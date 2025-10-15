@@ -1,8 +1,7 @@
-# {projectName}
+# Wake Frequency Calculation App
 
 A production-ready React + Vite + TypeScript foundation featuring Fluent UI v9, react-router, unit
-tests, and code quality tooling. Swap `{projectName}` for your actual package name and start
-shipping.
+tests, and code quality tooling.
 
 ## Getting Started
 

@@ -1,6 +1,7 @@
 import { config as loadEnv } from 'dotenv';
+import path from 'node:path';
 
-loadEnv();
+loadEnv({ path: path.resolve(process.cwd(), 'server', '.env') });
 
 const parseNumber = (value: string | undefined, fallback: number): number => {
   if (value === undefined) {

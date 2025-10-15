@@ -166,7 +166,7 @@ export const AppShell = () => {
         <div className={styles.headerContent}>
           <Link to="/" className={styles.brandLink}>
             <Text as="h1" className={styles.brandText}>
-              {`{projectName}`.replace(/-/g, ' ')}
+              Wake Frequency Calculation App
             </Text>
           </Link>
           <nav aria-label="Primary" className={styles.headerNav}>
