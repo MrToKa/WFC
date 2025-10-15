@@ -25,7 +25,7 @@ const useStyles = makeStyles({
   }
 });
 
-export const ThemeToggle = (): JSX.Element => {
+export const ThemeToggle = () => {
   const { mode, toggleTheme } = useTheme();
   const styles = useStyles();
   const isDark = mode === 'dark';

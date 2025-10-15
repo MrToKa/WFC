@@ -14,7 +14,7 @@
     "noUnusedParameters": true,
     "skipLibCheck": false,
     "resolveJsonModule": true,
-    "types": ["vite/client"],
+    "types": ["vite/client", "react", "react-dom"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

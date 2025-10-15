@@ -25,7 +25,7 @@ const useStyles = makeStyles({
   }
 });
 
-export const About = (): JSX.Element => {
+export const About = () => {
   const styles = useStyles();
 
   return (

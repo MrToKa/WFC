@@ -52,7 +52,7 @@ const getPreferredTheme = (): ThemeMode => {
   return prefersDark ? 'dark' : 'light';
 };
 
-export const ThemeProvider = ({ children }: PropsWithChildren): JSX.Element => {
+export const ThemeProvider = ({ children }: PropsWithChildren) => {
   const [mode, setMode] = useState<ThemeMode>(() => getPreferredTheme());
 
   useEffect(() => {

@@ -1,17 +1,32 @@
 import {
+  Button,
   Text,
   makeStyles,
   mergeClasses,
   shorthands,
   tokens
 } from '@fluentui/react-components';
-import { NavLink, Outlet, Link } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { useAuth } from '@/context/AuthContext';
 
-const NAV_LINKS = [
+type NavLinkConfig = {
+  to: string;
+  label: string;
+  end?: boolean;
+};
+
+const PRIMARY_LINKS: NavLinkConfig[] = [
   { to: '/', label: 'Home', end: true },
   { to: '/about', label: 'About' }
 ] as const;
+
+const AUTH_LINKS: NavLinkConfig[] = [{ to: '/account', label: 'Account' }];
+
+const GUEST_LINKS: NavLinkConfig[] = [
+  { to: '/login', label: 'Log in' },
+  { to: '/register', label: 'Register' }
+];
 
 const useStyles = makeStyles({
   root: {
@@ -50,7 +65,7 @@ const useStyles = makeStyles({
     ':focus-visible': {
       outlineStyle: 'solid',
       outlineWidth: '2px',
-      outlineColor: tokens.colorFocusBorder
+      outlineColor: tokens.colorStrokeFocus2
     }
   },
   brandText: {
@@ -63,6 +78,16 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '0.75rem',
     flexWrap: 'wrap'
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    flexWrap: 'wrap'
+  },
+  userBadge: {
+    color: tokens.colorNeutralForeground2,
+    fontWeight: tokens.fontWeightSemibold
   },
   navLink: {
     textDecoration: 'none',
@@ -79,7 +104,7 @@ const useStyles = makeStyles({
     ':focus-visible': {
       outlineStyle: 'solid',
       outlineWidth: '2px',
-      outlineColor: tokens.colorFocusBorder
+      outlineColor: tokens.colorStrokeFocus2
     }
   },
   navLinkActive: {
@@ -113,11 +138,27 @@ const useStyles = makeStyles({
   }
 });
 
-export const AppShell = (): JSX.Element => {
+export const AppShell = () => {
   const styles = useStyles();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const navLinks = [...PRIMARY_LINKS, ...(user ? AUTH_LINKS : GUEST_LINKS)];
+
+  const displayName = (() => {
+    if (!user) {
+      return '';
+    }
+    const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+    return name || user.email;
+  })();
 
   const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
     mergeClasses(styles.navLink, isActive && styles.navLinkActive);
+
+  const handleSignOut = (): void => {
+    signOut();
+    navigate('/login');
+  };
 
   return (
     <div className={styles.root}>
@@ -129,18 +170,30 @@ export const AppShell = (): JSX.Element => {
             </Text>
           </Link>
           <nav aria-label="Primary" className={styles.headerNav}>
-            {NAV_LINKS.map(({ to, label, end }) => (
+            {navLinks.map(({ to, label, end }) => (
               <NavLink key={to} to={to} end={end} className={navLinkClassName}>
                 {label}
               </NavLink>
             ))}
           </nav>
-          <ThemeToggle />
+          <div className={styles.headerActions}>
+            {user ? (
+              <>
+                <Text as="span" className={styles.userBadge}>
+                  Signed in as {displayName}
+                </Text>
+                <Button appearance="subtle" onClick={handleSignOut}>
+                  Sign out
+                </Button>
+              </>
+            ) : null}
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <aside className={styles.sidebar}>
         <nav aria-label="Sidebar" className={styles.sidebarNav}>
-          {NAV_LINKS.map(({ to, label, end }) => (
+          {navLinks.map(({ to, label, end }) => (
             <NavLink key={to} to={to} end={end} className={navLinkClassName}>
               {label}
             </NavLink>

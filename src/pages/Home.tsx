@@ -26,7 +26,7 @@ const useStyles = makeStyles({
   }
 });
 
-export const Home = (): JSX.Element => {
+export const Home = () => {
   const navigate = useNavigate();
   const styles = useStyles();
 
