@@ -35,6 +35,33 @@ export async function initializeDatabase(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cable_types (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      tag TEXT,
+      purpose TEXT,
+      diameter_mm NUMERIC,
+      weight_kg_per_m NUMERIC,
+      from_location TEXT,
+      to_location TEXT,
+      routing TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS cable_types_project_name_idx
+      ON cable_types (project_id, lower(name));
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_types_project_id_idx
+      ON cable_types (project_id);
+  `);
 }
 
 export async function shutdownDatabase(): Promise<void> {

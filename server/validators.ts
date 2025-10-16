@@ -66,3 +66,54 @@ export const updateProjectSchema = z
       message: 'At least one field must be provided'
     }
   );
+
+const cableTypeNumericField = z
+  .number()
+  .min(0)
+  .max(1_000_000)
+  .nullable()
+  .optional();
+
+const cableTypeStringField = z
+  .string()
+  .trim()
+  .max(500)
+  .optional();
+
+export const createCableTypeSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    tag: cableTypeStringField,
+    purpose: cableTypeStringField,
+    diameterMm: cableTypeNumericField,
+    weightKgPerM: cableTypeNumericField,
+    fromLocation: cableTypeStringField,
+    toLocation: cableTypeStringField,
+    routing: cableTypeStringField
+  })
+  .strict();
+
+export const updateCableTypeSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    tag: cableTypeStringField,
+    purpose: cableTypeStringField,
+    diameterMm: cableTypeNumericField,
+    weightKgPerM: cableTypeNumericField,
+    fromLocation: cableTypeStringField,
+    toLocation: cableTypeStringField,
+    routing: cableTypeStringField
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.name !== undefined ||
+      value.tag !== undefined ||
+      value.purpose !== undefined ||
+      value.diameterMm !== undefined ||
+      value.weightKgPerM !== undefined ||
+      value.fromLocation !== undefined ||
+      value.toLocation !== undefined ||
+      value.routing !== undefined,
+    { message: 'At least one field must be provided' }
+  );
