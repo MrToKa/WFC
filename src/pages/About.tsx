@@ -12,7 +12,7 @@ const useStyles = makeStyles({
   wrapper: {
     display: 'grid',
     gap: '1rem',
-    maxWidth: '48rem',
+    placeItems: 'center',
     ...shorthands.padding('0', '0', '2rem')
   },
   card: {

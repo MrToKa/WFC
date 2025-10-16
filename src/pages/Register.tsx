@@ -19,7 +19,11 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '1rem',
+    alignItems: 'stretch',
+    textAlign: 'center',
     maxWidth: '28rem',
+    marginLeft: 'auto',
+    marginRight: 'auto',
     ...shorthands.padding('0', '0', '2rem')
   },
   form: {
@@ -30,7 +34,8 @@ const useStyles = makeStyles({
   actions: {
     display: 'flex',
     gap: '0.75rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
+    justifyContent: 'center'
   },
   error: {
     color: tokens.colorStatusDangerForeground1

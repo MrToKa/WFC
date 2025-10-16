@@ -20,7 +20,8 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
-    maxWidth: '36rem',
+    alignItems: 'center',
+    textAlign: 'center',
     ...shorthands.padding('0', '0', '2rem')
   },
   section: {

@@ -33,13 +33,11 @@ const useStyles = makeStyles({
   root: {
     minHeight: '100vh',
     display: 'grid',
-    gridTemplateColumns: '16rem 1fr',
     gridTemplateRows: 'auto 1fr',
     backgroundColor: tokens.colorNeutralBackground1,
     color: tokens.colorNeutralForeground1,
     '@media (max-width: 768px)': {
-      gridTemplateColumns: '1fr',
-      gridTemplateRows: 'auto auto 1fr'
+      gridTemplateRows: 'auto 1fr'
     }
   },
   header: {
@@ -115,24 +113,6 @@ const useStyles = makeStyles({
       color: tokens.colorBrandForeground1
     }
   },
-  sidebar: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRight: `1px solid ${tokens.colorNeutralStroke1}`,
-    ...shorthands.padding('1.5rem', '1rem'),
-    '@media (max-width: 768px)': {
-      position: 'sticky',
-      top: '4.25rem',
-      zIndex: 5,
-      borderRight: 'none',
-      borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-      backgroundColor: tokens.colorNeutralBackground1
-    }
-  },
-  sidebarNav: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem'
-  },
   main: {
     overflow: 'auto',
     ...shorthands.padding('1.5rem')
@@ -169,7 +149,7 @@ export const AppShell = () => {
         <div className={styles.headerContent}>
           <Link to="/" className={styles.brandLink}>
             <Text as="h1" className={styles.brandText}>
-              Wake Frequency Calculation App
+              ACS App
             </Text>
           </Link>
           <nav aria-label="Primary" className={styles.headerNav}>
@@ -194,15 +174,6 @@ export const AppShell = () => {
           </div>
         </div>
       </header>
-      <aside className={styles.sidebar}>
-        <nav aria-label="Sidebar" className={styles.sidebarNav}>
-          {navLinks.map(({ to, label, end }) => (
-            <NavLink key={to} to={to} end={end} className={navLinkClassName}>
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-      </aside>
       <main id="app-root" className={styles.main} role="main" tabIndex={-1}>
         <Outlet />
       </main>
