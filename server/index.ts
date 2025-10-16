@@ -1,4 +1,5 @@
 import cors from 'cors';
+import { randomUUID } from 'crypto';
 import express, { type Request, type Response } from 'express';
 import { config } from './config.js';
 import { initializeDatabase, pool } from './db.js';
@@ -11,9 +12,11 @@ import {
 import { authenticate, requireAdmin } from './middleware.js';
 import {
   adminUpdateUserSchema,
+  createProjectSchema,
   loginSchema,
   registerSchema,
-  updateProfileSchema
+  updateProfileSchema,
+  updateProjectSchema
 } from './validators.js';
 
 type UserRow = {
@@ -37,12 +40,48 @@ type PublicUser = {
   updatedAt: string;
 };
 
+type ProjectRow = {
+  id: string;
+  project_number: string;
+  name: string;
+  customer: string;
+  description: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
+
+type PublicProject = {
+  id: string;
+  projectNumber: string;
+  name: string;
+  customer: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const mapUserRow = (row: UserRow): PublicUser => ({
   id: row.id,
   email: row.email,
   firstName: row.first_name ?? null,
   lastName: row.last_name ?? null,
   isAdmin: row.is_admin,
+  createdAt:
+    typeof row.created_at === 'string'
+      ? row.created_at
+      : row.created_at.toISOString(),
+  updatedAt:
+    typeof row.updated_at === 'string'
+      ? row.updated_at
+      : row.updated_at.toISOString()
+});
+
+const mapProjectRow = (row: ProjectRow): PublicProject => ({
+  id: row.id,
+  projectNumber: row.project_number,
+  name: row.name,
+  customer: row.customer,
+  description: row.description ?? null,
   createdAt:
     typeof row.created_at === 'string'
       ? row.created_at
@@ -523,6 +562,216 @@ app.post(
     } catch (error) {
       console.error('Admin promote user error', error);
       res.status(500).json({ error: 'Failed to promote user to admin' });
+    }
+  }
+);
+
+app.get('/api/projects', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await pool.query<ProjectRow>(
+      `SELECT * FROM projects ORDER BY created_at DESC`
+    );
+    res.json({ projects: result.rows.map(mapProjectRow) });
+  } catch (error) {
+    console.error('List projects error', error);
+    res.status(500).json({ error: 'Failed to fetch projects' });
+  }
+});
+
+app.get(
+  '/api/projects/:projectId',
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId } = req.params;
+
+    if (!projectId) {
+      res.status(400).json({ error: 'Project ID is required' });
+      return;
+    }
+
+    try {
+      const result = await pool.query<ProjectRow>(
+        `SELECT * FROM projects WHERE id = $1`,
+        [projectId]
+      );
+
+      const projectRow = result.rows[0];
+
+      if (!projectRow) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      res.json({ project: mapProjectRow(projectRow) });
+    } catch (error) {
+      console.error('Fetch project error', error);
+      res.status(500).json({ error: 'Failed to fetch project details' });
+    }
+  }
+);
+
+app.post(
+  '/api/projects',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const parseResult = createProjectSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    const { projectNumber, name, customer, description } = parseResult.data;
+    const projectId = randomUUID();
+    const normalizedDescription =
+      description === undefined ? undefined : description.trim();
+
+    try {
+      const result = await pool.query<ProjectRow>(
+        `
+          INSERT INTO projects (id, project_number, name, customer, description)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *;
+        `,
+        [
+          projectId,
+          projectNumber.trim(),
+          name.trim(),
+          customer.trim(),
+          normalizedDescription && normalizedDescription !== ''
+            ? normalizedDescription
+            : null
+        ]
+      );
+
+      res.status(201).json({ project: mapProjectRow(result.rows[0]) });
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23505'
+      ) {
+        res.status(409).json({ error: 'Project number already in use' });
+        return;
+      }
+
+      console.error('Create project error', error);
+      res.status(500).json({ error: 'Failed to create project' });
+    }
+  }
+);
+
+app.patch(
+  '/api/projects/:projectId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId } = req.params;
+
+    if (!projectId) {
+      res.status(400).json({ error: 'Project ID is required' });
+      return;
+    }
+
+    const parseResult = updateProjectSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    const { projectNumber, name, customer, description } = parseResult.data;
+    const fields: string[] = [];
+    const values: Array<string | null> = [];
+    let index = 1;
+
+    if (projectNumber !== undefined) {
+      fields.push(`project_number = $${index++}`);
+      values.push(projectNumber.trim());
+    }
+
+    if (name !== undefined) {
+      fields.push(`name = $${index++}`);
+      values.push(name.trim());
+    }
+
+    if (customer !== undefined) {
+      fields.push(`customer = $${index++}`);
+      values.push(customer.trim());
+    }
+
+    if (description !== undefined) {
+      const normalized = description.trim();
+      fields.push(`description = $${index++}`);
+      values.push(normalized === '' ? null : normalized);
+    }
+
+    fields.push(`updated_at = NOW()`);
+
+    try {
+      const result = await pool.query<ProjectRow>(
+        `
+          UPDATE projects
+          SET ${fields.join(', ')}
+          WHERE id = $${index}
+          RETURNING *;
+        `,
+        [...values, projectId]
+      );
+
+      const projectRow = result.rows[0];
+
+      if (!projectRow) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      res.json({ project: mapProjectRow(projectRow) });
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23505'
+      ) {
+        res.status(409).json({ error: 'Project number already in use' });
+        return;
+      }
+
+      console.error('Update project error', error);
+      res.status(500).json({ error: 'Failed to update project' });
+    }
+  }
+);
+
+app.delete(
+  '/api/projects/:projectId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId } = req.params;
+
+    if (!projectId) {
+      res.status(400).json({ error: 'Project ID is required' });
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        `DELETE FROM projects WHERE id = $1 RETURNING id`,
+        [projectId]
+      );
+
+      if (result.rowCount === 0) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error('Delete project error', error);
+      res.status(500).json({ error: 'Failed to delete project' });
     }
   }
 );

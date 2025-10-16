@@ -8,6 +8,16 @@ export type User = {
   updatedAt: string;
 };
 
+export type Project = {
+  id: string;
+  projectNumber: string;
+  name: string;
+  customer: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AuthSuccess = {
   user: User;
   token: string;
@@ -160,6 +170,58 @@ export async function promoteUserAsAdmin(
 ): Promise<{ user: User }> {
   return request<{ user: User }>(`/api/admin/users/${userId}/promote`, {
     method: 'POST',
+    token
+  });
+}
+
+export async function fetchProjects(): Promise<{ projects: Project[] }> {
+  return request<{ projects: Project[] }>('/api/projects', { method: 'GET' });
+}
+
+export async function fetchProject(
+  projectId: string
+): Promise<{ project: Project }> {
+  return request<{ project: Project }>(`/api/projects/${projectId}`, {
+    method: 'GET'
+  });
+}
+
+export async function createProject(
+  token: string,
+  data: {
+    projectNumber: string;
+    name: string;
+    customer: string;
+    description?: string;
+  }
+): Promise<{ project: Project }> {
+  return request<{ project: Project }>('/api/projects', {
+    method: 'POST',
+    token,
+    body: data
+  });
+}
+
+export async function updateProject(
+  token: string,
+  projectId: string,
+  data: {
+    projectNumber?: string;
+    name?: string;
+    customer?: string;
+    description?: string;
+  }
+): Promise<{ project: Project }> {
+  return request<{ project: Project }>(`/api/projects/${projectId}`, {
+    method: 'PATCH',
+    token,
+    body: data
+  });
+}
+
+export async function deleteProject(token: string, projectId: string): Promise<void> {
+  await request<void>(`/api/projects/${projectId}`, {
+    method: 'DELETE',
     token
   });
 }

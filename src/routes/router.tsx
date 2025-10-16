@@ -4,7 +4,8 @@ import { RedirectIfAuthenticated, RequireAdmin, RequireAuth } from '@/components
 import { Account } from '@/pages/Account';
 import { About } from '@/pages/About';
 import { AdminPanel } from '@/pages/AdminPanel';
-import { Home } from '@/pages/Home';
+import { ProjectDetails } from '@/pages/ProjectDetails';
+import { Projects } from '@/pages/Projects';
 import { Login } from '@/pages/Login';
 import { Register } from '@/pages/Register';
 
@@ -15,11 +16,15 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <Home />
+        element: <Projects />
       },
       {
         path: 'about',
         element: <About />
+      },
+      {
+        path: 'projects/:projectId',
+        element: <ProjectDetails />
       },
       {
         path: 'login',

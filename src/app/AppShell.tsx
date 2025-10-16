@@ -17,7 +17,7 @@ type NavLinkConfig = {
 };
 
 const PRIMARY_LINKS: NavLinkConfig[] = [
-  { to: '/', label: 'Home', end: true },
+  { to: '/', label: 'Projects', end: true },
   { to: '/about', label: 'About' }
 ] as const;
 
