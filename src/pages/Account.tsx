@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Body1,
   Button,
-  Caption1,
   Field,
   Input,
+  Persona,
   Title3,
   makeStyles,
   shorthands,
@@ -28,6 +28,16 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '0.5rem'
+  },
+  profileSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.75rem',
+    textAlign: 'center'
+  },
+  persona: {
+    maxWidth: '22rem'
   },
   form: {
     display: 'flex',
@@ -99,6 +109,14 @@ export const Account = () => {
       lastName: user.lastName ?? '',
       password: ''
     });
+  }, [user]);
+
+  const displayName = useMemo(() => {
+    if (!user) {
+      return '';
+    }
+    const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+    return name || user.email;
   }, [user]);
 
   const profileSummary = useMemo(() => {
@@ -217,18 +235,23 @@ export const Account = () => {
 
   return (
     <section className={styles.root} aria-labelledby="account-heading">
-      <div className={styles.section}>
+      <div className={styles.profileSection}>
         <Title3 id="account-heading">Account overview</Title3>
-        <Body1>Email: {user.email}</Body1>
-        <Body1>
-          Name: {user.firstName ?? '(not set)'} {user.lastName ?? ''}
-        </Body1>
-        <Body1>Role: {user.isAdmin ? 'Administrator' : 'User'}</Body1>
-        {profileSummary ? (
-          <Caption1>
-            Created {profileSummary.created} - Updated {profileSummary.updated}
-          </Caption1>
-        ) : null}
+        <Persona
+          className={styles.persona}
+          name={displayName}
+          secondaryText={user.email}
+          tertiaryText={user.isAdmin ? 'Administrator' : 'User'}
+          quaternaryText={
+            profileSummary
+              ? `Created ${profileSummary.created} - Updated ${profileSummary.updated}`
+              : undefined
+          }
+          textPosition="below"
+          textAlignment="center"
+          size="extra-large"
+          avatar={{ name: displayName, color: 'colorful' }}
+        />
       </div>
 
       <form className={styles.form} onSubmit={handleSubmit} noValidate aria-label="Update profile">

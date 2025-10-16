@@ -1,5 +1,6 @@
 import {
   Button,
+  Persona,
   Text,
   makeStyles,
   mergeClasses,
@@ -7,6 +8,7 @@ import {
   tokens
 } from '@fluentui/react-components';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { SignOut20Regular } from '@fluentui/react-icons';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useAuth } from '@/context/AuthContext';
 
@@ -21,7 +23,6 @@ const PRIMARY_LINKS: NavLinkConfig[] = [
   { to: '/about', label: 'About' }
 ] as const;
 
-const AUTH_LINKS: NavLinkConfig[] = [{ to: '/account', label: 'Account' }];
 const ADMIN_LINKS: NavLinkConfig[] = [{ to: '/admin', label: 'Admin' }];
 
 const GUEST_LINKS: NavLinkConfig[] = [
@@ -84,9 +85,29 @@ const useStyles = makeStyles({
     gap: '0.75rem',
     flexWrap: 'wrap'
   },
-  userBadge: {
-    color: tokens.colorNeutralForeground2,
-    fontWeight: tokens.fontWeightSemibold
+  personaLink: {
+    textDecoration: 'none',
+    display: 'inline-flex',
+    borderRadius: tokens.borderRadiusCircular,
+    ':focus-visible': {
+      outlineStyle: 'solid',
+      outlineWidth: '2px',
+      outlineColor: tokens.colorStrokeFocus2
+    }
+  },
+  personaCompact: {
+    ':global(.fui-Persona__primaryText)': {
+      display: 'none'
+    },
+    ':global(.fui-Persona__secondaryText)': {
+      display: 'none'
+    },
+    ':global(.fui-Persona__tertiaryText)': {
+      display: 'none'
+    },
+    ':global(.fui-Persona__quaternaryText)': {
+      display: 'none'
+    }
   },
   navLink: {
     textDecoration: 'none',
@@ -124,7 +145,7 @@ export const AppShell = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const navLinks = user
-    ? [...PRIMARY_LINKS, ...AUTH_LINKS, ...(user.isAdmin ? ADMIN_LINKS : [])]
+    ? [...PRIMARY_LINKS, ...(user.isAdmin ? ADMIN_LINKS : [])]
     : [...PRIMARY_LINKS, ...GUEST_LINKS];
 
   const displayName = (() => {
@@ -162,12 +183,26 @@ export const AppShell = () => {
           <div className={styles.headerActions}>
             {user ? (
               <>
-                <Text as="span" className={styles.userBadge}>
-                  Signed in as {displayName}
-                </Text>
-                <Button appearance="subtle" onClick={handleSignOut}>
-                  Sign out
-                </Button>
+                <Link
+                  to="/account"
+                  className={styles.personaLink}
+                  aria-label="View account"
+                  title={displayName}
+                >
+                  <Persona
+                    className={styles.personaCompact}
+                    avatar={{ name: displayName, color: 'colorful' }}
+                    size="large"
+                    textPosition="after"
+                  />
+                </Link>
+                <Button
+                  appearance="subtle"
+                  onClick={handleSignOut}
+                  icon={<SignOut20Regular />}
+                  aria-label="Sign out"
+                  title="Sign out"
+                />
               </>
             ) : null}
             <ThemeToggle />
