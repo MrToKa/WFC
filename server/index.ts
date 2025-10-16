@@ -8,8 +8,9 @@ import {
   signAccessToken,
   verifyPassword
 } from './auth.js';
-import { authenticate } from './middleware.js';
+import { authenticate, requireAdmin } from './middleware.js';
 import {
+  adminUpdateUserSchema,
   loginSchema,
   registerSchema,
   updateProfileSchema
@@ -21,6 +22,7 @@ type UserRow = {
   password_hash: string;
   first_name: string | null;
   last_name: string | null;
+  is_admin: boolean;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -30,6 +32,7 @@ type PublicUser = {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -39,6 +42,7 @@ const mapUserRow = (row: UserRow): PublicUser => ({
   email: row.email,
   firstName: row.first_name ?? null,
   lastName: row.last_name ?? null,
+  isAdmin: row.is_admin,
   createdAt:
     typeof row.created_at === 'string'
       ? row.created_at
@@ -73,22 +77,57 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
   const { email, password, firstName, lastName } = parseResult.data;
   const passwordHash = await hashPassword(password);
   const userId = createUserId();
+  const client = await pool.connect();
+  let transactionActive = false;
 
   try {
-    const result = await pool.query<UserRow>(
-      `
-        INSERT INTO users (id, email, password_hash, first_name, last_name)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *;
-      `,
-      [userId, email.toLowerCase(), passwordHash, firstName ?? null, lastName ?? null]
+    await client.query('BEGIN');
+    transactionActive = true;
+    await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
+
+    const existingUsersResult = await client.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM users`
     );
 
+    const existingUsers = Number(existingUsersResult.rows[0]?.count ?? '0');
+    const isFirstUser = existingUsers === 0;
+
+    const result = await client.query<UserRow>(
+      `
+        INSERT INTO users (id, email, password_hash, first_name, last_name, is_admin)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *;
+      `,
+      [
+        userId,
+        email.toLowerCase(),
+        passwordHash,
+        firstName ?? null,
+        lastName ?? null,
+        isFirstUser
+      ]
+    );
+
+    await client.query('COMMIT');
+    transactionActive = false;
+
     const user = mapUserRow(result.rows[0]);
-    const { token, expiresInSeconds } = signAccessToken(user.id, user.email);
+    const { token, expiresInSeconds } = signAccessToken(
+      user.id,
+      user.email,
+      user.isAdmin
+    );
 
     res.status(201).json({ user, token, expiresInSeconds });
   } catch (error) {
+    if (transactionActive) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Failed to rollback register transaction', rollbackError);
+      }
+    }
+
     if (
       typeof error === 'object' &&
       error !== null &&
@@ -101,6 +140,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
     console.error('Register error', error);
     res.status(500).json({ error: 'Failed to register user' });
+  } finally {
+    client.release();
   }
 });
 
@@ -135,7 +176,11 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 
     const user = mapUserRow(userRow);
-    const { token, expiresInSeconds } = signAccessToken(user.id, user.email);
+    const { token, expiresInSeconds } = signAccessToken(
+      user.id,
+      user.email,
+      user.isAdmin
+    );
 
     res.json({ user, token, expiresInSeconds });
   } catch (error) {
@@ -270,6 +315,214 @@ app.delete(
     } catch (error) {
       console.error('Delete user error', error);
       res.status(500).json({ error: 'Failed to delete user' });
+    }
+  }
+);
+
+app.get(
+  '/api/admin/users',
+  authenticate,
+  requireAdmin,
+  async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await pool.query<UserRow>(
+        `SELECT * FROM users ORDER BY created_at DESC`
+      );
+      res.json({ users: result.rows.map(mapUserRow) });
+    } catch (error) {
+      console.error('Admin list users error', error);
+      res.status(500).json({ error: 'Failed to list users' });
+    }
+  }
+);
+
+app.patch(
+  '/api/admin/users/:userId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const targetUserId = req.params.userId;
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    if (req.userId === targetUserId) {
+      res.status(400).json({
+        error: 'Use your account page to update your own profile'
+      });
+      return;
+    }
+
+    const parseResult = adminUpdateUserSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    const { email, firstName, lastName, password } = parseResult.data;
+    const fields: string[] = [];
+    const values: Array<string | null> = [];
+    let index = 1;
+
+    if (email !== undefined) {
+      fields.push(`email = $${index++}`);
+      values.push(email.toLowerCase());
+    }
+
+    if (firstName !== undefined) {
+      fields.push(`first_name = $${index++}`);
+      values.push(firstName);
+    }
+
+    if (lastName !== undefined) {
+      fields.push(`last_name = $${index++}`);
+      values.push(lastName);
+    }
+
+    if (password !== undefined) {
+      const hashed = await hashPassword(password);
+      fields.push(`password_hash = $${index++}`);
+      values.push(hashed);
+    }
+
+    fields.push(`updated_at = NOW()`);
+
+    try {
+      const result = await pool.query<UserRow>(
+        `
+          UPDATE users
+          SET ${fields.join(', ')}
+          WHERE id = $${index}
+          RETURNING *;
+        `,
+        [...values, targetUserId]
+      );
+
+      const userRow = result.rows[0];
+
+      if (!userRow) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      res.json({ user: mapUserRow(userRow) });
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23505'
+      ) {
+        res.status(409).json({ error: 'Email already in use' });
+        return;
+      }
+
+      console.error('Admin update user error', error);
+      res.status(500).json({ error: 'Failed to update user' });
+    }
+  }
+);
+
+app.delete(
+  '/api/admin/users/:userId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const targetUserId = req.params.userId;
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    if (req.userId === targetUserId) {
+      res.status(400).json({
+        error: 'Admins cannot delete their own account from the admin panel'
+      });
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        `DELETE FROM users WHERE id = $1 RETURNING id`,
+        [targetUserId]
+      );
+
+      if (result.rowCount === 0) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error('Admin delete user error', error);
+      res.status(500).json({ error: 'Failed to delete user' });
+    }
+  }
+);
+
+app.post(
+  '/api/admin/users/:userId/promote',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const targetUserId = req.params.userId;
+
+    if (!targetUserId) {
+      res.status(400).json({ error: 'User ID is required' });
+      return;
+    }
+
+    if (req.userId === targetUserId) {
+      res
+        .status(400)
+        .json({ error: 'You already have administrative permissions' });
+      return;
+    }
+
+    try {
+      const existingResult = await pool.query<{ is_admin: boolean }>(
+        `SELECT is_admin FROM users WHERE id = $1`,
+        [targetUserId]
+      );
+
+      const existingUser = existingResult.rows[0];
+
+      if (!existingUser) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      if (existingUser.is_admin) {
+        res.status(409).json({ error: 'User is already an admin' });
+        return;
+      }
+
+      const result = await pool.query<UserRow>(
+        `
+          UPDATE users
+          SET is_admin = TRUE,
+              updated_at = NOW()
+          WHERE id = $1
+          RETURNING *;
+        `,
+        [targetUserId]
+      );
+
+      const userRow = result.rows[0];
+
+      if (!userRow) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      res.json({ user: mapUserRow(userRow) });
+    } catch (error) {
+      console.error('Admin promote user error', error);
+      res.status(500).json({ error: 'Failed to promote user to admin' });
     }
   }
 );

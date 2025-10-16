@@ -22,6 +22,7 @@ const PRIMARY_LINKS: NavLinkConfig[] = [
 ] as const;
 
 const AUTH_LINKS: NavLinkConfig[] = [{ to: '/account', label: 'Account' }];
+const ADMIN_LINKS: NavLinkConfig[] = [{ to: '/admin', label: 'Admin' }];
 
 const GUEST_LINKS: NavLinkConfig[] = [
   { to: '/login', label: 'Log in' },
@@ -142,7 +143,9 @@ export const AppShell = () => {
   const styles = useStyles();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const navLinks = [...PRIMARY_LINKS, ...(user ? AUTH_LINKS : GUEST_LINKS)];
+  const navLinks = user
+    ? [...PRIMARY_LINKS, ...AUTH_LINKS, ...(user.isAdmin ? ADMIN_LINKS : [])]
+    : [...PRIMARY_LINKS, ...GUEST_LINKS];
 
   const displayName = (() => {
     if (!user) {

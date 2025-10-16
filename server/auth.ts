@@ -6,6 +6,7 @@ import { config } from './config.js';
 export interface JwtPayload {
   sub: string;
   email: string;
+  isAdmin?: boolean;
   iat?: number;
   exp?: number;
 }
@@ -30,10 +31,14 @@ export async function verifyPassword(
   return bcrypt.compare(password, hash);
 }
 
-export function signAccessToken(userId: string, email: string): AuthToken {
+export function signAccessToken(
+  userId: string,
+  email: string,
+  isAdmin: boolean
+): AuthToken {
   const expiresInSeconds = 60 * 60 * 24 * 7; // 7 days
   const token = jwt.sign(
-    { sub: userId, email } satisfies Omit<JwtPayload, 'iat' | 'exp'>,
+    { sub: userId, email, isAdmin } satisfies Omit<JwtPayload, 'iat' | 'exp'>,
     config.jwtSecret,
     { expiresIn: expiresInSeconds }
   );

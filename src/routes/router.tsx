@@ -1,8 +1,9 @@
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppShell } from '@/app/AppShell';
-import { RedirectIfAuthenticated, RequireAuth } from '@/components/AuthGuards';
+import { RedirectIfAuthenticated, RequireAdmin, RequireAuth } from '@/components/AuthGuards';
 import { Account } from '@/pages/Account';
 import { About } from '@/pages/About';
+import { AdminPanel } from '@/pages/AdminPanel';
 import { Home } from '@/pages/Home';
 import { Login } from '@/pages/Login';
 import { Register } from '@/pages/Register';
@@ -42,6 +43,14 @@ export const routes: RouteObject[] = [
           <RequireAuth>
             <Account />
           </RequireAuth>
+        )
+      },
+      {
+        path: 'admin',
+        element: (
+          <RequireAdmin>
+            <AdminPanel />
+          </RequireAdmin>
         )
       }
     ]

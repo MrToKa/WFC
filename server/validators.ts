@@ -34,3 +34,5 @@ export const updateProfileSchema = z
       message: 'At least one field must be provided'
     }
   );
+
+export const adminUpdateUserSchema = updateProfileSchema;

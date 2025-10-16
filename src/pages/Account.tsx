@@ -222,6 +222,7 @@ export const Account = () => {
         <Body1>
           Name: {user.firstName ?? '(not set)'} {user.lastName ?? ''}
         </Body1>
+        <Body1>Role: {user.isAdmin ? 'Administrator' : 'User'}</Body1>
         {profileSummary ? (
           <Caption1>
             Created {profileSummary.created} - Updated {profileSummary.updated}
