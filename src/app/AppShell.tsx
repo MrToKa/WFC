@@ -181,6 +181,7 @@ export const AppShell = () => {
             ))}
           </nav>
           <div className={styles.headerActions}>
+            <ThemeToggle />
             {user ? (
               <>
                 <Link
@@ -204,8 +205,7 @@ export const AppShell = () => {
                   title="Sign out"
                 />
               </>
-            ) : null}
-            <ThemeToggle />
+            ) : null}            
           </div>
         </div>
       </header>
