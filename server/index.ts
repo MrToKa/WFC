@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import express, { type Request, type Response } from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import path from 'node:path';
 import { config } from './config.js';
 import { initializeDatabase, pool } from './db.js';
@@ -1362,31 +1363,55 @@ app.get(
         [projectId]
       );
 
-      const rows = result.rows.map((row) => ({
-        [CABLE_EXCEL_HEADERS.name]: row.name ?? '',
-        [CABLE_EXCEL_HEADERS.purpose]: row.purpose ?? '',
-        [CABLE_EXCEL_HEADERS.diameter]:
-          row.diameter_mm !== null ? Number(row.diameter_mm) : '',
-        [CABLE_EXCEL_HEADERS.weight]:
-          row.weight_kg_per_m !== null ? Number(row.weight_kg_per_m) : ''
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(rows, {
-        header: [
-          CABLE_EXCEL_HEADERS.name,
-          CABLE_EXCEL_HEADERS.purpose,
-          CABLE_EXCEL_HEADERS.diameter,
-          CABLE_EXCEL_HEADERS.weight
-        ]
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Cable Types', {
+        views: [{ state: 'frozen', ySplit: 1 }]
       });
 
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Cables');
+      const columns = [
+        { name: CABLE_EXCEL_HEADERS.name, key: 'type', width: 32 },
+        { name: CABLE_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
+        { name: CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
+        { name: CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 }
+      ] as const;
 
-      const buffer = XLSX.write(workbook, {
-        bookType: 'xlsx',
-        type: 'buffer'
+      const rows = result.rows.map((row) => [
+        row.name ?? '',
+        row.purpose ?? '',
+        row.diameter_mm !== null && row.diameter_mm !== ''
+          ? Number(row.diameter_mm)
+          : '',
+        row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
+          ? Number(row.weight_kg_per_m)
+          : ''
+      ]);
+
+      const table = worksheet.addTable({
+        name: 'CableTypes',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: false
+        },
+        columns: columns.map((column) => ({ name: column.name })),
+        rows: rows.length > 0 ? rows : [['', '', '', '']]
       });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        worksheet.getColumn(index + 1).width = column.width;
+        if (column.key === 'diameter' || column.key === 'weight') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
 
       const projectSegment = sanitizeFileSegment(project.project_number);
       const fileName = `${projectSegment}-cables.xlsx`;
@@ -1397,7 +1422,7 @@ app.get(
       );
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
-      res.send(buffer);
+      res.send(Buffer.from(buffer));
     } catch (error) {
       console.error('Export cable types error', error);
       res.status(500).json({ error: 'Failed to export cable types' });
