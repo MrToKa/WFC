@@ -83,37 +83,25 @@ const cableTypeStringField = z
 export const createCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
-    tag: cableTypeStringField,
     purpose: cableTypeStringField,
     diameterMm: cableTypeNumericField,
-    weightKgPerM: cableTypeNumericField,
-    fromLocation: cableTypeStringField,
-    toLocation: cableTypeStringField,
-    routing: cableTypeStringField
+    weightKgPerM: cableTypeNumericField
   })
   .strict();
 
 export const updateCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
-    tag: cableTypeStringField,
     purpose: cableTypeStringField,
     diameterMm: cableTypeNumericField,
-    weightKgPerM: cableTypeNumericField,
-    fromLocation: cableTypeStringField,
-    toLocation: cableTypeStringField,
-    routing: cableTypeStringField
+    weightKgPerM: cableTypeNumericField
   })
   .strict()
   .refine(
     (value) =>
       value.name !== undefined ||
-      value.tag !== undefined ||
       value.purpose !== undefined ||
       value.diameterMm !== undefined ||
-      value.weightKgPerM !== undefined ||
-      value.fromLocation !== undefined ||
-      value.toLocation !== undefined ||
-      value.routing !== undefined,
+      value.weightKgPerM !== undefined,
     { message: 'At least one field must be provided' }
   );
