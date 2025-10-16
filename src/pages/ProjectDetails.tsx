@@ -39,6 +39,7 @@ import {
   updateCableType
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 
 const useStyles = makeStyles({
   root: {
@@ -80,16 +81,8 @@ const useStyles = makeStyles({
     flexWrap: 'wrap',
     gap: '0.75rem'
   },
-  statusMessage: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke1}`
-  },
   errorText: {
     color: tokens.colorStatusDangerForeground1
-  },
-  successText: {
-    color: tokens.colorStatusSuccessForeground1
   },
   tableContainer: {
     width: '100%',
@@ -139,8 +132,17 @@ const useStyles = makeStyles({
     justifyContent: 'flex-end',
     gap: '0.5rem',
     flexWrap: 'wrap'
+  },
+  pagination: {
+    display: 'flex',
+    gap: '0.5rem',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap'
   }
 });
+
+const CABLES_PER_PAGE = 10;
 
 type ProjectDetailsTab = 'details' | 'cables';
 
@@ -210,6 +212,7 @@ export const ProjectDetails = () => {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const { user, token } = useAuth();
+  const { showToast } = useToast();
 
   const isAdmin = Boolean(user?.isAdmin);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -224,15 +227,12 @@ export const ProjectDetails = () => {
   const [cableTypesRefreshing, setCableTypesRefreshing] =
     useState<boolean>(false);
   const [cableTypesError, setCableTypesError] = useState<string | null>(null);
-  const [cableActionMessage, setCableActionMessage] = useState<string | null>(
-    null
-  );
-  const [cableActionError, setCableActionError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [pendingCableTypeId, setPendingCableTypeId] = useState<string | null>(
     null
   );
+  const [cablePage, setCablePage] = useState<number>(1);
 
   const [isCableDialogOpen, setCableDialogOpen] = useState<boolean>(false);
   const [cableDialogMode, setCableDialogMode] = useState<'create' | 'edit'>(
@@ -247,6 +247,41 @@ export const ProjectDetails = () => {
   const [editingCableTypeId, setEditingCableTypeId] = useState<string | null>(
     null
   );
+
+  const sortCableTypes = useCallback(
+    (types: CableType[]) =>
+      [...types].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      ),
+    []
+  );
+
+  const totalCablePages = useMemo(() => {
+    if (cableTypes.length === 0) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(cableTypes.length / CABLES_PER_PAGE));
+  }, [cableTypes.length]);
+
+  const pagedCableTypes = useMemo(() => {
+    if (cableTypes.length === 0) {
+      return [];
+    }
+    const startIndex = (cablePage - 1) * CABLES_PER_PAGE;
+    return cableTypes.slice(startIndex, startIndex + CABLES_PER_PAGE);
+  }, [cableTypes, cablePage]);
+
+  const showPagination = cableTypes.length > CABLES_PER_PAGE;
+
+  useEffect(() => {
+    const totalPages = Math.max(
+      1,
+      Math.ceil(cableTypes.length / CABLES_PER_PAGE)
+    );
+    if (cablePage > totalPages) {
+      setCablePage(totalPages);
+    }
+  }, [cableTypes.length, cablePage]);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -295,12 +330,14 @@ export const ProjectDetails = () => {
 
       try {
         const response = await fetchCableTypes(projectId);
-        setCableTypes(response.cableTypes);
+        setCableTypes(sortCableTypes(response.cableTypes));
+        setCablePage(1);
       } catch (err) {
         console.error('Failed to load cable types', err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
             setCableTypes([]);
+            setCablePage(1);
             setCableTypesError(
               'Cable types endpoint is unavailable. Ensure the server is running the latest version.'
             );
@@ -315,7 +352,7 @@ export const ProjectDetails = () => {
         setCableTypesRefreshing(false);
       }
     },
-    [projectId]
+    [projectId, sortCableTypes]
   );
 
   useEffect(() => {
@@ -448,18 +485,15 @@ export const ProjectDetails = () => {
 
     setCableDialogSubmitting(true);
     setCableDialogErrors({});
-    setCableActionMessage(null);
-    setCableActionError(null);
 
     try {
       if (cableDialogMode === 'create') {
         const response = await createCableType(token, project.id, input);
         setCableTypes((previous) =>
-          [...previous, response.cableType].sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-          )
+          sortCableTypes([...previous, response.cableType])
         );
-        setCableActionMessage('Cable type created.');
+        setCablePage(1);
+        showToast({ intent: 'success', title: 'Cable type created' });
       } else if (editingCableTypeId) {
         const response = await updateCableType(
           token,
@@ -468,24 +502,34 @@ export const ProjectDetails = () => {
           input
         );
         setCableTypes((previous) =>
-          previous
-            .map((item) =>
-              item.id === editingCableTypeId ? response.cableType : item
-            )
-            .sort((a, b) =>
-              a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-            )
+          sortCableTypes(
+            previous
+              .map((item) =>
+                item.id === editingCableTypeId ? response.cableType : item
+              )
+          )
         );
-        setCableActionMessage('Cable type updated.');
+        showToast({ intent: 'success', title: 'Cable type updated' });
       }
       resetCableDialog();
     } catch (err) {
       console.error('Save cable type failed', err);
       if (err instanceof ApiError) {
         setCableDialogErrors(parseCableApiErrors(err.payload));
+        showToast({
+          intent: 'error',
+          title: 'Failed to save cable type',
+          body: err.message
+        });
       } else {
+        const message = 'Failed to save cable type. Please try again.';
         setCableDialogErrors({
-          general: 'Failed to save cable type. Please try again.'
+          general: message
+        });
+        showToast({
+          intent: 'error',
+          title: 'Failed to save cable type',
+          body: message
         });
       }
     } finally {
@@ -495,9 +539,11 @@ export const ProjectDetails = () => {
 
   const handleDeleteCableType = async (cableType: CableType) => {
     if (!project || !token) {
-      setCableActionError(
-        'You need to be signed in as an admin to delete cable types.'
-      );
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to delete cable types.'
+      });
       return;
     }
 
@@ -510,22 +556,28 @@ export const ProjectDetails = () => {
     }
 
     setPendingCableTypeId(cableType.id);
-    setCableActionError(null);
-    setCableActionMessage(null);
 
     try {
       await deleteCableType(token, project.id, cableType.id);
-      setCableTypes((previous) =>
-        previous.filter((item) => item.id !== cableType.id)
-      );
-      setCableActionMessage('Cable type deleted.');
+      setCableTypes((previous) => {
+        const next = previous.filter((item) => item.id !== cableType.id);
+        const totalPages = Math.max(
+          1,
+          Math.ceil(next.length / CABLES_PER_PAGE)
+        );
+        if (cablePage > totalPages) {
+          setCablePage(totalPages);
+        }
+        return next;
+      });
+      showToast({ intent: 'success', title: 'Cable type deleted' });
     } catch (err) {
       console.error('Delete cable type failed', err);
-      setCableActionError(
-        err instanceof ApiError
-          ? err.message
-          : 'Failed to delete cable type.'
-      );
+      showToast({
+        intent: 'error',
+        title: 'Failed to delete cable type',
+        body: err instanceof ApiError ? err.message : undefined
+      });
     } finally {
       setPendingCableTypeId(null);
     }
@@ -543,36 +595,41 @@ export const ProjectDetails = () => {
     event.target.value = '';
 
     if (!project || !token) {
-      setCableActionError(
-        'You need to be signed in as an admin to import cable types.'
-      );
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to import cable types.'
+      });
       return;
     }
 
     setIsImporting(true);
-    setCableActionError(null);
-    setCableActionMessage(null);
 
     try {
       const response = await importCableTypes(token, project.id, file);
-      setCableTypes(response.cableTypes);
+      setCableTypes(sortCableTypes(response.cableTypes));
+      setCablePage(1);
 
       const summary: CableImportSummary = response.summary;
-      setCableActionMessage(
-        `Import complete: ${summary.inserted} added, ${summary.updated} updated, ${summary.skipped} skipped.`
-      );
+      showToast({
+        intent: 'success',
+        title: 'Cable types imported',
+        body: `${summary.inserted} added, ${summary.updated} updated, ${summary.skipped} skipped.`
+      });
     } catch (err) {
       console.error('Import cable types failed', err);
       if (err instanceof ApiError && err.status === 404) {
-        setCableActionError(
-          'Cable type import endpoint not found. Please restart the API server after updating it.'
-        );
+        showToast({
+          intent: 'error',
+          title: 'Import endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
       } else {
-        setCableActionError(
-          err instanceof ApiError
-            ? err.message
-            : 'Failed to import cable types.'
-        );
+        showToast({
+          intent: 'error',
+          title: 'Failed to import cable types',
+          body: err instanceof ApiError ? err.message : undefined
+        });
       }
     } finally {
       setIsImporting(false);
@@ -581,15 +638,15 @@ export const ProjectDetails = () => {
 
   const handleExportCableTypes = async () => {
     if (!project || !token) {
-      setCableActionError(
-        'You need to be signed in as an admin to export cable types.'
-      );
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to export cable types.'
+      });
       return;
     }
 
     setIsExporting(true);
-    setCableActionError(null);
-    setCableActionMessage(null);
 
     try {
       const blob = await exportCableTypes(token, project.id);
@@ -606,19 +663,21 @@ export const ProjectDetails = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
 
-      setCableActionMessage('Cable types exported.');
+      showToast({ intent: 'success', title: 'Cable types exported' });
     } catch (err) {
       console.error('Export cable types failed', err);
       if (err instanceof ApiError && err.status === 404) {
-        setCableActionError(
-          'Cable type export endpoint not found. Please restart the API server after updating it.'
-        );
+        showToast({
+          intent: 'error',
+          title: 'Export endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
       } else {
-        setCableActionError(
-          err instanceof ApiError
-            ? err.message
-            : 'Failed to export cable types.'
-        );
+        showToast({
+          intent: 'error',
+          title: 'Failed to export cable types',
+          body: err instanceof ApiError ? err.message : undefined
+        });
       }
     } finally {
       setIsExporting(false);
@@ -736,26 +795,8 @@ export const ProjectDetails = () => {
             ) : null}
           </div>
 
-          {cableActionMessage ? (
-            <Body1
-              className={mergeClasses(styles.statusMessage, styles.successText)}
-            >
-              {cableActionMessage}
-            </Body1>
-          ) : null}
-          {cableActionError ? (
-            <Body1
-              className={mergeClasses(styles.statusMessage, styles.errorText)}
-            >
-              {cableActionError}
-            </Body1>
-          ) : null}
           {cableTypesError ? (
-            <Body1
-              className={mergeClasses(styles.statusMessage, styles.errorText)}
-            >
-              {cableTypesError}
-            </Body1>
+            <Body1 className={styles.errorText}>{cableTypesError}</Body1>
           ) : null}
 
           {cableTypesLoading ? (
@@ -798,7 +839,7 @@ export const ProjectDetails = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {cableTypes.map((cableType) => {
+                  {pagedCableTypes.map((cableType) => {
                     const isBusy = pendingCableTypeId === cableType.id;
                     return (
                       <tr key={cableType.id}>
@@ -851,6 +892,33 @@ export const ProjectDetails = () => {
                   })}
                 </tbody>
               </table>
+              {showPagination ? (
+                <div className={styles.pagination}>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setCablePage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={cablePage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Body1>
+                    Page {cablePage} of {totalCablePages}
+                  </Body1>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setCablePage((prev) =>
+                        Math.min(totalCablePages, prev + 1)
+                      )
+                    }
+                    disabled={cablePage === totalCablePages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

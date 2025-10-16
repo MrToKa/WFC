@@ -1396,9 +1396,9 @@ app.get(
           showFirstColumn: false,
           showLastColumn: false,
           showRowStripes: true,
-          showColumnStripes: false
+          showColumnStripes: true
         },
-        columns: columns.map((column) => ({ name: column.name })),
+        columns: columns.map((column) => ({ name: column.name, filterButton: true })),
         rows: rows.length > 0 ? rows : [['', '', '', '']]
       });
 
