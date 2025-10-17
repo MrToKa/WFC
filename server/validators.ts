@@ -143,3 +143,48 @@ export const updateCableSchema = z
       value.routing !== undefined,
     { message: 'At least one field must be provided' }
   );
+
+const trayStringField = z
+  .string()
+  .trim()
+  .max(500)
+  .optional();
+
+const trayNumericField = z
+  .number()
+  .min(0)
+  .max(1_000_000)
+  .nullable()
+  .optional();
+
+export const createTraySchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    type: trayStringField,
+    purpose: trayStringField,
+    widthMm: trayNumericField,
+    heightMm: trayNumericField,
+    lengthMm: trayNumericField
+  })
+  .strict();
+
+export const updateTraySchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    type: trayStringField,
+    purpose: trayStringField,
+    widthMm: trayNumericField,
+    heightMm: trayNumericField,
+    lengthMm: trayNumericField
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.name !== undefined ||
+      value.type !== undefined ||
+      value.purpose !== undefined ||
+      value.widthMm !== undefined ||
+      value.heightMm !== undefined ||
+      value.lengthMm !== undefined,
+    { message: 'At least one field must be provided' }
+  );

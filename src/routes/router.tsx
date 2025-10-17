@@ -5,6 +5,7 @@ import { Account } from '@/pages/Account';
 import { About } from '@/pages/About';
 import { AdminPanel } from '@/pages/AdminPanel';
 import { ProjectDetails } from '@/pages/ProjectDetails';
+import { TrayDetails } from '@/pages/TrayDetails';
 import { Projects } from '@/pages/Projects';
 import { Login } from '@/pages/Login';
 import { Register } from '@/pages/Register';
@@ -25,6 +26,10 @@ export const routes: RouteObject[] = [
       {
         path: 'projects/:projectId',
         element: <ProjectDetails />
+      },
+      {
+        path: 'projects/:projectId/trays/:trayId',
+        element: <TrayDetails />
       },
       {
         path: 'login',

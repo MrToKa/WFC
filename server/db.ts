@@ -92,6 +92,31 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS cables_cable_type_id_idx
       ON cables (cable_type_id);
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS trays (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      tray_type TEXT,
+      purpose TEXT,
+      width_mm NUMERIC,
+      height_mm NUMERIC,
+      length_mm NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS trays_project_name_idx
+      ON trays (project_id, lower(name));
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS trays_project_id_idx
+      ON trays (project_id);
+  `);
 }
 
 export async function shutdownDatabase(): Promise<void> {

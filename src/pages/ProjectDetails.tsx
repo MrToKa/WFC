@@ -25,7 +25,7 @@ import {
   shorthands,
   tokens
 } from '@fluentui/react-components';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
   ApiErrorPayload,
@@ -34,20 +34,28 @@ import {
   CableInput,
   CableType,
   CableTypeInput,
+  Tray,
+  TrayInput,
   Project,
   createCable,
   createCableType,
+  createTray,
   deleteCable,
   deleteCableType,
+  deleteTray,
   exportCables,
   exportCableTypes,
+  exportTrays,
   fetchCables,
   fetchCableTypes,
+  fetchTrays,
   fetchProject,
   importCables,
   importCableTypes,
+  importTrays,
   updateCable,
-  updateCableType
+  updateCableType,
+  updateTray
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -154,8 +162,9 @@ const useStyles = makeStyles({
 
 const CABLE_TYPES_PER_PAGE = 10;
 const CABLE_LIST_PER_PAGE = 10;
+const TRAYS_PER_PAGE = 10;
 
-type ProjectDetailsTab = 'details' | 'cables' | 'cable-list';
+type ProjectDetailsTab = 'details' | 'cables' | 'cable-list' | 'trays';
 
 type CableTypeFormState = {
   name: string;
@@ -181,6 +190,37 @@ const toFormState = (cableType: CableType): CableTypeFormState => ({
   diameterMm: cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
   weightKgPerM:
     cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : ''
+});
+
+type TrayFormState = {
+  name: string;
+  type: string;
+  purpose: string;
+  widthMm: string;
+  heightMm: string;
+  lengthMm: string;
+};
+
+type TrayFormErrors = Partial<Record<keyof TrayFormState, string>> & {
+  general?: string;
+};
+
+const emptyTrayForm: TrayFormState = {
+  name: '',
+  type: '',
+  purpose: '',
+  widthMm: '',
+  heightMm: '',
+  lengthMm: ''
+};
+
+const toTrayFormState = (tray: Tray): TrayFormState => ({
+  name: tray.name,
+  type: tray.type ?? '',
+  purpose: tray.purpose ?? '',
+  widthMm: tray.widthMm !== null ? String(tray.widthMm) : '',
+  heightMm: tray.heightMm !== null ? String(tray.heightMm) : '',
+  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : ''
 });
 
 const formatNumeric = (value: number | null): string =>
@@ -211,6 +251,32 @@ const parseCableTypeApiErrors = (
     }
     return acc;
   }, {});
+
+  const generalMessage = payload.formErrors?.[0];
+  if (generalMessage) {
+    fieldErrors.general = generalMessage;
+  }
+
+  return fieldErrors;
+};
+
+const parseTrayApiErrors = (payload: ApiErrorPayload): TrayFormErrors => {
+  if (typeof payload === 'string') {
+    return { general: payload };
+  }
+
+  const fieldErrors: TrayFormErrors = {};
+
+  for (const [field, messages] of Object.entries(
+    payload.fieldErrors ?? {}
+  )) {
+    if (messages.length === 0) {
+      continue;
+    }
+    if (field in emptyTrayForm) {
+      fieldErrors[field as keyof TrayFormState] = messages[0];
+    }
+  }
 
   const generalMessage = payload.formErrors?.[0];
   if (generalMessage) {
@@ -285,6 +351,7 @@ const parseCableFormErrors = (payload: ApiErrorPayload): CableFormErrors => {
 export const ProjectDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { projectId } = useParams<{ projectId: string }>();
   const { user, token } = useAuth();
   const { showToast } = useToast();
@@ -292,11 +359,20 @@ export const ProjectDetails = () => {
   const isAdmin = Boolean(user?.isAdmin);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cablesFileInputRef = useRef<HTMLInputElement | null>(null);
+  const traysFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<ProjectDetailsTab>('details');
+  const [selectedTab, setSelectedTab] = useState<ProjectDetailsTab>(() => {
+    const tabParam = searchParams.get('tab');
+    return tabParam === 'details' ||
+      tabParam === 'cables' ||
+      tabParam === 'cable-list' ||
+      tabParam === 'trays'
+      ? (tabParam as ProjectDetailsTab)
+      : 'details';
+  });
 
   const [cableTypes, setCableTypes] = useState<CableType[]>([]);
   const [cableTypesLoading, setCableTypesLoading] = useState<boolean>(true);
@@ -345,6 +421,25 @@ export const ProjectDetails = () => {
   const [cableDialogSubmitting, setCableDialogSubmitting] =
     useState<boolean>(false);
   const [editingCableId, setEditingCableId] = useState<string | null>(null);
+  const [trays, setTrays] = useState<Tray[]>([]);
+  const [traysLoading, setTraysLoading] = useState<boolean>(true);
+  const [traysRefreshing, setTraysRefreshing] = useState<boolean>(false);
+  const [traysError, setTraysError] = useState<string | null>(null);
+  const [traysImporting, setTraysImporting] = useState<boolean>(false);
+  const [traysExporting, setTraysExporting] = useState<boolean>(false);
+  const [pendingTrayId, setPendingTrayId] = useState<string | null>(null);
+  const [traysPage, setTraysPage] = useState<number>(1);
+  const [isTrayDialogOpen, setTrayDialogOpen] = useState<boolean>(false);
+  const [trayDialogMode, setTrayDialogMode] = useState<'create' | 'edit'>(
+    'create'
+  );
+  const [trayDialogValues, setTrayDialogValues] =
+    useState<TrayFormState>(emptyTrayForm);
+  const [trayDialogErrors, setTrayDialogErrors] =
+    useState<TrayFormErrors>({});
+  const [trayDialogSubmitting, setTrayDialogSubmitting] =
+    useState<boolean>(false);
+  const [editingTrayId, setEditingTrayId] = useState<string | null>(null);
   const [inlineEditingEnabled, setInlineEditingEnabled] =
     useState<boolean>(false);
   const [cableDrafts, setCableDrafts] = useState<
@@ -371,6 +466,15 @@ export const ProjectDetails = () => {
       ),
     []
   );
+
+  const sortTrays = useCallback(
+    (items: Tray[]) =>
+      [...items].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      ),
+    []
+  );
+
 
   const totalCablePages = useMemo(() => {
     if (cableTypes.length === 0) {
@@ -416,6 +520,23 @@ export const ProjectDetails = () => {
 
   const showCablePagination = cables.length > CABLE_LIST_PER_PAGE;
 
+  const totalTrayPages = useMemo(() => {
+    if (trays.length === 0) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(trays.length / TRAYS_PER_PAGE));
+  }, [trays.length]);
+
+  const pagedTrays = useMemo(() => {
+    if (trays.length === 0) {
+      return [];
+    }
+    const startIndex = (traysPage - 1) * TRAYS_PER_PAGE;
+    return trays.slice(startIndex, startIndex + TRAYS_PER_PAGE);
+  }, [trays, traysPage]);
+
+  const showTrayPagination = trays.length > TRAYS_PER_PAGE;
+
   useEffect(() => {
     const totalPages = Math.max(
       1,
@@ -425,6 +546,13 @@ export const ProjectDetails = () => {
       setCablesPage(totalPages);
     }
   }, [cables.length, cablesPage]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(trays.length / TRAYS_PER_PAGE));
+    if (traysPage > totalPages) {
+      setTraysPage(totalPages);
+    }
+  }, [trays.length, traysPage]);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -539,6 +667,48 @@ export const ProjectDetails = () => {
     [projectId, sortCables]
   );
 
+  const loadTrays = useCallback(
+    async (showSpinner: boolean) => {
+      if (!projectId) {
+        return;
+      }
+
+      if (showSpinner) {
+        setTraysLoading(true);
+      } else {
+        setTraysRefreshing(true);
+      }
+
+      setTraysError(null);
+
+      try {
+        const response = await fetchTrays(projectId);
+        setTrays(sortTrays(response.trays));
+        setTraysPage(1);
+      } catch (err) {
+        console.error('Failed to load trays', err);
+        if (err instanceof ApiError) {
+          if (err.status === 404) {
+            setTrays([]);
+            setTraysPage(1);
+            setTraysError(
+              'Trays endpoint is unavailable. Ensure the server is running the latest version.'
+            );
+          } else {
+            setTraysError(err.message);
+          }
+        } else {
+          setTraysError('Failed to load trays.');
+        }
+      } finally {
+        setTraysLoading(false);
+        setTraysRefreshing(false);
+      }
+    },
+    [projectId, sortTrays]
+  );
+
+
   useEffect(() => {
     if (!projectId) {
       return;
@@ -552,6 +722,14 @@ export const ProjectDetails = () => {
     }
     void loadCables(true);
   }, [projectId, loadCables]);
+
+  useEffect(() => {
+    if (!projectId) {
+      return;
+    }
+    void loadTrays(true);
+  }, [projectId, loadTrays]);
+
 
   const rebuildCableDrafts = useCallback(() => {
     setCableDrafts(
@@ -591,15 +769,47 @@ export const ProjectDetails = () => {
 
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
-      setSelectedTab(data.value as ProjectDetailsTab);
+      const tab = data.value as ProjectDetailsTab;
+      setSelectedTab(tab);
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        if (tab === 'details') {
+          next.delete('tab');
+        } else {
+          next.set('tab', tab);
+        }
+        return next;
+      });
     },
-    []
+    [setSearchParams]
   );
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    const validTabs: ProjectDetailsTab[] = ['details', 'cables', 'cable-list', 'trays'];
+    const nextTab =
+      tabParam && validTabs.includes(tabParam as ProjectDetailsTab)
+        ? (tabParam as ProjectDetailsTab)
+        : 'details';
+    if (nextTab !== selectedTab) {
+      setSelectedTab(nextTab);
+    }
+  }, [searchParams, selectedTab]);
+
 
   const handleCableTypeDialogFieldChange =
     (field: keyof CableTypeFormState) =>
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
       setCableTypeDialogValues((previous) => ({
+        ...previous,
+        [field]: data.value
+      }));
+    };
+
+  const handleTrayDialogFieldChange =
+    (field: keyof TrayFormState) =>
+    (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+      setTrayDialogValues((previous) => ({
         ...previous,
         [field]: data.value
       }));
@@ -897,6 +1107,105 @@ export const ProjectDetails = () => {
   }
 };
 
+  const handleImportTrays = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    event.target.value = '';
+
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to import trays.'
+      });
+      return;
+    }
+
+    setTraysImporting(true);
+
+    try {
+      const response = await importTrays(token, project.id, file);
+      setTrays(sortTrays(response.trays));
+      setTraysPage(1);
+
+      const summary: CableImportSummary = response.summary;
+      showToast({
+        intent: 'success',
+        title: 'Trays imported',
+        body: summary.inserted + ' added, ' + summary.updated + ' updated, ' + summary.skipped + ' skipped.'
+      });
+    } catch (err) {
+      console.error('Import trays failed', err);
+      if (err instanceof ApiError && err.status === 404) {
+        showToast({
+          intent: 'error',
+          title: 'Import endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
+      } else {
+        showToast({
+          intent: 'error',
+          title: 'Failed to import trays',
+          body: err instanceof ApiError ? err.message : undefined
+        });
+      }
+    } finally {
+      setTraysImporting(false);
+    }
+  };
+
+  const handleExportTrays = async () => {
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to export trays.'
+      });
+      return;
+    }
+
+    setTraysExporting(true);
+
+    try {
+      const blob = await exportTrays(token, project.id);
+      const link = document.createElement('a');
+      const url = window.URL.createObjectURL(blob);
+      const fileName = sanitizeFileSegment(project.projectNumber) + '-trays.xlsx';
+
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast({ intent: 'success', title: 'Trays exported' });
+    } catch (err) {
+      console.error('Export trays failed', err);
+      if (err instanceof ApiError && err.status === 404) {
+        showToast({
+          intent: 'error',
+          title: 'Export endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
+      } else {
+        showToast({
+          intent: 'error',
+          title: 'Failed to export trays',
+          body: err instanceof ApiError ? err.message : undefined
+        });
+      }
+    } finally {
+      setTraysExporting(false);
+    }
+  };
+
   const handleCableDialogFieldChange =
     (field: keyof CableFormState) =>
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
@@ -960,6 +1269,31 @@ export const ProjectDetails = () => {
     setEditingCableId(cable.id);
   }, []);
 
+
+  const resetTrayDialog = useCallback(() => {
+    setTrayDialogOpen(false);
+    setTrayDialogErrors({});
+    setTrayDialogValues(emptyTrayForm);
+    setTrayDialogSubmitting(false);
+    setEditingTrayId(null);
+  }, []);
+
+  const openCreateTrayDialog = useCallback(() => {
+    setTrayDialogMode('create');
+    setTrayDialogValues(emptyTrayForm);
+    setTrayDialogErrors({});
+    setTrayDialogOpen(true);
+    setEditingTrayId(null);
+  }, []);
+
+  const openEditTrayDialog = useCallback((tray: Tray) => {
+    setTrayDialogMode('edit');
+    setTrayDialogErrors({});
+    setTrayDialogValues(toTrayFormState(tray));
+    setTrayDialogOpen(true);
+    setEditingTrayId(tray.id);
+  }, []);
+
   const buildCableInput = (values: CableFormState) => {
     const errors: CableFormErrors = {};
 
@@ -988,6 +1322,104 @@ export const ProjectDetails = () => {
     };
 
     return { input, errors };
+  };
+
+  const buildTrayInput = (values: TrayFormState) => {
+    const errors: TrayFormErrors = {};
+
+    const name = values.name.trim();
+    if (name === "") {
+      errors.name = "Name is required";
+    }
+
+    const type = toNullableString(values.type);
+    const purpose = toNullableString(values.purpose);
+    const widthResult = parseNumberInput(values.widthMm);
+    if (widthResult.error) {
+      errors.widthMm = widthResult.error;
+    }
+    const heightResult = parseNumberInput(values.heightMm);
+    if (heightResult.error) {
+      errors.heightMm = heightResult.error;
+    }
+    const lengthResult = parseNumberInput(values.lengthMm);
+    if (lengthResult.error) {
+      errors.lengthMm = lengthResult.error;
+    }
+
+    const input: TrayInput = {
+      name,
+      type,
+      purpose,
+      widthMm: widthResult.numeric,
+      heightMm: heightResult.numeric,
+      lengthMm: lengthResult.numeric
+    };
+
+    return { input, errors };
+  };
+
+
+
+  const handleSubmitTrayDialog = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!project || !token) {
+      setTrayDialogErrors({
+        general: 'You need to be signed in as an admin to manage trays.'
+      });
+      return;
+    }
+
+    const { input, errors } = buildTrayInput(trayDialogValues);
+
+    if (Object.keys(errors).length > 0) {
+      setTrayDialogErrors(errors);
+      return;
+    }
+
+    setTrayDialogSubmitting(true);
+    setTrayDialogErrors({});
+
+    try {
+      if (trayDialogMode === 'create') {
+        const response = await createTray(token, project.id, input);
+        setTrays((previous) => sortTrays([...previous, response.tray]));
+        setTraysPage(1);
+        showToast({ intent: 'success', title: 'Tray created' });
+      } else if (editingTrayId) {
+        const response = await updateTray(token, project.id, editingTrayId, input);
+        setTrays((previous) =>
+          sortTrays(
+            previous.map((item) =>
+              item.id === editingTrayId ? response.tray : item
+            )
+          )
+        );
+        showToast({ intent: 'success', title: 'Tray updated' });
+      }
+      resetTrayDialog();
+    } catch (err) {
+      console.error('Save tray failed', err);
+      if (err instanceof ApiError) {
+        setTrayDialogErrors(parseTrayApiErrors(err.payload));
+        showToast({
+          intent: 'error',
+          title: 'Failed to save tray',
+          body: err.message
+        });
+      } else {
+        const message = 'Failed to save tray. Please try again.';
+        setTrayDialogErrors({ general: message });
+        showToast({
+          intent: 'error',
+          title: 'Failed to save tray',
+          body: message
+        });
+      }
+    } finally {
+      setTrayDialogSubmitting(false);
+    }
   };
 
   const handleSubmitCableDialog = async (event: FormEvent<HTMLFormElement>) => {
@@ -1057,6 +1489,64 @@ export const ProjectDetails = () => {
       setCableDialogSubmitting(false);
     }
   };
+
+
+  const handleDeleteTray = async (tray: Tray) => {
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to delete trays.'
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete tray "${tray.name}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPendingTrayId(tray.id);
+
+    try {
+      await deleteTray(token, project.id, tray.id);
+      setTrays((previous) => {
+        const next = previous.filter((item) => item.id !== tray.id);
+        const totalPages = Math.max(
+          1,
+          Math.ceil(next.length / TRAYS_PER_PAGE)
+        );
+        if (traysPage > totalPages) {
+          setTraysPage(totalPages);
+        }
+        return next;
+      });
+      showToast({ intent: 'success', title: 'Tray deleted' });
+    } catch (err) {
+      console.error('Delete tray failed', err);
+      showToast({
+        intent: 'error',
+        title: 'Failed to delete tray',
+        body: err instanceof ApiError ? err.message : undefined
+      });
+    } finally {
+      setPendingTrayId(null);
+    }
+  };
+
+
+  const openTrayDetails = useCallback(
+    (tray: Tray) => {
+      if (!projectId) {
+        return;
+      }
+      navigate(`/projects/${projectId}/trays/${tray.id}`);
+    },
+    [navigate, projectId]
+  );
 
   const handleDeleteCable = async (cable: Cable) => {
     if (!project || !token) {
@@ -1367,6 +1857,7 @@ export const ProjectDetails = () => {
         <Tab value="details">Details</Tab>
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
+        <Tab value="trays">Trays</Tab>
       </TabList>
 
       {selectedTab === 'details' ? (
@@ -1562,6 +2053,186 @@ export const ProjectDetails = () => {
         </div>
       ) : null}
 
+      {selectedTab === 'trays' ? (
+        <div className={styles.tabPanel}>
+          <div className={styles.actionsRow}>
+            <Button
+              onClick={() => void loadTrays(false)}
+              disabled={traysRefreshing}
+            >
+              {traysRefreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
+            {isAdmin ? (
+              <>
+                <Button appearance="primary" onClick={openCreateTrayDialog}>
+                  Add tray
+                </Button>
+                <Button
+                  onClick={() => traysFileInputRef.current?.click()}
+                  disabled={traysImporting}
+                >
+                  {traysImporting ? 'Importing...' : 'Import from Excel'}
+                </Button>
+                <Button
+                  appearance="secondary"
+                  onClick={() => void handleExportTrays()}
+                  disabled={traysExporting}
+                >
+                  {traysExporting ? 'Exporting...' : 'Export to Excel'}
+                </Button>
+                <input
+                  ref={traysFileInputRef}
+                  className={styles.hiddenInput}
+                  type="file"
+                  accept=".xlsx"
+                  onChange={handleImportTrays}
+                />
+              </>
+            ) : null}
+          </div>
+
+          {traysError ? (
+            <Body1 className={styles.errorText}>{traysError}</Body1>
+          ) : null}
+
+          {traysLoading ? (
+            <Spinner label="Loading trays..." />
+          ) : trays.length === 0 ? (
+            <div className={styles.emptyState}>
+              <Caption1>No trays found</Caption1>
+              <Body1>
+                {isAdmin
+                  ? 'Use the buttons above to add or import trays for this project.'
+                  : 'There are no trays recorded for this project yet.'}
+              </Body1>
+            </div>
+          ) : (
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.tableHeadCell}>Name</th>
+                    <th className={styles.tableHeadCell}>Type</th>
+                    <th className={styles.tableHeadCell}>Purpose</th>
+                    <th
+                      className={mergeClasses(
+                        styles.tableHeadCell,
+                        styles.numericCell
+                      )}
+                    >
+                      Width [mm]
+                    </th>
+                    <th
+                      className={mergeClasses(
+                        styles.tableHeadCell,
+                        styles.numericCell
+                      )}
+                    >
+                      Height [mm]
+                    </th>
+                    <th
+                      className={mergeClasses(
+                        styles.tableHeadCell,
+                        styles.numericCell
+                      )}
+                    >
+                      Length
+                    </th>
+                    <th className={styles.tableHeadCell}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedTrays.map((tray) => {
+                    const isBusy = pendingTrayId === tray.id;
+                    return (
+                      <tr key={tray.id}>
+                        <td className={styles.tableCell}>{tray.name}</td>
+                        <td className={styles.tableCell}>{tray.type ?? '-'}</td>
+                        <td className={styles.tableCell}>{tray.purpose ?? '-'}</td>
+                        <td
+                          className={mergeClasses(
+                            styles.tableCell,
+                            styles.numericCell
+                          )}
+                        >
+                          {formatNumeric(tray.widthMm)}
+                        </td>
+                        <td
+                          className={mergeClasses(
+                            styles.tableCell,
+                            styles.numericCell
+                          )}
+                        >
+                          {formatNumeric(tray.heightMm)}
+                        </td>
+                        <td
+                          className={mergeClasses(
+                            styles.tableCell,
+                            styles.numericCell
+                          )}
+                        >
+                          {formatNumeric(tray.lengthMm)}
+                        </td>
+                        <td
+                          className={mergeClasses(
+                            styles.tableCell,
+                            styles.actionsCell
+                          )}
+                        >
+                          <Button
+                            size="small"
+                            onClick={() => openTrayDetails(tray)}
+                            disabled={isBusy}
+                          >
+                            Details
+                          </Button>
+                          {isAdmin ? (
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => void handleDeleteTray(tray)}
+                              disabled={isBusy}
+                            >
+                              Delete
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {showTrayPagination ? (
+                <div className={styles.pagination}>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setTraysPage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={traysPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Body1>
+                    Page {traysPage} of {totalTrayPages}
+                  </Body1>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setTraysPage((prev) =>
+                        Math.min(totalTrayPages, prev + 1)
+                      )
+                    }
+                    disabled={traysPage === totalTrayPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
       {selectedTab === 'cable-list' ? (
         <div className={styles.tabPanel}>
           <div className={styles.actionsRow}>
@@ -1855,7 +2526,127 @@ export const ProjectDetails = () => {
         Back
       </Button>
 
-      <Dialog
+            <Dialog
+        open={isTrayDialogOpen}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            resetTrayDialog();
+          }
+        }}
+      >
+        <DialogSurface>
+          <form className={styles.dialogForm} onSubmit={handleSubmitTrayDialog}>
+            <DialogBody>
+              <DialogTitle>
+                {trayDialogMode === 'create' ? 'Add tray' : 'Edit tray'}
+              </DialogTitle>
+              <DialogContent>
+                <Field
+                  label="Name"
+                  required
+                  validationState={
+                    trayDialogErrors.name ? 'error' : undefined
+                  }
+                  validationMessage={trayDialogErrors.name}
+                >
+                  <Input
+                    value={trayDialogValues.name}
+                    onChange={handleTrayDialogFieldChange('name')}
+                    required
+                  />
+                </Field>
+                <Field
+                  label="Type"
+                  validationState={
+                    trayDialogErrors.type ? 'error' : undefined
+                  }
+                  validationMessage={trayDialogErrors.type}
+                >
+                  <Input
+                    value={trayDialogValues.type}
+                    onChange={handleTrayDialogFieldChange('type')}
+                  />
+                </Field>
+                <Field
+                  label="Purpose"
+                  validationState={
+                    trayDialogErrors.purpose ? 'error' : undefined
+                  }
+                  validationMessage={trayDialogErrors.purpose}
+                >
+                  <Input
+                    value={trayDialogValues.purpose}
+                    onChange={handleTrayDialogFieldChange('purpose')}
+                  />
+                </Field>
+                <Field
+                  label="Width [mm]"
+                  validationState={
+                    trayDialogErrors.widthMm ? 'error' : undefined
+                  }
+                  validationMessage={trayDialogErrors.widthMm}
+                >
+                  <Input
+                    value={trayDialogValues.widthMm}
+                    onChange={handleTrayDialogFieldChange('widthMm')}
+                  />
+                </Field>
+                <Field
+                  label="Height [mm]"
+                  validationState={
+                    trayDialogErrors.heightMm ? 'error' : undefined
+                  }
+                  validationMessage={trayDialogErrors.heightMm}
+                >
+                  <Input
+                    value={trayDialogValues.heightMm}
+                    onChange={handleTrayDialogFieldChange('heightMm')}
+                  />
+                </Field>
+                <Field
+                  label="Length"
+                  validationState={
+                    trayDialogErrors.lengthMm ? 'error' : undefined
+                  }
+                  validationMessage={trayDialogErrors.lengthMm}
+                >
+                  <Input
+                    value={trayDialogValues.lengthMm}
+                    onChange={handleTrayDialogFieldChange('lengthMm')}
+                  />
+                </Field>
+                {trayDialogErrors.general ? (
+                  <Body1 className={styles.errorText}>
+                    {trayDialogErrors.general}
+                  </Body1>
+                ) : null}
+              </DialogContent>
+              <DialogActions className={styles.dialogActions}>
+                <Button
+                  type="button"
+                  appearance="secondary"
+                  onClick={resetTrayDialog}
+                  disabled={trayDialogSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  appearance="primary"
+                  disabled={trayDialogSubmitting}
+                >
+                  {trayDialogSubmitting
+                    ? 'Saving...'
+                    : trayDialogMode === 'create'
+                      ? 'Add tray'
+                      : 'Save changes'}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </form>
+        </DialogSurface>
+      </Dialog>
+<Dialog
         open={isCableTypeDialogOpen}
         onOpenChange={(_, data) => {
           if (!data.open) {
