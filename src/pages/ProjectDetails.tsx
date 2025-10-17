@@ -14,6 +14,7 @@ import {
   Input,
   Dropdown,
   Option,
+  Switch,
   Spinner,
   Tab,
   TabList,
@@ -219,6 +220,11 @@ const parseCableTypeApiErrors = (
   return fieldErrors;
 };
 
+const toNullableString = (value: string): string | null => {
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
 type CableFormState = {
   cableId: string;
   tag: string;
@@ -339,6 +345,14 @@ export const ProjectDetails = () => {
   const [cableDialogSubmitting, setCableDialogSubmitting] =
     useState<boolean>(false);
   const [editingCableId, setEditingCableId] = useState<string | null>(null);
+  const [inlineEditingEnabled, setInlineEditingEnabled] =
+    useState<boolean>(false);
+  const [cableDrafts, setCableDrafts] = useState<
+    Record<string, CableFormState>
+  >({});
+  const [inlineUpdatingIds, setInlineUpdatingIds] = useState<Set<string>>(
+    new Set()
+  );
 
   const sortCableTypes = useCallback(
     (types: CableType[]) =>
@@ -538,6 +552,25 @@ export const ProjectDetails = () => {
     }
     void loadCables(true);
   }, [projectId, loadCables]);
+
+  const rebuildCableDrafts = useCallback(() => {
+    setCableDrafts(
+      cables.reduce((acc, cable) => {
+        acc[cable.id] = toCableFormState(cable);
+        return acc;
+      }, {} as Record<string, CableFormState>)
+    );
+  }, [cables]);
+
+  useEffect(() => {
+    rebuildCableDrafts();
+  }, [rebuildCableDrafts]);
+
+  useEffect(() => {
+    if (!inlineEditingEnabled) {
+      rebuildCableDrafts();
+    }
+  }, [inlineEditingEnabled, rebuildCableDrafts]);
 
   const formattedDates = useMemo(() => {
     if (!project) {
@@ -1170,6 +1203,122 @@ export const ProjectDetails = () => {
     }
   };
 
+  const handleCableDraftChange = useCallback(
+    (cableId: string, field: keyof CableFormState, value: string) => {
+      setCableDrafts((previous) => {
+        const baseDraft =
+          previous[cableId] ??
+          (() => {
+            const cable = cables.find((item) => item.id === cableId);
+            return cable ? toCableFormState(cable) : { ...emptyCableForm };
+          })();
+
+        return {
+          ...previous,
+          [cableId]: {
+            ...baseDraft,
+            [field]: value
+          }
+        };
+      });
+    },
+    [cables]
+  );
+
+  const updateCableInline = useCallback(
+    async (cable: Cable, changes: Partial<CableInput>) => {
+      if (!project || !token) {
+        showToast({
+          intent: 'error',
+          title: 'Admin access required',
+          body: 'You need to be signed in as an admin to update cables.'
+        });
+        return;
+      }
+
+      if (Object.keys(changes).length === 0) {
+        return;
+      }
+
+      setInlineUpdatingIds((previous) => {
+        const next = new Set(previous);
+        next.add(cable.id);
+        return next;
+      });
+
+      try {
+        const response = await updateCable(token, project.id, cable.id, changes);
+        setCables((previous) =>
+          sortCables(
+            previous.map((item) =>
+              item.id === cable.id ? response.cable : item
+            )
+          )
+        );
+        setCableDrafts((previous) => ({
+          ...previous,
+          [cable.id]: toCableFormState(response.cable)
+        }));
+      } catch (err) {
+        console.error('Inline cable update failed', err);
+        showToast({
+          intent: 'error',
+          title: 'Failed to update cable',
+          body: err instanceof ApiError ? err.message : undefined
+        });
+        setCableDrafts((previous) => ({
+          ...previous,
+          [cable.id]: toCableFormState(cable)
+        }));
+      } finally {
+        setInlineUpdatingIds((previous) => {
+          const next = new Set(previous);
+          next.delete(cable.id);
+          return next;
+        });
+      }
+    },
+    [project, token, showToast, updateCable, sortCables]
+  );
+
+  const handleInlineCableTypeChange = useCallback(
+    async (cable: Cable, nextCableTypeId: string) => {
+      if (nextCableTypeId === '' || nextCableTypeId === cable.cableTypeId) {
+        return;
+      }
+      await updateCableInline(cable, { cableTypeId: nextCableTypeId });
+    },
+    [updateCableInline]
+  );
+
+  const handleCableTextFieldBlur = useCallback(
+    async (
+      cable: Cable,
+      field: 'tag' | 'fromLocation' | 'toLocation' | 'routing'
+    ) => {
+      const draft = cableDrafts[cable.id];
+      if (!draft) {
+        return;
+      }
+
+      const normalized = toNullableString(draft[field]);
+      const current = (cable[field] ?? null) as string | null;
+
+      if (normalized === current) {
+        return;
+      }
+
+      const changes = {
+        [field]: normalized
+      } as Partial<CableInput>;
+
+      await updateCableInline(cable, changes);
+    },
+    [cableDrafts, updateCableInline]
+  );
+
+  const isInlineEditable = inlineEditingEnabled && isAdmin;
+
   if (isLoading) {
     return (
       <section className={styles.root}>
@@ -1451,6 +1600,14 @@ export const ProjectDetails = () => {
                   accept=".xlsx"
                   onChange={handleImportCables}
                 />
+                <Switch
+                  checked={inlineEditingEnabled}
+                  label="Inline edit"
+                  onChange={(_, data) =>
+                    setInlineEditingEnabled(Boolean(data.checked))
+                  }
+                  disabled={inlineUpdatingIds.size > 0}
+                />
               </>
             ) : null}
           </div>
@@ -1488,18 +1645,150 @@ export const ProjectDetails = () => {
                 <tbody>
                   {pagedCables.map((cable) => {
                     const isBusy = pendingCableId === cable.id;
+                    const draft =
+                      cableDrafts[cable.id] ?? toCableFormState(cable);
+                    const isRowUpdating = inlineUpdatingIds.has(cable.id);
+                    const disableActions = isBusy || isRowUpdating;
+                    const currentCableType = cableTypes.find(
+                      (type) => type.id === draft.cableTypeId
+                    );
                     return (
                       <tr key={cable.id}>
-                        <td className={styles.tableCell}>{cable.tag ?? '-'}</td>
-                        <td className={styles.tableCell}>{cable.typeName}</td>
                         <td className={styles.tableCell}>
-                          {cable.fromLocation ?? '-'}
+                          {isInlineEditable ? (
+                            <Input
+                              size="small"
+                              value={draft.tag}
+                              onChange={(_, data) =>
+                                handleCableDraftChange(
+                                  cable.id,
+                                  'tag',
+                                  data.value
+                                )
+                              }
+                              onBlur={() =>
+                                void handleCableTextFieldBlur(cable, 'tag')
+                              }
+                              disabled={isRowUpdating}
+                              aria-label="Cable tag"
+                            />
+                          ) : (
+                            cable.tag ?? '-'
+                          )}
                         </td>
                         <td className={styles.tableCell}>
-                          {cable.toLocation ?? '-'}
+                          {isInlineEditable ? (
+                            <Dropdown
+                              size="small"
+                              selectedOptions={
+                                draft.cableTypeId
+                                  ? [draft.cableTypeId]
+                                  : []
+                              }
+                              value={currentCableType?.name ?? ''}
+                              onOptionSelect={(_, data) => {
+                                const nextTypeId =
+                                  data.optionValue ?? cable.cableTypeId;
+                                handleCableDraftChange(
+                                  cable.id,
+                                  'cableTypeId',
+                                  nextTypeId ?? ''
+                                );
+                                if (
+                                  !data.optionValue ||
+                                  data.optionValue === cable.cableTypeId
+                                ) {
+                                  return;
+                                }
+                                void handleInlineCableTypeChange(
+                                  cable,
+                                  data.optionValue
+                                );
+                              }}
+                              disabled={isRowUpdating}
+                              aria-label="Cable type"
+                            >
+                              {cableTypes.map((type) => (
+                                <Option key={type.id} value={type.id}>
+                                  {type.name}
+                                </Option>
+                              ))}
+                            </Dropdown>
+                          ) : (
+                            cable.typeName
+                          )}
                         </td>
                         <td className={styles.tableCell}>
-                          {cable.routing ?? '-'}
+                          {isInlineEditable ? (
+                            <Input
+                              size="small"
+                              value={draft.fromLocation}
+                              onChange={(_, data) =>
+                                handleCableDraftChange(
+                                  cable.id,
+                                  'fromLocation',
+                                  data.value
+                                )
+                              }
+                              onBlur={() =>
+                                void handleCableTextFieldBlur(
+                                  cable,
+                                  'fromLocation'
+                                )
+                              }
+                              disabled={isRowUpdating}
+                              aria-label="From location"
+                            />
+                          ) : (
+                            cable.fromLocation ?? '-'
+                          )}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {isInlineEditable ? (
+                            <Input
+                              size="small"
+                              value={draft.toLocation}
+                              onChange={(_, data) =>
+                                handleCableDraftChange(
+                                  cable.id,
+                                  'toLocation',
+                                  data.value
+                                )
+                              }
+                              onBlur={() =>
+                                void handleCableTextFieldBlur(
+                                  cable,
+                                  'toLocation'
+                                )
+                              }
+                              disabled={isRowUpdating}
+                              aria-label="To location"
+                            />
+                          ) : (
+                            cable.toLocation ?? '-'
+                          )}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {isInlineEditable ? (
+                            <Input
+                              size="small"
+                              value={draft.routing}
+                              onChange={(_, data) =>
+                                handleCableDraftChange(
+                                  cable.id,
+                                  'routing',
+                                  data.value
+                                )
+                              }
+                              onBlur={() =>
+                                void handleCableTextFieldBlur(cable, 'routing')
+                              }
+                              disabled={isRowUpdating}
+                              aria-label="Routing"
+                            />
+                          ) : (
+                            cable.routing ?? '-'
+                          )}
                         </td>
                         {isAdmin ? (
                           <td
@@ -1511,7 +1800,7 @@ export const ProjectDetails = () => {
                             <Button
                               size="small"
                               onClick={() => openEditCableDialog(cable)}
-                              disabled={isBusy}
+                              disabled={disableActions}
                             >
                               Edit
                             </Button>
@@ -1519,7 +1808,7 @@ export const ProjectDetails = () => {
                               size="small"
                               appearance="secondary"
                               onClick={() => void handleDeleteCable(cable)}
-                              disabled={isBusy}
+                              disabled={disableActions}
                             >
                               Delete
                             </Button>
