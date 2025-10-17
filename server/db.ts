@@ -62,6 +62,36 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS cable_types_project_id_idx
       ON cable_types (project_id);
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cables (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      cable_id TEXT NOT NULL,
+      tag TEXT,
+      cable_type_id UUID NOT NULL REFERENCES cable_types(id) ON DELETE CASCADE,
+      from_location TEXT,
+      to_location TEXT,
+      routing TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS cables_project_cable_id_idx
+      ON cables (project_id, lower(cable_id));
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cables_project_id_idx
+      ON cables (project_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cables_cable_type_id_idx
+      ON cables (cable_type_id);
+  `);
 }
 
 export async function shutdownDatabase(): Promise<void> {

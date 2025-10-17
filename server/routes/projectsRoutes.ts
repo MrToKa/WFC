@@ -11,6 +11,7 @@ import {
 } from '../validators.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { cableTypesRouter } from './cableTypesRoutes.js';
+import { cablesRouter } from './cablesRoutes.js';
 
 const projectsRouter = Router();
 
@@ -249,5 +250,6 @@ projectsRouter.delete(
 );
 
 projectsRouter.use('/:projectId/cable-types', cableTypesRouter);
+projectsRouter.use('/:projectId/cables', cablesRouter);
 
 export { projectsRouter };

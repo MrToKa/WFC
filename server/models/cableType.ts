@@ -1,4 +1,6 @@
-const toNumberOrNull = (value: string | number | null): number | null => {
+export const toNumberOrNull = (
+  value: string | number | null
+): number | null => {
   if (value === null || value === undefined) {
     return null;
   }

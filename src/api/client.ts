@@ -33,6 +33,23 @@ export type CableType = {
   updatedAt: string;
 };
 
+export type Cable = {
+  id: string;
+  projectId: string;
+  cableId: string;
+  tag: string | null;
+  cableTypeId: string;
+  typeName: string;
+  purpose: string | null;
+  diameterMm: number | null;
+  weightKgPerM: number | null;
+  fromLocation: string | null;
+  toLocation: string | null;
+  routing: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AuthSuccess = {
   user: User;
   token: string;
@@ -75,6 +92,15 @@ export type CableTypeInput = {
   purpose?: string | null;
   diameterMm?: number | null;
   weightKgPerM?: number | null;
+  fromLocation?: string | null;
+  toLocation?: string | null;
+  routing?: string | null;
+};
+
+export type CableInput = {
+  cableId: string;
+  tag?: string | null;
+  cableTypeId: string;
   fromLocation?: string | null;
   toLocation?: string | null;
   routing?: string | null;
@@ -381,6 +407,127 @@ export async function exportCableTypes(
         ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (payload as any).error
         : 'Failed to export cable types';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function fetchCables(
+  projectId: string
+): Promise<{ cables: Cable[] }> {
+  return request<{ cables: Cable[] }>(`/api/projects/${projectId}/cables`);
+}
+
+export async function createCable(
+  token: string,
+  projectId: string,
+  data: CableInput
+): Promise<{ cable: Cable }> {
+  return request<{ cable: Cable }>(`/api/projects/${projectId}/cables`, {
+    method: 'POST',
+    token,
+    body: data
+  });
+}
+
+export async function updateCable(
+  token: string,
+  projectId: string,
+  cableId: string,
+  data: Partial<CableInput>
+): Promise<{ cable: Cable }> {
+  return request<{ cable: Cable }>(
+    `/api/projects/${projectId}/cables/${cableId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function deleteCable(
+  token: string,
+  projectId: string,
+  cableId: string
+): Promise<void> {
+  await request<void>(`/api/projects/${projectId}/cables/${cableId}`, {
+    method: 'DELETE',
+    token
+  });
+}
+
+export async function importCables(
+  token: string,
+  projectId: string,
+  file: File
+): Promise<{ summary: CableImportSummary; cables: Cable[] }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/projects/${projectId}/cables/import`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    }
+  );
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import cables';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as { summary: CableImportSummary; cables: Cable[] };
+}
+
+export async function exportCables(
+  token: string,
+  projectId: string
+): Promise<Blob> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/projects/${projectId}/cables/export`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export cables';
 
     throw new ApiError(response.status, errorPayload);
   }

@@ -12,6 +12,8 @@ import {
   DialogTitle,
   Field,
   Input,
+  Dropdown,
+  Option,
   Spinner,
   Tab,
   TabList,
@@ -27,15 +29,23 @@ import {
   ApiError,
   ApiErrorPayload,
   CableImportSummary,
+  Cable,
+  CableInput,
   CableType,
   CableTypeInput,
   Project,
+  createCable,
   createCableType,
+  deleteCable,
   deleteCableType,
+  exportCables,
   exportCableTypes,
+  fetchCables,
   fetchCableTypes,
   fetchProject,
+  importCables,
   importCableTypes,
+  updateCable,
   updateCableType
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
@@ -85,12 +95,10 @@ const useStyles = makeStyles({
     color: tokens.colorStatusDangerForeground1
   },
   tableContainer: {
-    width: '100%',
-    overflowX: 'auto'
+    width: '100%'
   },
   table: {
     width: '100%',
-    minWidth: '60rem',
     borderCollapse: 'collapse'
   },
   tableHeadCell: {
@@ -102,7 +110,8 @@ const useStyles = makeStyles({
   tableCell: {
     padding: '0.75rem 1rem',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    verticalAlign: 'top'
+    verticalAlign: 'top',
+    wordBreak: 'break-word'
   },
   numericCell: {
     textAlign: 'right'
@@ -142,9 +151,10 @@ const useStyles = makeStyles({
   }
 });
 
-const CABLES_PER_PAGE = 10;
+const CABLE_TYPES_PER_PAGE = 10;
+const CABLE_LIST_PER_PAGE = 10;
 
-type ProjectDetailsTab = 'details' | 'cables';
+type ProjectDetailsTab = 'details' | 'cables' | 'cable-list';
 
 type CableTypeFormState = {
   name: string;
@@ -174,7 +184,7 @@ const toFormState = (cableType: CableType): CableTypeFormState => ({
 
 const formatNumeric = (value: number | null): string =>
   value === null
-    ? '—'
+    ? '-'
     : new Intl.NumberFormat(undefined, {
         maximumFractionDigits: 3
       }).format(value);
@@ -185,7 +195,9 @@ const sanitizeFileSegment = (value: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'project';
 
-const parseCableApiErrors = (payload: ApiErrorPayload): CableTypeFormErrors => {
+const parseCableTypeApiErrors = (
+  payload: ApiErrorPayload
+): CableTypeFormErrors => {
   if (typeof payload === 'string') {
     return { general: payload };
   }
@@ -207,6 +219,63 @@ const parseCableApiErrors = (payload: ApiErrorPayload): CableTypeFormErrors => {
   return fieldErrors;
 };
 
+type CableFormState = {
+  cableId: string;
+  tag: string;
+  cableTypeId: string;
+  fromLocation: string;
+  toLocation: string;
+  routing: string;
+};
+
+type CableFormErrors = Partial<Record<keyof CableFormState, string>> & {
+  general?: string;
+};
+
+const emptyCableForm: CableFormState = {
+  cableId: '',
+  tag: '',
+  cableTypeId: '',
+  fromLocation: '',
+  toLocation: '',
+  routing: ''
+};
+
+const toCableFormState = (cable: Cable): CableFormState => ({
+  cableId: cable.cableId,
+  tag: cable.tag ?? '',
+  cableTypeId: cable.cableTypeId,
+  fromLocation: cable.fromLocation ?? '',
+  toLocation: cable.toLocation ?? '',
+  routing: cable.routing ?? ''
+});
+
+const parseCableFormErrors = (payload: ApiErrorPayload): CableFormErrors => {
+  if (typeof payload === 'string') {
+    return { general: payload };
+  }
+
+  const fieldErrors: CableFormErrors = {};
+
+  const fieldMessages = payload.fieldErrors ?? {};
+
+  for (const [field, messages] of Object.entries(fieldMessages)) {
+    if (messages.length === 0) {
+      continue;
+    }
+    if (field in emptyCableForm) {
+      fieldErrors[field as keyof CableFormState] = messages[0];
+    }
+  }
+
+  const generalMessage = payload.formErrors?.[0];
+  if (generalMessage) {
+    fieldErrors.general = generalMessage;
+  }
+
+  return fieldErrors;
+};
+
 export const ProjectDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
@@ -216,6 +285,7 @@ export const ProjectDetails = () => {
 
   const isAdmin = Boolean(user?.isAdmin);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cablesFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -234,19 +304,41 @@ export const ProjectDetails = () => {
   );
   const [cablePage, setCablePage] = useState<number>(1);
 
+  const [isCableTypeDialogOpen, setCableTypeDialogOpen] =
+    useState<boolean>(false);
+  const [cableTypeDialogMode, setCableTypeDialogMode] = useState<
+    'create' | 'edit'
+  >('create');
+  const [cableTypeDialogValues, setCableTypeDialogValues] =
+    useState<CableTypeFormState>(emptyCableTypeForm);
+  const [cableTypeDialogErrors, setCableTypeDialogErrors] =
+    useState<CableTypeFormErrors>({});
+  const [cableTypeDialogSubmitting, setCableTypeDialogSubmitting] =
+    useState<boolean>(false);
+  const [editingCableTypeId, setEditingCableTypeId] = useState<string | null>(
+    null
+  );
+
+  const [cables, setCables] = useState<Cable[]>([]);
+  const [cablesLoading, setCablesLoading] = useState<boolean>(true);
+  const [cablesRefreshing, setCablesRefreshing] = useState<boolean>(false);
+  const [cablesError, setCablesError] = useState<string | null>(null);
+  const [cablesImporting, setCablesImporting] = useState<boolean>(false);
+  const [cablesExporting, setCablesExporting] = useState<boolean>(false);
+  const [pendingCableId, setPendingCableId] = useState<string | null>(null);
+  const [cablesPage, setCablesPage] = useState<number>(1);
+
   const [isCableDialogOpen, setCableDialogOpen] = useState<boolean>(false);
   const [cableDialogMode, setCableDialogMode] = useState<'create' | 'edit'>(
     'create'
   );
   const [cableDialogValues, setCableDialogValues] =
-    useState<CableTypeFormState>(emptyCableTypeForm);
+    useState<CableFormState>(emptyCableForm);
   const [cableDialogErrors, setCableDialogErrors] =
-    useState<CableTypeFormErrors>({});
+    useState<CableFormErrors>({});
   const [cableDialogSubmitting, setCableDialogSubmitting] =
     useState<boolean>(false);
-  const [editingCableTypeId, setEditingCableTypeId] = useState<string | null>(
-    null
-  );
+  const [editingCableId, setEditingCableId] = useState<string | null>(null);
 
   const sortCableTypes = useCallback(
     (types: CableType[]) =>
@@ -256,32 +348,69 @@ export const ProjectDetails = () => {
     []
   );
 
+  const sortCables = useCallback(
+    (items: Cable[]) =>
+      [...items].sort((a, b) =>
+        a.cableId.localeCompare(b.cableId, undefined, {
+          sensitivity: 'base'
+        })
+      ),
+    []
+  );
+
   const totalCablePages = useMemo(() => {
     if (cableTypes.length === 0) {
       return 1;
     }
-    return Math.max(1, Math.ceil(cableTypes.length / CABLES_PER_PAGE));
+    return Math.max(1, Math.ceil(cableTypes.length / CABLE_TYPES_PER_PAGE));
   }, [cableTypes.length]);
 
   const pagedCableTypes = useMemo(() => {
     if (cableTypes.length === 0) {
       return [];
     }
-    const startIndex = (cablePage - 1) * CABLES_PER_PAGE;
-    return cableTypes.slice(startIndex, startIndex + CABLES_PER_PAGE);
+    const startIndex = (cablePage - 1) * CABLE_TYPES_PER_PAGE;
+    return cableTypes.slice(startIndex, startIndex + CABLE_TYPES_PER_PAGE);
   }, [cableTypes, cablePage]);
 
-  const showPagination = cableTypes.length > CABLES_PER_PAGE;
+  const showPagination = cableTypes.length > CABLE_TYPES_PER_PAGE;
 
   useEffect(() => {
     const totalPages = Math.max(
       1,
-      Math.ceil(cableTypes.length / CABLES_PER_PAGE)
+      Math.ceil(cableTypes.length / CABLE_TYPES_PER_PAGE)
     );
     if (cablePage > totalPages) {
       setCablePage(totalPages);
     }
   }, [cableTypes.length, cablePage]);
+
+  const totalCableListPages = useMemo(() => {
+    if (cables.length === 0) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(cables.length / CABLE_LIST_PER_PAGE));
+  }, [cables.length]);
+
+  const pagedCables = useMemo(() => {
+    if (cables.length === 0) {
+      return [];
+    }
+    const startIndex = (cablesPage - 1) * CABLE_LIST_PER_PAGE;
+    return cables.slice(startIndex, startIndex + CABLE_LIST_PER_PAGE);
+  }, [cables, cablesPage]);
+
+  const showCablePagination = cables.length > CABLE_LIST_PER_PAGE;
+
+  useEffect(() => {
+    const totalPages = Math.max(
+      1,
+      Math.ceil(cables.length / CABLE_LIST_PER_PAGE)
+    );
+    if (cablesPage > totalPages) {
+      setCablesPage(totalPages);
+    }
+  }, [cables.length, cablesPage]);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -355,12 +484,60 @@ export const ProjectDetails = () => {
     [projectId, sortCableTypes]
   );
 
+  const loadCables = useCallback(
+    async (showSpinner: boolean) => {
+      if (!projectId) {
+        return;
+      }
+
+      if (showSpinner) {
+        setCablesLoading(true);
+      } else {
+        setCablesRefreshing(true);
+      }
+
+      setCablesError(null);
+
+      try {
+        const response = await fetchCables(projectId);
+        setCables(sortCables(response.cables));
+        setCablesPage(1);
+      } catch (err) {
+        console.error('Failed to load cables', err);
+        if (err instanceof ApiError) {
+          if (err.status === 404) {
+            setCables([]);
+            setCablesPage(1);
+            setCablesError(
+              'Cables endpoint is unavailable. Ensure the server is running the latest version.'
+            );
+          } else {
+            setCablesError(err.message);
+          }
+        } else {
+          setCablesError('Failed to load cables.');
+        }
+      } finally {
+        setCablesLoading(false);
+        setCablesRefreshing(false);
+      }
+    },
+    [projectId, sortCables]
+  );
+
   useEffect(() => {
     if (!projectId) {
       return;
     }
     void loadCableTypes(true);
   }, [projectId, loadCableTypes]);
+
+  useEffect(() => {
+    if (!projectId) {
+      return;
+    }
+    void loadCables(true);
+  }, [projectId, loadCables]);
 
   const formattedDates = useMemo(() => {
     if (!project) {
@@ -386,36 +563,36 @@ export const ProjectDetails = () => {
     []
   );
 
-  const handleCableDialogFieldChange =
+  const handleCableTypeDialogFieldChange =
     (field: keyof CableTypeFormState) =>
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
-      setCableDialogValues((previous) => ({
+      setCableTypeDialogValues((previous) => ({
         ...previous,
         [field]: data.value
       }));
     };
 
-  const resetCableDialog = useCallback(() => {
-    setCableDialogOpen(false);
-    setCableDialogErrors({});
-    setCableDialogValues(emptyCableTypeForm);
-    setCableDialogSubmitting(false);
+  const resetCableTypeDialog = useCallback(() => {
+    setCableTypeDialogOpen(false);
+    setCableTypeDialogErrors({});
+    setCableTypeDialogValues(emptyCableTypeForm);
+    setCableTypeDialogSubmitting(false);
     setEditingCableTypeId(null);
   }, []);
 
-  const openCreateCableDialog = useCallback(() => {
-    setCableDialogMode('create');
-    setCableDialogValues(emptyCableTypeForm);
-    setCableDialogErrors({});
-    setCableDialogOpen(true);
+  const openCreateCableTypeDialog = useCallback(() => {
+    setCableTypeDialogMode('create');
+    setCableTypeDialogValues(emptyCableTypeForm);
+    setCableTypeDialogErrors({});
+    setCableTypeDialogOpen(true);
     setEditingCableTypeId(null);
   }, []);
 
-  const openEditCableDialog = useCallback((cableType: CableType) => {
-    setCableDialogMode('edit');
-    setCableDialogValues(toFormState(cableType));
-    setCableDialogErrors({});
-    setCableDialogOpen(true);
+  const openEditCableTypeDialog = useCallback((cableType: CableType) => {
+    setCableTypeDialogMode('edit');
+    setCableTypeDialogValues(toFormState(cableType));
+    setCableTypeDialogErrors({});
+    setCableTypeDialogOpen(true);
     setEditingCableTypeId(cableType.id);
   }, []);
 
@@ -435,7 +612,7 @@ export const ProjectDetails = () => {
     return { numeric: parsed };
   };
 
-  const buildCableInput = (values: CableTypeFormState) => {
+  const buildCableTypeInput = (values: CableTypeFormState) => {
     const errors: CableTypeFormErrors = {};
 
     const name = values.name.trim();
@@ -466,28 +643,28 @@ export const ProjectDetails = () => {
     return { input, errors };
   };
 
-  const handleSubmitCableDialog = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmitCableTypeDialog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!project || !token) {
-      setCableDialogErrors({
+      setCableTypeDialogErrors({
         general: 'You need to be signed in as an admin to manage cable types.'
       });
       return;
     }
 
-    const { input, errors } = buildCableInput(cableDialogValues);
+    const { input, errors } = buildCableTypeInput(cableTypeDialogValues);
 
     if (Object.keys(errors).length > 0) {
-      setCableDialogErrors(errors);
+      setCableTypeDialogErrors(errors);
       return;
     }
 
-    setCableDialogSubmitting(true);
-    setCableDialogErrors({});
+    setCableTypeDialogSubmitting(true);
+    setCableTypeDialogErrors({});
 
     try {
-      if (cableDialogMode === 'create') {
+      if (cableTypeDialogMode === 'create') {
         const response = await createCableType(token, project.id, input);
         setCableTypes((previous) =>
           sortCableTypes([...previous, response.cableType])
@@ -511,11 +688,12 @@ export const ProjectDetails = () => {
         );
         showToast({ intent: 'success', title: 'Cable type updated' });
       }
-      resetCableDialog();
+      void loadCables(false);
+      resetCableTypeDialog();
     } catch (err) {
       console.error('Save cable type failed', err);
       if (err instanceof ApiError) {
-        setCableDialogErrors(parseCableApiErrors(err.payload));
+        setCableTypeDialogErrors(parseCableTypeApiErrors(err.payload));
         showToast({
           intent: 'error',
           title: 'Failed to save cable type',
@@ -523,7 +701,7 @@ export const ProjectDetails = () => {
         });
       } else {
         const message = 'Failed to save cable type. Please try again.';
-        setCableDialogErrors({
+        setCableTypeDialogErrors({
           general: message
         });
         showToast({
@@ -533,7 +711,7 @@ export const ProjectDetails = () => {
         });
       }
     } finally {
-      setCableDialogSubmitting(false);
+      setCableTypeDialogSubmitting(false);
     }
   };
 
@@ -563,7 +741,7 @@ export const ProjectDetails = () => {
         const next = previous.filter((item) => item.id !== cableType.id);
         const totalPages = Math.max(
           1,
-          Math.ceil(next.length / CABLES_PER_PAGE)
+          Math.ceil(next.length / CABLE_TYPES_PER_PAGE)
         );
         if (cablePage > totalPages) {
           setCablePage(totalPages);
@@ -571,6 +749,7 @@ export const ProjectDetails = () => {
         return next;
       });
       showToast({ intent: 'success', title: 'Cable type deleted' });
+      void loadCables(false);
     } catch (err) {
       console.error('Delete cable type failed', err);
       showToast({
@@ -609,6 +788,7 @@ export const ProjectDetails = () => {
       const response = await importCableTypes(token, project.id, file);
       setCableTypes(sortCableTypes(response.cableTypes));
       setCablePage(1);
+      void loadCables(false);
 
       const summary: CableImportSummary = response.summary;
       showToast({
@@ -679,8 +859,314 @@ export const ProjectDetails = () => {
           body: err instanceof ApiError ? err.message : undefined
         });
       }
+  } finally {
+    setIsExporting(false);
+  }
+};
+
+  const handleCableDialogFieldChange =
+    (field: keyof CableFormState) =>
+    (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+      setCableDialogValues((previous) => ({
+        ...previous,
+        [field]: data.value
+      }));
+    };
+
+  const selectedCableType = useMemo(
+    () =>
+      cableTypes.find(
+        (type) => type.id === cableDialogValues.cableTypeId
+      ) ?? null,
+    [cableTypes, cableDialogValues.cableTypeId]
+  );
+
+  const handleCableTypeSelect = (
+    _event: unknown,
+    data: { optionValue?: string }
+  ) => {
+    setCableDialogValues((previous) => ({
+      ...previous,
+      cableTypeId: data.optionValue ?? ''
+    }));
+  };
+
+  const resetCableDialog = useCallback(() => {
+    setCableDialogOpen(false);
+    setCableDialogErrors({});
+    setCableDialogValues(emptyCableForm);
+    setCableDialogSubmitting(false);
+    setEditingCableId(null);
+  }, []);
+
+  const openCreateCableDialog = useCallback(() => {
+    if (cableTypes.length === 0) {
+      showToast({
+        intent: 'error',
+        title: 'Cable type required',
+        body: 'Create at least one cable type before adding cables.'
+      });
+      return;
+    }
+
+    setCableDialogMode('create');
+    setCableDialogErrors({});
+    setCableDialogValues({
+      ...emptyCableForm,
+      cableTypeId: cableTypes[0]?.id ?? ''
+    });
+    setCableDialogOpen(true);
+    setEditingCableId(null);
+  }, [cableTypes, showToast]);
+
+  const openEditCableDialog = useCallback((cable: Cable) => {
+    setCableDialogMode('edit');
+    setCableDialogErrors({});
+    setCableDialogValues(toCableFormState(cable));
+    setCableDialogOpen(true);
+    setEditingCableId(cable.id);
+  }, []);
+
+  const buildCableInput = (values: CableFormState) => {
+    const errors: CableFormErrors = {};
+
+    const cableId = values.cableId.trim();
+    if (cableId === '') {
+      errors.cableId = 'Cable ID is required';
+    }
+
+    const cableTypeId = values.cableTypeId.trim();
+    if (cableTypeId === '') {
+      errors.cableTypeId = 'Cable type is required';
+    }
+
+    const normalize = (text: string): string | null => {
+      const trimmed = text.trim();
+      return trimmed === '' ? null : trimmed;
+    };
+
+    const input: CableInput = {
+      cableId,
+      cableTypeId,
+      tag: normalize(values.tag),
+      fromLocation: normalize(values.fromLocation),
+      toLocation: normalize(values.toLocation),
+      routing: normalize(values.routing)
+    };
+
+    return { input, errors };
+  };
+
+  const handleSubmitCableDialog = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!project || !token) {
+      setCableDialogErrors({
+        general: 'You need to be signed in as an admin to manage cables.'
+      });
+      return;
+    }
+
+    const { input, errors } = buildCableInput(cableDialogValues);
+
+    if (Object.keys(errors).length > 0) {
+      setCableDialogErrors(errors);
+      return;
+    }
+
+    setCableDialogSubmitting(true);
+    setCableDialogErrors({});
+
+    try {
+      if (cableDialogMode === 'create') {
+        const response = await createCable(token, project.id, input);
+        setCables((previous) => sortCables([...previous, response.cable]));
+        setCablesPage(1);
+        showToast({ intent: 'success', title: 'Cable added' });
+      } else if (editingCableId) {
+        const response = await updateCable(
+          token,
+          project.id,
+          editingCableId,
+          input
+        );
+        setCables((previous) =>
+          sortCables(
+            previous.map((item) =>
+              item.id === editingCableId ? response.cable : item
+            )
+          )
+        );
+        showToast({ intent: 'success', title: 'Cable updated' });
+      }
+      resetCableDialog();
+    } catch (err) {
+      console.error('Save cable failed', err);
+      if (err instanceof ApiError) {
+        setCableDialogErrors(parseCableFormErrors(err.payload));
+        showToast({
+          intent: 'error',
+          title: 'Failed to save cable',
+          body: err.message
+        });
+      } else {
+        const message = 'Failed to save cable. Please try again.';
+        setCableDialogErrors({
+          general: message
+        });
+        showToast({
+          intent: 'error',
+          title: 'Failed to save cable',
+          body: message
+        });
+      }
     } finally {
-      setIsExporting(false);
+      setCableDialogSubmitting(false);
+    }
+  };
+
+  const handleDeleteCable = async (cable: Cable) => {
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to delete cables.'
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete cable "${cable.cableId}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPendingCableId(cable.id);
+
+    try {
+      await deleteCable(token, project.id, cable.id);
+      setCables((previous) => {
+        const next = previous.filter((item) => item.id !== cable.id);
+        const totalPages = Math.max(
+          1,
+          Math.ceil(next.length / CABLE_LIST_PER_PAGE)
+        );
+        if (cablesPage > totalPages) {
+          setCablesPage(totalPages);
+        }
+        return next;
+      });
+      showToast({ intent: 'success', title: 'Cable deleted' });
+    } catch (err) {
+      console.error('Delete cable failed', err);
+      showToast({
+        intent: 'error',
+        title: 'Failed to delete cable',
+        body: err instanceof ApiError ? err.message : undefined
+      });
+    } finally {
+      setPendingCableId(null);
+    }
+  };
+
+  const handleImportCables = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    event.target.value = '';
+
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to import cables.'
+      });
+      return;
+    }
+
+    setCablesImporting(true);
+
+    try {
+      const response = await importCables(token, project.id, file);
+      setCables(sortCables(response.cables));
+      setCablesPage(1);
+
+      const summary: CableImportSummary = response.summary;
+      showToast({
+        intent: 'success',
+        title: 'Cables imported',
+        body: `${summary.inserted} added, ${summary.updated} updated, ${summary.skipped} skipped.`
+      });
+    } catch (err) {
+      console.error('Import cables failed', err);
+      if (err instanceof ApiError && err.status === 404) {
+        showToast({
+          intent: 'error',
+          title: 'Import endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
+      } else {
+        showToast({
+          intent: 'error',
+          title: 'Failed to import cables',
+          body: err instanceof ApiError ? err.message : undefined
+        });
+      }
+    } finally {
+      setCablesImporting(false);
+    }
+  };
+
+  const handleExportCables = async () => {
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to export cables.'
+      });
+      return;
+    }
+
+    setCablesExporting(true);
+
+    try {
+      const blob = await exportCables(token, project.id);
+      const link = document.createElement('a');
+      const url = window.URL.createObjectURL(blob);
+      const fileName = `${sanitizeFileSegment(
+        project.projectNumber
+      )}-cable-list.xlsx`;
+
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast({ intent: 'success', title: 'Cables exported' });
+    } catch (err) {
+      console.error('Export cables failed', err);
+      if (err instanceof ApiError && err.status === 404) {
+        showToast({
+          intent: 'error',
+          title: 'Export endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
+      } else {
+        showToast({
+          intent: 'error',
+          title: 'Failed to export cables',
+          body: err instanceof ApiError ? err.message : undefined
+        });
+      }
+    } finally {
+      setCablesExporting(false);
     }
   };
 
@@ -731,6 +1217,7 @@ export const ProjectDetails = () => {
       >
         <Tab value="details">Details</Tab>
         <Tab value="cables">Cable types</Tab>
+        <Tab value="cable-list">Cables list</Tab>
       </TabList>
 
       {selectedTab === 'details' ? (
@@ -757,7 +1244,9 @@ export const ProjectDetails = () => {
             </Body1>
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {selectedTab === 'cables' ? (
         <div className={styles.tabPanel}>
           <div className={styles.actionsRow}>
             <Button
@@ -768,21 +1257,21 @@ export const ProjectDetails = () => {
             </Button>
             {isAdmin ? (
               <>
-                <Button appearance="primary" onClick={openCreateCableDialog}>
+                <Button appearance="primary" onClick={openCreateCableTypeDialog}>
                   Add cable type
                 </Button>
                 <Button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isImporting}
                 >
-                  {isImporting ? 'Importing…' : 'Import from Excel'}
+                  {isImporting ? 'Importing...' : 'Import from Excel'}
                 </Button>
                 <Button
                   appearance="secondary"
                   onClick={() => void handleExportCableTypes()}
                   disabled={isExporting}
                 >
-                  {isExporting ? 'Exporting…' : 'Export to Excel'}
+                  {isExporting ? 'Exporting...' : 'Export to Excel'}
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -823,7 +1312,7 @@ export const ProjectDetails = () => {
                         styles.numericCell
                       )}
                     >
-                      Diameter (mm)
+                      Diameter [mm]
                     </th>
                     <th
                       className={mergeClasses(
@@ -831,7 +1320,7 @@ export const ProjectDetails = () => {
                         styles.numericCell
                       )}
                     >
-                      Weight (kg/m)
+                      Weight [kg/m]
                     </th>
                     {isAdmin ? (
                       <th className={styles.tableHeadCell}>Actions</th>
@@ -845,7 +1334,7 @@ export const ProjectDetails = () => {
                       <tr key={cableType.id}>
                         <td className={styles.tableCell}>{cableType.name}</td>
                         <td className={styles.tableCell}>
-                          {cableType.purpose ?? '—'}
+                          {cableType.purpose ?? '-'}
                         </td>
                         <td
                           className={mergeClasses(
@@ -872,7 +1361,7 @@ export const ProjectDetails = () => {
                           >
                             <Button
                               size="small"
-                              onClick={() => openEditCableDialog(cableType)}
+                              onClick={() => openEditCableTypeDialog(cableType)}
                               disabled={isBusy}
                             >
                               Edit
@@ -922,11 +1411,260 @@ export const ProjectDetails = () => {
             </div>
           )}
         </div>
-      )}
+      ) : null}
+
+      {selectedTab === 'cable-list' ? (
+        <div className={styles.tabPanel}>
+          <div className={styles.actionsRow}>
+            <Button
+              onClick={() => void loadCables(false)}
+              disabled={cablesRefreshing}
+            >
+              {cablesRefreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
+            {isAdmin ? (
+              <>
+                <Button
+                  appearance="primary"
+                  onClick={openCreateCableDialog}
+                  disabled={cableTypes.length === 0}
+                >
+                  Add cable
+                </Button>
+                <Button
+                  onClick={() => cablesFileInputRef.current?.click()}
+                  disabled={cablesImporting}
+                >
+                  {cablesImporting ? 'Importing...' : 'Import from Excel'}
+                </Button>
+                <Button
+                  appearance="secondary"
+                  onClick={() => void handleExportCables()}
+                  disabled={cablesExporting}
+                >
+                  {cablesExporting ? 'Exporting...' : 'Export to Excel'}
+                </Button>
+                <input
+                  ref={cablesFileInputRef}
+                  className={styles.hiddenInput}
+                  type="file"
+                  accept=".xlsx"
+                  onChange={handleImportCables}
+                />
+              </>
+            ) : null}
+          </div>
+
+          {cablesError ? (
+            <Body1 className={styles.errorText}>{cablesError}</Body1>
+          ) : null}
+
+          {cablesLoading ? (
+            <Spinner label="Loading cables..." />
+          ) : cables.length === 0 ? (
+            <div className={styles.emptyState}>
+              <Caption1>No cables found</Caption1>
+              <Body1>
+                {isAdmin
+                  ? 'Add a cable manually or import a list from Excel.'
+                  : 'No cables have been recorded for this project yet.'}
+              </Body1>
+            </div>
+          ) : (
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.tableHeadCell}>Tag</th>
+                    <th className={styles.tableHeadCell}>Type</th>
+                    <th className={styles.tableHeadCell}>From location</th>
+                    <th className={styles.tableHeadCell}>To location</th>
+                    <th className={styles.tableHeadCell}>Routing</th>
+                    {isAdmin ? (
+                      <th className={styles.tableHeadCell}>Actions</th>
+                    ) : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedCables.map((cable) => {
+                    const isBusy = pendingCableId === cable.id;
+                    return (
+                      <tr key={cable.id}>
+                        <td className={styles.tableCell}>{cable.tag ?? '-'}</td>
+                        <td className={styles.tableCell}>{cable.typeName}</td>
+                        <td className={styles.tableCell}>
+                          {cable.fromLocation ?? '-'}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {cable.toLocation ?? '-'}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {cable.routing ?? '-'}
+                        </td>
+                        {isAdmin ? (
+                          <td
+                            className={mergeClasses(
+                              styles.tableCell,
+                              styles.actionsCell
+                            )}
+                          >
+                            <Button
+                              size="small"
+                              onClick={() => openEditCableDialog(cable)}
+                              disabled={isBusy}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => void handleDeleteCable(cable)}
+                              disabled={isBusy}
+                            >
+                              Delete
+                            </Button>
+                          </td>
+                        ) : null}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {showCablePagination ? (
+                <div className={styles.pagination}>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setCablesPage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={cablesPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Body1>
+                    Page {cablesPage} of {totalCableListPages}
+                  </Body1>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      setCablesPage((prev) =>
+                        Math.min(totalCableListPages, prev + 1)
+                      )
+                    }
+                    disabled={cablesPage === totalCableListPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <Button appearance="secondary" onClick={() => navigate(-1)}>
         Back
       </Button>
+
+      <Dialog
+        open={isCableTypeDialogOpen}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            resetCableTypeDialog();
+          }
+        }}
+      >
+        <DialogSurface>
+          <form className={styles.dialogForm} onSubmit={handleSubmitCableTypeDialog}>
+            <DialogBody>
+              <DialogTitle>
+                {cableTypeDialogMode === 'create'
+                  ? 'Add cable type'
+                  : 'Edit cable type'}
+              </DialogTitle>
+              <DialogContent>
+                <Field
+                  label="Name"
+                  required
+                  validationState={
+                    cableTypeDialogErrors.name ? 'error' : undefined
+                  }
+                  validationMessage={cableTypeDialogErrors.name}
+                >
+                  <Input
+                    value={cableTypeDialogValues.name}
+                    onChange={handleCableTypeDialogFieldChange('name')}
+                    required
+                  />
+                </Field>
+                <Field
+                  label="Purpose"
+                  validationState={
+                    cableTypeDialogErrors.purpose ? 'error' : undefined
+                  }
+                  validationMessage={cableTypeDialogErrors.purpose}
+                >
+                  <Input
+                    value={cableTypeDialogValues.purpose}
+                    onChange={handleCableTypeDialogFieldChange('purpose')}
+                  />
+                </Field>
+                <Field
+                  label="Diameter [mm]"
+                  validationState={
+                    cableTypeDialogErrors.diameterMm ? 'error' : undefined
+                  }
+                  validationMessage={cableTypeDialogErrors.diameterMm}
+                >
+                  <Input
+                    value={cableTypeDialogValues.diameterMm}
+                    onChange={handleCableTypeDialogFieldChange('diameterMm')}
+                    inputMode="decimal"
+                  />
+                </Field>
+                <Field
+                  label="Weight [kg/m]"
+                  validationState={
+                    cableTypeDialogErrors.weightKgPerM ? 'error' : undefined
+                  }
+                  validationMessage={cableTypeDialogErrors.weightKgPerM}
+                >
+                  <Input
+                    value={cableTypeDialogValues.weightKgPerM}
+                    onChange={handleCableTypeDialogFieldChange('weightKgPerM')}
+                    inputMode="decimal"
+                  />
+                </Field>
+                {cableTypeDialogErrors.general ? (
+                  <Body1 className={styles.errorText}>
+                    {cableTypeDialogErrors.general}
+                  </Body1>
+                ) : null}
+              </DialogContent>
+              <DialogActions className={styles.dialogActions}>
+                <Button
+                  type="button"
+                  onClick={resetCableTypeDialog}
+                  disabled={cableTypeDialogSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  appearance="primary"
+                  disabled={cableTypeDialogSubmitting}
+                >
+                  {cableTypeDialogSubmitting
+                    ? 'Saving...'
+                    : cableTypeDialogMode === 'create'
+                      ? 'Add'
+                      : 'Save'}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </form>
+      </DialogSurface>
+      </Dialog>
 
       <Dialog
         open={isCableDialogOpen}
@@ -940,61 +1678,70 @@ export const ProjectDetails = () => {
           <form className={styles.dialogForm} onSubmit={handleSubmitCableDialog}>
             <DialogBody>
               <DialogTitle>
-                {cableDialogMode === 'create'
-                  ? 'Add cable type'
-                  : 'Edit cable type'}
+                {cableDialogMode === 'create' ? 'Add cable' : 'Edit cable'}
               </DialogTitle>
               <DialogContent>
                 <Field
-                  label="Name"
+                  label="Cable ID"
                   required
                   validationState={
-                    cableDialogErrors.name ? 'error' : undefined
+                    cableDialogErrors.cableId ? 'error' : undefined
                   }
-                  validationMessage={cableDialogErrors.name}
+                  validationMessage={cableDialogErrors.cableId}
                 >
                   <Input
-                    value={cableDialogValues.name}
-                    onChange={handleCableDialogFieldChange('name')}
+                    value={cableDialogValues.cableId}
+                    onChange={handleCableDialogFieldChange('cableId')}
                     required
                   />
                 </Field>
-                <Field
-                  label="Purpose"
-                  validationState={
-                    cableDialogErrors.purpose ? 'error' : undefined
-                  }
-                  validationMessage={cableDialogErrors.purpose}
-                >
+                <Field label="Tag">
                   <Input
-                    value={cableDialogValues.purpose}
-                    onChange={handleCableDialogFieldChange('purpose')}
+                    value={cableDialogValues.tag}
+                    onChange={handleCableDialogFieldChange('tag')}
                   />
                 </Field>
                 <Field
-                  label="Diameter (mm)"
+                  label="Cable type"
+                  required
                   validationState={
-                    cableDialogErrors.diameterMm ? 'error' : undefined
+                    cableDialogErrors.cableTypeId ? 'error' : undefined
                   }
-                  validationMessage={cableDialogErrors.diameterMm}
+                  validationMessage={cableDialogErrors.cableTypeId}
                 >
+                  <Dropdown
+                    placeholder="Select cable type"
+                  selectedOptions={
+                    cableDialogValues.cableTypeId
+                      ? [cableDialogValues.cableTypeId]
+                      : []
+                  }
+                  value={selectedCableType?.name ?? ''}
+                  onOptionSelect={handleCableTypeSelect}
+                >
+                    {cableTypes.map((type) => (
+                      <Option key={type.id} value={type.id}>
+                        {type.name}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                </Field>
+                <Field label="From location">
                   <Input
-                    value={cableDialogValues.diameterMm}
-                    onChange={handleCableDialogFieldChange('diameterMm')}
-                    inputMode="decimal"
+                    value={cableDialogValues.fromLocation}
+                    onChange={handleCableDialogFieldChange('fromLocation')}
                   />
                 </Field>
-                <Field
-                  label="Weight (kg/m)"
-                  validationState={
-                    cableDialogErrors.weightKgPerM ? 'error' : undefined
-                  }
-                  validationMessage={cableDialogErrors.weightKgPerM}
-                >
+                <Field label="To location">
                   <Input
-                    value={cableDialogValues.weightKgPerM}
-                    onChange={handleCableDialogFieldChange('weightKgPerM')}
-                    inputMode="decimal"
+                    value={cableDialogValues.toLocation}
+                    onChange={handleCableDialogFieldChange('toLocation')}
+                  />
+                </Field>
+                <Field label="Routing">
+                  <Input
+                    value={cableDialogValues.routing}
+                    onChange={handleCableDialogFieldChange('routing')}
                   />
                 </Field>
                 {cableDialogErrors.general ? (
@@ -1006,6 +1753,7 @@ export const ProjectDetails = () => {
               <DialogActions className={styles.dialogActions}>
                 <Button
                   type="button"
+                  appearance="secondary"
                   onClick={resetCableDialog}
                   disabled={cableDialogSubmitting}
                 >
@@ -1019,8 +1767,8 @@ export const ProjectDetails = () => {
                   {cableDialogSubmitting
                     ? 'Saving...'
                     : cableDialogMode === 'create'
-                      ? 'Add'
-                      : 'Save'}
+                      ? 'Add cable'
+                      : 'Save changes'}
                 </Button>
               </DialogActions>
             </DialogBody>

@@ -105,3 +105,41 @@ export const updateCableTypeSchema = z
       value.weightKgPerM !== undefined,
     { message: 'At least one field must be provided' }
   );
+
+const cableStringField = z
+  .string()
+  .trim()
+  .max(500)
+  .optional();
+
+export const createCableSchema = z
+  .object({
+    cableId: z.string().trim().min(1).max(200),
+    tag: z.string().trim().max(500).optional(),
+    cableTypeId: z.string().trim().uuid(),
+    fromLocation: cableStringField,
+    toLocation: cableStringField,
+    routing: cableStringField
+  })
+  .strict();
+
+export const updateCableSchema = z
+  .object({
+    cableId: z.string().trim().min(1).max(200).optional(),
+    tag: z.string().trim().max(500).optional(),
+    cableTypeId: z.string().trim().uuid().optional(),
+    fromLocation: cableStringField,
+    toLocation: cableStringField,
+    routing: cableStringField
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.cableId !== undefined ||
+      value.tag !== undefined ||
+      value.cableTypeId !== undefined ||
+      value.fromLocation !== undefined ||
+      value.toLocation !== undefined ||
+      value.routing !== undefined,
+    { message: 'At least one field must be provided' }
+  );
