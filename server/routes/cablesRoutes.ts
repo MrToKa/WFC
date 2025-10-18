@@ -36,7 +36,6 @@ const INPUT_HEADERS = {
 } as const;
 
 const OUTPUT_HEADERS = {
-  cableId: 'Cable Id',
   tag: 'Tag',
   type: 'Type',
   purpose: 'Purpose',
@@ -812,6 +811,12 @@ cablesRouter.get(
   authenticate,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
+    const {
+      filter: filterQuery,
+      cableTypeId: cableTypeIdQuery,
+      sortColumn: sortColumnQuery,
+      sortDirection: sortDirectionQuery
+    } = req.query as Record<string, string | undefined>;
 
     if (!projectId) {
       res.status(400).json({ error: 'Project ID is required' });
@@ -826,13 +831,77 @@ cablesRouter.get(
         return;
       }
 
+      const conditions: string[] = ['c.project_id = $1'];
+      const values: Array<string> = [projectId];
+      let parameterIndex = 2;
+
+      if (cableTypeIdQuery) {
+        conditions.push(`c.cable_type_id = $${parameterIndex}`);
+        values.push(cableTypeIdQuery);
+        parameterIndex += 1;
+      }
+
+      const normalizedFilter =
+        typeof filterQuery === 'string' ? filterQuery.trim().toLowerCase() : '';
+
+      if (normalizedFilter) {
+        const likeParam = `$${parameterIndex}`;
+        conditions.push(
+          `
+            (
+              LOWER(c.cable_id) LIKE ${likeParam}
+              OR LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}
+              OR LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}
+              OR LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}
+              OR LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}
+              OR LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}
+            )
+          `
+        );
+        values.push(`%${normalizedFilter}%`);
+        parameterIndex += 1;
+      }
+
+      const allowedSortColumns = new Set([
+        'tag',
+        'typeName',
+        'fromLocation',
+        'toLocation',
+        'routing'
+      ]);
+
+      const normalizedSortColumn =
+        sortColumnQuery && allowedSortColumns.has(sortColumnQuery)
+          ? sortColumnQuery
+          : 'tag';
+
+      const normalizedSortDirection =
+        sortDirectionQuery && sortDirectionQuery.toLowerCase() === 'desc'
+          ? 'DESC'
+          : 'ASC';
+
+      const sortExpressionMap: Record<string, string> = {
+        tag: "LOWER(COALESCE(c.tag, c.cable_id))",
+        typeName: "LOWER(COALESCE(ct.name, ''))",
+        fromLocation: "LOWER(COALESCE(c.from_location, ''))",
+        toLocation: "LOWER(COALESCE(c.to_location, ''))",
+        routing: "LOWER(COALESCE(c.routing, ''))"
+      };
+
+      const sortExpression =
+        sortExpressionMap[normalizedSortColumn] ?? 'LOWER(c.cable_id)';
+
+      const whereClause = conditions.length
+        ? `WHERE ${conditions.join(' AND ')}`
+        : '';
+
       const result = await pool.query<CableWithTypeRow>(
         `
           ${selectCablesQuery}
-          WHERE c.project_id = $1
-          ORDER BY c.cable_id ASC;
+          ${whereClause}
+          ORDER BY ${sortExpression} ${normalizedSortDirection}, LOWER(c.cable_id) ASC;
         `,
-        [projectId]
+        values
       );
 
       const workbook = new ExcelJS.Workbook();
@@ -841,7 +910,6 @@ cablesRouter.get(
       });
 
       const columns = [
-        { name: OUTPUT_HEADERS.cableId, key: 'cableId', width: 20 },
         { name: OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
         { name: OUTPUT_HEADERS.type, key: 'type', width: 28 },
         { name: OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
@@ -853,7 +921,6 @@ cablesRouter.get(
       ] as const;
 
       const rows = result.rows.map((row) => [
-        row.cable_id ?? '',
         row.tag ?? '',
         row.type_name ?? '',
         row.type_purpose ?? '',

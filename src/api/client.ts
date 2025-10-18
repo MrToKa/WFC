@@ -62,6 +62,15 @@ export type Tray = {
   createdAt: string;
   updatedAt: string;
 };
+
+export type CableSortColumn =
+  | 'tag'
+  | 'typeName'
+  | 'fromLocation'
+  | 'toLocation'
+  | 'routing';
+
+export type CableSortDirection = 'asc' | 'desc';
 export type AuthSuccess = {
   user: User;
   token: string;
@@ -523,17 +532,45 @@ export async function importCables(
 
 export async function exportCables(
   token: string,
-  projectId: string
+  projectId: string,
+  options?: {
+    filterText?: string;
+    cableTypeId?: string;
+    sortColumn?: CableSortColumn;
+    sortDirection?: CableSortDirection;
+  }
 ): Promise<Blob> {
-  const response = await fetch(
-    `${API_BASE_URL}/api/projects/${projectId}/cables/export`,
-    {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+  const params = new URLSearchParams();
+
+  const trimmedFilter = options?.filterText?.trim();
+
+  if (trimmedFilter) {
+    params.set('filter', trimmedFilter);
+  }
+
+  if (options?.cableTypeId) {
+    params.set('cableTypeId', options.cableTypeId);
+  }
+
+  if (options?.sortColumn) {
+    params.set('sortColumn', options.sortColumn);
+  }
+
+  if (options?.sortDirection) {
+    params.set('sortDirection', options.sortDirection);
+  }
+
+  const query = params.toString();
+  const url = `${API_BASE_URL}/api/projects/${projectId}/cables/export${
+    query ? `?${query}` : ''
+  }`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
     }
-  );
+  });
 
   if (!response.ok) {
     let payload: unknown = null;

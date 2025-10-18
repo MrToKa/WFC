@@ -40,6 +40,12 @@ export const useProjectDetailsStyles = makeStyles({
     flexWrap: 'wrap',
     gap: '0.75rem'
   },
+  filtersRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.75rem',
+    alignItems: 'center'
+  },
   errorText: {
     color: tokens.colorStatusDangerForeground1
   },
@@ -61,6 +67,16 @@ export const useProjectDetailsStyles = makeStyles({
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     verticalAlign: 'top',
     wordBreak: 'break-word'
+  },
+  tableSortButton: {
+    padding: 0,
+    minWidth: 'auto',
+    height: 'auto',
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  sortIndicator: {
+    marginLeft: '0.25rem'
   },
   numericCell: {
     textAlign: 'right'

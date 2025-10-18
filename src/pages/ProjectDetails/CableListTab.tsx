@@ -1,4 +1,5 @@
 import type { ChangeEvent, RefObject } from 'react';
+import { useMemo } from 'react';
 
 import {
   Body1,
@@ -20,6 +21,15 @@ type CableListTabProps = {
   styles: ProjectDetailsStyles;
   canManageCables: boolean;
   isAdmin: boolean;
+  filterText: string;
+  onFilterTextChange: (value: string) => void;
+  cableTypeFilter: string;
+  onCableTypeFilterChange: (value: string) => void;
+  sortColumn: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+  sortDirection: 'asc' | 'desc';
+  onSortChange: (
+    column: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing'
+  ) => void;
   isRefreshing: boolean;
   onRefresh: () => void;
   onCreate: () => void;
@@ -62,6 +72,13 @@ export const CableListTab = ({
   styles,
   canManageCables,
   isAdmin,
+  filterText,
+  onFilterTextChange,
+  cableTypeFilter,
+  onCableTypeFilterChange,
+  sortColumn,
+  sortDirection,
+  onSortChange,
   isRefreshing,
   onRefresh,
   onCreate,
@@ -91,8 +108,34 @@ export const CableListTab = ({
   totalPages,
   onPreviousPage,
   onNextPage
-}: CableListTabProps) => (
-  <div className={styles.tabPanel} role="tabpanel" aria-label="Cable list">
+}: CableListTabProps) => {
+  const selectedOptions = useMemo<string[]>(
+    () => (cableTypeFilter ? [cableTypeFilter] : []),
+    [cableTypeFilter]
+  );
+  const renderSortButton = (
+    label: string,
+    column: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing'
+  ) => {
+    const isActive = sortColumn === column;
+    const indicator = isActive ? (sortDirection === 'asc' ? '^' : 'v') : '';
+    return (
+      <Button
+        appearance="transparent"
+        size="small"
+        onClick={() => onSortChange(column)}
+        className={styles.tableSortButton}
+      >
+        {label}
+        {indicator ? (
+          <span className={styles.sortIndicator}>{indicator}</span>
+        ) : null}
+      </Button>
+    );
+  };
+
+  return (
+    <div className={styles.tabPanel} role="tabpanel" aria-label="Cable list">
     <div className={styles.actionsRow}>
       <Button onClick={onRefresh} disabled={isRefreshing}>
         {isRefreshing ? 'Refreshing...' : 'Refresh'}
@@ -139,6 +182,30 @@ export const CableListTab = ({
       ) : null}
     </div>
 
+    <div className={styles.filtersRow}>
+      <Input
+        value={filterText}
+        placeholder="Filter cables"
+        onChange={(_, data) => onFilterTextChange(data.value)}
+        aria-label="Filter cables"
+      />
+      <Dropdown
+        selectedOptions={selectedOptions}
+        placeholder="All cable types"
+        onOptionSelect={(_, data) =>
+          onCableTypeFilterChange(data.optionValue ?? '')
+        }
+        aria-label="Filter by cable type"
+      >
+        <Option value="">All cable types</Option>
+        {cableTypes.map((type) => (
+          <Option key={type.id} value={type.id}>
+            {type.name}
+          </Option>
+        ))}
+      </Dropdown>
+    </div>
+
     {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
 
     {isLoading ? (
@@ -159,11 +226,21 @@ export const CableListTab = ({
         <table className={styles.table}>
           <thead>
             <tr>
-              <th className={styles.tableHeadCell}>Tag</th>
-              <th className={styles.tableHeadCell}>Type</th>
-              <th className={styles.tableHeadCell}>From location</th>
-              <th className={styles.tableHeadCell}>To location</th>
-              <th className={styles.tableHeadCell}>Routing</th>
+              <th className={styles.tableHeadCell}>
+                {renderSortButton('Tag', 'tag')}
+              </th>
+              <th className={styles.tableHeadCell}>
+                {renderSortButton('Type', 'typeName')}
+              </th>
+              <th className={styles.tableHeadCell}>
+                {renderSortButton('From location', 'fromLocation')}
+              </th>
+              <th className={styles.tableHeadCell}>
+                {renderSortButton('To location', 'toLocation')}
+              </th>
+              <th className={styles.tableHeadCell}>
+                {renderSortButton('Routing', 'routing')}
+              </th>
               {canManageCables ? (
                 <th className={styles.tableHeadCell}>Actions</th>
               ) : null}
@@ -323,4 +400,5 @@ export const CableListTab = ({
       </div>
     )}
   </div>
-);
+  );
+};
