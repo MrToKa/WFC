@@ -3,39 +3,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Body1,
   Button,
-  Caption1,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  Field,
-  Input,
-  Dropdown,
-  Option,
-  Switch,
   Spinner,
   Tab,
   TabList,
   TabValue,
-  Title3,
-  makeStyles,
-  mergeClasses,
-  shorthands,
-  tokens
+  Title3
 } from '@fluentui/react-components';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ApiError,
-  ApiErrorPayload,
   CableImportSummary,
   Cable,
   CableInput,
   CableType,
-  CableTypeInput,
   Tray,
-  TrayInput,
   Project,
   createCable,
   createCableType,
@@ -59,297 +40,47 @@ import {
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { useProjectDetailsStyles } from './ProjectDetails.styles';
+import {
+  buildCableInput,
+  buildCableTypeInput,
+  buildTrayInput,
+  CABLE_LIST_PER_PAGE,
+  CABLE_TYPES_PER_PAGE,
+  TRAYS_PER_PAGE,
+  CableFormErrors,
+  CableFormState,
+  CableTypeFormErrors,
+  CableTypeFormState,
+  ProjectDetailsTab,
+  TrayFormErrors,
+  TrayFormState,
+  emptyCableForm,
+  emptyCableTypeForm,
+  emptyTrayForm,
+  parseCableFormErrors,
+  parseCableTypeApiErrors,
+  parseTrayApiErrors,
+  toCableFormState,
+  toCableTypeFormState,
+  toTrayFormState
+} from './ProjectDetails.forms';
+import {
+  formatNumeric,
+  sanitizeFileSegment,
+  toNullableString
+} from './ProjectDetails.utils';
+import { CableDialog } from './ProjectDetails/CableDialog';
+import { CableListTab } from './ProjectDetails/CableListTab';
+import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
+import { CableTypesTab } from './ProjectDetails/CableTypesTab';
+import { DetailsTab } from './ProjectDetails/DetailsTab';
+import { TrayDialog } from './ProjectDetails/TrayDialog';
+import { TraysTab } from './ProjectDetails/TraysTab';
 
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.5rem',
-    maxWidth: '80rem',
-    width: '100%',
-    margin: '0 auto',
-    ...shorthands.padding('0', '0', '2rem')
-  },
-  header: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem'
-  },
-  metadata: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
-    gap: '0.75rem'
-  },
-  panel: {
-    borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke1}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('1rem')
-  },
-  tabList: {
-    alignSelf: 'flex-start'
-  },
-  tabPanel: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1rem'
-  },
-  actionsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '0.75rem'
-  },
-  errorText: {
-    color: tokens.colorStatusDangerForeground1
-  },
-  tableContainer: {
-    width: '100%'
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse'
-  },
-  tableHeadCell: {
-    textAlign: 'left',
-    padding: '0.75rem 1rem',
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`
-  },
-  tableCell: {
-    padding: '0.75rem 1rem',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    verticalAlign: 'top',
-    wordBreak: 'break-word'
-  },
-  numericCell: {
-    textAlign: 'right'
-  },
-  actionsCell: {
-    display: 'flex',
-    gap: '0.5rem',
-    flexWrap: 'wrap'
-  },
-  emptyState: {
-    padding: '1rem',
-    borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke1}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    textAlign: 'center'
-  },
-  hiddenInput: {
-    display: 'none'
-  },
-  dialogForm: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem'
-  },
-  dialogActions: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '0.5rem',
-    flexWrap: 'wrap'
-  },
-  pagination: {
-    display: 'flex',
-    gap: '0.5rem',
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexWrap: 'wrap'
-  }
-});
-
-const CABLE_TYPES_PER_PAGE = 10;
-const CABLE_LIST_PER_PAGE = 10;
-const TRAYS_PER_PAGE = 10;
-
-type ProjectDetailsTab = 'details' | 'cables' | 'cable-list' | 'trays';
-
-type CableTypeFormState = {
-  name: string;
-  purpose: string;
-  diameterMm: string;
-  weightKgPerM: string;
-};
-
-type CableTypeFormErrors = Partial<Record<keyof CableTypeFormState, string>> & {
-  general?: string;
-};
-
-const emptyCableTypeForm: CableTypeFormState = {
-  name: '',
-  purpose: '',
-  diameterMm: '',
-  weightKgPerM: ''
-};
-
-const toFormState = (cableType: CableType): CableTypeFormState => ({
-  name: cableType.name,
-  purpose: cableType.purpose ?? '',
-  diameterMm: cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
-  weightKgPerM:
-    cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : ''
-});
-
-type TrayFormState = {
-  name: string;
-  type: string;
-  purpose: string;
-  widthMm: string;
-  heightMm: string;
-  lengthMm: string;
-};
-
-type TrayFormErrors = Partial<Record<keyof TrayFormState, string>> & {
-  general?: string;
-};
-
-const emptyTrayForm: TrayFormState = {
-  name: '',
-  type: '',
-  purpose: '',
-  widthMm: '',
-  heightMm: '',
-  lengthMm: ''
-};
-
-const toTrayFormState = (tray: Tray): TrayFormState => ({
-  name: tray.name,
-  type: tray.type ?? '',
-  purpose: tray.purpose ?? '',
-  widthMm: tray.widthMm !== null ? String(tray.widthMm) : '',
-  heightMm: tray.heightMm !== null ? String(tray.heightMm) : '',
-  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : ''
-});
-
-const formatNumeric = (value: number | null): string =>
-  value === null
-    ? '-'
-    : new Intl.NumberFormat(undefined, {
-        maximumFractionDigits: 3
-      }).format(value);
-
-const sanitizeFileSegment = (value: string): string =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'project';
-
-const parseCableTypeApiErrors = (
-  payload: ApiErrorPayload
-): CableTypeFormErrors => {
-  if (typeof payload === 'string') {
-    return { general: payload };
-  }
-
-  const fieldErrors = Object.entries(payload.fieldErrors ?? {}).reduce<
-    CableTypeFormErrors
-  >((acc, [field, messages]) => {
-    if (messages.length > 0 && field in emptyCableTypeForm) {
-      acc[field as keyof CableTypeFormState] = messages[0];
-    }
-    return acc;
-  }, {});
-
-  const generalMessage = payload.formErrors?.[0];
-  if (generalMessage) {
-    fieldErrors.general = generalMessage;
-  }
-
-  return fieldErrors;
-};
-
-const parseTrayApiErrors = (payload: ApiErrorPayload): TrayFormErrors => {
-  if (typeof payload === 'string') {
-    return { general: payload };
-  }
-
-  const fieldErrors: TrayFormErrors = {};
-
-  for (const [field, messages] of Object.entries(
-    payload.fieldErrors ?? {}
-  )) {
-    if (messages.length === 0) {
-      continue;
-    }
-    if (field in emptyTrayForm) {
-      fieldErrors[field as keyof TrayFormState] = messages[0];
-    }
-  }
-
-  const generalMessage = payload.formErrors?.[0];
-  if (generalMessage) {
-    fieldErrors.general = generalMessage;
-  }
-
-  return fieldErrors;
-};
-
-const toNullableString = (value: string): string | null => {
-  const trimmed = value.trim();
-  return trimmed === '' ? null : trimmed;
-};
-
-type CableFormState = {
-  cableId: string;
-  tag: string;
-  cableTypeId: string;
-  fromLocation: string;
-  toLocation: string;
-  routing: string;
-};
-
-type CableFormErrors = Partial<Record<keyof CableFormState, string>> & {
-  general?: string;
-};
-
-const emptyCableForm: CableFormState = {
-  cableId: '',
-  tag: '',
-  cableTypeId: '',
-  fromLocation: '',
-  toLocation: '',
-  routing: ''
-};
-
-const toCableFormState = (cable: Cable): CableFormState => ({
-  cableId: cable.cableId,
-  tag: cable.tag ?? '',
-  cableTypeId: cable.cableTypeId,
-  fromLocation: cable.fromLocation ?? '',
-  toLocation: cable.toLocation ?? '',
-  routing: cable.routing ?? ''
-});
-
-const parseCableFormErrors = (payload: ApiErrorPayload): CableFormErrors => {
-  if (typeof payload === 'string') {
-    return { general: payload };
-  }
-
-  const fieldErrors: CableFormErrors = {};
-
-  const fieldMessages = payload.fieldErrors ?? {};
-
-  for (const [field, messages] of Object.entries(fieldMessages)) {
-    if (messages.length === 0) {
-      continue;
-    }
-    if (field in emptyCableForm) {
-      fieldErrors[field as keyof CableFormState] = messages[0];
-    }
-  }
-
-  const generalMessage = payload.formErrors?.[0];
-  if (generalMessage) {
-    fieldErrors.general = generalMessage;
-  }
-
-  return fieldErrors;
-};
 
 export const ProjectDetails = () => {
-  const styles = useStyles();
+  const styles = useProjectDetailsStyles();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { projectId } = useParams<{ projectId: string }>();
@@ -536,6 +267,30 @@ export const ProjectDetails = () => {
   }, [trays, traysPage]);
 
   const showTrayPagination = trays.length > TRAYS_PER_PAGE;
+
+  const handleCableTypesPreviousPage = useCallback(() => {
+    setCablePage((previous) => Math.max(1, previous - 1));
+  }, []);
+
+  const handleCableTypesNextPage = useCallback(() => {
+    setCablePage((previous) => Math.min(totalCablePages, previous + 1));
+  }, [totalCablePages]);
+
+  const handleCablesPreviousPage = useCallback(() => {
+    setCablesPage((previous) => Math.max(1, previous - 1));
+  }, []);
+
+  const handleCablesNextPage = useCallback(() => {
+    setCablesPage((previous) => Math.min(totalCableListPages, previous + 1));
+  }, [totalCableListPages]);
+
+  const handleTraysPreviousPage = useCallback(() => {
+    setTraysPage((previous) => Math.max(1, previous - 1));
+  }, []);
+
+  const handleTraysNextPage = useCallback(() => {
+    setTraysPage((previous) => Math.min(totalTrayPages, previous + 1));
+  }, [totalTrayPages]);
 
   useEffect(() => {
     const totalPages = Math.max(
@@ -833,58 +588,12 @@ export const ProjectDetails = () => {
 
   const openEditCableTypeDialog = useCallback((cableType: CableType) => {
     setCableTypeDialogMode('edit');
-    setCableTypeDialogValues(toFormState(cableType));
+    setCableTypeDialogValues(toCableTypeFormState(cableType));
     setCableTypeDialogErrors({});
     setCableTypeDialogOpen(true);
     setEditingCableTypeId(cableType.id);
   }, []);
 
-  const parseNumberInput = (value: string): { numeric: number | null; error?: string } => {
-    const trimmed = value.trim();
-    if (trimmed === '') {
-      return { numeric: null };
-    }
-    const normalized = trimmed.replace(',', '.');
-    const parsed = Number(normalized);
-    if (!Number.isFinite(parsed)) {
-      return { numeric: null, error: 'Enter a valid number' };
-    }
-    if (parsed < 0) {
-      return { numeric: null, error: 'Value must be positive' };
-    }
-    return { numeric: parsed };
-  };
-
-  const buildCableTypeInput = (values: CableTypeFormState) => {
-    const errors: CableTypeFormErrors = {};
-
-    const name = values.name.trim();
-    if (name === '') {
-      errors.name = 'Name is required';
-    }
-
-    const diameterResult = parseNumberInput(values.diameterMm);
-    if (diameterResult.error) {
-      errors.diameterMm = diameterResult.error;
-    }
-
-    const weightResult = parseNumberInput(values.weightKgPerM);
-    if (weightResult.error) {
-      errors.weightKgPerM = weightResult.error;
-    }
-
-    const input: CableTypeInput = {
-      name,
-      purpose: (() => {
-        const trimmed = values.purpose.trim();
-        return trimmed === '' ? null : trimmed;
-      })(),
-      diameterMm: diameterResult.numeric,
-      weightKgPerM: weightResult.numeric
-    };
-
-    return { input, errors };
-  };
 
   const handleSubmitCableTypeDialog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1293,73 +1002,6 @@ export const ProjectDetails = () => {
     setTrayDialogOpen(true);
     setEditingTrayId(tray.id);
   }, []);
-
-  const buildCableInput = (values: CableFormState) => {
-    const errors: CableFormErrors = {};
-
-    const cableId = values.cableId.trim();
-    if (cableId === '') {
-      errors.cableId = 'Cable ID is required';
-    }
-
-    const cableTypeId = values.cableTypeId.trim();
-    if (cableTypeId === '') {
-      errors.cableTypeId = 'Cable type is required';
-    }
-
-    const normalize = (text: string): string | null => {
-      const trimmed = text.trim();
-      return trimmed === '' ? null : trimmed;
-    };
-
-    const input: CableInput = {
-      cableId,
-      cableTypeId,
-      tag: normalize(values.tag),
-      fromLocation: normalize(values.fromLocation),
-      toLocation: normalize(values.toLocation),
-      routing: normalize(values.routing)
-    };
-
-    return { input, errors };
-  };
-
-  const buildTrayInput = (values: TrayFormState) => {
-    const errors: TrayFormErrors = {};
-
-    const name = values.name.trim();
-    if (name === "") {
-      errors.name = "Name is required";
-    }
-
-    const type = toNullableString(values.type);
-    const purpose = toNullableString(values.purpose);
-    const widthResult = parseNumberInput(values.widthMm);
-    if (widthResult.error) {
-      errors.widthMm = widthResult.error;
-    }
-    const heightResult = parseNumberInput(values.heightMm);
-    if (heightResult.error) {
-      errors.heightMm = heightResult.error;
-    }
-    const lengthResult = parseNumberInput(values.lengthMm);
-    if (lengthResult.error) {
-      errors.lengthMm = lengthResult.error;
-    }
-
-    const input: TrayInput = {
-      name,
-      type,
-      purpose,
-      widthMm: widthResult.numeric,
-      heightMm: heightResult.numeric,
-      lengthMm: lengthResult.numeric
-    };
-
-    return { input, errors };
-  };
-
-
 
   const handleSubmitTrayDialog = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1861,1000 +1503,147 @@ export const ProjectDetails = () => {
       </TabList>
 
       {selectedTab === 'details' ? (
-        <div className={styles.tabPanel}>
-          {formattedDates ? (
-            <div className={styles.metadata}>
-              <div className={styles.panel}>
-                <Caption1>Created</Caption1>
-                <Body1>{formattedDates.created}</Body1>
-              </div>
-              <div className={styles.panel}>
-                <Caption1>Last updated</Caption1>
-                <Body1>{formattedDates.updated}</Body1>
-              </div>
-            </div>
-          ) : null}
-
-          <div className={styles.panel}>
-            <Caption1>Description</Caption1>
-            <Body1>
-              {project.description
-                ? project.description
-                : 'No description provided.'}
-            </Body1>
-          </div>
-        </div>
+        <DetailsTab
+          styles={styles}
+          project={project}
+          formattedDates={formattedDates}
+        />
       ) : null}
 
       {selectedTab === 'cables' ? (
-        <div className={styles.tabPanel}>
-          <div className={styles.actionsRow}>
-            <Button
-              onClick={() => void loadCableTypes(false)}
-              disabled={cableTypesRefreshing}
-            >
-              {cableTypesRefreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-            {isAdmin ? (
-              <>
-                <Button appearance="primary" onClick={openCreateCableTypeDialog}>
-                  Add cable type
-                </Button>
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                >
-                  {isImporting ? 'Importing...' : 'Import from Excel'}
-                </Button>
-                <Button
-                  appearance="secondary"
-                  onClick={() => void handleExportCableTypes()}
-                  disabled={isExporting}
-                >
-                  {isExporting ? 'Exporting...' : 'Export to Excel'}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  className={styles.hiddenInput}
-                  type="file"
-                  accept=".xlsx"
-                  onChange={handleImportCableTypes}
-                />
-              </>
-            ) : null}
-          </div>
-
-          {cableTypesError ? (
-            <Body1 className={styles.errorText}>{cableTypesError}</Body1>
-          ) : null}
-
-          {cableTypesLoading ? (
-            <Spinner label="Loading cable types..." />
-          ) : cableTypes.length === 0 ? (
-            <div className={styles.emptyState}>
-              <Caption1>No cable types found</Caption1>
-              <Body1>
-                {isAdmin
-                  ? 'Use the buttons above to add or import cable types for this project.'
-                  : 'There are no cable types recorded for this project yet.'}
-              </Body1>
-            </div>
-          ) : (
-            <div className={styles.tableContainer}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th className={styles.tableHeadCell}>Type</th>
-                    <th className={styles.tableHeadCell}>Purpose</th>
-                    <th
-                      className={mergeClasses(
-                        styles.tableHeadCell,
-                        styles.numericCell
-                      )}
-                    >
-                      Diameter [mm]
-                    </th>
-                    <th
-                      className={mergeClasses(
-                        styles.tableHeadCell,
-                        styles.numericCell
-                      )}
-                    >
-                      Weight [kg/m]
-                    </th>
-                    {isAdmin ? (
-                      <th className={styles.tableHeadCell}>Actions</th>
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedCableTypes.map((cableType) => {
-                    const isBusy = pendingCableTypeId === cableType.id;
-                    return (
-                      <tr key={cableType.id}>
-                        <td className={styles.tableCell}>{cableType.name}</td>
-                        <td className={styles.tableCell}>
-                          {cableType.purpose ?? '-'}
-                        </td>
-                        <td
-                          className={mergeClasses(
-                            styles.tableCell,
-                            styles.numericCell
-                          )}
-                        >
-                          {formatNumeric(cableType.diameterMm)}
-                        </td>
-                        <td
-                          className={mergeClasses(
-                            styles.tableCell,
-                            styles.numericCell
-                          )}
-                        >
-                          {formatNumeric(cableType.weightKgPerM)}
-                        </td>
-                        {isAdmin ? (
-                          <td
-                            className={mergeClasses(
-                              styles.tableCell,
-                              styles.actionsCell
-                            )}
-                          >
-                            <Button
-                              size="small"
-                              onClick={() => openEditCableTypeDialog(cableType)}
-                              disabled={isBusy}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => void handleDeleteCableType(cableType)}
-                              disabled={isBusy}
-                            >
-                              Delete
-                            </Button>
-                          </td>
-                        ) : null}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {showPagination ? (
-                <div className={styles.pagination}>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      setCablePage((prev) => Math.max(1, prev - 1))
-                    }
-                    disabled={cablePage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <Body1>
-                    Page {cablePage} of {totalCablePages}
-                  </Body1>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      setCablePage((prev) =>
-                        Math.min(totalCablePages, prev + 1)
-                      )
-                    }
-                    disabled={cablePage === totalCablePages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
+        <CableTypesTab
+          styles={styles}
+          isAdmin={isAdmin}
+          isRefreshing={cableTypesRefreshing}
+          onRefresh={() => void loadCableTypes(false)}
+          onCreate={openCreateCableTypeDialog}
+          onImportClick={() => fileInputRef.current?.click()}
+          onExport={() => void handleExportCableTypes()}
+          onImportFileChange={handleImportCableTypes}
+          isImporting={isImporting}
+          isExporting={isExporting}
+          fileInputRef={fileInputRef}
+          error={cableTypesError}
+          isLoading={cableTypesLoading}
+          items={pagedCableTypes}
+          pendingId={pendingCableTypeId}
+          onEdit={openEditCableTypeDialog}
+          onDelete={(cableType) => void handleDeleteCableType(cableType)}
+          formatNumeric={formatNumeric}
+          showPagination={showPagination}
+          page={cablePage}
+          totalPages={totalCablePages}
+          paginationHandlers={{
+            onPrevious: handleCableTypesPreviousPage,
+            onNext: handleCableTypesNextPage
+          }}
+        />
       ) : null}
 
       {selectedTab === 'trays' ? (
-        <div className={styles.tabPanel}>
-          <div className={styles.actionsRow}>
-            <Button
-              onClick={() => void loadTrays(false)}
-              disabled={traysRefreshing}
-            >
-              {traysRefreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-            {isAdmin ? (
-              <>
-                <Button appearance="primary" onClick={openCreateTrayDialog}>
-                  Add tray
-                </Button>
-                <Button
-                  onClick={() => traysFileInputRef.current?.click()}
-                  disabled={traysImporting}
-                >
-                  {traysImporting ? 'Importing...' : 'Import from Excel'}
-                </Button>
-                <Button
-                  appearance="secondary"
-                  onClick={() => void handleExportTrays()}
-                  disabled={traysExporting}
-                >
-                  {traysExporting ? 'Exporting...' : 'Export to Excel'}
-                </Button>
-                <input
-                  ref={traysFileInputRef}
-                  className={styles.hiddenInput}
-                  type="file"
-                  accept=".xlsx"
-                  onChange={handleImportTrays}
-                />
-              </>
-            ) : null}
-          </div>
-
-          {traysError ? (
-            <Body1 className={styles.errorText}>{traysError}</Body1>
-          ) : null}
-
-          {traysLoading ? (
-            <Spinner label="Loading trays..." />
-          ) : trays.length === 0 ? (
-            <div className={styles.emptyState}>
-              <Caption1>No trays found</Caption1>
-              <Body1>
-                {isAdmin
-                  ? 'Use the buttons above to add or import trays for this project.'
-                  : 'There are no trays recorded for this project yet.'}
-              </Body1>
-            </div>
-          ) : (
-            <div className={styles.tableContainer}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th className={styles.tableHeadCell}>Name</th>
-                    <th className={styles.tableHeadCell}>Type</th>
-                    <th className={styles.tableHeadCell}>Purpose</th>
-                    <th
-                      className={mergeClasses(
-                        styles.tableHeadCell,
-                        styles.numericCell
-                      )}
-                    >
-                      Width [mm]
-                    </th>
-                    <th
-                      className={mergeClasses(
-                        styles.tableHeadCell,
-                        styles.numericCell
-                      )}
-                    >
-                      Height [mm]
-                    </th>
-                    <th
-                      className={mergeClasses(
-                        styles.tableHeadCell,
-                        styles.numericCell
-                      )}
-                    >
-                      Length
-                    </th>
-                    <th className={styles.tableHeadCell}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedTrays.map((tray) => {
-                    const isBusy = pendingTrayId === tray.id;
-                    return (
-                      <tr key={tray.id}>
-                        <td className={styles.tableCell}>{tray.name}</td>
-                        <td className={styles.tableCell}>{tray.type ?? '-'}</td>
-                        <td className={styles.tableCell}>{tray.purpose ?? '-'}</td>
-                        <td
-                          className={mergeClasses(
-                            styles.tableCell,
-                            styles.numericCell
-                          )}
-                        >
-                          {formatNumeric(tray.widthMm)}
-                        </td>
-                        <td
-                          className={mergeClasses(
-                            styles.tableCell,
-                            styles.numericCell
-                          )}
-                        >
-                          {formatNumeric(tray.heightMm)}
-                        </td>
-                        <td
-                          className={mergeClasses(
-                            styles.tableCell,
-                            styles.numericCell
-                          )}
-                        >
-                          {formatNumeric(tray.lengthMm)}
-                        </td>
-                        <td
-                          className={mergeClasses(
-                            styles.tableCell,
-                            styles.actionsCell
-                          )}
-                        >
-                          <Button
-                            size="small"
-                            onClick={() => openTrayDetails(tray)}
-                            disabled={isBusy}
-                          >
-                            Details
-                          </Button>
-                          {isAdmin ? (
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => void handleDeleteTray(tray)}
-                              disabled={isBusy}
-                            >
-                              Delete
-                            </Button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {showTrayPagination ? (
-                <div className={styles.pagination}>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      setTraysPage((prev) => Math.max(1, prev - 1))
-                    }
-                    disabled={traysPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <Body1>
-                    Page {traysPage} of {totalTrayPages}
-                  </Body1>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      setTraysPage((prev) =>
-                        Math.min(totalTrayPages, prev + 1)
-                      )
-                    }
-                    disabled={traysPage === totalTrayPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
+        <TraysTab
+          styles={styles}
+          isAdmin={isAdmin}
+          isRefreshing={traysRefreshing}
+          onRefresh={() => void loadTrays(false)}
+          onCreate={openCreateTrayDialog}
+          onImportClick={() => traysFileInputRef.current?.click()}
+          onExport={() => void handleExportTrays()}
+          onImportFileChange={handleImportTrays}
+          isImporting={traysImporting}
+          isExporting={traysExporting}
+          fileInputRef={traysFileInputRef}
+          error={traysError}
+          isLoading={traysLoading}
+          items={pagedTrays}
+          pendingId={pendingTrayId}
+          onDetails={openTrayDetails}
+          onDelete={(tray) => void handleDeleteTray(tray)}
+          formatNumeric={formatNumeric}
+          showPagination={showTrayPagination}
+          page={traysPage}
+          totalPages={totalTrayPages}
+          onPreviousPage={handleTraysPreviousPage}
+          onNextPage={handleTraysNextPage}
+        />
       ) : null}
       {selectedTab === 'cable-list' ? (
-        <div className={styles.tabPanel}>
-          <div className={styles.actionsRow}>
-            <Button
-              onClick={() => void loadCables(false)}
-              disabled={cablesRefreshing}
-            >
-              {cablesRefreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
-            {isAdmin ? (
-              <>
-                <Button
-                  appearance="primary"
-                  onClick={openCreateCableDialog}
-                  disabled={cableTypes.length === 0}
-                >
-                  Add cable
-                </Button>
-                <Button
-                  onClick={() => cablesFileInputRef.current?.click()}
-                  disabled={cablesImporting}
-                >
-                  {cablesImporting ? 'Importing...' : 'Import from Excel'}
-                </Button>
-                <Button
-                  appearance="secondary"
-                  onClick={() => void handleExportCables()}
-                  disabled={cablesExporting}
-                >
-                  {cablesExporting ? 'Exporting...' : 'Export to Excel'}
-                </Button>
-                <input
-                  ref={cablesFileInputRef}
-                  className={styles.hiddenInput}
-                  type="file"
-                  accept=".xlsx"
-                  onChange={handleImportCables}
-                />
-                <Switch
-                  checked={inlineEditingEnabled}
-                  label="Inline edit"
-                  onChange={(_, data) =>
-                    setInlineEditingEnabled(Boolean(data.checked))
-                  }
-                  disabled={inlineUpdatingIds.size > 0}
-                />
-              </>
-            ) : null}
-          </div>
-
-          {cablesError ? (
-            <Body1 className={styles.errorText}>{cablesError}</Body1>
-          ) : null}
-
-          {cablesLoading ? (
-            <Spinner label="Loading cables..." />
-          ) : cables.length === 0 ? (
-            <div className={styles.emptyState}>
-              <Caption1>No cables found</Caption1>
-              <Body1>
-                {isAdmin
-                  ? 'Add a cable manually or import a list from Excel.'
-                  : 'No cables have been recorded for this project yet.'}
-              </Body1>
-            </div>
-          ) : (
-            <div className={styles.tableContainer}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th className={styles.tableHeadCell}>Tag</th>
-                    <th className={styles.tableHeadCell}>Type</th>
-                    <th className={styles.tableHeadCell}>From location</th>
-                    <th className={styles.tableHeadCell}>To location</th>
-                    <th className={styles.tableHeadCell}>Routing</th>
-                    {isAdmin ? (
-                      <th className={styles.tableHeadCell}>Actions</th>
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedCables.map((cable) => {
-                    const isBusy = pendingCableId === cable.id;
-                    const draft =
-                      cableDrafts[cable.id] ?? toCableFormState(cable);
-                    const isRowUpdating = inlineUpdatingIds.has(cable.id);
-                    const disableActions = isBusy || isRowUpdating;
-                    const currentCableType = cableTypes.find(
-                      (type) => type.id === draft.cableTypeId
-                    );
-                    return (
-                      <tr key={cable.id}>
-                        <td className={styles.tableCell}>
-                          {isInlineEditable ? (
-                            <Input
-                              size="small"
-                              value={draft.tag}
-                              onChange={(_, data) =>
-                                handleCableDraftChange(
-                                  cable.id,
-                                  'tag',
-                                  data.value
-                                )
-                              }
-                              onBlur={() =>
-                                void handleCableTextFieldBlur(cable, 'tag')
-                              }
-                              disabled={isRowUpdating}
-                              aria-label="Cable tag"
-                            />
-                          ) : (
-                            cable.tag ?? '-'
-                          )}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {isInlineEditable ? (
-                            <Dropdown
-                              size="small"
-                              selectedOptions={
-                                draft.cableTypeId
-                                  ? [draft.cableTypeId]
-                                  : []
-                              }
-                              value={currentCableType?.name ?? ''}
-                              onOptionSelect={(_, data) => {
-                                const nextTypeId =
-                                  data.optionValue ?? cable.cableTypeId;
-                                handleCableDraftChange(
-                                  cable.id,
-                                  'cableTypeId',
-                                  nextTypeId ?? ''
-                                );
-                                if (
-                                  !data.optionValue ||
-                                  data.optionValue === cable.cableTypeId
-                                ) {
-                                  return;
-                                }
-                                void handleInlineCableTypeChange(
-                                  cable,
-                                  data.optionValue
-                                );
-                              }}
-                              disabled={isRowUpdating}
-                              aria-label="Cable type"
-                            >
-                              {cableTypes.map((type) => (
-                                <Option key={type.id} value={type.id}>
-                                  {type.name}
-                                </Option>
-                              ))}
-                            </Dropdown>
-                          ) : (
-                            cable.typeName
-                          )}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {isInlineEditable ? (
-                            <Input
-                              size="small"
-                              value={draft.fromLocation}
-                              onChange={(_, data) =>
-                                handleCableDraftChange(
-                                  cable.id,
-                                  'fromLocation',
-                                  data.value
-                                )
-                              }
-                              onBlur={() =>
-                                void handleCableTextFieldBlur(
-                                  cable,
-                                  'fromLocation'
-                                )
-                              }
-                              disabled={isRowUpdating}
-                              aria-label="From location"
-                            />
-                          ) : (
-                            cable.fromLocation ?? '-'
-                          )}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {isInlineEditable ? (
-                            <Input
-                              size="small"
-                              value={draft.toLocation}
-                              onChange={(_, data) =>
-                                handleCableDraftChange(
-                                  cable.id,
-                                  'toLocation',
-                                  data.value
-                                )
-                              }
-                              onBlur={() =>
-                                void handleCableTextFieldBlur(
-                                  cable,
-                                  'toLocation'
-                                )
-                              }
-                              disabled={isRowUpdating}
-                              aria-label="To location"
-                            />
-                          ) : (
-                            cable.toLocation ?? '-'
-                          )}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {isInlineEditable ? (
-                            <Input
-                              size="small"
-                              value={draft.routing}
-                              onChange={(_, data) =>
-                                handleCableDraftChange(
-                                  cable.id,
-                                  'routing',
-                                  data.value
-                                )
-                              }
-                              onBlur={() =>
-                                void handleCableTextFieldBlur(cable, 'routing')
-                              }
-                              disabled={isRowUpdating}
-                              aria-label="Routing"
-                            />
-                          ) : (
-                            cable.routing ?? '-'
-                          )}
-                        </td>
-                        {isAdmin ? (
-                          <td
-                            className={mergeClasses(
-                              styles.tableCell,
-                              styles.actionsCell
-                            )}
-                          >
-                            <Button
-                              size="small"
-                              onClick={() => openEditCableDialog(cable)}
-                              disabled={disableActions}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => void handleDeleteCable(cable)}
-                              disabled={disableActions}
-                            >
-                              Delete
-                            </Button>
-                          </td>
-                        ) : null}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {showCablePagination ? (
-                <div className={styles.pagination}>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      setCablesPage((prev) => Math.max(1, prev - 1))
-                    }
-                    disabled={cablesPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <Body1>
-                    Page {cablesPage} of {totalCableListPages}
-                  </Body1>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      setCablesPage((prev) =>
-                        Math.min(totalCableListPages, prev + 1)
-                      )
-                    }
-                    disabled={cablesPage === totalCableListPages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </div>
+        <CableListTab
+          styles={styles}
+          isAdmin={isAdmin}
+          isRefreshing={cablesRefreshing}
+          onRefresh={() => void loadCables(false)}
+          onCreate={openCreateCableDialog}
+          onImportClick={() => cablesFileInputRef.current?.click()}
+          onExport={() => void handleExportCables()}
+          onImportFileChange={handleImportCables}
+          isImporting={cablesImporting}
+          isExporting={cablesExporting}
+          fileInputRef={cablesFileInputRef}
+          inlineEditingEnabled={inlineEditingEnabled}
+          onInlineEditingToggle={setInlineEditingEnabled}
+          inlineUpdatingIds={inlineUpdatingIds}
+          isInlineEditable={isInlineEditable}
+          cableTypes={cableTypes}
+          items={pagedCables}
+          drafts={cableDrafts}
+          onDraftChange={handleCableDraftChange}
+          onTextFieldBlur={handleCableTextFieldBlur}
+          onInlineCableTypeChange={handleInlineCableTypeChange}
+          pendingId={pendingCableId}
+          onEdit={openEditCableDialog}
+          onDelete={(cable) => void handleDeleteCable(cable)}
+          error={cablesError}
+          isLoading={cablesLoading}
+          showPagination={showCablePagination}
+          page={cablesPage}
+          totalPages={totalCableListPages}
+          onPreviousPage={handleCablesPreviousPage}
+          onNextPage={handleCablesNextPage}
+        />
       ) : null}
 
       <Button appearance="secondary" onClick={() => navigate(-1)}>
         Back
       </Button>
 
-            <Dialog
+      <TrayDialog
+        styles={styles}
         open={isTrayDialogOpen}
-        onOpenChange={(_, data) => {
-          if (!data.open) {
-            resetTrayDialog();
-          }
-        }}
-      >
-        <DialogSurface>
-          <form className={styles.dialogForm} onSubmit={handleSubmitTrayDialog}>
-            <DialogBody>
-              <DialogTitle>
-                {trayDialogMode === 'create' ? 'Add tray' : 'Edit tray'}
-              </DialogTitle>
-              <DialogContent>
-                <Field
-                  label="Name"
-                  required
-                  validationState={
-                    trayDialogErrors.name ? 'error' : undefined
-                  }
-                  validationMessage={trayDialogErrors.name}
-                >
-                  <Input
-                    value={trayDialogValues.name}
-                    onChange={handleTrayDialogFieldChange('name')}
-                    required
-                  />
-                </Field>
-                <Field
-                  label="Type"
-                  validationState={
-                    trayDialogErrors.type ? 'error' : undefined
-                  }
-                  validationMessage={trayDialogErrors.type}
-                >
-                  <Input
-                    value={trayDialogValues.type}
-                    onChange={handleTrayDialogFieldChange('type')}
-                  />
-                </Field>
-                <Field
-                  label="Purpose"
-                  validationState={
-                    trayDialogErrors.purpose ? 'error' : undefined
-                  }
-                  validationMessage={trayDialogErrors.purpose}
-                >
-                  <Input
-                    value={trayDialogValues.purpose}
-                    onChange={handleTrayDialogFieldChange('purpose')}
-                  />
-                </Field>
-                <Field
-                  label="Width [mm]"
-                  validationState={
-                    trayDialogErrors.widthMm ? 'error' : undefined
-                  }
-                  validationMessage={trayDialogErrors.widthMm}
-                >
-                  <Input
-                    value={trayDialogValues.widthMm}
-                    onChange={handleTrayDialogFieldChange('widthMm')}
-                  />
-                </Field>
-                <Field
-                  label="Height [mm]"
-                  validationState={
-                    trayDialogErrors.heightMm ? 'error' : undefined
-                  }
-                  validationMessage={trayDialogErrors.heightMm}
-                >
-                  <Input
-                    value={trayDialogValues.heightMm}
-                    onChange={handleTrayDialogFieldChange('heightMm')}
-                  />
-                </Field>
-                <Field
-                  label="Length"
-                  validationState={
-                    trayDialogErrors.lengthMm ? 'error' : undefined
-                  }
-                  validationMessage={trayDialogErrors.lengthMm}
-                >
-                  <Input
-                    value={trayDialogValues.lengthMm}
-                    onChange={handleTrayDialogFieldChange('lengthMm')}
-                  />
-                </Field>
-                {trayDialogErrors.general ? (
-                  <Body1 className={styles.errorText}>
-                    {trayDialogErrors.general}
-                  </Body1>
-                ) : null}
-              </DialogContent>
-              <DialogActions className={styles.dialogActions}>
-                <Button
-                  type="button"
-                  appearance="secondary"
-                  onClick={resetTrayDialog}
-                  disabled={trayDialogSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  appearance="primary"
-                  disabled={trayDialogSubmitting}
-                >
-                  {trayDialogSubmitting
-                    ? 'Saving...'
-                    : trayDialogMode === 'create'
-                      ? 'Add tray'
-                      : 'Save changes'}
-                </Button>
-              </DialogActions>
-            </DialogBody>
-          </form>
-        </DialogSurface>
-      </Dialog>
-<Dialog
-        open={isCableTypeDialogOpen}
-        onOpenChange={(_, data) => {
-          if (!data.open) {
-            resetCableTypeDialog();
-          }
-        }}
-      >
-        <DialogSurface>
-          <form className={styles.dialogForm} onSubmit={handleSubmitCableTypeDialog}>
-            <DialogBody>
-              <DialogTitle>
-                {cableTypeDialogMode === 'create'
-                  ? 'Add cable type'
-                  : 'Edit cable type'}
-              </DialogTitle>
-              <DialogContent>
-                <Field
-                  label="Name"
-                  required
-                  validationState={
-                    cableTypeDialogErrors.name ? 'error' : undefined
-                  }
-                  validationMessage={cableTypeDialogErrors.name}
-                >
-                  <Input
-                    value={cableTypeDialogValues.name}
-                    onChange={handleCableTypeDialogFieldChange('name')}
-                    required
-                  />
-                </Field>
-                <Field
-                  label="Purpose"
-                  validationState={
-                    cableTypeDialogErrors.purpose ? 'error' : undefined
-                  }
-                  validationMessage={cableTypeDialogErrors.purpose}
-                >
-                  <Input
-                    value={cableTypeDialogValues.purpose}
-                    onChange={handleCableTypeDialogFieldChange('purpose')}
-                  />
-                </Field>
-                <Field
-                  label="Diameter [mm]"
-                  validationState={
-                    cableTypeDialogErrors.diameterMm ? 'error' : undefined
-                  }
-                  validationMessage={cableTypeDialogErrors.diameterMm}
-                >
-                  <Input
-                    value={cableTypeDialogValues.diameterMm}
-                    onChange={handleCableTypeDialogFieldChange('diameterMm')}
-                    inputMode="decimal"
-                  />
-                </Field>
-                <Field
-                  label="Weight [kg/m]"
-                  validationState={
-                    cableTypeDialogErrors.weightKgPerM ? 'error' : undefined
-                  }
-                  validationMessage={cableTypeDialogErrors.weightKgPerM}
-                >
-                  <Input
-                    value={cableTypeDialogValues.weightKgPerM}
-                    onChange={handleCableTypeDialogFieldChange('weightKgPerM')}
-                    inputMode="decimal"
-                  />
-                </Field>
-                {cableTypeDialogErrors.general ? (
-                  <Body1 className={styles.errorText}>
-                    {cableTypeDialogErrors.general}
-                  </Body1>
-                ) : null}
-              </DialogContent>
-              <DialogActions className={styles.dialogActions}>
-                <Button
-                  type="button"
-                  onClick={resetCableTypeDialog}
-                  disabled={cableTypeDialogSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  appearance="primary"
-                  disabled={cableTypeDialogSubmitting}
-                >
-                  {cableTypeDialogSubmitting
-                    ? 'Saving...'
-                    : cableTypeDialogMode === 'create'
-                      ? 'Add'
-                      : 'Save'}
-                </Button>
-              </DialogActions>
-            </DialogBody>
-          </form>
-      </DialogSurface>
-      </Dialog>
+        mode={trayDialogMode}
+        values={trayDialogValues}
+        errors={trayDialogErrors}
+        submitting={trayDialogSubmitting}
+        onFieldChange={handleTrayDialogFieldChange}
+        onSubmit={handleSubmitTrayDialog}
+        onDismiss={resetTrayDialog}
+      />
 
-      <Dialog
+      <CableTypeDialog
+        styles={styles}
+        open={isCableTypeDialogOpen}
+        mode={cableTypeDialogMode}
+        values={cableTypeDialogValues}
+        errors={cableTypeDialogErrors}
+        submitting={cableTypeDialogSubmitting}
+        onFieldChange={handleCableTypeDialogFieldChange}
+        onSubmit={handleSubmitCableTypeDialog}
+        onDismiss={resetCableTypeDialog}
+      />
+
+      <CableDialog
+        styles={styles}
         open={isCableDialogOpen}
-        onOpenChange={(_, data) => {
-          if (!data.open) {
-            resetCableDialog();
-          }
-        }}
-      >
-        <DialogSurface>
-          <form className={styles.dialogForm} onSubmit={handleSubmitCableDialog}>
-            <DialogBody>
-              <DialogTitle>
-                {cableDialogMode === 'create' ? 'Add cable' : 'Edit cable'}
-              </DialogTitle>
-              <DialogContent>
-                <Field
-                  label="Cable ID"
-                  required
-                  validationState={
-                    cableDialogErrors.cableId ? 'error' : undefined
-                  }
-                  validationMessage={cableDialogErrors.cableId}
-                >
-                  <Input
-                    value={cableDialogValues.cableId}
-                    onChange={handleCableDialogFieldChange('cableId')}
-                    required
-                  />
-                </Field>
-                <Field label="Tag">
-                  <Input
-                    value={cableDialogValues.tag}
-                    onChange={handleCableDialogFieldChange('tag')}
-                  />
-                </Field>
-                <Field
-                  label="Cable type"
-                  required
-                  validationState={
-                    cableDialogErrors.cableTypeId ? 'error' : undefined
-                  }
-                  validationMessage={cableDialogErrors.cableTypeId}
-                >
-                  <Dropdown
-                    placeholder="Select cable type"
-                  selectedOptions={
-                    cableDialogValues.cableTypeId
-                      ? [cableDialogValues.cableTypeId]
-                      : []
-                  }
-                  value={selectedCableType?.name ?? ''}
-                  onOptionSelect={handleCableTypeSelect}
-                >
-                    {cableTypes.map((type) => (
-                      <Option key={type.id} value={type.id}>
-                        {type.name}
-                      </Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-                <Field label="From location">
-                  <Input
-                    value={cableDialogValues.fromLocation}
-                    onChange={handleCableDialogFieldChange('fromLocation')}
-                  />
-                </Field>
-                <Field label="To location">
-                  <Input
-                    value={cableDialogValues.toLocation}
-                    onChange={handleCableDialogFieldChange('toLocation')}
-                  />
-                </Field>
-                <Field label="Routing">
-                  <Input
-                    value={cableDialogValues.routing}
-                    onChange={handleCableDialogFieldChange('routing')}
-                  />
-                </Field>
-                {cableDialogErrors.general ? (
-                  <Body1 className={styles.errorText}>
-                    {cableDialogErrors.general}
-                  </Body1>
-                ) : null}
-              </DialogContent>
-              <DialogActions className={styles.dialogActions}>
-                <Button
-                  type="button"
-                  appearance="secondary"
-                  onClick={resetCableDialog}
-                  disabled={cableDialogSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  appearance="primary"
-                  disabled={cableDialogSubmitting}
-                >
-                  {cableDialogSubmitting
-                    ? 'Saving...'
-                    : cableDialogMode === 'create'
-                      ? 'Add cable'
-                      : 'Save changes'}
-                </Button>
-              </DialogActions>
-            </DialogBody>
-          </form>
-        </DialogSurface>
-      </Dialog>
+        mode={cableDialogMode}
+        values={cableDialogValues}
+        errors={cableDialogErrors}
+        submitting={cableDialogSubmitting}
+        cableTypes={cableTypes}
+        onFieldChange={handleCableDialogFieldChange}
+        onCableTypeSelect={handleCableTypeSelect}
+        onSubmit={handleSubmitCableDialog}
+        onDismiss={resetCableDialog}
+      />
     </section>
   );
 };
