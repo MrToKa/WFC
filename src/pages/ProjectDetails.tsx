@@ -45,6 +45,7 @@ export const ProjectDetails = () => {
   const { showToast } = useToast();
 
   const isAdmin = Boolean(user?.isAdmin);
+  const canManageCables = Boolean(token);
 
   const [selectedTab, setSelectedTab] = useState<ProjectDetailsTab>(() => {
     const tabParam = searchParams.get('tab');
@@ -204,7 +205,7 @@ export const ProjectDetails = () => {
     [navigate, projectId]
   );
 
-  const isInlineEditable = inlineEditingEnabled && isAdmin;
+  const isInlineEditable = inlineEditingEnabled && canManageCables;
 
   if (projectLoading) {
     return (
@@ -326,6 +327,7 @@ export const ProjectDetails = () => {
       {selectedTab === 'cable-list' ? (
         <CableListTab
           styles={styles}
+          canManageCables={canManageCables}
           isAdmin={isAdmin}
           isRefreshing={cablesRefreshing}
           onRefresh={() => void reloadCables({ showSpinner: false })}

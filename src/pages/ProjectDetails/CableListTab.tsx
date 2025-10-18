@@ -18,6 +18,7 @@ import type { CableFormState } from '../ProjectDetails.forms';
 
 type CableListTabProps = {
   styles: ProjectDetailsStyles;
+  canManageCables: boolean;
   isAdmin: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
@@ -59,6 +60,7 @@ type CableListTabProps = {
 
 export const CableListTab = ({
   styles,
+  canManageCables,
   isAdmin,
   isRefreshing,
   onRefresh,
@@ -95,7 +97,7 @@ export const CableListTab = ({
       <Button onClick={onRefresh} disabled={isRefreshing}>
         {isRefreshing ? 'Refreshing...' : 'Refresh'}
       </Button>
-      {isAdmin ? (
+      {canManageCables ? (
         <>
           <Button
             appearance="primary"
@@ -104,9 +106,20 @@ export const CableListTab = ({
           >
             Add cable
           </Button>
-          <Button onClick={onImportClick} disabled={isImporting}>
-            {isImporting ? 'Importing...' : 'Import from Excel'}
-          </Button>
+          {isAdmin ? (
+            <>
+              <Button onClick={onImportClick} disabled={isImporting}>
+                {isImporting ? 'Importing...' : 'Import from Excel'}
+              </Button>
+              <input
+                ref={fileInputRef}
+                className={styles.hiddenInput}
+                type="file"
+                accept=".xlsx"
+                onChange={onImportFileChange}
+              />
+            </>
+          ) : null}
           <Button
             appearance="secondary"
             onClick={onExport}
@@ -114,13 +127,6 @@ export const CableListTab = ({
           >
             {isExporting ? 'Exporting...' : 'Export to Excel'}
           </Button>
-          <input
-            ref={fileInputRef}
-            className={styles.hiddenInput}
-            type="file"
-            accept=".xlsx"
-            onChange={onImportFileChange}
-          />
           <Switch
             checked={inlineEditingEnabled}
             label="Inline edit"
@@ -141,8 +147,10 @@ export const CableListTab = ({
       <div className={styles.emptyState}>
         <Caption1>No cables found</Caption1>
         <Body1>
-          {isAdmin
-            ? 'Add a cable manually or import a list from Excel.'
+          {canManageCables
+            ? isAdmin
+              ? 'Add a cable manually or import a list from Excel.'
+              : 'Add a cable manually to start building this list.'
             : 'No cables have been recorded for this project yet.'}
         </Body1>
       </div>
@@ -156,7 +164,7 @@ export const CableListTab = ({
               <th className={styles.tableHeadCell}>From location</th>
               <th className={styles.tableHeadCell}>To location</th>
               <th className={styles.tableHeadCell}>Routing</th>
-              {isAdmin ? (
+              {canManageCables ? (
                 <th className={styles.tableHeadCell}>Actions</th>
               ) : null}
             </tr>
@@ -265,7 +273,7 @@ export const CableListTab = ({
                       cable.routing ?? '-'
                     )}
                   </td>
-                  {isAdmin ? (
+                  {canManageCables ? (
                     <td className={styles.tableCell}>
                       <div className={styles.actionsCell}>
                         <Button

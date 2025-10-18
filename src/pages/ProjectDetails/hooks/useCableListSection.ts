@@ -338,8 +338,8 @@ export const useCableListSection = ({
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
-          title: 'Admin access required',
-          body: 'You need to be signed in as an admin to update cables.'
+          title: 'Sign-in required',
+          body: 'You need to be signed in to update cables.'
         });
         return;
       }
@@ -432,7 +432,7 @@ export const useCableListSection = ({
 
       if (!projectSnapshot || !token) {
         setDialogErrors({
-          general: 'You need to be signed in as an admin to manage cables.'
+          general: 'You need to be signed in to manage cables.'
         });
         return;
       }
@@ -513,8 +513,8 @@ export const useCableListSection = ({
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
-          title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete cables.'
+          title: 'Sign-in required',
+          body: 'You need to be signed in to delete cables.'
         });
         return;
       }
@@ -570,8 +570,8 @@ export const useCableListSection = ({
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
-          title: 'Admin access required',
-          body: 'You need to be signed in as an admin to import cables.'
+          title: 'Sign-in required',
+          body: 'You need to be signed in to import cables.'
         });
         return;
       }
@@ -615,8 +615,8 @@ export const useCableListSection = ({
     if (!projectSnapshot || !token) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export cables.'
+        title: 'Sign-in required',
+        body: 'You need to be signed in to export cables.'
       });
       return;
     }

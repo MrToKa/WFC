@@ -12,7 +12,7 @@ import {
   type CableWithTypeRow
 } from '../models/cable.js';
 import type { CableTypeRow } from '../models/cableType.js';
-import { authenticate, requireAdmin } from '../middleware.js';
+import { authenticate } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   createCableSchema,
@@ -121,7 +121,6 @@ cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 cablesRouter.post(
   '/',
   authenticate,
-  requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -264,7 +263,6 @@ cablesRouter.post(
 cablesRouter.patch(
   '/:cableId',
   authenticate,
-  requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableId } = req.params;
 
@@ -439,7 +437,6 @@ cablesRouter.patch(
 cablesRouter.delete(
   '/:cableId',
   authenticate,
-  requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableId } = req.params;
 
@@ -476,7 +473,6 @@ cablesRouter.delete(
 cablesRouter.post(
   '/import',
   authenticate,
-  requireAdmin,
   upload.single('file'),
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
@@ -814,7 +810,6 @@ cablesRouter.post(
 cablesRouter.get(
   '/export',
   authenticate,
-  requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
