@@ -17,8 +17,8 @@ import {
 
 import type { CableType } from '@/api/client';
 
-import type { ProjectDetailsStyles } from './ProjectDetails.styles';
-import type { CableFormErrors, CableFormState } from './ProjectDetails.forms';
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import type { CableFormErrors, CableFormState } from '../ProjectDetails.forms';
 
 type CableDialogProps = {
   styles: ProjectDetailsStyles;

@@ -16,8 +16,8 @@ import {
 import type {
   CableTypeFormErrors,
   CableTypeFormState
-} from './ProjectDetails.forms';
-import type { ProjectDetailsStyles } from './ProjectDetails.styles';
+} from '../ProjectDetails.forms';
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
 type CableTypeDialogProps = {
   styles: ProjectDetailsStyles;

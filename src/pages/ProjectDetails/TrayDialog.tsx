@@ -13,8 +13,8 @@ import {
   Input
 } from '@fluentui/react-components';
 
-import type { ProjectDetailsStyles } from './ProjectDetails.styles';
-import type { TrayFormErrors, TrayFormState } from './ProjectDetails.forms';
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import type { TrayFormErrors, TrayFormState } from '../ProjectDetails.forms';
 
 type TrayDialogProps = {
   styles: ProjectDetailsStyles;

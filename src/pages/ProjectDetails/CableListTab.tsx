@@ -13,8 +13,8 @@ import {
 
 import type { Cable, CableType } from '@/api/client';
 
-import type { ProjectDetailsStyles } from './ProjectDetails.styles';
-import type { CableFormState } from './ProjectDetails.forms';
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import type { CableFormState } from '../ProjectDetails.forms';
 
 type CableListTabProps = {
   styles: ProjectDetailsStyles;
@@ -27,7 +27,7 @@ type CableListTabProps = {
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
   isExporting: boolean;
-  fileInputRef: RefObject<HTMLInputElement>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
   inlineEditingEnabled: boolean;
   onInlineEditingToggle: (checked: boolean) => void;
   inlineUpdatingIds: Set<string>;

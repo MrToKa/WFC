@@ -10,7 +10,7 @@ import {
 
 import type { Tray } from '@/api/client';
 
-import type { ProjectDetailsStyles } from './ProjectDetails.styles';
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
 type TraysTabProps = {
   styles: ProjectDetailsStyles;
@@ -23,7 +23,7 @@ type TraysTabProps = {
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
   isExporting: boolean;
-  fileInputRef: RefObject<HTMLInputElement>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
   error: string | null;
   isLoading: boolean;
   items: Tray[];

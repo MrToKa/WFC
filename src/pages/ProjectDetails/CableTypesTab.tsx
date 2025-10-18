@@ -10,7 +10,7 @@ import {
 
 import type { CableType } from '@/api/client';
 
-import type { ProjectDetailsStyles } from './ProjectDetails.styles';
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
 type PaginationHandlers = {
   onPrevious: () => void;
@@ -28,7 +28,7 @@ type CableTypesTabProps = {
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
   isExporting: boolean;
-  fileInputRef: RefObject<HTMLInputElement>;
+  fileInputRef: RefObject<HTMLInputElement | null>;
   error: string | null;
   isLoading: boolean;
   items: CableType[];

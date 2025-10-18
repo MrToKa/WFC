@@ -2,7 +2,7 @@ import { Body1, Caption1 } from '@fluentui/react-components';
 
 import type { Project } from '@/api/client';
 
-import type { ProjectDetailsStyles } from './ProjectDetails.styles';
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
 type FormattedDates = {
   created: string;

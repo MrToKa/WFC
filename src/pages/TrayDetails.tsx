@@ -19,6 +19,7 @@ import {
   Tray,
   TrayInput,
   fetchProject,
+  fetchTrays,
   fetchTray,
   deleteTray,
   updateTray
@@ -119,6 +120,7 @@ export const TrayDetails = () => {
 
   const [project, setProject] = useState<Project | null>(null);
   const [tray, setTray] = useState<Tray | null>(null);
+  const [trays, setTrays] = useState<Tray[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,10 +137,19 @@ export const TrayDetails = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  const sortTrays = useCallback(
+    (items: Tray[]) =>
+      [...items].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      ),
+    []
+  );
+
   useEffect(() => {
     const load = async () => {
       if (!projectId || !trayId) {
         setError('Tray not found.');
+        setTrays([]);
         setIsLoading(false);
         return;
       }
@@ -155,6 +166,8 @@ export const TrayDetails = () => {
         setProject(projectResponse.project);
         setTray(trayResponse.tray);
         setFormValues(toTrayFormState(trayResponse.tray));
+        setIsEditing(false);
+        setFormErrors({});
       } catch (err) {
         console.error('Failed to load tray details', err);
         if (err instanceof ApiError && err.status === 404) {
@@ -162,13 +175,23 @@ export const TrayDetails = () => {
         } else {
           setError('Failed to load tray details.');
         }
+        setTrays([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const traysResponse = await fetchTrays(projectId);
+        setTrays(sortTrays(traysResponse.trays));
+      } catch (err) {
+        console.error('Failed to load trays for navigation', err);
       } finally {
         setIsLoading(false);
       }
     };
 
     void load();
-  }, [projectId, trayId]);
+  }, [projectId, trayId, sortTrays]);
 
   const pageTitle = useMemo(() => {
     if (!tray) {
@@ -176,6 +199,35 @@ export const TrayDetails = () => {
     }
     return `Tray — ${tray.name}`;
   }, [tray]);
+
+  const { previousTray, nextTray } = useMemo(() => {
+    if (!tray) {
+      return { previousTray: null, nextTray: null };
+    }
+
+    const currentIndex = trays.findIndex((item) => item.id === tray.id);
+
+    if (currentIndex === -1) {
+      return { previousTray: null, nextTray: null };
+    }
+
+    return {
+      previousTray: currentIndex > 0 ? trays[currentIndex - 1] : null,
+      nextTray:
+        currentIndex < trays.length - 1 ? trays[currentIndex + 1] : null
+    };
+  }, [tray, trays]);
+
+  const handleNavigateTray = useCallback(
+    (targetTrayId: string) => {
+      if (!projectId) {
+        return;
+      }
+
+      navigate(`/projects/${projectId}/trays/${targetTrayId}`);
+    },
+    [navigate, projectId]
+  );
 
   const handleFieldChange =
     (field: keyof TrayFormState) =>
@@ -246,6 +298,15 @@ export const TrayDetails = () => {
     try {
       const response = await updateTray(token, project.id, tray.id, input);
       setTray(response.tray);
+      setTrays((previous) => {
+        const hasTray = previous.some((item) => item.id === response.tray.id);
+        const nextTrays = hasTray
+          ? previous.map((item) =>
+              item.id === response.tray.id ? response.tray : item
+            )
+          : [...previous, response.tray];
+        return sortTrays(nextTrays);
+      });
       setFormValues(toTrayFormState(response.tray));
       setIsEditing(false);
       showToast({ intent: 'success', title: 'Tray updated' });
@@ -333,6 +394,22 @@ export const TrayDetails = () => {
       </div>
 
       <div className={styles.actions}>
+        <Button
+          appearance="secondary"
+          onClick={() =>
+            previousTray && handleNavigateTray(previousTray.id)
+          }
+          disabled={!previousTray}
+        >
+          Previous tray
+        </Button>
+        <Button
+          appearance="secondary"
+          onClick={() => nextTray && handleNavigateTray(nextTray.id)}
+          disabled={!nextTray}
+        >
+          Next tray
+        </Button>
         <Button onClick={() => navigate(`/projects/${projectId}?tab=trays`)}>
           Back to project
         </Button>
