@@ -5,7 +5,6 @@ import {
   Body1,
   Button,
   Caption1,
-  Field,
   Input,
   Spinner,
   Switch,
@@ -16,7 +15,11 @@ import type { Cable, Tray } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { toCableFormState, type CableFormState } from '../ProjectDetails.forms';
-import { computeDesignLength, formatNumeric } from '../ProjectDetails.utils';
+import {
+  computeDesignLength,
+  formatDisplayDate,
+  formatNumeric
+} from '../ProjectDetails.utils';
 
 type CableReportTabProps = {
   styles: ProjectDetailsStyles;
@@ -53,11 +56,6 @@ type CableReportTabProps = {
   onNextPage: () => void;
   trays: Tray[];
   secondaryTrayLength: number | null;
-  secondaryTrayLengthInput: string;
-  onSecondaryTrayLengthInputChange: (value: string) => void;
-  onSaveSecondaryTrayLength: () => void;
-  secondaryTrayLengthSaving: boolean;
-  secondaryTrayLengthError: string | null;
 };
 
 const normalizeTrayLengths = (trays: Tray[]): Map<string, number> =>
@@ -102,71 +100,23 @@ export const CableReportTab = ({
   onNextPage,
   trays,
   secondaryTrayLength,
-  secondaryTrayLengthInput,
-  onSecondaryTrayLengthInputChange,
-  onSaveSecondaryTrayLength,
-  secondaryTrayLengthSaving,
-  secondaryTrayLengthError
 }: CableReportTabProps) => {
   const trayLengths = useMemo(() => normalizeTrayLengths(trays), [trays]);
 
-  const renderSecondaryTraySection = () => {
-    if (!isAdmin) {
-      return (
-        <div className={styles.panel}>
-          <Caption1>Secondary tray length</Caption1>
-          <Body1>
-            {secondaryTrayLength !== null
-              ? `${formatNumeric(secondaryTrayLength)} m`
-              : 'Not specified'}
-          </Body1>
-        </div>
-      );
-    }
-
-    return (
-      <div className={styles.panel}>
-        <Field
-          label="Secondary tray length [m]"
-          validationState={
-            secondaryTrayLengthError ? 'error' : undefined
-          }
-          validationMessage={secondaryTrayLengthError}
-        >
-          <Input
-            type="number"
-            min={0}
-            step={0.1}
-            value={secondaryTrayLengthInput}
-            onChange={(_, data) => onSecondaryTrayLengthInputChange(data.value)}
-            disabled={secondaryTrayLengthSaving}
-          />
-        </Field>
-        <Button
-          appearance="primary"
-          onClick={onSaveSecondaryTrayLength}
-          disabled={secondaryTrayLengthSaving}
-        >
-          {secondaryTrayLengthSaving ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
-    );
-  };
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable report">
-      {renderSecondaryTraySection()}
 
       <div className={styles.actionsRow}>
         <Button onClick={onRefresh} disabled={isRefreshing}>
-          {isRefreshing ? 'Refreshing…' : 'Refresh'}
+          {isRefreshing ? 'Refreshing' : 'Refresh'}
         </Button>
         {canManageCables ? (
           <>
             {isAdmin ? (
               <>
                 <Button onClick={onImportClick} disabled={isImporting}>
-                  {isImporting ? 'Importing…' : 'Import from Excel'}
+                  {isImporting ? 'Importing' : 'Import from Excel'}
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -178,7 +128,7 @@ export const CableReportTab = ({
               </>
             ) : null}
             <Button onClick={onExport} disabled={isExporting}>
-              {isExporting ? 'Exporting…' : 'Export to Excel'}
+              {isExporting ? 'Exporting' : 'Export to Excel'}
             </Button>
             <Switch
               checked={inlineEditingEnabled}
@@ -193,7 +143,7 @@ export const CableReportTab = ({
       {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
 
       {isLoading ? (
-        <Spinner label="Loading cables…" />
+        <Spinner label="Loading cables" />
       ) : items.length === 0 ? (
         <div className={styles.emptyState}>
           <Caption1>No cables found</Caption1>
@@ -259,9 +209,9 @@ export const CableReportTab = ({
                         styles.tableCell,
                         styles.numericCell
                       )}
-                    >
-                      {formatNumeric(designLength)}
-                    </td>
+                >
+                  {formatNumeric(designLength)}
+                </td>
                     <td
                       className={mergeClasses(
                         styles.tableCell,
@@ -307,7 +257,7 @@ export const CableReportTab = ({
                           disabled={!canManageCables || isBusy}
                         />
                       ) : cable.connectedFrom ? (
-                        cable.connectedFrom
+                        formatDisplayDate(cable.connectedFrom)
                       ) : (
                         '-'
                       )}
@@ -328,7 +278,7 @@ export const CableReportTab = ({
                           disabled={!canManageCables || isBusy}
                         />
                       ) : cable.connectedTo ? (
-                        cable.connectedTo
+                        formatDisplayDate(cable.connectedTo)
                       ) : (
                         '-'
                       )}
@@ -345,25 +295,22 @@ export const CableReportTab = ({
                           disabled={!canManageCables || isBusy}
                         />
                       ) : cable.tested ? (
-                        cable.tested
+                        formatDisplayDate(cable.tested)
                       ) : (
                         '-'
                       )}
                     </td>
                     {canManageCables ? (
-                      <td
-                        className={mergeClasses(
-                          styles.tableCell,
-                          styles.actionsCell
-                        )}
-                      >
-                        <Button
-                          size="small"
-                          onClick={() => onEdit(cable)}
-                          disabled={pendingId === cable.id || isBusy}
-                        >
-                          Edit
-                        </Button>
+                      <td className={styles.tableCell}>
+                        <div className={styles.actionsCell}>
+                          <Button
+                            size="small"
+                            onClick={() => onEdit(cable)}
+                            disabled={pendingId === cable.id || isBusy}
+                          >
+                            Edit
+                          </Button>
+                        </div>
                       </td>
                     ) : null}
                   </tr>

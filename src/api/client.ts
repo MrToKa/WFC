@@ -552,6 +552,7 @@ export async function exportCables(
     cableTypeId?: string;
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;
+    view?: 'list' | 'report';
   }
 ): Promise<Blob> {
   const params = new URLSearchParams();
@@ -572,6 +573,10 @@ export async function exportCables(
 
   if (options?.sortDirection) {
     params.set('sortDirection', options.sortDirection);
+  }
+
+  if (options?.view) {
+    params.set('view', options.view);
   }
 
   const query = params.toString();

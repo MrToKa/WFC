@@ -20,6 +20,18 @@ import type { CableType } from '@/api/client';
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { CableFormErrors, CableFormState } from '../ProjectDetails.forms';
 
+export type CableDialogField =
+  | 'cableId'
+  | 'tag'
+  | 'cableTypeId'
+  | 'fromLocation'
+  | 'toLocation'
+  | 'routing'
+  | 'installLength'
+  | 'connectedFrom'
+  | 'connectedTo'
+  | 'tested';
+
 type CableDialogProps = {
   styles: ProjectDetailsStyles;
   open: boolean;
@@ -28,6 +40,7 @@ type CableDialogProps = {
   errors: CableFormErrors;
   submitting: boolean;
   cableTypes: CableType[];
+  visibleFields: CableDialogField[];
   onFieldChange: (
     field: keyof CableFormState
   ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
@@ -47,6 +60,7 @@ export const CableDialog = ({
   errors,
   submitting,
   cableTypes,
+  visibleFields,
   onFieldChange,
   onCableTypeSelect,
   onSubmit,
@@ -55,6 +69,8 @@ export const CableDialog = ({
   const selectedCableType = cableTypes.find(
     (type) => type.id === values.cableTypeId
   );
+
+  const isFieldVisible = (field: CableDialogField) => visibleFields.includes(field);
 
   return (
     <Dialog
@@ -72,112 +88,132 @@ export const CableDialog = ({
               {mode === 'create' ? 'Add cable' : 'Edit cable'}
             </DialogTitle>
             <DialogContent>
-              <Field
-                label="Cable ID"
-                required
-                validationState={errors.cableId ? 'error' : undefined}
-                validationMessage={errors.cableId}
-              >
-                <Input
-                  value={values.cableId}
-                  onChange={onFieldChange('cableId')}
+              {isFieldVisible('cableId') ? (
+                <Field
+                  label="Cable ID"
                   required
-                />
-              </Field>
-              <Field label="Tag">
-                <Input
-                  value={values.tag}
-                  onChange={onFieldChange('tag')}
-                />
-              </Field>
-              <Field
-                label="Cable type"
-                required
-                validationState={errors.cableTypeId ? 'error' : undefined}
-                validationMessage={errors.cableTypeId}
-              >
-                <Dropdown
-                  placeholder="Select cable type"
-                  selectedOptions={
-                    values.cableTypeId ? [values.cableTypeId] : []
-                  }
-                  value={selectedCableType?.name ?? ''}
-                  onOptionSelect={onCableTypeSelect}
+                  validationState={errors.cableId ? 'error' : undefined}
+                  validationMessage={errors.cableId}
                 >
-                  {cableTypes.map((type) => (
-                    <Option key={type.id} value={type.id}>
-                      {type.name}
-                    </Option>
-                  ))}
-                </Dropdown>
-              </Field>
-              <Field label="From location">
-                <Input
-                  value={values.fromLocation}
-                  onChange={onFieldChange('fromLocation')}
-                />
-              </Field>
-              <Field label="To location">
-                <Input
-                  value={values.toLocation}
-                  onChange={onFieldChange('toLocation')}
-                />
-              </Field>
-              <Field label="Routing">
-                <Input
-                  value={values.routing}
-                  onChange={onFieldChange('routing')}
-                />
-              </Field>
-              <Field
-                label="Install length [m]"
-                validationState={
-                  errors.installLength ? 'error' : undefined
-                }
-                validationMessage={errors.installLength}
-              >
-                <Input
-                  type="number"
-                  min={0}
-                  value={values.installLength}
-                  onChange={onFieldChange('installLength')}
-                />
-              </Field>
-              <Field
-                label="Connected from"
-                validationState={
-                  errors.connectedFrom ? 'error' : undefined
-                }
-                validationMessage={errors.connectedFrom}
-              >
-                <Input
-                  type="date"
-                  value={values.connectedFrom}
-                  onChange={onFieldChange('connectedFrom')}
-                />
-              </Field>
-              <Field
-                label="Connected to"
-                validationState={errors.connectedTo ? 'error' : undefined}
-                validationMessage={errors.connectedTo}
-              >
-                <Input
-                  type="date"
-                  value={values.connectedTo}
-                  onChange={onFieldChange('connectedTo')}
-                />
-              </Field>
-              <Field
-                label="Tested"
-                validationState={errors.tested ? 'error' : undefined}
-                validationMessage={errors.tested}
-              >
-                <Input
-                  type="date"
-                  value={values.tested}
-                  onChange={onFieldChange('tested')}
-                />
-              </Field>
+                  <Input
+                    value={values.cableId}
+                    onChange={onFieldChange('cableId')}
+                    required
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('tag') ? (
+                <Field label="Tag">
+                  <Input
+                    value={values.tag}
+                    onChange={onFieldChange('tag')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('cableTypeId') ? (
+                <Field
+                  label="Cable type"
+                  required
+                  validationState={errors.cableTypeId ? 'error' : undefined}
+                  validationMessage={errors.cableTypeId}
+                >
+                  <Dropdown
+                    placeholder="Select cable type"
+                    selectedOptions={
+                      values.cableTypeId ? [values.cableTypeId] : []
+                    }
+                    value={selectedCableType?.name ?? ''}
+                    onOptionSelect={onCableTypeSelect}
+                  >
+                    {cableTypes.map((type) => (
+                      <Option key={type.id} value={type.id}>
+                        {type.name}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                </Field>
+              ) : null}
+              {isFieldVisible('fromLocation') ? (
+                <Field label="From location">
+                  <Input
+                    value={values.fromLocation}
+                    onChange={onFieldChange('fromLocation')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('toLocation') ? (
+                <Field label="To location">
+                  <Input
+                    value={values.toLocation}
+                    onChange={onFieldChange('toLocation')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('routing') ? (
+                <Field label="Routing">
+                  <Input
+                    value={values.routing}
+                    onChange={onFieldChange('routing')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('installLength') ? (
+                <Field
+                  label="Install length [m]"
+                  validationState={
+                    errors.installLength ? 'error' : undefined
+                  }
+                  validationMessage={errors.installLength}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={values.installLength}
+                    onChange={onFieldChange('installLength')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('connectedFrom') ? (
+                <Field
+                  label="Connected from"
+                  validationState={
+                    errors.connectedFrom ? 'error' : undefined
+                  }
+                  validationMessage={errors.connectedFrom}
+                >
+                  <Input
+                    type="date"
+                    value={values.connectedFrom}
+                    onChange={onFieldChange('connectedFrom')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('connectedTo') ? (
+                <Field
+                  label="Connected to"
+                  validationState={errors.connectedTo ? 'error' : undefined}
+                  validationMessage={errors.connectedTo}
+                >
+                  <Input
+                    type="date"
+                    value={values.connectedTo}
+                    onChange={onFieldChange('connectedTo')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('tested') ? (
+                <Field
+                  label="Tested"
+                  validationState={errors.tested ? 'error' : undefined}
+                  validationMessage={errors.tested}
+                >
+                  <Input
+                    type="date"
+                    value={values.tested}
+                    onChange={onFieldChange('tested')}
+                  />
+                </Field>
+              ) : null}
               {errors.general ? (
                 <Body1 className={styles.errorText}>{errors.general}</Body1>
               ) : null}

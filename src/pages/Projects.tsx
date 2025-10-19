@@ -3,7 +3,6 @@ import {
   Body1,
   Button,
   Caption1,
-  Field,
   Input,
   Spinner,
   Subtitle2,
@@ -201,7 +200,7 @@ export const Projects = () => {
           className={styles.filterInput}
           placeholder="Filter projects..."
           value={search}
-          onChange={(event, data) => setSearch(data.value)}
+          onChange={(_, data) => setSearch(data.value)}
         />
       </div>
 

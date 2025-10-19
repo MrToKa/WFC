@@ -8,7 +8,11 @@ import type {
   TrayInput
 } from '@/api/client';
 
-import { parseNumberInput, toNullableString } from './ProjectDetails.utils';
+import {
+  isIsoDateString,
+  parseNumberInput,
+  toNullableString
+} from './ProjectDetails.utils';
 
 export const CABLE_TYPES_PER_PAGE = 10;
 export const CABLE_LIST_PER_PAGE = 10;
@@ -330,11 +334,15 @@ export const buildCableInput = (
     if (trimmed === '') {
       return null;
     }
-    if (Number.isNaN(Date.parse(trimmed))) {
+
+    const normalized = trimmed.slice(0, 10);
+
+    if (!isIsoDateString(normalized)) {
       errors[field] = 'Enter a valid date (YYYY-MM-DD)';
       return null;
     }
-    return trimmed.slice(0, 10);
+
+    return normalized;
   };
 
   input.connectedFrom = parseDate(values.connectedFrom, 'connectedFrom');

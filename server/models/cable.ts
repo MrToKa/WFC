@@ -48,6 +48,18 @@ export type PublicCable = {
 const toIsoString = (value: Date | string): string =>
   typeof value === 'string' ? value : value.toISOString();
 
+const toDateOnlyString = (value: Date | string): string => {
+  if (typeof value === 'string') {
+    const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+    return match ? match[1] : value.slice(0, 10);
+  }
+
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const toIntegerOrNull = (value: string | number | null): number | null => {
   if (value === null || value === undefined) {
     return null;
@@ -71,11 +83,9 @@ export const mapCableRow = (row: CableWithTypeRow): PublicCable => ({
   toLocation: row.to_location ?? null,
   routing: row.routing ?? null,
   installLength: toIntegerOrNull(row.install_length),
-  connectedFrom: row.connected_from
-    ? toIsoString(row.connected_from).slice(0, 10)
-    : null,
-  connectedTo: row.connected_to ? toIsoString(row.connected_to).slice(0, 10) : null,
-  tested: row.tested ? toIsoString(row.tested).slice(0, 10) : null,
+  connectedFrom: row.connected_from ? toDateOnlyString(row.connected_from) : null,
+  connectedTo: row.connected_to ? toDateOnlyString(row.connected_to) : null,
+  tested: row.tested ? toDateOnlyString(row.tested) : null,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at)
 });

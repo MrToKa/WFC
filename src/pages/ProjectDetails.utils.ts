@@ -101,5 +101,26 @@ export const computeDesignLength = (
   }
 
   const designLength = total * 1.1;
-  return Math.round(designLength * 100) / 100;
+  return Math.round(designLength);
 };
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export const formatDisplayDate = (value: string | null | undefined): string => {
+  if (!value) {
+    return '-';
+  }
+
+  const trimmed = value.trim();
+  const iso = trimmed.slice(0, 10);
+
+  if (!ISO_DATE_PATTERN.test(iso)) {
+    return trimmed;
+  }
+
+  const [year, month, day] = iso.split('-');
+  return `${day}-${month}-${year}`;
+};
+
+export const isIsoDateString = (value: string): boolean =>
+  ISO_DATE_PATTERN.test(value.trim());

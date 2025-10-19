@@ -20,7 +20,10 @@ import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
 import { formatNumeric } from './ProjectDetails.utils';
 import { CableReportTab } from './ProjectDetails/CableReportTab';
-import { CableDialog } from './ProjectDetails/CableDialog';
+import {
+  CableDialog,
+  type CableDialogField
+} from './ProjectDetails/CableDialog';
 import { CableListTab } from './ProjectDetails/CableListTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
@@ -107,6 +110,22 @@ export const ProjectDetails = () => {
     token,
     showToast
   });
+
+  const cableDialogVisibleFields: CableDialogField[] =
+    selectedTab === 'cable-report' && cableDialog.mode === 'edit'
+      ? ['installLength', 'connectedFrom', 'connectedTo', 'tested']
+      : [
+          'cableId',
+          'tag',
+          'cableTypeId',
+          'fromLocation',
+          'toLocation',
+          'routing',
+          'installLength',
+          'connectedFrom',
+          'connectedTo',
+          'tested'
+        ];
 
   const {
     cableTypes,
@@ -368,6 +387,15 @@ export const ProjectDetails = () => {
           styles={styles}
           project={project}
           formattedDates={formattedDates}
+          isAdmin={isAdmin}
+          secondaryTrayLengthInput={secondaryTrayLengthInput}
+          onSecondaryTrayLengthInputChange={(value) => {
+            setSecondaryTrayLengthInput(value);
+            setSecondaryTrayLengthError(null);
+          }}
+          onSaveSecondaryTrayLength={() => void handleSecondaryTrayLengthSave()}
+          secondaryTrayLengthSaving={secondaryTrayLengthSaving}
+          secondaryTrayLengthError={secondaryTrayLengthError}
         />
       ) : null}
 
@@ -445,7 +473,7 @@ export const ProjectDetails = () => {
           onRefresh={() => void reloadCables({ showSpinner: false })}
           onCreate={handleCreateCable}
           onImportClick={() => cablesFileInputRef.current?.click()}
-          onExport={() => void handleExportCables()}
+          onExport={() => void handleExportCables('list')}
           onImportFileChange={handleImportCables}
           isImporting={cablesImporting}
           isExporting={cablesExporting}
@@ -485,7 +513,7 @@ export const ProjectDetails = () => {
           isRefreshing={cablesRefreshing}
           onRefresh={() => void reloadCables({ showSpinner: false })}
           onImportClick={() => cablesFileInputRef.current?.click()}
-          onExport={() => void handleExportCables()}
+          onExport={() => void handleExportCables('report')}
           onImportFileChange={handleImportCables}
           isImporting={cablesImporting}
           isExporting={cablesExporting}
@@ -509,14 +537,6 @@ export const ProjectDetails = () => {
           onNextPage={handleCablesNextPage}
           trays={trays}
           secondaryTrayLength={project.secondaryTrayLength}
-          secondaryTrayLengthInput={secondaryTrayLengthInput}
-          onSecondaryTrayLengthInputChange={(value) => {
-            setSecondaryTrayLengthInput(value);
-            setSecondaryTrayLengthError(null);
-          }}
-          onSaveSecondaryTrayLength={() => void handleSecondaryTrayLengthSave()}
-          secondaryTrayLengthSaving={secondaryTrayLengthSaving}
-          secondaryTrayLengthError={secondaryTrayLengthError}
         />
       ) : null}
 
@@ -560,6 +580,7 @@ export const ProjectDetails = () => {
         onCableTypeSelect={cableDialog.handleCableTypeSelect}
         onSubmit={(event) => void cableDialog.handleSubmit(event)}
         onDismiss={cableDialog.reset}
+        visibleFields={cableDialogVisibleFields}
       />
     </section>
   );

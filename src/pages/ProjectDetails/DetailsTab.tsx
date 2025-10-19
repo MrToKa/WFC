@@ -1,8 +1,15 @@
-import { Body1, Caption1 } from '@fluentui/react-components';
+import {
+  Body1,
+  Button,
+  Caption1,
+  Field,
+  Input
+} from '@fluentui/react-components';
 
 import type { Project } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import { formatNumeric } from '../ProjectDetails.utils';
 
 type FormattedDates = {
   created: string;
@@ -13,12 +20,24 @@ type DetailsTabProps = {
   styles: ProjectDetailsStyles;
   project: Project;
   formattedDates: FormattedDates;
+  isAdmin: boolean;
+  secondaryTrayLengthInput: string;
+  onSecondaryTrayLengthInputChange: (value: string) => void;
+  onSaveSecondaryTrayLength: () => void;
+  secondaryTrayLengthSaving: boolean;
+  secondaryTrayLengthError: string | null;
 };
 
 export const DetailsTab = ({
   styles,
   project,
-  formattedDates
+  formattedDates,
+  isAdmin,
+  secondaryTrayLengthInput,
+  onSecondaryTrayLengthInputChange,
+  onSaveSecondaryTrayLength,
+  secondaryTrayLengthSaving,
+  secondaryTrayLengthError
 }: DetailsTabProps) => (
   <div className={styles.tabPanel} role="tabpanel" aria-label="Details">
     {formattedDates ? (
@@ -47,6 +66,44 @@ export const DetailsTab = ({
       <Body1>
         {project.manager ? project.manager : 'No manager specified.'}
       </Body1>
+    </div>
+    <div className={styles.panel}>
+      <Caption1>Secondary tray length</Caption1>
+      {!isAdmin ? (
+        <Body1>
+          {project.secondaryTrayLength !== null
+            ? `${formatNumeric(project.secondaryTrayLength)} m`
+            : 'Not specified'}
+        </Body1>
+      ) : (
+        <>
+          <Body1>
+            Current value:{' '}
+            {project.secondaryTrayLength !== null
+              ? `${formatNumeric(project.secondaryTrayLength)} m`
+              : 'Not specified'}
+          </Body1>
+          <Field
+            label="Update value [m]"
+            validationState={secondaryTrayLengthError ? 'error' : undefined}
+            validationMessage={secondaryTrayLengthError}
+          >
+            <Input
+              value={secondaryTrayLengthInput}
+              onChange={(_, data) => onSecondaryTrayLengthInputChange(data.value)}
+              disabled={secondaryTrayLengthSaving}
+              inputMode="decimal"
+            />
+          </Field>
+          <Button
+            appearance="primary"
+            onClick={onSaveSecondaryTrayLength}
+            disabled={secondaryTrayLengthSaving}
+          >
+            {secondaryTrayLengthSaving ? 'Saving...' : 'Save'}
+          </Button>
+        </>
+      )}
     </div>
   </div>
 );

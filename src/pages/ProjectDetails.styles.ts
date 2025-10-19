@@ -5,7 +5,7 @@ export const useProjectDetailsStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
-    maxWidth: '80rem',
+    maxWidth: '100%',
     width: '100%',
     margin: '0 auto',
     ...shorthands.padding('0', '0', '2rem')
@@ -65,7 +65,7 @@ export const useProjectDetailsStyles = makeStyles({
   tableCell: {
     padding: '0.75rem 1rem',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    verticalAlign: 'top',
+    verticalAlign: 'middle',
     wordBreak: 'break-word'
   },
   tableSortButton: {
@@ -84,7 +84,9 @@ export const useProjectDetailsStyles = makeStyles({
   actionsCell: {
     display: 'flex',
     gap: '0.5rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-start'
   },
   emptyState: {
     padding: '1rem',

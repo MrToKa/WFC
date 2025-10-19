@@ -40,7 +40,7 @@ const INPUT_HEADERS = {
   tested: 'Tested'
 } as const;
 
-const OUTPUT_HEADERS = {
+const LIST_OUTPUT_HEADERS = {
   tag: 'Tag',
   type: 'Type',
   purpose: 'Purpose',
@@ -51,6 +51,17 @@ const OUTPUT_HEADERS = {
   routing: 'Routing',
   designLength: 'Design Length',
   installLength: 'Install Length',
+  connectedFrom: 'Connected From',
+  connectedTo: 'Connected To',
+  tested: 'Tested'
+} as const;
+
+const REPORT_OUTPUT_HEADERS = {
+  tag: 'Tag',
+  fromLocation: 'From Location',
+  toLocation: 'To Location',
+  designLength: 'Design Length [m]',
+  installLength: 'Install Length [m]',
   connectedFrom: 'Connected From',
   connectedTo: 'Connected To',
   tested: 'Tested'
@@ -86,12 +97,13 @@ const normalizeDateValue = (
     return null;
   }
 
-  const timestamp = Date.parse(trimmed);
-  if (Number.isNaN(timestamp)) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (!match) {
     return null;
   }
 
-  return new Date(timestamp).toISOString().slice(0, 10);
+  const [, year, month, day] = match;
+  return `${year}-${month}-${day}`;
 };
 
 const parseInstallLength = (value: unknown): number | null => {
@@ -174,7 +186,7 @@ const computeDesignLengthMeters = (
   }
 
   const designLength = total * 1.1;
-  return Math.round(designLength * 100) / 100;
+  return Math.round(designLength);
 };
 
 const formatDateCell = (
@@ -184,8 +196,21 @@ const formatDateCell = (
     return '';
   }
 
-  const iso = typeof value === 'string' ? value : value.toISOString();
-  return iso.slice(0, 10);
+  if (value instanceof Date) {
+    const year = value.getUTCFullYear();
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    return `${day}-${month}-${year}`;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+
+  if (!match) {
+    return value;
+  }
+
+  const [, year, month, day] = match;
+  return `${day}-${month}-${year}`;
 };
 
 const selectCablesQuery = `
@@ -1135,58 +1160,182 @@ cablesRouter.get(
         values
       );
 
+      const trayResult = await pool.query<{
+        name: string;
+        length_mm: string | number | null;
+      }>(
+        `
+          SELECT name, length_mm
+          FROM trays
+          WHERE project_id = $1;
+        `,
+        [projectId]
+      );
+
+      const trayLengths = new Map<string, number>();
+
+      for (const tray of trayResult.rows) {
+        const lengthMm = toNumberOrNull(tray.length_mm);
+
+        if (lengthMm !== null) {
+          trayLengths.set(normalizeTrayKey(tray.name), lengthMm / 1000);
+        }
+      }
+
+      const secondaryTrayLengthMeters = toNumberOrNull(
+        project.secondary_tray_length ?? null
+      );
+
+      const viewParam =
+        typeof req.query.view === 'string'
+          ? req.query.view.toLowerCase()
+          : undefined;
+      const exportView = viewParam === 'report' ? 'report' : 'list';
+
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Cables', {
-        views: [{ state: 'frozen', ySplit: 1 }]
-      });
+      const worksheet = workbook.addWorksheet(
+        exportView === 'report' ? 'Cables report' : 'Cables',
+        {
+          views: [{ state: 'frozen', ySplit: 1 }]
+        }
+      );
 
-      const columns = [
-        { name: OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
-        { name: OUTPUT_HEADERS.type, key: 'type', width: 28 },
-        { name: OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
-        { name: OUTPUT_HEADERS.diameter, key: 'diameter', width: 18 },
-        { name: OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
-        { name: OUTPUT_HEADERS.fromLocation, key: 'fromLocation', width: 26 },
-        { name: OUTPUT_HEADERS.toLocation, key: 'toLocation', width: 26 },
-        { name: OUTPUT_HEADERS.routing, key: 'routing', width: 30 },
-        { name: OUTPUT_HEADERS.designLength, key: 'designLength', width: 18 },
-        { name: OUTPUT_HEADERS.installLength, key: 'installLength', width: 18 },
-        { name: OUTPUT_HEADERS.connectedFrom, key: 'connectedFrom', width: 20 },
-        { name: OUTPUT_HEADERS.connectedTo, key: 'connectedTo', width: 20 },
-        { name: OUTPUT_HEADERS.tested, key: 'tested', width: 18 }
-      ] as const;
+      const columns =
+        exportView === 'report'
+          ? [
+              { name: REPORT_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
+              {
+                name: REPORT_OUTPUT_HEADERS.fromLocation,
+                key: 'fromLocation',
+                width: 26
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.toLocation,
+                key: 'toLocation',
+                width: 26
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.designLength,
+                key: 'designLength',
+                width: 18
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.installLength,
+                key: 'installLength',
+                width: 18
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.connectedFrom,
+                key: 'connectedFrom',
+                width: 20
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.connectedTo,
+                key: 'connectedTo',
+                width: 20
+              },
+              { name: REPORT_OUTPUT_HEADERS.tested, key: 'tested', width: 18 }
+            ] as const
+          : [
+              { name: LIST_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
+              { name: LIST_OUTPUT_HEADERS.type, key: 'type', width: 28 },
+              { name: LIST_OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
+              {
+                name: LIST_OUTPUT_HEADERS.diameter,
+                key: 'diameter',
+                width: 18
+              },
+              { name: LIST_OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
+              {
+                name: LIST_OUTPUT_HEADERS.fromLocation,
+                key: 'fromLocation',
+                width: 26
+              },
+              {
+                name: LIST_OUTPUT_HEADERS.toLocation,
+                key: 'toLocation',
+                width: 26
+              },
+              {
+                name: LIST_OUTPUT_HEADERS.routing,
+                key: 'routing',
+                width: 30
+              },
+              {
+                name: LIST_OUTPUT_HEADERS.designLength,
+                key: 'designLength',
+                width: 18
+              },
+              {
+                name: LIST_OUTPUT_HEADERS.installLength,
+                key: 'installLength',
+                width: 18
+              },
+              {
+                name: LIST_OUTPUT_HEADERS.connectedFrom,
+                key: 'connectedFrom',
+                width: 20
+              },
+              {
+                name: LIST_OUTPUT_HEADERS.connectedTo,
+                key: 'connectedTo',
+                width: 20
+              },
+              { name: LIST_OUTPUT_HEADERS.tested, key: 'tested', width: 18 }
+            ] as const;
 
-      const rows = result.rows.map((row) => [
-        row.tag ?? '',
-        row.type_name ?? '',
-        row.type_purpose ?? '',
-        row.type_diameter_mm !== null && row.type_diameter_mm !== ''
-          ? Number(row.type_diameter_mm)
-          : '',
-        row.type_weight_kg_per_m !== null && row.type_weight_kg_per_m !== ''
-          ? Number(row.type_weight_kg_per_m)
-          : '',
-        row.from_location ?? '',
-        row.to_location ?? '',
-        row.routing ?? '',
-        (() => {
-          const designLength = computeDesignLengthMeters(
-            row.routing ?? null,
-            trayLengths,
-            secondaryTrayLengthMeters
-          );
-          return designLength ?? '';
-        })(),
-        row.install_length !== null && row.install_length !== ''
-          ? Number(row.install_length)
-          : '',
-        formatDateCell(row.connected_from),
-        formatDateCell(row.connected_to),
-        formatDateCell(row.tested)
-      ]);
+      const rows =
+        exportView === 'report'
+          ? result.rows.map((row) => [
+              row.tag ?? '',
+              row.from_location ?? '',
+              row.to_location ?? '',
+              (() => {
+                const designLength = computeDesignLengthMeters(
+                  row.routing ?? null,
+                  trayLengths,
+                  secondaryTrayLengthMeters
+                );
+                return designLength ?? '';
+              })(),
+              row.install_length !== null && row.install_length !== ''
+                ? Number(row.install_length)
+                : '',
+              formatDateCell(row.connected_from),
+              formatDateCell(row.connected_to),
+              formatDateCell(row.tested)
+            ])
+          : result.rows.map((row) => [
+              row.tag ?? '',
+              row.type_name ?? '',
+              row.type_purpose ?? '',
+              row.type_diameter_mm !== null && row.type_diameter_mm !== ''
+                ? Number(row.type_diameter_mm)
+                : '',
+              row.type_weight_kg_per_m !== null && row.type_weight_kg_per_m !== ''
+                ? Number(row.type_weight_kg_per_m)
+                : '',
+              row.from_location ?? '',
+              row.to_location ?? '',
+              row.routing ?? '',
+              (() => {
+                const designLength = computeDesignLengthMeters(
+                  row.routing ?? null,
+                  trayLengths,
+                  secondaryTrayLengthMeters
+                );
+                return designLength ?? '';
+              })(),
+              row.install_length !== null && row.install_length !== ''
+                ? Number(row.install_length)
+                : '',
+              formatDateCell(row.connected_from),
+              formatDateCell(row.connected_to),
+              formatDateCell(row.tested)
+            ]);
 
       const table = worksheet.addTable({
-        name: 'Cables',
+        name: exportView === 'report' ? 'CablesReport' : 'Cables',
         ref: 'A1',
         headerRow: true,
         totalsRow: false,
@@ -1215,7 +1364,7 @@ cablesRouter.get(
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
         }
         if (column.key === 'designLength') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+          worksheet.getColumn(index + 1).numFmt = '#,##0';
         }
         if (column.key === 'installLength') {
           worksheet.getColumn(index + 1).numFmt = '#,##0';
@@ -1225,7 +1374,8 @@ cablesRouter.get(
       const buffer = await workbook.xlsx.writeBuffer();
 
       const projectSegment = sanitizeFileSegment(project.project_number);
-      const fileName = `${projectSegment}-cable-list.xlsx`;
+      const fileSuffix = exportView === 'report' ? 'cables-report' : 'cable-list';
+      const fileName = `${projectSegment}-${fileSuffix}.xlsx`;
 
       res.setHeader(
         'Content-Type',
@@ -1245,3 +1395,6 @@ cablesRouter.get(
 );
 
 export { cablesRouter };
+
+
+

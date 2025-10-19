@@ -33,7 +33,11 @@ import {
   parseCableFormErrors,
   toCableFormState
 } from '../../ProjectDetails.forms';
-import { sanitizeFileSegment, toNullableString } from '../../ProjectDetails.utils';
+import {
+  isIsoDateString,
+  sanitizeFileSegment,
+  toNullableString
+} from '../../ProjectDetails.utils';
 
 type ShowToast = (options: {
   title: string;
@@ -94,7 +98,7 @@ type UseCableListSectionResult = {
   openEditCableDialog: (cable: Cable) => void;
   handleDeleteCable: (cable: Cable) => Promise<void>;
   handleImportCables: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
-  handleExportCables: () => Promise<void>;
+  handleExportCables: (view?: 'list' | 'report') => Promise<void>;
   handleCableDraftChange: (
     cableId: string,
     field: keyof CableFormState,
@@ -570,8 +574,9 @@ export const useCableListSection = ({
             }
             changes = { [field]: null } as Partial<CableInput>;
           } else {
-            const parsed = Date.parse(value);
-            if (Number.isNaN(parsed)) {
+            const normalized = value.slice(0, 10);
+
+            if (!isIsoDateString(normalized)) {
               showToast({
                 intent: 'error',
                 title: 'Invalid date',
@@ -580,7 +585,6 @@ export const useCableListSection = ({
               return;
             }
 
-            const normalized = new Date(parsed).toISOString().slice(0, 10);
             if (normalized === current) {
               return;
             }
@@ -787,66 +791,71 @@ export const useCableListSection = ({
     [projectSnapshot, showToast, sortCables, token]
   );
 
-  const handleExportCables = useCallback(async () => {
-    if (!projectSnapshot || !token) {
-      showToast({
-        intent: 'error',
-        title: 'Sign-in required',
-        body: 'You need to be signed in to export cables.'
-      });
-      return;
-    }
-
-    setIsExporting(true);
-
-    try {
-      const blob = await exportCables(token, projectSnapshot.id, {
-        filterText,
-        cableTypeId: cableTypeFilter || undefined,
-        sortColumn,
-        sortDirection
-      });
-      const link = document.createElement('a');
-      const url = window.URL.createObjectURL(blob);
-      const fileName = `${sanitizeFileSegment(
-        projectSnapshot.projectNumber
-      )}-cable-list.xlsx`;
-
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      showToast({ intent: 'success', title: 'Cables exported' });
-    } catch (err) {
-      console.error('Export cables failed', err);
-      if (err instanceof ApiError && err.status === 404) {
+  const handleExportCables = useCallback(
+    async (view: 'list' | 'report' = 'list') => {
+      if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
-          title: 'Export endpoint unavailable',
-          body: 'Please restart the API server after updating it.'
+          title: 'Sign-in required',
+          body: 'You need to be signed in to export cables.'
         });
-      } else {
-        showToast({
-          intent: 'error',
-          title: 'Failed to export cables',
-          body: err instanceof ApiError ? err.message : undefined
-        });
+        return;
       }
-    } finally {
-      setIsExporting(false);
-    }
-  }, [
-    cableTypeFilter,
-    filterText,
-    projectSnapshot,
-    showToast,
-    sortColumn,
-    sortDirection,
-    token
-  ]);
+
+      setIsExporting(true);
+
+      try {
+        const blob = await exportCables(token, projectSnapshot.id, {
+          filterText,
+          cableTypeId: cableTypeFilter || undefined,
+          sortColumn,
+          sortDirection,
+          view
+        });
+        const link = document.createElement('a');
+        const url = window.URL.createObjectURL(blob);
+        const suffix = view === 'report' ? 'cables-report' : 'cable-list';
+        const fileName = `${sanitizeFileSegment(
+          projectSnapshot.projectNumber
+        )}-${suffix}.xlsx`;
+
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        showToast({ intent: 'success', title: 'Cables exported' });
+      } catch (err) {
+        console.error('Export cables failed', err);
+        if (err instanceof ApiError && err.status === 404) {
+          showToast({
+            intent: 'error',
+            title: 'Export endpoint unavailable',
+            body: 'Please restart the API server after updating it.'
+          });
+        } else {
+          showToast({
+            intent: 'error',
+            title: 'Failed to export cables',
+            body: err instanceof ApiError ? err.message : undefined
+          });
+        }
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [
+      cableTypeFilter,
+      filterText,
+      projectSnapshot,
+      showToast,
+      sortColumn,
+      sortDirection,
+      token
+    ]
+  );
 
   return {
     cables,
@@ -896,3 +905,4 @@ export const useCableListSection = ({
     }
   };
 };
+
