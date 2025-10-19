@@ -129,6 +129,55 @@ export const CableDialog = ({
                   onChange={onFieldChange('routing')}
                 />
               </Field>
+              <Field
+                label="Install length [m]"
+                validationState={
+                  errors.installLength ? 'error' : undefined
+                }
+                validationMessage={errors.installLength}
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  value={values.installLength}
+                  onChange={onFieldChange('installLength')}
+                />
+              </Field>
+              <Field
+                label="Connected from"
+                validationState={
+                  errors.connectedFrom ? 'error' : undefined
+                }
+                validationMessage={errors.connectedFrom}
+              >
+                <Input
+                  type="date"
+                  value={values.connectedFrom}
+                  onChange={onFieldChange('connectedFrom')}
+                />
+              </Field>
+              <Field
+                label="Connected to"
+                validationState={errors.connectedTo ? 'error' : undefined}
+                validationMessage={errors.connectedTo}
+              >
+                <Input
+                  type="date"
+                  value={values.connectedTo}
+                  onChange={onFieldChange('connectedTo')}
+                />
+              </Field>
+              <Field
+                label="Tested"
+                validationState={errors.tested ? 'error' : undefined}
+                validationMessage={errors.tested}
+              >
+                <Input
+                  type="date"
+                  value={values.tested}
+                  onChange={onFieldChange('tested')}
+                />
+              </Field>
               {errors.general ? (
                 <Body1 className={styles.errorText}>{errors.general}</Body1>
               ) : null}

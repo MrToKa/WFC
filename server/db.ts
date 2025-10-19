@@ -32,6 +32,7 @@ export async function initializeDatabase(): Promise<void> {
       customer TEXT NOT NULL,
       manager TEXT,
       description TEXT,
+      secondary_tray_length NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -40,6 +41,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS manager TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS secondary_tray_length NUMERIC;
   `);
 
   await pool.query(`
@@ -79,6 +85,10 @@ export async function initializeDatabase(): Promise<void> {
       from_location TEXT,
       to_location TEXT,
       routing TEXT,
+      install_length INTEGER,
+      connected_from DATE,
+      connected_to DATE,
+      tested DATE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -97,6 +107,26 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS cables_cable_type_id_idx
       ON cables (cable_type_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS install_length INTEGER;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS connected_from DATE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS connected_to DATE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS tested DATE;
   `);
 
   await pool.query(`

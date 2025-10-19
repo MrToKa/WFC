@@ -18,7 +18,8 @@ export type ProjectDetailsTab =
   | 'details'
   | 'cables'
   | 'cable-list'
-  | 'trays';
+  | 'trays'
+  | 'cable-report';
 
 export type CableTypeFormState = {
   name: string;
@@ -217,6 +218,10 @@ export type CableFormState = {
   fromLocation: string;
   toLocation: string;
   routing: string;
+  installLength: string;
+  connectedFrom: string;
+  connectedTo: string;
+  tested: string;
 };
 
 export type CableFormErrors = Partial<Record<keyof CableFormState, string>> & {
@@ -229,7 +234,11 @@ export const emptyCableForm: CableFormState = {
   cableTypeId: '',
   fromLocation: '',
   toLocation: '',
-  routing: ''
+  routing: '',
+  installLength: '',
+  connectedFrom: '',
+  connectedTo: '',
+  tested: ''
 };
 
 export const toCableFormState = (cable: Cable): CableFormState => ({
@@ -238,7 +247,12 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   cableTypeId: cable.cableTypeId,
   fromLocation: cable.fromLocation ?? '',
   toLocation: cable.toLocation ?? '',
-  routing: cable.routing ?? ''
+  routing: cable.routing ?? '',
+  installLength:
+    cable.installLength !== null ? String(cable.installLength) : '',
+  connectedFrom: cable.connectedFrom ?? '',
+  connectedTo: cable.connectedTo ?? '',
+  tested: cable.tested ?? ''
 });
 
 export const parseCableFormErrors = (
@@ -298,6 +312,34 @@ export const buildCableInput = (
     toLocation: normalize(values.toLocation),
     routing: normalize(values.routing)
   };
+
+  const installLengthValue = values.installLength.trim();
+  if (installLengthValue !== '') {
+    const parsed = Number(installLengthValue);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+      errors.installLength = 'Install length must be a non-negative integer';
+    } else {
+      input.installLength = parsed;
+    }
+  } else {
+    input.installLength = null;
+  }
+
+  const parseDate = (value: string, field: keyof CableFormState) => {
+    const trimmed = value.trim();
+    if (trimmed === '') {
+      return null;
+    }
+    if (Number.isNaN(Date.parse(trimmed))) {
+      errors[field] = 'Enter a valid date (YYYY-MM-DD)';
+      return null;
+    }
+    return trimmed.slice(0, 10);
+  };
+
+  input.connectedFrom = parseDate(values.connectedFrom, 'connectedFrom');
+  input.connectedTo = parseDate(values.connectedTo, 'connectedTo');
+  input.tested = parseDate(values.tested, 'tested');
 
   return { input, errors };
 };

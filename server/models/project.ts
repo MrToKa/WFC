@@ -1,3 +1,5 @@
+import { toNumberOrNull } from './cableType.js';
+
 export type ProjectRow = {
   id: string;
   project_number: string;
@@ -5,6 +7,7 @@ export type ProjectRow = {
   customer: string;
   manager: string | null;
   description: string | null;
+  secondary_tray_length: string | number | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -16,6 +19,7 @@ export type PublicProject = {
   customer: string;
   manager: string | null;
   description: string | null;
+  secondaryTrayLength: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -27,6 +31,7 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   customer: row.customer,
   manager: row.manager ?? null,
   description: row.description ?? null,
+  secondaryTrayLength: toNumberOrNull(row.secondary_tray_length),
   createdAt:
     typeof row.created_at === 'string'
       ? row.created_at

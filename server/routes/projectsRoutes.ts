@@ -29,6 +29,7 @@ projectsRouter.get(
             customer,
             manager,
             description,
+            secondary_tray_length,
             created_at,
             updated_at
           FROM projects
@@ -81,8 +82,14 @@ projectsRouter.post(
       return;
     }
 
-    const { projectNumber, name, customer, description, manager } =
-      parseResult.data;
+    const {
+      projectNumber,
+      name,
+      customer,
+      description,
+      manager,
+      secondaryTrayLength
+    } = parseResult.data;
     const projectId = randomUUID();
     const normalizedDescription =
       description === undefined ? undefined : description.trim();
@@ -91,8 +98,16 @@ projectsRouter.post(
     try {
       const result = await pool.query<ProjectRow>(
         `
-          INSERT INTO projects (id, project_number, name, customer, manager, description)
-          VALUES ($1, $2, $3, $4, $5, $6)
+          INSERT INTO projects (
+            id,
+            project_number,
+            name,
+            customer,
+            manager,
+            description,
+            secondary_tray_length
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
           RETURNING
             id,
             project_number,
@@ -100,6 +115,7 @@ projectsRouter.post(
             customer,
             manager,
             description,
+            secondary_tray_length,
             created_at,
             updated_at;
         `,
@@ -113,7 +129,8 @@ projectsRouter.post(
             : normalizedManager,
           normalizedDescription === undefined || normalizedDescription === ''
             ? null
-            : normalizedDescription
+            : normalizedDescription,
+          secondaryTrayLength ?? null
         ]
       );
 
@@ -188,6 +205,11 @@ projectsRouter.patch(
       values.push(normalized === '' ? null : normalized);
     }
 
+    if (parseResult.data.secondaryTrayLength !== undefined) {
+      fields.push(`secondary_tray_length = $${index++}`);
+      values.push(parseResult.data.secondaryTrayLength);
+    }
+
     fields.push(`updated_at = NOW()`);
 
     try {
@@ -203,6 +225,7 @@ projectsRouter.patch(
             customer,
             manager,
             description,
+            secondary_tray_length,
             created_at,
             updated_at;
         `,

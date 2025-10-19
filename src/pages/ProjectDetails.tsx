@@ -14,9 +14,12 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
+import { ApiError, updateProject } from '@/api/client';
+
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
 import { formatNumeric } from './ProjectDetails.utils';
+import { CableReportTab } from './ProjectDetails/CableReportTab';
 import { CableDialog } from './ProjectDetails/CableDialog';
 import { CableListTab } from './ProjectDetails/CableListTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
@@ -33,7 +36,8 @@ const VALID_TABS: ProjectDetailsTab[] = [
   'details',
   'cables',
   'cable-list',
-  'trays'
+  'trays',
+  'cable-report'
 ];
 
 export const ProjectDetails = () => {
@@ -58,7 +62,8 @@ export const ProjectDetails = () => {
     project,
     projectLoading,
     projectError,
-    formattedDates
+    formattedDates,
+    reloadProject
   } = useProjectDetailsData({ projectId });
 
   const {
@@ -134,6 +139,7 @@ export const ProjectDetails = () => {
   });
 
   const {
+    trays,
     pagedTrays,
     totalTrayPages,
     traysPage,
@@ -159,6 +165,94 @@ export const ProjectDetails = () => {
     token,
     showToast
   });
+
+  const [secondaryTrayLengthInput, setSecondaryTrayLengthInput] = useState<string>('');
+  const [secondaryTrayLengthError, setSecondaryTrayLengthError] = useState<string | null>(
+    null
+  );
+  const [secondaryTrayLengthSaving, setSecondaryTrayLengthSaving] =
+    useState<boolean>(false);
+
+  useEffect(() => {
+    if (project?.secondaryTrayLength !== undefined) {
+      setSecondaryTrayLengthInput(
+        project.secondaryTrayLength !== null
+          ? String(project.secondaryTrayLength)
+          : ''
+      );
+      setSecondaryTrayLengthError(null);
+    }
+  }, [project?.secondaryTrayLength]);
+
+  const handleSecondaryTrayLengthSave = useCallback(async () => {
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Sign-in required',
+        body: 'You need to be signed in to update the secondary tray length.'
+      });
+      return;
+    }
+
+    if (!isAdmin) {
+      showToast({
+        intent: 'error',
+        title: 'Administrator access required',
+        body: 'Only administrators can update the secondary tray length.'
+      });
+      return;
+    }
+
+    const trimmed = secondaryTrayLengthInput.trim();
+    let nextValue: number | null = null;
+
+    if (trimmed === '') {
+      nextValue = null;
+    } else {
+      const normalized = trimmed.replace(',', '.');
+      const parsed = Number(normalized);
+
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        setSecondaryTrayLengthError('Enter a non-negative number.');
+        return;
+      }
+
+      nextValue = Math.round(parsed * 1000) / 1000;
+    }
+
+    if (project.secondaryTrayLength === nextValue) {
+      setSecondaryTrayLengthError('No changes to save.');
+      return;
+    }
+
+    setSecondaryTrayLengthSaving(true);
+    setSecondaryTrayLengthError(null);
+
+    try {
+      await updateProject(token, project.id, {
+        secondaryTrayLength: nextValue
+      });
+      await reloadProject();
+      showToast({ intent: 'success', title: 'Secondary tray length updated' });
+    } catch (error) {
+      console.error('Failed to update secondary tray length', error);
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to update secondary tray length.';
+      setSecondaryTrayLengthError(message);
+      showToast({ intent: 'error', title: 'Update failed', body: message });
+    } finally {
+      setSecondaryTrayLengthSaving(false);
+    }
+  }, [
+    isAdmin,
+    project,
+    reloadProject,
+    secondaryTrayLengthInput,
+    showToast,
+    token
+  ]);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -266,6 +360,7 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="trays">Trays</Tab>
+        <Tab value="cable-report">Cables report</Tab>
       </TabList>
 
       {selectedTab === 'details' ? (
@@ -379,6 +474,49 @@ export const ProjectDetails = () => {
           totalPages={totalCablePages}
           onPreviousPage={handleCablesPreviousPage}
           onNextPage={handleCablesNextPage}
+        />
+      ) : null}
+
+      {selectedTab === 'cable-report' ? (
+        <CableReportTab
+          styles={styles}
+          canManageCables={canManageCables}
+          isAdmin={isAdmin}
+          isRefreshing={cablesRefreshing}
+          onRefresh={() => void reloadCables({ showSpinner: false })}
+          onImportClick={() => cablesFileInputRef.current?.click()}
+          onExport={() => void handleExportCables()}
+          onImportFileChange={handleImportCables}
+          isImporting={cablesImporting}
+          isExporting={cablesExporting}
+          fileInputRef={cablesFileInputRef}
+          inlineEditingEnabled={inlineEditingEnabled}
+          onInlineEditingToggle={setInlineEditingEnabled}
+          inlineUpdatingIds={inlineUpdatingIds}
+          isInlineEditable={isInlineEditable}
+          items={pagedCables}
+          drafts={cableDrafts}
+          onDraftChange={handleCableDraftChange}
+          onFieldBlur={(cable, field) => void handleCableTextFieldBlur(cable, field)}
+          pendingId={pendingCableId}
+          onEdit={openEditCableDialog}
+          error={cablesError}
+          isLoading={cablesLoading}
+          showPagination={showCablePagination}
+          page={cablesPage}
+          totalPages={totalCablePages}
+          onPreviousPage={handleCablesPreviousPage}
+          onNextPage={handleCablesNextPage}
+          trays={trays}
+          secondaryTrayLength={project.secondaryTrayLength}
+          secondaryTrayLengthInput={secondaryTrayLengthInput}
+          onSecondaryTrayLengthInputChange={(value) => {
+            setSecondaryTrayLengthInput(value);
+            setSecondaryTrayLengthError(null);
+          }}
+          onSaveSecondaryTrayLength={() => void handleSecondaryTrayLengthSave()}
+          secondaryTrayLengthSaving={secondaryTrayLengthSaving}
+          secondaryTrayLengthError={secondaryTrayLengthError}
         />
       ) : null}
 

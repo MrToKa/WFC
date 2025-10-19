@@ -11,6 +11,7 @@ import {
   type CableRow,
   type CableWithTypeRow
 } from '../models/cable.js';
+import { toNumberOrNull } from '../models/cableType.js';
 import type { CableTypeRow } from '../models/cableType.js';
 import { authenticate } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
@@ -32,7 +33,11 @@ const INPUT_HEADERS = {
   type: 'Type',
   fromLocation: 'From Location',
   toLocation: 'To Location',
-  routing: 'Routing'
+  routing: 'Routing',
+  installLength: 'Install Length',
+  connectedFrom: 'Connected From',
+  connectedTo: 'Connected To',
+  tested: 'Tested'
 } as const;
 
 const OUTPUT_HEADERS = {
@@ -43,7 +48,12 @@ const OUTPUT_HEADERS = {
   weight: 'Weight [kg/m]',
   fromLocation: 'From Location',
   toLocation: 'To Location',
-  routing: 'Routing'
+  routing: 'Routing',
+  designLength: 'Design Length',
+  installLength: 'Install Length',
+  connectedFrom: 'Connected From',
+  connectedTo: 'Connected To',
+  tested: 'Tested'
 } as const;
 
 const normalizeOptionalString = (
@@ -63,6 +73,121 @@ const sanitizeFileSegment = (value: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'project';
 
+const normalizeDateValue = (
+  value: string | null | undefined
+): string | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed === '') {
+    return null;
+  }
+
+  const timestamp = Date.parse(trimmed);
+  if (Number.isNaN(timestamp)) {
+    return null;
+  }
+
+  return new Date(timestamp).toISOString().slice(0, 10);
+};
+
+const parseInstallLength = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? Math.trunc(value) : null;
+  }
+
+  const trimmed = String(value).trim();
+  if (trimmed === '') {
+    return null;
+  }
+
+  const numeric = Number(trimmed);
+  return Number.isFinite(numeric) ? Math.trunc(numeric) : null;
+};
+
+const INTERNAL_TRAY_LENGTH_METERS = 3;
+
+const normalizeTrayKey = (value: string): string =>
+  value.trim().toLowerCase().replace(/\s+/g, ' ');
+
+const parseRoutingSegments = (routing: string): string[] => {
+  const normalized = routing
+    .replace(/->/g, '>')
+    .replace(/[→↦‣]/g, '>')
+    .replace(/\r?\n/g, '>');
+
+  return normalized
+    .split(/[>,;|/\\]/)
+    .map((segment) => segment.trim())
+    .map((segment) => segment.replace(/^[-–—]+/, '').replace(/[-–—]+$/, ''))
+    .map((segment) => segment.replace(/\s+/g, ' '))
+    .filter((segment) => segment.length > 0);
+};
+
+const computeDesignLengthMeters = (
+  routing: string | null,
+  trayLengths: Map<string, number>,
+  secondaryTrayLength: number | null
+): number | null => {
+  if (!routing) {
+    return null;
+  }
+
+  const segments = parseRoutingSegments(routing);
+
+  if (segments.length === 0) {
+    return null;
+  }
+
+  const secondary = secondaryTrayLength ?? 0;
+  let total = 0;
+
+  for (const segment of segments) {
+    const key = normalizeTrayKey(segment);
+
+    if (key.startsWith('internal')) {
+      total += INTERNAL_TRAY_LENGTH_METERS;
+      continue;
+    }
+
+    if (key.startsWith('secondary')) {
+      total += secondary;
+      continue;
+    }
+
+    const trayLength = trayLengths.get(key);
+
+    if (trayLength) {
+      total += trayLength;
+    }
+  }
+
+  if (total === 0) {
+    return null;
+  }
+
+  const designLength = total * 1.1;
+  return Math.round(designLength * 100) / 100;
+};
+
+const formatDateCell = (
+  value: Date | string | null | undefined
+): string => {
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  const iso = typeof value === 'string' ? value : value.toISOString();
+  return iso.slice(0, 10);
+};
+
 const selectCablesQuery = `
   SELECT
     c.id,
@@ -73,6 +198,10 @@ const selectCablesQuery = `
     c.from_location,
     c.to_location,
     c.routing,
+    c.install_length,
+    c.connected_from,
+    c.connected_to,
+    c.tested,
     c.created_at,
     c.updated_at,
     ct.name AS type_name,
@@ -135,6 +264,32 @@ cablesRouter.post(
         res.status(404).json({ error: 'Project not found' });
         return;
       }
+
+      const trayResult = await pool.query<{
+        name: string;
+        length_mm: string | number | null;
+      }>(
+        `
+          SELECT name, length_mm
+          FROM trays
+          WHERE project_id = $1;
+        `,
+        [projectId]
+      );
+
+      const trayLengths = new Map<string, number>();
+
+      for (const tray of trayResult.rows) {
+        const lengthMm = toNumberOrNull(tray.length_mm);
+
+        if (lengthMm !== null) {
+          trayLengths.set(normalizeTrayKey(tray.name), lengthMm / 1000);
+        }
+      }
+
+      const secondaryTrayLengthMeters = toNumberOrNull(
+        project.secondary_tray_length ?? null
+      );
     } catch (error) {
       console.error('Verify project for cable create error', error);
       res.status(500).json({ error: 'Failed to verify project' });
@@ -154,7 +309,11 @@ cablesRouter.post(
       cableTypeId,
       fromLocation,
       toLocation,
-      routing
+      routing,
+      installLength,
+      connectedFrom,
+      connectedTo,
+      tested
     } = parseResult.data;
 
     try {
@@ -197,9 +356,13 @@ cablesRouter.post(
             cable_type_id,
             from_location,
             to_location,
-            routing
+            routing,
+            install_length,
+            connected_from,
+            connected_to,
+            tested
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           RETURNING
             id,
             project_id,
@@ -209,6 +372,10 @@ cablesRouter.post(
             from_location,
             to_location,
             routing,
+            install_length,
+            connected_from,
+            connected_to,
+            tested,
             created_at,
             updated_at;
         `,
@@ -220,7 +387,11 @@ cablesRouter.post(
           cableTypeId,
           normalizeOptionalString(fromLocation ?? null),
           normalizeOptionalString(toLocation ?? null),
-          normalizeOptionalString(routing ?? null)
+          normalizeOptionalString(routing ?? null),
+          installLength ?? null,
+          normalizeDateValue(connectedFrom ?? null),
+          normalizeDateValue(connectedTo ?? null),
+          normalizeDateValue(tested ?? null)
         ]
       );
 
@@ -285,7 +456,11 @@ cablesRouter.patch(
       cableTypeId,
       fromLocation,
       toLocation,
-      routing
+      routing,
+      installLength,
+      connectedFrom,
+      connectedTo,
+      tested
     } = parseResult.data;
 
     try {
@@ -384,6 +559,26 @@ cablesRouter.patch(
     if (routing !== undefined) {
       fields.push(`routing = $${index++}`);
       values.push(normalizeOptionalString(routing));
+    }
+
+    if (installLength !== undefined) {
+      fields.push(`install_length = $${index++}`);
+      values.push(installLength ?? null);
+    }
+
+    if (connectedFrom !== undefined) {
+      fields.push(`connected_from = $${index++}`);
+      values.push(normalizeDateValue(connectedFrom));
+    }
+
+    if (connectedTo !== undefined) {
+      fields.push(`connected_to = $${index++}`);
+      values.push(normalizeDateValue(connectedTo));
+    }
+
+    if (tested !== undefined) {
+      fields.push(`tested = $${index++}`);
+      values.push(normalizeDateValue(tested));
     }
 
     fields.push(`updated_at = NOW()`);
@@ -548,6 +743,10 @@ cablesRouter.post(
       fromLocation: string | null;
       toLocation: string | null;
       routing: string | null;
+      installLength: number | null;
+      connectedFrom: string | null;
+      connectedTo: string | null;
+      tested: string | null;
     }> = [];
 
     const seenCableIds = new Set<string>();
@@ -601,6 +800,18 @@ cablesRouter.post(
         ),
         routing: normalizeOptionalString(
           row[INPUT_HEADERS.routing] as string | null | undefined
+        ),
+        installLength: parseInstallLength(
+          row[INPUT_HEADERS.installLength] as unknown
+        ),
+        connectedFrom: normalizeDateValue(
+          row[INPUT_HEADERS.connectedFrom] as string | null | undefined
+        ),
+        connectedTo: normalizeDateValue(
+          row[INPUT_HEADERS.connectedTo] as string | null | undefined
+        ),
+        tested: normalizeDateValue(
+          row[INPUT_HEADERS.tested] as string | null | undefined
         )
       });
 
@@ -714,7 +925,11 @@ cablesRouter.post(
           tag: row.tag,
           fromLocation: row.fromLocation,
           toLocation: row.toLocation,
-          routing: row.routing
+          routing: row.routing,
+          installLength: row.installLength,
+          connectedFrom: row.connectedFrom,
+          connectedTo: row.connectedTo,
+          tested: row.tested
         };
 
         const existing = existingMap.get(row.cableKey);
@@ -729,8 +944,12 @@ cablesRouter.post(
                 from_location = $3,
                 to_location = $4,
                 routing = $5,
+                install_length = $6,
+                connected_from = $7,
+                connected_to = $8,
+                tested = $9,
                 updated_at = NOW()
-              WHERE id = $6;
+              WHERE id = $10;
             `,
             [
               payload.tag,
@@ -738,6 +957,10 @@ cablesRouter.post(
               payload.fromLocation,
               payload.toLocation,
               payload.routing,
+              payload.installLength,
+              payload.connectedFrom,
+              payload.connectedTo,
+              payload.tested,
               existing.id
             ]
           );
@@ -753,9 +976,13 @@ cablesRouter.post(
                 cable_type_id,
                 from_location,
                 to_location,
-                routing
+                routing,
+                install_length,
+                connected_from,
+                connected_to,
+                tested
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
             `,
             [
               randomUUID(),
@@ -765,7 +992,11 @@ cablesRouter.post(
               cableType.id,
               payload.fromLocation,
               payload.toLocation,
-              payload.routing
+              payload.routing,
+              payload.installLength,
+              payload.connectedFrom,
+              payload.connectedTo,
+              payload.tested
             ]
           );
           summary.inserted += 1;
@@ -917,7 +1148,12 @@ cablesRouter.get(
         { name: OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
         { name: OUTPUT_HEADERS.fromLocation, key: 'fromLocation', width: 26 },
         { name: OUTPUT_HEADERS.toLocation, key: 'toLocation', width: 26 },
-        { name: OUTPUT_HEADERS.routing, key: 'routing', width: 30 }
+        { name: OUTPUT_HEADERS.routing, key: 'routing', width: 30 },
+        { name: OUTPUT_HEADERS.designLength, key: 'designLength', width: 18 },
+        { name: OUTPUT_HEADERS.installLength, key: 'installLength', width: 18 },
+        { name: OUTPUT_HEADERS.connectedFrom, key: 'connectedFrom', width: 20 },
+        { name: OUTPUT_HEADERS.connectedTo, key: 'connectedTo', width: 20 },
+        { name: OUTPUT_HEADERS.tested, key: 'tested', width: 18 }
       ] as const;
 
       const rows = result.rows.map((row) => [
@@ -932,7 +1168,21 @@ cablesRouter.get(
           : '',
         row.from_location ?? '',
         row.to_location ?? '',
-        row.routing ?? ''
+        row.routing ?? '',
+        (() => {
+          const designLength = computeDesignLengthMeters(
+            row.routing ?? null,
+            trayLengths,
+            secondaryTrayLengthMeters
+          );
+          return designLength ?? '';
+        })(),
+        row.install_length !== null && row.install_length !== ''
+          ? Number(row.install_length)
+          : '',
+        formatDateCell(row.connected_from),
+        formatDateCell(row.connected_to),
+        formatDateCell(row.tested)
       ]);
 
       const table = worksheet.addTable({
@@ -951,9 +1201,7 @@ cablesRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: rows.length > 0
-          ? rows
-          : [['', '', '', '', '', '', '', '', '']]
+        rows: rows.length > 0 ? rows : [Array(columns.length).fill('')]
       });
 
       table.commit();
@@ -965,6 +1213,12 @@ cablesRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'designLength') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
+        if (column.key === 'installLength') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0';
         }
       });
 

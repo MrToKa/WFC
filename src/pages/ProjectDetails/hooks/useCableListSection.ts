@@ -102,7 +102,7 @@ type UseCableListSectionResult = {
   ) => void;
   handleCableTextFieldBlur: (
     cable: Cable,
-    field: 'tag' | 'fromLocation' | 'toLocation' | 'routing'
+    field: keyof CableFormState
   ) => Promise<void>;
   handleInlineCableTypeChange: (
     cable: Cable,
@@ -503,29 +503,103 @@ export const useCableListSection = ({
   );
 
   const handleCableTextFieldBlur = useCallback(
-    async (
-      cable: Cable,
-      field: 'tag' | 'fromLocation' | 'toLocation' | 'routing'
-    ) => {
+    async (cable: Cable, field: keyof CableFormState) => {
       const draft = cableDrafts[cable.id];
       if (!draft) {
         return;
       }
 
-      const normalized = toNullableString(draft[field]);
-      const current = (cable[field] ?? null) as string | null;
+      let changes: Partial<CableInput> | null = null;
 
-      if (normalized === current) {
+      switch (field) {
+        case 'tag':
+        case 'fromLocation':
+        case 'toLocation':
+        case 'routing': {
+          const normalized = toNullableString(draft[field]);
+          const current = (cable[field] ?? null) as string | null;
+
+          if (normalized === current) {
+            return;
+          }
+
+          changes = { [field]: normalized } as Partial<CableInput>;
+          break;
+        }
+        case 'installLength': {
+          const trimmed = draft.installLength.trim();
+          const current = cable.installLength ?? null;
+
+          if (trimmed === '') {
+            if (current === null) {
+              return;
+            }
+            changes = { installLength: null };
+          } else {
+            const parsed = Number(trimmed);
+            if (
+              !Number.isFinite(parsed) ||
+              !Number.isInteger(parsed) ||
+              parsed < 0
+            ) {
+              showToast({
+                intent: 'error',
+                title: 'Invalid install length',
+                body: 'Install length must be a non-negative integer.'
+              });
+              return;
+            }
+
+            if (parsed === current) {
+              return;
+            }
+
+            changes = { installLength: parsed };
+          }
+          break;
+        }
+        case 'connectedFrom':
+        case 'connectedTo':
+        case 'tested': {
+          const value = draft[field].trim();
+          const current = cable[field] ?? null;
+
+          if (value === '') {
+            if (current === null) {
+              return;
+            }
+            changes = { [field]: null } as Partial<CableInput>;
+          } else {
+            const parsed = Date.parse(value);
+            if (Number.isNaN(parsed)) {
+              showToast({
+                intent: 'error',
+                title: 'Invalid date',
+                body: 'Use the YYYY-MM-DD format for dates.'
+              });
+              return;
+            }
+
+            const normalized = new Date(parsed).toISOString().slice(0, 10);
+            if (normalized === current) {
+              return;
+            }
+
+            changes = { [field]: normalized } as Partial<CableInput>;
+          }
+          break;
+        }
+        default:
+          return;
+      }
+
+      if (!changes) {
         return;
       }
 
-      const changes = {
-        [field]: normalized
-      } as Partial<CableInput>;
-
       await updateCableInline(cable, changes);
     },
-    [cableDrafts, updateCableInline]
+    [cableDrafts, showToast, updateCableInline]
   );
 
   const handleSubmit = useCallback(

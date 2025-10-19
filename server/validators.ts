@@ -42,7 +42,13 @@ const projectFieldSchema = {
   name: z.string().trim().min(1).max(200),
   customer: z.string().trim().min(1).max(200),
   manager: z.string().trim().max(200).optional(),
-  description: z.string().trim().max(2000).optional()
+  description: z.string().trim().max(2000).optional(),
+  secondaryTrayLength: z
+    .number()
+    .min(0)
+    .max(1_000_000)
+    .nullable()
+    .optional()
 } as const;
 
 export const createProjectSchema = z
@@ -55,7 +61,8 @@ export const updateProjectSchema = z
     name: projectFieldSchema.name.optional(),
     customer: projectFieldSchema.customer.optional(),
     manager: projectFieldSchema.manager,
-    description: projectFieldSchema.description.optional()
+    description: projectFieldSchema.description.optional(),
+    secondaryTrayLength: projectFieldSchema.secondaryTrayLength
   })
   .strict()
   .refine(
@@ -64,7 +71,8 @@ export const updateProjectSchema = z
       value.name !== undefined ||
       value.customer !== undefined ||
       value.manager !== undefined ||
-      value.description !== undefined,
+      value.description !== undefined ||
+      value.secondaryTrayLength !== undefined,
     {
       message: 'At least one field must be provided'
     }
@@ -122,7 +130,38 @@ export const createCableSchema = z
     cableTypeId: z.string().trim().uuid(),
     fromLocation: cableStringField,
     toLocation: cableStringField,
-    routing: cableStringField
+    routing: cableStringField,
+    installLength: z
+      .number()
+      .int()
+      .min(0)
+      .max(1_000_000)
+      .nullable()
+      .optional(),
+    connectedFrom: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional(),
+    connectedTo: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional(),
+    tested: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional()
   })
   .strict();
 
@@ -133,7 +172,38 @@ export const updateCableSchema = z
     cableTypeId: z.string().trim().uuid().optional(),
     fromLocation: cableStringField,
     toLocation: cableStringField,
-    routing: cableStringField
+    routing: cableStringField,
+    installLength: z
+      .number()
+      .int()
+      .min(0)
+      .max(1_000_000)
+      .nullable()
+      .optional(),
+    connectedFrom: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional(),
+    connectedTo: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional(),
+    tested: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional()
   })
   .strict()
   .refine(
@@ -143,7 +213,11 @@ export const updateCableSchema = z
       value.cableTypeId !== undefined ||
       value.fromLocation !== undefined ||
       value.toLocation !== undefined ||
-      value.routing !== undefined,
+      value.routing !== undefined ||
+      value.installLength !== undefined ||
+      value.connectedFrom !== undefined ||
+      value.connectedTo !== undefined ||
+      value.tested !== undefined,
     { message: 'At least one field must be provided' }
   );
 

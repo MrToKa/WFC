@@ -17,6 +17,7 @@ export const ensureProjectExists = async (
         customer,
         manager,
         description,
+        secondary_tray_length,
         created_at,
         updated_at
       FROM projects

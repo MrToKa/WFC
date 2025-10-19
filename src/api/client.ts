@@ -15,6 +15,7 @@ export type Project = {
   customer: string;
   manager: string | null;
   description: string | null;
+  secondaryTrayLength: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,6 +48,10 @@ export type Cable = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  installLength: number | null;
+  connectedFrom: string | null;
+  connectedTo: string | null;
+  tested: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -126,6 +131,10 @@ export type CableInput = {
   fromLocation?: string | null;
   toLocation?: string | null;
   routing?: string | null;
+  installLength?: number | null;
+  connectedFrom?: string | null;
+  connectedTo?: string | null;
+  tested?: string | null;
 };
 
 export type TrayInput = {
@@ -277,6 +286,7 @@ export async function createProject(
     customer: string;
     manager?: string | null;
     description?: string;
+    secondaryTrayLength?: number | null;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>('/api/projects', {
@@ -295,6 +305,7 @@ export async function updateProject(
     customer?: string;
     manager?: string | null;
     description?: string;
+    secondaryTrayLength?: number | null;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>(`/api/projects/${projectId}`, {
