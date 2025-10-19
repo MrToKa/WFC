@@ -42,5 +42,11 @@ export const DetailsTab = ({
           : 'No description provided.'}
       </Body1>
     </div>
+    <div className={styles.panel}>
+      <Caption1>Project manager</Caption1>
+      <Body1>
+        {project.manager ? project.manager : 'No manager specified.'}
+      </Body1>
+    </div>
   </div>
 );

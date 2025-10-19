@@ -163,6 +163,16 @@ export const ProjectManagementSection = ({
                     />
                   </Field>
                   <Field
+                    label="Project manager"
+                    validationState={createProjectErrors.manager ? 'error' : undefined}
+                    validationMessage={createProjectErrors.manager}
+                  >
+                    <Input
+                      value={createProjectValues.manager}
+                      onChange={handleCreateProjectFieldChange('manager')}
+                    />
+                  </Field>
+                  <Field
                     label="Description"
                     validationState={createProjectErrors.description ? 'error' : undefined}
                     validationMessage={createProjectErrors.description}
@@ -240,7 +250,17 @@ export const ProjectManagementSection = ({
                     <button
                       type="button"
                       className={styles.sortButton}
-                      onClick={() => toggleProjectSort('createdAt')}
+                      onClick={() => toggleProjectSort('manager')}
+                    >
+                      Project manager
+                      {projectSortIndicator('manager')}
+                    </button>
+                  </th>
+                <th className={styles.tableHeadCell}>
+                  <button
+                    type="button"
+                    className={styles.sortButton}
+                    onClick={() => toggleProjectSort('createdAt')}
                     >
                       Created
                       {projectSortIndicator('createdAt')}
@@ -270,6 +290,7 @@ export const ProjectManagementSection = ({
                       <td className={styles.tableCell}>{project.projectNumber}</td>
                       <td className={styles.tableCell}>{project.name}</td>
                       <td className={styles.tableCell}>{project.customer}</td>
+                      <td className={styles.tableCell}>{project.manager ?? 'N/A'}</td>
                       <td className={styles.tableCell}>{formatDateTime(project.createdAt)}</td>
                       <td className={styles.tableCell}>{formatDateTime(project.updatedAt)}</td>
                       <td className={`${styles.tableCell} ${styles.actionCell}`}>
@@ -365,6 +386,17 @@ export const ProjectManagementSection = ({
                     />
                   </Field>
                   <Field
+                    label="Project manager"
+                    hint="Leave blank to clear the project manager."
+                    validationState={projectEditErrors.manager ? 'error' : undefined}
+                    validationMessage={projectEditErrors.manager}
+                  >
+                    <Input
+                      value={projectEditValues.manager}
+                      onChange={handleEditProjectFieldChange('manager')}
+                    />
+                  </Field>
+                  <Field
                     label="Description"
                     hint="Leave blank to clear the description."
                     validationState={projectEditErrors.description ? 'error' : undefined}
@@ -404,4 +436,3 @@ export const ProjectManagementSection = ({
     </section>
   );
 };
-

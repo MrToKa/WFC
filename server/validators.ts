@@ -41,6 +41,7 @@ const projectFieldSchema = {
   projectNumber: z.string().trim().min(1).max(50),
   name: z.string().trim().min(1).max(200),
   customer: z.string().trim().min(1).max(200),
+  manager: z.string().trim().max(200).optional(),
   description: z.string().trim().max(2000).optional()
 } as const;
 
@@ -53,6 +54,7 @@ export const updateProjectSchema = z
     projectNumber: projectFieldSchema.projectNumber.optional(),
     name: projectFieldSchema.name.optional(),
     customer: projectFieldSchema.customer.optional(),
+    manager: projectFieldSchema.manager,
     description: projectFieldSchema.description.optional()
   })
   .strict()
@@ -61,6 +63,7 @@ export const updateProjectSchema = z
       value.projectNumber !== undefined ||
       value.name !== undefined ||
       value.customer !== undefined ||
+      value.manager !== undefined ||
       value.description !== undefined,
     {
       message: 'At least one field must be provided'

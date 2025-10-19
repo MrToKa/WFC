@@ -30,10 +30,16 @@ export async function initializeDatabase(): Promise<void> {
       project_number TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       customer TEXT NOT NULL,
+      manager TEXT,
       description TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS manager TEXT;
   `);
 
   await pool.query(`

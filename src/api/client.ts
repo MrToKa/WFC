@@ -13,6 +13,7 @@ export type Project = {
   projectNumber: string;
   name: string;
   customer: string;
+  manager: string | null;
   description: string | null;
   createdAt: string;
   updatedAt: string;
@@ -274,6 +275,7 @@ export async function createProject(
     projectNumber: string;
     name: string;
     customer: string;
+    manager?: string | null;
     description?: string;
   }
 ): Promise<{ project: Project }> {
@@ -291,6 +293,7 @@ export async function updateProject(
     projectNumber?: string;
     name?: string;
     customer?: string;
+    manager?: string | null;
     description?: string;
   }
 ): Promise<{ project: Project }> {

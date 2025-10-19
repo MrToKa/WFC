@@ -27,6 +27,7 @@ projectsRouter.get(
             project_number,
             name,
             customer,
+            manager,
             description,
             created_at,
             updated_at
@@ -80,21 +81,24 @@ projectsRouter.post(
       return;
     }
 
-    const { projectNumber, name, customer, description } = parseResult.data;
+    const { projectNumber, name, customer, description, manager } =
+      parseResult.data;
     const projectId = randomUUID();
     const normalizedDescription =
       description === undefined ? undefined : description.trim();
+    const normalizedManager = manager === undefined ? undefined : manager.trim();
 
     try {
       const result = await pool.query<ProjectRow>(
         `
-          INSERT INTO projects (id, project_number, name, customer, description)
-          VALUES ($1, $2, $3, $4, $5)
+          INSERT INTO projects (id, project_number, name, customer, manager, description)
+          VALUES ($1, $2, $3, $4, $5, $6)
           RETURNING
             id,
             project_number,
             name,
             customer,
+            manager,
             description,
             created_at,
             updated_at;
@@ -104,6 +108,9 @@ projectsRouter.post(
           projectNumber.trim(),
           name.trim(),
           customer.trim(),
+          normalizedManager === undefined || normalizedManager === ''
+            ? null
+            : normalizedManager,
           normalizedDescription === undefined || normalizedDescription === ''
             ? null
             : normalizedDescription
@@ -147,7 +154,8 @@ projectsRouter.patch(
       return;
     }
 
-    const { projectNumber, name, customer, description } = parseResult.data;
+    const { projectNumber, name, customer, description, manager } =
+      parseResult.data;
 
     const fields: string[] = [];
     const values: Array<string | null> = [];
@@ -166,6 +174,12 @@ projectsRouter.patch(
     if (customer !== undefined) {
       fields.push(`customer = $${index++}`);
       values.push(customer.trim());
+    }
+
+    if (manager !== undefined) {
+      const normalized = manager.trim();
+      fields.push(`manager = $${index++}`);
+      values.push(normalized === '' ? null : normalized);
     }
 
     if (description !== undefined) {
@@ -187,6 +201,7 @@ projectsRouter.patch(
             project_number,
             name,
             customer,
+            manager,
             description,
             created_at,
             updated_at;

@@ -18,6 +18,7 @@ export type ProjectFormState = {
   projectNumber: string;
   name: string;
   customer: string;
+  manager: string;
   description: string;
 };
 
@@ -36,6 +37,7 @@ export const emptyProjectForm: ProjectFormState = {
   projectNumber: '',
   name: '',
   customer: '',
+  manager: '',
   description: ''
 };
 
@@ -90,4 +92,3 @@ export const parseProjectApiErrors = (payload: ApiErrorPayload): ProjectFormErro
       ? fieldErrors
       : { general: 'Request failed' };
 };
-

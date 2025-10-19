@@ -15,6 +15,7 @@ export const ensureProjectExists = async (
         project_number,
         name,
         customer,
+        manager,
         description,
         created_at,
         updated_at

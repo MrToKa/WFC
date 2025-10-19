@@ -251,6 +251,9 @@ export const ProjectDetails = () => {
           {project.projectNumber} &mdash; {project.name}
         </Title3>
         <Body1>Customer: {project.customer}</Body1>
+        {/* <Body1>
+          Project manager: {project.manager ? project.manager : 'Not specified'}
+        </Body1> */}
       </div>
 
       <TabList

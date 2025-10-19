@@ -65,11 +65,13 @@ const useStyles = makeStyles({
   },
   tableCell: {
     padding: '0.75rem 1rem',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+    verticalAlign: 'top'
   },
   actionsCell: {
     display: 'flex',
-    gap: '0.5rem'
+    gap: '0.5rem',
+    alignItems: 'flex-start'
   },
   projectInfo: {
     display: 'flex',
@@ -94,7 +96,9 @@ export const Projects = () => {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState<string>('');
-  const [sortField, setSortField] = useState<'projectNumber' | 'name' | 'customer' | 'createdAt'>(
+  const [sortField, setSortField] = useState<
+    'projectNumber' | 'name' | 'customer' | 'manager' | 'createdAt'
+  >(
     'createdAt'
   );
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -133,7 +137,8 @@ export const Projects = () => {
       return (
         project.projectNumber.toLowerCase().includes(term) ||
         project.name.toLowerCase().includes(term) ||
-        project.customer.toLowerCase().includes(term)
+        project.customer.toLowerCase().includes(term) ||
+        (project.manager ? project.manager.toLowerCase().includes(term) : false)
       );
     })
     .sort((a, b) => {
@@ -145,6 +150,11 @@ export const Projects = () => {
           return a.name.localeCompare(b.name) * direction;
         case 'customer':
           return a.customer.localeCompare(b.customer) * direction;
+        case 'manager': {
+          const managerA = a.manager ?? '';
+          const managerB = b.manager ?? '';
+          return managerA.localeCompare(managerB) * direction;
+        }
         case 'createdAt':
         default:
           return (
@@ -189,7 +199,7 @@ export const Projects = () => {
         </Button>
         <Input
           className={styles.filterInput}
-          placeholder="Filter projects…"
+          placeholder="Filter projects..."
           value={search}
           onChange={(event, data) => setSearch(data.value)}
         />
@@ -256,6 +266,21 @@ export const Projects = () => {
                   <button
                     type="button"
                     className={styles.sortButton}
+                    onClick={() => toggleSort('manager')}
+                    aria-label={`Sort by project manager ${
+                      sortField === 'manager' && sortDirection === 'asc'
+                        ? 'descending'
+                        : 'ascending'
+                    }`}
+                  >
+                    Project manager
+                    {sortIndicator('manager')}
+                  </button>
+                </th>
+                <th className={styles.tableHeadCell}>
+                  <button
+                    type="button"
+                    className={styles.sortButton}
                     onClick={() => toggleSort('createdAt')}
                     aria-label={`Sort by created date ${
                       sortField === 'createdAt' && sortDirection === 'asc'
@@ -283,19 +308,22 @@ export const Projects = () => {
                     </div>
                   </td>
                   <td className={styles.tableCell}>{project.customer}</td>
+                  <td className={styles.tableCell}>{project.manager ?? 'N/A'}</td>
                   <td className={styles.tableCell}>
                     {new Intl.DateTimeFormat(undefined, {
                       dateStyle: 'medium'
                     }).format(new Date(project.createdAt))}
                   </td>
-                  <td className={`${styles.tableCell} ${styles.actionsCell}`}>
-                    <Button
-                      size="small"
-                      appearance="primary"
-                      onClick={() => navigate(`/projects/${project.id}`)}
-                    >
-                      Details
-                    </Button>
+                  <td className={styles.tableCell}>
+                    <div className={styles.actionsCell}>
+                      <Button
+                        size="small"
+                        appearance="primary"
+                        onClick={() => navigate(`/projects/${project.id}`)}
+                      >
+                        Details
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

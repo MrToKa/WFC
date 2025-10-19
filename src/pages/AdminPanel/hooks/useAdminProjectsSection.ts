@@ -72,6 +72,7 @@ type ProjectSortField =
   | 'projectNumber'
   | 'name'
   | 'customer'
+  | 'manager'
   | 'createdAt'
   | 'updatedAt';
 
@@ -146,10 +147,12 @@ export const useAdminProjectsSection = ({
     const term = projectSearch.trim().toLowerCase();
     const list = term
       ? projects.filter((project) => {
+          const managerValue = project.manager?.toLowerCase() ?? '';
           return (
             project.projectNumber.toLowerCase().includes(term) ||
             project.name.toLowerCase().includes(term) ||
-            project.customer.toLowerCase().includes(term)
+            project.customer.toLowerCase().includes(term) ||
+            managerValue.includes(term)
           );
         })
       : [...projects];
@@ -164,6 +167,11 @@ export const useAdminProjectsSection = ({
           return a.name.localeCompare(b.name) * direction;
         case 'customer':
           return a.customer.localeCompare(b.customer) * direction;
+        case 'manager': {
+          const managerA = a.manager ?? '';
+          const managerB = b.manager ?? '';
+          return managerA.localeCompare(managerB) * direction;
+        }
         case 'updatedAt':
           return (
             (new Date(a.updatedAt).getTime() -
@@ -246,6 +254,7 @@ export const useAdminProjectsSection = ({
       projectNumber: createProjectValues.projectNumber.trim(),
       name: createProjectValues.name.trim(),
       customer: createProjectValues.customer.trim(),
+      manager: createProjectValues.manager.trim(),
       description: createProjectValues.description.trim()
     };
 
@@ -274,6 +283,7 @@ export const useAdminProjectsSection = ({
         projectNumber: payload.projectNumber,
         name: payload.name,
         customer: payload.customer,
+        manager: payload.manager || undefined,
         description: payload.description || undefined
       });
       setProjects((previous) => [response.project, ...previous]);
@@ -301,6 +311,7 @@ export const useAdminProjectsSection = ({
       projectNumber: projectToEdit.projectNumber,
       name: projectToEdit.name,
       customer: projectToEdit.customer,
+      manager: projectToEdit.manager ?? '',
       description: projectToEdit.description ?? ''
     });
     setProjectEditErrors({});
@@ -352,6 +363,7 @@ export const useAdminProjectsSection = ({
       projectNumber?: string;
       name?: string;
       customer?: string;
+      manager?: string | null;
       description?: string;
     } = {};
 
@@ -368,6 +380,11 @@ export const useAdminProjectsSection = ({
     const customerValue = projectEditValues.customer.trim();
     if (customerValue !== editingProject.customer) {
       payload.customer = customerValue;
+    }
+
+    const managerValue = projectEditValues.manager.trim();
+    if (managerValue !== (editingProject.manager ?? '')) {
+      payload.manager = managerValue || '';
     }
 
     const descriptionValue = projectEditValues.description.trim();
@@ -488,4 +505,3 @@ export const useAdminProjectsSection = ({
     pendingProjectAction
   };
 };
-

@@ -3,6 +3,7 @@ export type ProjectRow = {
   project_number: string;
   name: string;
   customer: string;
+  manager: string | null;
   description: string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -13,6 +14,7 @@ export type PublicProject = {
   projectNumber: string;
   name: string;
   customer: string;
+  manager: string | null;
   description: string | null;
   createdAt: string;
   updatedAt: string;
@@ -23,6 +25,7 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   projectNumber: row.project_number,
   name: row.name,
   customer: row.customer,
+  manager: row.manager ?? null,
   description: row.description ?? null,
   createdAt:
     typeof row.created_at === 'string'
