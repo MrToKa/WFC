@@ -197,9 +197,10 @@ const formatDateCell = (
   }
 
   if (value instanceof Date) {
-    const year = value.getUTCFullYear();
-    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(value.getUTCDate()).padStart(2, '0');
+    // Use local calendar parts so we mirror the original DATE field without shifting by timezone.
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
     return `${day}-${month}-${year}`;
   }
 
