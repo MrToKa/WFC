@@ -28,6 +28,7 @@ export type CableDialogField =
   | 'toLocation'
   | 'routing'
   | 'installLength'
+  | 'pullDate'
   | 'connectedFrom'
   | 'connectedTo'
   | 'tested';
@@ -170,6 +171,19 @@ export const CableDialog = ({
                     min={0}
                     value={values.installLength}
                     onChange={onFieldChange('installLength')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('pullDate') ? (
+                <Field
+                  label="Pull date"
+                  validationState={errors.pullDate ? 'error' : undefined}
+                  validationMessage={errors.pullDate}
+                >
+                  <Input
+                    type="date"
+                    value={values.pullDate}
+                    onChange={onFieldChange('pullDate')}
                   />
                 </Field>
               ) : null}

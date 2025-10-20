@@ -177,6 +177,7 @@ export const CableReportTab = ({
                 >
                   Install length [m]
                 </th>
+                <th className={styles.tableHeadCell}>Pull date</th>
                 <th className={styles.tableHeadCell}>Connected from</th>
                 <th className={styles.tableHeadCell}>Connected to</th>
                 <th className={styles.tableHeadCell}>Tested</th>
@@ -237,6 +238,23 @@ export const CableReportTab = ({
                         />
                       ) : cable.installLength !== null ? (
                         formatNumeric(cable.installLength)
+                    ) : (
+                      '-'
+                    )}
+                  </td>
+                    <td className={styles.tableCell}>
+                      {isInlineEditable ? (
+                        <Input
+                          type="date"
+                          value={draft.pullDate}
+                          onChange={(_, data) =>
+                            onDraftChange(cable.id, 'pullDate', data.value)
+                          }
+                          onBlur={() => onFieldBlur(cable, 'pullDate')}
+                          disabled={!canManageCables || isBusy}
+                        />
+                      ) : cable.pullDate ? (
+                        formatDisplayDate(cable.pullDate)
                       ) : (
                         '-'
                       )}

@@ -138,6 +138,14 @@ export const createCableSchema = z
       .max(1_000_000)
       .nullable()
       .optional(),
+    pullDate: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional(),
     connectedFrom: z
       .string()
       .trim()
@@ -180,6 +188,14 @@ export const updateCableSchema = z
       .max(1_000_000)
       .nullable()
       .optional(),
+    pullDate: z
+      .string()
+      .trim()
+      .refine((value) => value === '' || !Number.isNaN(Date.parse(value)), {
+        message: 'Invalid date'
+      })
+      .nullable()
+      .optional(),
     connectedFrom: z
       .string()
       .trim()
@@ -215,6 +231,7 @@ export const updateCableSchema = z
       value.toLocation !== undefined ||
       value.routing !== undefined ||
       value.installLength !== undefined ||
+      value.pullDate !== undefined ||
       value.connectedFrom !== undefined ||
       value.connectedTo !== undefined ||
       value.tested !== undefined,

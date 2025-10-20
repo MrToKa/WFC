@@ -113,7 +113,7 @@ export const ProjectDetails = () => {
 
   const cableDialogVisibleFields: CableDialogField[] =
     selectedTab === 'cable-report' && cableDialog.mode === 'edit'
-      ? ['installLength', 'connectedFrom', 'connectedTo', 'tested']
+      ? ['installLength', 'pullDate', 'connectedFrom', 'connectedTo', 'tested']
       : [
           'cableId',
           'tag',
@@ -122,6 +122,7 @@ export const ProjectDetails = () => {
           'toLocation',
           'routing',
           'installLength',
+          'pullDate',
           'connectedFrom',
           'connectedTo',
           'tested'

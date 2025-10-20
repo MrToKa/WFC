@@ -562,6 +562,7 @@ export const useCableListSection = ({
           }
           break;
         }
+        case 'pullDate':
         case 'connectedFrom':
         case 'connectedTo':
         case 'tested': {

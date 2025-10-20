@@ -35,6 +35,7 @@ const INPUT_HEADERS = {
   toLocation: 'To Location',
   routing: 'Routing',
   installLength: 'Install Length',
+  pullDate: 'Pull Date',
   connectedFrom: 'Connected From',
   connectedTo: 'Connected To',
   tested: 'Tested'
@@ -51,6 +52,7 @@ const LIST_OUTPUT_HEADERS = {
   routing: 'Routing',
   designLength: 'Design Length',
   installLength: 'Install Length',
+  pullDate: 'Pull Date',
   connectedFrom: 'Connected From',
   connectedTo: 'Connected To',
   tested: 'Tested'
@@ -62,6 +64,7 @@ const REPORT_OUTPUT_HEADERS = {
   toLocation: 'To Location',
   designLength: 'Design Length [m]',
   installLength: 'Install Length [m]',
+  pullDate: 'Pull Date',
   connectedFrom: 'Connected From',
   connectedTo: 'Connected To',
   tested: 'Tested'
@@ -225,6 +228,7 @@ const selectCablesQuery = `
     c.to_location,
     c.routing,
     c.install_length,
+    c.pull_date,
     c.connected_from,
     c.connected_to,
     c.tested,
@@ -337,6 +341,7 @@ cablesRouter.post(
       toLocation,
       routing,
       installLength,
+      pullDate,
       connectedFrom,
       connectedTo,
       tested
@@ -384,11 +389,12 @@ cablesRouter.post(
             to_location,
             routing,
             install_length,
+            pull_date,
             connected_from,
             connected_to,
             tested
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING
             id,
             project_id,
@@ -399,6 +405,7 @@ cablesRouter.post(
             to_location,
             routing,
             install_length,
+            pull_date,
             connected_from,
             connected_to,
             tested,
@@ -415,6 +422,7 @@ cablesRouter.post(
           normalizeOptionalString(toLocation ?? null),
           normalizeOptionalString(routing ?? null),
           installLength ?? null,
+          normalizeDateValue(pullDate ?? null),
           normalizeDateValue(connectedFrom ?? null),
           normalizeDateValue(connectedTo ?? null),
           normalizeDateValue(tested ?? null)
@@ -484,6 +492,7 @@ cablesRouter.patch(
       toLocation,
       routing,
       installLength,
+      pullDate,
       connectedFrom,
       connectedTo,
       tested
@@ -590,6 +599,11 @@ cablesRouter.patch(
     if (installLength !== undefined) {
       fields.push(`install_length = $${index++}`);
       values.push(installLength ?? null);
+    }
+
+    if (pullDate !== undefined) {
+      fields.push(`pull_date = $${index++}`);
+      values.push(normalizeDateValue(pullDate));
     }
 
     if (connectedFrom !== undefined) {
@@ -770,6 +784,7 @@ cablesRouter.post(
       toLocation: string | null;
       routing: string | null;
       installLength: number | null;
+      pullDate: string | null;
       connectedFrom: string | null;
       connectedTo: string | null;
       tested: string | null;
@@ -829,6 +844,9 @@ cablesRouter.post(
         ),
         installLength: parseInstallLength(
           row[INPUT_HEADERS.installLength] as unknown
+        ),
+        pullDate: normalizeDateValue(
+          row[INPUT_HEADERS.pullDate] as string | null | undefined
         ),
         connectedFrom: normalizeDateValue(
           row[INPUT_HEADERS.connectedFrom] as string | null | undefined
@@ -953,6 +971,7 @@ cablesRouter.post(
           toLocation: row.toLocation,
           routing: row.routing,
           installLength: row.installLength,
+          pullDate: row.pullDate,
           connectedFrom: row.connectedFrom,
           connectedTo: row.connectedTo,
           tested: row.tested
@@ -971,11 +990,12 @@ cablesRouter.post(
                 to_location = $4,
                 routing = $5,
                 install_length = $6,
-                connected_from = $7,
-                connected_to = $8,
-                tested = $9,
+                pull_date = $7,
+                connected_from = $8,
+                connected_to = $9,
+                tested = $10,
                 updated_at = NOW()
-              WHERE id = $10;
+              WHERE id = $11;
             `,
             [
               payload.tag,
@@ -984,6 +1004,7 @@ cablesRouter.post(
               payload.toLocation,
               payload.routing,
               payload.installLength,
+              payload.pullDate,
               payload.connectedFrom,
               payload.connectedTo,
               payload.tested,
@@ -1004,11 +1025,12 @@ cablesRouter.post(
                 to_location,
                 routing,
                 install_length,
+                pull_date,
                 connected_from,
                 connected_to,
                 tested
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
             `,
             [
               randomUUID(),
@@ -1020,6 +1042,7 @@ cablesRouter.post(
               payload.toLocation,
               payload.routing,
               payload.installLength,
+              payload.pullDate,
               payload.connectedFrom,
               payload.connectedTo,
               payload.tested
@@ -1226,6 +1249,11 @@ cablesRouter.get(
                 width: 18
               },
               {
+                name: REPORT_OUTPUT_HEADERS.pullDate,
+                key: 'pullDate',
+                width: 20
+              },
+              {
                 name: REPORT_OUTPUT_HEADERS.connectedFrom,
                 key: 'connectedFrom',
                 width: 20
@@ -1273,6 +1301,11 @@ cablesRouter.get(
                 width: 18
               },
               {
+                name: LIST_OUTPUT_HEADERS.pullDate,
+                key: 'pullDate',
+                width: 20
+              },
+              {
                 name: LIST_OUTPUT_HEADERS.connectedFrom,
                 key: 'connectedFrom',
                 width: 20
@@ -1302,6 +1335,7 @@ cablesRouter.get(
               row.install_length !== null && row.install_length !== ''
                 ? Number(row.install_length)
                 : '',
+              formatDateCell(row.pull_date),
               formatDateCell(row.connected_from),
               formatDateCell(row.connected_to),
               formatDateCell(row.tested)
@@ -1330,6 +1364,7 @@ cablesRouter.get(
               row.install_length !== null && row.install_length !== ''
                 ? Number(row.install_length)
                 : '',
+              formatDateCell(row.pull_date),
               formatDateCell(row.connected_from),
               formatDateCell(row.connected_to),
               formatDateCell(row.tested)

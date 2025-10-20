@@ -223,6 +223,7 @@ export type CableFormState = {
   toLocation: string;
   routing: string;
   installLength: string;
+  pullDate: string;
   connectedFrom: string;
   connectedTo: string;
   tested: string;
@@ -240,6 +241,7 @@ export const emptyCableForm: CableFormState = {
   toLocation: '',
   routing: '',
   installLength: '',
+  pullDate: '',
   connectedFrom: '',
   connectedTo: '',
   tested: ''
@@ -254,6 +256,7 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   routing: cable.routing ?? '',
   installLength:
     cable.installLength !== null ? String(cable.installLength) : '',
+  pullDate: cable.pullDate ?? '',
   connectedFrom: cable.connectedFrom ?? '',
   connectedTo: cable.connectedTo ?? '',
   tested: cable.tested ?? ''
@@ -347,6 +350,7 @@ export const buildCableInput = (
 
   input.connectedFrom = parseDate(values.connectedFrom, 'connectedFrom');
   input.connectedTo = parseDate(values.connectedTo, 'connectedTo');
+  input.pullDate = parseDate(values.pullDate, 'pullDate');
   input.tested = parseDate(values.tested, 'tested');
 
   return { input, errors };
