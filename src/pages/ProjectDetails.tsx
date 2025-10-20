@@ -28,6 +28,7 @@ import { CableListTab } from './ProjectDetails/CableListTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
+import { ProgressDialog } from './ProjectDetails/ProgressDialog';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
 import { useCableListSection } from './ProjectDetails/hooks/useCableListSection';
@@ -61,6 +62,9 @@ export const ProjectDetails = () => {
       : 'details';
   });
 
+  const [progressDialogOpen, setProgressDialogOpen] = useState(false);
+  const openProgress = useCallback(() => setProgressDialogOpen(true), []);
+
   const {
     project,
     projectLoading,
@@ -70,6 +74,7 @@ export const ProjectDetails = () => {
   } = useProjectDetailsData({ projectId });
 
   const {
+    cables,
     pagedCables,
     totalCablePages,
     cablesPage,
@@ -361,13 +366,13 @@ export const ProjectDetails = () => {
   return (
     <section className={styles.root} aria-labelledby="project-details-heading">
       <div className={styles.header}>
-        <Title3 id="project-details-heading">
-          {project.projectNumber} &mdash; {project.name}
-        </Title3>
+        <div className={styles.headerRow}>
+          <Title3 id="project-details-heading">
+            {project.projectNumber} &mdash; {project.name}
+          </Title3>
+          {/* Progress button moved into tab action rows */}
+          </div>
         <Body1>Customer: {project.customer}</Body1>
-        {/* <Body1>
-          Project manager: {project.manager ? project.manager : 'Not specified'}
-        </Body1> */}
       </div>
 
       <TabList
@@ -511,6 +516,7 @@ export const ProjectDetails = () => {
           styles={styles}
           canManageCables={canManageCables}
           isAdmin={isAdmin}
+          onOpenProgress={openProgress}
           isRefreshing={cablesRefreshing}
           onRefresh={() => void reloadCables({ showSpinner: false })}
           onImportClick={() => cablesFileInputRef.current?.click()}
@@ -582,6 +588,12 @@ export const ProjectDetails = () => {
         onSubmit={(event) => void cableDialog.handleSubmit(event)}
         onDismiss={cableDialog.reset}
         visibleFields={cableDialogVisibleFields}
+      />
+
+      <ProgressDialog
+        open={progressDialogOpen}
+        cables={cables}
+        onDismiss={() => setProgressDialogOpen(false)}
       />
     </section>
   );

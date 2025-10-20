@@ -15,6 +15,18 @@ export const useProjectDetailsStyles = makeStyles({
     flexDirection: 'column',
     gap: '0.5rem'
   },
+  headerRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '0.75rem'
+  },
+  headerActions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.5rem'
+  },
   metadata: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',

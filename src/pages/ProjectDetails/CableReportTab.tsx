@@ -29,6 +29,7 @@ type CableReportTabProps = {
   onRefresh: () => void;
   onImportClick: () => void;
   onExport: () => void;
+  onOpenProgress?: () => void;
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
   isExporting: boolean;
@@ -77,6 +78,7 @@ export const CableReportTab = ({
   onRefresh,
   onImportClick,
   onExport,
+  onOpenProgress,
   onImportFileChange,
   isImporting,
   isExporting,
@@ -127,6 +129,9 @@ export const CableReportTab = ({
                 />
               </>
             ) : null}
+            <Button appearance="primary" onClick={onOpenProgress}>
+              Progress
+            </Button>
             <Button onClick={onExport} disabled={isExporting}>
               {isExporting ? 'Exporting' : 'Export to Excel'}
             </Button>
