@@ -20,7 +20,7 @@ type NavLinkConfig = {
 
 const PRIMARY_LINKS: NavLinkConfig[] = [
   { to: '/', label: 'Projects', end: true },
-  { to: '/about', label: 'About' }
+  { to: '/materials', label: 'Materials' }
 ] as const;
 
 const ADMIN_LINKS: NavLinkConfig[] = [{ to: '/admin', label: 'Admin' }];

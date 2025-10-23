@@ -310,3 +310,65 @@ export const updateTraySchema = z
       value.lengthMm !== undefined,
     { message: 'At least one field must be provided' }
   );
+
+const materialNumericField = z
+  .number()
+  .min(0)
+  .max(1_000_000)
+  .nullable()
+  .optional();
+
+export const createMaterialTraySchema = z
+  .object({
+    type: z.string().trim().min(1).max(200),
+    heightMm: materialNumericField,
+    widthMm: materialNumericField,
+    weightKgPerM: materialNumericField
+  })
+  .strict();
+
+export const createMaterialSupportSchema = z
+  .object({
+    type: z.string().trim().min(1).max(200),
+    heightMm: materialNumericField,
+    widthMm: materialNumericField,
+    lengthMm: materialNumericField,
+    weightKg: materialNumericField
+  })
+  .strict();
+
+export const updateMaterialTraySchema = z
+  .object({
+    type: z.string().trim().min(1).max(200).optional(),
+    heightMm: materialNumericField,
+    widthMm: materialNumericField,
+    weightKgPerM: materialNumericField
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.type !== undefined ||
+      value.heightMm !== undefined ||
+      value.widthMm !== undefined ||
+      value.weightKgPerM !== undefined,
+    { message: 'At least one field must be provided' }
+  );
+
+export const updateMaterialSupportSchema = z
+  .object({
+    type: z.string().trim().min(1).max(200).optional(),
+    heightMm: materialNumericField,
+    widthMm: materialNumericField,
+    lengthMm: materialNumericField,
+    weightKg: materialNumericField
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.type !== undefined ||
+      value.heightMm !== undefined ||
+      value.widthMm !== undefined ||
+      value.lengthMm !== undefined ||
+      value.weightKg !== undefined,
+    { message: 'At least one field must be provided' }
+  );

@@ -2,7 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppShell } from '@/app/AppShell';
 import { RedirectIfAuthenticated, RequireAdmin, RequireAuth } from '@/components/AuthGuards';
 import { Account } from '@/pages/Account';
-import { About } from '@/pages/About';
+import { Materials } from '@/pages/Materials';
 import { AdminPanel } from '@/pages/AdminPanel';
 import { ProjectDetails } from '@/pages/ProjectDetails';
 import { TrayDetails } from '@/pages/TrayDetails';
@@ -20,8 +20,8 @@ export const routes: RouteObject[] = [
         element: <Projects />
       },
       {
-        path: 'about',
-        element: <About />
+        path: 'materials',
+        element: <Materials />
       },
       {
         path: 'projects/:projectId',

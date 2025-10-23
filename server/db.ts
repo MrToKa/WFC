@@ -182,6 +182,41 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS trays_project_id_idx
       ON trays (project_id);
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_trays (
+      id UUID PRIMARY KEY,
+      tray_type TEXT NOT NULL UNIQUE,
+      height_mm NUMERIC,
+      width_mm NUMERIC,
+      weight_kg_per_m NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS material_trays_type_lower_idx
+      ON material_trays (LOWER(tray_type));
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_supports (
+      id UUID PRIMARY KEY,
+      support_type TEXT NOT NULL UNIQUE,
+      height_mm NUMERIC,
+      width_mm NUMERIC,
+      length_mm NUMERIC,
+      weight_kg NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS material_supports_type_lower_idx
+      ON material_supports (LOWER(support_type));
+  `);
 }
 
 export async function shutdownDatabase(): Promise<void> {

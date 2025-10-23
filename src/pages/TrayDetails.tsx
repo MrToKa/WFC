@@ -4,8 +4,10 @@ import {
   Body1,
   Button,
   Caption1,
+  Dropdown,
   Field,
   Input,
+  Option,
   Spinner,
   Title3,
   makeStyles,
@@ -19,12 +21,14 @@ import {
   Project,
   Tray,
   TrayInput,
+  MaterialTray,
   fetchProject,
   fetchCables,
   fetchTrays,
   fetchTray,
   deleteTray,
-  updateTray
+  updateTray,
+  fetchAllMaterialTrays
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -105,6 +109,7 @@ type TrayFormState = {
   widthMm: string;
   heightMm: string;
   lengthMm: string;
+  weightKgPerM: string;
 };
 
 type TrayFormErrors = Partial<Record<keyof TrayFormState, string>>;
@@ -115,7 +120,8 @@ const toTrayFormState = (tray: Tray): TrayFormState => ({
   purpose: tray.purpose ?? '',
   widthMm: tray.widthMm !== null ? String(tray.widthMm) : '',
   heightMm: tray.heightMm !== null ? String(tray.heightMm) : '',
-  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : ''
+  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : '',
+  weightKgPerM: ''
 });
 
 const parseNumberInput = (value: string): { numeric: number | null; error?: string } => {
@@ -179,11 +185,16 @@ export const TrayDetails = () => {
     purpose: '',
     widthMm: '',
     heightMm: '',
-    lengthMm: ''
+    lengthMm: '',
+    weightKgPerM: ''
   });
   const [formErrors, setFormErrors] = useState<TrayFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const [materialTrays, setMaterialTrays] = useState<MaterialTray[]>([]);
+  const [isLoadingMaterials, setIsLoadingMaterials] = useState<boolean>(false);
+  const [materialsError, setMaterialsError] = useState<string | null>(null);
 
   const sortTrays = useCallback(
     (items: Tray[]) =>
@@ -192,6 +203,103 @@ export const TrayDetails = () => {
       ),
     []
   );
+
+  useEffect(() => {
+    const loadMaterialTrays = async () => {
+      setIsLoadingMaterials(true);
+      setMaterialsError(null);
+      try {
+        const result = await fetchAllMaterialTrays();
+        const sorted = [...result.trays].sort((a, b) =>
+          a.type.localeCompare(b.type, undefined, { sensitivity: 'base' })
+        );
+        setMaterialTrays(sorted);
+      } catch (err) {
+        console.error('Fetch material trays failed', err);
+        setMaterialsError('Failed to load tray types. Width, height, and weight cannot be updated automatically.');
+      } finally {
+        setIsLoadingMaterials(false);
+      }
+    };
+
+    void loadMaterialTrays();
+  }, []);
+
+  const formatDimensionValue = useCallback(
+    (value: number | null | undefined) =>
+      value === null || value === undefined || Number.isNaN(value) ? '' : String(value),
+    []
+  );
+
+  const formatWeightValue = useCallback(
+    (value: number | null | undefined) =>
+      value === null || value === undefined || Number.isNaN(value) ? '' : value.toFixed(3),
+    []
+  );
+
+  const findMaterialTrayByType = useCallback(
+    (type: string) => {
+      const normalised = type.trim().toLowerCase();
+      if (!normalised) {
+        return null;
+      }
+      return (
+        materialTrays.find(
+          (item) => item.type.trim().toLowerCase() === normalised
+        ) ?? null
+      );
+    },
+    [materialTrays]
+  );
+
+  const selectedMaterialTray = useMemo(
+    () => findMaterialTrayByType(formValues.type),
+    [findMaterialTrayByType, formValues.type]
+  );
+
+  useEffect(() => {
+    if (!selectedMaterialTray) {
+      setFormValues((previous) => {
+        if (previous.weightKgPerM === '') {
+          return previous;
+        }
+        return { ...previous, weightKgPerM: '' };
+      });
+      return;
+    }
+
+    setFormValues((previous) => {
+      const nextWeight = formatWeightValue(selectedMaterialTray.weightKgPerM);
+      const nextWidth = formatDimensionValue(selectedMaterialTray.widthMm);
+      const nextHeight = formatDimensionValue(selectedMaterialTray.heightMm);
+
+      let changed = false;
+      const nextState: TrayFormState = { ...previous };
+
+      if (previous.weightKgPerM !== nextWeight) {
+        nextState.weightKgPerM = nextWeight;
+        changed = true;
+      }
+
+      if (isEditing) {
+        if (previous.widthMm !== nextWidth) {
+          nextState.widthMm = nextWidth;
+          changed = true;
+        }
+        if (previous.heightMm !== nextHeight) {
+          nextState.heightMm = nextHeight;
+          changed = true;
+        }
+      }
+
+      return changed ? nextState : previous;
+    });
+  }, [
+    selectedMaterialTray,
+    isEditing,
+    formatDimensionValue,
+    formatWeightValue
+  ]);
 
   useEffect(() => {
     const load = async () => {
@@ -305,6 +413,42 @@ export const TrayDetails = () => {
         [field]: data.value
       }));
     };
+
+  const handleTypeSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      const nextType = data.optionValue ?? '';
+      const material = nextType ? findMaterialTrayByType(nextType) : null;
+
+      setFormValues((previous) => {
+        const nextState: TrayFormState = {
+          ...previous,
+          type: nextType
+        };
+
+        if (material) {
+          nextState.widthMm = formatDimensionValue(material.widthMm);
+          nextState.heightMm = formatDimensionValue(material.heightMm);
+          nextState.weightKgPerM = formatWeightValue(material.weightKgPerM);
+        } else {
+          nextState.weightKgPerM = '';
+        }
+
+        return nextState;
+      });
+
+      setFormErrors((previous) => ({
+        ...previous,
+        type: undefined,
+        widthMm: undefined,
+        heightMm: undefined
+      }));
+    },
+    [
+      findMaterialTrayByType,
+      formatDimensionValue,
+      formatWeightValue
+    ]
+  );
 
   const buildTrayInput = (values: TrayFormState) => {
     const errors: TrayFormErrors = {};
@@ -433,6 +577,15 @@ export const TrayDetails = () => {
     setIsEditing(false);
   };
 
+  const canUseMaterialDropdown = !isLoadingMaterials && materialTrays.length > 0;
+  const weightDisplay =
+    formValues.weightKgPerM !== ''
+      ? formValues.weightKgPerM
+      : formatWeightValue(selectedMaterialTray?.weightKgPerM) || '-';
+  const currentTypeHasMaterial = Boolean(
+    formValues.type && findMaterialTrayByType(formValues.type)
+  );
+
   if (isLoading) {
     return (
       <section className={styles.root}>
@@ -503,6 +656,9 @@ export const TrayDetails = () => {
         <Caption1>Tray details</Caption1>
         {isEditing ? (
           <form className={styles.grid} onSubmit={handleSubmit}>
+            {materialsError ? (
+              <Body1 className={styles.errorText}>{materialsError}</Body1>
+            ) : null}
             <Field
               label="Name"
               required
@@ -520,10 +676,32 @@ export const TrayDetails = () => {
               validationState={formErrors.type ? 'error' : undefined}
               validationMessage={formErrors.type}
             >
-              <Input
-                value={formValues.type}
-                onChange={handleFieldChange('type')}
-              />
+              {canUseMaterialDropdown ? (
+                <Dropdown
+                  placeholder="Select tray type"
+                  selectedOptions={
+                    formValues.type ? [formValues.type] : []
+                  }
+                  value={formValues.type || undefined}
+                  onOptionSelect={handleTypeSelect}
+                >
+                  {materialTrays.map((material) => (
+                    <Option key={material.id} value={material.type}>
+                      {material.type}
+                    </Option>
+                  ))}
+                  {!currentTypeHasMaterial && formValues.type ? (
+                    <Option value={formValues.type}>{formValues.type}</Option>
+                  ) : null}
+                </Dropdown>
+              ) : (
+                <Input
+                  value={formValues.type}
+                  onChange={handleFieldChange('type')}
+                  placeholder={isLoadingMaterials ? 'Loading types...' : undefined}
+                  readOnly={isLoadingMaterials}
+                />
+              )}
             </Field>
             <Field
               label="Purpose"
@@ -540,20 +718,17 @@ export const TrayDetails = () => {
               validationState={formErrors.widthMm ? 'error' : undefined}
               validationMessage={formErrors.widthMm}
             >
-              <Input
-                value={formValues.widthMm}
-                onChange={handleFieldChange('widthMm')}
-              />
+              <Input value={formValues.widthMm} readOnly />
             </Field>
             <Field
               label="Height [mm]"
               validationState={formErrors.heightMm ? 'error' : undefined}
               validationMessage={formErrors.heightMm}
             >
-              <Input
-                value={formValues.heightMm}
-                onChange={handleFieldChange('heightMm')}
-              />
+              <Input value={formValues.heightMm} readOnly />
+            </Field>
+            <Field label="Weight [kg/m]">
+              <Input value={formValues.weightKgPerM} readOnly />
             </Field>
             <Field
               label="Length"
@@ -612,6 +787,10 @@ export const TrayDetails = () => {
                     }).format(tray.heightMm)
                   : '-'}
               </Body1>
+            </div>
+            <div className={styles.field}>
+              <Caption1>Weight [kg/m]</Caption1>
+              <Body1>{weightDisplay}</Body1>
             </div>
             <div className={styles.field}>
               <Caption1>Length</Caption1>

@@ -73,6 +73,41 @@ export type Tray = {
   updatedAt: string;
 };
 
+export type MaterialTray = {
+  id: string;
+  type: string;
+  heightMm: number | null;
+  widthMm: number | null;
+  weightKgPerM: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MaterialSupport = {
+  id: string;
+  type: string;
+  heightMm: number | null;
+  widthMm: number | null;
+  lengthMm: number | null;
+  weightKg: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MaterialImportSummary = {
+  totalRows: number;
+  created: number;
+  updated: number;
+  skipped: number;
+};
+
+export type PaginationMeta = {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
 export type CableSortColumn =
   | 'tag'
   | 'typeName'
@@ -149,6 +184,21 @@ export type TrayInput = {
   widthMm?: number | null;
   heightMm?: number | null;
   lengthMm?: number | null;
+};
+
+export type MaterialTrayInput = {
+  type: string;
+  heightMm?: number | null;
+  widthMm?: number | null;
+  weightKgPerM?: number | null;
+};
+
+export type MaterialSupportInput = {
+  type: string;
+  heightMm?: number | null;
+  widthMm?: number | null;
+  lengthMm?: number | null;
+  weightKg?: number | null;
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
@@ -746,6 +796,270 @@ export async function exportTrays(
         ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (payload as any).error
         : 'Failed to export trays';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function fetchMaterialTrays(options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<{ trays: MaterialTray[]; pagination: PaginationMeta }> {
+  const params = new URLSearchParams();
+
+  if (options?.page !== undefined) {
+    params.set('page', String(options.page));
+  }
+
+  if (options?.pageSize !== undefined) {
+    params.set('pageSize', String(options.pageSize));
+  }
+
+  const query = params.toString();
+
+  return request<{ trays: MaterialTray[]; pagination: PaginationMeta }>(
+    `/api/materials/trays${query ? `?${query}` : ''}`
+  );
+}
+
+export async function fetchAllMaterialTrays(): Promise<{
+  trays: MaterialTray[];
+}> {
+  return request<{ trays: MaterialTray[] }>('/api/materials/trays/all');
+}
+
+export async function createMaterialTray(
+  token: string,
+  data: MaterialTrayInput
+): Promise<{ tray: MaterialTray }> {
+  return request<{ tray: MaterialTray }>('/api/materials/trays', {
+    method: 'POST',
+    token,
+    body: data
+  });
+}
+
+export async function updateMaterialTray(
+  token: string,
+  trayId: string,
+  data: Partial<MaterialTrayInput>
+): Promise<{ tray: MaterialTray }> {
+  return request<{ tray: MaterialTray }>(
+    `/api/materials/trays/${trayId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function deleteMaterialTray(
+  token: string,
+  trayId: string
+): Promise<void> {
+  await request<null>(`/api/materials/trays/${trayId}`, {
+    method: 'DELETE',
+    token
+  });
+}
+
+export async function importMaterialTrays(
+  token: string,
+  file: File
+): Promise<{ summary: MaterialImportSummary; trays: MaterialTray[] }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/api/materials/trays/import`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import trays';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as { summary: MaterialImportSummary; trays: MaterialTray[] };
+}
+
+export async function exportMaterialTrays(token?: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/materials/trays/export`, {
+    method: 'GET',
+    headers
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export trays';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function fetchMaterialSupports(options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<{ supports: MaterialSupport[]; pagination: PaginationMeta }> {
+  const params = new URLSearchParams();
+
+  if (options?.page !== undefined) {
+    params.set('page', String(options.page));
+  }
+
+  if (options?.pageSize !== undefined) {
+    params.set('pageSize', String(options.pageSize));
+  }
+
+  const query = params.toString();
+
+  return request<{ supports: MaterialSupport[]; pagination: PaginationMeta }>(
+    `/api/materials/supports${query ? `?${query}` : ''}`
+  );
+}
+
+export async function createMaterialSupport(
+  token: string,
+  data: MaterialSupportInput
+): Promise<{ support: MaterialSupport }> {
+  return request<{ support: MaterialSupport }>('/api/materials/supports', {
+    method: 'POST',
+    token,
+    body: data
+  });
+}
+
+export async function updateMaterialSupport(
+  token: string,
+  supportId: string,
+  data: Partial<MaterialSupportInput>
+): Promise<{ support: MaterialSupport }> {
+  return request<{ support: MaterialSupport }>(
+    `/api/materials/supports/${supportId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function deleteMaterialSupport(
+  token: string,
+  supportId: string
+): Promise<void> {
+  await request<null>(`/api/materials/supports/${supportId}`, {
+    method: 'DELETE',
+    token
+  });
+}
+
+export async function importMaterialSupports(
+  token: string,
+  file: File
+): Promise<{ summary: MaterialImportSummary; supports: MaterialSupport[] }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/api/materials/supports/import`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import supports';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    summary: MaterialImportSummary;
+    supports: MaterialSupport[];
+  };
+}
+
+export async function exportMaterialSupports(token?: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/materials/supports/export`,
+    {
+      method: 'GET',
+      headers
+    }
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export supports';
 
     throw new ApiError(response.status, errorPayload);
   }
