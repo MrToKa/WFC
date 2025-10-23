@@ -33,6 +33,8 @@ export async function initializeDatabase(): Promise<void> {
       manager TEXT,
       description TEXT,
       secondary_tray_length NUMERIC,
+      support_distance NUMERIC,
+      support_weight NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -46,6 +48,27 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS secondary_tray_length NUMERIC;
+  `);
+
+  await pool.query(`
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS support_distance NUMERIC;
+  `);
+
+  await pool.query(`
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS support_weight NUMERIC;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_support_distances (
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      tray_type TEXT NOT NULL,
+      support_distance NUMERIC NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, tray_type)
+    );
   `);
 
   await pool.query(`

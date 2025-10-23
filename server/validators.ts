@@ -48,6 +48,28 @@ const projectFieldSchema = {
     .min(0)
     .max(1_000_000)
     .nullable()
+    .optional(),
+  supportDistance: z
+    .number()
+    .min(0)
+    .max(1_000_000)
+    .nullable()
+    .optional(),
+  supportWeight: z
+    .number()
+    .min(0)
+    .max(1_000_000)
+    .nullable()
+    .optional(),
+  supportDistances: z
+    .record(
+      z.string().trim().min(1).max(200),
+      z
+        .number()
+        .min(0)
+        .max(1_000_000)
+        .nullable()
+    )
     .optional()
 } as const;
 
@@ -62,7 +84,10 @@ export const updateProjectSchema = z
     customer: projectFieldSchema.customer.optional(),
     manager: projectFieldSchema.manager,
     description: projectFieldSchema.description.optional(),
-    secondaryTrayLength: projectFieldSchema.secondaryTrayLength
+    secondaryTrayLength: projectFieldSchema.secondaryTrayLength,
+    supportDistance: projectFieldSchema.supportDistance,
+    supportWeight: projectFieldSchema.supportWeight,
+    supportDistances: projectFieldSchema.supportDistances
   })
   .strict()
   .refine(
@@ -72,7 +97,10 @@ export const updateProjectSchema = z
       value.customer !== undefined ||
       value.manager !== undefined ||
       value.description !== undefined ||
-      value.secondaryTrayLength !== undefined,
+      value.secondaryTrayLength !== undefined ||
+      value.supportDistance !== undefined ||
+      value.supportWeight !== undefined ||
+      value.supportDistances !== undefined,
     {
       message: 'At least one field must be provided'
     }

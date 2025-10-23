@@ -46,6 +46,37 @@ export const useProjectDetailsStyles = makeStyles({
     flexDirection: 'column',
     gap: '1rem'
   },
+  numericFieldsRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '1rem'
+  },
+  numericField: {
+    flex: '1 1 14rem',
+    maxWidth: '18rem',
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.padding('0.75rem'),
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem'
+  },
+  numericFieldLabel: {
+    fontWeight: tokens.fontWeightSemibold
+  },
+  numericFieldControls: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    gap: '0.5rem'
+  },
+  numericFieldInput: {
+    flex: '1 1 auto'
+  },
+  supportOverridesNote: {
+    marginTop: '0.5rem',
+    color: tokens.colorNeutralForeground2
+  },
   actionsRow: {
     display: 'flex',
     alignItems: 'center',

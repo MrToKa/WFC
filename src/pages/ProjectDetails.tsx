@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   Body1,
@@ -14,11 +14,11 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
-import { ApiError, updateProject } from '@/api/client';
+import { ApiError, Project, updateProject } from '@/api/client';
 
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
-import { formatNumeric } from './ProjectDetails.utils';
+import { formatNumeric, parseNumberInput } from './ProjectDetails.utils';
 import { CableReportTab } from './ProjectDetails/CableReportTab';
 import {
   CableDialog,
@@ -35,6 +35,148 @@ import { useCableListSection } from './ProjectDetails/hooks/useCableListSection'
 import { useCableTypesSection } from './ProjectDetails/hooks/useCableTypesSection';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
 import { useTraysSection } from './ProjectDetails/hooks/useTraysSection';
+
+type UpdatableNumericProjectField =
+  | 'secondaryTrayLength'
+  | 'supportDistance'
+  | 'supportWeight';
+
+type NumericFieldLabelMap = Record<UpdatableNumericProjectField, string>;
+
+const NUMERIC_FIELD_LABELS: NumericFieldLabelMap = {
+  secondaryTrayLength: 'Secondary tray length',
+  supportDistance: 'Default distance between supports',
+  supportWeight: 'Support weight'
+};
+
+type ShowToast = ReturnType<typeof useToast>['showToast'];
+
+type UseProjectNumericFieldParams = {
+  project: Project | null;
+  field: UpdatableNumericProjectField;
+  token: string | null;
+  isAdmin: boolean;
+  showToast: ShowToast;
+  reloadProject: () => Promise<void>;
+};
+
+type NumericFieldController = {
+  input: string;
+  error: string | null;
+  saving: boolean;
+  onInputChange: (value: string) => void;
+  onSave: () => Promise<void>;
+};
+
+const useProjectNumericField = ({
+  project,
+  field,
+  token,
+  isAdmin,
+  showToast,
+  reloadProject
+}: UseProjectNumericFieldParams): NumericFieldController => {
+  const [input, setInput] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (project) {
+      const currentValue = project[field];
+      setInput(
+        currentValue !== null && currentValue !== undefined
+          ? String(currentValue)
+          : ''
+      );
+    } else {
+      setInput('');
+    }
+    setError(null);
+  }, [project, field]);
+
+  const onInputChange = useCallback((value: string) => {
+    setInput(value);
+    setError(null);
+  }, []);
+
+  const onSave = useCallback(async () => {
+    const label = NUMERIC_FIELD_LABELS[field];
+
+    if (!project || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Sign-in required',
+        body: `You need to be signed in to update the ${label.toLowerCase()}.`
+      });
+      return;
+    }
+
+    if (!isAdmin) {
+      showToast({
+        intent: 'error',
+        title: 'Administrator access required',
+        body: `Only administrators can update the ${label.toLowerCase()}.`
+      });
+      return;
+    }
+
+    const parsed = parseNumberInput(input);
+    if (parsed.error) {
+      setError(parsed.error);
+      return;
+    }
+
+    const nextValue =
+      parsed.numeric !== null
+        ? Math.round(parsed.numeric * 1000) / 1000
+        : null;
+    const currentValue = project[field];
+
+    if (currentValue === nextValue) {
+      setError('No changes to save.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      await updateProject(token, project.id, {
+        [field]: nextValue
+      });
+      await reloadProject();
+      showToast({
+        intent: 'success',
+        title: `${label} updated`
+      });
+    } catch (error) {
+      console.error(`Failed to update ${field}`, error);
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : `Failed to update ${label.toLowerCase()}.`;
+      setError(message);
+      showToast({
+        intent: 'error',
+        title: 'Update failed',
+        body: message
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [field, input, isAdmin, project, reloadProject, showToast, token]);
+
+  return useMemo(
+    () => ({
+      input,
+      error,
+      saving,
+      onInputChange,
+      onSave
+    }),
+    [error, input, onInputChange, onSave, saving]
+  );
+};
 
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
@@ -191,92 +333,244 @@ export const ProjectDetails = () => {
     showToast
   });
 
-  const [secondaryTrayLengthInput, setSecondaryTrayLengthInput] = useState<string>('');
-  const [secondaryTrayLengthError, setSecondaryTrayLengthError] = useState<string | null>(
-    null
+  const secondaryTrayLengthField = useProjectNumericField({
+    project,
+    field: 'secondaryTrayLength',
+    token,
+    isAdmin,
+    showToast,
+    reloadProject
+  });
+  const supportDistanceField = useProjectNumericField({
+    project,
+    field: 'supportDistance',
+    token,
+    isAdmin,
+    showToast,
+    reloadProject
+  });
+  const supportWeightField = useProjectNumericField({
+    project,
+    field: 'supportWeight',
+    token,
+    isAdmin,
+    showToast,
+    reloadProject
+  });
+
+  const numericFields = useMemo(
+    () => [
+      {
+        field: 'secondaryTrayLength' as const,
+        label: NUMERIC_FIELD_LABELS.secondaryTrayLength,
+        unit: 'm',
+        ...secondaryTrayLengthField
+      },
+      {
+        field: 'supportDistance' as const,
+        label: NUMERIC_FIELD_LABELS.supportDistance,
+        unit: 'm',
+        ...supportDistanceField
+      },
+      {
+        field: 'supportWeight' as const,
+        label: NUMERIC_FIELD_LABELS.supportWeight,
+        unit: 'kg',
+        ...supportWeightField
+      }
+    ],
+    [secondaryTrayLengthField, supportDistanceField, supportWeightField]
   );
-  const [secondaryTrayLengthSaving, setSecondaryTrayLengthSaving] =
-    useState<boolean>(false);
+
+  const trayTypes = useMemo(() => {
+    const unique = new Set<string>();
+    trays.forEach((tray) => {
+      if (tray.type) {
+        unique.add(tray.type);
+      }
+    });
+    Object.keys(project?.supportDistanceOverrides ?? {}).forEach((trayType) => {
+      if (trayType) {
+        unique.add(trayType);
+      }
+    });
+    return Array.from(unique).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    );
+  }, [project?.supportDistanceOverrides, trays]);
+
+  const [supportDistanceOverridesInputs, setSupportDistanceOverridesInputs] =
+    useState<Record<string, string>>({});
+  const [supportDistanceOverridesErrors, setSupportDistanceOverridesErrors] =
+    useState<Record<string, string | null>>({});
+  const [supportDistanceOverridesSaving, setSupportDistanceOverridesSaving] =
+    useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (project?.secondaryTrayLength !== undefined) {
-      setSecondaryTrayLengthInput(
-        project.secondaryTrayLength !== null
-          ? String(project.secondaryTrayLength)
-          : ''
-      );
-      setSecondaryTrayLengthError(null);
-    }
-  }, [project?.secondaryTrayLength]);
-
-  const handleSecondaryTrayLengthSave = useCallback(async () => {
-    if (!project || !token) {
-      showToast({
-        intent: 'error',
-        title: 'Sign-in required',
-        body: 'You need to be signed in to update the secondary tray length.'
+    const overrides = project?.supportDistanceOverrides ?? {};
+    setSupportDistanceOverridesInputs(() => {
+      const next: Record<string, string> = {};
+      trayTypes.forEach((trayType) => {
+        const value = overrides[trayType];
+        next[trayType] =
+          value !== undefined && value !== null ? String(value) : '';
       });
-      return;
-    }
+      return next;
+    });
+    setSupportDistanceOverridesErrors({});
+    setSupportDistanceOverridesSaving({});
+  }, [project?.supportDistanceOverrides, trayTypes]);
 
-    if (!isAdmin) {
-      showToast({
-        intent: 'error',
-        title: 'Administrator access required',
-        body: 'Only administrators can update the secondary tray length.'
+  const handleSupportDistanceOverrideInputChange = useCallback(
+    (trayType: string, value: string) => {
+      setSupportDistanceOverridesInputs((previous) => ({
+        ...previous,
+        [trayType]: value
+      }));
+      setSupportDistanceOverridesErrors((previous) => {
+        if (!previous[trayType]) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[trayType];
+        return next;
       });
-      return;
-    }
+    },
+    []
+  );
 
-    const trimmed = secondaryTrayLengthInput.trim();
-    let nextValue: number | null = null;
-
-    if (trimmed === '') {
-      nextValue = null;
-    } else {
-      const normalized = trimmed.replace(',', '.');
-      const parsed = Number(normalized);
-
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        setSecondaryTrayLengthError('Enter a non-negative number.');
+  const handleSupportDistanceOverrideSave = useCallback(
+    async (trayType: string) => {
+      if (!project || !token) {
+        showToast({
+          intent: 'error',
+          title: 'Sign-in required',
+          body: 'You need to be signed in to update support distances.'
+        });
         return;
       }
 
-      nextValue = Math.round(parsed * 1000) / 1000;
-    }
+      if (!isAdmin) {
+        showToast({
+          intent: 'error',
+          title: 'Administrator access required',
+          body: 'Only administrators can update support distances.'
+        });
+        return;
+      }
 
-    if (project.secondaryTrayLength === nextValue) {
-      setSecondaryTrayLengthError('No changes to save.');
-      return;
-    }
+      const inputValue = supportDistanceOverridesInputs[trayType] ?? '';
+      const parsed = parseNumberInput(inputValue);
 
-    setSecondaryTrayLengthSaving(true);
-    setSecondaryTrayLengthError(null);
+      if (parsed.error) {
+        setSupportDistanceOverridesErrors((previous) => ({
+          ...previous,
+          [trayType]: parsed.error
+        }));
+        return;
+      }
 
-    try {
-      await updateProject(token, project.id, {
-        secondaryTrayLength: nextValue
+      const nextValue =
+        parsed.numeric !== null
+          ? Math.round(parsed.numeric * 1000) / 1000
+          : null;
+      const currentValue =
+        project.supportDistanceOverrides[trayType] ?? null;
+
+      if (currentValue === nextValue) {
+        setSupportDistanceOverridesErrors((previous) => ({
+          ...previous,
+          [trayType]: 'No changes to save.'
+        }));
+        return;
+      }
+
+      setSupportDistanceOverridesSaving((previous) => ({
+        ...previous,
+        [trayType]: true
+      }));
+      setSupportDistanceOverridesErrors((previous) => {
+        const next = { ...previous };
+        delete next[trayType];
+        return next;
       });
-      await reloadProject();
-      showToast({ intent: 'success', title: 'Secondary tray length updated' });
-    } catch (error) {
-      console.error('Failed to update secondary tray length', error);
-      const message =
-        error instanceof ApiError
-          ? error.message
-          : 'Failed to update secondary tray length.';
-      setSecondaryTrayLengthError(message);
-      showToast({ intent: 'error', title: 'Update failed', body: message });
-    } finally {
-      setSecondaryTrayLengthSaving(false);
+
+      try {
+        const nextOverrides = { ...project.supportDistanceOverrides };
+
+        if (nextValue === null) {
+          delete nextOverrides[trayType];
+        } else {
+          nextOverrides[trayType] = nextValue;
+        }
+
+        await updateProject(token, project.id, {
+          supportDistances: nextOverrides
+        });
+        await reloadProject();
+        showToast({
+          intent: 'success',
+          title: `Support distance for ${trayType} updated`
+        });
+      } catch (error) {
+        console.error(
+          `Failed to update support distance for tray type "${trayType}"`,
+          error
+        );
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : 'Failed to update support distance.';
+        setSupportDistanceOverridesErrors((previous) => ({
+          ...previous,
+          [trayType]: message
+        }));
+        showToast({
+          intent: 'error',
+          title: 'Update failed',
+          body: message
+        });
+      } finally {
+        setSupportDistanceOverridesSaving((previous) => ({
+          ...previous,
+          [trayType]: false
+        }));
+      }
+    },
+    [
+      isAdmin,
+      project,
+      reloadProject,
+      showToast,
+      supportDistanceOverridesInputs,
+      token
+    ]
+  );
+
+  const supportDistanceOverrideFields = useMemo(() => {
+    if (!project) {
+      return [];
     }
+
+    return trayTypes.map((trayType) => ({
+      trayType,
+      currentValue: project.supportDistanceOverrides[trayType] ?? null,
+      defaultValue: project.supportDistance ?? null,
+      input: supportDistanceOverridesInputs[trayType] ?? '',
+      error: supportDistanceOverridesErrors[trayType] ?? null,
+      saving: Boolean(supportDistanceOverridesSaving[trayType]),
+      onInputChange: (value: string) =>
+        handleSupportDistanceOverrideInputChange(trayType, value),
+      onSave: () => handleSupportDistanceOverrideSave(trayType)
+    }));
   }, [
-    isAdmin,
+    handleSupportDistanceOverrideInputChange,
+    handleSupportDistanceOverrideSave,
     project,
-    reloadProject,
-    secondaryTrayLengthInput,
-    showToast,
-    token
+    supportDistanceOverridesErrors,
+    supportDistanceOverridesInputs,
+    supportDistanceOverridesSaving,
+    trayTypes
   ]);
 
   useEffect(() => {
@@ -394,14 +688,8 @@ export const ProjectDetails = () => {
           project={project}
           formattedDates={formattedDates}
           isAdmin={isAdmin}
-          secondaryTrayLengthInput={secondaryTrayLengthInput}
-          onSecondaryTrayLengthInputChange={(value) => {
-            setSecondaryTrayLengthInput(value);
-            setSecondaryTrayLengthError(null);
-          }}
-          onSaveSecondaryTrayLength={() => void handleSecondaryTrayLengthSave()}
-          secondaryTrayLengthSaving={secondaryTrayLengthSaving}
-          secondaryTrayLengthError={secondaryTrayLengthError}
+          numericFields={numericFields}
+          supportDistanceOverrides={supportDistanceOverrideFields}
         />
       ) : null}
 

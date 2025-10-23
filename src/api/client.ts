@@ -16,6 +16,9 @@ export type Project = {
   manager: string | null;
   description: string | null;
   secondaryTrayLength: number | null;
+  supportDistance: number | null;
+  supportWeight: number | null;
+  supportDistanceOverrides: Record<string, number>;
   createdAt: string;
   updatedAt: string;
 };
@@ -289,6 +292,9 @@ export async function createProject(
     manager?: string | null;
     description?: string;
     secondaryTrayLength?: number | null;
+    supportDistance?: number | null;
+    supportWeight?: number | null;
+    supportDistances?: Record<string, number | null>;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>('/api/projects', {
@@ -308,6 +314,9 @@ export async function updateProject(
     manager?: string | null;
     description?: string;
     secondaryTrayLength?: number | null;
+    supportDistance?: number | null;
+    supportWeight?: number | null;
+    supportDistances?: Record<string, number | null>;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>(`/api/projects/${projectId}`, {

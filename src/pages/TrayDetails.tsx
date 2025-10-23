@@ -15,10 +15,12 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ApiError,
+  Cable,
   Project,
   Tray,
   TrayInput,
   fetchProject,
+  fetchCables,
   fetchTrays,
   fetchTray,
   deleteTray,
@@ -48,6 +50,28 @@ const useStyles = makeStyles({
     flexWrap: 'wrap',
     alignItems: 'center'
   },
+  tableWrapper: {
+    width: '100%',
+    overflowX: 'auto'
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    minWidth: '28rem'
+  },
+  tableHeadCell: {
+    textAlign: 'left',
+    padding: '0.75rem 1rem',
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+    whiteSpace: 'nowrap',
+    fontWeight: tokens.fontWeightSemibold
+  },
+  tableCell: {
+    padding: '0.75rem 1rem',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+    verticalAlign: 'top'
+  },
   section: {
     display: 'grid',
     gap: '0.75rem',
@@ -65,6 +89,9 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '0.25rem'
+  },
+  emptyState: {
+    padding: '0.5rem 0'
   },
   errorText: {
     color: tokens.colorStatusDangerForeground1
@@ -109,6 +136,25 @@ const toNullableString = (value: string): string | null => {
   return trimmed === '' ? null : trimmed;
 };
 
+const routingContainsTray = (routing: string | null, trayName: string): boolean => {
+  if (!routing) {
+    return false;
+  }
+
+  const target = trayName.trim().toLowerCase();
+  if (!target) {
+    return false;
+  }
+
+  return routing
+    .split('/')
+    .map((segment) => segment.trim().toLowerCase())
+    .some((segment) => segment === target);
+};
+
+const filterCablesByTray = (cables: Cable[], trayName: string): Cable[] =>
+  cables.filter((cable) => routingContainsTray(cable.routing, trayName));
+
 export const TrayDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
@@ -121,6 +167,8 @@ export const TrayDetails = () => {
   const [project, setProject] = useState<Project | null>(null);
   const [tray, setTray] = useState<Tray | null>(null);
   const [trays, setTrays] = useState<Tray[]>([]);
+  const [trayCables, setTrayCables] = useState<Cable[]>([]);
+  const [cablesError, setCablesError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,6 +197,7 @@ export const TrayDetails = () => {
     const load = async () => {
       if (!projectId || !trayId) {
         setError('Tray not found.');
+        setTrayCables([]);
         setTrays([]);
         setIsLoading(false);
         return;
@@ -156,6 +205,8 @@ export const TrayDetails = () => {
 
       setIsLoading(true);
       setError(null);
+       setTrayCables([]);
+       setCablesError(null);
 
       try {
         const [projectResponse, trayResponse] = await Promise.all([
@@ -168,6 +219,14 @@ export const TrayDetails = () => {
         setFormValues(toTrayFormState(trayResponse.tray));
         setIsEditing(false);
         setFormErrors({});
+
+        try {
+          const cablesResponse = await fetchCables(projectId);
+          setTrayCables(filterCablesByTray(cablesResponse.cables, trayResponse.tray.name));
+        } catch (cableError) {
+          console.error('Failed to load tray cables', cableError);
+          setCablesError('Failed to load cables for this tray.');
+        }
       } catch (err) {
         console.error('Failed to load tray details', err);
         if (err instanceof ApiError && err.status === 404) {
@@ -175,6 +234,7 @@ export const TrayDetails = () => {
         } else {
           setError('Failed to load tray details.');
         }
+        setTrayCables([]);
         setTrays([]);
         setIsLoading(false);
         return;
@@ -197,7 +257,7 @@ export const TrayDetails = () => {
     if (!tray) {
       return 'Tray details';
     }
-    return `Tray — ${tray.name}`;
+    return `Tray - ${tray.name}`;
   }, [tray]);
 
   const { previousTray, nextTray } = useMemo(() => {
@@ -217,6 +277,14 @@ export const TrayDetails = () => {
         currentIndex < trays.length - 1 ? trays[currentIndex + 1] : null
     };
   }, [tray, trays]);
+
+  const numberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: 3
+      }),
+    []
+  );
 
   const handleNavigateTray = useCallback(
     (targetTrayId: string) => {
@@ -388,7 +456,7 @@ export const TrayDetails = () => {
         <Title3>{pageTitle}</Title3>
         {project ? (
           <Body1>
-            Project: {project.projectNumber} — {project.name}
+            Project: {project.projectNumber} - {project.name}
           </Body1>
         ) : null}
       </div>
@@ -573,6 +641,55 @@ export const TrayDetails = () => {
                 }).format(new Date(tray.updatedAt))}
               </Body1>
             </div>
+          </div>
+        )}
+      </div>
+      <div className={styles.section}>
+        <Caption1>Cables laying on the tray</Caption1>
+        {cablesError ? (
+          <Body1 className={styles.errorText}>{cablesError}</Body1>
+        ) : trayCables.length === 0 ? (
+          <Body1 className={styles.emptyState}>No cables found on this tray.</Body1>
+        ) : (
+          <div className={styles.tableWrapper}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th scope="col" className={styles.tableHeadCell}>
+                    No.
+                  </th>
+                  <th scope="col" className={styles.tableHeadCell}>
+                    Cable name
+                  </th>
+                  <th scope="col" className={styles.tableHeadCell}>
+                    Cable type
+                  </th>
+                  <th scope="col" className={styles.tableHeadCell}>
+                    Cable diameter [mm]
+                  </th>
+                  <th scope="col" className={styles.tableHeadCell}>
+                    Cable weight [kg/m]
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {trayCables.map((cable, index) => (
+                  <tr key={cable.id}>
+                    <td className={styles.tableCell}>{index + 1}</td>
+                    <td className={styles.tableCell}>{cable.tag ?? '-'}</td>
+                    <td className={styles.tableCell}>{cable.typeName}</td>
+                    <td className={styles.tableCell}>
+                      {cable.diameterMm !== null ? numberFormatter.format(cable.diameterMm) : '-'}
+                    </td>
+                    <td className={styles.tableCell}>
+                      {cable.weightKgPerM !== null
+                        ? numberFormatter.format(cable.weightKgPerM)
+                        : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
