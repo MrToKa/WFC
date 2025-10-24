@@ -22,13 +22,15 @@ import {
   Tray,
   TrayInput,
   MaterialTray,
+  MaterialSupport,
   fetchProject,
   fetchCables,
   fetchTrays,
   fetchTray,
   deleteTray,
   updateTray,
-  fetchAllMaterialTrays
+  fetchAllMaterialTrays,
+  fetchMaterialSupports
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -114,6 +116,15 @@ type TrayFormState = {
 
 type TrayFormErrors = Partial<Record<keyof TrayFormState, string>>;
 
+type SupportCalculationResult = {
+  lengthMeters: number | null;
+  distanceMeters: number | null;
+  supportsCount: number | null;
+  weightPerPieceKg: number | null;
+  totalWeightKg: number | null;
+  weightPerMeterKg: number | null;
+};
+
 const toTrayFormState = (tray: Tray): TrayFormState => ({
   name: tray.name,
   type: tray.type ?? '',
@@ -195,6 +206,67 @@ export const TrayDetails = () => {
   const [materialTrays, setMaterialTrays] = useState<MaterialTray[]>([]);
   const [isLoadingMaterials, setIsLoadingMaterials] = useState<boolean>(false);
   const [materialsError, setMaterialsError] = useState<string | null>(null);
+  const [materialSupportsById, setMaterialSupportsById] = useState<Record<string, MaterialSupport>>({});
+  const [materialSupportsLoading, setMaterialSupportsLoading] = useState<boolean>(false);
+  const [materialSupportsError, setMaterialSupportsError] = useState<string | null>(null);
+  const [materialSupportsLoaded, setMaterialSupportsLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSupports = async () => {
+      setMaterialSupportsLoading(true);
+      setMaterialSupportsError(null);
+
+      try {
+        const loaded: MaterialSupport[] = [];
+        let page = 1;
+        const PAGE_SIZE = 100;
+
+        while (true) {
+          const { supports: pageSupports, pagination } = await fetchMaterialSupports({
+            page,
+            pageSize: PAGE_SIZE
+          });
+
+          loaded.push(...pageSupports);
+
+          if (!pagination || pagination.totalPages === 0 || page >= pagination.totalPages) {
+            break;
+          }
+
+          page += 1;
+        }
+
+        if (!cancelled) {
+          setMaterialSupportsById((previous) => {
+            const next = { ...previous };
+            loaded.forEach((support) => {
+              next[support.id] = support;
+            });
+            return next;
+          });
+          setMaterialSupportsLoaded(true);
+        }
+      } catch (error) {
+        console.error('Failed to load supports', error);
+        if (!cancelled) {
+          setMaterialSupportsError('Failed to load support details.');
+          setMaterialSupportsLoaded(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setMaterialSupportsLoading(false);
+        }
+      }
+    };
+
+    void loadSupports();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const sortTrays = useCallback(
     (items: Tray[]) =>
@@ -393,6 +465,120 @@ export const TrayDetails = () => {
       }),
     []
   );
+
+  const supportOverride = useMemo(() => {
+    if (!project || !tray || !tray.type) {
+      return null;
+    }
+    return project.supportDistanceOverrides[tray.type] ?? null;
+  }, [project, tray]);
+
+  const supportIdToLoad = supportOverride?.supportId ?? null;
+
+  const overrideSupport =
+    supportIdToLoad && materialSupportsById[supportIdToLoad]
+      ? materialSupportsById[supportIdToLoad]
+      : null;
+
+  const supportCalculations = useMemo<SupportCalculationResult>(() => {
+    const lengthMeters =
+      tray && tray.lengthMm !== null && tray.lengthMm > 0
+        ? tray.lengthMm / 1000
+        : null;
+
+    const overrideDistance =
+      supportOverride && supportOverride.distance !== null
+        ? supportOverride.distance
+        : null;
+
+    let distanceMeters =
+      overrideDistance ??
+      (project && project.supportDistance !== null ? project.supportDistance : null);
+
+    if (
+      (distanceMeters === null || distanceMeters === undefined || distanceMeters <= 0) &&
+      tray?.type
+    ) {
+      if (tray.type.trim().toLowerCase() === 'kl 100.603 f') {
+        distanceMeters = 2;
+      }
+    }
+
+    if (distanceMeters !== null && distanceMeters <= 0) {
+      distanceMeters = null;
+    }
+
+    const weightPerPieceOverride =
+      overrideSupport && overrideSupport.weightKg !== null
+        ? overrideSupport.weightKg
+        : null;
+
+    const weightPerPieceKg =
+      weightPerPieceOverride !== null
+        ? weightPerPieceOverride
+        : project && project.supportWeight !== null
+        ? project.supportWeight
+        : null;
+
+    if (lengthMeters === null || lengthMeters <= 0 || distanceMeters === null) {
+      return {
+        lengthMeters,
+        distanceMeters,
+        supportsCount: null,
+        weightPerPieceKg,
+        totalWeightKg: null,
+        weightPerMeterKg: null
+      };
+    }
+
+    const baseSegments = Math.floor(lengthMeters / distanceMeters);
+    let supportsCount = Math.max(2, baseSegments + 1);
+    const remainder = lengthMeters - baseSegments * distanceMeters;
+
+    if (baseSegments >= 1 && remainder > distanceMeters * 0.2) {
+      supportsCount += 1;
+    }
+
+    const totalWeightKg =
+      weightPerPieceKg !== null ? supportsCount * weightPerPieceKg : null;
+
+    const weightPerMeterKg =
+      totalWeightKg !== null && lengthMeters > 0
+        ? totalWeightKg / lengthMeters
+        : null;
+
+    return {
+      lengthMeters,
+      distanceMeters,
+      supportsCount,
+      weightPerPieceKg,
+      totalWeightKg,
+      weightPerMeterKg
+    };
+  }, [project, tray, supportOverride, overrideSupport]);
+
+  const formatSupportNumber = useCallback(
+    (value: number | null) =>
+      value === null || Number.isNaN(value) ? '-' : numberFormatter.format(value),
+    [numberFormatter]
+  );
+
+  const supportSectionNeedsSupportData = Boolean(supportOverride?.supportId);
+  const supportDistanceMissing = supportCalculations.distanceMeters === null;
+  const trayLengthMissing =
+    supportCalculations.lengthMeters === null || supportCalculations.lengthMeters <= 0;
+  const supportDetailsMissing =
+    supportSectionNeedsSupportData &&
+    materialSupportsLoaded &&
+    !materialSupportsLoading &&
+    supportIdToLoad !== null &&
+    !overrideSupport;
+  const supportDetailsError = supportDetailsMissing
+    ? 'Selected support details were not found.'
+    : materialSupportsError;
+
+  const supportTypeDisplay = overrideSupport?.type ?? supportOverride?.supportType ?? null;
+  const supportLengthMm = overrideSupport?.lengthMm ?? null;
 
   const handleNavigateTray = useCallback(
     (targetTrayId: string) => {
@@ -871,6 +1057,54 @@ export const TrayDetails = () => {
             </table>
           </div>
         )}
+      </div>
+      <div className={styles.section}>
+        <Caption1>Supports weight calculations</Caption1>
+        {supportSectionNeedsSupportData && materialSupportsLoading ? (
+          <Spinner label="Loading support details..." />
+        ) : null}
+        {supportSectionNeedsSupportData && supportDetailsError ? (
+          <Body1 className={styles.errorText}>{supportDetailsError}</Body1>
+        ) : null}
+        {supportDistanceMissing || trayLengthMissing ? (
+          <Body1 className={styles.emptyState}>
+            {supportDistanceMissing && trayLengthMissing
+              ? 'Tray length and support distance are required for calculations.'
+              : supportDistanceMissing
+              ? 'Support distance is not configured for this tray.'
+              : 'Tray length is not specified for this tray.'}
+          </Body1>
+        ) : null}
+        <div className={styles.grid}>
+          <div className={styles.field}>
+            <Caption1>Support type</Caption1>
+            <Body1>{supportTypeDisplay ?? '-'}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Support length [mm]</Caption1>
+            <Body1>
+              {supportLengthMm !== null
+                ? numberFormatter.format(supportLengthMm)
+                : '-'}
+            </Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Supports count</Caption1>
+            <Body1>{formatSupportNumber(supportCalculations.supportsCount)}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Weight per piece [kg]</Caption1>
+            <Body1>{formatSupportNumber(supportCalculations.weightPerPieceKg)}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Supports total weight [kg]</Caption1>
+            <Body1>{formatSupportNumber(supportCalculations.totalWeightKg)}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Supports weight load per meter [kg/m]</Caption1>
+            <Body1>{formatSupportNumber(supportCalculations.weightPerMeterKg)}</Body1>
+          </div>
+        </div>
       </div>
     </section>
   );
