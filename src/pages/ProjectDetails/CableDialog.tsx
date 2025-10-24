@@ -27,6 +27,7 @@ export type CableDialogField =
   | 'fromLocation'
   | 'toLocation'
   | 'routing'
+  | 'designLength'
   | 'installLength'
   | 'pullDate'
   | 'connectedFrom'
@@ -155,6 +156,22 @@ export const CableDialog = ({
                   <Input
                     value={values.routing}
                     onChange={onFieldChange('routing')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('designLength') ? (
+                <Field
+                  label="Design length [m]"
+                  validationState={
+                    errors.designLength ? 'error' : undefined
+                  }
+                  validationMessage={errors.designLength}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={values.designLength}
+                    onChange={onFieldChange('designLength')}
                   />
                 </Field>
               ) : null}

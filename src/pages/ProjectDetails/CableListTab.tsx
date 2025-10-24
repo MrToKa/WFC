@@ -53,7 +53,7 @@ type CableListTabProps = {
   ) => void;
   onTextFieldBlur: (
     cable: Cable,
-    field: 'tag' | 'fromLocation' | 'toLocation' | 'routing'
+    field: 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'designLength'
   ) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
   pendingId: string | null;
@@ -241,6 +241,11 @@ export const CableListTab = ({
               <th className={styles.tableHeadCell}>
                 {renderSortButton('Routing', 'routing')}
               </th>
+              <th
+                className={`${styles.tableHeadCell} ${styles.numericCell}`}
+              >
+                Design length [m]
+              </th>
               {canManageCables ? (
                 <th className={styles.tableHeadCell}>Actions</th>
               ) : null}
@@ -348,6 +353,28 @@ export const CableListTab = ({
                       />
                     ) : (
                       cable.routing ?? '-'
+                    )}
+                  </td>
+                  <td
+                    className={`${styles.tableCell} ${styles.numericCell}`}
+                  >
+                    {isInlineEditable && draft ? (
+                      <Input
+                        size="small"
+                        type="number"
+                        min={0}
+                        value={draft.designLength}
+                        onChange={(_, data) =>
+                          onDraftChange(cable.id, 'designLength', data.value)
+                        }
+                        onBlur={() => onTextFieldBlur(cable, 'designLength')}
+                        disabled={isRowUpdating}
+                        aria-label="Design length"
+                      />
+                    ) : cable.designLength !== null ? (
+                      cable.designLength
+                    ) : (
+                      '-'
                     )}
                   </td>
                   {canManageCables ? (

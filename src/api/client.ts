@@ -51,6 +51,7 @@ export type Cable = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  designLength: number | null;
   installLength: number | null;
   pullDate: string | null;
   connectedFrom: string | null;
@@ -170,6 +171,7 @@ export type CableInput = {
   fromLocation?: string | null;
   toLocation?: string | null;
   routing?: string | null;
+  designLength?: number | null;
   installLength?: number | null;
   pullDate?: string | null;
   connectedFrom?: string | null;

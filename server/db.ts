@@ -108,6 +108,7 @@ export async function initializeDatabase(): Promise<void> {
       from_location TEXT,
       to_location TEXT,
       routing TEXT,
+      design_length INTEGER,
       install_length INTEGER,
       pull_date DATE,
       connected_from DATE,
@@ -131,6 +132,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS cables_cable_type_id_idx
       ON cables (cable_type_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS design_length INTEGER;
   `);
 
   await pool.query(`

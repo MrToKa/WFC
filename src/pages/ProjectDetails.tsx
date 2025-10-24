@@ -258,22 +258,28 @@ export const ProjectDetails = () => {
     showToast
   });
 
-  const cableDialogVisibleFields: CableDialogField[] =
-    selectedTab === 'cable-report' && cableDialog.mode === 'edit'
-      ? ['installLength', 'pullDate', 'connectedFrom', 'connectedTo', 'tested']
-      : [
-          'cableId',
-          'tag',
-          'cableTypeId',
-          'fromLocation',
-          'toLocation',
-          'routing',
-          'installLength',
-          'pullDate',
-          'connectedFrom',
-          'connectedTo',
-          'tested'
-        ];
+  const cableDialogVisibleFields: CableDialogField[] = (() => {
+    if (cableDialog.mode === 'edit') {
+      if (selectedTab === 'cable-report') {
+        return ['installLength', 'pullDate', 'connectedFrom', 'connectedTo', 'tested'];
+      }
+      return ['tag', 'cableTypeId', 'fromLocation', 'toLocation', 'routing', 'designLength'];
+    }
+    return [
+      'cableId',
+      'tag',
+      'cableTypeId',
+      'fromLocation',
+      'toLocation',
+      'routing',
+      'designLength',
+      'installLength',
+      'pullDate',
+      'connectedFrom',
+      'connectedTo',
+      'tested'
+    ];
+  })();
 
   const {
     cableTypes,
@@ -830,8 +836,6 @@ export const ProjectDetails = () => {
           totalPages={totalCablePages}
           onPreviousPage={handleCablesPreviousPage}
           onNextPage={handleCablesNextPage}
-          trays={trays}
-          secondaryTrayLength={project.secondaryTrayLength}
         />
       ) : null}
 
@@ -886,3 +890,4 @@ export const ProjectDetails = () => {
     </section>
   );
 };
+

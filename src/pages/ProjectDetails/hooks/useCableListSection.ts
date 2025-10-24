@@ -194,7 +194,8 @@ export const useCableListSection = ({
         cable.typeName,
         cable.fromLocation,
         cable.toLocation,
-        cable.routing
+        cable.routing,
+        cable.designLength !== null ? String(cable.designLength) : ''
       ];
       return values.some((value) =>
         (value ?? '').toLowerCase().includes(normalizedFilter)
@@ -530,15 +531,16 @@ export const useCableListSection = ({
           changes = { [field]: normalized } as Partial<CableInput>;
           break;
         }
+        case 'designLength':
         case 'installLength': {
-          const trimmed = draft.installLength.trim();
-          const current = cable.installLength ?? null;
+          const trimmed = draft[field].trim();
+          const current = (cable[field] ?? null) as number | null;
 
           if (trimmed === '') {
             if (current === null) {
               return;
             }
-            changes = { installLength: null };
+            changes = { [field]: null } as Partial<CableInput>;
           } else {
             const parsed = Number(trimmed);
             if (
@@ -546,10 +548,12 @@ export const useCableListSection = ({
               !Number.isInteger(parsed) ||
               parsed < 0
             ) {
+              const label =
+                field === 'designLength' ? 'Design length' : 'Install length';
               showToast({
                 intent: 'error',
-                title: 'Invalid install length',
-                body: 'Install length must be a non-negative integer.'
+                title: `Invalid ${label.toLowerCase()}`,
+                body: `${label} must be a non-negative integer.`
               });
               return;
             }
@@ -558,7 +562,7 @@ export const useCableListSection = ({
               return;
             }
 
-            changes = { installLength: parsed };
+            changes = { [field]: parsed } as Partial<CableInput>;
           }
           break;
         }

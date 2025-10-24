@@ -222,6 +222,7 @@ export type CableFormState = {
   fromLocation: string;
   toLocation: string;
   routing: string;
+  designLength: string;
   installLength: string;
   pullDate: string;
   connectedFrom: string;
@@ -240,6 +241,7 @@ export const emptyCableForm: CableFormState = {
   fromLocation: '',
   toLocation: '',
   routing: '',
+  designLength: '',
   installLength: '',
   pullDate: '',
   connectedFrom: '',
@@ -254,6 +256,8 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   fromLocation: cable.fromLocation ?? '',
   toLocation: cable.toLocation ?? '',
   routing: cable.routing ?? '',
+  designLength:
+    cable.designLength !== null ? String(cable.designLength) : '',
   installLength:
     cable.installLength !== null ? String(cable.installLength) : '',
   pullDate: cable.pullDate ?? '',
@@ -319,6 +323,18 @@ export const buildCableInput = (
     toLocation: normalize(values.toLocation),
     routing: normalize(values.routing)
   };
+
+  const designLengthValue = values.designLength.trim();
+  if (designLengthValue !== '') {
+    const parsed = Number(designLengthValue);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+      errors.designLength = 'Design length must be a non-negative integer';
+    } else {
+      input.designLength = parsed;
+    }
+  } else {
+    input.designLength = null;
+  }
 
   const installLengthValue = values.installLength.trim();
   if (installLengthValue !== '') {

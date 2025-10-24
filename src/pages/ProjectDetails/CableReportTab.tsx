@@ -1,5 +1,4 @@
 import type { ChangeEvent, RefObject } from 'react';
-import { useMemo } from 'react';
 
 import {
   Body1,
@@ -11,15 +10,11 @@ import {
   mergeClasses
 } from '@fluentui/react-components';
 
-import type { Cable, Tray } from '@/api/client';
+import type { Cable } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { toCableFormState, type CableFormState } from '../ProjectDetails.forms';
-import {
-  computeDesignLength,
-  formatDisplayDate,
-  formatNumeric
-} from '../ProjectDetails.utils';
+import { formatDisplayDate, formatNumeric } from '../ProjectDetails.utils';
 
 type CableReportTabProps = {
   styles: ProjectDetailsStyles;
@@ -55,20 +50,7 @@ type CableReportTabProps = {
   totalPages: number;
   onPreviousPage: () => void;
   onNextPage: () => void;
-  trays: Tray[];
-  secondaryTrayLength: number | null;
 };
-
-const normalizeTrayLengths = (trays: Tray[]): Map<string, number> =>
-  trays.reduce((map, tray) => {
-    if (tray.lengthMm !== null) {
-      map.set(
-        tray.name.trim().toLowerCase().replace(/\s+/g, ' '),
-        tray.lengthMm / 1000
-      );
-    }
-    return map;
-  }, new Map<string, number>());
 
 export const CableReportTab = ({
   styles,
@@ -99,13 +81,8 @@ export const CableReportTab = ({
   page,
   totalPages,
   onPreviousPage,
-  onNextPage,
-  trays,
-  secondaryTrayLength,
+  onNextPage
 }: CableReportTabProps) => {
-  const trayLengths = useMemo(() => normalizeTrayLengths(trays), [trays]);
-
-
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable report">
 
@@ -195,11 +172,6 @@ export const CableReportTab = ({
               {items.map((cable) => {
                 const draft = drafts[cable.id] ?? toCableFormState(cable);
                 const isBusy = inlineUpdatingIds.has(cable.id);
-                const designLength = computeDesignLength(
-                  cable.routing,
-                  trayLengths,
-                  secondaryTrayLength
-                );
 
                 return (
                   <tr key={cable.id}>
@@ -215,9 +187,9 @@ export const CableReportTab = ({
                         styles.tableCell,
                         styles.numericCell
                       )}
-                >
-                  {formatNumeric(designLength)}
-                </td>
+                    >
+                      {formatNumeric(cable.designLength)}
+                    </td>
                     <td
                       className={mergeClasses(
                         styles.tableCell,
@@ -360,3 +332,7 @@ export const CableReportTab = ({
     </div>
   );
 };
+
+
+
+
