@@ -557,6 +557,48 @@ export const TrayDetails = () => {
     };
   }, [project, tray, supportOverride, overrideSupport]);
 
+  const trayWeightPerMeterKg = useMemo(() => {
+    if (formValues.weightKgPerM.trim() !== '') {
+      const { numeric } = parseNumberInput(formValues.weightKgPerM);
+      if (numeric !== null) {
+        return numeric;
+      }
+    }
+
+    if (
+      selectedMaterialTray?.weightKgPerM !== null &&
+      selectedMaterialTray?.weightKgPerM !== undefined &&
+      !Number.isNaN(selectedMaterialTray.weightKgPerM)
+    ) {
+      return selectedMaterialTray.weightKgPerM;
+    }
+
+    return null;
+  }, [formValues.weightKgPerM, selectedMaterialTray]);
+
+  const supportWeightPerMeterKg = supportCalculations.weightPerMeterKg;
+  const trayLengthMeters = supportCalculations.lengthMeters;
+
+  const trayWeightLoadPerMeterKg = useMemo(() => {
+    if (trayWeightPerMeterKg === null || supportWeightPerMeterKg === null) {
+      return null;
+    }
+
+    return trayWeightPerMeterKg + supportWeightPerMeterKg;
+  }, [trayWeightPerMeterKg, supportWeightPerMeterKg]);
+
+  const trayTotalOwnWeightKg = useMemo(() => {
+    if (
+      trayWeightLoadPerMeterKg === null ||
+      trayLengthMeters === null ||
+      trayLengthMeters <= 0
+    ) {
+      return null;
+    }
+
+    return trayWeightLoadPerMeterKg * trayLengthMeters;
+  }, [trayWeightLoadPerMeterKg, trayLengthMeters]);
+
   const formatSupportNumber = useCallback(
     (value: number | null) =>
       value === null || Number.isNaN(value) ? '-' : numberFormatter.format(value),
@@ -1103,6 +1145,19 @@ export const TrayDetails = () => {
           <div className={styles.field}>
             <Caption1>Supports weight load per meter [kg/m]</Caption1>
             <Body1>{formatSupportNumber(supportCalculations.weightPerMeterKg)}</Body1>
+          </div>
+        </div>
+      </div>
+      <div className={styles.section}>
+        <Caption1>Tray own weight calculations</Caption1>
+        <div className={styles.grid}>
+          <div className={styles.field}>
+            <Caption1>Tray weight load per meter [kg/m]</Caption1>
+            <Body1>{formatSupportNumber(trayWeightLoadPerMeterKg)}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Tray total own weight [kg]</Caption1>
+            <Body1>{formatSupportNumber(trayTotalOwnWeightKg)}</Body1>
           </div>
         </div>
       </div>
