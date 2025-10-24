@@ -14,7 +14,14 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
-import { ApiError, Project, updateProject } from '@/api/client';
+import {
+  ApiError,
+  MaterialSupport,
+  Project,
+  ProjectSupportOverridePayload,
+  fetchMaterialSupports,
+  updateProject
+} from '@/api/client';
 
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
@@ -49,6 +56,8 @@ const NUMERIC_FIELD_LABELS: NumericFieldLabelMap = {
   supportWeight: 'Support weight'
 };
 
+const SUPPORT_LENGTH_MATCH_TOLERANCE = 15;
+
 type ShowToast = ReturnType<typeof useToast>['showToast'];
 
 type UseProjectNumericFieldParams = {
@@ -66,6 +75,12 @@ type NumericFieldController = {
   saving: boolean;
   onInputChange: (value: string) => void;
   onSave: () => Promise<void>;
+};
+
+type TrayTypeDetail = {
+  trayType: string;
+  widthMm: number | null;
+  hasMultipleWidths: boolean;
 };
 
 const useProjectNumericField = ({
@@ -388,27 +403,55 @@ export const ProjectDetails = () => {
     [secondaryTrayLengthField, supportDistanceField, supportWeightField]
   );
 
-  const trayTypes = useMemo(() => {
-    const unique = new Set<string>();
+  const trayTypeDetails = useMemo<TrayTypeDetail[]>(() => {
+    const map = new Map<string, Set<number>>();
+
     trays.forEach((tray) => {
-      if (tray.type) {
-        unique.add(tray.type);
+      if (!tray.type) {
+        return;
+      }
+
+      if (!map.has(tray.type)) {
+        map.set(tray.type, new Set<number>());
+      }
+
+      if (tray.widthMm !== null && tray.widthMm !== undefined) {
+        map.get(tray.type)!.add(tray.widthMm);
       }
     });
+
     Object.keys(project?.supportDistanceOverrides ?? {}).forEach((trayType) => {
-      if (trayType) {
-        unique.add(trayType);
+      if (trayType && !map.has(trayType)) {
+        map.set(trayType, new Set<number>());
       }
     });
-    return Array.from(unique).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base' })
-    );
+
+    return Array.from(map.entries())
+      .map(([trayType, widths]) => {
+        const values = Array.from(widths);
+        const hasMultipleWidths = values.length > 1;
+        const widthMm =
+          values.length === 1 ? values[0] : null;
+
+        return {
+          trayType,
+          widthMm,
+          hasMultipleWidths
+        };
+      })
+      .sort((a, b) =>
+        a.trayType.localeCompare(b.trayType, undefined, {
+          sensitivity: 'base'
+        })
+      );
   }, [project?.supportDistanceOverrides, trays]);
 
   const [supportDistanceOverridesInputs, setSupportDistanceOverridesInputs] =
     useState<Record<string, string>>({});
-  const [supportDistanceOverridesErrors, setSupportDistanceOverridesErrors] =
+  const [supportDistanceOverridesSupportIds, setSupportDistanceOverridesSupportIds] =
     useState<Record<string, string | null>>({});
+  const [supportDistanceOverridesErrors, setSupportDistanceOverridesErrors] =
+    useState<Record<string, string | null | undefined>>({});
   const [supportDistanceOverridesSaving, setSupportDistanceOverridesSaving] =
     useState<Record<string, boolean>>({});
 
@@ -416,16 +459,142 @@ export const ProjectDetails = () => {
     const overrides = project?.supportDistanceOverrides ?? {};
     setSupportDistanceOverridesInputs(() => {
       const next: Record<string, string> = {};
-      trayTypes.forEach((trayType) => {
-        const value = overrides[trayType];
+      trayTypeDetails.forEach(({ trayType }) => {
+        const override = overrides[trayType];
         next[trayType] =
-          value !== undefined && value !== null ? String(value) : '';
+          override && override.distance !== null && override.distance !== undefined
+            ? String(override.distance)
+            : '';
       });
       return next;
     });
-    setSupportDistanceOverridesErrors({});
+    setSupportDistanceOverridesSupportIds(() => {
+      const next: Record<string, string | null> = {};
+      trayTypeDetails.forEach(({ trayType }) => {
+        const override = overrides[trayType];
+        next[trayType] =
+          override && override.supportId ? override.supportId : null;
+      });
+      return next;
+    });
+    setSupportDistanceOverridesErrors(() => ({}));
     setSupportDistanceOverridesSaving({});
-  }, [project?.supportDistanceOverrides, trayTypes]);
+  }, [project?.supportDistanceOverrides, trayTypeDetails]);
+
+  const [supports, setSupports] = useState<MaterialSupport[]>([]);
+  const [supportsLoading, setSupportsLoading] = useState<boolean>(false);
+  const [supportsError, setSupportsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setSupports([]);
+      setSupportsLoading(false);
+      setSupportsError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSupports = async () => {
+      setSupportsLoading(true);
+      setSupportsError(null);
+
+      try {
+        const loaded: MaterialSupport[] = [];
+        let page = 1;
+        const PAGE_SIZE = 100;
+
+        while (true) {
+          const { supports: pageSupports, pagination } =
+            await fetchMaterialSupports({ page, pageSize: PAGE_SIZE });
+
+          loaded.push(...pageSupports);
+
+          if (!pagination || pagination.totalPages === 0 || page >= pagination.totalPages) {
+            break;
+          }
+
+          page += 1;
+        }
+
+        if (!cancelled) {
+          loaded.sort((a, b) =>
+            a.type.localeCompare(b.type, undefined, { sensitivity: 'base' })
+          );
+          setSupports(loaded);
+        }
+      } catch (error) {
+        console.error('Failed to load supports', error);
+        if (!cancelled) {
+          const message =
+            error instanceof ApiError
+              ? error.message
+              : 'Failed to load supports.';
+          setSupportsError(message);
+          showToast({
+            intent: 'error',
+            title: 'Failed to load supports',
+            body: message
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setSupportsLoading(false);
+        }
+      }
+    };
+
+    void loadSupports();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, showToast]);
+
+  const supportsById = useMemo(
+    () =>
+      supports.reduce<Record<string, MaterialSupport>>((acc, support) => {
+        acc[support.id] = support;
+        return acc;
+      }, {}),
+    [supports]
+  );
+
+  const supportOptionsByTrayType = useMemo(
+    () =>
+      trayTypeDetails.reduce<
+        Record<
+          string,
+          {
+            options: MaterialSupport[];
+            widthMm: number | null;
+            hasMultipleWidths: boolean;
+          }
+        >
+      >((acc, detail) => {
+        let options: MaterialSupport[] = [];
+
+        if (detail.widthMm !== null && !detail.hasMultipleWidths) {
+          const targetWidth = detail.widthMm;
+          options = supports.filter(
+            (support) =>
+              support.lengthMm !== null &&
+              Math.abs(support.lengthMm - targetWidth) <=
+                SUPPORT_LENGTH_MATCH_TOLERANCE
+          );
+        } else {
+          options = supports;
+        }
+
+        acc[detail.trayType] = {
+          options,
+          widthMm: detail.widthMm,
+          hasMultipleWidths: detail.hasMultipleWidths
+        };
+        return acc;
+      }, {}),
+    [supports, trayTypeDetails]
+  );
 
   const handleSupportDistanceOverrideInputChange = useCallback(
     (trayType: string, value: string) => {
@@ -437,9 +606,33 @@ export const ProjectDetails = () => {
         if (!previous[trayType]) {
           return previous;
         }
+        return {
+          ...previous,
+          [trayType]: null
+        };
+      });
+    },
+    []
+  );
+
+  const handleSupportDistanceOverrideSupportChange = useCallback(
+    (trayType: string, supportId: string | null) => {
+      const normalizedSupportId =
+        supportId && supportId.trim() !== '' ? supportId : null;
+
+      setSupportDistanceOverridesSupportIds((previous) => {
         const next = { ...previous };
-        delete next[trayType];
+        next[trayType] = normalizedSupportId;
         return next;
+      });
+      setSupportDistanceOverridesErrors((previous) => {
+        if (!previous[trayType]) {
+          return previous;
+        }
+        return {
+          ...previous,
+          [trayType]: null
+        };
       });
     },
     []
@@ -451,7 +644,7 @@ export const ProjectDetails = () => {
         showToast({
           intent: 'error',
           title: 'Sign-in required',
-          body: 'You need to be signed in to update support distances.'
+          body: 'You need to be signed in to update support settings.'
         });
         return;
       }
@@ -460,7 +653,7 @@ export const ProjectDetails = () => {
         showToast({
           intent: 'error',
           title: 'Administrator access required',
-          body: 'Only administrators can update support distances.'
+          body: 'Only administrators can update support settings.'
         });
         return;
       }
@@ -476,14 +669,27 @@ export const ProjectDetails = () => {
         return;
       }
 
-      const nextValue =
+      const nextDistance =
         parsed.numeric !== null
           ? Math.round(parsed.numeric * 1000) / 1000
           : null;
-      const currentValue =
-        project.supportDistanceOverrides[trayType] ?? null;
+      const selectedSupportId =
+        supportDistanceOverridesSupportIds[trayType] ?? null;
 
-      if (currentValue === nextValue) {
+      const currentOverride = project.supportDistanceOverrides[trayType];
+      const currentDistance =
+        currentOverride && currentOverride.distance !== null
+          ? currentOverride.distance
+          : null;
+      const currentSupportId =
+        currentOverride && currentOverride.supportId
+          ? currentOverride.supportId
+          : null;
+
+      if (
+        currentDistance === nextDistance &&
+        currentSupportId === selectedSupportId
+      ) {
         setSupportDistanceOverridesErrors((previous) => ({
           ...previous,
           [trayType]: 'No changes to save.'
@@ -495,19 +701,35 @@ export const ProjectDetails = () => {
         ...previous,
         [trayType]: true
       }));
-      setSupportDistanceOverridesErrors((previous) => {
-        const next = { ...previous };
-        delete next[trayType];
-        return next;
-      });
+      setSupportDistanceOverridesErrors((previous) => ({
+        ...previous,
+        [trayType]: null
+      }));
 
       try {
-        const nextOverrides = { ...project.supportDistanceOverrides };
+        const nextOverrides = Object.entries(
+          project.supportDistanceOverrides
+        ).reduce<Record<string, ProjectSupportOverridePayload>>(
+          (acc, [key, override]) => {
+            acc[key] = {
+              distance:
+                override?.distance !== undefined && override?.distance !== null
+                  ? override.distance
+                  : null,
+              supportId: override?.supportId ?? null
+            };
+            return acc;
+          },
+          {}
+        );
 
-        if (nextValue === null) {
+        if (nextDistance === null && !selectedSupportId) {
           delete nextOverrides[trayType];
         } else {
-          nextOverrides[trayType] = nextValue;
+          nextOverrides[trayType] = {
+            distance: nextDistance,
+            supportId: selectedSupportId
+          };
         }
 
         await updateProject(token, project.id, {
@@ -516,17 +738,17 @@ export const ProjectDetails = () => {
         await reloadProject();
         showToast({
           intent: 'success',
-          title: `Support distance for ${trayType} updated`
+          title: `Support settings for ${trayType} updated`
         });
       } catch (error) {
         console.error(
-          `Failed to update support distance for tray type "${trayType}"`,
+          `Failed to update support settings for tray type "${trayType}"`,
           error
         );
         const message =
           error instanceof ApiError
             ? error.message
-            : 'Failed to update support distance.';
+            : 'Failed to update support settings.';
         setSupportDistanceOverridesErrors((previous) => ({
           ...previous,
           [trayType]: message
@@ -549,6 +771,7 @@ export const ProjectDetails = () => {
       reloadProject,
       showToast,
       supportDistanceOverridesInputs,
+      supportDistanceOverridesSupportIds,
       token
     ]
   );
@@ -558,25 +781,66 @@ export const ProjectDetails = () => {
       return [];
     }
 
-    return trayTypes.map((trayType) => ({
-      trayType,
-      currentValue: project.supportDistanceOverrides[trayType] ?? null,
-      defaultValue: project.supportDistance ?? null,
-      input: supportDistanceOverridesInputs[trayType] ?? '',
-      error: supportDistanceOverridesErrors[trayType] ?? null,
-      saving: Boolean(supportDistanceOverridesSaving[trayType]),
-      onInputChange: (value: string) =>
-        handleSupportDistanceOverrideInputChange(trayType, value),
-      onSave: () => handleSupportDistanceOverrideSave(trayType)
-    }));
+    return trayTypeDetails.map((detail) => {
+      const override = project.supportDistanceOverrides[detail.trayType];
+      const currentDistance =
+        override && override.distance !== null ? override.distance : null;
+      const currentSupportType =
+        override?.supportType ??
+        (override?.supportId ? supportsById[override.supportId]?.type ?? null : null);
+      const selectedSupportId =
+        supportDistanceOverridesSupportIds[detail.trayType] ?? null;
+      const optionsInfo =
+        supportOptionsByTrayType[detail.trayType] ?? {
+          options: [] as MaterialSupport[],
+          widthMm: detail.widthMm,
+          hasMultipleWidths: detail.hasMultipleWidths
+        };
+
+      return {
+        trayType: detail.trayType,
+        trayWidthMm: optionsInfo.widthMm,
+        hasWidthConflict: detail.hasMultipleWidths,
+        currentDistance,
+        currentSupportType,
+        defaultValue: project.supportDistance ?? null,
+        input: supportDistanceOverridesInputs[detail.trayType] ?? '',
+        selectedSupportId,
+        selectedSupportLabel:
+          selectedSupportId
+            ? supportsById[selectedSupportId]?.type ??
+              override?.supportType ??
+              'Support no longer available'
+            : 'None (use default)',
+        selectedSupportMissing: Boolean(
+          selectedSupportId && !supportsById[selectedSupportId]
+        ),
+        supportOptions: optionsInfo.options,
+        supportsLoading,
+        supportsError,
+        error: supportDistanceOverridesErrors[detail.trayType] ?? null,
+        saving: Boolean(supportDistanceOverridesSaving[detail.trayType]),
+        onInputChange: (value: string) =>
+          handleSupportDistanceOverrideInputChange(detail.trayType, value),
+        onSupportChange: (supportId: string | null) =>
+          handleSupportDistanceOverrideSupportChange(detail.trayType, supportId),
+        onSave: () => handleSupportDistanceOverrideSave(detail.trayType)
+      };
+    });
   }, [
     handleSupportDistanceOverrideInputChange,
     handleSupportDistanceOverrideSave,
+    handleSupportDistanceOverrideSupportChange,
     project,
     supportDistanceOverridesErrors,
     supportDistanceOverridesInputs,
     supportDistanceOverridesSaving,
-    trayTypes
+    supportDistanceOverridesSupportIds,
+    supportOptionsByTrayType,
+    supportsById,
+    supportsError,
+    supportsLoading,
+    trayTypeDetails
   ]);
 
   useEffect(() => {

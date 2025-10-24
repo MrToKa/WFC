@@ -18,9 +18,20 @@ export type Project = {
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;
-  supportDistanceOverrides: Record<string, number>;
+  supportDistanceOverrides: Record<string, ProjectSupportOverride>;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ProjectSupportOverride = {
+  distance: number | null;
+  supportId: string | null;
+  supportType: string | null;
+};
+
+export type ProjectSupportOverridePayload = {
+  distance: number | null;
+  supportId: string | null;
 };
 
 export type CableType = {
@@ -346,7 +357,7 @@ export async function createProject(
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;
-    supportDistances?: Record<string, number | null>;
+    supportDistances?: Record<string, ProjectSupportOverridePayload>;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>('/api/projects', {
@@ -368,7 +379,7 @@ export async function updateProject(
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;
-    supportDistances?: Record<string, number | null>;
+    supportDistances?: Record<string, ProjectSupportOverridePayload>;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>(`/api/projects/${projectId}`, {

@@ -37,6 +37,39 @@ export const updateProfileSchema = z
 
 export const adminUpdateUserSchema = updateProfileSchema;
 
+const traySupportOverrideSchema = z
+  .object({
+    distance: z
+      .number()
+      .min(0)
+      .max(1_000_000)
+      .nullable()
+      .optional(),
+    supportId: z
+      .string()
+      .trim()
+      .uuid()
+      .nullable()
+      .optional()
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.distance !== undefined || value.supportId !== undefined,
+    {
+      message: 'Support override must include distance or support ID'
+    }
+  );
+
+const supportOverrideValueSchema = z.union([
+  z
+    .number()
+    .min(0)
+    .max(1_000_000)
+    .nullable(),
+  traySupportOverrideSchema
+]);
+
 const projectFieldSchema = {
   projectNumber: z.string().trim().min(1).max(50),
   name: z.string().trim().min(1).max(200),
@@ -64,11 +97,7 @@ const projectFieldSchema = {
   supportDistances: z
     .record(
       z.string().trim().min(1).max(200),
-      z
-        .number()
-        .min(0)
-        .max(1_000_000)
-        .nullable()
+      supportOverrideValueSchema
     )
     .optional()
 } as const;

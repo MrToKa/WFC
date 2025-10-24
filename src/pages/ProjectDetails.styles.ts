@@ -68,6 +68,7 @@ export const useProjectDetailsStyles = makeStyles({
   numericFieldControls: {
     display: 'flex',
     alignItems: 'flex-end',
+    flexWrap: 'wrap',
     gap: '0.5rem'
   },
   numericFieldInput: {

@@ -22,8 +22,16 @@ export const ensureProjectExists = async (
         p.support_weight,
         COALESCE(
           (
-            SELECT jsonb_object_agg(d.tray_type, d.support_distance)
+            SELECT jsonb_object_agg(
+              d.tray_type,
+              jsonb_build_object(
+                'distance', d.support_distance,
+                'supportId', d.support_id,
+                'supportType', s.support_type
+              )
+            )
             FROM project_support_distances d
+            LEFT JOIN material_supports s ON s.id = d.support_id
             WHERE d.project_id = p.id
           ),
           '{}'::jsonb

@@ -16,11 +16,24 @@ import { traysRouter } from './traysRoutes.js';
 
 const projectsRouter = Router();
 
+type NormalizedSupportOverrides = Record<
+  string,
+  {
+    distance: number | null;
+    supportId: string | null;
+  }
+>;
+
 const syncSupportDistances = async (
   projectId: string,
-  distances: Record<string, number>
+  overrides: NormalizedSupportOverrides
 ): Promise<void> => {
-  const entries = Object.entries(distances).filter(([trayType]) => trayType.trim() !== '');
+  const entries = Object.entries(overrides)
+    .map(([trayType, value]) => [trayType.trim(), value] as const)
+    .filter(
+      ([trayType, value]) =>
+        trayType !== '' && (value.distance !== null || value.supportId !== null)
+    );
 
   const client = await pool.connect();
 
@@ -31,24 +44,26 @@ const syncSupportDistances = async (
       [projectId]
     );
 
-    for (const [trayType, distance] of entries) {
+    for (const [trayType, value] of entries) {
       await client.query(
         `
           INSERT INTO project_support_distances (
             project_id,
             tray_type,
             support_distance,
+            support_id,
             created_at,
             updated_at
           )
-          VALUES ($1, $2, $3, NOW(), NOW())
+          VALUES ($1, $2, $3, $4, NOW(), NOW())
           ON CONFLICT (project_id, tray_type)
           DO UPDATE
           SET
             support_distance = EXCLUDED.support_distance,
+            support_id = EXCLUDED.support_id,
             updated_at = NOW();
         `,
-        [projectId, trayType.trim(), distance]
+        [projectId, trayType, value.distance, value.supportId]
       );
     }
 
@@ -61,15 +76,85 @@ const syncSupportDistances = async (
   }
 };
 
-const normalizeSupportDistances = (
-  distances: Record<string, number | null>
-): Record<string, number> =>
-  Object.entries(distances).reduce<Record<string, number>>((acc, [trayType, value]) => {
-    if (value !== null && Number.isFinite(value)) {
-      acc[trayType] = value;
+type SupportOverrideInput =
+  | {
+      distance?: unknown;
+      supportId?: unknown;
     }
-    return acc;
-  }, {});
+  | number
+  | null
+  | undefined;
+
+const normalizeSupportDistances = (
+  distances: Record<string, SupportOverrideInput>
+): NormalizedSupportOverrides => {
+  const parseNumeric = (value: unknown): number | null => {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : null;
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim().replace(',', '.');
+      if (normalized === '') {
+        return null;
+      }
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+  };
+
+  return Object.entries(distances).reduce<NormalizedSupportOverrides>(
+    (acc, [trayType, rawValue]) => {
+      const normalizedTrayType = trayType.trim();
+      if (normalizedTrayType === '') {
+        return acc;
+      }
+
+      let distance: number | null = null;
+      let supportId: string | null = null;
+
+      if (
+        rawValue !== null &&
+        rawValue !== undefined &&
+        typeof rawValue === 'object' &&
+        !Array.isArray(rawValue)
+      ) {
+        const candidate = rawValue as {
+          distance?: unknown;
+          supportId?: unknown;
+        };
+
+        if (candidate.distance !== undefined) {
+          distance = candidate.distance === null ? null : parseNumeric(candidate.distance);
+        }
+
+        if (candidate.supportId !== undefined) {
+          if (
+            candidate.supportId === null ||
+            (typeof candidate.supportId === 'string' &&
+              candidate.supportId.trim() === '')
+          ) {
+            supportId = null;
+          } else if (typeof candidate.supportId === 'string') {
+            supportId = candidate.supportId.trim();
+          }
+        }
+      } else {
+        distance = parseNumeric(rawValue);
+      }
+
+      if (distance === null && supportId === null) {
+        return acc;
+      }
+
+      acc[normalizedTrayType] = { distance, supportId };
+      return acc;
+    },
+    {}
+  );
+};
 
 projectsRouter.get(
   '/',
@@ -89,8 +174,16 @@ projectsRouter.get(
             p.support_weight,
             COALESCE(
               (
-                SELECT jsonb_object_agg(d.tray_type, d.support_distance)
+                SELECT jsonb_object_agg(
+                  d.tray_type,
+                  jsonb_build_object(
+                    'distance', d.support_distance,
+                    'supportId', d.support_id,
+                    'supportType', s.support_type
+                  )
+                )
                 FROM project_support_distances d
+                LEFT JOIN material_supports s ON s.id = d.support_id
                 WHERE d.project_id = p.id
               ),
               '{}'::jsonb

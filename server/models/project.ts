@@ -25,33 +25,77 @@ export type PublicProject = {
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;
-  supportDistanceOverrides: Record<string, number>;
+  supportDistanceOverrides: Record<string, PublicTraySupportOverride>;
   createdAt: string;
   updatedAt: string;
 };
 
+const parseNumericValue = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (normalized === '') {
+      return null;
+    }
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+export type PublicTraySupportOverride = {
+  distance: number | null;
+  supportId: string | null;
+  supportType: string | null;
+};
+
 const toSupportDistanceOverrides = (
   value: Record<string, unknown> | null
-): Record<string, number> => {
+): Record<string, PublicTraySupportOverride> => {
   if (!value) {
     return {};
   }
 
-  return Object.entries(value).reduce<Record<string, number>>(
-    (acc, [trayType, rawDistance]) => {
-      if (typeof rawDistance === 'number' && Number.isFinite(rawDistance)) {
-        acc[trayType] = rawDistance;
+  return Object.entries(value).reduce<Record<string, PublicTraySupportOverride>>(
+    (acc, [trayType, raw]) => {
+      if (raw === null || raw === undefined) {
         return acc;
       }
 
-      if (typeof rawDistance === 'string') {
-        const normalized = rawDistance.trim().replace(',', '.');
-        if (normalized === '') {
-          return acc;
+      if (typeof raw === 'number' || typeof raw === 'string') {
+        const parsed = parseNumericValue(raw);
+        if (parsed !== null) {
+          acc[trayType] = {
+            distance: parsed,
+            supportId: null,
+            supportType: null
+          };
         }
-        const parsed = Number(normalized);
-        if (Number.isFinite(parsed)) {
-          acc[trayType] = parsed;
+        return acc;
+      }
+
+      if (typeof raw === 'object') {
+        const rawRecord = raw as Record<string, unknown>;
+        const distance = parseNumericValue(rawRecord.distance);
+        const supportId =
+          typeof rawRecord.supportId === 'string' && rawRecord.supportId.trim() !== ''
+            ? rawRecord.supportId.trim()
+            : null;
+        const supportType =
+          typeof rawRecord.supportType === 'string' && rawRecord.supportType.trim() !== ''
+            ? rawRecord.supportType.trim()
+            : null;
+
+        if (distance !== null || supportId !== null || supportType !== null) {
+          acc[trayType] = {
+            distance,
+            supportId,
+            supportType
+          };
         }
       }
 

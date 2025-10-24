@@ -72,6 +72,11 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE project_support_distances
+    ALTER COLUMN support_distance DROP NOT NULL;
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cable_types (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -222,6 +227,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS material_supports_type_lower_idx
       ON material_supports (LOWER(support_type));
+  `);
+
+  await pool.query(`
+    ALTER TABLE project_support_distances
+    ADD COLUMN IF NOT EXISTS support_id UUID REFERENCES material_supports(id) ON DELETE SET NULL;
   `);
 }
 
