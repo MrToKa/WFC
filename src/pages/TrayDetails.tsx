@@ -4,6 +4,7 @@ import {
   Body1,
   Button,
   Caption1,
+  Checkbox,
   Dropdown,
   Field,
   Input,
@@ -14,6 +15,7 @@ import {
   shorthands,
   tokens
 } from '@fluentui/react-components';
+import type { CheckboxOnChangeData } from '@fluentui/react-components';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ApiError,
@@ -172,6 +174,18 @@ const routingContainsTray = (routing: string | null, trayName: string): boolean 
 const filterCablesByTray = (cables: Cable[], trayName: string): Cable[] =>
   cables.filter((cable) => routingContainsTray(cable.routing, trayName));
 
+const isGroundingPurpose = (purpose: string | null): boolean =>
+  purpose !== null && purpose.trim().toLowerCase() === 'grounding';
+
+const getCableDisplayName = (cable: Cable): string => {
+  const tag = cable.tag?.trim();
+  if (tag) {
+    return tag;
+  }
+
+  return cable.typeName;
+};
+
 export const TrayDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
@@ -185,6 +199,11 @@ export const TrayDetails = () => {
   const [tray, setTray] = useState<Tray | null>(null);
   const [trays, setTrays] = useState<Tray[]>([]);
   const [trayCables, setTrayCables] = useState<Cable[]>([]);
+  const [includeGroundingCables, setIncludeGroundingCables] =
+    useState<boolean>(false);
+  const [selectedGroundingCableId, setSelectedGroundingCableId] =
+    useState<string | null>(null);
+  const [groundingCableOptions, setGroundingCableOptions] = useState<Cable[]>([]);
   const [cablesError, setCablesError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -385,8 +404,9 @@ export const TrayDetails = () => {
 
       setIsLoading(true);
       setError(null);
-       setTrayCables([]);
-       setCablesError(null);
+      setTrayCables([]);
+      setGroundingCableOptions([]);
+      setCablesError(null);
 
       try {
         const [projectResponse, trayResponse] = await Promise.all([
@@ -402,9 +422,15 @@ export const TrayDetails = () => {
 
         try {
           const cablesResponse = await fetchCables(projectId);
-          setTrayCables(filterCablesByTray(cablesResponse.cables, trayResponse.tray.name));
+          setGroundingCableOptions(
+            cablesResponse.cables.filter((cable) => isGroundingPurpose(cable.purpose))
+          );
+          setTrayCables(
+            filterCablesByTray(cablesResponse.cables, trayResponse.tray.name)
+          );
         } catch (cableError) {
           console.error('Failed to load tray cables', cableError);
+          setGroundingCableOptions([]);
           setCablesError('Failed to load cables for this tray.');
         }
       } catch (err) {
@@ -463,6 +489,98 @@ export const TrayDetails = () => {
       new Intl.NumberFormat(undefined, {
         maximumFractionDigits: 3
       }),
+    []
+  );
+
+  const nonGroundingCables = useMemo(
+    () => trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)),
+    [trayCables]
+  );
+
+  useEffect(() => {
+    if (!includeGroundingCables) {
+      setSelectedGroundingCableId(null);
+      return;
+    }
+
+    if (groundingCableOptions.length === 0) {
+      setSelectedGroundingCableId(null);
+      return;
+    }
+
+    setSelectedGroundingCableId((previous) => {
+      if (
+        previous &&
+        groundingCableOptions.some((cable) => cable.id === previous)
+      ) {
+        return previous;
+      }
+      return groundingCableOptions[0]?.id ?? null;
+    });
+  }, [includeGroundingCables, groundingCableOptions]);
+
+  const selectedGroundingCable = useMemo(() => {
+    if (!includeGroundingCables || !selectedGroundingCableId) {
+      return null;
+    }
+
+    return (
+      groundingCableOptions.find(
+        (cable) => cable.id === selectedGroundingCableId
+      ) ?? null
+    );
+  }, [groundingCableOptions, includeGroundingCables, selectedGroundingCableId]);
+
+  const cablesForWeightCalculation = useMemo(() => {
+    const result: Cable[] = [];
+
+    nonGroundingCables.forEach((cable) => {
+      if (
+        cable.weightKgPerM !== null &&
+        !Number.isNaN(cable.weightKgPerM)
+      ) {
+        result.push(cable);
+      }
+    });
+
+    if (
+      selectedGroundingCable &&
+      selectedGroundingCable.weightKgPerM !== null &&
+      !Number.isNaN(selectedGroundingCable.weightKgPerM)
+    ) {
+      const alreadyIncluded = result.some(
+        (cable) => cable.id === selectedGroundingCable.id
+      );
+      if (!alreadyIncluded) {
+        result.push(selectedGroundingCable);
+      }
+    }
+
+    return result;
+  }, [nonGroundingCables, selectedGroundingCable]);
+
+  const cablesWeightLoadPerMeterKg = useMemo(() => {
+    if (cablesForWeightCalculation.length === 0) {
+      return null;
+    }
+
+    return cablesForWeightCalculation.reduce((sum, cable) => {
+      const weight = cable.weightKgPerM;
+      return weight !== null && !Number.isNaN(weight) ? sum + weight : sum;
+    }, 0);
+  }, [cablesForWeightCalculation]);
+
+  const handleIncludeGroundingChange = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, data: CheckboxOnChangeData) => {
+      setIncludeGroundingCables(Boolean(data.checked));
+    },
+    []
+  );
+
+  const handleGroundingCableSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setSelectedGroundingCableId(data.optionValue ?? null);
+    },
     []
   );
 
@@ -598,6 +716,18 @@ export const TrayDetails = () => {
 
     return trayWeightLoadPerMeterKg * trayLengthMeters;
   }, [trayWeightLoadPerMeterKg, trayLengthMeters]);
+
+  const cablesTotalWeightKg = useMemo(() => {
+    if (
+      cablesWeightLoadPerMeterKg === null ||
+      trayLengthMeters === null ||
+      trayLengthMeters <= 0
+    ) {
+      return null;
+    }
+
+    return cablesWeightLoadPerMeterKg * trayLengthMeters;
+  }, [cablesWeightLoadPerMeterKg, trayLengthMeters]);
 
   const formatSupportNumber = useCallback(
     (value: number | null) =>
@@ -1158,6 +1288,50 @@ export const TrayDetails = () => {
           <div className={styles.field}>
             <Caption1>Tray total own weight [kg]</Caption1>
             <Body1>{formatSupportNumber(trayTotalOwnWeightKg)}</Body1>
+          </div>
+        </div>
+      </div>
+      <div className={styles.section}>
+        <Caption1>Cables on tray weight calculations</Caption1>
+        <Checkbox
+          label='Include "Bare grounding copper cable"'
+          checked={includeGroundingCables}
+          onChange={handleIncludeGroundingChange}
+        />
+        {includeGroundingCables ? (
+          groundingCableOptions.length > 0 ? (
+            <Dropdown
+              placeholder="Select grounding cable"
+              selectedOptions={
+                selectedGroundingCableId ? [selectedGroundingCableId] : []
+              }
+              onOptionSelect={handleGroundingCableSelect}
+            >
+              {groundingCableOptions.map((cable) => (
+                <Option key={cable.id} value={cable.id}>
+                  {getCableDisplayName(cable)}
+                </Option>
+              ))}
+            </Dropdown>
+          ) : (
+            <Body1 className={styles.emptyState}>
+              No grounding cables available for selection.
+            </Body1>
+          )
+        ) : null}
+        {cablesForWeightCalculation.length === 0 ? (
+          <Body1 className={styles.emptyState}>
+            No cables with weight data available for calculations.
+          </Body1>
+        ) : null}
+        <div className={styles.grid}>
+          <div className={styles.field}>
+            <Caption1>Cables weight load per meter [kg/m]</Caption1>
+            <Body1>{formatSupportNumber(cablesWeightLoadPerMeterKg)}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Total weight on the tray [kg]</Caption1>
+            <Body1>{formatSupportNumber(cablesTotalWeightKg)}</Body1>
           </div>
         </div>
       </div>
