@@ -4,6 +4,7 @@ import {
   Body1,
   Button,
   Caption1,
+  Checkbox,
   Dropdown,
   Field,
   Input,
@@ -14,11 +15,13 @@ import {
   shorthands,
   tokens
 } from '@fluentui/react-components';
+import type { CheckboxOnChangeData } from '@fluentui/react-components';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ApiError,
   Cable,
   Project,
+  CableType,
   Tray,
   TrayInput,
   MaterialTray,
@@ -26,6 +29,7 @@ import {
   fetchProject,
   fetchCables,
   fetchTrays,
+  fetchCableTypes,
   fetchTray,
   deleteTray,
   updateTray,
@@ -188,6 +192,11 @@ export const TrayDetails = () => {
   const [tray, setTray] = useState<Tray | null>(null);
   const [trays, setTrays] = useState<Tray[]>([]);
   const [trayCables, setTrayCables] = useState<Cable[]>([]);
+  const [projectCableTypes, setProjectCableTypes] = useState<CableType[]>([]);
+  const [projectCableTypesLoading, setProjectCableTypesLoading] = useState<boolean>(false);
+  const [projectCableTypesError, setProjectCableTypesError] = useState<string | null>(null);
+  const [includeGroundingCable, setIncludeGroundingCable] = useState<boolean>(false);
+  const [selectedGroundingCableTypeId, setSelectedGroundingCableTypeId] = useState<string>('');
   const [cablesError, setCablesError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -299,6 +308,85 @@ export const TrayDetails = () => {
 
     void loadMaterialTrays();
   }, []);
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectCableTypes([]);
+      setSelectedGroundingCableTypeId('');
+      setProjectCableTypesError(null);
+      setProjectCableTypesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCableTypes = async () => {
+      setProjectCableTypesLoading(true);
+      setProjectCableTypesError(null);
+
+      try {
+        const response = await fetchCableTypes(projectId);
+        const sorted = [...response.cableTypes].sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+
+        if (!cancelled) {
+          setProjectCableTypes(sorted);
+        }
+      } catch (err) {
+        console.error('Failed to load project cable types', err);
+        if (!cancelled) {
+          setProjectCableTypes([]);
+          setProjectCableTypesError('Failed to load project cable types.');
+        }
+      } finally {
+        if (!cancelled) {
+          setProjectCableTypesLoading(false);
+        }
+      }
+    };
+
+    void loadCableTypes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const groundingCableTypes = useMemo(
+    () =>
+      projectCableTypes.filter((type) => {
+        const purpose = type.purpose?.trim().toLowerCase();
+        return purpose === 'grounding';
+      }),
+    [projectCableTypes]
+  );
+
+  useEffect(() => {
+    if (!selectedGroundingCableTypeId) {
+      return;
+    }
+
+    const stillExists = groundingCableTypes.some(
+      (type) => type.id === selectedGroundingCableTypeId
+    );
+
+    if (!stillExists) {
+      setSelectedGroundingCableTypeId('');
+    }
+  }, [groundingCableTypes, selectedGroundingCableTypeId]);
+
+  useEffect(() => {
+    if (!includeGroundingCable || selectedGroundingCableTypeId) {
+      return;
+    }
+
+    if (groundingCableTypes.length === 0) {
+      return;
+    }
+
+    setSelectedGroundingCableTypeId(groundingCableTypes[0].id);
+  }, [includeGroundingCable, groundingCableTypes, selectedGroundingCableTypeId]);
 
   const formatDimensionValue = useCallback(
     (value: number | null | undefined) =>
@@ -471,6 +559,23 @@ export const TrayDetails = () => {
     []
   );
 
+  const formatCableTypeLabel = useCallback(
+    (type: CableType) => {
+      const baseName = type.name?.trim() || 'Unnamed cable type';
+      const tag = type.tag?.trim();
+      const weight = type.weightKgPerM;
+      const weightDisplay =
+        weight !== null && !Number.isNaN(weight)
+          ? `${numberFormatter.format(weight)} kg/m`
+          : null;
+
+      return [baseName, tag ? `(${tag})` : null, weightDisplay ? `- ${weightDisplay}` : null]
+        .filter(Boolean)
+        .join(' ');
+    },
+    [numberFormatter]
+  );
+
   const nonGroundingCables = useMemo(
     () => trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)),
     [trayCables]
@@ -483,16 +588,56 @@ export const TrayDetails = () => {
     });
   }, [nonGroundingCables]);
 
-  const cablesWeightLoadPerMeterKg = useMemo(() => {
-    if (cablesForWeightCalculation.length === 0) {
+  const selectedGroundingCableType = useMemo(() => {
+    if (!selectedGroundingCableTypeId) {
       return null;
     }
 
-    return cablesForWeightCalculation.reduce((sum, cable) => {
+    return (
+      groundingCableTypes.find((type) => type.id === selectedGroundingCableTypeId) ?? null
+    );
+  }, [groundingCableTypes, selectedGroundingCableTypeId]);
+
+  const selectedGroundingCableLabel = useMemo(
+    () =>
+      selectedGroundingCableType
+        ? formatCableTypeLabel(selectedGroundingCableType)
+        : undefined,
+    [selectedGroundingCableType, formatCableTypeLabel]
+  );
+
+  const groundingCableWeightKgPerM = useMemo(() => {
+    if (!includeGroundingCable || !selectedGroundingCableType) {
+      return null;
+    }
+
+    const weight = selectedGroundingCableType.weightKgPerM;
+    return weight !== null && !Number.isNaN(weight) ? weight : null;
+  }, [includeGroundingCable, selectedGroundingCableType]);
+
+  const cablesWeightLoadPerMeterKg = useMemo(() => {
+    let total = 0;
+    let hasWeightData = false;
+
+    for (const cable of cablesForWeightCalculation) {
       const weight = cable.weightKgPerM;
-      return weight !== null && !Number.isNaN(weight) ? sum + weight : sum;
-    }, 0);
-  }, [cablesForWeightCalculation]);
+      if (weight !== null && !Number.isNaN(weight)) {
+        total += weight;
+        hasWeightData = true;
+      }
+    }
+
+    if (groundingCableWeightKgPerM !== null) {
+      total += groundingCableWeightKgPerM;
+      hasWeightData = true;
+    }
+
+    return hasWeightData ? total : null;
+  }, [cablesForWeightCalculation, groundingCableWeightKgPerM]);
+
+  const hasGroundingCableWeightData = groundingCableWeightKgPerM !== null;
+  const groundingCableMissingWeight =
+    includeGroundingCable && selectedGroundingCableType !== null && !hasGroundingCableWeightData;
 
   const supportOverride = useMemo(() => {
     if (!project || !tray || !tray.type) {
@@ -716,6 +861,20 @@ export const TrayDetails = () => {
       formatDimensionValue,
       formatWeightValue
     ]
+  );
+
+  const handleGroundingCableToggle = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, data: CheckboxOnChangeData) => {
+      setIncludeGroundingCable(data.checked === true || data.checked === 'mixed');
+    },
+    []
+  );
+
+  const handleGroundingCableTypeSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setSelectedGroundingCableTypeId(data.optionValue ?? '');
+    },
+    []
   );
 
   const buildTrayInput = (values: TrayFormState) => {
@@ -1203,7 +1362,62 @@ export const TrayDetails = () => {
       </div>
       <div className={styles.section}>
         <Caption1>Cables on tray weight calculations</Caption1>
-        {cablesForWeightCalculation.length === 0 ? (
+        <div className={styles.field}>
+          <Checkbox
+            label="Add grounding cable"
+            checked={includeGroundingCable}
+            onChange={handleGroundingCableToggle}
+          />
+          {includeGroundingCable && projectCableTypesLoading ? (
+            <Spinner label="Loading cable types..." />
+          ) : null}
+          {includeGroundingCable && projectCableTypesError ? (
+            <Body1 className={styles.errorText}>{projectCableTypesError}</Body1>
+          ) : null}
+          {includeGroundingCable &&
+          !projectCableTypesLoading &&
+          !projectCableTypesError &&
+          groundingCableTypes.length === 0 ? (
+            <Body1 className={styles.emptyState}>
+              No grounding cable types available for this project.
+            </Body1>
+          ) : null}
+        </div>
+        {includeGroundingCable &&
+        !projectCableTypesLoading &&
+        !projectCableTypesError &&
+        groundingCableTypes.length > 0 ? (
+          <div className={styles.field}>
+            <Field
+              label="Grounding cable type"
+              validationState={groundingCableMissingWeight ? 'error' : undefined}
+              validationMessage={
+                groundingCableMissingWeight
+                  ? 'Selected cable type does not include weight data. It will not affect calculations.'
+                  : undefined
+              }
+            >
+              <Dropdown
+                placeholder="Select cable type"
+                selectedOptions={
+                  selectedGroundingCableTypeId ? [selectedGroundingCableTypeId] : []
+                }
+                value={selectedGroundingCableLabel}
+                onOptionSelect={handleGroundingCableTypeSelect}
+              >
+                {groundingCableTypes.map((type) => {
+                  const label = formatCableTypeLabel(type);
+                  return (
+                    <Option key={type.id} value={type.id}>
+                      {label}
+                    </Option>
+                  );
+                })}
+              </Dropdown>
+            </Field>
+          </div>
+        ) : null}
+        {cablesWeightLoadPerMeterKg === null ? (
           <Body1 className={styles.emptyState}>
             No cables with weight data available for calculations.
           </Body1>
