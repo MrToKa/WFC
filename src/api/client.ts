@@ -81,6 +81,8 @@ export type Tray = {
   widthMm: number | null;
   heightMm: number | null;
   lengthMm: number | null;
+  includeGroundingCable: boolean;
+  groundingCableTypeId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -197,6 +199,8 @@ export type TrayInput = {
   widthMm?: number | null;
   heightMm?: number | null;
   lengthMm?: number | null;
+  includeGroundingCable?: boolean;
+  groundingCableTypeId?: string | null;
 };
 
 export type MaterialTrayInput = {

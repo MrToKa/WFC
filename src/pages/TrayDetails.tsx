@@ -195,15 +195,11 @@ export const TrayDetails = () => {
   const [projectCableTypes, setProjectCableTypes] = useState<CableType[]>([]);
   const [projectCableTypesLoading, setProjectCableTypesLoading] = useState<boolean>(false);
   const [projectCableTypesError, setProjectCableTypesError] = useState<string | null>(null);
+  type GroundingSelection = { include: boolean; typeId: string | null };
   const [groundingSelectionsByTrayId, setGroundingSelectionsByTrayId] = useState<
-    Record<
-      string,
-      {
-        include: boolean;
-        typeId: string;
-      }
-    >
+    Record<string, GroundingSelection>
   >({});
+  const [groundingPreferenceSaving, setGroundingPreferenceSaving] = useState<boolean>(false);
   const [cablesError, setCablesError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -371,7 +367,7 @@ export const TrayDetails = () => {
       : null;
 
   const includeGroundingCable = currentGroundingPreference?.include ?? false;
-  const selectedGroundingCableTypeId = currentGroundingPreference?.typeId ?? '';
+  const selectedGroundingCableTypeId = currentGroundingPreference?.typeId ?? null;
 
   const groundingCableTypes = useMemo(
     () =>
@@ -382,46 +378,128 @@ export const TrayDetails = () => {
     [projectCableTypes]
   );
 
+  const persistGroundingPreference = useCallback(
+    async (
+      previousPreference: GroundingSelection | null,
+      nextPreference: GroundingSelection
+    ) => {
+      if (!trayId) {
+        return;
+      }
+
+      if (!projectId || !token) {
+        setGroundingSelectionsByTrayId((previous) => {
+          if (!previousPreference) {
+            const { [trayId]: _omit, ...rest } = previous;
+            return rest;
+          }
+          return {
+            ...previous,
+            [trayId]: previousPreference
+          };
+        });
+        if (!token) {
+          return;
+        }
+        showToast({
+          intent: 'error',
+          title: 'Unable to save grounding cable setting',
+          body: 'Missing project information.'
+        });
+        return;
+      }
+
+      setGroundingPreferenceSaving(true);
+
+      try {
+        const response = await updateTray(token, projectId, trayId, {
+          includeGroundingCable: nextPreference.include,
+          groundingCableTypeId: nextPreference.typeId ?? null
+        });
+
+        setTray(response.tray);
+        setTrays((previous) => {
+          const hasTray = previous.some((item) => item.id === response.tray.id);
+          if (!hasTray) {
+            return previous;
+          }
+          return previous.map((item) =>
+            item.id === response.tray.id ? response.tray : item
+          );
+        });
+        setGroundingSelectionsByTrayId((previous) => ({
+          ...previous,
+          [trayId]: {
+            include: response.tray.includeGroundingCable,
+            typeId: response.tray.groundingCableTypeId
+          }
+        }));
+      } catch (error) {
+        console.error('Failed to save grounding cable preference', error);
+        setGroundingSelectionsByTrayId((previous) => {
+          if (!previousPreference) {
+            const { [trayId]: _omit, ...rest } = previous;
+            return rest;
+          }
+          return {
+            ...previous,
+            [trayId]: previousPreference
+          };
+        });
+        showToast({
+          intent: 'error',
+          title: 'Failed to save grounding cable setting',
+          body: 'Please try again.'
+        });
+      } finally {
+        setGroundingPreferenceSaving(false);
+      }
+    },
+    [projectId, trayId, token, showToast, updateTray]
+  );
+
   useEffect(() => {
     if (!trayId || !includeGroundingCable) {
       return;
     }
 
+    if (groundingPreferenceSaving) {
+      return;
+    }
+
     const hasCurrentSelection =
-      selectedGroundingCableTypeId !== '' &&
+      selectedGroundingCableTypeId !== null &&
       groundingCableTypes.some((type) => type.id === selectedGroundingCableTypeId);
 
     if (hasCurrentSelection) {
       return;
     }
 
-    const fallbackTypeId = groundingCableTypes[0]?.id ?? '';
+    const fallbackTypeId = groundingCableTypes[0]?.id ?? null;
 
-    setGroundingSelectionsByTrayId((previous) => {
-      const current = previous[trayId];
-      if (!current || !current.include) {
-        return previous;
-      }
+    if (fallbackTypeId === null) {
+      return;
+    }
 
-      const nextTypeId = fallbackTypeId;
+    const nextPreference: GroundingSelection = {
+      include: true,
+      typeId: fallbackTypeId
+    };
 
-      if (current.typeId === nextTypeId) {
-        return previous;
-      }
+    setGroundingSelectionsByTrayId((previous) => ({
+      ...previous,
+      [trayId]: nextPreference
+    }));
 
-      return {
-        ...previous,
-        [trayId]: {
-          ...current,
-          typeId: nextTypeId
-        }
-      };
-    });
+    void persistGroundingPreference(currentGroundingPreference, nextPreference);
   }, [
     trayId,
     includeGroundingCable,
     selectedGroundingCableTypeId,
-    groundingCableTypes
+    groundingCableTypes,
+    currentGroundingPreference,
+    groundingPreferenceSaving,
+    persistGroundingPreference
   ]);
 
   const formatDimensionValue = useCallback(
@@ -524,6 +602,13 @@ export const TrayDetails = () => {
         setProject(projectResponse.project);
         setTray(trayResponse.tray);
         setFormValues(toTrayFormState(trayResponse.tray));
+        setGroundingSelectionsByTrayId((previous) => ({
+          ...previous,
+          [trayResponse.tray.id]: {
+            include: trayResponse.tray.includeGroundingCable,
+            typeId: trayResponse.tray.groundingCableTypeId
+          }
+        }));
         setIsEditing(false);
         setFormErrors({});
 
@@ -901,82 +986,106 @@ export const TrayDetails = () => {
 
   const handleGroundingCableToggle = useCallback(
     (_event: ChangeEvent<HTMLInputElement>, data: CheckboxOnChangeData) => {
-      if (!trayId) {
+      if (!trayId || groundingPreferenceSaving) {
         return;
       }
 
       const nextInclude = data.checked === true || data.checked === 'mixed';
 
-      setGroundingSelectionsByTrayId((previous) => {
-        const current = previous[trayId];
+      if (nextInclude && groundingCableTypes.length === 0) {
+        showToast({
+          intent: 'warning',
+          title: 'No grounding cable types available',
+          body: 'Add a grounding cable type to the project before enabling this option.'
+        });
+        return;
+      }
 
-        if (nextInclude) {
-          const hasValidStoredType =
-            current?.typeId &&
-            groundingCableTypes.some((type) => type.id === current.typeId);
+      const previousPreference = currentGroundingPreference;
+      let nextTypeId = previousPreference?.typeId ?? null;
 
-          const nextTypeId = hasValidStoredType
-            ? current?.typeId ?? ''
-            : groundingCableTypes[0]?.id ?? '';
-
-          if (current && current.include && current.typeId === nextTypeId) {
-            return previous;
-          }
-
-          return {
-            ...previous,
-            [trayId]: {
-              include: true,
-              typeId: nextTypeId
-            }
-          };
+      if (nextInclude) {
+        if (
+          !nextTypeId ||
+          !groundingCableTypes.some((type) => type.id === nextTypeId)
+        ) {
+          nextTypeId = groundingCableTypes[0]?.id ?? null;
         }
+      }
 
-        const nextPreference = {
-          include: false,
-          typeId: current?.typeId ?? ''
-        };
+      const nextPreference: GroundingSelection = {
+        include: nextInclude,
+        typeId: nextTypeId
+      };
 
-        if (current && !current.include && current.typeId === nextPreference.typeId) {
-          return previous;
-        }
+      if (
+        previousPreference &&
+        previousPreference.include === nextPreference.include &&
+        previousPreference.typeId === nextPreference.typeId
+      ) {
+        return;
+      }
 
-        return {
-          ...previous,
-          [trayId]: nextPreference
-        };
-      });
+      setGroundingSelectionsByTrayId((previous) => ({
+        ...previous,
+        [trayId]: nextPreference
+      }));
+
+      void persistGroundingPreference(previousPreference, nextPreference);
     },
-    [trayId, groundingCableTypes]
+    [
+      trayId,
+      groundingPreferenceSaving,
+      groundingCableTypes,
+      currentGroundingPreference,
+      persistGroundingPreference,
+      showToast
+    ]
   );
 
   const handleGroundingCableTypeSelect = useCallback(
     (_event: unknown, data: { optionValue?: string }) => {
-      if (!trayId) {
+      if (!trayId || groundingPreferenceSaving) {
         return;
       }
 
-      const nextTypeId = data.optionValue ?? '';
+      const nextTypeId = data.optionValue ?? null;
       if (!nextTypeId) {
         return;
       }
 
-      setGroundingSelectionsByTrayId((previous) => {
-        const current = previous[trayId];
-        if (current && current.typeId === nextTypeId && current.include) {
-          return previous;
-        }
+      if (!groundingCableTypes.some((type) => type.id === nextTypeId)) {
+        return;
+      }
 
-        return {
-          ...previous,
-          [trayId]: {
-            include: true,
-            typeId: nextTypeId
-          }
-        };
-      });
+      const previousPreference = currentGroundingPreference;
+      const nextPreference: GroundingSelection = {
+        include: true,
+        typeId: nextTypeId
+      };
+
+      if (
+        previousPreference &&
+        previousPreference.include === nextPreference.include &&
+        previousPreference.typeId === nextPreference.typeId
+      ) {
+        return;
+      }
+
+      setGroundingSelectionsByTrayId((previous) => ({
+        ...previous,
+        [trayId]: nextPreference
+      }));
+
+      void persistGroundingPreference(previousPreference, nextPreference);
     },
-    [trayId]
+    [
+      trayId,
+      groundingPreferenceSaving,
+      groundingCableTypes,
+      currentGroundingPreference,
+      persistGroundingPreference
+    ]
   );
 
   const buildTrayInput = (values: TrayFormState) => {
@@ -1469,6 +1578,7 @@ export const TrayDetails = () => {
             label="Add grounding cable"
             checked={includeGroundingCable}
             onChange={handleGroundingCableToggle}
+            disabled={groundingPreferenceSaving}
           />
           {includeGroundingCable && projectCableTypesLoading ? (
             <Spinner label="Loading cable types..." />
@@ -1506,6 +1616,7 @@ export const TrayDetails = () => {
                 }
                 value={selectedGroundingCableLabel}
                 onOptionSelect={handleGroundingCableTypeSelect}
+                disabled={groundingPreferenceSaving}
               >
                 {groundingCableTypes.map((type) => {
                   const label = formatCableTypeLabel(type);

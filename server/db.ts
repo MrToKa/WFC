@@ -185,6 +185,34 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE trays
+    ADD COLUMN IF NOT EXISTS include_grounding_cable BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE trays
+    ADD COLUMN IF NOT EXISTS grounding_cable_type_id UUID;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'trays_grounding_cable_type_id_fkey'
+          AND table_name = 'trays'
+      ) THEN
+        ALTER TABLE trays
+          ADD CONSTRAINT trays_grounding_cable_type_id_fkey
+          FOREIGN KEY (grounding_cable_type_id)
+          REFERENCES cable_types(id)
+          ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS trays_project_name_idx
       ON trays (project_id, lower(name));
   `);

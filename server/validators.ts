@@ -341,7 +341,11 @@ export const updateTraySchema = z
     purpose: trayStringField,
     widthMm: trayNumericField,
     heightMm: trayNumericField,
-    lengthMm: trayNumericField
+    lengthMm: trayNumericField,
+    includeGroundingCable: z.boolean().optional(),
+    groundingCableTypeId: z
+      .union([z.string().trim().uuid(), z.null()])
+      .optional()
   })
   .strict()
   .refine(
@@ -351,7 +355,9 @@ export const updateTraySchema = z
       value.purpose !== undefined ||
       value.widthMm !== undefined ||
       value.heightMm !== undefined ||
-      value.lengthMm !== undefined,
+      value.lengthMm !== undefined ||
+      value.includeGroundingCable !== undefined ||
+      value.groundingCableTypeId !== undefined,
     { message: 'At least one field must be provided' }
   );
 

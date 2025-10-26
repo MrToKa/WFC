@@ -7,6 +7,8 @@ export type TrayRow = {
   width_mm: string | number | null;
   height_mm: string | number | null;
   length_mm: string | number | null;
+  include_grounding_cable: boolean | null;
+  grounding_cable_type_id: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -32,6 +34,8 @@ export type PublicTray = {
   widthMm: number | null;
   heightMm: number | null;
   lengthMm: number | null;
+  includeGroundingCable: boolean;
+  groundingCableTypeId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -45,6 +49,8 @@ export const mapTrayRow = (row: TrayRow): PublicTray => ({
   widthMm: toNumberOrNull(row.width_mm),
   heightMm: toNumberOrNull(row.height_mm),
   lengthMm: toNumberOrNull(row.length_mm),
+  includeGroundingCable: Boolean(row.include_grounding_cable),
+  groundingCableTypeId: row.grounding_cable_type_id ?? null,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at)
 });

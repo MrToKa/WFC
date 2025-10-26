@@ -72,6 +72,8 @@ const selectTraysQuery = `
     width_mm,
     height_mm,
     length_mm,
+    include_grounding_cable,
+    grounding_cable_type_id,
     created_at,
     updated_at
   FROM trays
@@ -322,6 +324,8 @@ traysRouter.post(
             width_mm,
             height_mm,
             length_mm,
+            include_grounding_cable,
+            grounding_cable_type_id,
             created_at,
             updated_at;
         `,
@@ -378,8 +382,46 @@ traysRouter.patch(
       return;
     }
 
-    const { name, type, purpose, widthMm, heightMm, lengthMm } =
-      parseResult.data;
+    const {
+      name,
+      type,
+      purpose,
+      widthMm,
+      heightMm,
+      lengthMm,
+      includeGroundingCable,
+      groundingCableTypeId
+    } = parseResult.data;
+
+    if (
+      groundingCableTypeId !== undefined &&
+      groundingCableTypeId !== null
+    ) {
+      try {
+        const cableTypeResult = await pool.query(
+          `
+            SELECT project_id
+            FROM cable_types
+            WHERE id = $1;
+          `,
+          [groundingCableTypeId]
+        );
+
+        if (
+          cableTypeResult.rowCount === 0 ||
+          cableTypeResult.rows[0]?.project_id !== projectId
+        ) {
+          res.status(400).json({
+            error: 'Grounding cable type does not belong to this project'
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('Validate grounding cable type error', error);
+        res.status(500).json({ error: 'Failed to update tray' });
+        return;
+      }
+    }
 
     if (name !== undefined) {
       try {
@@ -408,7 +450,7 @@ traysRouter.patch(
     }
 
     const fields: string[] = [];
-    const values: Array<string | number | null> = [];
+    const values: Array<string | number | boolean | null> = [];
     let index = 1;
 
     if (name !== undefined) {
@@ -435,6 +477,14 @@ traysRouter.patch(
       fields.push(`length_mm = $${index++}`);
       values.push(lengthMm ?? null);
     }
+    if (includeGroundingCable !== undefined) {
+      fields.push(`include_grounding_cable = $${index++}`);
+      values.push(includeGroundingCable);
+    }
+    if (groundingCableTypeId !== undefined) {
+      fields.push(`grounding_cable_type_id = $${index++}`);
+      values.push(groundingCableTypeId);
+    }
 
     fields.push(`updated_at = NOW()`);
 
@@ -454,6 +504,8 @@ traysRouter.patch(
             width_mm,
             height_mm,
             length_mm,
+            include_grounding_cable,
+            grounding_cable_type_id,
             created_at,
             updated_at;
         `,
