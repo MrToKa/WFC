@@ -905,6 +905,22 @@ export const TrayDetails = () => {
     return cablesWeightLoadPerMeterKg * trayLengthMeters;
   }, [cablesWeightLoadPerMeterKg, trayLengthMeters]);
 
+  const totalWeightLoadPerMeterKg = useMemo(() => {
+    if (trayWeightLoadPerMeterKg === null || cablesWeightLoadPerMeterKg === null) {
+      return null;
+    }
+
+    return trayWeightLoadPerMeterKg + cablesWeightLoadPerMeterKg;
+  }, [trayWeightLoadPerMeterKg, cablesWeightLoadPerMeterKg]);
+
+  const totalWeightKg = useMemo(() => {
+    if (trayTotalOwnWeightKg === null || cablesTotalWeightKg === null) {
+      return null;
+    }
+
+    return trayTotalOwnWeightKg + cablesTotalWeightKg;
+  }, [trayTotalOwnWeightKg, cablesTotalWeightKg]);
+
   const formatSupportNumber = useCallback(
     (value: number | null) =>
       value === null || Number.isNaN(value) ? '-' : numberFormatter.format(value),
@@ -1643,6 +1659,19 @@ export const TrayDetails = () => {
           <div className={styles.field}>
             <Caption1>Total weight on the tray [kg]</Caption1>
             <Body1>{formatSupportNumber(cablesTotalWeightKg)}</Body1>
+          </div>
+        </div>
+      </div>
+      <div className={styles.section}>
+        <Caption1>Total weight calculations</Caption1>
+        <div className={styles.grid}>
+          <div className={styles.field}>
+            <Caption1>Total weight load per meter [kg/m]</Caption1>
+            <Body1>{formatSupportNumber(totalWeightLoadPerMeterKg)}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Total weight [kg]</Caption1>
+            <Body1>{formatSupportNumber(totalWeightKg)}</Body1>
           </div>
         </div>
       </div>
