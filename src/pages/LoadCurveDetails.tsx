@@ -14,6 +14,8 @@ import {
   Button,
   Caption1,
   Card,
+  CardHeader,
+  CardPreview,
   Dropdown,
   Field,
   Input,
@@ -23,6 +25,7 @@ import {
   Title2,
   Title3,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens
 } from '@fluentui/react-components';
@@ -96,11 +99,25 @@ const useStyles = makeStyles({
     gap: '0.75rem',
     flexWrap: 'wrap'
   },
-  chart: {
-    width: '100%',
-    maxWidth: '300px',
-    height: '180px',
+  curvePreviewCard: {
+    display: 'grid',
+    gap: '0.75rem',
+    alignContent: 'start',
+    width: '700px',
+    maxWidth: '100%'
+  },
+  curvePreviewHeaderDescription: {
+    color: tokens.colorNeutralForeground3
+  },
+  curvePreviewChart: {
+    width: '600px',
+    height: '310px',
     margin: '0 auto'
+  },
+  curvePreviewMeta: {
+    color: tokens.colorNeutralForeground3,
+    textAlign: 'center',
+    marginTop: '0.5rem'
   },
   readOnlyNotice: {
     color: tokens.colorNeutralForeground3
@@ -620,13 +637,25 @@ export const LoadCurveDetails = () => {
           </form>
         </Card>
 
-        <Card appearance='outline' className={styles.detailCard}>
-          <Title3>Curve preview</Title3>
-          <LoadCurveChart points={loadCurve.points} className={styles.chart} />
-          <Caption1>
+        <Card
+          appearance='outline'
+          className={mergeClasses(styles.detailCard, styles.curvePreviewCard)}
+        >
+          <CardHeader
+            header={<Title3>Curve preview</Title3>}
+            description={
+              <Caption1 className={styles.curvePreviewHeaderDescription}>
+                {loadCurve.trayType ? `Tray: ${loadCurve.trayType}` : 'No tray assigned'}
+              </Caption1>
+            }
+          />
+          <CardPreview>
+            <LoadCurveChart points={loadCurve.points} className={styles.curvePreviewChart} />
+          </CardPreview>
+          <Caption1 className={styles.curvePreviewMeta}>
             {loadCurve.points.length} {loadCurve.points.length === 1 ? 'point' : 'points'}{' '}
             {'\u2022'}{' '}
-            {loadCurve.trayType ? `Tray: ${loadCurve.trayType}` : 'No tray assigned'}
+            {updatedAt ?? 'Last updated information unavailable'}
           </Caption1>
         </Card>
       </div>
