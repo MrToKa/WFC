@@ -1223,7 +1223,7 @@ export const TrayDetails = () => {
             span: chartSpanMeters,
             load: safetyAdjustedLoadKnPerM,
             color: markerColor,
-            label: 'Load limit at span'
+            label: 'Calculated point'
           }
         : null;
 
@@ -1294,7 +1294,7 @@ export const TrayDetails = () => {
         load: chartEvaluation.allowableLoadAtSpan,
         toSpan: chartSpanMeters,
         color: tokens.colorPaletteRedForeground1,
-        label: 'Calculated point'
+        label: 'Load limit at span'
       }
     ];
   }, [chartEvaluation.allowableLoadAtSpan, chartEvaluation.marker, chartSpanMeters]);
