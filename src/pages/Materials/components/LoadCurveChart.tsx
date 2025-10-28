@@ -185,7 +185,7 @@ export const LoadCurveChart = memo(({ points, className }: LoadCurveChartProps) 
       {/* Axis labels */}
       <text
         x={CHART_WIDTH / 2}
-        y={CHART_HEIGHT - 4}
+        y={CHART_HEIGHT - 40}
         textAnchor='middle'
         fontSize='12'
         fill={tokens.colorNeutralForeground2}
