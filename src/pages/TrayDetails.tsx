@@ -235,6 +235,18 @@ export const TrayDetails = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+    // Navigation logic for next/previous tray using previousTray and nextTray
+    const handlePrevTray = () => {
+      if (previousTray) {
+        navigate(`/projects/${projectId}/trays/${previousTray.id}`);
+      }
+    };
+    const handleNextTray = () => {
+      if (nextTray) {
+        navigate(`/projects/${projectId}/trays/${nextTray.id}`);
+      }
+    };
+
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [formValues, setFormValues] = useState<TrayFormState>({
     name: '',
@@ -2160,6 +2172,15 @@ export const TrayDetails = () => {
             </div>
           </>
         )}
+      </div>
+      {/* Navigation buttons for trays */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
+        <Button appearance="secondary" onClick={handlePrevTray} disabled={!previousTray}>
+          Previous tray
+        </Button>
+        <Button appearance="secondary" onClick={handleNextTray} disabled={!nextTray}>
+          Next tray
+        </Button>
       </div>
     </section>
   );
