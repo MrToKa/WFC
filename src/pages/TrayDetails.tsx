@@ -26,6 +26,7 @@ import {
   TrayInput,
   MaterialTray,
   MaterialSupport,
+  MaterialLoadCurve,
   fetchProject,
   fetchCables,
   fetchTrays,
@@ -34,10 +35,12 @@ import {
   deleteTray,
   updateTray,
   fetchAllMaterialTrays,
-  fetchMaterialSupports
+  fetchMaterialSupports,
+  fetchMaterialLoadCurve
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { LoadCurveChart } from './Materials/components/LoadCurveChart';
 
 const useStyles = makeStyles({
   root: {
@@ -105,6 +108,21 @@ const useStyles = makeStyles({
   },
   errorText: {
     color: tokens.colorStatusDangerForeground1
+  },
+  chartWrapper: {
+    width: '100%',
+    overflowX: 'auto'
+  },
+  chartCanvas: {
+    minWidth: '32rem'
+  },
+  chartMeta: {
+    display: 'grid',
+    gap: '0.75rem',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))'
+  },
+  chartStatus: {
+    fontWeight: tokens.fontWeightSemibold
   }
 });
 
@@ -129,6 +147,16 @@ type SupportCalculationResult = {
   weightPerMeterKg: number | null;
 };
 
+type LoadCurveChartStatus =
+  | 'no-curve'
+  | 'loading'
+  | 'awaiting-data'
+  | 'no-points'
+  | 'ok'
+  | 'too-long'
+  | 'too-short'
+  | 'load-too-high';
+
 const toTrayFormState = (tray: Tray): TrayFormState => ({
   name: tray.name,
   type: tray.type ?? '',
@@ -151,6 +179,9 @@ const parseNumberInput = (value: string): { numeric: number | null; error?: stri
   }
   return { numeric: parsed };
 };
+
+const KN_PER_KG = 9.80665 / 1000;
+const FLOAT_TOLERANCE = 1e-6;
 
 const toNullableString = (value: string): string | null => {
   const trimmed = value.trim();
@@ -225,6 +256,10 @@ export const TrayDetails = () => {
   const [materialSupportsLoading, setMaterialSupportsLoading] = useState<boolean>(false);
   const [materialSupportsError, setMaterialSupportsError] = useState<string | null>(null);
   const [materialSupportsLoaded, setMaterialSupportsLoaded] = useState<boolean>(false);
+  const [loadCurvesById, setLoadCurvesById] = useState<Record<string, MaterialLoadCurve>>({});
+  const [loadCurveLoadingId, setLoadCurveLoadingId] = useState<string | null>(null);
+  const [loadCurveError, setLoadCurveError] = useState<string | null>(null);
+  const [safetyFactorInput, setSafetyFactorInput] = useState<string>('10');
 
   useEffect(() => {
     let cancelled = false;
@@ -533,6 +568,56 @@ export const TrayDetails = () => {
     () => findMaterialTrayByType(formValues.type),
     [findMaterialTrayByType, formValues.type]
   );
+
+  const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
+  const selectedLoadCurve =
+    selectedLoadCurveId && loadCurvesById[selectedLoadCurveId]
+      ? loadCurvesById[selectedLoadCurveId]
+      : null;
+
+  useEffect(() => {
+    if (!selectedLoadCurveId) {
+      setLoadCurveLoadingId(null);
+      setLoadCurveError(null);
+      return;
+    }
+
+    if (loadCurvesById[selectedLoadCurveId]) {
+      setLoadCurveLoadingId(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadCurveLoadingId(selectedLoadCurveId);
+    setLoadCurveError(null);
+
+    const load = async () => {
+      try {
+        const response = await fetchMaterialLoadCurve(selectedLoadCurveId);
+        if (!cancelled) {
+          setLoadCurvesById((previous) => ({
+            ...previous,
+            [selectedLoadCurveId]: response.loadCurve
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to load material load curve', err);
+        if (!cancelled) {
+          setLoadCurveError('Failed to load tray load curve.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadCurveLoadingId(null);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedLoadCurveId, loadCurvesById]);
 
   useEffect(() => {
     if (!selectedMaterialTray) {
@@ -921,6 +1006,319 @@ export const TrayDetails = () => {
     return trayTotalOwnWeightKg + cablesTotalWeightKg;
   }, [trayTotalOwnWeightKg, cablesTotalWeightKg]);
 
+  const safetyFactorParsed = useMemo(
+    () => parseNumberInput(safetyFactorInput),
+    [safetyFactorInput]
+  );
+
+  const safetyFactorPercent = safetyFactorParsed.numeric;
+  const safetyFactorValidationMessage =
+    safetyFactorInput.trim() === ''
+      ? 'Enter a safety factor.'
+      : safetyFactorPercent === null
+      ? safetyFactorParsed.error ?? 'Enter a numeric value.'
+      : safetyFactorPercent < 0
+      ? 'Safety factor must be zero or greater.'
+      : undefined;
+  const safetyFactorHasError = Boolean(safetyFactorValidationMessage);
+  const safetyFactorMultiplier =
+    safetyFactorHasError ? null : 1 + ((safetyFactorPercent ?? 0) / 100);
+
+  const totalWeightLoadPerMeterKn = useMemo(() => {
+    if (totalWeightLoadPerMeterKg === null) {
+      return null;
+    }
+    return totalWeightLoadPerMeterKg * KN_PER_KG;
+  }, [totalWeightLoadPerMeterKg]);
+
+  const safetyAdjustedLoadKnPerM = useMemo(() => {
+    if (totalWeightLoadPerMeterKn === null || safetyFactorMultiplier === null) {
+      return null;
+    }
+    return totalWeightLoadPerMeterKn * safetyFactorMultiplier;
+  }, [totalWeightLoadPerMeterKn, safetyFactorMultiplier]);
+
+  const chartSpanMeters = supportCalculations.distanceMeters;
+  const chartLoadCurvePoints = selectedLoadCurve?.points ?? [];
+
+  const chartEvaluation = useMemo(() => {
+    if (!selectedLoadCurveId) {
+      return {
+        status: 'no-curve' as LoadCurveChartStatus,
+        message: 'The selected tray type is not linked to a load curve.',
+        marker: null,
+        limitHighlight: null,
+        minSpan: null,
+        maxSpan: null,
+        allowableLoadAtSpan: null
+      };
+    }
+
+    if (!selectedLoadCurve) {
+      return {
+        status: 'loading' as LoadCurveChartStatus,
+        message: 'Loading load curve...',
+        marker: null,
+        limitHighlight: null,
+        minSpan: null,
+        maxSpan: null,
+        allowableLoadAtSpan: null
+      };
+    }
+
+    if (chartLoadCurvePoints.length === 0) {
+      return {
+        status: 'no-points' as LoadCurveChartStatus,
+        message: 'The assigned load curve has no data points.',
+        marker: null,
+        limitHighlight: null,
+        minSpan: null,
+        maxSpan: null,
+        allowableLoadAtSpan: null
+      };
+    }
+
+    const sortedPoints = [...chartLoadCurvePoints].sort((a, b) => a.spanM - b.spanM);
+    const minSpan = sortedPoints[0].spanM;
+    const maxSpan = sortedPoints[sortedPoints.length - 1].spanM;
+    const maxLoad = sortedPoints.reduce(
+      (currentMax, point) => Math.max(currentMax, point.loadKnPerM),
+      Number.NEGATIVE_INFINITY
+    );
+
+    const computeLoadAtSpan = (span: number): number | null => {
+      if (span <= sortedPoints[0].spanM + FLOAT_TOLERANCE) {
+        return sortedPoints[0].loadKnPerM;
+      }
+
+      for (let index = 1; index < sortedPoints.length; index += 1) {
+        const previous = sortedPoints[index - 1];
+        const current = sortedPoints[index];
+
+        if (span <= current.spanM + FLOAT_TOLERANCE) {
+          const spanDelta = current.spanM - previous.spanM;
+          if (Math.abs(spanDelta) <= FLOAT_TOLERANCE) {
+            return current.loadKnPerM;
+          }
+          const ratio = (span - previous.spanM) / spanDelta;
+          return previous.loadKnPerM + ratio * (current.loadKnPerM - previous.loadKnPerM);
+        }
+      }
+
+      return sortedPoints[sortedPoints.length - 1].loadKnPerM;
+    };
+
+    const computeMaxSpanForLoad = (
+      targetLoad: number
+    ): { span: number; load: number } | null => {
+      if (targetLoad > maxLoad + FLOAT_TOLERANCE) {
+        return { span: minSpan, load: sortedPoints[0].loadKnPerM };
+      }
+
+      for (let index = 1; index < sortedPoints.length; index += 1) {
+        const previous = sortedPoints[index - 1];
+        const current = sortedPoints[index];
+        const prevLoad = previous.loadKnPerM;
+        const currLoad = current.loadKnPerM;
+
+        const crosses =
+          (prevLoad >= targetLoad && currLoad <= targetLoad) ||
+          (prevLoad <= targetLoad && currLoad >= targetLoad);
+
+        if (!crosses) {
+          continue;
+        }
+
+        const loadDelta = currLoad - prevLoad;
+        if (Math.abs(loadDelta) <= FLOAT_TOLERANCE) {
+          return { span: current.spanM, load: currLoad };
+        }
+
+        const ratio = (targetLoad - prevLoad) / loadDelta;
+        const span = previous.spanM + ratio * (current.spanM - previous.spanM);
+        return { span, load: targetLoad };
+      }
+
+      return { span: maxSpan, load: sortedPoints[sortedPoints.length - 1].loadKnPerM };
+    };
+
+    if (safetyFactorMultiplier === null) {
+      return {
+        status: 'awaiting-data' as LoadCurveChartStatus,
+        message: 'Enter a valid safety factor to evaluate the load curve.',
+        marker: null,
+        limitHighlight: null,
+        minSpan,
+        maxSpan,
+        allowableLoadAtSpan: null
+      };
+    }
+
+    if (chartSpanMeters === null || safetyAdjustedLoadKnPerM === null) {
+      return {
+        status: 'awaiting-data' as LoadCurveChartStatus,
+        message: 'Provide tray weight and support spacing data to plot the point.',
+        marker: null,
+        limitHighlight: null,
+        minSpan,
+        maxSpan,
+        allowableLoadAtSpan: null
+      };
+    }
+
+    const maxSpanForLoad = computeMaxSpanForLoad(safetyAdjustedLoadKnPerM);
+    const allowableLoadAtSpan = computeLoadAtSpan(chartSpanMeters);
+
+    let status: LoadCurveChartStatus = 'ok';
+    let message = 'Support spacing is within the load curve limits.';
+    let highlight: { span: number; load: number; type: 'min' | 'max'; label: string } | null =
+      maxSpanForLoad
+        ? {
+            span: maxSpanForLoad.span,
+            load: maxSpanForLoad.load,
+            type: 'max',
+            label: 'Max allowable span'
+          }
+        : null;
+
+    if (safetyAdjustedLoadKnPerM > maxLoad + FLOAT_TOLERANCE) {
+      status = 'load-too-high';
+      message = 'Calculated load exceeds the maximum load defined by the curve.';
+      highlight = {
+        span: minSpan,
+        load: sortedPoints[0].loadKnPerM,
+        type: 'max',
+        label: 'Max allowable span'
+      };
+    } else if (chartSpanMeters < minSpan - FLOAT_TOLERANCE) {
+      status = 'too-short';
+      message = 'Support spacing is below the minimum span covered by the curve.';
+      highlight = {
+        span: minSpan,
+        load: sortedPoints[0].loadKnPerM,
+        type: 'min',
+        label: 'Min allowable span'
+      };
+    } else if (maxSpanForLoad && chartSpanMeters > maxSpanForLoad.span + FLOAT_TOLERANCE) {
+      status = 'too-long';
+      message = 'Support spacing exceeds the allowable span for the calculated load.';
+      highlight = {
+        span: maxSpanForLoad.span,
+        load: maxSpanForLoad.load,
+        type: 'max',
+        label: 'Max allowable span'
+      };
+    }
+
+    const markerColor =
+      status === 'ok'
+        ? tokens.colorPaletteGreenForeground1
+        : status === 'too-short'
+        ? tokens.colorPaletteMarigoldForeground2
+        : tokens.colorPaletteRedForeground1;
+
+    const marker =
+      chartSpanMeters !== null && safetyAdjustedLoadKnPerM !== null
+        ? {
+            span: chartSpanMeters,
+            load: safetyAdjustedLoadKnPerM,
+            color: markerColor,
+            label: 'Load limit at span'
+          }
+        : null;
+
+    return {
+      status,
+      message,
+      marker,
+      limitHighlight: highlight,
+      minSpan,
+      maxSpan,
+      
+      allowableLoadAtSpan
+    };
+  }, [
+    selectedLoadCurveId,
+    selectedLoadCurve,
+    chartLoadCurvePoints,
+    chartSpanMeters,
+    safetyAdjustedLoadKnPerM,
+    safetyFactorMultiplier
+  ]);
+
+  const chartStatusColor =
+    safetyFactorHasError
+      ? tokens.colorStatusDangerForeground1
+      : chartEvaluation.status === 'ok'
+      ? tokens.colorPaletteGreenForeground1
+      : chartEvaluation.status === 'too-short'
+      ? tokens.colorPaletteMarigoldForeground2
+      : chartEvaluation.status === 'no-curve' ||
+        chartEvaluation.status === 'loading' ||
+        chartEvaluation.status === 'awaiting-data' ||
+        chartEvaluation.status === 'no-points'
+      ? tokens.colorNeutralForeground3
+      : tokens.colorPaletteRedForeground1;
+
+  const chartPointSpanDisplay =
+    chartSpanMeters !== null ? numberFormatter.format(chartSpanMeters) : '-';
+  const chartPointLoadDisplay =
+    safetyAdjustedLoadKnPerM !== null ? numberFormatter.format(safetyAdjustedLoadKnPerM) : '-';
+  const chartVerticalLines = useMemo(() => {
+    const highlight = chartEvaluation.limitHighlight;
+    if (!highlight) {
+      return null;
+    }
+
+    const lineColor =
+      highlight.type === 'min'
+        ? tokens.colorPaletteMarigoldForeground2
+        : tokens.colorPaletteDarkOrangeForeground1;
+
+    return [
+      {
+        span: highlight.span,
+        toLoad: highlight.load,
+        color: lineColor
+      }
+    ];
+  }, [chartEvaluation.limitHighlight]);
+
+  const chartHorizontalLines = useMemo(() => {
+    if (chartSpanMeters === null || chartEvaluation.allowableLoadAtSpan === null) {
+      return null;
+    }
+
+    return [
+      {
+        load: chartEvaluation.allowableLoadAtSpan,
+        toSpan: chartSpanMeters,
+        color: tokens.colorPaletteRedForeground1,
+        label: 'Calculated point'
+      }
+    ];
+  }, [chartEvaluation.allowableLoadAtSpan, chartEvaluation.marker, chartSpanMeters]);
+
+  const chartSummary = useMemo(() => {
+    const highlight = chartEvaluation.limitHighlight;
+    if (!highlight) {
+      return { text: null, color: undefined as string | undefined };
+    }
+
+    const spanText =
+      highlight.span !== null && !Number.isNaN(highlight.span)
+        ? numberFormatter.format(highlight.span)
+        : null;
+
+    const color =
+      highlight.type === 'min'
+        ? tokens.colorPaletteMarigoldForeground2
+        : tokens.colorPaletteDarkOrangeForeground1;
+
+    const text = spanText ? `${highlight.label}: ${spanText} m` : highlight.label;
+    return { text, color };
+  }, [chartEvaluation.limitHighlight, numberFormatter]);
+
   const formatSupportNumber = useCallback(
     (value: number | null) =>
       value === null || Number.isNaN(value) ? '-' : numberFormatter.format(value),
@@ -1102,6 +1500,13 @@ export const TrayDetails = () => {
       currentGroundingPreference,
       persistGroundingPreference
     ]
+  );
+
+  const handleSafetyFactorChange = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+      setSafetyFactorInput(data.value);
+    },
+    []
   );
 
   const buildTrayInput = (values: TrayFormState) => {
@@ -1674,6 +2079,92 @@ export const TrayDetails = () => {
             <Body1>{formatSupportNumber(totalWeightKg)}</Body1>
           </div>
         </div>
+      </div>
+      <div className={styles.section}>
+        <Caption1>Tray load curve</Caption1>
+        <div className={styles.grid}>
+          <div className={styles.field}>
+            <Caption1>Assigned load curve</Caption1>
+            <Body1>{selectedMaterialTray?.loadCurveName ?? 'Not assigned'}</Body1>
+          </div>
+          <Field
+            label="Safety factor [%]"
+            validationState={safetyFactorHasError ? 'error' : undefined}
+            validationMessage={safetyFactorValidationMessage}
+          >
+            <Input
+              value={safetyFactorInput}
+              onChange={handleSafetyFactorChange}
+              type="number"
+              min="0"
+              step="1"
+              inputMode="decimal"
+              placeholder="10"
+            />
+          </Field>
+        </div>
+        {loadCurveError ? (
+          <Body1 className={styles.errorText}>{loadCurveError}</Body1>
+        ) : null}
+        {selectedLoadCurveId === null ? (
+          <Body1 className={styles.emptyState}>
+            Assign a load curve to this tray type to visualise support limits.
+          </Body1>
+        ) : loadCurveLoadingId === selectedLoadCurveId ? (
+          <Spinner label="Loading load curve..." />
+        ) : selectedLoadCurve === null ? (
+          <Body1 className={styles.emptyState}>
+            Unable to display load curve data. Try refreshing the page.
+          </Body1>
+        ) : chartLoadCurvePoints.length === 0 ? (
+          <Body1 className={styles.emptyState}>
+            The assigned load curve has no data points.
+          </Body1>
+        ) : (
+          <>
+            <div className={styles.chartWrapper}>
+              <LoadCurveChart
+                points={chartLoadCurvePoints}
+                className={styles.chartCanvas}
+                marker={chartEvaluation.marker}
+                limitHighlight={chartEvaluation.limitHighlight}
+                verticalLines={chartVerticalLines}
+                horizontalLines={chartHorizontalLines}
+                summaryText={chartSummary.text}
+                summaryColor={chartSummary.color}
+              />
+            </div>
+            <Body1 className={styles.chartStatus} style={{ color: chartStatusColor }}>
+              {chartEvaluation.message}
+            </Body1>
+            <div className={styles.chartMeta}>
+              <div className={styles.field}>
+                <Caption1>Point for chart - Span (m)</Caption1>
+                <Body1>{chartPointSpanDisplay}</Body1>
+              </div>
+              <div className={styles.field}>
+                <Caption1>Point for chart - Load (kN/m)</Caption1>
+                <Body1>{chartPointLoadDisplay}</Body1>
+              </div>
+              {chartEvaluation.limitHighlight ? (
+                <div className={styles.field}>
+                  <Caption1>
+                    {chartEvaluation.limitHighlight.type === 'min'
+                      ? 'Minimum allowable span (m)'
+                      : 'Max allowable span (m)'}
+                  </Caption1>
+                  <Body1>{numberFormatter.format(chartEvaluation.limitHighlight.span)}</Body1>
+                </div>
+              ) : null}
+              {chartEvaluation.allowableLoadAtSpan !== null ? (
+                <div className={styles.field}>
+                  <Caption1>Load limit at span [kN/m]</Caption1>
+                  <Body1>{numberFormatter.format(chartEvaluation.allowableLoadAtSpan)}</Body1>
+                </div>
+              ) : null}
+            </div>
+          </>
+        )}
       </div>
     </section>
   );
