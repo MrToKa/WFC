@@ -10,7 +10,6 @@ import {
   Input,
   Option,
   Spinner,
-  Title3,
   makeStyles,
   shorthands,
   tokens
@@ -19,28 +18,34 @@ import type { CheckboxOnChangeData } from '@fluentui/react-components';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ApiError,
-  Cable,
-  Project,
-  CableType,
-  Tray,
-  TrayInput,
-  MaterialTray,
-  MaterialSupport,
-  MaterialLoadCurve,
-  fetchProject,
-  fetchCables,
-  fetchTrays,
-  fetchCableTypes,
-  fetchTray,
   deleteTray,
-  updateTray,
-  fetchAllMaterialTrays,
-  fetchMaterialSupports,
-  fetchMaterialLoadCurve
+  updateTray
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { LoadCurveChart } from './Materials/components/LoadCurveChart';
+
+// Import refactored modules
+import {
+  useTrayData,
+  useMaterialData,
+  useMaterialSupports,
+  useLoadCurveData,
+  useTrayCalculations,
+  useGroundingCable,
+  useLoadCurveEvaluation,
+  useProjectCableTypes
+} from './TrayDetails/hooks';
+import {
+  toTrayFormState,
+  parseNumberInput,
+  buildTrayInput,
+  formatDimensionValue,
+  formatWeightValue
+} from './TrayDetails/TrayDetails.utils';
+import { TrayFormState, TrayFormErrors } from './TrayDetails/TrayDetails.types';
+import { TrayDetailsHeader } from './TrayDetails/components/TrayDetailsHeader';
+import { CablesTableSection } from './TrayDetails/components/CablesTableSection';
 
 const useStyles = makeStyles({
   root: {
@@ -126,90 +131,6 @@ const useStyles = makeStyles({
   }
 });
 
-type TrayFormState = {
-  name: string;
-  type: string;
-  purpose: string;
-  widthMm: string;
-  heightMm: string;
-  lengthMm: string;
-  weightKgPerM: string;
-};
-
-type TrayFormErrors = Partial<Record<keyof TrayFormState, string>>;
-
-type SupportCalculationResult = {
-  lengthMeters: number | null;
-  distanceMeters: number | null;
-  supportsCount: number | null;
-  weightPerPieceKg: number | null;
-  totalWeightKg: number | null;
-  weightPerMeterKg: number | null;
-};
-
-type LoadCurveChartStatus =
-  | 'no-curve'
-  | 'loading'
-  | 'awaiting-data'
-  | 'no-points'
-  | 'ok'
-  | 'too-long'
-  | 'too-short'
-  | 'load-too-high';
-
-const toTrayFormState = (tray: Tray): TrayFormState => ({
-  name: tray.name,
-  type: tray.type ?? '',
-  purpose: tray.purpose ?? '',
-  widthMm: tray.widthMm !== null ? String(tray.widthMm) : '',
-  heightMm: tray.heightMm !== null ? String(tray.heightMm) : '',
-  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : '',
-  weightKgPerM: ''
-});
-
-const parseNumberInput = (value: string): { numeric: number | null; error?: string } => {
-  const trimmed = value.trim();
-  if (trimmed === '') {
-    return { numeric: null };
-  }
-  const normalised = trimmed.replace(',', '.');
-  const parsed = Number(normalised);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return { numeric: null, error: 'Enter a valid non-negative number' };
-  }
-  return { numeric: parsed };
-};
-
-const KN_PER_KG = 9.80665 / 1000;
-const FLOAT_TOLERANCE = 1e-6;
-
-const toNullableString = (value: string): string | null => {
-  const trimmed = value.trim();
-  return trimmed === '' ? null : trimmed;
-};
-
-const routingContainsTray = (routing: string | null, trayName: string): boolean => {
-  if (!routing) {
-    return false;
-  }
-
-  const target = trayName.trim().toLowerCase();
-  if (!target) {
-    return false;
-  }
-
-  return routing
-    .split('/')
-    .map((segment) => segment.trim().toLowerCase())
-    .some((segment) => segment === target);
-};
-
-const filterCablesByTray = (cables: Cable[], trayName: string): Cable[] =>
-  cables.filter((cable) => routingContainsTray(cable.routing, trayName));
-
-const isGroundingPurpose = (purpose: string | null): boolean =>
-  purpose !== null && purpose.trim().toLowerCase() === 'grounding';
-
 export const TrayDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
@@ -219,34 +140,29 @@ export const TrayDetails = () => {
 
   const isAdmin = Boolean(user?.isAdmin);
 
-  const [project, setProject] = useState<Project | null>(null);
-  const [tray, setTray] = useState<Tray | null>(null);
-  const [trays, setTrays] = useState<Tray[]>([]);
-  const [trayCables, setTrayCables] = useState<Cable[]>([]);
-  const [projectCableTypes, setProjectCableTypes] = useState<CableType[]>([]);
-  const [projectCableTypesLoading, setProjectCableTypesLoading] = useState<boolean>(false);
-  const [projectCableTypesError, setProjectCableTypesError] = useState<string | null>(null);
-  type GroundingSelection = { include: boolean; typeId: string | null };
-  const [groundingSelectionsByTrayId, setGroundingSelectionsByTrayId] = useState<
-    Record<string, GroundingSelection>
-  >({});
-  const [groundingPreferenceSaving, setGroundingPreferenceSaving] = useState<boolean>(false);
-  const [cablesError, setCablesError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use custom hooks for data management
+  const {
+    project,
+    tray,
+    trays,
+    trayCables,
+    cablesError,
+    isLoading,
+    error,
+    setTray,
+    setTrays
+  } = useTrayData(projectId, trayId);
 
-    // Navigation logic for next/previous tray using previousTray and nextTray
-    const handlePrevTray = () => {
-      if (previousTray) {
-        navigate(`/projects/${projectId}/trays/${previousTray.id}`);
-      }
-    };
-    const handleNextTray = () => {
-      if (nextTray) {
-        navigate(`/projects/${projectId}/trays/${nextTray.id}`);
-      }
-    };
+  const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
+    useMaterialData();
 
+  const { materialSupportsById, materialSupportsLoading, materialSupportsError, materialSupportsLoaded } =
+    useMaterialSupports();
+
+  const { projectCableTypes, projectCableTypesLoading, projectCableTypesError } =
+    useProjectCableTypes(projectId);
+
+  // Form state
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [formValues, setFormValues] = useState<TrayFormState>({
     name: '',
@@ -261,375 +177,26 @@ export const TrayDetails = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  const [materialTrays, setMaterialTrays] = useState<MaterialTray[]>([]);
-  const [isLoadingMaterials, setIsLoadingMaterials] = useState<boolean>(false);
-  const [materialsError, setMaterialsError] = useState<string | null>(null);
-  const [materialSupportsById, setMaterialSupportsById] = useState<Record<string, MaterialSupport>>({});
-  const [materialSupportsLoading, setMaterialSupportsLoading] = useState<boolean>(false);
-  const [materialSupportsError, setMaterialSupportsError] = useState<string | null>(null);
-  const [materialSupportsLoaded, setMaterialSupportsLoaded] = useState<boolean>(false);
-  const [loadCurvesById, setLoadCurvesById] = useState<Record<string, MaterialLoadCurve>>({});
-  const [loadCurveLoadingId, setLoadCurveLoadingId] = useState<string | null>(null);
-  const [loadCurveError, setLoadCurveError] = useState<string | null>(null);
-
+  // Initialize form when tray loads
   useEffect(() => {
-    let cancelled = false;
-
-    const loadSupports = async () => {
-      setMaterialSupportsLoading(true);
-      setMaterialSupportsError(null);
-
-      try {
-        const loaded: MaterialSupport[] = [];
-        let page = 1;
-        const PAGE_SIZE = 100;
-
-        while (true) {
-          const { supports: pageSupports, pagination } = await fetchMaterialSupports({
-            page,
-            pageSize: PAGE_SIZE
-          });
-
-          loaded.push(...pageSupports);
-
-          if (!pagination || pagination.totalPages === 0 || page >= pagination.totalPages) {
-            break;
-          }
-
-          page += 1;
-        }
-
-        if (!cancelled) {
-          setMaterialSupportsById((previous) => {
-            const next = { ...previous };
-            loaded.forEach((support) => {
-              next[support.id] = support;
-            });
-            return next;
-          });
-          setMaterialSupportsLoaded(true);
-        }
-      } catch (error) {
-        console.error('Failed to load supports', error);
-        if (!cancelled) {
-          setMaterialSupportsError('Failed to load support details.');
-          setMaterialSupportsLoaded(true);
-        }
-      } finally {
-        if (!cancelled) {
-          setMaterialSupportsLoading(false);
-        }
-      }
-    };
-
-    void loadSupports();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const sortTrays = useCallback(
-    (items: Tray[]) =>
-      [...items].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      ),
-    []
-  );
-
-  useEffect(() => {
-    const loadMaterialTrays = async () => {
-      setIsLoadingMaterials(true);
-      setMaterialsError(null);
-      try {
-        const result = await fetchAllMaterialTrays();
-        const sorted = [...result.trays].sort((a, b) =>
-          a.type.localeCompare(b.type, undefined, { sensitivity: 'base' })
-        );
-        setMaterialTrays(sorted);
-      } catch (err) {
-        console.error('Fetch material trays failed', err);
-        setMaterialsError('Failed to load tray types. Width, height, and weight cannot be updated automatically.');
-      } finally {
-        setIsLoadingMaterials(false);
-      }
-    };
-
-    void loadMaterialTrays();
-  }, []);
-
-  useEffect(() => {
-    if (!projectId) {
-      setProjectCableTypes([]);
-      setProjectCableTypesError(null);
-      setProjectCableTypesLoading(false);
-      return;
+    if (tray) {
+      setFormValues(toTrayFormState(tray));
+      setIsEditing(false);
+      setFormErrors({});
     }
+  }, [tray]);
 
-    let cancelled = false;
-
-    const loadCableTypes = async () => {
-      setProjectCableTypesLoading(true);
-      setProjectCableTypesError(null);
-
-      try {
-        const response = await fetchCableTypes(projectId);
-        const sorted = [...response.cableTypes].sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-        );
-
-        if (!cancelled) {
-          setProjectCableTypes(sorted);
-        }
-      } catch (err) {
-        console.error('Failed to load project cable types', err);
-        if (!cancelled) {
-          setProjectCableTypes([]);
-          setProjectCableTypesError('Failed to load project cable types.');
-        }
-      } finally {
-        if (!cancelled) {
-          setProjectCableTypesLoading(false);
-        }
-      }
-    };
-
-    void loadCableTypes();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
-  useEffect(() => {
-    setGroundingSelectionsByTrayId((previous) =>
-      Object.keys(previous).length > 0 ? {} : previous
-    );
-  }, [projectId]);
-
-  const currentGroundingPreference =
-    trayId && groundingSelectionsByTrayId[trayId]
-      ? groundingSelectionsByTrayId[trayId]
-      : null;
-
-  const includeGroundingCable = currentGroundingPreference?.include ?? false;
-  const selectedGroundingCableTypeId = currentGroundingPreference?.typeId ?? null;
-
-  const groundingCableTypes = useMemo(
-    () =>
-      projectCableTypes.filter((type) => {
-        const purpose = type.purpose?.trim().toLowerCase();
-        return purpose === 'grounding';
-      }),
-    [projectCableTypes]
-  );
-
-  const persistGroundingPreference = useCallback(
-    async (
-      previousPreference: GroundingSelection | null,
-      nextPreference: GroundingSelection
-    ) => {
-      if (!trayId) {
-        return;
-      }
-
-      if (!projectId || !token) {
-        setGroundingSelectionsByTrayId((previous) => {
-          if (!previousPreference) {
-            const { [trayId]: _omit, ...rest } = previous;
-            return rest;
-          }
-          return {
-            ...previous,
-            [trayId]: previousPreference
-          };
-        });
-        if (!token) {
-          return;
-        }
-        showToast({
-          intent: 'error',
-          title: 'Unable to save grounding cable setting',
-          body: 'Missing project information.'
-        });
-        return;
-      }
-
-      setGroundingPreferenceSaving(true);
-
-      try {
-        const response = await updateTray(token, projectId, trayId, {
-          includeGroundingCable: nextPreference.include,
-          groundingCableTypeId: nextPreference.typeId ?? null
-        });
-
-        setTray(response.tray);
-        setTrays((previous) => {
-          const hasTray = previous.some((item) => item.id === response.tray.id);
-          if (!hasTray) {
-            return previous;
-          }
-          return previous.map((item) =>
-            item.id === response.tray.id ? response.tray : item
-          );
-        });
-        setGroundingSelectionsByTrayId((previous) => ({
-          ...previous,
-          [trayId]: {
-            include: response.tray.includeGroundingCable,
-            typeId: response.tray.groundingCableTypeId
-          }
-        }));
-      } catch (error) {
-        console.error('Failed to save grounding cable preference', error);
-        setGroundingSelectionsByTrayId((previous) => {
-          if (!previousPreference) {
-            const { [trayId]: _omit, ...rest } = previous;
-            return rest;
-          }
-          return {
-            ...previous,
-            [trayId]: previousPreference
-          };
-        });
-        showToast({
-          intent: 'error',
-          title: 'Failed to save grounding cable setting',
-          body: 'Please try again.'
-        });
-      } finally {
-        setGroundingPreferenceSaving(false);
-      }
-    },
-    [projectId, trayId, token, showToast, updateTray]
-  );
-
-  useEffect(() => {
-    if (!trayId || !includeGroundingCable) {
-      return;
-    }
-
-    if (groundingPreferenceSaving) {
-      return;
-    }
-
-    const hasCurrentSelection =
-      selectedGroundingCableTypeId !== null &&
-      groundingCableTypes.some((type) => type.id === selectedGroundingCableTypeId);
-
-    if (hasCurrentSelection) {
-      return;
-    }
-
-    const fallbackTypeId = groundingCableTypes[0]?.id ?? null;
-
-    if (fallbackTypeId === null) {
-      return;
-    }
-
-    const nextPreference: GroundingSelection = {
-      include: true,
-      typeId: fallbackTypeId
-    };
-
-    setGroundingSelectionsByTrayId((previous) => ({
-      ...previous,
-      [trayId]: nextPreference
-    }));
-
-    void persistGroundingPreference(currentGroundingPreference, nextPreference);
-  }, [
-    trayId,
-    includeGroundingCable,
-    selectedGroundingCableTypeId,
-    groundingCableTypes,
-    currentGroundingPreference,
-    groundingPreferenceSaving,
-    persistGroundingPreference
-  ]);
-
-  const formatDimensionValue = useCallback(
-    (value: number | null | undefined) =>
-      value === null || value === undefined || Number.isNaN(value) ? '' : String(value),
-    []
-  );
-
-  const formatWeightValue = useCallback(
-    (value: number | null | undefined) =>
-      value === null || value === undefined || Number.isNaN(value) ? '' : value.toFixed(3),
-    []
-  );
-
-  const findMaterialTrayByType = useCallback(
-    (type: string) => {
-      const normalised = type.trim().toLowerCase();
-      if (!normalised) {
-        return null;
-      }
-      return (
-        materialTrays.find(
-          (item) => item.type.trim().toLowerCase() === normalised
-        ) ?? null
-      );
-    },
-    [materialTrays]
-  );
-
+  // Material tray selection
   const selectedMaterialTray = useMemo(
     () => findMaterialTrayByType(formValues.type),
     [findMaterialTrayByType, formValues.type]
   );
 
   const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
-  const selectedLoadCurve =
-    selectedLoadCurveId && loadCurvesById[selectedLoadCurveId]
-      ? loadCurvesById[selectedLoadCurveId]
-      : null;
+  const { selectedLoadCurve, loadCurveLoadingId, loadCurveError } =
+    useLoadCurveData(selectedLoadCurveId);
 
-  useEffect(() => {
-    if (!selectedLoadCurveId) {
-      setLoadCurveLoadingId(null);
-      setLoadCurveError(null);
-      return;
-    }
-
-    if (loadCurvesById[selectedLoadCurveId]) {
-      setLoadCurveLoadingId(null);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadCurveLoadingId(selectedLoadCurveId);
-    setLoadCurveError(null);
-
-    const load = async () => {
-      try {
-        const response = await fetchMaterialLoadCurve(selectedLoadCurveId);
-        if (!cancelled) {
-          setLoadCurvesById((previous) => ({
-            ...previous,
-            [selectedLoadCurveId]: response.loadCurve
-          }));
-        }
-      } catch (err) {
-        console.error('Failed to load material load curve', err);
-        if (!cancelled) {
-          setLoadCurveError('Failed to load tray load curve.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadCurveLoadingId(null);
-        }
-      }
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedLoadCurveId, loadCurvesById]);
-
+  // Auto-update form fields when material tray changes
   useEffect(() => {
     if (!selectedMaterialTray) {
       setFormValues((previous) => {
@@ -667,286 +234,86 @@ export const TrayDetails = () => {
 
       return changed ? nextState : previous;
     });
+  }, [selectedMaterialTray, isEditing]);
+
+  // Grounding cable logic
+  const groundingHook = useGroundingCable(
+    projectId,
+    trayId,
+    projectCableTypes,
+    token,
+    showToast,
+    setTray,
+    setTrays
+  );
+
+  const {
+    groundingCableTypes,
+    includeGroundingCable,
+    selectedGroundingCableTypeId,
+    selectedGroundingCableType,
+    groundingCableWeightKgPerM,
+    currentGroundingPreference,
+    groundingPreferenceSaving,
+    setGroundingSelectionsByTrayId,
+    persistGroundingPreference
+  } = groundingHook;
+
+  // Initialize grounding selection when tray loads
+  useEffect(() => {
+    if (tray) {
+      setGroundingSelectionsByTrayId((previous) => ({
+        ...previous,
+        [tray.id]: {
+          include: tray.includeGroundingCable,
+          typeId: tray.groundingCableTypeId
+        }
+      }));
+    }
+  }, [tray, setGroundingSelectionsByTrayId]);
+
+  // Auto-select fallback grounding cable type if needed
+  useEffect(() => {
+    if (!trayId || !includeGroundingCable || groundingPreferenceSaving) {
+      return;
+    }
+
+    const hasCurrentSelection =
+      selectedGroundingCableTypeId !== null &&
+      groundingCableTypes.some((type) => type.id === selectedGroundingCableTypeId);
+
+    if (hasCurrentSelection) {
+      return;
+    }
+
+    const fallbackTypeId = groundingCableTypes[0]?.id ?? null;
+    if (fallbackTypeId === null) {
+      return;
+    }
+
+    const nextPreference = {
+      include: true,
+      typeId: fallbackTypeId
+    };
+
+    setGroundingSelectionsByTrayId((previous) => ({
+      ...previous,
+      [trayId]: nextPreference
+    }));
+
+    void persistGroundingPreference(currentGroundingPreference, nextPreference);
   }, [
-    selectedMaterialTray,
-    isEditing,
-    formatDimensionValue,
-    formatWeightValue
+    trayId,
+    includeGroundingCable,
+    selectedGroundingCableTypeId,
+    groundingCableTypes,
+    currentGroundingPreference,
+    groundingPreferenceSaving,
+    persistGroundingPreference,
+    setGroundingSelectionsByTrayId
   ]);
 
-  useEffect(() => {
-    const load = async () => {
-      if (!projectId || !trayId) {
-        setError('Tray not found.');
-        setTrayCables([]);
-        setTrays([]);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      setError(null);
-      setTrayCables([]);
-      setCablesError(null);
-
-      try {
-        const [projectResponse, trayResponse] = await Promise.all([
-          fetchProject(projectId),
-          fetchTray(projectId, trayId)
-        ]);
-
-        setProject(projectResponse.project);
-        setTray(trayResponse.tray);
-        setFormValues(toTrayFormState(trayResponse.tray));
-        setGroundingSelectionsByTrayId((previous) => ({
-          ...previous,
-          [trayResponse.tray.id]: {
-            include: trayResponse.tray.includeGroundingCable,
-            typeId: trayResponse.tray.groundingCableTypeId
-          }
-        }));
-        setIsEditing(false);
-        setFormErrors({});
-
-        try {
-          const cablesResponse = await fetchCables(projectId);
-          setTrayCables(
-            filterCablesByTray(cablesResponse.cables, trayResponse.tray.name)
-          );
-        } catch (cableError) {
-          console.error('Failed to load tray cables', cableError);
-          setCablesError('Failed to load cables for this tray.');
-        }
-      } catch (err) {
-        console.error('Failed to load tray details', err);
-        if (err instanceof ApiError && err.status === 404) {
-          setError('Tray not found.');
-        } else {
-          setError('Failed to load tray details.');
-        }
-        setTrayCables([]);
-        setTrays([]);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const traysResponse = await fetchTrays(projectId);
-        setTrays(sortTrays(traysResponse.trays));
-      } catch (err) {
-        console.error('Failed to load trays for navigation', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void load();
-  }, [projectId, trayId, sortTrays]);
-
-  const pageTitle = useMemo(() => {
-    if (!tray) {
-      return 'Tray details';
-    }
-    return `Tray - ${tray.name}`;
-  }, [tray]);
-
-  const { previousTray, nextTray } = useMemo(() => {
-    if (!tray) {
-      return { previousTray: null, nextTray: null };
-    }
-
-    const currentIndex = trays.findIndex((item) => item.id === tray.id);
-
-    if (currentIndex === -1) {
-      return { previousTray: null, nextTray: null };
-    }
-
-    return {
-      previousTray: currentIndex > 0 ? trays[currentIndex - 1] : null,
-      nextTray:
-        currentIndex < trays.length - 1 ? trays[currentIndex + 1] : null
-    };
-  }, [tray, trays]);
-
-  const numberFormatter = useMemo(
-    () =>
-      new Intl.NumberFormat(undefined, {
-        maximumFractionDigits: 3
-      }),
-    []
-  );
-
-  const formatCableTypeLabel = useCallback(
-    (type: CableType) => {
-      const baseName = type.name?.trim() || 'Unnamed cable type';
-      const tag = type.tag?.trim();
-      const weight = type.weightKgPerM;
-      const weightDisplay =
-        weight !== null && !Number.isNaN(weight)
-          ? `${numberFormatter.format(weight)} kg/m`
-          : null;
-
-      return [baseName, tag ? `(${tag})` : null, weightDisplay ? `- ${weightDisplay}` : null]
-        .filter(Boolean)
-        .join(' ');
-    },
-    [numberFormatter]
-  );
-
-  const nonGroundingCables = useMemo(
-    () => trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)),
-    [trayCables]
-  );
-
-  const cablesForWeightCalculation = useMemo(() => {
-    return nonGroundingCables.filter((cable) => {
-      const weight = cable.weightKgPerM;
-      return weight !== null && !Number.isNaN(weight);
-    });
-  }, [nonGroundingCables]);
-
-  const selectedGroundingCableType = useMemo(() => {
-    if (!selectedGroundingCableTypeId) {
-      return null;
-    }
-
-    return (
-      groundingCableTypes.find((type) => type.id === selectedGroundingCableTypeId) ?? null
-    );
-  }, [groundingCableTypes, selectedGroundingCableTypeId]);
-
-  const selectedGroundingCableLabel = useMemo(
-    () =>
-      selectedGroundingCableType
-        ? formatCableTypeLabel(selectedGroundingCableType)
-        : undefined,
-    [selectedGroundingCableType, formatCableTypeLabel]
-  );
-
-  const groundingCableWeightKgPerM = useMemo(() => {
-    if (!includeGroundingCable || !selectedGroundingCableType) {
-      return null;
-    }
-
-    const weight = selectedGroundingCableType.weightKgPerM;
-    return weight !== null && !Number.isNaN(weight) ? weight : null;
-  }, [includeGroundingCable, selectedGroundingCableType]);
-
-  const cablesWeightLoadPerMeterKg = useMemo(() => {
-    let total = 0;
-    let hasWeightData = false;
-
-    for (const cable of cablesForWeightCalculation) {
-      const weight = cable.weightKgPerM;
-      if (weight !== null && !Number.isNaN(weight)) {
-        total += weight;
-        hasWeightData = true;
-      }
-    }
-
-    if (groundingCableWeightKgPerM !== null) {
-      total += groundingCableWeightKgPerM;
-      hasWeightData = true;
-    }
-
-    return hasWeightData ? total : null;
-  }, [cablesForWeightCalculation, groundingCableWeightKgPerM]);
-
-  const hasGroundingCableWeightData = groundingCableWeightKgPerM !== null;
-  const groundingCableMissingWeight =
-    includeGroundingCable && selectedGroundingCableType !== null && !hasGroundingCableWeightData;
-
-  const supportOverride = useMemo(() => {
-    if (!project || !tray || !tray.type) {
-      return null;
-    }
-    return project.supportDistanceOverrides[tray.type] ?? null;
-  }, [project, tray]);
-
-  const supportIdToLoad = supportOverride?.supportId ?? null;
-
-  const overrideSupport =
-    supportIdToLoad && materialSupportsById[supportIdToLoad]
-      ? materialSupportsById[supportIdToLoad]
-      : null;
-
-  const supportCalculations = useMemo<SupportCalculationResult>(() => {
-    const lengthMeters =
-      tray && tray.lengthMm !== null && tray.lengthMm > 0
-        ? tray.lengthMm / 1000
-        : null;
-
-    const overrideDistance =
-      supportOverride && supportOverride.distance !== null
-        ? supportOverride.distance
-        : null;
-
-    let distanceMeters =
-      overrideDistance ??
-      (project && project.supportDistance !== null ? project.supportDistance : null);
-
-    if (
-      (distanceMeters === null || distanceMeters === undefined || distanceMeters <= 0) &&
-      tray?.type
-    ) {
-      if (tray.type.trim().toLowerCase() === 'kl 100.603 f') {
-        distanceMeters = 2;
-      }
-    }
-
-    if (distanceMeters !== null && distanceMeters <= 0) {
-      distanceMeters = null;
-    }
-
-    const weightPerPieceOverride =
-      overrideSupport && overrideSupport.weightKg !== null
-        ? overrideSupport.weightKg
-        : null;
-
-    const weightPerPieceKg =
-      weightPerPieceOverride !== null
-        ? weightPerPieceOverride
-        : project && project.supportWeight !== null
-        ? project.supportWeight
-        : null;
-
-    if (lengthMeters === null || lengthMeters <= 0 || distanceMeters === null) {
-      return {
-        lengthMeters,
-        distanceMeters,
-        supportsCount: null,
-        weightPerPieceKg,
-        totalWeightKg: null,
-        weightPerMeterKg: null
-      };
-    }
-
-    const baseSegments = Math.floor(lengthMeters / distanceMeters);
-    let supportsCount = Math.max(2, baseSegments + 1);
-    const remainder = lengthMeters - baseSegments * distanceMeters;
-
-    if (baseSegments >= 1 && remainder > distanceMeters * 0.2) {
-      supportsCount += 1;
-    }
-
-    const totalWeightKg =
-      weightPerPieceKg !== null ? supportsCount * weightPerPieceKg : null;
-
-    const weightPerMeterKg =
-      totalWeightKg !== null && lengthMeters > 0
-        ? totalWeightKg / lengthMeters
-        : null;
-
-    return {
-      lengthMeters,
-      distanceMeters,
-      supportsCount,
-      weightPerPieceKg,
-      totalWeightKg,
-      weightPerMeterKg
-    };
-  }, [project, tray, supportOverride, overrideSupport]);
-
+  // Calculate tray weight
   const trayWeightPerMeterKg = useMemo(() => {
     if (formValues.weightKgPerM.trim() !== '') {
       const { numeric } = parseNumberInput(formValues.weightKgPerM);
@@ -966,60 +333,33 @@ export const TrayDetails = () => {
     return null;
   }, [formValues.weightKgPerM, selectedMaterialTray]);
 
-  const supportWeightPerMeterKg = supportCalculations.weightPerMeterKg;
-  const trayLengthMeters = supportCalculations.lengthMeters;
+  // All calculations using custom hook
+  const calculations = useTrayCalculations(
+    project,
+    tray,
+    trayCables,
+    materialSupportsById,
+    trayWeightPerMeterKg,
+    groundingCableWeightKgPerM
+  );
 
-  const trayWeightLoadPerMeterKg = useMemo(() => {
-    if (trayWeightPerMeterKg === null || supportWeightPerMeterKg === null) {
-      return null;
-    }
+  const {
+    supportOverride,
+    overrideSupport,
+    supportCalculations,
+    nonGroundingCables,
+    cablesWeightLoadPerMeterKg,
+    trayWeightLoadPerMeterKg,
+    trayTotalOwnWeightKg,
+    cablesTotalWeightKg,
+    totalWeightLoadPerMeterKg,
+    totalWeightKg,
+    totalWeightLoadPerMeterKn
+  } = calculations;
 
-    return trayWeightPerMeterKg + supportWeightPerMeterKg;
-  }, [trayWeightPerMeterKg, supportWeightPerMeterKg]);
-
-  const trayTotalOwnWeightKg = useMemo(() => {
-    if (
-      trayWeightLoadPerMeterKg === null ||
-      trayLengthMeters === null ||
-      trayLengthMeters <= 0
-    ) {
-      return null;
-    }
-
-    return trayWeightLoadPerMeterKg * trayLengthMeters;
-  }, [trayWeightLoadPerMeterKg, trayLengthMeters]);
-
-  const cablesTotalWeightKg = useMemo(() => {
-    if (
-      cablesWeightLoadPerMeterKg === null ||
-      trayLengthMeters === null ||
-      trayLengthMeters <= 0
-    ) {
-      return null;
-    }
-
-    return cablesWeightLoadPerMeterKg * trayLengthMeters;
-  }, [cablesWeightLoadPerMeterKg, trayLengthMeters]);
-
-  const totalWeightLoadPerMeterKg = useMemo(() => {
-    if (trayWeightLoadPerMeterKg === null || cablesWeightLoadPerMeterKg === null) {
-      return null;
-    }
-
-    return trayWeightLoadPerMeterKg + cablesWeightLoadPerMeterKg;
-  }, [trayWeightLoadPerMeterKg, cablesWeightLoadPerMeterKg]);
-
-  const totalWeightKg = useMemo(() => {
-    if (trayTotalOwnWeightKg === null || cablesTotalWeightKg === null) {
-      return null;
-    }
-
-    return trayTotalOwnWeightKg + cablesTotalWeightKg;
-  }, [trayTotalOwnWeightKg, cablesTotalWeightKg]);
-
+  // Safety factor calculations
   const safetyFactorPercent = project?.trayLoadSafetyFactor ?? null;
-  const safetyFactorMissing =
-    project !== null && project.trayLoadSafetyFactor === null;
+  const safetyFactorMissing = project !== null && project.trayLoadSafetyFactor === null;
   const safetyFactorHasError =
     project !== null && safetyFactorPercent !== null && safetyFactorPercent < 0;
   const safetyFactorMultiplier =
@@ -1037,13 +377,6 @@ export const TrayDetails = () => {
   })();
   const safetyFactorBlocking = safetyFactorHasError || safetyFactorMissing;
 
-  const totalWeightLoadPerMeterKn = useMemo(() => {
-    if (totalWeightLoadPerMeterKg === null) {
-      return null;
-    }
-    return totalWeightLoadPerMeterKg * KN_PER_KG;
-  }, [totalWeightLoadPerMeterKg]);
-
   const safetyAdjustedLoadKnPerM = useMemo(() => {
     if (totalWeightLoadPerMeterKn === null || safetyFactorMultiplier === null) {
       return null;
@@ -1051,289 +384,82 @@ export const TrayDetails = () => {
     return totalWeightLoadPerMeterKn * safetyFactorMultiplier;
   }, [totalWeightLoadPerMeterKn, safetyFactorMultiplier]);
 
+  // Load curve evaluation
   const chartSpanMeters = supportCalculations.distanceMeters;
   const chartLoadCurvePoints = selectedLoadCurve?.points ?? [];
-
-  const chartEvaluation = useMemo(() => {
-    if (!selectedLoadCurveId) {
-      return {
-        status: 'no-curve' as LoadCurveChartStatus,
-        message: 'The selected tray type is not linked to a load curve.',
-        marker: null,
-        limitHighlight: null,
-        minSpan: null,
-        maxSpan: null,
-        allowableLoadAtSpan: null
-      };
-    }
-
-    if (!selectedLoadCurve) {
-      return {
-        status: 'loading' as LoadCurveChartStatus,
-        message: 'Loading load curve...',
-        marker: null,
-        limitHighlight: null,
-        minSpan: null,
-        maxSpan: null,
-        allowableLoadAtSpan: null
-      };
-    }
-
-    if (chartLoadCurvePoints.length === 0) {
-      return {
-        status: 'no-points' as LoadCurveChartStatus,
-        message: 'The assigned load curve has no data points.',
-        marker: null,
-        limitHighlight: null,
-        minSpan: null,
-        maxSpan: null,
-        allowableLoadAtSpan: null
-      };
-    }
-
-    const sortedPoints = [...chartLoadCurvePoints].sort((a, b) => a.spanM - b.spanM);
-    const minSpan = sortedPoints[0].spanM;
-    const maxSpan = sortedPoints[sortedPoints.length - 1].spanM;
-    const maxLoad = sortedPoints.reduce(
-      (currentMax, point) => Math.max(currentMax, point.loadKnPerM),
-      Number.NEGATIVE_INFINITY
-    );
-
-    const computeLoadAtSpan = (span: number): number | null => {
-      if (span <= sortedPoints[0].spanM + FLOAT_TOLERANCE) {
-        return sortedPoints[0].loadKnPerM;
-      }
-
-      for (let index = 1; index < sortedPoints.length; index += 1) {
-        const previous = sortedPoints[index - 1];
-        const current = sortedPoints[index];
-
-        if (span <= current.spanM + FLOAT_TOLERANCE) {
-          const spanDelta = current.spanM - previous.spanM;
-          if (Math.abs(spanDelta) <= FLOAT_TOLERANCE) {
-            return current.loadKnPerM;
-          }
-          const ratio = (span - previous.spanM) / spanDelta;
-          return previous.loadKnPerM + ratio * (current.loadKnPerM - previous.loadKnPerM);
-        }
-      }
-
-      return sortedPoints[sortedPoints.length - 1].loadKnPerM;
-    };
-
-    const computeMaxSpanForLoad = (
-      targetLoad: number
-    ): { span: number; load: number } | null => {
-      if (targetLoad > maxLoad + FLOAT_TOLERANCE) {
-        return { span: minSpan, load: sortedPoints[0].loadKnPerM };
-      }
-
-      for (let index = 1; index < sortedPoints.length; index += 1) {
-        const previous = sortedPoints[index - 1];
-        const current = sortedPoints[index];
-        const prevLoad = previous.loadKnPerM;
-        const currLoad = current.loadKnPerM;
-
-        const crosses =
-          (prevLoad >= targetLoad && currLoad <= targetLoad) ||
-          (prevLoad <= targetLoad && currLoad >= targetLoad);
-
-        if (!crosses) {
-          continue;
-        }
-
-        const loadDelta = currLoad - prevLoad;
-        if (Math.abs(loadDelta) <= FLOAT_TOLERANCE) {
-          return { span: current.spanM, load: currLoad };
-        }
-
-        const ratio = (targetLoad - prevLoad) / loadDelta;
-        const span = previous.spanM + ratio * (current.spanM - previous.spanM);
-        return { span, load: targetLoad };
-      }
-
-      return { span: maxSpan, load: sortedPoints[sortedPoints.length - 1].loadKnPerM };
-    };
-
-    if (safetyFactorMultiplier === null) {
-      return {
-        status: 'awaiting-data' as LoadCurveChartStatus,
-        message:
-          safetyFactorStatusMessage ??
-          'Set a safety factor in Project details to evaluate the load curve.',
-        marker: null,
-        limitHighlight: null,
-        minSpan,
-        maxSpan,
-        allowableLoadAtSpan: null
-      };
-    }
-
-    if (chartSpanMeters === null || safetyAdjustedLoadKnPerM === null) {
-      return {
-        status: 'awaiting-data' as LoadCurveChartStatus,
-        message: 'Provide tray weight and support spacing data to plot the point.',
-        marker: null,
-        limitHighlight: null,
-        minSpan,
-        maxSpan,
-        allowableLoadAtSpan: null
-      };
-    }
-
-    const maxSpanForLoad = computeMaxSpanForLoad(safetyAdjustedLoadKnPerM);
-    const allowableLoadAtSpan = computeLoadAtSpan(chartSpanMeters);
-
-    let status: LoadCurveChartStatus = 'ok';
-    let message = 'Support spacing is within the load curve limits.';
-    let highlight: { span: number; load: number; type: 'min' | 'max'; label: string } | null =
-      maxSpanForLoad
-        ? {
-            span: maxSpanForLoad.span,
-            load: maxSpanForLoad.load,
-            type: 'max',
-            label: 'Max allowable span'
-          }
-        : null;
-
-    if (safetyAdjustedLoadKnPerM > maxLoad + FLOAT_TOLERANCE) {
-      status = 'load-too-high';
-      message = 'Calculated load exceeds the maximum load defined by the curve.';
-      highlight = {
-        span: minSpan,
-        load: sortedPoints[0].loadKnPerM,
-        type: 'max',
-        label: 'Max allowable span'
-      };
-    } else if (chartSpanMeters < minSpan - FLOAT_TOLERANCE) {
-      status = 'too-short';
-      message = 'Support spacing is below the minimum span covered by the curve.';
-      highlight = {
-        span: minSpan,
-        load: sortedPoints[0].loadKnPerM,
-        type: 'min',
-        label: 'Min allowable span'
-      };
-    } else if (maxSpanForLoad && chartSpanMeters > maxSpanForLoad.span + FLOAT_TOLERANCE) {
-      status = 'too-long';
-      message = 'Support spacing exceeds the allowable span for the calculated load.';
-      highlight = {
-        span: maxSpanForLoad.span,
-        load: maxSpanForLoad.load,
-        type: 'max',
-        label: 'Max allowable span'
-      };
-    }
-
-    const markerColor =
-      status === 'ok'
-        ? tokens.colorPaletteGreenForeground1
-        : status === 'too-short'
-        ? tokens.colorPaletteMarigoldForeground2
-        : tokens.colorPaletteRedForeground1;
-
-    const marker =
-      chartSpanMeters !== null && safetyAdjustedLoadKnPerM !== null
-        ? {
-            span: chartSpanMeters,
-            load: safetyAdjustedLoadKnPerM,
-            color: markerColor,
-            label: 'Calculated point'
-          }
-        : null;
-
-    return {
-      status,
-      message,
-      marker,
-      limitHighlight: highlight,
-      minSpan,
-      maxSpan,
-      
-      allowableLoadAtSpan
-    };
-  }, [
+  const chartEvaluation = useLoadCurveEvaluation(
     selectedLoadCurveId,
     selectedLoadCurve,
-    chartLoadCurvePoints,
     chartSpanMeters,
     safetyAdjustedLoadKnPerM,
     safetyFactorMultiplier,
     safetyFactorStatusMessage
-  ]);
+  );
 
-  const chartStatusColor =
-    safetyFactorBlocking
-      ? tokens.colorStatusDangerForeground1
-      : chartEvaluation.status === 'ok'
-      ? tokens.colorPaletteGreenForeground1
-      : chartEvaluation.status === 'too-short'
-      ? tokens.colorPaletteMarigoldForeground2
-      : chartEvaluation.status === 'no-curve' ||
-        chartEvaluation.status === 'loading' ||
-        chartEvaluation.status === 'awaiting-data' ||
-        chartEvaluation.status === 'no-points'
-      ? tokens.colorNeutralForeground3
-      : tokens.colorPaletteRedForeground1;
-
-  const chartPointSpanDisplay =
-    chartSpanMeters !== null ? numberFormatter.format(chartSpanMeters) : '-';
-  const chartPointLoadDisplay =
-    safetyAdjustedLoadKnPerM !== null ? numberFormatter.format(safetyAdjustedLoadKnPerM) : '-';
-  const chartVerticalLines = useMemo(() => {
-    const highlight = chartEvaluation.limitHighlight;
-    if (!highlight) {
-      return null;
+  // Navigation
+  const { previousTray, nextTray } = useMemo(() => {
+    if (!tray) {
+      return { previousTray: null, nextTray: null };
     }
 
-    const lineColor =
-      highlight.type === 'min'
-        ? tokens.colorPaletteMarigoldForeground2
-        : tokens.colorPaletteDarkOrangeForeground1;
+    const currentIndex = trays.findIndex((item) => item.id === tray.id);
+    if (currentIndex === -1) {
+      return { previousTray: null, nextTray: null };
+    }
 
-    return [
-      {
-        span: highlight.span,
-        toLoad: highlight.load,
-        color: lineColor
+    return {
+      previousTray: currentIndex > 0 ? trays[currentIndex - 1] : null,
+      nextTray: currentIndex < trays.length - 1 ? trays[currentIndex + 1] : null
+    };
+  }, [tray, trays]);
+
+  const handleNavigateTray = useCallback(
+    (targetTrayId: string) => {
+      if (!projectId) {
+        return;
       }
-    ];
-  }, [chartEvaluation.limitHighlight]);
+      navigate(`/projects/${projectId}/trays/${targetTrayId}`);
+    },
+    [navigate, projectId]
+  );
 
-  const chartHorizontalLines = useMemo(() => {
-    if (chartSpanMeters === null || chartEvaluation.allowableLoadAtSpan === null) {
-      return null;
+  const handlePrevTray = () => {
+    if (previousTray) {
+      handleNavigateTray(previousTray.id);
     }
+  };
 
-    return [
-      {
-        load: chartEvaluation.allowableLoadAtSpan,
-        toSpan: chartSpanMeters,
-        color: tokens.colorPaletteRedForeground1,
-        label: 'Load limit at span'
-      }
-    ];
-  }, [chartEvaluation.allowableLoadAtSpan, chartEvaluation.marker, chartSpanMeters]);
-
-  const chartSummary = useMemo(() => {
-    const highlight = chartEvaluation.limitHighlight;
-    if (!highlight) {
-      return { text: null, color: undefined as string | undefined };
+  const handleNextTray = () => {
+    if (nextTray) {
+      handleNavigateTray(nextTray.id);
     }
+  };
 
-    const spanText =
-      highlight.span !== null && !Number.isNaN(highlight.span)
-        ? numberFormatter.format(highlight.span)
-        : null;
+  // Formatters
+  const numberFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: 3
+      }),
+    []
+  );
 
-    const color =
-      highlight.type === 'min'
-        ? tokens.colorPaletteMarigoldForeground2
-        : tokens.colorPaletteDarkOrangeForeground1;
+  const formatCableTypeLabel = useCallback(
+    (type: typeof projectCableTypes[0]) => {
+      const baseName = type.name?.trim() || 'Unnamed cable type';
+      const tag = type.tag?.trim();
+      const weight = type.weightKgPerM;
+      const weightDisplay =
+        weight !== null && !Number.isNaN(weight)
+          ? `${numberFormatter.format(weight)} kg/m`
+          : null;
 
-    const text = spanText ? `${highlight.label}: ${spanText} m` : highlight.label;
-    return { text, color };
-  }, [chartEvaluation.limitHighlight, numberFormatter]);
+      return [baseName, tag ? `(${tag})` : null, weightDisplay ? `- ${weightDisplay}` : null]
+        .filter(Boolean)
+        .join(' ');
+    },
+    [numberFormatter]
+  );
 
   const formatSupportNumber = useCallback(
     (value: number | null) =>
@@ -1341,34 +467,7 @@ export const TrayDetails = () => {
     [numberFormatter]
   );
 
-  const supportSectionNeedsSupportData = Boolean(supportOverride?.supportId);
-  const supportDistanceMissing = supportCalculations.distanceMeters === null;
-  const trayLengthMissing =
-    supportCalculations.lengthMeters === null || supportCalculations.lengthMeters <= 0;
-  const supportDetailsMissing =
-    supportSectionNeedsSupportData &&
-    materialSupportsLoaded &&
-    !materialSupportsLoading &&
-    supportIdToLoad !== null &&
-    !overrideSupport;
-  const supportDetailsError = supportDetailsMissing
-    ? 'Selected support details were not found.'
-    : materialSupportsError;
-
-  const supportTypeDisplay = overrideSupport?.type ?? supportOverride?.supportType ?? null;
-  const supportLengthMm = overrideSupport?.lengthMm ?? null;
-
-  const handleNavigateTray = useCallback(
-    (targetTrayId: string) => {
-      if (!projectId) {
-        return;
-      }
-
-      navigate(`/projects/${projectId}/trays/${targetTrayId}`);
-    },
-    [navigate, projectId]
-  );
-
+  // Form handlers
   const handleFieldChange =
     (field: keyof TrayFormState) =>
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
@@ -1407,11 +506,7 @@ export const TrayDetails = () => {
         heightMm: undefined
       }));
     },
-    [
-      findMaterialTrayByType,
-      formatDimensionValue,
-      formatWeightValue
-    ]
+    [findMaterialTrayByType]
   );
 
   const handleGroundingCableToggle = useCallback(
@@ -1435,15 +530,12 @@ export const TrayDetails = () => {
       let nextTypeId = previousPreference?.typeId ?? null;
 
       if (nextInclude) {
-        if (
-          !nextTypeId ||
-          !groundingCableTypes.some((type) => type.id === nextTypeId)
-        ) {
+        if (!nextTypeId || !groundingCableTypes.some((type) => type.id === nextTypeId)) {
           nextTypeId = groundingCableTypes[0]?.id ?? null;
         }
       }
 
-      const nextPreference: GroundingSelection = {
+      const nextPreference = {
         include: nextInclude,
         typeId: nextTypeId
       };
@@ -1469,7 +561,8 @@ export const TrayDetails = () => {
       groundingCableTypes,
       currentGroundingPreference,
       persistGroundingPreference,
-      showToast
+      showToast,
+      setGroundingSelectionsByTrayId
     ]
   );
 
@@ -1480,16 +573,12 @@ export const TrayDetails = () => {
       }
 
       const nextTypeId = data.optionValue ?? null;
-      if (!nextTypeId) {
-        return;
-      }
-
-      if (!groundingCableTypes.some((type) => type.id === nextTypeId)) {
+      if (!nextTypeId || !groundingCableTypes.some((type) => type.id === nextTypeId)) {
         return;
       }
 
       const previousPreference = currentGroundingPreference;
-      const nextPreference: GroundingSelection = {
+      const nextPreference = {
         include: true,
         typeId: nextTypeId
       };
@@ -1514,44 +603,10 @@ export const TrayDetails = () => {
       groundingPreferenceSaving,
       groundingCableTypes,
       currentGroundingPreference,
-      persistGroundingPreference
+      persistGroundingPreference,
+      setGroundingSelectionsByTrayId
     ]
   );
-
-  const buildTrayInput = (values: TrayFormState) => {
-    const errors: TrayFormErrors = {};
-
-    const name = values.name.trim();
-    if (name === '') {
-      errors.name = 'Name is required';
-    }
-
-    const widthResult = parseNumberInput(values.widthMm);
-    if (widthResult.error) {
-      errors.widthMm = widthResult.error;
-    }
-
-    const heightResult = parseNumberInput(values.heightMm);
-    if (heightResult.error) {
-      errors.heightMm = heightResult.error;
-    }
-
-    const lengthResult = parseNumberInput(values.lengthMm);
-    if (lengthResult.error) {
-      errors.lengthMm = lengthResult.error;
-    }
-
-    const input: TrayInput = {
-      name,
-      type: toNullableString(values.type),
-      purpose: toNullableString(values.purpose),
-      widthMm: widthResult.numeric,
-      heightMm: heightResult.numeric,
-      lengthMm: lengthResult.numeric
-    };
-
-    return { input, errors };
-  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1580,12 +635,11 @@ export const TrayDetails = () => {
       setTray(response.tray);
       setTrays((previous) => {
         const hasTray = previous.some((item) => item.id === response.tray.id);
-        const nextTrays = hasTray
+        return hasTray
           ? previous.map((item) =>
               item.id === response.tray.id ? response.tray : item
             )
           : [...previous, response.tray];
-        return sortTrays(nextTrays);
       });
       setFormValues(toTrayFormState(response.tray));
       setIsEditing(false);
@@ -1645,6 +699,37 @@ export const TrayDetails = () => {
     setIsEditing(false);
   };
 
+  // UI state calculations
+  const selectedGroundingCableLabel = useMemo(
+    () =>
+      selectedGroundingCableType
+        ? formatCableTypeLabel(selectedGroundingCableType)
+        : undefined,
+    [selectedGroundingCableType, formatCableTypeLabel]
+  );
+
+  const hasGroundingCableWeightData = groundingCableWeightKgPerM !== null;
+  const groundingCableMissingWeight =
+    includeGroundingCable && selectedGroundingCableType !== null && !hasGroundingCableWeightData;
+
+  const supportIdToLoad = supportOverride?.supportId ?? null;
+  const supportSectionNeedsSupportData = Boolean(supportOverride?.supportId);
+  const supportDistanceMissing = supportCalculations.distanceMeters === null;
+  const trayLengthMissing =
+    supportCalculations.lengthMeters === null || supportCalculations.lengthMeters <= 0;
+  const supportDetailsMissing =
+    supportSectionNeedsSupportData &&
+    materialSupportsLoaded &&
+    !materialSupportsLoading &&
+    supportIdToLoad !== null &&
+    !overrideSupport;
+  const supportDetailsError = supportDetailsMissing
+    ? 'Selected support details were not found.'
+    : materialSupportsError;
+
+  const supportTypeDisplay = overrideSupport?.type ?? supportOverride?.supportType ?? null;
+  const supportLengthMm = overrideSupport?.lengthMm ?? null;
+
   const canUseMaterialDropdown = !isLoadingMaterials && materialTrays.length > 0;
   const weightDisplay =
     formValues.weightKgPerM !== ''
@@ -1654,6 +739,82 @@ export const TrayDetails = () => {
     formValues.type && findMaterialTrayByType(formValues.type)
   );
 
+  // Chart visualization data
+  const chartStatusColor =
+    safetyFactorBlocking
+      ? tokens.colorStatusDangerForeground1
+      : chartEvaluation.status === 'ok'
+      ? tokens.colorPaletteGreenForeground1
+      : chartEvaluation.status === 'too-short'
+      ? tokens.colorPaletteMarigoldForeground2
+      : chartEvaluation.status === 'no-curve' ||
+        chartEvaluation.status === 'loading' ||
+        chartEvaluation.status === 'awaiting-data' ||
+        chartEvaluation.status === 'no-points'
+      ? tokens.colorNeutralForeground3
+      : tokens.colorPaletteRedForeground1;
+
+  const chartPointSpanDisplay =
+    chartSpanMeters !== null ? numberFormatter.format(chartSpanMeters) : '-';
+  const chartPointLoadDisplay =
+    safetyAdjustedLoadKnPerM !== null ? numberFormatter.format(safetyAdjustedLoadKnPerM) : '-';
+
+  const chartVerticalLines = useMemo(() => {
+    const highlight = chartEvaluation.limitHighlight;
+    if (!highlight) {
+      return null;
+    }
+
+    const lineColor =
+      highlight.type === 'min'
+        ? tokens.colorPaletteMarigoldForeground2
+        : tokens.colorPaletteDarkOrangeForeground1;
+
+    return [
+      {
+        span: highlight.span,
+        toLoad: highlight.load,
+        color: lineColor
+      }
+    ];
+  }, [chartEvaluation.limitHighlight]);
+
+  const chartHorizontalLines = useMemo(() => {
+    if (chartSpanMeters === null || chartEvaluation.allowableLoadAtSpan === null) {
+      return null;
+    }
+
+    return [
+      {
+        load: chartEvaluation.allowableLoadAtSpan,
+        toSpan: chartSpanMeters,
+        color: tokens.colorPaletteRedForeground1,
+        label: 'Load limit at span'
+      }
+    ];
+  }, [chartEvaluation.allowableLoadAtSpan, chartSpanMeters]);
+
+  const chartSummary = useMemo(() => {
+    const highlight = chartEvaluation.limitHighlight;
+    if (!highlight) {
+      return { text: null, color: undefined as string | undefined };
+    }
+
+    const spanText =
+      highlight.span !== null && !Number.isNaN(highlight.span)
+        ? numberFormatter.format(highlight.span)
+        : null;
+
+    const color =
+      highlight.type === 'min'
+        ? tokens.colorPaletteMarigoldForeground2
+        : tokens.colorPaletteDarkOrangeForeground1;
+
+    const text = spanText ? `${highlight.label}: ${spanText} m` : highlight.label;
+    return { text, color };
+  }, [chartEvaluation.limitHighlight, numberFormatter]);
+
+  // Loading and error states
   if (isLoading) {
     return (
       <section className={styles.root}>
@@ -1673,53 +834,22 @@ export const TrayDetails = () => {
 
   return (
     <section className={styles.root}>
-      <div className={styles.header}>
-        <Title3>{pageTitle}</Title3>
-        {project ? (
-          <Body1>
-            Project: {project.projectNumber} - {project.name}
-          </Body1>
-        ) : null}
-      </div>
+      <TrayDetailsHeader
+        tray={tray}
+        project={project}
+        previousTray={previousTray}
+        nextTray={nextTray}
+        isAdmin={isAdmin}
+        isEditing={isEditing}
+        isDeleting={isDeleting}
+        onNavigateTray={handleNavigateTray}
+        onBack={() => navigate(`/projects/${projectId}?tab=trays`)}
+        onEdit={() => setIsEditing(true)}
+        onDelete={() => void handleDelete()}
+        styles={styles}
+      />
 
-      <div className={styles.actions}>
-        <Button
-          appearance="secondary"
-          onClick={() =>
-            previousTray && handleNavigateTray(previousTray.id)
-          }
-          disabled={!previousTray}
-        >
-          Previous tray
-        </Button>
-        <Button
-          appearance="secondary"
-          onClick={() => nextTray && handleNavigateTray(nextTray.id)}
-          disabled={!nextTray}
-        >
-          Next tray
-        </Button>
-        <Button onClick={() => navigate(`/projects/${projectId}?tab=trays`)}>
-          Back to project
-        </Button>
-        {isAdmin ? (
-          <>
-            {!isEditing ? (
-              <Button appearance="primary" onClick={() => setIsEditing(true)}>
-                Edit tray
-              </Button>
-            ) : null}
-            <Button
-              appearance="secondary"
-              onClick={() => void handleDelete()}
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Deleting...' : 'Delete tray'}
-            </Button>
-          </>
-        ) : null}
-      </div>
-
+      {/* Tray Details Section */}
       <div className={styles.section}>
         <Caption1>Tray details</Caption1>
         {isEditing ? (
@@ -1747,9 +877,7 @@ export const TrayDetails = () => {
               {canUseMaterialDropdown ? (
                 <Dropdown
                   placeholder="Select tray type"
-                  selectedOptions={
-                    formValues.type ? [formValues.type] : []
-                  }
+                  selectedOptions={formValues.type ? [formValues.type] : []}
                   value={formValues.type || undefined}
                   onOptionSelect={handleTypeSelect}
                 >
@@ -1759,7 +887,7 @@ export const TrayDetails = () => {
                     </Option>
                   ))}
                   {!currentTypeHasMaterial && formValues.type ? (
-                    <Option value={formValues.type}>{formValues.type}</Option>
+                    <Option key="custom" value={formValues.type}>{formValues.type}</Option>
                   ) : null}
                 </Dropdown>
               ) : (
@@ -1799,7 +927,7 @@ export const TrayDetails = () => {
               <Input value={formValues.weightKgPerM} readOnly />
             </Field>
             <Field
-              label="Length"
+              label="Length [mm]"
               validationState={formErrors.lengthMm ? 'error' : undefined}
               validationMessage={formErrors.lengthMm}
             >
@@ -1839,21 +967,13 @@ export const TrayDetails = () => {
             <div className={styles.field}>
               <Caption1>Width [mm]</Caption1>
               <Body1>
-                {tray.widthMm !== null
-                  ? new Intl.NumberFormat(undefined, {
-                      maximumFractionDigits: 3
-                    }).format(tray.widthMm)
-                  : '-'}
+                {tray.widthMm !== null ? numberFormatter.format(tray.widthMm) : '-'}
               </Body1>
             </div>
             <div className={styles.field}>
               <Caption1>Height [mm]</Caption1>
               <Body1>
-                {tray.heightMm !== null
-                  ? new Intl.NumberFormat(undefined, {
-                      maximumFractionDigits: 3
-                    }).format(tray.heightMm)
-                  : '-'}
+                {tray.heightMm !== null ? numberFormatter.format(tray.heightMm) : '-'}
               </Body1>
             </div>
             <div className={styles.field}>
@@ -1861,13 +981,9 @@ export const TrayDetails = () => {
               <Body1>{weightDisplay}</Body1>
             </div>
             <div className={styles.field}>
-              <Caption1>Length</Caption1>
+              <Caption1>Length [mm]</Caption1>
               <Body1>
-                {tray.lengthMm !== null
-                  ? new Intl.NumberFormat(undefined, {
-                      maximumFractionDigits: 3
-                    }).format(tray.lengthMm)
-                  : '-'}
+                {tray.lengthMm !== null ? numberFormatter.format(tray.lengthMm) : '-'}
               </Body1>
             </div>
             <div className={styles.field}>
@@ -1891,55 +1007,16 @@ export const TrayDetails = () => {
           </div>
         )}
       </div>
-      <div className={styles.section}>
-        <Caption1>Cables laying on the tray</Caption1>
-        {cablesError ? (
-          <Body1 className={styles.errorText}>{cablesError}</Body1>
-        ) : trayCables.length === 0 ? (
-          <Body1 className={styles.emptyState}>No cables found on this tray.</Body1>
-        ) : (
-          <div className={styles.tableWrapper}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th scope="col" className={styles.tableHeadCell}>
-                    No.
-                  </th>
-                  <th scope="col" className={styles.tableHeadCell}>
-                    Cable name
-                  </th>
-                  <th scope="col" className={styles.tableHeadCell}>
-                    Cable type
-                  </th>
-                  <th scope="col" className={styles.tableHeadCell}>
-                    Cable diameter [mm]
-                  </th>
-                  <th scope="col" className={styles.tableHeadCell}>
-                    Cable weight [kg/m]
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {trayCables.map((cable, index) => (
-                  <tr key={cable.id}>
-                    <td className={styles.tableCell}>{index + 1}</td>
-                    <td className={styles.tableCell}>{cable.tag ?? '-'}</td>
-                    <td className={styles.tableCell}>{cable.typeName}</td>
-                    <td className={styles.tableCell}>
-                      {cable.diameterMm !== null ? numberFormatter.format(cable.diameterMm) : '-'}
-                    </td>
-                    <td className={styles.tableCell}>
-                      {cable.weightKgPerM !== null
-                        ? numberFormatter.format(cable.weightKgPerM)
-                        : '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+
+      {/* Cables Section */}
+      <CablesTableSection
+        trayCables={nonGroundingCables}
+        cablesError={cablesError}
+        styles={styles}
+        numberFormatter={numberFormatter}
+      />
+
+      {/* Support Calculations Section */}
       <div className={styles.section}>
         <Caption1>Supports weight calculations</Caption1>
         {supportSectionNeedsSupportData && materialSupportsLoading ? (
@@ -1965,9 +1042,7 @@ export const TrayDetails = () => {
           <div className={styles.field}>
             <Caption1>Support length [mm]</Caption1>
             <Body1>
-              {supportLengthMm !== null
-                ? numberFormatter.format(supportLengthMm)
-                : '-'}
+              {supportLengthMm !== null ? numberFormatter.format(supportLengthMm) : '-'}
             </Body1>
           </div>
           <div className={styles.field}>
@@ -1988,6 +1063,8 @@ export const TrayDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* Tray Own Weight Section */}
       <div className={styles.section}>
         <Caption1>Tray own weight calculations</Caption1>
         <div className={styles.grid}>
@@ -2001,6 +1078,8 @@ export const TrayDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* Cables Weight Section */}
       <div className={styles.section}>
         <Caption1>Cables on tray weight calculations</Caption1>
         <div className={styles.field}>
@@ -2048,14 +1127,11 @@ export const TrayDetails = () => {
                 onOptionSelect={handleGroundingCableTypeSelect}
                 disabled={groundingPreferenceSaving}
               >
-                {groundingCableTypes.map((type) => {
-                  const label = formatCableTypeLabel(type);
-                  return (
-                    <Option key={type.id} value={type.id}>
-                      {label}
-                    </Option>
-                  );
-                })}
+                {groundingCableTypes.map((type) => (
+                  <Option key={type.id} value={type.id}>
+                    {formatCableTypeLabel(type)}
+                  </Option>
+                ))}
               </Dropdown>
             </Field>
           </div>
@@ -2076,6 +1152,8 @@ export const TrayDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* Total Weight Section */}
       <div className={styles.section}>
         <Caption1>Total weight calculations</Caption1>
         <div className={styles.grid}>
@@ -2089,6 +1167,8 @@ export const TrayDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* Load Curve Section */}
       <div className={styles.section}>
         <Caption1>Tray load curve</Caption1>
         <div className={styles.grid}>
@@ -2146,26 +1226,24 @@ export const TrayDetails = () => {
             </Body1>
             <div className={styles.chartMeta}>
               <div className={styles.field}>
-                <Caption1>Point for chart - Span (m)</Caption1>
+                <Caption1>Calculated point span [m]</Caption1>
                 <Body1>{chartPointSpanDisplay}</Body1>
               </div>
               <div className={styles.field}>
-                <Caption1>Point for chart - Load (kN/m)</Caption1>
+                <Caption1>Calculated point load [kN/m]</Caption1>
                 <Body1>{chartPointLoadDisplay}</Body1>
               </div>
               {chartEvaluation.limitHighlight ? (
                 <div className={styles.field}>
-                  <Caption1>
-                    {chartEvaluation.limitHighlight.type === 'min'
-                      ? 'Minimum allowable span (m)'
-                      : 'Max allowable span (m)'}
-                  </Caption1>
-                  <Body1>{numberFormatter.format(chartEvaluation.limitHighlight.span)}</Body1>
+                  <Caption1>{chartEvaluation.limitHighlight.label} [m]</Caption1>
+                  <Body1>
+                    {numberFormatter.format(chartEvaluation.limitHighlight.span)}
+                  </Body1>
                 </div>
               ) : null}
               {chartEvaluation.allowableLoadAtSpan !== null ? (
                 <div className={styles.field}>
-                  <Caption1>Load limit at span [kN/m]</Caption1>
+                  <Caption1>Allowable load at span [kN/m]</Caption1>
                   <Body1>{numberFormatter.format(chartEvaluation.allowableLoadAtSpan)}</Body1>
                 </div>
               ) : null}
@@ -2173,7 +1251,8 @@ export const TrayDetails = () => {
           </>
         )}
       </div>
-      {/* Navigation buttons for trays */}
+
+      {/* Navigation Footer */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
         <Button appearance="secondary" onClick={handlePrevTray} disabled={!previousTray}>
           Previous tray
