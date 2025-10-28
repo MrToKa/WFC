@@ -7,21 +7,26 @@ import {
   TabValue,
   Title3
 } from '@fluentui/react-components';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useStyles } from './Materials/Materials.styles';
 import { MaterialsTab } from './Materials/Materials.types';
 import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
+import { useLoadCurves } from './Materials/hooks/useLoadCurves';
 import { TrayDialog } from './Materials/components/TrayDialog';
 import { SupportDialog } from './Materials/components/SupportDialog';
 import { TraysTable } from './Materials/components/TraysTable';
 import { SupportsTable } from './Materials/components/SupportsTable';
+import { LoadCurvesGrid } from './Materials/components/LoadCurvesGrid';
+import { LoadCurveDialog } from './Materials/components/LoadCurveDialog';
 
 export const Materials = () => {
   const styles = useStyles();
   const { user, token } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const isAdmin = Boolean(user?.isAdmin);
   const [selectedTab, setSelectedTab] = useState<MaterialsTab>('trays');
@@ -65,6 +70,7 @@ export const Materials = () => {
 
   const traysHook = useTrays({ token, isAdmin, showToast });
   const supportsHook = useSupports({ token, isAdmin, showToast });
+  const loadCurvesHook = useLoadCurves({ token, isAdmin, showToast });
 
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
@@ -75,12 +81,17 @@ export const Materials = () => {
 
   const trayTotalPages = traysHook.trayPagination ? traysHook.trayPagination.totalPages : 1;
   const supportTotalPages = supportsHook.supportPagination ? supportsHook.supportPagination.totalPages : 1;
+  const loadCurveTotalPages = loadCurvesHook.loadCurvePagination
+    ? loadCurvesHook.loadCurvePagination.totalPages
+    : 1;
 
   return (
     <section className={styles.root} aria-labelledby='materials-heading'>
       <div className={styles.header}>
         <Title3 id='materials-heading'>Materials</Title3>
-        <Body1>Reference trays and supports that can be reused across projects.</Body1>
+        <Body1>
+          Reference trays, supports, and load curves that can be reused across projects.
+        </Body1>
       </div>
 
       <TabList
@@ -90,9 +101,19 @@ export const Materials = () => {
       >
         <Tab value='trays'>Trays</Tab>
         <Tab value='supports'>Supports</Tab>
+        <Tab value='loadCurves'>Load curves</Tab>
       </TabList>
 
-      <div role='tabpanel' aria-label={selectedTab === 'trays' ? 'Trays' : 'Supports'}>
+      <div
+        role='tabpanel'
+        aria-label={
+          selectedTab === 'trays'
+            ? 'Trays'
+            : selectedTab === 'supports'
+            ? 'Supports'
+            : 'Load curves'
+        }
+      >
         {selectedTab === 'trays' ? (
           <>
             <div className={styles.actionsRow}>
@@ -147,7 +168,7 @@ export const Materials = () => {
               styles={styles}
             />
           </>
-        ) : (
+        ) : selectedTab === 'supports' ? (
           <>
             <div className={styles.actionsRow}>
               <Button
@@ -201,6 +222,45 @@ export const Materials = () => {
               styles={styles}
             />
           </>
+        ) : (
+          <>
+            <div className={styles.actionsRow}>
+              <Button
+                onClick={() =>
+                  loadCurvesHook.loadLoadCurves(loadCurvesHook.loadCurvePage, { silent: true })
+                }
+                disabled={loadCurvesHook.isRefreshingLoadCurves}
+              >
+                {loadCurvesHook.isRefreshingLoadCurves ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              {isAdmin ? (
+                <Button appearance='primary' onClick={loadCurvesHook.openLoadCurveCreateDialog}>
+                  Add load curve
+                </Button>
+              ) : null}
+            </div>
+
+            <LoadCurvesGrid
+              loadCurves={loadCurvesHook.loadCurves}
+              isLoading={loadCurvesHook.isLoadingLoadCurves}
+              isRefreshing={loadCurvesHook.isRefreshingLoadCurves}
+              error={loadCurvesHook.loadCurvesError}
+              isAdmin={isAdmin}
+              pendingId={loadCurvesHook.loadCurvePendingId}
+              page={loadCurvesHook.loadCurvePage}
+              totalPages={loadCurveTotalPages}
+              onSetPage={loadCurvesHook.setLoadCurvePage}
+              onView={(loadCurve) => navigate(`/materials/load-curves/${loadCurve.id}`)}
+              onEdit={loadCurvesHook.openLoadCurveEditDialog}
+              onDelete={loadCurvesHook.handleLoadCurveDelete}
+              gridClassName={styles.loadCurvesGrid}
+              cardClassName={styles.loadCurveCard}
+              chartClassName={styles.loadCurveChart}
+              footerClassName={styles.loadCurveFooter}
+              emptyStateClassName={styles.loadCurvesEmpty}
+              paginationClassName={styles.pagination}
+            />
+          </>
         )}
       </div>
 
@@ -227,6 +287,21 @@ export const Materials = () => {
         onFieldChange={supportsHook.handleSupportFieldChange}
         onSubmit={supportsHook.handleSupportSubmit}
         onClose={supportsHook.closeSupportDialog}
+        dialogActionsClassName={styles.dialogActions}
+      />
+      <LoadCurveDialog
+        open={loadCurvesHook.isLoadCurveDialogOpen}
+        mode={loadCurvesHook.loadCurveDialogMode}
+        editingLoadCurve={loadCurvesHook.editingLoadCurve}
+        form={loadCurvesHook.loadCurveForm}
+        formErrors={loadCurvesHook.loadCurveFormErrors}
+        isSubmitting={loadCurvesHook.isLoadCurveSubmitting}
+        trayOptions={loadCurvesHook.trayOptions}
+        isLoadingTrays={loadCurvesHook.isLoadingMaterialTrays}
+        onFieldChange={loadCurvesHook.handleLoadCurveFieldChange}
+        onTrayChange={loadCurvesHook.handleLoadCurveTrayChange}
+        onSubmit={loadCurvesHook.handleLoadCurveSubmit}
+        onClose={loadCurvesHook.closeLoadCurveDialog}
         dialogActionsClassName={styles.dialogActions}
       />
     </section>

@@ -9,6 +9,7 @@ import { TrayDetails } from '@/pages/TrayDetails';
 import { Projects } from '@/pages/Projects';
 import { Login } from '@/pages/Login';
 import { Register } from '@/pages/Register';
+import { LoadCurveDetails } from '@/pages/LoadCurveDetails';
 
 export const routes: RouteObject[] = [
   {
@@ -22,6 +23,10 @@ export const routes: RouteObject[] = [
       {
         path: 'materials',
         element: <Materials />
+      },
+      {
+        path: 'materials/load-curves/:loadCurveId',
+        element: <LoadCurveDetails />
       },
       {
         path: 'projects/:projectId',

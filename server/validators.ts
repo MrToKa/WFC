@@ -422,3 +422,42 @@ export const updateMaterialSupportSchema = z
       value.weightKg !== undefined,
     { message: 'At least one field must be provided' }
   );
+
+const loadCurvePointNumericField = z
+  .number({ invalid_type_error: 'Enter a non-negative number' })
+  .refine((value) => Number.isFinite(value) && value >= 0, {
+    message: 'Enter a non-negative finite number'
+  });
+
+export const loadCurvePointSchema = z
+  .object({
+    spanM: loadCurvePointNumericField,
+    loadKnPerM: loadCurvePointNumericField
+  })
+  .strict();
+
+export const createMaterialLoadCurveSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(2000).optional().nullable(),
+    trayId: z.string().uuid().optional().nullable(),
+    points: z.array(loadCurvePointSchema).max(2000).optional()
+  })
+  .strict();
+
+export const updateMaterialLoadCurveSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    description: z.string().trim().max(2000).optional().nullable(),
+    trayId: z.string().uuid().optional().nullable(),
+    points: z.array(loadCurvePointSchema).max(2000).optional()
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.name !== undefined ||
+      value.description !== undefined ||
+      value.trayId !== undefined ||
+      value.points !== undefined,
+    { message: 'At least one field must be provided' }
+  );

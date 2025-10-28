@@ -108,11 +108,54 @@ export type MaterialSupport = {
   updatedAt: string;
 };
 
+export type MaterialLoadCurvePoint = {
+  id: string;
+  order: number;
+  spanM: number;
+  loadKnPerM: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MaterialLoadCurve = {
+  id: string;
+  name: string;
+  description: string | null;
+  trayId: string | null;
+  trayType: string | null;
+  createdAt: string;
+  updatedAt: string;
+  points: MaterialLoadCurvePoint[];
+};
+
+export type MaterialLoadCurvePointInput = {
+  spanM: number;
+  loadKnPerM: number;
+};
+
+export type MaterialLoadCurveInput = {
+  name: string;
+  description?: string | null;
+  trayId?: string | null;
+  points?: MaterialLoadCurvePointInput[];
+};
+
+export type MaterialLoadCurveUpdateInput = {
+  name?: string;
+  description?: string | null;
+  trayId?: string | null;
+  points?: MaterialLoadCurvePointInput[];
+};
+
 export type MaterialImportSummary = {
   totalRows: number;
   created: number;
   updated: number;
   skipped: number;
+};
+
+export type MaterialLoadCurveImportSummary = {
+  importedPoints: number;
 };
 
 export type PaginationMeta = {
@@ -1082,4 +1125,117 @@ export async function exportMaterialSupports(token?: string): Promise<Blob> {
   }
 
   return response.blob();
+}
+
+export async function fetchMaterialLoadCurves(options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<{ loadCurves: MaterialLoadCurve[]; pagination: PaginationMeta }> {
+  const params = new URLSearchParams();
+
+  if (options?.page !== undefined) {
+    params.set('page', String(options.page));
+  }
+
+  if (options?.pageSize !== undefined) {
+    params.set('pageSize', String(options.pageSize));
+  }
+
+  const query = params.toString();
+
+  return request<{
+    loadCurves: MaterialLoadCurve[];
+    pagination: PaginationMeta;
+  }>(`/api/materials/load-curves${query ? `?${query}` : ''}`);
+}
+
+export async function fetchMaterialLoadCurve(
+  loadCurveId: string
+): Promise<{ loadCurve: MaterialLoadCurve }> {
+  return request<{ loadCurve: MaterialLoadCurve }>(
+    `/api/materials/load-curves/${loadCurveId}`
+  );
+}
+
+export async function createMaterialLoadCurve(
+  token: string,
+  data: MaterialLoadCurveInput
+): Promise<{ loadCurve: MaterialLoadCurve }> {
+  return request<{ loadCurve: MaterialLoadCurve }>('/api/materials/load-curves', {
+    method: 'POST',
+    token,
+    body: data
+  });
+}
+
+export async function updateMaterialLoadCurve(
+  token: string,
+  loadCurveId: string,
+  data: MaterialLoadCurveUpdateInput
+): Promise<{ loadCurve: MaterialLoadCurve }> {
+  return request<{ loadCurve: MaterialLoadCurve }>(
+    `/api/materials/load-curves/${loadCurveId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function deleteMaterialLoadCurve(
+  token: string,
+  loadCurveId: string
+): Promise<void> {
+  await request<null>(`/api/materials/load-curves/${loadCurveId}`, {
+    method: 'DELETE',
+    token
+  });
+}
+
+export async function importMaterialLoadCurvePoints(
+  token: string,
+  loadCurveId: string,
+  file: File
+): Promise<{
+  loadCurve: MaterialLoadCurve;
+  summary: MaterialLoadCurveImportSummary;
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/materials/load-curves/${loadCurveId}/import`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    }
+  );
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import load curve points';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    loadCurve: MaterialLoadCurve;
+    summary: MaterialLoadCurveImportSummary;
+  };
 }

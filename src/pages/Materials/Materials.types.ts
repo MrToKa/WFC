@@ -1,4 +1,4 @@
-export type MaterialsTab = 'trays' | 'supports';
+export type MaterialsTab = 'trays' | 'supports' | 'loadCurves';
 
 export type TrayFormState = {
   type: string;
@@ -17,6 +17,13 @@ export type SupportFormState = {
 
 export type TrayFormErrors = Partial<Record<keyof TrayFormState, string>>;
 export type SupportFormErrors = Partial<Record<keyof SupportFormState, string>>;
+export type LoadCurveFormState = {
+  name: string;
+  trayId: string;
+  description: string;
+};
+
+export type LoadCurveFormErrors = Partial<Record<keyof LoadCurveFormState, string>>;
 
 export const initialTrayForm: TrayFormState = {
   type: '',
@@ -31,6 +38,12 @@ export const initialSupportForm: SupportFormState = {
   widthMm: '',
   lengthMm: '',
   weightKg: ''
+};
+
+export const initialLoadCurveForm: LoadCurveFormState = {
+  name: '',
+  trayId: '',
+  description: ''
 };
 
 export const PAGE_SIZE = 10;

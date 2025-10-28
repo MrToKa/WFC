@@ -258,6 +258,49 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_load_curves (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      tray_id UUID REFERENCES material_trays(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS material_load_curves_name_lower_idx
+      ON material_load_curves (LOWER(name));
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_load_curves_tray_id_idx
+      ON material_load_curves (tray_id);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_load_curve_points (
+      id UUID PRIMARY KEY,
+      load_curve_id UUID NOT NULL REFERENCES material_load_curves(id) ON DELETE CASCADE,
+      point_order INTEGER NOT NULL,
+      span_m NUMERIC NOT NULL,
+      load_kn_per_m NUMERIC NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS material_load_curve_points_curve_order_idx
+      ON material_load_curve_points (load_curve_id, point_order);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_load_curve_points_curve_id_idx
+      ON material_load_curve_points (load_curve_id);
+  `);
+
+  await pool.query(`
     ALTER TABLE project_support_distances
     ADD COLUMN IF NOT EXISTS support_id UUID REFERENCES material_supports(id) ON DELETE SET NULL;
   `);

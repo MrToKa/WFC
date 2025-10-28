@@ -14,10 +14,19 @@ import {
   mapMaterialSupportRow,
   type MaterialSupportRow
 } from '../models/materialSupport.js';
+import {
+  mapMaterialLoadCurveRow,
+  mapMaterialLoadCurvePointRow,
+  type MaterialLoadCurvePointRow,
+  type MaterialLoadCurveRow,
+  type PublicMaterialLoadCurve
+} from '../models/materialLoadCurve.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import {
+  createMaterialLoadCurveSchema,
   createMaterialSupportSchema,
   createMaterialTraySchema,
+  updateMaterialLoadCurveSchema,
   updateMaterialSupportSchema,
   updateMaterialTraySchema
 } from '../validators.js';
@@ -43,6 +52,21 @@ const SUPPORT_HEADERS = {
   length: 'Length [mm]',
   weight: 'Weight [kg]'
 } as const;
+
+const LOAD_CURVE_HEADERS = {
+  span: 'L [m]',
+  load: 'q(L) [kN/m]'
+} as const;
+
+const LOAD_CURVE_SHEET_NAME = 'CurveData';
+const MAX_LOAD_CURVE_POINTS = 2000;
+
+type Queryable = {
+  query: <T = unknown>(
+    text: string,
+    params?: unknown[]
+  ) => Promise<{ rows: T[] }>;
+};
 
 const sanitizeFileSegment = (value: string): string =>
   value
@@ -73,6 +97,51 @@ const toNullableNumber = (value: unknown): number | null => {
 };
 
 const normalizeType = (value: string): string => value.trim().replace(/\s+/g, ' ');
+
+const normalizeOptionalText = (value?: string | null): string | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+const normalizeOptionalUuid = (value?: string | null): string | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
+};
+
+type NormalizedLoadCurvePoint = {
+  spanM: number;
+  loadKnPerM: number;
+};
+
+const normalizeLoadCurvePoints = (
+  points?: { spanM: number; loadKnPerM: number }[]
+): NormalizedLoadCurvePoint[] => {
+  if (!points) {
+    return [];
+  }
+
+  const normalized = points
+    .map((point) => ({
+      spanM: Number(point.spanM),
+      loadKnPerM: Number(point.loadKnPerM)
+    }))
+    .filter(
+      (point) =>
+        Number.isFinite(point.spanM) &&
+        Number.isFinite(point.loadKnPerM) &&
+        point.spanM >= 0 &&
+        point.loadKnPerM >= 0
+    );
+
+  normalized.sort((a, b) => a.spanM - b.spanM);
+  return normalized.slice(0, MAX_LOAD_CURVE_POINTS);
+};
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -139,7 +208,93 @@ const selectMaterialSupportsQuery = `
   FROM material_supports
 `;
 
+const selectMaterialLoadCurvesQuery = `
+  SELECT
+    lc.id,
+    lc.name,
+    lc.description,
+    lc.tray_id,
+    lc.created_at,
+    lc.updated_at,
+    mt.tray_type
+  FROM material_load_curves lc
+  LEFT JOIN material_trays mt ON lc.tray_id = mt.id
+`;
+
+const selectMaterialLoadCurvePointsQuery = `
+  SELECT
+    id,
+    load_curve_id,
+    point_order,
+    span_m,
+    load_kn_per_m,
+    created_at,
+    updated_at
+  FROM material_load_curve_points
+`;
+
 const materialsRouter = Router();
+
+const mapLoadCurvesWithPoints = async (
+  db: Queryable,
+  rows: MaterialLoadCurveRow[]
+): Promise<PublicMaterialLoadCurve[]> => {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const ids = rows.map((row) => row.id);
+
+  const pointsResult = await db.query<MaterialLoadCurvePointRow>(
+    `
+      ${selectMaterialLoadCurvePointsQuery}
+      WHERE load_curve_id = ANY($1::uuid[])
+      ORDER BY load_curve_id ASC, point_order ASC;
+    `,
+    [ids]
+  );
+
+  const pointsByCurve = new Map<string, ReturnType<typeof mapMaterialLoadCurvePointRow>[]>();
+
+  for (const pointRow of pointsResult.rows) {
+    const mappedPoint = mapMaterialLoadCurvePointRow(pointRow);
+    const existing = pointsByCurve.get(pointRow.load_curve_id);
+    if (existing) {
+      existing.push(mappedPoint);
+    } else {
+      pointsByCurve.set(pointRow.load_curve_id, [mappedPoint]);
+    }
+  }
+
+  return rows.map((row) =>
+    mapMaterialLoadCurveRow(
+      row,
+      (pointsByCurve.get(row.id) ?? []).sort((a, b) => a.order - b.order)
+    )
+  );
+};
+
+const fetchMaterialLoadCurveById = async (
+  db: Queryable,
+  id: string
+): Promise<PublicMaterialLoadCurve | null> => {
+  const result = await db.query<MaterialLoadCurveRow>(
+    `
+      ${selectMaterialLoadCurvesQuery}
+      WHERE lc.id = $1
+      LIMIT 1;
+    `,
+    [id]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+
+  const loadCurves = await mapLoadCurvesWithPoints(db, [row]);
+  return loadCurves[0] ?? null;
+};
 
 materialsRouter.get(
   '/trays',
@@ -1157,6 +1312,516 @@ materialsRouter.get(
     } catch (error) {
       console.error('Export material supports error', error);
       res.status(500).json({ error: 'Failed to export supports' });
+    }
+  }
+);
+
+materialsRouter.get(
+  '/load-curves',
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { page, pageSize, offset } = parsePaginationParams(req);
+
+      const countResult = await pool.query<{ count: string }>(`
+        SELECT COUNT(*)::int AS count FROM material_load_curves;
+      `);
+      const totalItems = Number(countResult.rows[0]?.count ?? 0);
+
+      const result = await pool.query<MaterialLoadCurveRow>(
+        `
+          ${selectMaterialLoadCurvesQuery}
+          ORDER BY LOWER(lc.name) ASC
+          LIMIT $1 OFFSET $2;
+        `,
+        [pageSize, offset]
+      );
+
+      const loadCurves = await mapLoadCurvesWithPoints(pool, result.rows);
+
+      res.json({
+        loadCurves,
+        pagination: buildPaginationMeta(totalItems, page, pageSize)
+      });
+    } catch (error) {
+      console.error('List material load curves error', error);
+      res.status(500).json({ error: 'Failed to fetch load curves' });
+    }
+  }
+);
+
+materialsRouter.get(
+  '/load-curves/:loadCurveId',
+  async (req: Request, res: Response): Promise<void> => {
+    const { loadCurveId } = req.params;
+
+    if (!loadCurveId) {
+      res.status(400).json({ error: 'Load curve ID is required' });
+      return;
+    }
+
+    try {
+      const loadCurve = await fetchMaterialLoadCurveById(pool, loadCurveId);
+      if (!loadCurve) {
+        res.status(404).json({ error: 'Load curve not found' });
+        return;
+      }
+
+      res.json({ loadCurve });
+    } catch (error) {
+      console.error('Fetch material load curve error', error);
+      res.status(500).json({ error: 'Failed to fetch load curve' });
+    }
+  }
+);
+
+materialsRouter.post(
+  '/load-curves',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const parseResult = createMaterialLoadCurveSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    const data = parseResult.data;
+    const name = normalizeType(data.name);
+    const description = normalizeOptionalText(data.description ?? null);
+    const trayId = normalizeOptionalUuid(data.trayId);
+    const points = normalizeLoadCurvePoints(data.points);
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const loadCurveId = randomUUID();
+      await client.query(
+        `
+          INSERT INTO material_load_curves (
+            id,
+            name,
+            description,
+            tray_id
+          ) VALUES ($1, $2, $3, $4);
+        `,
+        [loadCurveId, name, description, trayId]
+      );
+
+      if (points.length > 0) {
+        const insertValues: unknown[] = [];
+        const valueClauses: string[] = [];
+
+        points.forEach((point, index) => {
+          const baseIndex = index * 5;
+          insertValues.push(
+            randomUUID(),
+            loadCurveId,
+            index + 1,
+            point.spanM,
+            point.loadKnPerM
+          );
+          valueClauses.push(
+            `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5})`
+          );
+        });
+
+        await client.query(
+          `
+            INSERT INTO material_load_curve_points (
+              id,
+              load_curve_id,
+              point_order,
+              span_m,
+              load_kn_per_m
+            ) VALUES ${valueClauses.join(', ')};
+          `,
+          insertValues
+        );
+      }
+
+      const loadCurve = await fetchMaterialLoadCurveById(client, loadCurveId);
+      await client.query('COMMIT');
+
+      if (!loadCurve) {
+        res.status(500).json({ error: 'Failed to load new load curve' });
+        return;
+      }
+
+      res.status(201).json({ loadCurve });
+    } catch (error) {
+      await client.query('ROLLBACK');
+
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code: string }).code === '23505'
+      ) {
+        res.status(409).json({ error: 'A load curve with this name already exists' });
+        return;
+      }
+
+      console.error('Create material load curve error', error);
+      res.status(500).json({ error: 'Failed to create load curve' });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+materialsRouter.patch(
+  '/load-curves/:loadCurveId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { loadCurveId } = req.params;
+
+    if (!loadCurveId) {
+      res.status(400).json({ error: 'Load curve ID is required' });
+      return;
+    }
+
+    const parseResult = updateMaterialLoadCurveSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    const data = parseResult.data;
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+    let parameterIndex = 1;
+
+    if (data.name !== undefined) {
+      setClauses.push(`name = $${parameterIndex}`);
+      values.push(normalizeType(data.name));
+      parameterIndex += 1;
+    }
+
+    if (data.description !== undefined) {
+      setClauses.push(`description = $${parameterIndex}`);
+      values.push(normalizeOptionalText(data.description));
+      parameterIndex += 1;
+    }
+
+    if (data.trayId !== undefined) {
+      setClauses.push(`tray_id = $${parameterIndex}`);
+      values.push(normalizeOptionalUuid(data.trayId));
+      parameterIndex += 1;
+    }
+
+    setClauses.push('updated_at = NOW()');
+
+    const idParamIndex = parameterIndex;
+    values.push(loadCurveId);
+
+    const points =
+      data.points !== undefined ? normalizeLoadCurvePoints(data.points) : undefined;
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const updateResult = await client.query<MaterialLoadCurveRow>(
+        `
+          UPDATE material_load_curves
+          SET ${setClauses.join(', ')}
+          WHERE id = $${idParamIndex}
+          RETURNING
+            id,
+            name,
+            description,
+            tray_id,
+            created_at,
+            updated_at;
+        `,
+        values
+      );
+
+      if (updateResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Load curve not found' });
+        return;
+      }
+
+      if (points !== undefined) {
+        await client.query(
+          `
+            DELETE FROM material_load_curve_points
+            WHERE load_curve_id = $1;
+          `,
+          [loadCurveId]
+        );
+
+        if (points.length > 0) {
+          const insertValues: unknown[] = [];
+          const valueClauses: string[] = [];
+
+          points.forEach((point, index) => {
+            const baseIndex = index * 5;
+            insertValues.push(
+              randomUUID(),
+              loadCurveId,
+              index + 1,
+              point.spanM,
+              point.loadKnPerM
+            );
+            valueClauses.push(
+              `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5})`
+            );
+          });
+
+          await client.query(
+            `
+              INSERT INTO material_load_curve_points (
+                id,
+                load_curve_id,
+                point_order,
+                span_m,
+                load_kn_per_m
+              ) VALUES ${valueClauses.join(', ')};
+            `,
+            insertValues
+          );
+        }
+      }
+
+      const loadCurve = await fetchMaterialLoadCurveById(client, loadCurveId);
+      await client.query('COMMIT');
+
+      if (!loadCurve) {
+        res.status(404).json({ error: 'Load curve not found' });
+        return;
+      }
+
+      res.json({ loadCurve });
+    } catch (error) {
+      await client.query('ROLLBACK');
+
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code: string }).code === '23505'
+      ) {
+        res.status(409).json({ error: 'A load curve with this name already exists' });
+        return;
+      }
+
+      console.error('Update material load curve error', error);
+      res.status(500).json({ error: 'Failed to update load curve' });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+materialsRouter.delete(
+  '/load-curves/:loadCurveId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { loadCurveId } = req.params;
+
+    if (!loadCurveId) {
+      res.status(400).json({ error: 'Load curve ID is required' });
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        `
+          DELETE FROM material_load_curves
+          WHERE id = $1;
+        `,
+        [loadCurveId]
+      );
+
+      if (result.rowCount === 0) {
+        res.status(404).json({ error: 'Load curve not found' });
+        return;
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error('Delete material load curve error', error);
+      res.status(500).json({ error: 'Failed to delete load curve' });
+    }
+  }
+);
+
+materialsRouter.post(
+  '/load-curves/:loadCurveId/import',
+  authenticate,
+  requireAdmin,
+  upload.single('file'),
+  async (req: Request, res: Response): Promise<void> => {
+    const { loadCurveId } = req.params;
+
+    if (!loadCurveId) {
+      res.status(400).json({ error: 'Load curve ID is required' });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'Excel file is required' });
+      return;
+    }
+
+    try {
+      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const sheet = workbook.Sheets[LOAD_CURVE_SHEET_NAME];
+
+      if (!sheet) {
+        res.status(400).json({
+          error: `Sheet '${LOAD_CURVE_SHEET_NAME}' not found in workbook`
+        });
+        return;
+      }
+
+      const rows = XLSX.utils.sheet_to_json<(unknown | null)[]>(sheet, {
+        header: 1,
+        raw: true,
+        defval: null
+      });
+
+      const [, ...dataRows] = rows;
+      const points = dataRows
+        .map((row) => {
+          if (!Array.isArray(row) || row.length < 2) {
+            return null;
+          }
+
+          const span = toNullableNumber(row[0]);
+          const load = toNullableNumber(row[1]);
+
+          if (span === null || load === null) {
+            return null;
+          }
+
+          return {
+            spanM: span,
+            loadKnPerM: load
+          };
+        })
+        .filter(
+          (point): point is { spanM: number; loadKnPerM: number } =>
+            point !== null
+        );
+
+      if (points.length === 0) {
+        res.status(400).json({ error: 'No valid curve points found in file' });
+        return;
+      }
+
+      const normalizedPoints = normalizeLoadCurvePoints(points);
+
+      if (normalizedPoints.length === 0) {
+        res.status(400).json({ error: 'No valid curve points to import' });
+        return;
+      }
+
+      const client = await pool.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        const existing = await client.query(
+          `
+            SELECT id FROM material_load_curves
+            WHERE id = $1;
+          `,
+          [loadCurveId]
+        );
+
+        if (existing.rowCount === 0) {
+          await client.query('ROLLBACK');
+          res.status(404).json({ error: 'Load curve not found' });
+          return;
+        }
+
+        await client.query(
+          `
+            UPDATE material_load_curves
+            SET updated_at = NOW()
+            WHERE id = $1;
+          `,
+          [loadCurveId]
+        );
+
+        await client.query(
+          `
+            DELETE FROM material_load_curve_points
+            WHERE load_curve_id = $1;
+          `,
+          [loadCurveId]
+        );
+
+        const insertValues: unknown[] = [];
+        const valueClauses: string[] = [];
+
+        normalizedPoints.forEach((point, index) => {
+          const baseIndex = index * 5;
+          insertValues.push(
+            randomUUID(),
+            loadCurveId,
+            index + 1,
+            point.spanM,
+            point.loadKnPerM
+          );
+          valueClauses.push(
+            `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5})`
+          );
+        });
+
+        if (valueClauses.length > 0) {
+          await client.query(
+            `
+              INSERT INTO material_load_curve_points (
+                id,
+                load_curve_id,
+                point_order,
+                span_m,
+                load_kn_per_m
+              ) VALUES ${valueClauses.join(', ')};
+            `,
+            insertValues
+          );
+        }
+
+        const loadCurve = await fetchMaterialLoadCurveById(
+          client,
+          loadCurveId
+        );
+        await client.query('COMMIT');
+
+        if (!loadCurve) {
+          res.status(404).json({ error: 'Load curve not found' });
+          return;
+        }
+
+        res.json({
+          loadCurve,
+          summary: {
+            importedPoints: normalizedPoints.length
+          }
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Import load curve points error', error);
+        res.status(500).json({ error: 'Failed to import load curve points' });
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error('Parse load curve import file error', error);
+      res.status(500).json({ error: 'Failed to read Excel file' });
     }
   }
 );

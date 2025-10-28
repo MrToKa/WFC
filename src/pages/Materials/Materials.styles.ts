@@ -1,4 +1,4 @@
-import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+﻿import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
 
 export const useStyles = makeStyles({
   root: {
@@ -57,6 +57,38 @@ export const useStyles = makeStyles({
     display: 'grid',
     gap: '0.5rem'
   },
+  loadCurvesGrid: {
+    display: 'grid',
+    gap: '1rem',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(520px, 480px))',
+    justifyContent: 'center',
+    justifyItems: 'center'
+  },
+  loadCurveCard: {
+    display: 'grid',
+    gap: '0.75rem',
+    alignContent: 'start',
+    width: '700px',
+    maxWidth: '100%'
+  },
+  loadCurveChart: {
+    width: '600px',
+    height: '310px',
+    margin: '0 auto'
+  },
+  loadCurveFooter: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '0.75rem',
+    flexWrap: 'wrap'
+  },
+  loadCurvesEmpty: {
+    display: 'grid',
+    gap: '0.75rem',
+    placeItems: 'center',
+    minHeight: '160px'
+  },
   errorText: {
     color: tokens.colorStatusDangerForeground1
   },
@@ -74,3 +106,4 @@ export const useStyles = makeStyles({
     gap: '0.5rem'
   }
 });
+
