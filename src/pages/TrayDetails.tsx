@@ -4,11 +4,6 @@ import {
   Body1,
   Button,
   Caption1,
-  Checkbox,
-  Dropdown,
-  Field,
-  Input,
-  Option,
   Spinner,
   makeStyles,
   shorthands,
@@ -23,7 +18,6 @@ import {
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { LoadCurveChart } from './Materials/components/LoadCurveChart';
 
 // Import refactored modules
 import {
@@ -44,8 +38,16 @@ import {
   formatWeightValue
 } from './TrayDetails/TrayDetails.utils';
 import { TrayFormState, TrayFormErrors } from './TrayDetails/TrayDetails.types';
-import { TrayDetailsHeader } from './TrayDetails/components/TrayDetailsHeader';
-import { CablesTableSection } from './TrayDetails/components/CablesTableSection';
+import {
+  TrayDetailsHeader,
+  CablesTableSection,
+  TrayInfoSection,
+  TrayEditForm,
+  SupportCalculationsSection,
+  WeightCalculationsSection,
+  GroundingCableControls,
+  LoadCurveSection
+} from './TrayDetails/components';
 
 const useStyles = makeStyles({
   root: {
@@ -850,163 +852,30 @@ export const TrayDetails = () => {
       />
 
       {/* Tray Details Section */}
-      <div className={styles.section}>
-        <Caption1>Tray details</Caption1>
-        {isEditing ? (
-          <form className={styles.grid} onSubmit={handleSubmit}>
-            {materialsError ? (
-              <Body1 className={styles.errorText}>{materialsError}</Body1>
-            ) : null}
-            <Field
-              label="Name"
-              required
-              validationState={formErrors.name ? 'error' : undefined}
-              validationMessage={formErrors.name}
-            >
-              <Input
-                value={formValues.name}
-                onChange={handleFieldChange('name')}
-                required
-              />
-            </Field>
-            <Field
-              label="Type"
-              validationState={formErrors.type ? 'error' : undefined}
-              validationMessage={formErrors.type}
-            >
-              {canUseMaterialDropdown ? (
-                <Dropdown
-                  placeholder="Select tray type"
-                  selectedOptions={formValues.type ? [formValues.type] : []}
-                  value={formValues.type || undefined}
-                  onOptionSelect={handleTypeSelect}
-                >
-                  {materialTrays.map((material) => (
-                    <Option key={material.id} value={material.type}>
-                      {material.type}
-                    </Option>
-                  ))}
-                  {!currentTypeHasMaterial && formValues.type ? (
-                    <Option key="custom" value={formValues.type}>{formValues.type}</Option>
-                  ) : null}
-                </Dropdown>
-              ) : (
-                <Input
-                  value={formValues.type}
-                  onChange={handleFieldChange('type')}
-                  placeholder={isLoadingMaterials ? 'Loading types...' : undefined}
-                  readOnly={isLoadingMaterials}
-                />
-              )}
-            </Field>
-            <Field
-              label="Purpose"
-              validationState={formErrors.purpose ? 'error' : undefined}
-              validationMessage={formErrors.purpose}
-            >
-              <Input
-                value={formValues.purpose}
-                onChange={handleFieldChange('purpose')}
-              />
-            </Field>
-            <Field
-              label="Width [mm]"
-              validationState={formErrors.widthMm ? 'error' : undefined}
-              validationMessage={formErrors.widthMm}
-            >
-              <Input value={formValues.widthMm} readOnly />
-            </Field>
-            <Field
-              label="Height [mm]"
-              validationState={formErrors.heightMm ? 'error' : undefined}
-              validationMessage={formErrors.heightMm}
-            >
-              <Input value={formValues.heightMm} readOnly />
-            </Field>
-            <Field label="Weight [kg/m]">
-              <Input value={formValues.weightKgPerM} readOnly />
-            </Field>
-            <Field
-              label="Length [mm]"
-              validationState={formErrors.lengthMm ? 'error' : undefined}
-              validationMessage={formErrors.lengthMm}
-            >
-              <Input
-                value={formValues.lengthMm}
-                onChange={handleFieldChange('lengthMm')}
-              />
-            </Field>
-            <div className={styles.actions}>
-              <Button
-                type="button"
-                appearance="secondary"
-                onClick={handleCancelEdit}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button appearance="primary" type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Save changes'}
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className={styles.grid}>
-            <div className={styles.field}>
-              <Caption1>Name</Caption1>
-              <Body1>{tray.name}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Type</Caption1>
-              <Body1>{tray.type ?? '-'}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Purpose</Caption1>
-              <Body1>{tray.purpose ?? '-'}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Width [mm]</Caption1>
-              <Body1>
-                {tray.widthMm !== null ? numberFormatter.format(tray.widthMm) : '-'}
-              </Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Height [mm]</Caption1>
-              <Body1>
-                {tray.heightMm !== null ? numberFormatter.format(tray.heightMm) : '-'}
-              </Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Weight [kg/m]</Caption1>
-              <Body1>{weightDisplay}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Length [mm]</Caption1>
-              <Body1>
-                {tray.lengthMm !== null ? numberFormatter.format(tray.lengthMm) : '-'}
-              </Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Created</Caption1>
-              <Body1>
-                {new Intl.DateTimeFormat(undefined, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short'
-                }).format(new Date(tray.createdAt))}
-              </Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1>Updated</Caption1>
-              <Body1>
-                {new Intl.DateTimeFormat(undefined, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short'
-                }).format(new Date(tray.updatedAt))}
-              </Body1>
-            </div>
-          </div>
-        )}
-      </div>
+      {isEditing ? (
+        <TrayEditForm
+          formValues={formValues}
+          formErrors={formErrors}
+          materialsError={materialsError}
+          materialTrays={materialTrays}
+          canUseMaterialDropdown={canUseMaterialDropdown}
+          currentTypeHasMaterial={currentTypeHasMaterial}
+          isLoadingMaterials={isLoadingMaterials}
+          isSubmitting={isSubmitting}
+          onFieldChange={handleFieldChange}
+          onTypeSelect={handleTypeSelect}
+          onSubmit={handleSubmit}
+          onCancel={handleCancelEdit}
+          styles={styles}
+        />
+      ) : (
+        <TrayInfoSection
+          tray={tray}
+          weightDisplay={weightDisplay}
+          numberFormatter={numberFormatter}
+          styles={styles}
+        />
+      )}
 
       {/* Cables Section */}
       <CablesTableSection
@@ -1017,125 +886,48 @@ export const TrayDetails = () => {
       />
 
       {/* Support Calculations Section */}
-      <div className={styles.section}>
-        <Caption1>Supports weight calculations</Caption1>
-        {supportSectionNeedsSupportData && materialSupportsLoading ? (
-          <Spinner label="Loading support details..." />
-        ) : null}
-        {supportSectionNeedsSupportData && supportDetailsError ? (
-          <Body1 className={styles.errorText}>{supportDetailsError}</Body1>
-        ) : null}
-        {supportDistanceMissing || trayLengthMissing ? (
-          <Body1 className={styles.emptyState}>
-            {supportDistanceMissing && trayLengthMissing
-              ? 'Tray length and support distance are required for calculations.'
-              : supportDistanceMissing
-              ? 'Support distance is not configured for this tray.'
-              : 'Tray length is not specified for this tray.'}
-          </Body1>
-        ) : null}
-        <div className={styles.grid}>
-          <div className={styles.field}>
-            <Caption1>Support type</Caption1>
-            <Body1>{supportTypeDisplay ?? '-'}</Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Support length [mm]</Caption1>
-            <Body1>
-              {supportLengthMm !== null ? numberFormatter.format(supportLengthMm) : '-'}
-            </Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Supports count</Caption1>
-            <Body1>{formatSupportNumber(supportCalculations.supportsCount)}</Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Weight per piece [kg]</Caption1>
-            <Body1>{formatSupportNumber(supportCalculations.weightPerPieceKg)}</Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Supports total weight [kg]</Caption1>
-            <Body1>{formatSupportNumber(supportCalculations.totalWeightKg)}</Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Supports weight load per meter [kg/m]</Caption1>
-            <Body1>{formatSupportNumber(supportCalculations.weightPerMeterKg)}</Body1>
-          </div>
-        </div>
-      </div>
+      <SupportCalculationsSection
+        supportSectionNeedsSupportData={supportSectionNeedsSupportData}
+        materialSupportsLoading={materialSupportsLoading}
+        supportDetailsError={supportDetailsError}
+        supportDistanceMissing={supportDistanceMissing}
+        trayLengthMissing={trayLengthMissing}
+        supportTypeDisplay={supportTypeDisplay}
+        supportLengthMm={supportLengthMm}
+        supportCalculations={supportCalculations}
+        formatSupportNumber={formatSupportNumber}
+        numberFormatter={numberFormatter}
+        styles={styles}
+      />
 
       {/* Tray Own Weight Section */}
-      <div className={styles.section}>
-        <Caption1>Tray own weight calculations</Caption1>
-        <div className={styles.grid}>
-          <div className={styles.field}>
-            <Caption1>Tray weight load per meter [kg/m]</Caption1>
-            <Body1>{formatSupportNumber(trayWeightLoadPerMeterKg)}</Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Tray total own weight [kg]</Caption1>
-            <Body1>{formatSupportNumber(trayTotalOwnWeightKg)}</Body1>
-          </div>
-        </div>
-      </div>
+      <WeightCalculationsSection
+        title="Tray own weight calculations"
+        calculations={[
+          { label: 'Tray weight load per meter [kg/m]', value: trayWeightLoadPerMeterKg },
+          { label: 'Tray total own weight [kg]', value: trayTotalOwnWeightKg }
+        ]}
+        formatNumber={formatSupportNumber}
+        styles={styles}
+      />
 
       {/* Cables Weight Section */}
       <div className={styles.section}>
         <Caption1>Cables on tray weight calculations</Caption1>
-        <div className={styles.field}>
-          <Checkbox
-            label="Add grounding cable"
-            checked={includeGroundingCable}
-            onChange={handleGroundingCableToggle}
-            disabled={groundingPreferenceSaving}
-          />
-          {includeGroundingCable && projectCableTypesLoading ? (
-            <Spinner label="Loading cable types..." />
-          ) : null}
-          {includeGroundingCable && projectCableTypesError ? (
-            <Body1 className={styles.errorText}>{projectCableTypesError}</Body1>
-          ) : null}
-          {includeGroundingCable &&
-          !projectCableTypesLoading &&
-          !projectCableTypesError &&
-          groundingCableTypes.length === 0 ? (
-            <Body1 className={styles.emptyState}>
-              No grounding cable types available for this project.
-            </Body1>
-          ) : null}
-        </div>
-        {includeGroundingCable &&
-        !projectCableTypesLoading &&
-        !projectCableTypesError &&
-        groundingCableTypes.length > 0 ? (
-          <div className={styles.field}>
-            <Field
-              label="Grounding cable type"
-              validationState={groundingCableMissingWeight ? 'error' : undefined}
-              validationMessage={
-                groundingCableMissingWeight
-                  ? 'Selected cable type does not include weight data. It will not affect calculations.'
-                  : undefined
-              }
-            >
-              <Dropdown
-                placeholder="Select cable type"
-                selectedOptions={
-                  selectedGroundingCableTypeId ? [selectedGroundingCableTypeId] : []
-                }
-                value={selectedGroundingCableLabel}
-                onOptionSelect={handleGroundingCableTypeSelect}
-                disabled={groundingPreferenceSaving}
-              >
-                {groundingCableTypes.map((type) => (
-                  <Option key={type.id} value={type.id}>
-                    {formatCableTypeLabel(type)}
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-          </div>
-        ) : null}
+        <GroundingCableControls
+          includeGroundingCable={includeGroundingCable}
+          groundingPreferenceSaving={groundingPreferenceSaving}
+          projectCableTypesLoading={projectCableTypesLoading}
+          projectCableTypesError={projectCableTypesError}
+          groundingCableTypes={groundingCableTypes}
+          selectedGroundingCableTypeId={selectedGroundingCableTypeId}
+          selectedGroundingCableLabel={selectedGroundingCableLabel}
+          groundingCableMissingWeight={groundingCableMissingWeight}
+          onToggle={handleGroundingCableToggle}
+          onTypeSelect={handleGroundingCableTypeSelect}
+          formatCableTypeLabel={formatCableTypeLabel}
+          styles={styles}
+        />
         {cablesWeightLoadPerMeterKg === null ? (
           <Body1 className={styles.emptyState}>
             No cables with weight data available for calculations.
@@ -1154,103 +946,36 @@ export const TrayDetails = () => {
       </div>
 
       {/* Total Weight Section */}
-      <div className={styles.section}>
-        <Caption1>Total weight calculations</Caption1>
-        <div className={styles.grid}>
-          <div className={styles.field}>
-            <Caption1>Total weight load per meter [kg/m]</Caption1>
-            <Body1>{formatSupportNumber(totalWeightLoadPerMeterKg)}</Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Total weight [kg]</Caption1>
-            <Body1>{formatSupportNumber(totalWeightKg)}</Body1>
-          </div>
-        </div>
-      </div>
+      <WeightCalculationsSection
+        title="Total weight calculations"
+        calculations={[
+          { label: 'Total weight load per meter [kg/m]', value: totalWeightLoadPerMeterKg },
+          { label: 'Total weight [kg]', value: totalWeightKg }
+        ]}
+        formatNumber={formatSupportNumber}
+        styles={styles}
+      />
 
       {/* Load Curve Section */}
-      <div className={styles.section}>
-        <Caption1>Tray load curve</Caption1>
-        <div className={styles.grid}>
-          <div className={styles.field}>
-            <Caption1>Assigned load curve</Caption1>
-            <Body1>{selectedMaterialTray?.loadCurveName ?? 'Not assigned'}</Body1>
-          </div>
-          <div className={styles.field}>
-            <Caption1>Safety factor [%]</Caption1>
-            <Body1>
-              {safetyFactorPercent !== null
-                ? numberFormatter.format(safetyFactorPercent)
-                : project
-                ? 'Not set'
-                : '-'}
-            </Body1>
-          </div>
-        </div>
-        {safetyFactorStatusMessage ? (
-          <Body1 className={styles.errorText}>{safetyFactorStatusMessage}</Body1>
-        ) : null}
-        {loadCurveError ? (
-          <Body1 className={styles.errorText}>{loadCurveError}</Body1>
-        ) : null}
-        {selectedLoadCurveId === null ? (
-          <Body1 className={styles.emptyState}>
-            Assign a load curve to this tray type to visualise support limits.
-          </Body1>
-        ) : loadCurveLoadingId === selectedLoadCurveId ? (
-          <Spinner label="Loading load curve..." />
-        ) : selectedLoadCurve === null ? (
-          <Body1 className={styles.emptyState}>
-            Unable to display load curve data. Try refreshing the page.
-          </Body1>
-        ) : chartLoadCurvePoints.length === 0 ? (
-          <Body1 className={styles.emptyState}>
-            The assigned load curve has no data points.
-          </Body1>
-        ) : (
-          <>
-            <div className={styles.chartWrapper}>
-              <LoadCurveChart
-                points={chartLoadCurvePoints}
-                className={styles.chartCanvas}
-                marker={chartEvaluation.marker}
-                limitHighlight={chartEvaluation.limitHighlight}
-                verticalLines={chartVerticalLines}
-                horizontalLines={chartHorizontalLines}
-                summaryText={chartSummary.text}
-                summaryColor={chartSummary.color}
-              />
-            </div>
-            <Body1 className={styles.chartStatus} style={{ color: chartStatusColor }}>
-              {chartEvaluation.message}
-            </Body1>
-            <div className={styles.chartMeta}>
-              <div className={styles.field}>
-                <Caption1>Calculated point span [m]</Caption1>
-                <Body1>{chartPointSpanDisplay}</Body1>
-              </div>
-              <div className={styles.field}>
-                <Caption1>Calculated point load [kN/m]</Caption1>
-                <Body1>{chartPointLoadDisplay}</Body1>
-              </div>
-              {chartEvaluation.limitHighlight ? (
-                <div className={styles.field}>
-                  <Caption1>{chartEvaluation.limitHighlight.label} [m]</Caption1>
-                  <Body1>
-                    {numberFormatter.format(chartEvaluation.limitHighlight.span)}
-                  </Body1>
-                </div>
-              ) : null}
-              {chartEvaluation.allowableLoadAtSpan !== null ? (
-                <div className={styles.field}>
-                  <Caption1>Allowable load at span [kN/m]</Caption1>
-                  <Body1>{numberFormatter.format(chartEvaluation.allowableLoadAtSpan)}</Body1>
-                </div>
-              ) : null}
-            </div>
-          </>
-        )}
-      </div>
+      <LoadCurveSection
+        selectedMaterialTray={selectedMaterialTray}
+        safetyFactorPercent={safetyFactorPercent}
+        safetyFactorStatusMessage={safetyFactorStatusMessage}
+        loadCurveError={loadCurveError}
+        selectedLoadCurveId={selectedLoadCurveId}
+        loadCurveLoadingId={loadCurveLoadingId}
+        selectedLoadCurve={selectedLoadCurve}
+        chartLoadCurvePoints={chartLoadCurvePoints}
+        chartEvaluation={chartEvaluation}
+        chartVerticalLines={chartVerticalLines}
+        chartHorizontalLines={chartHorizontalLines}
+        chartSummary={chartSummary}
+        chartStatusColor={chartStatusColor}
+        chartPointSpanDisplay={chartPointSpanDisplay}
+        chartPointLoadDisplay={chartPointLoadDisplay}
+        numberFormatter={numberFormatter}
+        styles={styles}
+      />
 
       {/* Navigation Footer */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
