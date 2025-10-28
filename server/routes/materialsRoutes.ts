@@ -17,9 +17,11 @@ import {
 import {
   mapMaterialLoadCurveRow,
   mapMaterialLoadCurvePointRow,
+  mapMaterialLoadCurveSummary,
   type MaterialLoadCurvePointRow,
   type MaterialLoadCurveRow,
-  type PublicMaterialLoadCurve
+  type PublicMaterialLoadCurve,
+  type PublicMaterialLoadCurveSummary
 } from '../models/materialLoadCurve.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import {
@@ -185,14 +187,17 @@ const buildPaginationMeta = (
 
 const selectMaterialTraysQuery = `
   SELECT
-    id,
-    tray_type,
-    height_mm,
-    width_mm,
-    weight_kg_per_m,
-    created_at,
-    updated_at
-  FROM material_trays
+    mt.id,
+    mt.tray_type,
+    mt.height_mm,
+    mt.width_mm,
+    mt.weight_kg_per_m,
+    mt.load_curve_id,
+    mt.created_at,
+    mt.updated_at,
+    lc.name AS load_curve_name
+  FROM material_trays mt
+  LEFT JOIN material_load_curves lc ON mt.load_curve_id = lc.id
 `;
 
 const selectMaterialSupportsQuery = `
@@ -216,9 +221,20 @@ const selectMaterialLoadCurvesQuery = `
     lc.tray_id,
     lc.created_at,
     lc.updated_at,
-    mt.tray_type
+    mt.tray_type,
+    COALESCE(stats.assigned_tray_count, 0) AS assigned_tray_count,
+    stats.assigned_tray_types
   FROM material_load_curves lc
   LEFT JOIN material_trays mt ON lc.tray_id = mt.id
+  LEFT JOIN (
+    SELECT
+      load_curve_id,
+      COUNT(*)::int AS assigned_tray_count,
+      ARRAY_AGG(tray_type ORDER BY tray_type) AS assigned_tray_types
+    FROM material_trays
+    WHERE load_curve_id IS NOT NULL
+    GROUP BY load_curve_id
+  ) stats ON stats.load_curve_id = lc.id
 `;
 
 const selectMaterialLoadCurvePointsQuery = `
@@ -369,14 +385,16 @@ materialsRouter.post(
             tray_type,
             height_mm,
             width_mm,
-            weight_kg_per_m
-          ) VALUES ($1, $2, $3, $4, $5)
+            weight_kg_per_m,
+            load_curve_id
+          ) VALUES ($1, $2, $3, $4, $5, NULL)
           RETURNING
             id,
             tray_type,
             height_mm,
             width_mm,
             weight_kg_per_m,
+            load_curve_id,
             created_at,
             updated_at;
         `,
@@ -457,25 +475,23 @@ materialsRouter.patch(
       parameterIndex += 1;
     }
 
+    if (data.loadCurveId !== undefined) {
+      setClauses.push(`load_curve_id = $${parameterIndex}`);
+      values.push(normalizeOptionalUuid(data.loadCurveId));
+      parameterIndex += 1;
+    }
+
     setClauses.push('updated_at = NOW()');
 
     const idParamIndex = parameterIndex;
     values.push(trayId);
 
     try {
-      const result = await pool.query<MaterialTrayRow>(
+      const result = await pool.query(
         `
           UPDATE material_trays
           SET ${setClauses.join(', ')}
           WHERE id = $${idParamIndex}
-          RETURNING
-            id,
-            tray_type,
-            height_mm,
-            width_mm,
-            weight_kg_per_m,
-            created_at,
-            updated_at;
         `,
         values
       );
@@ -485,7 +501,22 @@ materialsRouter.patch(
         return;
       }
 
-      res.json({ tray: mapMaterialTrayRow(result.rows[0]) });
+      const trayResult = await pool.query<MaterialTrayRow>(
+        `
+          ${selectMaterialTraysQuery}
+          WHERE mt.id = $1
+          LIMIT 1;
+        `,
+        [trayId]
+      );
+
+      const trayRow = trayResult.rows[0];
+      if (!trayRow) {
+        res.status(404).json({ error: 'Tray not found' });
+        return;
+      }
+
+      res.json({ tray: mapMaterialTrayRow(trayRow) });
     } catch (error) {
       if (
         error &&
@@ -494,6 +525,16 @@ materialsRouter.patch(
         (error as { code: string }).code === '23505'
       ) {
         res.status(409).json({ error: 'A tray with this type already exists' });
+        return;
+      }
+
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error as { code: string }).code === '23503'
+      ) {
+        res.status(400).json({ error: 'Referenced load curve not found' });
         return;
       }
 
@@ -1345,6 +1386,29 @@ materialsRouter.get(
     } catch (error) {
       console.error('List material load curves error', error);
       res.status(500).json({ error: 'Failed to fetch load curves' });
+    }
+  }
+);
+
+materialsRouter.get(
+  '/load-curves/summary',
+  async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await pool.query<MaterialLoadCurveRow>(
+        `
+          ${selectMaterialLoadCurvesQuery}
+          ORDER BY LOWER(lc.name) ASC;
+        `
+      );
+
+      const loadCurves: PublicMaterialLoadCurveSummary[] = result.rows.map(
+        (row) => mapMaterialLoadCurveSummary(row)
+      );
+
+      res.json({ loadCurves });
+    } catch (error) {
+      console.error('List material load curve summaries error', error);
+      res.status(500).json({ error: 'Failed to fetch load curve summaries' });
     }
   }
 );

@@ -7,20 +7,12 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
-  Dropdown,
   Field,
   Input,
-  Option,
   Textarea
 } from '@fluentui/react-components';
-import type { OptionOnSelectData } from '@fluentui/react-components';
 import type { MaterialLoadCurve } from '@/api/client';
 import type { LoadCurveFormErrors, LoadCurveFormState } from '../Materials.types';
-
-type TrayOption = {
-  id: string;
-  label: string;
-};
 
 type LoadCurveDialogProps = {
   open: boolean;
@@ -29,12 +21,9 @@ type LoadCurveDialogProps = {
   form: LoadCurveFormState;
   formErrors: LoadCurveFormErrors;
   isSubmitting: boolean;
-  trayOptions: TrayOption[];
-  isLoadingTrays: boolean;
   onFieldChange: (
     field: keyof LoadCurveFormState
   ) => (_event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => void;
-  onTrayChange: (_event: unknown, data: OptionOnSelectData) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   dialogActionsClassName: string;
@@ -47,18 +36,11 @@ export const LoadCurveDialog = ({
   form,
   formErrors,
   isSubmitting,
-  trayOptions,
-  isLoadingTrays,
   onFieldChange,
-  onTrayChange,
   onSubmit,
   onClose,
   dialogActionsClassName
 }: LoadCurveDialogProps) => {
-  const selectedTray = form.trayId
-    ? trayOptions.find((option) => option.id === form.trayId)
-    : null;
-
   return (
     <Dialog
       open={open}
@@ -88,26 +70,6 @@ export const LoadCurveDialog = ({
                   onChange={onFieldChange('name')}
                   required
                 />
-              </Field>
-              <Field
-                label='Associated tray (optional)'
-                validationState={formErrors.trayId ? 'error' : undefined}
-                validationMessage={formErrors.trayId}
-              >
-                <Dropdown
-                  placeholder={isLoadingTrays ? 'Loading trays…' : 'Select tray'}
-                  selectedOptions={form.trayId ? [form.trayId] : []}
-                  value={selectedTray?.label ?? ''}
-                  onOptionSelect={onTrayChange}
-                  disabled={isLoadingTrays}
-                >
-                  <Option value=''>No tray assigned</Option>
-                  {trayOptions.map((option) => (
-                    <Option key={option.id} value={option.id}>
-                      {option.label}
-                    </Option>
-                  ))}
-                </Dropdown>
               </Field>
               <Field
                 label='Description (optional)'

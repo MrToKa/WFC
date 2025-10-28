@@ -392,7 +392,8 @@ export const updateMaterialTraySchema = z
     type: z.string().trim().min(1).max(200).optional(),
     heightMm: materialNumericField,
     widthMm: materialNumericField,
-    weightKgPerM: materialNumericField
+    weightKgPerM: materialNumericField,
+    loadCurveId: z.string().uuid().optional().nullable()
   })
   .strict()
   .refine(
@@ -400,7 +401,8 @@ export const updateMaterialTraySchema = z
       value.type !== undefined ||
       value.heightMm !== undefined ||
       value.widthMm !== undefined ||
-      value.weightKgPerM !== undefined,
+      value.weightKgPerM !== undefined ||
+      value.loadCurveId !== undefined,
     { message: 'At least one field must be provided' }
   );
 

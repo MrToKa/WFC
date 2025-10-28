@@ -48,13 +48,17 @@ export const LoadCurveCard = ({
     const updatedAt = dateFormatter.format(new Date(loadCurve.updatedAt));
     const pointCount = loadCurve.points.length;
 
-    const trayLabel =
-      loadCurve.trayType ?? (loadCurve.trayId ? 'Assigned tray' : 'No tray assigned');
+    let assignmentLabel = 'No trays assigned';
+    if (loadCurve.assignedTrayCount === 1) {
+      assignmentLabel = `Used by ${loadCurve.assignedTrayTypes[0] ?? '1 tray'}`;
+    } else if (loadCurve.assignedTrayCount > 1) {
+      assignmentLabel = `Used by ${loadCurve.assignedTrayCount} trays`;
+    }
 
     return {
       updatedAt,
       pointCount,
-      trayLabel
+      assignmentLabel
     };
   }, [loadCurve]);
 
@@ -64,7 +68,7 @@ export const LoadCurveCard = ({
         header={<Body1>{loadCurve.name}</Body1>}
         description={
           <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
-            {metadata.trayLabel}
+            {metadata.assignmentLabel}
           </Caption1>
         }
       />

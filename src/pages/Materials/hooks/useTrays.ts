@@ -1,13 +1,16 @@
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { OptionOnSelectData } from '@fluentui/react-components';
 import {
   ApiError,
+  MaterialLoadCurveSummary,
   MaterialTray,
   PaginationMeta,
   createMaterialTray,
   deleteMaterialTray,
   exportMaterialTrays,
   fetchMaterialTrays,
+  fetchMaterialLoadCurveSummaries,
   importMaterialTrays,
   updateMaterialTray
 } from '@/api/client';
@@ -43,6 +46,17 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   const [trayForm, setTrayForm] = useState<TrayFormState>(initialTrayForm);
   const [trayFormErrors, setTrayFormErrors] = useState<TrayFormErrors>({});
   const [isTraySubmitting, setIsTraySubmitting] = useState<boolean>(false);
+
+  const [isTrayLoadCurveDialogOpen, setIsTrayLoadCurveDialogOpen] = useState<boolean>(false);
+  const [trayLoadCurveTray, setTrayLoadCurveTray] = useState<MaterialTray | null>(null);
+  const [trayLoadCurveSelection, setTrayLoadCurveSelection] = useState<string>('');
+  const [trayLoadCurveSummaries, setTrayLoadCurveSummaries] = useState<
+    MaterialLoadCurveSummary[]
+  >([]);
+  const [isLoadingTrayLoadCurves, setIsLoadingTrayLoadCurves] = useState<boolean>(false);
+  const [isSubmittingTrayLoadCurve, setIsSubmittingTrayLoadCurve] = useState<boolean>(false);
+  const [trayLoadCurveError, setTrayLoadCurveError] = useState<string | null>(null);
+  const [trayLoadCurvePendingId, setTrayLoadCurvePendingId] = useState<string | null>(null);
 
   const trayFileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -92,6 +106,21 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     void loadTrays(trayPage);
   }, [trayPage, loadTrays]);
 
+  const loadTrayLoadCurves = useCallback(async () => {
+    setTrayLoadCurveError(null);
+    setIsLoadingTrayLoadCurves(true);
+    try {
+      const result = await fetchMaterialLoadCurveSummaries();
+      setTrayLoadCurveSummaries(result.loadCurves);
+    } catch (error) {
+      console.error('Fetch material load curve summaries failed', error);
+      setTrayLoadCurveSummaries([]);
+      setTrayLoadCurveError('Failed to load load curves. Please try again.');
+    } finally {
+      setIsLoadingTrayLoadCurves(false);
+    }
+  }, []);
+
   const openTrayCreateDialog = useCallback(() => {
     setTrayDialogMode('create');
     setEditingTray(null);
@@ -121,6 +150,110 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     setTrayFormErrors({});
   }, []);
 
+  const openTrayLoadCurveDialog = useCallback(
+    (tray: MaterialTray) => {
+      if (!isAdmin) {
+        showToast({
+          intent: 'error',
+          title: 'Admin access required',
+          body: 'You need to be signed in as an admin to assign load curves.'
+        });
+        return;
+      }
+      setTrayLoadCurveTray(tray);
+      setTrayLoadCurveSelection(tray.loadCurveId ?? '');
+      setTrayLoadCurveError(null);
+      setIsTrayLoadCurveDialogOpen(true);
+      void loadTrayLoadCurves();
+    },
+    [isAdmin, loadTrayLoadCurves, showToast]
+  );
+
+  const closeTrayLoadCurveDialog = useCallback(() => {
+    setIsTrayLoadCurveDialogOpen(false);
+    setTrayLoadCurveTray(null);
+    setTrayLoadCurveSelection('');
+    setTrayLoadCurveSummaries([]);
+    setTrayLoadCurveError(null);
+  }, []);
+
+  const handleTrayLoadCurveChange = useCallback(
+    (_event: unknown, data: OptionOnSelectData) => {
+      setTrayLoadCurveSelection(data.optionValue ?? '');
+      setTrayLoadCurveError(null);
+    },
+    []
+  );
+
+  const handleTrayLoadCurveSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (!isAdmin || !token) {
+        showToast({
+          intent: 'error',
+          title: 'Admin access required',
+          body: 'You need to be signed in as an admin to assign load curves.'
+        });
+        return;
+      }
+
+      if (!trayLoadCurveTray) {
+        return;
+      }
+
+      const currentSelection = trayLoadCurveTray.loadCurveId ?? '';
+      if (trayLoadCurveSelection === currentSelection) {
+        closeTrayLoadCurveDialog();
+        return;
+      }
+
+      setIsSubmittingTrayLoadCurve(true);
+      setTrayLoadCurvePendingId(trayLoadCurveTray.id);
+      try {
+        await updateMaterialTray(token, trayLoadCurveTray.id, {
+          loadCurveId: trayLoadCurveSelection === '' ? null : trayLoadCurveSelection
+        });
+
+        showToast({
+          intent: 'success',
+          title: trayLoadCurveSelection ? 'Load curve assigned to tray' : 'Load curve unassigned'
+        });
+        await loadTrays(trayPage, { silent: true });
+        closeTrayLoadCurveDialog();
+      } catch (error) {
+        console.error('Update tray load curve assignment failed', error);
+        setTrayLoadCurveError('Failed to update load curve assignment. Please try again.');
+        if (error instanceof ApiError && (error.status === 400 || error.status === 404)) {
+          showToast({
+            intent: 'error',
+            title: 'Load curve not found',
+            body: 'Refresh and try again.'
+          });
+        } else {
+          showToast({
+            intent: 'error',
+            title: 'Failed to update load curve assignment',
+            body: 'Please try again.'
+          });
+        }
+      } finally {
+        setIsSubmittingTrayLoadCurve(false);
+        setTrayLoadCurvePendingId(null);
+      }
+    },
+    [
+      closeTrayLoadCurveDialog,
+      isAdmin,
+      loadTrays,
+      showToast,
+      token,
+      trayLoadCurveSelection,
+      trayLoadCurveTray,
+      trayPage
+    ]
+  );
+
   const handleTrayFieldChange = useCallback(
     (field: keyof TrayFormState) =>
       (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
@@ -131,7 +264,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   );
 
   const handleTraySubmit = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
 
       if (!isAdmin || !token) {
@@ -381,10 +514,23 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     trayForm,
     trayFormErrors,
     isTraySubmitting,
+    isTrayLoadCurveDialogOpen,
+    trayLoadCurveTray,
+    trayLoadCurveSelection,
+    trayLoadCurveSummaries,
+    isLoadingTrayLoadCurves,
+    isSubmittingTrayLoadCurve,
+    trayLoadCurveError,
+    trayLoadCurvePendingId,
     loadTrays,
+    loadTrayLoadCurves,
     openTrayCreateDialog,
     openTrayEditDialog,
     closeTrayDialog,
+    openTrayLoadCurveDialog,
+    closeTrayLoadCurveDialog,
+    handleTrayLoadCurveChange,
+    handleTrayLoadCurveSubmit,
     handleTrayFieldChange,
     handleTraySubmit,
     handleTrayImportClick,

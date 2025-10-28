@@ -229,6 +229,7 @@ export async function initializeDatabase(): Promise<void> {
       height_mm NUMERIC,
       width_mm NUMERIC,
       weight_kg_per_m NUMERIC,
+      load_curve_id UUID,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -237,6 +238,42 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS material_trays_type_lower_idx
       ON material_trays (LOWER(tray_type));
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_trays
+    ADD COLUMN IF NOT EXISTS load_curve_id UUID;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'material_trays_load_curve_id_fkey'
+          AND table_name = 'material_trays'
+      ) THEN
+        ALTER TABLE material_trays
+          ADD CONSTRAINT material_trays_load_curve_id_fkey
+          FOREIGN KEY (load_curve_id)
+          REFERENCES material_load_curves(id)
+          ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_trays_load_curve_id_idx
+      ON material_trays (load_curve_id);
+  `);
+
+  await pool.query(`
+    UPDATE material_trays mt
+    SET load_curve_id = lc.id
+    FROM material_load_curves lc
+    WHERE lc.tray_id = mt.id
+      AND mt.load_curve_id IS NULL;
   `);
 
   await pool.query(`

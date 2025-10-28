@@ -16,6 +16,7 @@ import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
 import { useLoadCurves } from './Materials/hooks/useLoadCurves';
 import { TrayDialog } from './Materials/components/TrayDialog';
+import { TrayLoadCurveDialog } from './Materials/components/TrayLoadCurveDialog';
 import { SupportDialog } from './Materials/components/SupportDialog';
 import { TraysTable } from './Materials/components/TraysTable';
 import { SupportsTable } from './Materials/components/SupportsTable';
@@ -157,11 +158,13 @@ export const Materials = () => {
               error={traysHook.traysError}
               isAdmin={isAdmin}
               pendingId={traysHook.trayPendingId}
+              loadCurvePendingId={traysHook.trayLoadCurvePendingId}
               isSubmitting={traysHook.isTraySubmitting}
               formatNumeric={formatNumeric}
               formatWeight={formatWeight}
               onEdit={traysHook.openTrayEditDialog}
               onDelete={traysHook.handleTrayDelete}
+              onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
               page={traysHook.trayPage}
               totalPages={trayTotalPages}
               onSetPage={traysHook.setTrayPage}
@@ -276,6 +279,20 @@ export const Materials = () => {
         onClose={traysHook.closeTrayDialog}
         dialogActionsClassName={styles.dialogActions}
       />
+      <TrayLoadCurveDialog
+        open={traysHook.isTrayLoadCurveDialogOpen}
+        tray={traysHook.trayLoadCurveTray}
+        loadCurves={traysHook.trayLoadCurveSummaries}
+        selection={traysHook.trayLoadCurveSelection}
+        isLoading={traysHook.isLoadingTrayLoadCurves}
+        isSubmitting={traysHook.isSubmittingTrayLoadCurve}
+        error={traysHook.trayLoadCurveError}
+        onSelectionChange={traysHook.handleTrayLoadCurveChange}
+        onReload={traysHook.loadTrayLoadCurves}
+        onSubmit={traysHook.handleTrayLoadCurveSubmit}
+        onClose={traysHook.closeTrayLoadCurveDialog}
+        dialogActionsClassName={styles.dialogActions}
+      />
 
       <SupportDialog
         open={supportsHook.isSupportDialogOpen}
@@ -296,10 +313,7 @@ export const Materials = () => {
         form={loadCurvesHook.loadCurveForm}
         formErrors={loadCurvesHook.loadCurveFormErrors}
         isSubmitting={loadCurvesHook.isLoadCurveSubmitting}
-        trayOptions={loadCurvesHook.trayOptions}
-        isLoadingTrays={loadCurvesHook.isLoadingMaterialTrays}
         onFieldChange={loadCurvesHook.handleLoadCurveFieldChange}
-        onTrayChange={loadCurvesHook.handleLoadCurveTrayChange}
         onSubmit={loadCurvesHook.handleLoadCurveSubmit}
         onClose={loadCurvesHook.closeLoadCurveDialog}
         dialogActionsClassName={styles.dialogActions}

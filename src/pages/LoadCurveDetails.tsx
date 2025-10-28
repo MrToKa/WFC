@@ -3,7 +3,6 @@
   type FormEvent,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState
 } from 'react';
@@ -16,10 +15,8 @@ import {
   Card,
   CardHeader,
   CardPreview,
-  Dropdown,
   Field,
   Input,
-  Option,
   Spinner,
   Textarea,
   Title2,
@@ -29,12 +26,9 @@ import {
   shorthands,
   tokens
 } from '@fluentui/react-components';
-import type { OptionOnSelectData } from '@fluentui/react-components';
 import {
   ApiError,
   MaterialLoadCurve,
-  MaterialTray,
-  fetchAllMaterialTrays,
   fetchMaterialLoadCurve,
   importMaterialLoadCurvePoints,
   updateMaterialLoadCurve
@@ -51,7 +45,6 @@ type PointFormRow = {
 
 type DetailsFormState = {
   name: string;
-  trayId: string;
   description: string;
 };
 
@@ -205,14 +198,11 @@ export const LoadCurveDetails = () => {
   const isAdmin = Boolean(user?.isAdmin);
 
   const [loadCurve, setLoadCurve] = useState<MaterialLoadCurve | null>(null);
-  const [materialTrays, setMaterialTrays] = useState<MaterialTray[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isLoadingTrays, setIsLoadingTrays] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const [detailsForm, setDetailsForm] = useState<DetailsFormState>({
     name: '',
-    trayId: '',
     description: ''
   });
   const [detailsErrors, setDetailsErrors] = useState<DetailsFormErrors>({});
@@ -229,7 +219,6 @@ export const LoadCurveDetails = () => {
     setLoadCurve(curve);
     setDetailsForm({
       name: curve.name,
-      trayId: curve.trayId ?? '',
       description: curve.description ?? ''
     });
     setPointsForm(
@@ -245,43 +234,23 @@ export const LoadCurveDetails = () => {
     if (!loadCurveId) {
       setError('Load curve identifier is missing.');
       setIsLoading(false);
-      setIsLoadingTrays(false);
       return;
     }
 
     setIsLoading(true);
-    setIsLoadingTrays(true);
     try {
-      const [curveResult, traysResult] = await Promise.allSettled([
-        fetchMaterialLoadCurve(loadCurveId),
-        fetchAllMaterialTrays()
-      ]);
-
-      if (curveResult.status === 'fulfilled') {
-        applyLoadCurve(curveResult.value.loadCurve);
-        setError(null);
-      } else {
-        const reason = curveResult.reason;
-        if (reason instanceof ApiError && reason.status === 404) {
-          setError('Load curve not found.');
-        } else {
-          setError('Failed to load load curve.');
-        }
-        return;
-      }
-
-      if (traysResult.status === 'fulfilled') {
-        setMaterialTrays(traysResult.value.trays);
-      } else {
-        console.error('Failed to load material trays', traysResult.reason);
-        setMaterialTrays([]);
-      }
+      const result = await fetchMaterialLoadCurve(loadCurveId);
+      applyLoadCurve(result.loadCurve);
+      setError(null);
     } catch (err) {
       console.error('Failed to load load curve details', err);
-      setError('Failed to load load curve.');
+      if (err instanceof ApiError && err.status === 404) {
+        setError('Load curve not found.');
+      } else {
+        setError('Failed to load load curve.');
+      }
     } finally {
       setIsLoading(false);
-      setIsLoadingTrays(false);
     }
   }, [applyLoadCurve, loadCurveId]);
 
@@ -289,29 +258,12 @@ export const LoadCurveDetails = () => {
     void loadData();
   }, [loadData]);
 
-  const trayOptions = useMemo(
-    () =>
-      materialTrays.map((tray) => ({
-        id: tray.id,
-        label: tray.type
-      })),
-    [materialTrays]
-  );
-
   const handleDetailsChange =
     (field: keyof DetailsFormState) =>
     (_event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => {
       setDetailsForm((previous) => ({ ...previous, [field]: data.value }));
       setDetailsErrors((previous) => ({ ...previous, [field]: undefined }));
     };
-
-  const handleDetailsTraySelect = (_event: unknown, data: OptionOnSelectData) => {
-    setDetailsForm((previous) => ({
-      ...previous,
-      trayId: data.optionValue ?? ''
-    }));
-    setDetailsErrors((previous) => ({ ...previous, trayId: undefined }));
-  };
 
   const handleDetailsSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -342,8 +294,7 @@ export const LoadCurveDetails = () => {
     try {
       const response = await updateMaterialLoadCurve(token, loadCurveId, {
         name: detailsForm.name.trim(),
-        description: detailsForm.description.trim() === '' ? null : detailsForm.description.trim(),
-        trayId: detailsForm.trayId.trim() === '' ? null : detailsForm.trayId.trim()
+        description: detailsForm.description.trim() === '' ? null : detailsForm.description.trim()
       });
       applyLoadCurve(response.loadCurve);
       showToast({ intent: 'success', title: 'Load curve updated' });
@@ -562,6 +513,25 @@ export const LoadCurveDetails = () => {
     return null;
   }
 
+  const maxAssignedTraysToDisplay = 5;
+  const assignedTrayNames = loadCurve.assignedTrayTypes.slice(0, maxAssignedTraysToDisplay);
+  const remainingAssignedTrays = Math.max(
+    0,
+    loadCurve.assignedTrayCount - assignedTrayNames.length
+  );
+  const assignedTraysSummary =
+    loadCurve.assignedTrayCount === 0
+      ? 'No trays assigned'
+      : loadCurve.assignedTrayCount === 1
+      ? `Used by ${assignedTrayNames[0]}`
+      : `Used by ${loadCurve.assignedTrayCount} trays`;
+  const assignedTraysDetail =
+    loadCurve.assignedTrayCount === 0
+      ? null
+      : remainingAssignedTrays > 0
+      ? `${assignedTrayNames.join(', ')} (+${remainingAssignedTrays} more)`
+      : assignedTrayNames.join(', ');
+
   return (
     <section className={styles.root} aria-labelledby='load-curve-heading'>
       <div className={styles.header}>
@@ -578,6 +548,11 @@ export const LoadCurveDetails = () => {
       <div className={styles.layout}>
         <Card appearance='outline' className={styles.detailCard}>
           <Title3>General information</Title3>
+          <Caption1 className={styles.readOnlyNotice}>
+            {assignedTraysDetail
+              ? `Currently used by: ${assignedTraysDetail}.`
+              : 'No trays currently use this load curve.'}
+          </Caption1>
           <form onSubmit={handleDetailsSubmit} className={styles.detailCardContent}>
             <Field
               label='Name'
@@ -591,26 +566,6 @@ export const LoadCurveDetails = () => {
                 disabled={!isAdmin}
                 required
               />
-            </Field>
-            <Field label='Associated tray (optional)'>
-              <Dropdown
-                placeholder={isLoadingTrays ? 'Loading trays...' : 'Select tray'}
-                selectedOptions={detailsForm.trayId ? [detailsForm.trayId] : []}
-                value={
-                  detailsForm.trayId
-                    ? trayOptions.find((option) => option.id === detailsForm.trayId)?.label ?? ''
-                    : ''
-                }
-                onOptionSelect={handleDetailsTraySelect}
-                disabled={!isAdmin || isLoadingTrays}
-              >
-                <Option value=''>No tray assigned</Option>
-                {trayOptions.map((option) => (
-                  <Option key={option.id} value={option.id}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Dropdown>
             </Field>
             <Field label='Description (optional)'>
               <Textarea
@@ -645,7 +600,7 @@ export const LoadCurveDetails = () => {
             header={<Title3>Curve preview</Title3>}
             description={
               <Caption1 className={styles.curvePreviewHeaderDescription}>
-                {loadCurve.trayType ? `Tray: ${loadCurve.trayType}` : 'No tray assigned'}
+                {assignedTraysSummary}
               </Caption1>
             }
           />

@@ -1,16 +1,13 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { OptionOnSelectData } from '@fluentui/react-components';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError,
   MaterialLoadCurve,
   MaterialLoadCurveInput,
   MaterialLoadCurveUpdateInput,
-  MaterialTray,
   PaginationMeta,
   createMaterialLoadCurve,
   deleteMaterialLoadCurve,
-  fetchAllMaterialTrays,
   fetchMaterialLoadCurves,
   updateMaterialLoadCurve
 } from '@/api/client';
@@ -46,8 +43,7 @@ const validateLoadCurveForm = (form: LoadCurveFormState): LoadCurveFormErrors =>
 
 const buildLoadCurvePayload = (form: LoadCurveFormState): MaterialLoadCurveInput => ({
   name: form.name.trim(),
-  description: form.description.trim() === '' ? null : form.description.trim(),
-  trayId: form.trayId.trim() === '' ? null : form.trayId.trim()
+  description: form.description.trim() === '' ? null : form.description.trim()
 });
 
 export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams) => {
@@ -65,9 +61,6 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
   const [loadCurveForm, setLoadCurveForm] = useState<LoadCurveFormState>(initialLoadCurveForm);
   const [loadCurveFormErrors, setLoadCurveFormErrors] = useState<LoadCurveFormErrors>({});
   const [isLoadCurveSubmitting, setIsLoadCurveSubmitting] = useState<boolean>(false);
-
-  const [materialTrays, setMaterialTrays] = useState<MaterialTray[]>([]);
-  const [isLoadingMaterialTrays, setIsLoadingMaterialTrays] = useState<boolean>(false);
 
   const loadLoadCurves = useCallback(
     async (page: number, options?: { silent?: boolean }) => {
@@ -115,22 +108,6 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
     void loadLoadCurves(loadCurvePage);
   }, [loadLoadCurves, loadCurvePage]);
 
-  const loadMaterialTrays = useCallback(async () => {
-    setIsLoadingMaterialTrays(true);
-    try {
-      const result = await fetchAllMaterialTrays();
-      setMaterialTrays(result.trays);
-    } catch (error) {
-      console.error('Fetch material trays for load curves failed', error);
-    } finally {
-      setIsLoadingMaterialTrays(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadMaterialTrays();
-  }, [loadMaterialTrays]);
-
   const openLoadCurveCreateDialog = useCallback(() => {
     if (!isAdmin) {
       showToast({
@@ -161,7 +138,6 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
       setEditingLoadCurve(loadCurve);
       setLoadCurveForm({
         name: loadCurve.name,
-        trayId: loadCurve.trayId ?? '',
         description: loadCurve.description ?? ''
       });
       setLoadCurveFormErrors({});
@@ -184,17 +160,6 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         setLoadCurveForm((previous) => ({ ...previous, [field]: data.value }));
         setLoadCurveFormErrors((previous) => ({ ...previous, [field]: undefined }));
       },
-    []
-  );
-
-  const handleLoadCurveTrayChange = useCallback(
-    (_event: unknown, data: OptionOnSelectData) => {
-      setLoadCurveForm((previous) => ({
-        ...previous,
-        trayId: data.optionValue ?? ''
-      }));
-      setLoadCurveFormErrors((previous) => ({ ...previous, trayId: undefined }));
-    },
     []
   );
 
@@ -320,15 +285,6 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
     ]
   );
 
-  const trayOptions = useMemo(
-    () =>
-      materialTrays.map((tray) => ({
-        id: tray.id,
-        label: tray.type
-      })),
-    [materialTrays]
-  );
-
   return {
     loadCurves,
     loadCurvePagination,
@@ -344,15 +300,11 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
     loadCurveForm,
     loadCurveFormErrors,
     isLoadCurveSubmitting,
-    loadMaterialTrays,
-    isLoadingMaterialTrays,
-    trayOptions,
     loadLoadCurves,
     openLoadCurveCreateDialog,
     openLoadCurveEditDialog,
     closeLoadCurveDialog,
     handleLoadCurveFieldChange,
-    handleLoadCurveTrayChange,
     handleLoadCurveSubmit,
     handleLoadCurveDelete
   };

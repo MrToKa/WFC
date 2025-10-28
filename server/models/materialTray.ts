@@ -4,6 +4,8 @@ export type MaterialTrayRow = {
   height_mm: string | number | null;
   width_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  load_curve_id: string | null;
+  load_curve_name?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -26,6 +28,8 @@ export type PublicMaterialTray = {
   heightMm: number | null;
   widthMm: number | null;
   weightKgPerM: number | null;
+  loadCurveId: string | null;
+  loadCurveName: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -36,6 +40,8 @@ export const mapMaterialTrayRow = (row: MaterialTrayRow): PublicMaterialTray => 
   heightMm: toNumberOrNull(row.height_mm),
   widthMm: toNumberOrNull(row.width_mm),
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
+  loadCurveId: row.load_curve_id ?? null,
+  loadCurveName: row.load_curve_name ?? null,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at)
 });

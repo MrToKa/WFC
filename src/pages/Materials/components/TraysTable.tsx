@@ -7,11 +7,13 @@ type TraysTableProps = {
   error: string | null;
   isAdmin: boolean;
   pendingId: string | null;
+  loadCurvePendingId: string | null;
   isSubmitting: boolean;
   formatNumeric: (value: number | null) => string;
   formatWeight: (value: number | null) => string;
   onEdit: (tray: MaterialTray) => void;
   onDelete: (tray: MaterialTray) => void;
+  onAssignLoadCurve: (tray: MaterialTray) => void;
   page: number;
   totalPages: number;
   onSetPage: (page: number) => void;
@@ -34,11 +36,13 @@ export const TraysTable = ({
   error,
   isAdmin,
   pendingId,
+  loadCurvePendingId,
   isSubmitting,
   formatNumeric,
   formatWeight,
   onEdit,
   onDelete,
+  onAssignLoadCurve,
   page,
   totalPages,
   onSetPage,
@@ -81,12 +85,14 @@ export const TraysTable = ({
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Weight [kg/m]
               </th>
+              <th className={styles.tableHeadCell}>Load curve</th>
               {isAdmin ? <th className={styles.tableHeadCell}>Actions</th> : null}
             </tr>
           </thead>
           <tbody>
             {trays.map((tray) => {
               const isBusy = pendingId === tray.id;
+              const isAssigning = loadCurvePendingId === tray.id;
               return (
                 <tr key={tray.id}>
                   <td className={styles.tableCell}>{tray.type}</td>
@@ -99,8 +105,19 @@ export const TraysTable = ({
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatWeight(tray.weightKgPerM)}
                   </td>
+                  <td className={styles.tableCell}>
+                    {tray.loadCurveName ?? 'No load curve assigned'}
+                  </td>
                   {isAdmin ? (
                     <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                      <Button
+                        size='small'
+                        appearance='secondary'
+                        onClick={() => onAssignLoadCurve(tray)}
+                        disabled={isBusy || isSubmitting || isAssigning}
+                      >
+                        {isAssigning ? 'Updating...' : 'Assign load curve'}
+                      </Button>
                       <Button
                         size='small'
                         onClick={() => onEdit(tray)}

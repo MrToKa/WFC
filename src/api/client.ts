@@ -93,6 +93,8 @@ export type MaterialTray = {
   heightMm: number | null;
   widthMm: number | null;
   weightKgPerM: number | null;
+  loadCurveId: string | null;
+  loadCurveName: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -123,6 +125,8 @@ export type MaterialLoadCurve = {
   description: string | null;
   trayId: string | null;
   trayType: string | null;
+  assignedTrayCount: number;
+  assignedTrayTypes: string[];
   createdAt: string;
   updatedAt: string;
   points: MaterialLoadCurvePoint[];
@@ -145,6 +149,15 @@ export type MaterialLoadCurveUpdateInput = {
   description?: string | null;
   trayId?: string | null;
   points?: MaterialLoadCurvePointInput[];
+};
+
+export type MaterialLoadCurveSummary = {
+  id: string;
+  name: string;
+  trayId: string | null;
+  trayType: string | null;
+  assignedTrayCount: number;
+  assignedTrayTypes: string[];
 };
 
 export type MaterialImportSummary = {
@@ -251,6 +264,7 @@ export type MaterialTrayInput = {
   heightMm?: number | null;
   widthMm?: number | null;
   weightKgPerM?: number | null;
+  loadCurveId?: string | null;
 };
 
 export type MaterialSupportInput = {
@@ -1147,6 +1161,14 @@ export async function fetchMaterialLoadCurves(options?: {
     loadCurves: MaterialLoadCurve[];
     pagination: PaginationMeta;
   }>(`/api/materials/load-curves${query ? `?${query}` : ''}`);
+}
+
+export async function fetchMaterialLoadCurveSummaries(): Promise<{
+  loadCurves: MaterialLoadCurveSummary[];
+}> {
+  return request<{ loadCurves: MaterialLoadCurveSummary[] }>(
+    '/api/materials/load-curves/summary'
+  );
 }
 
 export async function fetchMaterialLoadCurve(

@@ -19,7 +19,6 @@ export type TrayFormErrors = Partial<Record<keyof TrayFormState, string>>;
 export type SupportFormErrors = Partial<Record<keyof SupportFormState, string>>;
 export type LoadCurveFormState = {
   name: string;
-  trayId: string;
   description: string;
 };
 
@@ -42,7 +41,6 @@ export const initialSupportForm: SupportFormState = {
 
 export const initialLoadCurveForm: LoadCurveFormState = {
   name: '',
-  trayId: '',
   description: ''
 };
 
