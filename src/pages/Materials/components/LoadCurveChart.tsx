@@ -148,6 +148,71 @@ export const LoadCurveChart = memo(
     };
   }, [points]);
 
+  // Calculate vertical and horizontal lines data - must be called unconditionally
+  const verticalLinesData = useMemo(() => {
+    if (!processed || !verticalLines || verticalLines.length === 0) {
+      return [];
+    }
+
+    const { domainSpanMin, domainSpanMax, domainLoadMin, domainLoadMax } = processed;
+
+    return verticalLines
+      .map((line, index) => {
+        if (!Number.isFinite(line.span) || !Number.isFinite(line.toLoad)) {
+          return null;
+        }
+
+        const span = Math.min(Math.max(line.span, domainSpanMin), domainSpanMax);
+        const load = Math.min(Math.max(line.toLoad, domainLoadMin), domainLoadMax);
+        return {
+          key: `vertical-${index}`,
+          span,
+          load,
+          color: line.color ?? tokens.colorPaletteDarkOrangeForeground1,
+          label: line.label
+        };
+      })
+      .filter(Boolean) as {
+      key: string;
+      span: number;
+      load: number;
+      color: string;
+      label?: string;
+    }[];
+  }, [verticalLines, processed]);
+
+  const horizontalLinesData = useMemo(() => {
+    if (!processed || !horizontalLines || horizontalLines.length === 0) {
+      return [];
+    }
+
+    const { domainLoadMin, domainLoadMax, domainSpanMin, domainSpanMax } = processed;
+
+    return horizontalLines
+      .map((line, index) => {
+        if (!Number.isFinite(line.load) || !Number.isFinite(line.toSpan)) {
+          return null;
+        }
+
+        const load = Math.min(Math.max(line.load, domainLoadMin), domainLoadMax);
+        const span = Math.min(Math.max(line.toSpan, domainSpanMin), domainSpanMax);
+        return {
+          key: `horizontal-${index}`,
+          load,
+          span,
+          color: line.color ?? tokens.colorPalettePurpleForeground2,
+          label: line.label
+        };
+      })
+      .filter(Boolean) as {
+      key: string;
+      load: number;
+      span: number;
+      color: string;
+      label?: string;
+    }[];
+  }, [horizontalLines, processed]);
+
   if (!processed) {
     return <Body2>No curve data available.</Body2>;
   }
@@ -226,66 +291,6 @@ export const LoadCurveChart = memo(
           : 'Minimum allowable point')
     };
   })();
-
-  const verticalLinesData = useMemo(() => {
-    if (!verticalLines || verticalLines.length === 0) {
-      return [];
-    }
-
-    return verticalLines
-      .map((line, index) => {
-        if (!Number.isFinite(line.span) || !Number.isFinite(line.toLoad)) {
-          return null;
-        }
-
-        const span = Math.min(Math.max(line.span, domainSpanMin), domainSpanMax);
-        const load = Math.min(Math.max(line.toLoad, domainLoadMin), domainLoadMax);
-        return {
-          key: `vertical-${index}`,
-          span,
-          load,
-          color: line.color ?? tokens.colorPaletteDarkOrangeForeground1,
-          label: line.label
-        };
-      })
-      .filter(Boolean) as {
-      key: string;
-      span: number;
-      load: number;
-      color: string;
-      label?: string;
-    }[];
-  }, [verticalLines, domainSpanMin, domainSpanMax, domainLoadMin, domainLoadMax]);
-
-  const horizontalLinesData = useMemo(() => {
-    if (!horizontalLines || horizontalLines.length === 0) {
-      return [];
-    }
-
-    return horizontalLines
-      .map((line, index) => {
-        if (!Number.isFinite(line.load) || !Number.isFinite(line.toSpan)) {
-          return null;
-        }
-
-        const load = Math.min(Math.max(line.load, domainLoadMin), domainLoadMax);
-        const span = Math.min(Math.max(line.toSpan, domainSpanMin), domainSpanMax);
-        return {
-          key: `horizontal-${index}`,
-          load,
-          span,
-          color: line.color ?? tokens.colorPalettePurpleForeground2,
-          label: line.label
-        };
-      })
-      .filter(Boolean) as {
-      key: string;
-      load: number;
-      span: number;
-      color: string;
-      label?: string;
-    }[];
-  }, [horizontalLines, domainLoadMin, domainLoadMax, domainSpanMin, domainSpanMax]);
 
   return (
     <svg
