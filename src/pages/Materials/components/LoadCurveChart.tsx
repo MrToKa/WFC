@@ -290,9 +290,9 @@ export const LoadCurveChart = memo(
   return (
     <svg
       className={className}
-      width={CHART_WIDTH}
-      height={CHART_HEIGHT}
-      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+      width="auto"
+      height="auto"
+      viewBox={`0 0 ${CHART_WIDTH + MARGIN} ${CHART_HEIGHT}`}
       role='img'
       aria-label='Load curve chart'
     >
