@@ -249,6 +249,7 @@ projectsRouter.post(
       secondaryTrayLength,
       supportDistance,
       supportWeight,
+      trayLoadSafetyFactor,
       supportDistances
     } = parseResult.data;
     const projectId = randomUUID();
@@ -268,9 +269,10 @@ projectsRouter.post(
             description,
             secondary_tray_length,
             support_distance,
-            support_weight
+            support_weight,
+            tray_load_safety_factor
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           RETURNING id;
         `,
         [
@@ -286,7 +288,8 @@ projectsRouter.post(
             : normalizedDescription,
           secondaryTrayLength ?? null,
           supportDistance ?? null,
-          supportWeight ?? null
+          supportWeight ?? null,
+          trayLoadSafetyFactor ?? null
         ]
       );
 
@@ -385,6 +388,11 @@ projectsRouter.patch(
     if (parseResult.data.supportWeight !== undefined) {
       fields.push(`support_weight = $${index++}`);
       values.push(parseResult.data.supportWeight);
+    }
+
+    if (parseResult.data.trayLoadSafetyFactor !== undefined) {
+      fields.push(`tray_load_safety_factor = $${index++}`);
+      values.push(parseResult.data.trayLoadSafetyFactor);
     }
 
     fields.push(`updated_at = NOW()`);

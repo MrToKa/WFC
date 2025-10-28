@@ -16,7 +16,8 @@ import { formatNumeric } from '../ProjectDetails.utils';
 type NumericFieldName =
   | 'secondaryTrayLength'
   | 'supportDistance'
-  | 'supportWeight';
+  | 'supportWeight'
+  | 'trayLoadSafetyFactor';
 
 type NumericFieldConfig = {
   field: NumericFieldName;

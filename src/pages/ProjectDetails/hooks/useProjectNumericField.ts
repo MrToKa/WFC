@@ -11,14 +11,16 @@ type ShowToast = (props: {
 type UpdatableNumericProjectField =
   | 'secondaryTrayLength'
   | 'supportDistance'
-  | 'supportWeight';
+  | 'supportWeight'
+  | 'trayLoadSafetyFactor';
 
 type NumericFieldLabelMap = Record<UpdatableNumericProjectField, string>;
 
 export const NUMERIC_FIELD_LABELS: NumericFieldLabelMap = {
   secondaryTrayLength: 'Secondary tray length',
   supportDistance: 'Default distance between supports',
-  supportWeight: 'Support weight'
+  supportWeight: 'Support weight',
+  trayLoadSafetyFactor: 'Tray load safety factor'
 };
 
 type UseProjectNumericFieldParams = {

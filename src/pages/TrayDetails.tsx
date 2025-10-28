@@ -259,7 +259,6 @@ export const TrayDetails = () => {
   const [loadCurvesById, setLoadCurvesById] = useState<Record<string, MaterialLoadCurve>>({});
   const [loadCurveLoadingId, setLoadCurveLoadingId] = useState<string | null>(null);
   const [loadCurveError, setLoadCurveError] = useState<string | null>(null);
-  const [safetyFactorInput, setSafetyFactorInput] = useState<string>('10');
 
   useEffect(() => {
     let cancelled = false;
@@ -1006,23 +1005,25 @@ export const TrayDetails = () => {
     return trayTotalOwnWeightKg + cablesTotalWeightKg;
   }, [trayTotalOwnWeightKg, cablesTotalWeightKg]);
 
-  const safetyFactorParsed = useMemo(
-    () => parseNumberInput(safetyFactorInput),
-    [safetyFactorInput]
-  );
-
-  const safetyFactorPercent = safetyFactorParsed.numeric;
-  const safetyFactorValidationMessage =
-    safetyFactorInput.trim() === ''
-      ? 'Enter a safety factor.'
-      : safetyFactorPercent === null
-      ? safetyFactorParsed.error ?? 'Enter a numeric value.'
-      : safetyFactorPercent < 0
-      ? 'Safety factor must be zero or greater.'
-      : undefined;
-  const safetyFactorHasError = Boolean(safetyFactorValidationMessage);
+  const safetyFactorPercent = project?.trayLoadSafetyFactor ?? null;
+  const safetyFactorMissing =
+    project !== null && project.trayLoadSafetyFactor === null;
+  const safetyFactorHasError =
+    project !== null && safetyFactorPercent !== null && safetyFactorPercent < 0;
   const safetyFactorMultiplier =
-    safetyFactorHasError ? null : 1 + ((safetyFactorPercent ?? 0) / 100);
+    safetyFactorHasError || safetyFactorPercent === null
+      ? null
+      : 1 + safetyFactorPercent / 100;
+  const safetyFactorStatusMessage = (() => {
+    if (safetyFactorHasError) {
+      return 'Safety factor must be zero or greater.';
+    }
+    if (safetyFactorMissing) {
+      return 'Set a safety factor in Project details to evaluate the load curve.';
+    }
+    return null;
+  })();
+  const safetyFactorBlocking = safetyFactorHasError || safetyFactorMissing;
 
   const totalWeightLoadPerMeterKn = useMemo(() => {
     if (totalWeightLoadPerMeterKg === null) {
@@ -1145,7 +1146,9 @@ export const TrayDetails = () => {
     if (safetyFactorMultiplier === null) {
       return {
         status: 'awaiting-data' as LoadCurveChartStatus,
-        message: 'Enter a valid safety factor to evaluate the load curve.',
+        message:
+          safetyFactorStatusMessage ??
+          'Set a safety factor in Project details to evaluate the load curve.',
         marker: null,
         limitHighlight: null,
         minSpan,
@@ -1243,11 +1246,12 @@ export const TrayDetails = () => {
     chartLoadCurvePoints,
     chartSpanMeters,
     safetyAdjustedLoadKnPerM,
-    safetyFactorMultiplier
+    safetyFactorMultiplier,
+    safetyFactorStatusMessage
   ]);
 
   const chartStatusColor =
-    safetyFactorHasError
+    safetyFactorBlocking
       ? tokens.colorStatusDangerForeground1
       : chartEvaluation.status === 'ok'
       ? tokens.colorPaletteGreenForeground1
@@ -1500,13 +1504,6 @@ export const TrayDetails = () => {
       currentGroundingPreference,
       persistGroundingPreference
     ]
-  );
-
-  const handleSafetyFactorChange = useCallback(
-    (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
-      setSafetyFactorInput(data.value);
-    },
-    []
   );
 
   const buildTrayInput = (values: TrayFormState) => {
@@ -2087,22 +2084,20 @@ export const TrayDetails = () => {
             <Caption1>Assigned load curve</Caption1>
             <Body1>{selectedMaterialTray?.loadCurveName ?? 'Not assigned'}</Body1>
           </div>
-          <Field
-            label="Safety factor [%]"
-            validationState={safetyFactorHasError ? 'error' : undefined}
-            validationMessage={safetyFactorValidationMessage}
-          >
-            <Input
-              value={safetyFactorInput}
-              onChange={handleSafetyFactorChange}
-              type="number"
-              min="0"
-              step="1"
-              inputMode="decimal"
-              placeholder="10"
-            />
-          </Field>
+          <div className={styles.field}>
+            <Caption1>Safety factor [%]</Caption1>
+            <Body1>
+              {safetyFactorPercent !== null
+                ? numberFormatter.format(safetyFactorPercent)
+                : project
+                ? 'Not set'
+                : '-'}
+            </Body1>
+          </div>
         </div>
+        {safetyFactorStatusMessage ? (
+          <Body1 className={styles.errorText}>{safetyFactorStatusMessage}</Body1>
+        ) : null}
         {loadCurveError ? (
           <Body1 className={styles.errorText}>{loadCurveError}</Body1>
         ) : null}

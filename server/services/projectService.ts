@@ -20,6 +20,7 @@ export const ensureProjectExists = async (
         p.secondary_tray_length,
         p.support_distance,
         p.support_weight,
+        p.tray_load_safety_factor,
         COALESCE(
           (
             SELECT jsonb_object_agg(

@@ -18,6 +18,7 @@ export type Project = {
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;
+  trayLoadSafetyFactor: number | null;
   supportDistanceOverrides: Record<string, ProjectSupportOverride>;
   createdAt: string;
   updatedAt: string;
@@ -418,6 +419,7 @@ export async function createProject(
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;
+    trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
   }
 ): Promise<{ project: Project }> {
@@ -440,6 +442,7 @@ export async function updateProject(
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;
+    trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
   }
 ): Promise<{ project: Project }> {

@@ -10,6 +10,7 @@ export type ProjectRow = {
   secondary_tray_length: string | number | null;
   support_distance: string | number | null;
   support_weight: string | number | null;
+  tray_load_safety_factor: string | number | null;
   support_distances: Record<string, unknown> | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -25,6 +26,7 @@ export type PublicProject = {
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;
+  trayLoadSafetyFactor: number | null;
   supportDistanceOverrides: Record<string, PublicTraySupportOverride>;
   createdAt: string;
   updatedAt: string;
@@ -115,6 +117,7 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   secondaryTrayLength: toNumberOrNull(row.secondary_tray_length),
   supportDistance: toNumberOrNull(row.support_distance),
   supportWeight: toNumberOrNull(row.support_weight),
+  trayLoadSafetyFactor: toNumberOrNull(row.tray_load_safety_factor),
   supportDistanceOverrides: toSupportDistanceOverrides(row.support_distances),
   createdAt:
     typeof row.created_at === 'string'

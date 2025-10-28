@@ -226,6 +226,14 @@ export const ProjectDetails = () => {
     showToast,
     reloadProject
   });
+  const trayLoadSafetyFactorField = useProjectNumericField({
+    project,
+    field: 'trayLoadSafetyFactor',
+    token,
+    isAdmin,
+    showToast,
+    reloadProject
+  });
 
   const numericFields = useMemo(
     () => [
@@ -246,9 +254,20 @@ export const ProjectDetails = () => {
         label: NUMERIC_FIELD_LABELS.supportWeight,
         unit: 'kg',
         ...supportWeightField
+      },
+      {
+        field: 'trayLoadSafetyFactor' as const,
+        label: NUMERIC_FIELD_LABELS.trayLoadSafetyFactor,
+        unit: '%',
+        ...trayLoadSafetyFactorField
       }
     ],
-    [secondaryTrayLengthField, supportDistanceField, supportWeightField]
+    [
+      secondaryTrayLengthField,
+      supportDistanceField,
+      supportWeightField,
+      trayLoadSafetyFactorField
+    ]
   );
 
   const trayTypeDetails = useTrayTypeDetails({

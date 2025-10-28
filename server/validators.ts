@@ -94,6 +94,12 @@ const projectFieldSchema = {
     .max(1_000_000)
     .nullable()
     .optional(),
+  trayLoadSafetyFactor: z
+    .number()
+    .min(0)
+    .max(1_000_000)
+    .nullable()
+    .optional(),
   supportDistances: z
     .record(
       z.string().trim().min(1).max(200),
@@ -116,6 +122,7 @@ export const updateProjectSchema = z
     secondaryTrayLength: projectFieldSchema.secondaryTrayLength,
     supportDistance: projectFieldSchema.supportDistance,
     supportWeight: projectFieldSchema.supportWeight,
+    trayLoadSafetyFactor: projectFieldSchema.trayLoadSafetyFactor,
     supportDistances: projectFieldSchema.supportDistances
   })
   .strict()
@@ -129,6 +136,7 @@ export const updateProjectSchema = z
       value.secondaryTrayLength !== undefined ||
       value.supportDistance !== undefined ||
       value.supportWeight !== undefined ||
+      value.trayLoadSafetyFactor !== undefined ||
       value.supportDistances !== undefined,
     {
       message: 'At least one field must be provided'

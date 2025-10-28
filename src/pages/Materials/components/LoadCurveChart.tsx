@@ -375,7 +375,7 @@ export const LoadCurveChart = memo(
         </text>
 
       {/* Tick labels */}
-      {spanTicks.map((tick, idx) => {
+      {spanTicks.map((tick) => {
         const x = xScale(tick);
         return (
           <text

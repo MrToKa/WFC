@@ -35,6 +35,7 @@ export async function initializeDatabase(): Promise<void> {
       secondary_tray_length NUMERIC,
       support_distance NUMERIC,
       support_weight NUMERIC,
+      tray_load_safety_factor NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -58,6 +59,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS support_weight NUMERIC;
+  `);
+
+  await pool.query(`
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS tray_load_safety_factor NUMERIC;
   `);
 
   await pool.query(`
