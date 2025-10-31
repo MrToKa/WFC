@@ -116,6 +116,17 @@ export type TemplateFile = {
   canDelete: boolean;
 };
 
+export type TemplateFileVersion = {
+  id: string;
+  templateId: string;
+  versionNumber: number;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number;
+  uploadedAt: string;
+  uploadedBy: FileUploader | null;
+};
+
 export type MaterialTray = {
   id: string;
   type: string;
@@ -237,6 +248,7 @@ export type ApiErrorPayload =
 export class ApiError extends Error {
   status: number;
   payload: ApiErrorPayload;
+  templateId?: string;
 
   constructor(status: number, payload: ApiErrorPayload) {
     const message =
@@ -613,12 +625,19 @@ export async function fetchTemplateFiles(
 
 export async function uploadTemplateFile(
   token: string,
-  file: File
+  file: File,
+  options?: { replaceTemplateId?: string }
 ): Promise<{ file: TemplateFile }> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE_URL}/api/templates`, {
+  const endpoint = options?.replaceTemplateId
+    ? `${API_BASE_URL}/api/templates?replaceId=${encodeURIComponent(
+        options.replaceTemplateId
+      )}`
+    : `${API_BASE_URL}/api/templates`;
+
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`
@@ -639,6 +658,16 @@ export async function uploadTemplateFile(
   }
 
   if (!response.ok) {
+    let templateId: string | undefined;
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      'templateId' in payload &&
+      typeof (payload as { templateId?: unknown }).templateId === 'string'
+    ) {
+      templateId = (payload as { templateId: string }).templateId;
+    }
+
     const errorPayload =
       payload &&
       typeof payload === 'object' &&
@@ -646,7 +675,14 @@ export async function uploadTemplateFile(
       typeof (payload as { error: unknown }).error === 'string'
         ? (payload as { error: string }).error
         : 'Failed to upload template file';
-    throw new ApiError(response.status, errorPayload);
+
+    const apiError = new ApiError(response.status, errorPayload);
+
+    if (templateId) {
+      apiError.templateId = templateId;
+    }
+
+    throw apiError;
   }
 
   return payload as { file: TemplateFile };
@@ -660,6 +696,63 @@ export async function deleteTemplateFile(
     method: 'DELETE',
     token
   });
+}
+
+export async function fetchTemplateVersions(
+  token: string,
+  templateId: string
+): Promise<{ versions: TemplateFileVersion[] }> {
+  return request<{ versions: TemplateFileVersion[] }>(
+    `/api/templates/${templateId}/versions`,
+    {
+      method: 'GET',
+      token
+    }
+  );
+}
+
+export async function deleteTemplateVersion(
+  token: string,
+  templateId: string,
+  versionId: string
+): Promise<void> {
+  await request<null>(
+    `/api/templates/${templateId}/versions/${versionId}`,
+    {
+      method: 'DELETE',
+      token
+    }
+  );
+}
+
+export async function downloadTemplateVersion(
+  token: string,
+  templateId: string,
+  versionId: string
+): Promise<{ blob: Blob; contentType: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/templates/${templateId}/versions/${versionId}/download`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      'Failed to download template version'
+    );
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    contentType:
+      response.headers.get('content-type') ?? 'application/octet-stream'
+  };
 }
 
 export async function downloadTemplateFile(

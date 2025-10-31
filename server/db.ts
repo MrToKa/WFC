@@ -389,6 +389,30 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS template_files_file_name_lower_idx
+      ON template_files (LOWER(file_name));
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS template_file_versions (
+      id UUID PRIMARY KEY,
+      template_id UUID NOT NULL REFERENCES template_files(id) ON DELETE CASCADE,
+      version_number INTEGER NOT NULL,
+      object_key TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      content_type TEXT,
+      size_bytes BIGINT,
+      uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS template_file_versions_template_version_idx
+      ON template_file_versions (template_id, version_number);
+  `);
+
+  await pool.query(`
     ALTER TABLE material_trays
     ADD COLUMN IF NOT EXISTS image_template_id UUID REFERENCES template_files(id) ON DELETE SET NULL;
   `);

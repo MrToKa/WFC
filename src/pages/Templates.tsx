@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 
 import {
   Body1,
@@ -9,6 +9,12 @@ import {
   TabList,
   TabValue,
   Title3,
+  Dialog,
+  DialogSurface,
+  DialogBody,
+  DialogTitle,
+  DialogActions,
+  DialogContent,
   makeStyles,
   mergeClasses,
   shorthands,
@@ -18,9 +24,13 @@ import {
 import {
   ApiError,
   TemplateFile,
+  TemplateFileVersion,
   deleteTemplateFile,
   downloadTemplateFile,
   fetchTemplateFiles,
+  fetchTemplateVersions,
+  deleteTemplateVersion,
+  downloadTemplateVersion,
   uploadTemplateFile
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
@@ -55,6 +65,22 @@ const useStyles = makeStyles({
     width: '100%',
     borderCollapse: 'collapse',
     minWidth: '40rem'
+  },
+  replaceDialogSurface: {
+    width: 'min(90vw, 32rem)'
+  },
+  versionsDialogSurface: {
+    width: 'min(95vw, 80rem)',
+    maxWidth: '80rem'
+  },
+  versionsDialogContent: {
+    overflowX: 'auto',
+    maxHeight: '70vh'
+  },
+  versionsDialogTable: {
+    width: '100%',
+    minWidth: '56rem',
+    borderCollapse: 'collapse'
   },
   headCell: {
     textAlign: 'left',
@@ -160,6 +186,19 @@ const triggerFileDownload = (fileName: string, blob: Blob): void => {
   URL.revokeObjectURL(url);
 };
 
+const normalizeFileName = (fileName: string): string => {
+  const extension = getFileExtension(fileName);
+  const baseName = fileName.slice(0, fileName.length - extension.length).trim();
+  const normalizedBase = baseName
+    ? baseName
+        .normalize('NFKD')
+        .replace(/[\u0000-\u001f\u007f]/g, '')
+        .replace(/\s+/g, ' ')
+        .slice(0, 200)
+    : 'template';
+  return `${normalizedBase}${extension}`;
+};
+
 const getTemplateCategory = (file: TemplateFile): TemplateCategory | 'other' => {
   const extension = getFileExtension(file.fileName);
   const contentType = (file.contentType ?? '').toLowerCase();
@@ -212,6 +251,38 @@ export const Templates = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<TemplateCategory>('word');
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [replaceTarget, setReplaceTarget] = useState<TemplateFile | null>(null);
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState<boolean>(false);
+  const [isReplacing, setIsReplacing] = useState<boolean>(false);
+
+  type VersionsDialogState = {
+    open: boolean;
+    template: TemplateFile | null;
+    versions: TemplateFileVersion[];
+    loading: boolean;
+    error: string | null;
+  };
+
+  const [versionsDialog, setVersionsDialog] = useState<VersionsDialogState>({
+    open: false,
+    template: null,
+    versions: [],
+    loading: false,
+    error: null
+  });
+
+  const upsertTemplateFile = useCallback((template: TemplateFile) => {
+    setFiles((previous) => {
+      const others = previous.filter((file) => file.id !== template.id);
+      const next = [template, ...others];
+      next.sort(
+        (a, b) =>
+          new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+      );
+      return next;
+    });
+  }, []);
 
   const loadFiles = useCallback(
     async (options?: { showSpinner?: boolean }) => {
@@ -254,6 +325,217 @@ export const Templates = () => {
     void loadFiles({ showSpinner: true });
   }, [loadFiles]);
 
+  const loadTemplateVersions = useCallback(
+    async (templateId: string) => {
+      if (!token) {
+        return;
+      }
+
+      setVersionsDialog((previous) =>
+        previous.template && previous.template.id === templateId
+          ? { ...previous, loading: true, error: null }
+          : previous
+      );
+
+      try {
+        const response = await fetchTemplateVersions(token, templateId);
+        setVersionsDialog((previous) =>
+          previous.template && previous.template.id === templateId
+            ? { ...previous, versions: response.versions, loading: false }
+            : previous
+        );
+      } catch (err) {
+        console.error('Failed to load template versions', err);
+        const message = formatApiError(
+          err,
+          'Failed to load template versions.'
+        );
+        setVersionsDialog((previous) =>
+          previous.template && previous.template.id === templateId
+            ? { ...previous, error: message, loading: false }
+            : previous
+        );
+      }
+    },
+    [token]
+  );
+
+  const openVersionsDialog = useCallback(
+    (template: TemplateFile) => {
+      setVersionsDialog({
+        open: true,
+        template,
+        versions: [],
+        loading: true,
+        error: null
+      });
+
+      if (token) {
+        void loadTemplateVersions(template.id);
+      }
+    },
+    [loadTemplateVersions, token]
+  );
+
+  const closeVersionsDialog = useCallback(() => {
+    setVersionsDialog({
+      open: false,
+      template: null,
+      versions: [],
+      loading: false,
+      error: null
+    });
+  }, []);
+
+  const handleDownloadVersion = useCallback(
+    async (version: TemplateFileVersion) => {
+      if (!token) {
+        showToast({
+          intent: 'warning',
+          title: 'Download not allowed',
+          body: 'You must be signed in to download templates.'
+        });
+        return;
+      }
+
+      try {
+        const { blob } = await downloadTemplateVersion(
+          token,
+          version.templateId,
+          version.id
+        );
+        const extension = getFileExtension(version.fileName);
+        const downloadName = extension
+          ? `${version.fileName.slice(
+              0,
+              version.fileName.length - extension.length
+            )}_v${version.versionNumber}${extension}`
+          : `${version.fileName}_v${version.versionNumber}`;
+        triggerFileDownload(downloadName, blob);
+      } catch (err) {
+        console.error('Failed to download template version', err);
+        showToast({
+          intent: 'error',
+          title: 'Download failed',
+          body: formatApiError(
+            err,
+            'Unable to download the selected version.'
+          )
+        });
+      }
+    },
+    [showToast, token]
+  );
+
+  const handleDeleteVersion = useCallback(
+    async (version: TemplateFileVersion) => {
+      if (!token) {
+        showToast({
+          intent: 'warning',
+          title: 'Delete not allowed',
+          body: 'You must be signed in to delete template versions.'
+        });
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Delete version ${version.versionNumber} of \"${version.fileName}\"? This action cannot be undone.`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await deleteTemplateVersion(token, version.templateId, version.id);
+        setVersionsDialog((previous) => {
+          if (!previous.template || previous.template.id !== version.templateId) {
+            return previous;
+          }
+          return {
+            ...previous,
+            versions: previous.versions.filter((item) => item.id !== version.id)
+          };
+        });
+        showToast({ intent: 'success', title: 'Version deleted' });
+      } catch (err) {
+        console.error('Failed to delete template version', err);
+        showToast({
+          intent: 'error',
+          title: 'Failed to delete version',
+          body: formatApiError(
+            err,
+            'Unable to delete the selected version.'
+          )
+        });
+      }
+    },
+    [showToast, token]
+  );
+
+  const resetReplaceState = useCallback(() => {
+    setPendingUploadFile(null);
+    setReplaceTarget(null);
+    setReplaceDialogOpen(false);
+    setIsReplacing(false);
+  }, []);
+
+  const handleReplaceCancel = useCallback(() => {
+    resetReplaceState();
+  }, [resetReplaceState]);
+
+  const handleReplaceConfirm = useCallback(async () => {
+    if (!pendingUploadFile || !replaceTarget) {
+      resetReplaceState();
+      return;
+    }
+
+    if (!token) {
+      showToast({
+        intent: 'warning',
+        title: 'Replace not allowed',
+        body: 'You must be signed in to upload templates.'
+      });
+      resetReplaceState();
+      return;
+    }
+
+    setIsReplacing(true);
+
+    try {
+      const response = await uploadTemplateFile(token, pendingUploadFile, {
+        replaceTemplateId: replaceTarget.id
+      });
+
+      upsertTemplateFile(response.file);
+
+      showToast({
+        intent: 'success',
+        title: 'Template replaced',
+        body: `"${response.file.fileName}" updated successfully.`
+      });
+
+      void loadTemplateVersions(replaceTarget.id);
+
+      resetReplaceState();
+    } catch (err) {
+      console.error('Failed to replace template file', err);
+      showToast({
+        intent: 'error',
+        title: 'Replace failed',
+        body: formatApiError(err, 'Unable to replace the selected file.')
+      });
+      setIsReplacing(false);
+    }
+  }, [
+    loadTemplateVersions,
+    pendingUploadFile,
+    replaceTarget,
+    resetReplaceState,
+    showToast,
+    token,
+    upsertTemplateFile
+  ]);
   const handleUpload = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
       const selectedFile = event.target.files?.[0];
@@ -307,11 +589,25 @@ export const Templates = () => {
         return;
       }
 
+      const normalizedFileName = normalizeFileName(selectedFile.name);
+      const existingTemplate = files.find(
+        (current) =>
+          current.fileName.toLowerCase() === normalizedFileName.toLowerCase()
+      );
+
+      if (existingTemplate) {
+        setPendingUploadFile(selectedFile);
+        setReplaceTarget(existingTemplate);
+        setReplaceDialogOpen(true);
+        event.target.value = '';
+        return;
+      }
+
       setIsUploading(true);
 
       try {
         const response = await uploadTemplateFile(token, selectedFile);
-        setFiles((prev) => [response.file, ...prev]);
+        upsertTemplateFile(response.file);
         showToast({
           title: 'Template uploaded',
           body: `"${selectedFile.name}" uploaded successfully.`,
@@ -319,6 +615,36 @@ export const Templates = () => {
         });
       } catch (err) {
         console.error('Failed to upload template file', err);
+
+         if (err instanceof ApiError && err.status === 409) {
+           const conflictTemplateId =
+             typeof err.templateId === 'string' ? err.templateId : undefined;
+           const normalizedLower = normalizedFileName.toLowerCase();
+           const matchingTemplate =
+             (conflictTemplateId
+               ? files.find((item) => item.id === conflictTemplateId)
+               : undefined) ??
+             files.find(
+               (item) => item.fileName.toLowerCase() === normalizedLower
+             );
+
+           if (matchingTemplate) {
+             setPendingUploadFile(selectedFile);
+             setReplaceTarget(matchingTemplate);
+             setReplaceDialogOpen(true);
+             return;
+           }
+
+           showToast({
+             title: 'File already exists',
+             body:
+               'A template with this name already exists. Refresh the list to get the latest files and try again.',
+             intent: 'error'
+           });
+           void loadFiles({ showSpinner: false });
+           return;
+         }
+
         showToast({
           title: 'Upload failed',
           body: formatApiError(err, 'Unable to upload the selected file.'),
@@ -329,7 +655,15 @@ export const Templates = () => {
         event.target.value = '';
       }
     },
-    [isAdmin, selectedCategory, showToast, token]
+    [
+      files,
+      isAdmin,
+      loadFiles,
+      selectedCategory,
+      showToast,
+      token,
+      upsertTemplateFile
+    ]
   );
 
   const handleDelete = useCallback(
@@ -348,6 +682,17 @@ export const Templates = () => {
       try {
         await deleteTemplateFile(token, templateId);
         setFiles((prev) => prev.filter((file) => file.id !== templateId));
+        setVersionsDialog((previous) =>
+          previous.template && previous.template.id === templateId
+            ? {
+                open: false,
+                template: null,
+                versions: [],
+                loading: false,
+                error: null
+              }
+            : previous
+        );
         showToast({ title: 'Template deleted', intent: 'success' });
       } catch (err) {
         console.error('Failed to delete template file', err);
@@ -470,11 +815,7 @@ export const Templates = () => {
       ) : filteredFiles.length === 0 ? (
         <div className={styles.emptyState}>
           <Caption1>{emptyMessage}</Caption1>
-          {isAdmin ? (
-            <Body1>
-              Use the upload button above to add shared {CATEGORY_LABELS[selectedCategory]} files.
-            </Body1>
-          ) : null}
+          <Body1>No files available in this category.</Body1>
         </div>
       ) : (
         <div className={styles.tableWrapper}>
@@ -528,6 +869,13 @@ export const Templates = () => {
                       <Button
                         size="small"
                         appearance="secondary"
+                        onClick={() => openVersionsDialog(file)}
+                      >
+                        Versions
+                      </Button>
+                      <Button
+                        size="small"
+                        appearance="secondary"
                         onClick={() => void handleDownload(file)}
                         disabled={isDownloading}
                       >
@@ -551,6 +899,128 @@ export const Templates = () => {
           </table>
         </div>
       )}
+
+      <Dialog
+        open={replaceDialogOpen}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            handleReplaceCancel();
+          }
+        }}
+      >
+        <DialogSurface className={styles.replaceDialogSurface}>
+          <DialogBody>
+            <DialogTitle>Replace template?</DialogTitle>
+            <DialogContent>
+              <Body1>
+                {replaceTarget && pendingUploadFile
+                  ? `Do you want to replace "${replaceTarget.fileName}" with "${pendingUploadFile.name}"?`
+                  : 'Do you want to replace the existing file?'}
+              </Body1>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={handleReplaceCancel}
+                disabled={isReplacing}
+              >
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={() => void handleReplaceConfirm()}
+                disabled={isReplacing}
+              >
+                {isReplacing ? 'Replacing...' : 'Replace'}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <Dialog
+        open={versionsDialog.open}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            closeVersionsDialog();
+          }
+        }}
+      >
+        <DialogSurface className={styles.versionsDialogSurface}>
+          <DialogBody>
+            <DialogTitle>
+              Previous versions - {versionsDialog.template?.fileName ?? ''}
+            </DialogTitle>
+            <DialogContent className={styles.versionsDialogContent}>
+              {versionsDialog.loading ? (
+                <Spinner label="Loading versions..." />
+              ) : versionsDialog.error ? (
+                <Body1 className={styles.errorText}>{versionsDialog.error}</Body1>
+              ) : versionsDialog.versions.length === 0 ? (
+                <Caption1>No previous versions.</Caption1>
+              ) : (
+                <table className={styles.versionsDialogTable}>
+                  <thead>
+                    <tr>
+                      <th className={styles.headCell}>Version</th>
+                      <th className={styles.headCell}>Size</th>
+                      <th className={styles.headCell}>Uploaded by</th>
+                      <th className={styles.headCell}>Uploaded at</th>
+                      <th className={styles.headCell}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versionsDialog.versions.map((version) => {
+                      const rawName = version.uploadedBy
+                        ? [version.uploadedBy.firstName, version.uploadedBy.lastName]
+                            .filter(Boolean)
+                            .join(' ')
+                            .trim()
+                        : '';
+                      const versionUploader =
+                        rawName !== ''
+                          ? rawName
+                          : version.uploadedBy?.email ?? '—';
+
+                      return (
+                        <tr key={version.id}>
+                          <td className={styles.cell}>v{version.versionNumber}</td>
+                          <td className={mergeClasses(styles.cell, styles.numericCell)}>
+                            {formatFileSize(version.sizeBytes)}
+                          </td>
+                          <td className={styles.cell}>{versionUploader}</td>
+                          <td className={styles.cell}>{formatDateTime(version.uploadedAt)}</td>
+                          <td className={mergeClasses(styles.cell, styles.actionsCell)}>
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => void handleDownloadVersion(version)}
+                            >
+                              Download
+                            </Button>
+                            {isAdmin ? (
+                              <Button
+                                size="small"
+                                appearance="outline"
+                                onClick={() => void handleDeleteVersion(version)}
+                              >
+                                Delete
+                              </Button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={closeVersionsDialog}>Close</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </section>
   );
 };
