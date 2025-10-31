@@ -190,6 +190,10 @@ export const ProjectDetails = () => {
     traysExporting,
     pendingTrayId,
     fileInputRef: traysFileInputRef,
+    searchText: traysSearchText,
+    searchCriteria: traysSearchCriteria,
+    setSearchText: setTraysSearchText,
+    setSearchCriteria: setTraysSearchCriteria,
     reloadTrays,
     goToPreviousPage: handleTraysPreviousPage,
     goToNextPage: handleTraysNextPage,
@@ -480,6 +484,10 @@ export const ProjectDetails = () => {
           isImporting={traysImporting}
           isExporting={traysExporting}
           fileInputRef={traysFileInputRef}
+          searchText={traysSearchText}
+          searchCriteria={traysSearchCriteria}
+          onSearchTextChange={setTraysSearchText}
+          onSearchCriteriaChange={setTraysSearchCriteria}
           error={traysError}
           isLoading={traysLoading}
           items={pagedTrays}

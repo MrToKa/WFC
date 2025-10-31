@@ -32,6 +32,8 @@ import {
 } from '../../ProjectDetails.forms';
 import { sanitizeFileSegment } from '../../ProjectDetails.utils';
 
+export type TraySearchCriteria = 'all' | 'name' | 'type' | 'purpose' | 'width' | 'height';
+
 type ShowToast = (options: {
   title: string;
   body?: string;
@@ -76,6 +78,10 @@ type UseTraysSectionResult = {
   traysPage: number;
   showTrayPagination: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
+  searchText: string;
+  searchCriteria: TraySearchCriteria;
+  setSearchText: (value: string) => void;
+  setSearchCriteria: (value: TraySearchCriteria) => void;
   reloadTrays: (options?: { showSpinner?: boolean }) => Promise<void>;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
@@ -118,6 +124,9 @@ export const useTraysSection = ({
   const [dialogSubmitting, setDialogSubmitting] = useState<boolean>(false);
   const [editingTrayId, setEditingTrayId] = useState<string | null>(null);
 
+  const [searchText, setSearchText] = useState<string>('');
+  const [searchCriteria, setSearchCriteria] = useState<TraySearchCriteria>('all');
+
   const sortTrays = useCallback(
     (items: Tray[]) =>
       [...items].sort((a, b) =>
@@ -126,20 +135,63 @@ export const useTraysSection = ({
     []
   );
 
+  const filteredTrays = useMemo(() => {
+    const normalizedFilter = searchText.trim().toLowerCase();
+    if (!normalizedFilter) {
+      return trays;
+    }
+    return trays.filter((tray) => {
+      if (searchCriteria === 'all') {
+        const values = [
+          tray.name,
+          tray.type,
+          tray.purpose,
+          tray.widthMm !== null ? String(tray.widthMm) : '',
+          tray.heightMm !== null ? String(tray.heightMm) : '',
+          tray.lengthMm !== null ? String(tray.lengthMm) : ''
+        ];
+        return values.some((value) =>
+          (value ?? '').toLowerCase().includes(normalizedFilter)
+        );
+      }
+      
+      // Filter by specific criteria
+      let value = '';
+      switch (searchCriteria) {
+        case 'name':
+          value = tray.name ?? '';
+          break;
+        case 'type':
+          value = tray.type ?? '';
+          break;
+        case 'purpose':
+          value = tray.purpose ?? '';
+          break;
+        case 'width':
+          value = tray.widthMm !== null ? String(tray.widthMm) : '';
+          break;
+        case 'height':
+          value = tray.heightMm !== null ? String(tray.heightMm) : '';
+          break;
+      }
+      return value.toLowerCase().includes(normalizedFilter);
+    });
+  }, [searchText, searchCriteria, trays]);
+
   const totalPages = useMemo(() => {
-    if (trays.length === 0) {
+    if (filteredTrays.length === 0) {
       return 1;
     }
-    return Math.max(1, Math.ceil(trays.length / TRAYS_PER_PAGE));
-  }, [trays.length]);
+    return Math.max(1, Math.ceil(filteredTrays.length / TRAYS_PER_PAGE));
+  }, [filteredTrays.length]);
 
   const pagedTrays = useMemo(() => {
-    if (trays.length === 0) {
+    if (filteredTrays.length === 0) {
       return [];
     }
     const startIndex = (page - 1) * TRAYS_PER_PAGE;
-    return trays.slice(startIndex, startIndex + TRAYS_PER_PAGE);
-  }, [trays, page]);
+    return filteredTrays.slice(startIndex, startIndex + TRAYS_PER_PAGE);
+  }, [filteredTrays, page]);
 
   useEffect(() => {
     const nextPage = Math.max(1, Math.ceil(trays.length / TRAYS_PER_PAGE));
@@ -203,6 +255,16 @@ export const useTraysSection = ({
   const goToNextPage = useCallback(() => {
     setPage((previous) => Math.min(totalPages, previous + 1));
   }, [totalPages]);
+
+  const handleSearchTextChange = useCallback((value: string) => {
+    setSearchText(value);
+    setPage(1);
+  }, []);
+
+  const handleSearchCriteriaChange = useCallback((value: TraySearchCriteria) => {
+    setSearchCriteria(value);
+    setPage(1);
+  }, []);
 
   const handleFieldChange =
     (field: keyof TrayFormState) =>
@@ -477,8 +539,12 @@ export const useTraysSection = ({
     pagedTrays,
     totalTrayPages: totalPages,
     traysPage: page,
-    showTrayPagination: trays.length > TRAYS_PER_PAGE,
+    showTrayPagination: filteredTrays.length > TRAYS_PER_PAGE,
     fileInputRef,
+    searchText,
+    searchCriteria,
+    setSearchText: handleSearchTextChange,
+    setSearchCriteria: handleSearchCriteriaChange,
     reloadTrays,
     goToPreviousPage,
     goToNextPage,

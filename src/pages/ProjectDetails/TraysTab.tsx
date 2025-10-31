@@ -1,14 +1,19 @@
 ﻿import type { ChangeEvent, RefObject } from 'react';
+import { useMemo } from 'react';
 
 import {
   Body1,
   Button,
   Caption1,
+  Dropdown,
+  Input,
+  Option,
   Spinner,
   mergeClasses
 } from '@fluentui/react-components';
 
 import type { Tray } from '@/api/client';
+import type { TraySearchCriteria } from './hooks/useTraysSection';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
@@ -24,6 +29,10 @@ type TraysTabProps = {
   isImporting: boolean;
   isExporting: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
+  searchText: string;
+  searchCriteria: TraySearchCriteria;
+  onSearchTextChange: (value: string) => void;
+  onSearchCriteriaChange: (value: TraySearchCriteria) => void;
   error: string | null;
   isLoading: boolean;
   items: Tray[];
@@ -50,6 +59,10 @@ export const TraysTab = ({
   isImporting,
   isExporting,
   fileInputRef,
+  searchText,
+  searchCriteria,
+  onSearchTextChange,
+  onSearchCriteriaChange,
   error,
   isLoading,
   items,
@@ -62,7 +75,13 @@ export const TraysTab = ({
   totalPages,
   onPreviousPage,
   onNextPage
-}: TraysTabProps) => (
+}: TraysTabProps) => {
+  const selectedCriteria = useMemo<string[]>(
+    () => [searchCriteria],
+    [searchCriteria]
+  );
+
+  return (
   <div className={styles.tabPanel} role="tabpanel" aria-label="Trays">
     <div className={styles.actionsRow}>
       <Button onClick={onRefresh} disabled={isRefreshing}>
@@ -92,6 +111,37 @@ export const TraysTab = ({
           />
         </>
       ) : null}
+    </div>
+
+    <div className={styles.filtersRow}>
+      <Input
+        value={searchText}
+        placeholder="Filter trays"
+        onChange={(_, data) => onSearchTextChange(data.value)}
+        aria-label="Filter trays"
+      />
+      <Dropdown
+        selectedOptions={selectedCriteria}
+        value={
+          searchCriteria === 'all' ? 'All fields' :
+          searchCriteria === 'name' ? 'Name' :
+          searchCriteria === 'type' ? 'Type' :
+          searchCriteria === 'purpose' ? 'Purpose' :
+          searchCriteria === 'width' ? 'Width' :
+          'Height'
+        }
+        onOptionSelect={(_, data) =>
+          onSearchCriteriaChange(data.optionValue as TraySearchCriteria)
+        }
+        aria-label="Search criteria"
+      >
+        <Option value="all">All fields</Option>
+        <Option value="name">Name</Option>
+        <Option value="type">Type</Option>
+        <Option value="purpose">Purpose</Option>
+        <Option value="width">Width</Option>
+        <Option value="height">Height</Option>
+      </Dropdown>
     </div>
 
     {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
@@ -227,4 +277,5 @@ export const TraysTab = ({
       </div>
     )}
   </div>
-);
+  );
+};
