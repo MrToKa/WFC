@@ -110,10 +110,12 @@ export const ProjectDetails = () => {
     handleCableTextFieldBlur,
     handleInlineCableTypeChange,
     filterText,
+    filterCriteria,
     cableTypeFilter,
     sortColumn,
     sortDirection,
     setFilterText: setCableFilterText,
+    setFilterCriteria: setCableFilterCriteria,
     setCableTypeFilter: setCableTypeFilterValue,
     handleSortChange: handleCableSortChange,
     cableDialog
@@ -160,6 +162,10 @@ export const ProjectDetails = () => {
     cableTypePage,
     showCableTypePagination,
     fileInputRef: cableTypesFileInputRef,
+    searchText: cableTypesSearchText,
+    searchCriteria: cableTypesSearchCriteria,
+    setSearchText: setCableTypesSearchText,
+    setSearchCriteria: setCableTypesSearchCriteria,
     reloadCableTypes,
     goToPreviousPage: handleCableTypesPreviousPage,
     goToNextPage: handleCableTypesNextPage,
@@ -454,6 +460,10 @@ export const ProjectDetails = () => {
           isImporting={cableTypesImporting}
           isExporting={cableTypesExporting}
           fileInputRef={cableTypesFileInputRef}
+          searchText={cableTypesSearchText}
+          searchCriteria={cableTypesSearchCriteria}
+          onSearchTextChange={setCableTypesSearchText}
+          onSearchCriteriaChange={setCableTypesSearchCriteria}
           error={cableTypesError}
           isLoading={cableTypesLoading}
           items={pagedCableTypes}
@@ -531,6 +541,8 @@ export const ProjectDetails = () => {
           isAdmin={isAdmin}
           filterText={filterText}
           onFilterTextChange={setCableFilterText}
+          filterCriteria={filterCriteria}
+          onFilterCriteriaChange={setCableFilterCriteria}
           cableTypeFilter={cableTypeFilter}
           onCableTypeFilterChange={setCableTypeFilterValue}
           sortColumn={sortColumn}
@@ -586,6 +598,10 @@ export const ProjectDetails = () => {
           isImporting={cablesImporting}
           isExporting={cablesExporting}
           fileInputRef={cablesFileInputRef}
+          filterText={filterText}
+          onFilterTextChange={setCableFilterText}
+          filterCriteria={filterCriteria}
+          onFilterCriteriaChange={setCableFilterCriteria}
           inlineEditingEnabled={inlineEditingEnabled}
           onInlineEditingToggle={setInlineEditingEnabled}
           inlineUpdatingIds={inlineUpdatingIds}

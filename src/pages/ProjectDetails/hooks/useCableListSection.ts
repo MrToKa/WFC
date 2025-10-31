@@ -39,6 +39,8 @@ import {
   toNullableString
 } from '../../ProjectDetails.utils';
 
+export type CableSearchCriteria = 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+
 type ShowToast = (options: {
   title: string;
   body?: string;
@@ -113,10 +115,12 @@ type UseCableListSectionResult = {
     nextCableTypeId: string
   ) => Promise<void>;
   filterText: string;
+  filterCriteria: CableSearchCriteria;
   cableTypeFilter: string;
   sortColumn: CableSortColumn;
   sortDirection: CableSortDirection;
   setFilterText: (value: string) => void;
+  setFilterCriteria: (value: CableSearchCriteria) => void;
   setCableTypeFilter: (value: string) => void;
   handleSortChange: (column: CableSortColumn) => void;
   cableDialog: CableDialogController;
@@ -164,6 +168,7 @@ export const useCableListSection = ({
     Record<string, CableFormState>
   >({});
   const [filterText, setFilterText] = useState<string>('');
+  const [filterCriteria, setFilterCriteria] = useState<CableSearchCriteria>('all');
   const [cableTypeFilter, setCableTypeFilter] = useState<string>('');
   const [sortColumn, setSortColumn] = useState<CableSortColumn>('tag');
   const [sortDirection, setSortDirection] =
@@ -188,20 +193,44 @@ export const useCableListSection = ({
       if (!normalizedFilter) {
         return true;
       }
-      const values = [
-        cable.cableId,
-        cable.tag,
-        cable.typeName,
-        cable.fromLocation,
-        cable.toLocation,
-        cable.routing,
-        cable.designLength !== null ? String(cable.designLength) : ''
-      ];
-      return values.some((value) =>
-        (value ?? '').toLowerCase().includes(normalizedFilter)
-      );
+      
+      if (filterCriteria === 'all') {
+        const values = [
+          cable.cableId,
+          cable.tag,
+          cable.typeName,
+          cable.fromLocation,
+          cable.toLocation,
+          cable.routing,
+          cable.designLength !== null ? String(cable.designLength) : ''
+        ];
+        return values.some((value) =>
+          (value ?? '').toLowerCase().includes(normalizedFilter)
+        );
+      }
+      
+      // Filter by specific criteria
+      let value = '';
+      switch (filterCriteria) {
+        case 'tag':
+          value = cable.tag ?? cable.cableId ?? '';
+          break;
+        case 'typeName':
+          value = cable.typeName ?? '';
+          break;
+        case 'fromLocation':
+          value = cable.fromLocation ?? '';
+          break;
+        case 'toLocation':
+          value = cable.toLocation ?? '';
+          break;
+        case 'routing':
+          value = cable.routing ?? '';
+          break;
+      }
+      return value.toLowerCase().includes(normalizedFilter);
     });
-  }, [cableTypeFilter, cables, filterText]);
+  }, [cableTypeFilter, cables, filterText, filterCriteria]);
 
   const sortedFilteredCables = useMemo(() => {
     const getSortValue = (cable: Cable, column: CableSortColumn): string => {
@@ -274,6 +303,11 @@ export const useCableListSection = ({
 
   const handleCableTypeFilterChange = useCallback((value: string) => {
     setCableTypeFilter(value);
+    setPage(1);
+  }, []);
+
+  const handleFilterCriteriaChange = useCallback((value: CableSearchCriteria) => {
+    setFilterCriteria(value);
     setPage(1);
   }, []);
 
@@ -891,10 +925,12 @@ export const useCableListSection = ({
     handleCableTextFieldBlur,
     handleInlineCableTypeChange,
     filterText,
+    filterCriteria,
     cableTypeFilter,
     sortColumn,
     sortDirection,
     setFilterText: handleFilterTextChange,
+    setFilterCriteria: handleFilterCriteriaChange,
     setCableTypeFilter: handleCableTypeFilterChange,
     handleSortChange,
     cableDialog: {

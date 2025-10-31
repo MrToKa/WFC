@@ -1,14 +1,19 @@
 import type { ChangeEvent, RefObject } from 'react';
+import { useMemo } from 'react';
 
 import {
   Body1,
   Button,
   Caption1,
+  Dropdown,
+  Input,
+  Option,
   Spinner,
   mergeClasses
 } from '@fluentui/react-components';
 
 import type { CableType } from '@/api/client';
+import type { CableTypeSearchCriteria } from './hooks/useCableTypesSection';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
@@ -29,6 +34,10 @@ type CableTypesTabProps = {
   isImporting: boolean;
   isExporting: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
+  searchText: string;
+  searchCriteria: CableTypeSearchCriteria;
+  onSearchTextChange: (value: string) => void;
+  onSearchCriteriaChange: (value: CableTypeSearchCriteria) => void;
   error: string | null;
   isLoading: boolean;
   items: CableType[];
@@ -54,6 +63,10 @@ export const CableTypesTab = ({
   isImporting,
   isExporting,
   fileInputRef,
+  searchText,
+  searchCriteria,
+  onSearchTextChange,
+  onSearchCriteriaChange,
   error,
   isLoading,
   items,
@@ -65,7 +78,13 @@ export const CableTypesTab = ({
   page,
   totalPages,
   paginationHandlers
-}: CableTypesTabProps) => (
+}: CableTypesTabProps) => {
+  const selectedCriteria = useMemo<string[]>(
+    () => [searchCriteria],
+    [searchCriteria]
+  );
+
+  return (
   <div className={styles.tabPanel} role="tabpanel" aria-label="Cable types">
     <div className={styles.actionsRow}>
       <Button onClick={onRefresh} disabled={isRefreshing}>
@@ -95,6 +114,35 @@ export const CableTypesTab = ({
           />
         </>
       ) : null}
+    </div>
+
+    <div className={styles.filtersRow}>
+      <Input
+        value={searchText}
+        placeholder="Filter cable types"
+        onChange={(_, data) => onSearchTextChange(data.value)}
+        aria-label="Filter cable types"
+      />
+      <Dropdown
+        selectedOptions={selectedCriteria}
+        value={
+          searchCriteria === 'all' ? 'All fields' :
+          searchCriteria === 'name' ? 'Name' :
+          searchCriteria === 'purpose' ? 'Purpose' :
+          searchCriteria === 'diameter' ? 'Diameter' :
+          'Weight'
+        }
+        onOptionSelect={(_, data) =>
+          onSearchCriteriaChange(data.optionValue as CableTypeSearchCriteria)
+        }
+        aria-label="Search criteria"
+      >
+        <Option value="all">All fields</Option>
+        <Option value="name">Name</Option>
+        <Option value="purpose">Purpose</Option>
+        <Option value="diameter">Diameter</Option>
+        <Option value="weight">Weight</Option>
+      </Dropdown>
     </div>
 
     {error ? (
@@ -218,4 +266,5 @@ export const CableTypesTab = ({
       </div>
     )}
   </div>
-);
+  );
+};

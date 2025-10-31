@@ -13,6 +13,7 @@ import {
 } from '@fluentui/react-components';
 
 import type { Cable, CableType } from '@/api/client';
+import type { CableSearchCriteria } from './hooks/useCableListSection';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { CableFormState } from '../ProjectDetails.forms';
@@ -23,6 +24,8 @@ type CableListTabProps = {
   isAdmin: boolean;
   filterText: string;
   onFilterTextChange: (value: string) => void;
+  filterCriteria: CableSearchCriteria;
+  onFilterCriteriaChange: (value: CableSearchCriteria) => void;
   cableTypeFilter: string;
   onCableTypeFilterChange: (value: string) => void;
   sortColumn: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
@@ -74,6 +77,8 @@ export const CableListTab = ({
   isAdmin,
   filterText,
   onFilterTextChange,
+  filterCriteria,
+  onFilterCriteriaChange,
   cableTypeFilter,
   onCableTypeFilterChange,
   sortColumn,
@@ -113,6 +118,12 @@ export const CableListTab = ({
     () => (cableTypeFilter ? [cableTypeFilter] : []),
     [cableTypeFilter]
   );
+  
+  const selectedCriteria = useMemo<string[]>(
+    () => [filterCriteria],
+    [filterCriteria]
+  );
+  
   const renderSortButton = (
     label: string,
     column: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing'
@@ -189,6 +200,28 @@ export const CableListTab = ({
         onChange={(_, data) => onFilterTextChange(data.value)}
         aria-label="Filter cables"
       />
+      <Dropdown
+        selectedOptions={selectedCriteria}
+        value={
+          filterCriteria === 'all' ? 'All fields' :
+          filterCriteria === 'tag' ? 'Tag' :
+          filterCriteria === 'typeName' ? 'Type' :
+          filterCriteria === 'fromLocation' ? 'From location' :
+          filterCriteria === 'toLocation' ? 'To location' :
+          'Routing'
+        }
+        onOptionSelect={(_, data) =>
+          onFilterCriteriaChange(data.optionValue as CableSearchCriteria)
+        }
+        aria-label="Search criteria"
+      >
+        <Option value="all">All fields</Option>
+        <Option value="tag">Tag</Option>
+        <Option value="typeName">Type</Option>
+        <Option value="fromLocation">From location</Option>
+        <Option value="toLocation">To location</Option>
+        <Option value="routing">Routing</Option>
+      </Dropdown>
       <Dropdown
         selectedOptions={selectedOptions}
         placeholder="All cable types"

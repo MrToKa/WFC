@@ -1,16 +1,20 @@
 import type { ChangeEvent, RefObject } from 'react';
+import { useMemo } from 'react';
 
 import {
   Body1,
   Button,
   Caption1,
+  Dropdown,
   Input,
+  Option,
   Spinner,
   Switch,
   mergeClasses
 } from '@fluentui/react-components';
 
 import type { Cable } from '@/api/client';
+import type { CableSearchCriteria } from './hooks/useCableListSection';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { toCableFormState, type CableFormState } from '../ProjectDetails.forms';
@@ -29,6 +33,10 @@ type CableReportTabProps = {
   isImporting: boolean;
   isExporting: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
+  filterText: string;
+  onFilterTextChange: (value: string) => void;
+  filterCriteria: CableSearchCriteria;
+  onFilterCriteriaChange: (value: CableSearchCriteria) => void;
   inlineEditingEnabled: boolean;
   onInlineEditingToggle: (checked: boolean) => void;
   inlineUpdatingIds: Set<string>;
@@ -65,6 +73,10 @@ export const CableReportTab = ({
   isImporting,
   isExporting,
   fileInputRef,
+  filterText,
+  onFilterTextChange,
+  filterCriteria,
+  onFilterCriteriaChange,
   inlineEditingEnabled,
   onInlineEditingToggle,
   inlineUpdatingIds,
@@ -83,6 +95,11 @@ export const CableReportTab = ({
   onPreviousPage,
   onNextPage
 }: CableReportTabProps) => {
+  const selectedCriteria = useMemo<string[]>(
+    () => [filterCriteria],
+    [filterCriteria]
+  );
+
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable report">
 
@@ -120,6 +137,37 @@ export const CableReportTab = ({
             />
           </>
         ) : null}
+      </div>
+
+      <div className={styles.filtersRow}>
+        <Input
+          value={filterText}
+          placeholder="Filter cables"
+          onChange={(_, data) => onFilterTextChange(data.value)}
+          aria-label="Filter cables"
+        />
+        <Dropdown
+          selectedOptions={selectedCriteria}
+          value={
+            filterCriteria === 'all' ? 'All fields' :
+            filterCriteria === 'tag' ? 'Tag' :
+            filterCriteria === 'typeName' ? 'Type' :
+            filterCriteria === 'fromLocation' ? 'From location' :
+            filterCriteria === 'toLocation' ? 'To location' :
+            'Routing'
+          }
+          onOptionSelect={(_, data) =>
+            onFilterCriteriaChange(data.optionValue as CableSearchCriteria)
+          }
+          aria-label="Search criteria"
+        >
+          <Option value="all">All fields</Option>
+          <Option value="tag">Tag</Option>
+          <Option value="typeName">Type</Option>
+          <Option value="fromLocation">From location</Option>
+          <Option value="toLocation">To location</Option>
+          <Option value="routing">Routing</Option>
+        </Dropdown>
       </div>
 
       {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}

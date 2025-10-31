@@ -32,6 +32,8 @@ import {
 } from '../../ProjectDetails.forms';
 import { sanitizeFileSegment } from '../../ProjectDetails.utils';
 
+export type CableTypeSearchCriteria = 'all' | 'name' | 'purpose' | 'diameter' | 'weight';
+
 type ShowToast = (options: {
   title: string;
   body?: string;
@@ -77,6 +79,10 @@ type UseCableTypesSectionResult = {
   cableTypePage: number;
   showCableTypePagination: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
+  searchText: string;
+  searchCriteria: CableTypeSearchCriteria;
+  setSearchText: (value: string) => void;
+  setSearchCriteria: (value: CableTypeSearchCriteria) => void;
   reloadCableTypes: (options?: { showSpinner?: boolean }) => Promise<void>;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
@@ -128,6 +134,9 @@ export const useCableTypesSection = ({
     null
   );
 
+  const [searchText, setSearchText] = useState<string>('');
+  const [searchCriteria, setSearchCriteria] = useState<CableTypeSearchCriteria>('all');
+
   const sortCableTypes = useCallback(
     (types: CableType[]) =>
       [...types].sort((a, b) =>
@@ -136,30 +145,68 @@ export const useCableTypesSection = ({
     []
   );
 
+  const filteredCableTypes = useMemo(() => {
+    const normalizedFilter = searchText.trim().toLowerCase();
+    if (!normalizedFilter) {
+      return cableTypes;
+    }
+    return cableTypes.filter((cableType) => {
+      if (searchCriteria === 'all') {
+        const values = [
+          cableType.name,
+          cableType.purpose,
+          cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
+          cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : ''
+        ];
+        return values.some((value) =>
+          (value ?? '').toLowerCase().includes(normalizedFilter)
+        );
+      }
+      
+      // Filter by specific criteria
+      let value = '';
+      switch (searchCriteria) {
+        case 'name':
+          value = cableType.name ?? '';
+          break;
+        case 'purpose':
+          value = cableType.purpose ?? '';
+          break;
+        case 'diameter':
+          value = cableType.diameterMm !== null ? String(cableType.diameterMm) : '';
+          break;
+        case 'weight':
+          value = cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '';
+          break;
+      }
+      return value.toLowerCase().includes(normalizedFilter);
+    });
+  }, [searchText, searchCriteria, cableTypes]);
+
   const totalPages = useMemo(() => {
-    if (cableTypes.length === 0) {
+    if (filteredCableTypes.length === 0) {
       return 1;
     }
-    return Math.max(1, Math.ceil(cableTypes.length / CABLE_TYPES_PER_PAGE));
-  }, [cableTypes.length]);
+    return Math.max(1, Math.ceil(filteredCableTypes.length / CABLE_TYPES_PER_PAGE));
+  }, [filteredCableTypes.length]);
 
   const pagedCableTypes = useMemo(() => {
-    if (cableTypes.length === 0) {
+    if (filteredCableTypes.length === 0) {
       return [];
     }
     const startIndex = (page - 1) * CABLE_TYPES_PER_PAGE;
-    return cableTypes.slice(startIndex, startIndex + CABLE_TYPES_PER_PAGE);
-  }, [cableTypes, page]);
+    return filteredCableTypes.slice(startIndex, startIndex + CABLE_TYPES_PER_PAGE);
+  }, [filteredCableTypes, page]);
 
   useEffect(() => {
     const nextPage = Math.max(
       1,
-      Math.ceil(cableTypes.length / CABLE_TYPES_PER_PAGE)
+      Math.ceil(filteredCableTypes.length / CABLE_TYPES_PER_PAGE)
     );
     if (page > nextPage) {
       setPage(nextPage);
     }
-  }, [cableTypes.length, page]);
+  }, [filteredCableTypes.length, page]);
 
   const reloadCableTypes = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
@@ -216,6 +263,16 @@ export const useCableTypesSection = ({
   const goToNextPage = useCallback(() => {
     setPage((previous) => Math.min(totalPages, previous + 1));
   }, [totalPages]);
+
+  const handleSearchTextChange = useCallback((value: string) => {
+    setSearchText(value);
+    setPage(1);
+  }, []);
+
+  const handleSearchCriteriaChange = useCallback((value: CableTypeSearchCriteria) => {
+    setSearchCriteria(value);
+    setPage(1);
+  }, []);
 
   const handleFieldChange =
     (field: keyof CableTypeFormState) =>
@@ -506,8 +563,12 @@ export const useCableTypesSection = ({
     pagedCableTypes,
     totalCableTypePages: totalPages,
     cableTypePage: page,
-    showCableTypePagination: cableTypes.length > CABLE_TYPES_PER_PAGE,
+    showCableTypePagination: filteredCableTypes.length > CABLE_TYPES_PER_PAGE,
     fileInputRef,
+    searchText,
+    searchCriteria,
+    setSearchText: handleSearchTextChange,
+    setSearchCriteria: handleSearchCriteriaChange,
     reloadCableTypes,
     goToPreviousPage,
     goToNextPage,
