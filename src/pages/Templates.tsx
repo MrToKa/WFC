@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 
 import {
   Body1,
   Button,
   Caption1,
   Spinner,
+  Tab,
+  TabList,
+  TabValue,
   Title3,
   makeStyles,
   mergeClasses,
@@ -22,6 +25,7 @@ import {
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { TemplateImagePreview } from './Materials/components/TemplateImagePreview';
 
 const useStyles = makeStyles({
   root: {
@@ -88,7 +92,23 @@ const useStyles = makeStyles({
 });
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
-const ACCEPTED_FILE_TYPES = '.doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png';
+type TemplateCategory = 'word' | 'excel' | 'pdf' | 'images';
+
+const TEMPLATE_CATEGORIES: TemplateCategory[] = ['word', 'excel', 'pdf', 'images'];
+
+const CATEGORY_LABELS: Record<TemplateCategory, string> = {
+  word: 'Word',
+  excel: 'Excel',
+  pdf: 'PDF',
+  images: 'Pictures'
+};
+
+const CATEGORY_ACCEPT_TYPES: Record<TemplateCategory, string> = {
+  word: '.doc,.docx',
+  excel: '.xls,.xlsx',
+  pdf: '.pdf',
+  images: '.jpg,.jpeg,.png'
+};
 
 const formatFileSize = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -111,6 +131,14 @@ const formatDateTime = (value: string): string =>
     timeStyle: 'short'
   }).format(new Date(value));
 
+const getFileExtension = (fileName: string): string => {
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot === -1) {
+    return '';
+  }
+  return fileName.slice(lastDot).toLowerCase();
+};
+
 const formatApiError = (error: unknown, fallback: string): string => {
   if (error instanceof ApiError) {
     return error.message;
@@ -132,6 +160,43 @@ const triggerFileDownload = (fileName: string, blob: Blob): void => {
   URL.revokeObjectURL(url);
 };
 
+const getTemplateCategory = (file: TemplateFile): TemplateCategory | 'other' => {
+  const extension = getFileExtension(file.fileName);
+  const contentType = (file.contentType ?? '').toLowerCase();
+
+  if (
+    extension === '.doc' ||
+    extension === '.docx' ||
+    contentType.includes('wordprocessing')
+  ) {
+    return 'word';
+  }
+
+  if (
+    extension === '.xls' ||
+    extension === '.xlsx' ||
+    contentType.includes('spreadsheet') ||
+    contentType.includes('excel')
+  ) {
+    return 'excel';
+  }
+
+  if (extension === '.pdf' || contentType.includes('pdf')) {
+    return 'pdf';
+  }
+
+  if (
+    extension === '.jpg' ||
+    extension === '.jpeg' ||
+    extension === '.png' ||
+    contentType.startsWith('image/')
+  ) {
+    return 'images';
+  }
+
+  return 'other';
+};
+
 export const Templates = () => {
   const styles = useStyles();
   const { user, token } = useAuth();
@@ -146,6 +211,7 @@ export const Templates = () => {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<TemplateCategory>('word');
 
   const loadFiles = useCallback(
     async (options?: { showSpinner?: boolean }) => {
@@ -169,13 +235,19 @@ export const Templates = () => {
         setFiles(response.files);
       } catch (err) {
         console.error('Failed to load template files', err);
-        setError(formatApiError(err, 'Failed to load template files.'));
+        const message = formatApiError(err, 'Failed to load template files.');
+        setError(message);
+        showToast({
+          intent: 'error',
+          title: 'Failed to load template files.',
+          body: message
+        });
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [token]
+    [showToast, token]
   );
 
   useEffect(() => {
@@ -220,6 +292,21 @@ export const Templates = () => {
         return;
       }
 
+      const acceptedExtensions = CATEGORY_ACCEPT_TYPES[selectedCategory]
+        .split(',')
+        .map((value) => value.trim());
+      const extension = getFileExtension(selectedFile.name);
+
+      if (!acceptedExtensions.includes(extension)) {
+        showToast({
+          title: 'Unsupported file type',
+          body: `Please upload a ${CATEGORY_LABELS[selectedCategory]} file (${acceptedExtensions.join(', ')}).`,
+          intent: 'error'
+        });
+        event.target.value = '';
+        return;
+      }
+
       setIsUploading(true);
 
       try {
@@ -242,7 +329,7 @@ export const Templates = () => {
         event.target.value = '';
       }
     },
-    [isAdmin, showToast, token]
+    [isAdmin, selectedCategory, showToast, token]
   );
 
   const handleDelete = useCallback(
@@ -306,6 +393,18 @@ export const Templates = () => {
     [showToast, token]
   );
 
+  const filteredFiles = useMemo(
+    () => files.filter((file) => getTemplateCategory(file) === selectedCategory),
+    [files, selectedCategory]
+  );
+
+  const currentAcceptTypes = CATEGORY_ACCEPT_TYPES[selectedCategory];
+
+  const emptyMessage =
+    selectedCategory === 'images'
+      ? 'No picture files uploaded yet.'
+      : `No ${CATEGORY_LABELS[selectedCategory]} files uploaded yet.`;
+
   return (
     <section className={styles.root} aria-labelledby="templates-heading">
       <div className={styles.header}>
@@ -315,6 +414,20 @@ export const Templates = () => {
           templates are available to every project.
         </Body1>
       </div>
+
+      <TabList
+        selectedValue={selectedCategory}
+        onTabSelect={(_, data: { value: TabValue }) =>
+          setSelectedCategory(data.value as TemplateCategory)
+        }
+        aria-label="Template categories"
+      >
+        {TEMPLATE_CATEGORIES.map((category) => (
+          <Tab key={category} value={category}>
+            {CATEGORY_LABELS[category]}
+          </Tab>
+        ))}
+      </TabList>
 
       <div className={styles.actions}>
         <Button onClick={() => void loadFiles({ showSpinner: false })} disabled={isRefreshing}>
@@ -327,13 +440,15 @@ export const Templates = () => {
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
             >
-              {isUploading ? 'Uploading...' : 'Upload template'}
+              {isUploading
+                ? 'Uploading...'
+                : `Upload ${CATEGORY_LABELS[selectedCategory]} file`}
             </Button>
             <input
               ref={fileInputRef}
               className={styles.hiddenInput}
               type="file"
-              accept={ACCEPTED_FILE_TYPES}
+              accept={currentAcceptTypes}
               onChange={handleUpload}
             />
           </>
@@ -342,7 +457,8 @@ export const Templates = () => {
 
       {isAdmin ? (
         <Caption1>
-          Accepted formats: {ACCEPTED_FILE_TYPES.replace(/,/g, ', ')} (up to{' '}
+          Accepted formats for {CATEGORY_LABELS[selectedCategory]}:{' '}
+          {currentAcceptTypes.replace(/,/g, ', ')} (up to{' '}
           {formatFileSize(MAX_FILE_SIZE_BYTES)}).
         </Caption1>
       ) : null}
@@ -351,20 +467,23 @@ export const Templates = () => {
 
       {isLoading ? (
         <Spinner label="Loading templates..." />
-      ) : files.length === 0 ? (
+      ) : filteredFiles.length === 0 ? (
         <div className={styles.emptyState}>
-          <Caption1>No templates uploaded yet</Caption1>
-          <Body1>
-            {isAdmin
-              ? 'Use the upload button above to add shared templates for the team.'
-              : 'There are no shared templates available at the moment.'}
-          </Body1>
+          <Caption1>{emptyMessage}</Caption1>
+          {isAdmin ? (
+            <Body1>
+              Use the upload button above to add shared {CATEGORY_LABELS[selectedCategory]} files.
+            </Body1>
+          ) : null}
         </div>
       ) : (
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
             <thead>
               <tr>
+                {selectedCategory === 'images' ? (
+                  <th className={styles.headCell}>Preview</th>
+                ) : null}
                 <th className={styles.headCell}>Template</th>
                 <th className={styles.headCell}>Size</th>
                 <th className={styles.headCell}>Uploaded by</th>
@@ -373,7 +492,7 @@ export const Templates = () => {
               </tr>
             </thead>
             <tbody>
-              {files.map((file) => {
+              {filteredFiles.map((file) => {
                 const rawUploaderName = file.uploadedBy
                   ? [file.uploadedBy.firstName, file.uploadedBy.lastName]
                       .filter(Boolean)
@@ -381,7 +500,7 @@ export const Templates = () => {
                       .trim()
                   : '';
                 const uploader =
-                  rawUploaderName && rawUploaderName !== ''
+                  rawUploaderName !== ''
                     ? rawUploaderName
                     : file.uploadedBy?.email ?? '—';
                 const isDownloading = downloadingId === file.id;
@@ -389,16 +508,22 @@ export const Templates = () => {
 
                 return (
                   <tr key={file.id}>
+                    {selectedCategory === 'images' ? (
+                      <td className={styles.cell}>
+                        <TemplateImagePreview
+                          token={token}
+                          templateId={file.id}
+                          fileName={file.fileName}
+                          contentType={file.contentType}
+                        />
+                      </td>
+                    ) : null}
                     <td className={styles.cell}>{file.fileName}</td>
-                    <td
-                      className={mergeClasses(styles.cell, styles.numericCell)}
-                    >
+                    <td className={mergeClasses(styles.cell, styles.numericCell)}>
                       {formatFileSize(file.sizeBytes)}
                     </td>
                     <td className={styles.cell}>{uploader}</td>
-                    <td className={styles.cell}>
-                      {formatDateTime(file.uploadedAt)}
-                    </td>
+                    <td className={styles.cell}>{formatDateTime(file.uploadedAt)}</td>
                     <td className={mergeClasses(styles.cell, styles.actionsCell)}>
                       <Button
                         size="small"
