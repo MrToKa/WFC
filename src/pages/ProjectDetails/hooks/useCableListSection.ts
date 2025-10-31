@@ -116,12 +116,10 @@ type UseCableListSectionResult = {
   ) => Promise<void>;
   filterText: string;
   filterCriteria: CableSearchCriteria;
-  cableTypeFilter: string;
   sortColumn: CableSortColumn;
   sortDirection: CableSortDirection;
   setFilterText: (value: string) => void;
   setFilterCriteria: (value: CableSearchCriteria) => void;
-  setCableTypeFilter: (value: string) => void;
   handleSortChange: (column: CableSortColumn) => void;
   cableDialog: CableDialogController;
 };
@@ -169,7 +167,6 @@ export const useCableListSection = ({
   >({});
   const [filterText, setFilterText] = useState<string>('');
   const [filterCriteria, setFilterCriteria] = useState<CableSearchCriteria>('all');
-  const [cableTypeFilter, setCableTypeFilter] = useState<string>('');
   const [sortColumn, setSortColumn] = useState<CableSortColumn>('tag');
   const [sortDirection, setSortDirection] =
     useState<CableSortDirection>('asc');
@@ -187,9 +184,6 @@ export const useCableListSection = ({
   const filteredCables = useMemo(() => {
     const normalizedFilter = filterText.trim().toLowerCase();
     return cables.filter((cable) => {
-      if (cableTypeFilter && cable.cableTypeId !== cableTypeFilter) {
-        return false;
-      }
       if (!normalizedFilter) {
         return true;
       }
@@ -230,7 +224,7 @@ export const useCableListSection = ({
       }
       return value.toLowerCase().includes(normalizedFilter);
     });
-  }, [cableTypeFilter, cables, filterText, filterCriteria]);
+  }, [cables, filterText, filterCriteria]);
 
   const sortedFilteredCables = useMemo(() => {
     const getSortValue = (cable: Cable, column: CableSortColumn): string => {
@@ -298,11 +292,6 @@ export const useCableListSection = ({
 
   const handleFilterTextChange = useCallback((value: string) => {
     setFilterText(value);
-    setPage(1);
-  }, []);
-
-  const handleCableTypeFilterChange = useCallback((value: string) => {
-    setCableTypeFilter(value);
     setPage(1);
   }, []);
 
@@ -846,7 +835,6 @@ export const useCableListSection = ({
       try {
         const blob = await exportCables(token, projectSnapshot.id, {
           filterText,
-          cableTypeId: cableTypeFilter || undefined,
           sortColumn,
           sortDirection,
           view
@@ -886,7 +874,6 @@ export const useCableListSection = ({
       }
     },
     [
-      cableTypeFilter,
       filterText,
       projectSnapshot,
       showToast,
@@ -926,12 +913,10 @@ export const useCableListSection = ({
     handleInlineCableTypeChange,
     filterText,
     filterCriteria,
-    cableTypeFilter,
     sortColumn,
     sortDirection,
     setFilterText: handleFilterTextChange,
     setFilterCriteria: handleFilterCriteriaChange,
-    setCableTypeFilter: handleCableTypeFilterChange,
     handleSortChange,
     cableDialog: {
       open: isDialogOpen,

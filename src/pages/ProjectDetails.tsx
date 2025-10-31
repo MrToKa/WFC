@@ -111,12 +111,10 @@ export const ProjectDetails = () => {
     handleInlineCableTypeChange,
     filterText,
     filterCriteria,
-    cableTypeFilter,
     sortColumn,
     sortDirection,
     setFilterText: setCableFilterText,
     setFilterCriteria: setCableFilterCriteria,
-    setCableTypeFilter: setCableTypeFilterValue,
     handleSortChange: handleCableSortChange,
     cableDialog
   } = useCableListSection({
@@ -543,8 +541,6 @@ export const ProjectDetails = () => {
           onFilterTextChange={setCableFilterText}
           filterCriteria={filterCriteria}
           onFilterCriteriaChange={setCableFilterCriteria}
-          cableTypeFilter={cableTypeFilter}
-          onCableTypeFilterChange={setCableTypeFilterValue}
           sortColumn={sortColumn}
           sortDirection={sortDirection}
           onSortChange={handleCableSortChange}

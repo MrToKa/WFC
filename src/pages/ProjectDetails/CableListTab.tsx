@@ -26,8 +26,6 @@ type CableListTabProps = {
   onFilterTextChange: (value: string) => void;
   filterCriteria: CableSearchCriteria;
   onFilterCriteriaChange: (value: CableSearchCriteria) => void;
-  cableTypeFilter: string;
-  onCableTypeFilterChange: (value: string) => void;
   sortColumn: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
   sortDirection: 'asc' | 'desc';
   onSortChange: (
@@ -79,8 +77,6 @@ export const CableListTab = ({
   onFilterTextChange,
   filterCriteria,
   onFilterCriteriaChange,
-  cableTypeFilter,
-  onCableTypeFilterChange,
   sortColumn,
   sortDirection,
   onSortChange,
@@ -114,11 +110,6 @@ export const CableListTab = ({
   onPreviousPage,
   onNextPage
 }: CableListTabProps) => {
-  const selectedOptions = useMemo<string[]>(
-    () => (cableTypeFilter ? [cableTypeFilter] : []),
-    [cableTypeFilter]
-  );
-  
   const selectedCriteria = useMemo<string[]>(
     () => [filterCriteria],
     [filterCriteria]
@@ -221,21 +212,6 @@ export const CableListTab = ({
         <Option value="fromLocation">From location</Option>
         <Option value="toLocation">To location</Option>
         <Option value="routing">Routing</Option>
-      </Dropdown>
-      <Dropdown
-        selectedOptions={selectedOptions}
-        placeholder="All cable types"
-        onOptionSelect={(_, data) =>
-          onCableTypeFilterChange(data.optionValue ?? '')
-        }
-        aria-label="Filter by cable type"
-      >
-        <Option value="">All cable types</Option>
-        {cableTypes.map((type) => (
-          <Option key={type.id} value={type.id}>
-            {type.name}
-          </Option>
-        ))}
       </Dropdown>
     </div>
 
