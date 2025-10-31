@@ -55,6 +55,13 @@ export const SupportDialog = ({
     selectedTemplateId && selectedTemplateId !== ''
       ? [selectedTemplateId]
       : [NONE_OPTION_VALUE];
+  const selectedOption =
+    selectedTemplateId && selectedTemplateId !== ''
+      ? templateOptions.find((option) => option.id === selectedTemplateId)
+      : null;
+  const dropdownValue =
+    selectedOption?.fileName ??
+    (!selectedTemplateId || selectedTemplateId === '' ? 'No image' : undefined);
 
   return (
     <Dialog
@@ -138,6 +145,7 @@ export const SupportDialog = ({
               >
                 <Dropdown
                   selectedOptions={selectedOptions}
+                  value={dropdownValue}
                   onOptionSelect={(_, data) => {
                     const optionValue = data.optionValue ?? NONE_OPTION_VALUE;
                     onTemplateChange(

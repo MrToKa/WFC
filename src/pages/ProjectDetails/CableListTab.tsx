@@ -26,11 +26,6 @@ type CableListTabProps = {
   onFilterTextChange: (value: string) => void;
   filterCriteria: CableSearchCriteria;
   onFilterCriteriaChange: (value: CableSearchCriteria) => void;
-  sortColumn: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
-  sortDirection: 'asc' | 'desc';
-  onSortChange: (
-    column: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing'
-  ) => void;
   isRefreshing: boolean;
   onRefresh: () => void;
   onCreate: () => void;
@@ -77,9 +72,6 @@ export const CableListTab = ({
   onFilterTextChange,
   filterCriteria,
   onFilterCriteriaChange,
-  sortColumn,
-  sortDirection,
-  onSortChange,
   isRefreshing,
   onRefresh,
   onCreate,
@@ -114,27 +106,6 @@ export const CableListTab = ({
     () => [filterCriteria],
     [filterCriteria]
   );
-  
-  const renderSortButton = (
-    label: string,
-    column: 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing'
-  ) => {
-    const isActive = sortColumn === column;
-    const indicator = isActive ? (sortDirection === 'asc' ? '^' : 'v') : '';
-    return (
-      <Button
-        appearance="transparent"
-        size="small"
-        onClick={() => onSortChange(column)}
-        className={styles.tableSortButton}
-      >
-        {label}
-        {indicator ? (
-          <span className={styles.sortIndicator}>{indicator}</span>
-        ) : null}
-      </Button>
-    );
-  };
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable list">
@@ -236,19 +207,19 @@ export const CableListTab = ({
           <thead>
             <tr>
               <th className={styles.tableHeadCell}>
-                {renderSortButton('Tag', 'tag')}
+                Tag
               </th>
               <th className={styles.tableHeadCell}>
-                {renderSortButton('Type', 'typeName')}
+                Type
               </th>
               <th className={styles.tableHeadCell}>
-                {renderSortButton('From location', 'fromLocation')}
+                From location
               </th>
               <th className={styles.tableHeadCell}>
-                {renderSortButton('To location', 'toLocation')}
+                To location
               </th>
               <th className={styles.tableHeadCell}>
-                {renderSortButton('Routing', 'routing')}
+                Routing
               </th>
               <th
                 className={`${styles.tableHeadCell} ${styles.numericCell}`}

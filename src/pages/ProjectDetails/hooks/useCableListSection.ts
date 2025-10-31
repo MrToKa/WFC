@@ -14,8 +14,6 @@ import {
   Cable,
   CableImportSummary,
   CableInput,
-  CableSortColumn,
-  CableSortDirection,
   createCable,
   deleteCable,
   exportCables,
@@ -116,11 +114,8 @@ type UseCableListSectionResult = {
   ) => Promise<void>;
   filterText: string;
   filterCriteria: CableSearchCriteria;
-  sortColumn: CableSortColumn;
-  sortDirection: CableSortDirection;
   setFilterText: (value: string) => void;
   setFilterCriteria: (value: CableSearchCriteria) => void;
-  handleSortChange: (column: CableSortColumn) => void;
   cableDialog: CableDialogController;
 };
 
@@ -167,9 +162,6 @@ export const useCableListSection = ({
   >({});
   const [filterText, setFilterText] = useState<string>('');
   const [filterCriteria, setFilterCriteria] = useState<CableSearchCriteria>('all');
-  const [sortColumn, setSortColumn] = useState<CableSortColumn>('tag');
-  const [sortDirection, setSortDirection] =
-    useState<CableSortDirection>('asc');
 
   const sortCables = useCallback(
     (items: Cable[]) =>
@@ -226,63 +218,26 @@ export const useCableListSection = ({
     });
   }, [cables, filterText, filterCriteria]);
 
-  const sortedFilteredCables = useMemo(() => {
-    const getSortValue = (cable: Cable, column: CableSortColumn): string => {
-      switch (column) {
-        case 'tag':
-          return (cable.tag ?? cable.cableId ?? '').toString();
-        case 'typeName':
-          return cable.typeName ?? '';
-        case 'fromLocation':
-          return cable.fromLocation ?? '';
-        case 'toLocation':
-          return cable.toLocation ?? '';
-        case 'routing':
-          return cable.routing ?? '';
-        default:
-          return '';
-      }
-    };
-
-    const sorted = [...filteredCables].sort((a, b) => {
-      const aValue = getSortValue(a, sortColumn).toLowerCase();
-      const bValue = getSortValue(b, sortColumn).toLowerCase();
-
-      if (aValue < bValue) {
-        return sortDirection === 'asc' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortDirection === 'asc' ? 1 : -1;
-      }
-
-      return a.cableId.localeCompare(b.cableId, undefined, {
-        sensitivity: 'base'
-      });
-    });
-
-    return sorted;
-  }, [filteredCables, sortColumn, sortDirection]);
-
   const totalPages = useMemo(() => {
-    if (sortedFilteredCables.length === 0) {
+    if (filteredCables.length === 0) {
       return 1;
     }
     return Math.max(
       1,
-      Math.ceil(sortedFilteredCables.length / CABLE_LIST_PER_PAGE)
+      Math.ceil(filteredCables.length / CABLE_LIST_PER_PAGE)
     );
-  }, [sortedFilteredCables.length]);
+  }, [filteredCables.length]);
 
   const pagedCables = useMemo(() => {
-    if (sortedFilteredCables.length === 0) {
+    if (filteredCables.length === 0) {
       return [];
     }
     const startIndex = (page - 1) * CABLE_LIST_PER_PAGE;
-    return sortedFilteredCables.slice(
+    return filteredCables.slice(
       startIndex,
       startIndex + CABLE_LIST_PER_PAGE
     );
-  }, [page, sortedFilteredCables]);
+  }, [page, filteredCables]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -298,19 +253,6 @@ export const useCableListSection = ({
   const handleFilterCriteriaChange = useCallback((value: CableSearchCriteria) => {
     setFilterCriteria(value);
     setPage(1);
-  }, []);
-
-  const handleSortChange = useCallback((column: CableSortColumn) => {
-    setSortColumn((currentColumn) => {
-      if (currentColumn === column) {
-        setSortDirection((currentDirection) =>
-          currentDirection === 'asc' ? 'desc' : 'asc'
-        );
-        return currentColumn;
-      }
-      setSortDirection('asc');
-      return column;
-    });
   }, []);
 
   const reloadCables = useCallback(
@@ -835,8 +777,6 @@ export const useCableListSection = ({
       try {
         const blob = await exportCables(token, projectSnapshot.id, {
           filterText,
-          sortColumn,
-          sortDirection,
           view
         });
         const link = document.createElement('a');
@@ -877,8 +817,6 @@ export const useCableListSection = ({
       filterText,
       projectSnapshot,
       showToast,
-      sortColumn,
-      sortDirection,
       token
     ]
   );
@@ -894,7 +832,7 @@ export const useCableListSection = ({
     pagedCables,
     totalCablePages: totalPages,
     cablesPage: page,
-    showCablePagination: sortedFilteredCables.length > CABLE_LIST_PER_PAGE,
+    showCablePagination: filteredCables.length > CABLE_LIST_PER_PAGE,
     fileInputRef,
     inlineEditingEnabled,
     setInlineEditingEnabled,
@@ -913,11 +851,8 @@ export const useCableListSection = ({
     handleInlineCableTypeChange,
     filterText,
     filterCriteria,
-    sortColumn,
-    sortDirection,
     setFilterText: handleFilterTextChange,
     setFilterCriteria: handleFilterCriteriaChange,
-    handleSortChange,
     cableDialog: {
       open: isDialogOpen,
       mode: dialogMode,
