@@ -106,6 +106,30 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS project_files_project_file_name_lower_idx
+      ON project_files (project_id, LOWER(file_name));
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_file_versions (
+      id UUID PRIMARY KEY,
+      project_file_id UUID NOT NULL REFERENCES project_files(id) ON DELETE CASCADE,
+      version_number INTEGER NOT NULL,
+      object_key TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      content_type TEXT,
+      size_bytes BIGINT,
+      uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS project_file_versions_file_version_idx
+      ON project_file_versions (project_file_id, version_number);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cable_types (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

@@ -139,6 +139,22 @@ export const useProjectDetailsStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     textAlign: 'center'
   },
+  replaceDialogSurface: {
+    width: 'min(90vw, 32rem)'
+  },
+  versionsDialogSurface: {
+    width: 'min(95vw, 80rem)',
+    maxWidth: '80rem'
+  },
+  versionsDialogContent: {
+    overflowX: 'auto',
+    maxHeight: '70vh'
+  },
+  versionsDialogTable: {
+    width: '100%',
+    minWidth: '56rem',
+    borderCollapse: 'collapse'
+  },
   hiddenInput: {
     display: 'none'
   },

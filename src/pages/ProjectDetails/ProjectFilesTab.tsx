@@ -4,6 +4,12 @@ import {
   Body1,
   Button,
   Caption1,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Spinner,
   Tab,
   TabList,
@@ -11,7 +17,7 @@ import {
   mergeClasses
 } from '@fluentui/react-components';
 
-import type { ProjectFile } from '@/api/client';
+import type { ProjectFile, ProjectFileVersion } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
@@ -30,6 +36,25 @@ type ProjectFilesTabProps = {
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   onDownload: (file: ProjectFile) => Promise<void>;
   onDelete: (fileId: string) => Promise<void>;
+  onOpenVersions: (file: ProjectFile) => void;
+  onCloseVersions: () => void;
+  versionsDialog: {
+    open: boolean;
+    file: ProjectFile | null;
+    versions: ProjectFileVersion[];
+    loading: boolean;
+    error: string | null;
+  };
+  onDownloadVersion: (version: ProjectFileVersion) => Promise<void>;
+  onDeleteVersion: (version: ProjectFileVersion) => Promise<void>;
+  replaceDialog: {
+    open: boolean;
+    target: ProjectFile | null;
+    pendingFileName: string | null;
+    isReplacing: boolean;
+  };
+  onReplaceConfirm: () => Promise<void>;
+  onReplaceCancel: () => void;
   fileInputRef: RefObject<HTMLInputElement | null>;
 };
 
@@ -132,9 +157,26 @@ export const ProjectFilesTab = ({
   onFileInputChange,
   onDownload,
   onDelete,
+  onOpenVersions,
+  onCloseVersions,
+  versionsDialog,
+  onDownloadVersion,
+  onDeleteVersion,
+  replaceDialog,
+  onReplaceConfirm,
+  onReplaceCancel,
   fileInputRef
 }: ProjectFilesTabProps) => {
   const [selectedCategory, setSelectedCategory] = useState<FileCategory>('word');
+
+  const {
+    open: replaceDialogOpen,
+    target: replaceTarget,
+    pendingFileName,
+    isReplacing
+  } = replaceDialog;
+
+  const versionsDialogFileName = versionsDialog.file?.fileName ?? '';
 
   const filteredFiles = useMemo(
     () => files.filter((file) => getFileCategory(file) === selectedCategory),
@@ -207,8 +249,12 @@ export const ProjectFilesTab = ({
           <Caption1>{emptyMessage}</Caption1>
           <Body1>
             {canUpload
-              ? `Use the upload button above to attach ${CATEGORY_LABELS[selectedCategory].toLowerCase()} files to this project.`
-              : `There are no ${CATEGORY_LABELS[selectedCategory].toLowerCase()} files uploaded for this project.`}
+              ? `Use the upload button above to attach ${CATEGORY_LABELS[
+                  selectedCategory
+                ].toLowerCase()} files to this project.`
+              : `There are no ${CATEGORY_LABELS[
+                  selectedCategory
+                ].toLowerCase()} files uploaded for this project.`}
           </Body1>
         </div>
       ) : (
@@ -237,6 +283,7 @@ export const ProjectFilesTab = ({
                   rawUploaderName && rawUploaderName !== ''
                     ? rawUploaderName
                     : file.uploadedBy?.email ?? '—';
+
                 return (
                   <tr key={file.id}>
                     <td className={styles.tableCell}>{file.fileName}</td>
@@ -258,6 +305,13 @@ export const ProjectFilesTab = ({
                         styles.actionsCell
                       )}
                     >
+                      <Button
+                        size="small"
+                        appearance="secondary"
+                        onClick={() => onOpenVersions(file)}
+                      >
+                        Versions
+                      </Button>
                       <Button
                         size="small"
                         appearance="secondary"
@@ -284,6 +338,149 @@ export const ProjectFilesTab = ({
           </table>
         </div>
       )}
+
+      <Dialog
+        open={replaceDialogOpen}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            onReplaceCancel();
+          }
+        }}
+      >
+        <DialogSurface className={styles.replaceDialogSurface}>
+          <DialogBody>
+            <DialogTitle>Replace file?</DialogTitle>
+            <DialogContent>
+              <Body1>
+                {replaceTarget && pendingFileName
+                  ? `Do you want to replace "${replaceTarget.fileName}" with "${pendingFileName}"?`
+                  : 'Do you want to replace the existing file?'}
+              </Body1>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={onReplaceCancel}
+                disabled={isReplacing}
+              >
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                onClick={() => void onReplaceConfirm()}
+                disabled={isReplacing}
+              >
+                {isReplacing ? 'Replacing...' : 'Replace'}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      <Dialog
+        open={versionsDialog.open}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            onCloseVersions();
+          }
+        }}
+      >
+        <DialogSurface className={styles.versionsDialogSurface}>
+          <DialogBody>
+            <DialogTitle>
+              Previous versions - {versionsDialogFileName}
+            </DialogTitle>
+            <DialogContent className={styles.versionsDialogContent}>
+              {versionsDialog.loading ? (
+                <Spinner label="Loading versions..." />
+              ) : versionsDialog.error ? (
+                <Body1 className={styles.errorText}>
+                  {versionsDialog.error}
+                </Body1>
+              ) : versionsDialog.versions.length === 0 ? (
+                <Caption1>No previous versions.</Caption1>
+              ) : (
+                <table className={styles.versionsDialogTable}>
+                  <thead>
+                    <tr>
+                      <th className={styles.tableHeadCell}>Version</th>
+                      <th className={styles.tableHeadCell}>Size</th>
+                      <th className={styles.tableHeadCell}>Uploaded by</th>
+                      <th className={styles.tableHeadCell}>Uploaded at</th>
+                      <th className={styles.tableHeadCell}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versionsDialog.versions.map((version) => {
+                      const rawVersionUploader = version.uploadedBy
+                        ? [
+                            version.uploadedBy.firstName,
+                            version.uploadedBy.lastName
+                          ]
+                            .filter(Boolean)
+                            .join(' ')
+                            .trim()
+                        : '';
+                      const versionUploader =
+                        rawVersionUploader && rawVersionUploader !== ''
+                          ? rawVersionUploader
+                          : version.uploadedBy?.email ?? '—';
+
+                      return (
+                        <tr key={version.id}>
+                          <td className={styles.tableCell}>
+                            v{version.versionNumber}
+                          </td>
+                          <td
+                            className={mergeClasses(
+                              styles.tableCell,
+                              styles.numericCell
+                            )}
+                          >
+                            {formatFileSize(version.sizeBytes)}
+                          </td>
+                          <td className={styles.tableCell}>
+                            {versionUploader}
+                          </td>
+                          <td className={styles.tableCell}>
+                            {formatDateTime(version.uploadedAt)}
+                          </td>
+                          <td
+                            className={mergeClasses(
+                              styles.tableCell,
+                              styles.actionsCell
+                            )}
+                          >
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => void onDownloadVersion(version)}
+                            >
+                              Download
+                            </Button>
+                            {canUpload ? (
+                              <Button
+                                size="small"
+                                appearance="outline"
+                                onClick={() => void onDeleteVersion(version)}
+                              >
+                                Delete
+                              </Button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={onCloseVersions}>Close</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 };

@@ -227,7 +227,15 @@ export const ProjectDetails = () => {
     reloadFiles: reloadProjectFiles,
     handleFileInputChange: handleProjectFileInputChange,
     handleDeleteFile: handleProjectFileDelete,
-    handleDownloadFile: handleProjectFileDownload
+    handleDownloadFile: handleProjectFileDownload,
+    replaceDialog: projectFilesReplaceDialog,
+    handleReplaceConfirm: handleProjectFileReplaceConfirm,
+    handleReplaceCancel: handleProjectFileReplaceCancel,
+    openVersionsDialog: openProjectFileVersionsDialog,
+    closeVersionsDialog: closeProjectFileVersionsDialog,
+    versionsDialog: projectFileVersionsDialog,
+    handleDownloadVersion: handleProjectFileVersionDownload,
+    handleDeleteVersion: handleProjectFileVersionDelete
   } = useProjectFilesSection({
     projectId,
     token,
@@ -528,6 +536,14 @@ export const ProjectDetails = () => {
           onFileInputChange={handleProjectFileInputChange}
           onDownload={handleProjectFileDownload}
           onDelete={handleProjectFileDelete}
+          onOpenVersions={openProjectFileVersionsDialog}
+          onCloseVersions={closeProjectFileVersionsDialog}
+          versionsDialog={projectFileVersionsDialog}
+          onDownloadVersion={handleProjectFileVersionDownload}
+          onDeleteVersion={handleProjectFileVersionDelete}
+          replaceDialog={projectFilesReplaceDialog}
+          onReplaceConfirm={handleProjectFileReplaceConfirm}
+          onReplaceCancel={handleProjectFileReplaceCancel}
           fileInputRef={projectFilesInputRef}
         />
       ) : null}

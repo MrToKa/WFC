@@ -106,6 +106,17 @@ export type ProjectFile = {
   canDelete: boolean;
 };
 
+export type ProjectFileVersion = {
+  id: string;
+  projectFileId: string;
+  versionNumber: number;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number;
+  uploadedAt: string;
+  uploadedBy: FileUploader | null;
+};
+
 export type TemplateFile = {
   id: string;
   fileName: string;
@@ -249,6 +260,7 @@ export class ApiError extends Error {
   status: number;
   payload: ApiErrorPayload;
   templateId?: string;
+  fileId?: string;
 
   constructor(status: number, payload: ApiErrorPayload) {
     const message =
@@ -509,24 +521,32 @@ export async function deleteProject(token: string, projectId: string): Promise<v
 }
 
 export async function fetchProjectFiles(
-  projectId: string
+  projectId: string,
+  token: string
 ): Promise<{ files: ProjectFile[] }> {
   return request<{ files: ProjectFile[] }>(
     `/api/projects/${projectId}/files`,
-    { method: 'GET' }
+    { method: 'GET', token }
   );
 }
 
 export async function uploadProjectFile(
   token: string,
   projectId: string,
-  file: File
+  file: File,
+  options?: { replaceFileId?: string }
 ): Promise<{ file: ProjectFile }> {
   const formData = new FormData();
   formData.append('file', file);
 
+  const endpoint = options?.replaceFileId
+    ? `${API_BASE_URL}/api/projects/${projectId}/files?replaceId=${encodeURIComponent(
+        options.replaceFileId
+      )}`
+    : `${API_BASE_URL}/api/projects/${projectId}/files`;
+
   const response = await fetch(
-    `${API_BASE_URL}/api/projects/${projectId}/files`,
+    endpoint,
     {
       method: 'POST',
       headers: {
@@ -556,7 +576,25 @@ export async function uploadProjectFile(
       typeof (payload as { error: unknown }).error === 'string'
         ? (payload as { error: string }).error
         : 'Failed to upload project file';
-    throw new ApiError(response.status, errorPayload);
+
+    let fileId: string | undefined;
+
+    if (
+      payload &&
+      typeof payload === 'object' &&
+      'fileId' in payload &&
+      typeof (payload as { fileId?: unknown }).fileId === 'string'
+    ) {
+      fileId = (payload as { fileId: string }).fileId;
+    }
+
+    const apiError = new ApiError(response.status, errorPayload);
+
+    if (fileId) {
+      apiError.fileId = fileId;
+    }
+
+    throw apiError;
   }
 
   return payload as { file: ProjectFile };
@@ -611,6 +649,66 @@ export async function downloadProjectFile(
   return {
     blob,
     contentType: response.headers.get('content-type') ?? 'application/octet-stream'
+  };
+}
+
+export async function fetchProjectFileVersions(
+  token: string,
+  projectId: string,
+  fileId: string
+): Promise<{ versions: ProjectFileVersion[] }> {
+  return request<{ versions: ProjectFileVersion[] }>(
+    `/api/projects/${projectId}/files/${fileId}/versions`,
+    {
+      method: 'GET',
+      token
+    }
+  );
+}
+
+export async function deleteProjectFileVersion(
+  token: string,
+  projectId: string,
+  fileId: string,
+  versionId: string
+): Promise<void> {
+  await request<null>(
+    `/api/projects/${projectId}/files/${fileId}/versions/${versionId}`,
+    {
+      method: 'DELETE',
+      token
+    }
+  );
+}
+
+export async function downloadProjectFileVersion(
+  token: string,
+  projectId: string,
+  fileId: string,
+  versionId: string
+): Promise<{ blob: Blob; contentType: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/projects/${projectId}/files/${fileId}/versions/${versionId}/download`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      'Failed to download project file version'
+    );
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    contentType:
+      response.headers.get('content-type') ?? 'application/octet-stream'
   };
 }
 
