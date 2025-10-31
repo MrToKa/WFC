@@ -32,6 +32,10 @@ type ProjectFilesRequest = AuthenticatedRequest & {
   };
 };
 
+type ProjectFilesUploadRequest = ProjectFilesRequest & {
+  file?: Express.Multer.File;
+};
+
 const ALLOWED_EXTENSIONS = new Set([
   '.doc',
   '.docx',
@@ -108,8 +112,6 @@ const buildContentDisposition = (fileName: string): string => {
 const getProjectFilesRouter = (): Router => {
   const router = Router({ mergeParams: true });
 
-  router.use(authenticate);
-
   router.get(
     '/',
     async (req: ProjectFilesRequest, res: Response): Promise<void> => {
@@ -149,7 +151,7 @@ const getProjectFilesRouter = (): Router => {
           [projectId]
         );
 
-        const files = result.rows.map((row) =>
+        const files = result.rows.map((row: ProjectFileRow) =>
           mapProjectFileRow(row, {
             canDelete:
               req.isAdmin === true ||
@@ -167,8 +169,9 @@ const getProjectFilesRouter = (): Router => {
 
   router.post(
     '/',
+    authenticate,
     upload.single('file'),
-    async (req: ProjectFilesRequest, res: Response): Promise<void> => {
+    async (req: ProjectFilesUploadRequest, res: Response): Promise<void> => {
       const { projectId } = req.params;
 
       if (!projectId) {
@@ -178,6 +181,11 @@ const getProjectFilesRouter = (): Router => {
 
       if (!req.userId) {
         res.status(401).json({ error: 'Authentication required' });
+        return;
+      }
+
+      if (req.isAdmin !== true) {
+        res.status(403).json({ error: 'Only administrators can upload files' });
         return;
       }
 
@@ -281,6 +289,7 @@ const getProjectFilesRouter = (): Router => {
 
   router.delete(
     '/:fileId',
+    authenticate,
     async (req: ProjectFilesRequest, res: Response): Promise<void> => {
       const { projectId, fileId } = req.params;
 
@@ -348,6 +357,7 @@ const getProjectFilesRouter = (): Router => {
 
   router.get(
     '/:fileId/download',
+    authenticate,
     async (req: ProjectFilesRequest, res: Response): Promise<void> => {
       const { projectId, fileId } = req.params;
 

@@ -1,10 +1,13 @@
-import type { ChangeEvent, RefObject } from 'react';
+import { useMemo, useState, type ChangeEvent, type RefObject } from 'react';
 
 import {
   Body1,
   Button,
   Caption1,
   Spinner,
+  Tab,
+  TabList,
+  TabValue,
   mergeClasses
 } from '@fluentui/react-components';
 
@@ -27,8 +30,25 @@ type ProjectFilesTabProps = {
   onFileInputChange: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   onDownload: (file: ProjectFile) => Promise<void>;
   onDelete: (fileId: string) => Promise<void>;
-  fileInputAccept: string;
   fileInputRef: RefObject<HTMLInputElement | null>;
+};
+
+type FileCategory = 'word' | 'excel' | 'pdf' | 'images';
+
+const FILE_CATEGORIES: FileCategory[] = ['word', 'excel', 'pdf', 'images'];
+
+const CATEGORY_LABELS: Record<FileCategory, string> = {
+  word: 'Word',
+  excel: 'Excel',
+  pdf: 'PDF',
+  images: 'Pictures'
+};
+
+const CATEGORY_ACCEPT_TYPES: Record<FileCategory, string> = {
+  word: '.doc,.docx',
+  excel: '.xls,.xlsx',
+  pdf: '.pdf',
+  images: '.jpg,.jpeg,.png'
 };
 
 const formatFileSize = (bytes: number): string => {
@@ -52,6 +72,51 @@ const formatDateTime = (value: string): string =>
     timeStyle: 'short'
   }).format(new Date(value));
 
+const getFileExtension = (fileName: string): string => {
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot === -1) {
+    return '';
+  }
+  return fileName.slice(lastDot).toLowerCase();
+};
+
+const getFileCategory = (file: ProjectFile): FileCategory | 'other' => {
+  const extension = getFileExtension(file.fileName);
+  const contentType = (file.contentType ?? '').toLowerCase();
+
+  if (
+    extension === '.doc' ||
+    extension === '.docx' ||
+    contentType.includes('wordprocessing')
+  ) {
+    return 'word';
+  }
+
+  if (
+    extension === '.xls' ||
+    extension === '.xlsx' ||
+    contentType.includes('spreadsheet') ||
+    contentType.includes('excel')
+  ) {
+    return 'excel';
+  }
+
+  if (extension === '.pdf' || contentType.includes('pdf')) {
+    return 'pdf';
+  }
+
+  if (
+    extension === '.jpg' ||
+    extension === '.jpeg' ||
+    extension === '.png' ||
+    contentType.startsWith('image/')
+  ) {
+    return 'images';
+  }
+
+  return 'other';
+};
+
 export const ProjectFilesTab = ({
   styles,
   files,
@@ -67,126 +132,158 @@ export const ProjectFilesTab = ({
   onFileInputChange,
   onDownload,
   onDelete,
-  fileInputAccept,
   fileInputRef
-}: ProjectFilesTabProps) => (
-  <div className={styles.tabPanel} role="tabpanel" aria-label="Project files">
-    <div className={styles.actionsRow}>
-      <Button onClick={onRefresh} disabled={isRefreshing}>
-        {isRefreshing ? 'Refreshing...' : 'Refresh'}
-      </Button>
-      {canUpload ? (
-        <>
-          <Button
-            appearance="primary"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-          >
-            {isUploading ? 'Uploading...' : 'Upload file'}
-          </Button>
-          <input
-            ref={fileInputRef}
-            className={styles.hiddenInput}
-            type="file"
-            accept={fileInputAccept}
-            onChange={onFileInputChange}
-          />
-        </>
-      ) : null}
-    </div>
+}: ProjectFilesTabProps) => {
+  const [selectedCategory, setSelectedCategory] = useState<FileCategory>('word');
 
-    {canUpload ? (
-      <Caption1>
-        Accepted formats: .doc, .docx, .xls, .xlsx, .pdf, .jpg, .jpeg, .png (up
-        to {formatFileSize(maxFileSizeBytes)}).
-      </Caption1>
-    ) : null}
+  const filteredFiles = useMemo(
+    () => files.filter((file) => getFileCategory(file) === selectedCategory),
+    [files, selectedCategory]
+  );
 
-    {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
+  const currentAcceptTypes = CATEGORY_ACCEPT_TYPES[selectedCategory];
 
-    {isLoading ? (
-      <Spinner label="Loading files..." />
-    ) : files.length === 0 ? (
-      <div className={styles.emptyState}>
-        <Caption1>No files uploaded yet</Caption1>
-        <Body1>
-          {canUpload
-            ? 'Use the upload button above to attach documents and images to this project.'
-            : 'There are no files uploaded for this project.'}
-        </Body1>
+  const emptyMessage =
+    selectedCategory === 'images'
+      ? 'No picture files uploaded yet.'
+      : `No ${CATEGORY_LABELS[selectedCategory]} files uploaded yet.`;
+
+  return (
+    <div className={styles.tabPanel} role="tabpanel" aria-label="Project files">
+      <TabList
+        selectedValue={selectedCategory}
+        onTabSelect={(_, data: { value: TabValue }) =>
+          setSelectedCategory(data.value as FileCategory)
+        }
+        aria-label="File categories"
+      >
+        {FILE_CATEGORIES.map((category) => (
+          <Tab key={category} value={category}>
+            {CATEGORY_LABELS[category]}
+          </Tab>
+        ))}
+      </TabList>
+
+      <div className={styles.actionsRow}>
+        <Button onClick={onRefresh} disabled={isRefreshing}>
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
+        {canUpload ? (
+          <>
+            <Button
+              appearance="primary"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              {isUploading
+                ? 'Uploading...'
+                : `Upload ${CATEGORY_LABELS[selectedCategory]} file`}
+            </Button>
+            <input
+              ref={fileInputRef}
+              className={styles.hiddenInput}
+              type="file"
+              accept={currentAcceptTypes}
+              onChange={onFileInputChange}
+            />
+          </>
+        ) : null}
       </div>
-    ) : (
-      <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.tableHeadCell}>File name</th>
-              <th className={styles.tableHeadCell}>Size</th>
-              <th className={styles.tableHeadCell}>Uploaded by</th>
-              <th className={styles.tableHeadCell}>Uploaded at</th>
-              <th className={styles.tableHeadCell}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {files.map((file) => {
-              const isDeleting = pendingFileId === file.id;
-              const isDownloading = downloadingFileId === file.id;
-              const rawUploaderName = file.uploadedBy
-                ? [file.uploadedBy.firstName, file.uploadedBy.lastName]
-                    .filter(Boolean)
-                    .join(' ')
-                    .trim()
-                : '';
-              const uploader =
-                rawUploaderName && rawUploaderName !== ''
-                  ? rawUploaderName
-                  : file.uploadedBy?.email ?? '—';
-              return (
-                <tr key={file.id}>
-                  <td className={styles.tableCell}>{file.fileName}</td>
-                  <td
-                    className={mergeClasses(
-                      styles.tableCell,
-                      styles.numericCell
-                    )}
-                  >
-                    {formatFileSize(file.sizeBytes)}
-                  </td>
-                  <td className={styles.tableCell}>{uploader}</td>
-                  <td className={styles.tableCell}>
-                    {formatDateTime(file.uploadedAt)}
-                  </td>
-                  <td
-                    className={mergeClasses(
-                      styles.tableCell,
-                      styles.actionsCell
-                    )}
-                  >
-                    <Button
-                      size="small"
-                      appearance="secondary"
-                      onClick={() => void onDownload(file)}
-                      disabled={isDownloading}
+
+      {canUpload ? (
+        <Caption1>
+          Accepted formats for {CATEGORY_LABELS[selectedCategory]}:{' '}
+          {currentAcceptTypes.replace(/,/g, ', ')} (up to{' '}
+          {formatFileSize(maxFileSizeBytes)}).
+        </Caption1>
+      ) : null}
+
+      {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
+
+      {isLoading ? (
+        <Spinner label="Loading files..." />
+      ) : filteredFiles.length === 0 ? (
+        <div className={styles.emptyState}>
+          <Caption1>{emptyMessage}</Caption1>
+          <Body1>
+            {canUpload
+              ? `Use the upload button above to attach ${CATEGORY_LABELS[selectedCategory].toLowerCase()} files to this project.`
+              : `There are no ${CATEGORY_LABELS[selectedCategory].toLowerCase()} files uploaded for this project.`}
+          </Body1>
+        </div>
+      ) : (
+        <div className={styles.tableContainer}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th className={styles.tableHeadCell}>File name</th>
+                <th className={styles.tableHeadCell}>Size</th>
+                <th className={styles.tableHeadCell}>Uploaded by</th>
+                <th className={styles.tableHeadCell}>Uploaded at</th>
+                <th className={styles.tableHeadCell}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredFiles.map((file) => {
+                const isDeleting = pendingFileId === file.id;
+                const isDownloading = downloadingFileId === file.id;
+                const rawUploaderName = file.uploadedBy
+                  ? [file.uploadedBy.firstName, file.uploadedBy.lastName]
+                      .filter(Boolean)
+                      .join(' ')
+                      .trim()
+                  : '';
+                const uploader =
+                  rawUploaderName && rawUploaderName !== ''
+                    ? rawUploaderName
+                    : file.uploadedBy?.email ?? '—';
+                return (
+                  <tr key={file.id}>
+                    <td className={styles.tableCell}>{file.fileName}</td>
+                    <td
+                      className={mergeClasses(
+                        styles.tableCell,
+                        styles.numericCell
+                      )}
                     >
-                      {isDownloading ? 'Downloading...' : 'Download'}
-                    </Button>
-                    {file.canDelete ? (
+                      {formatFileSize(file.sizeBytes)}
+                    </td>
+                    <td className={styles.tableCell}>{uploader}</td>
+                    <td className={styles.tableCell}>
+                      {formatDateTime(file.uploadedAt)}
+                    </td>
+                    <td
+                      className={mergeClasses(
+                        styles.tableCell,
+                        styles.actionsCell
+                      )}
+                    >
                       <Button
                         size="small"
-                        appearance="outline"
-                        onClick={() => void onDelete(file.id)}
-                        disabled={isDeleting}
+                        appearance="secondary"
+                        onClick={() => void onDownload(file)}
+                        disabled={isDownloading}
                       >
-                        {isDeleting ? 'Deleting...' : 'Delete'}
+                        {isDownloading ? 'Downloading...' : 'Download'}
                       </Button>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </div>
-);
+                      {file.canDelete ? (
+                        <Button
+                          size="small"
+                          appearance="outline"
+                          onClick={() => void onDelete(file.id)}
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? 'Deleting...' : 'Delete'}
+                        </Button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};

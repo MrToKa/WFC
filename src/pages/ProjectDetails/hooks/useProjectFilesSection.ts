@@ -21,6 +21,7 @@ type ShowToast = (options: {
 type UseProjectFilesSectionParams = {
   projectId?: string;
   token: string | null;
+  isAdmin: boolean;
   showToast: ShowToast;
 };
 
@@ -67,6 +68,7 @@ const triggerFileDownload = (fileName: string, blob: Blob): void => {
 export const useProjectFilesSection = ({
   projectId,
   token,
+  isAdmin,
   showToast
 }: UseProjectFilesSectionParams): UseProjectFilesSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -240,7 +242,7 @@ export const useProjectFilesSection = ({
     pendingFileId,
     error,
     fileInputRef,
-    canUpload: Boolean(token && projectId),
+    canUpload: Boolean(token && projectId && isAdmin),
     maxFileSizeBytes: MAX_FILE_SIZE_BYTES,
     reloadFiles,
     handleFileInputChange,

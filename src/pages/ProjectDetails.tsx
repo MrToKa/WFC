@@ -231,6 +231,7 @@ export const ProjectDetails = () => {
   } = useProjectFilesSection({
     projectId,
     token,
+    isAdmin,
     showToast
   });
 
@@ -527,7 +528,6 @@ export const ProjectDetails = () => {
           onFileInputChange={handleProjectFileInputChange}
           onDownload={handleProjectFileDownload}
           onDelete={handleProjectFileDelete}
-          fileInputAccept=".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png"
           fileInputRef={projectFilesInputRef}
         />
       ) : null}
