@@ -715,15 +715,3 @@ export const LoadCurveDetails = () => {
     </section>
   );
 };
-
-
-
-
-
-
-
-
-
-
-
-

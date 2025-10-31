@@ -63,6 +63,9 @@ type ProjectFilesRequest = AuthenticatedRequest & {
 
 type ProjectFilesUploadRequest = ProjectFilesRequest & {
   file?: Express.Multer.File;
+  query: {
+    replaceId?: string;
+  };
 };
 
 const sanitizeObjectFileName = (name: string): string => {
@@ -157,7 +160,7 @@ export const projectFilesRouter = (() => {
         [projectId]
       );
 
-      const files = result.rows.map((row) =>
+      const files = result.rows.map((row: ProjectFileRow) =>
         mapProjectFileRow(row, {
           canDelete:
             req.isAdmin === true ||
