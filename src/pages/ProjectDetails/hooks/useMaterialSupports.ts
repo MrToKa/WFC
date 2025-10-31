@@ -27,13 +27,6 @@ export const useMaterialSupports = ({
   const [supportsError, setSupportsError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAdmin) {
-      setSupports([]);
-      setSupportsLoading(false);
-      setSupportsError(null);
-      return;
-    }
-
     let cancelled = false;
 
     const loadSupports = async () => {
@@ -72,11 +65,13 @@ export const useMaterialSupports = ({
               ? error.message
               : 'Failed to load supports.';
           setSupportsError(message);
-          showToast({
-            intent: 'error',
-            title: 'Failed to load supports',
-            body: message
-          });
+          if (isAdmin) {
+            showToast({
+              intent: 'error',
+              title: 'Failed to load supports',
+              body: message
+            });
+          }
         }
       } finally {
         if (!cancelled) {

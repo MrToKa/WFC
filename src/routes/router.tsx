@@ -3,6 +3,7 @@ import { AppShell } from '@/app/AppShell';
 import { RedirectIfAuthenticated, RequireAdmin, RequireAuth } from '@/components/AuthGuards';
 import { Account } from '@/pages/Account';
 import { Materials } from '@/pages/Materials';
+import { Templates } from '@/pages/Templates';
 import { AdminPanel } from '@/pages/AdminPanel';
 import { ProjectDetails } from '@/pages/ProjectDetails';
 import { TrayDetails } from '@/pages/TrayDetails';
@@ -23,6 +24,14 @@ export const routes: RouteObject[] = [
       {
         path: 'materials',
         element: <Materials />
+      },
+      {
+        path: 'templates',
+        element: (
+          <RequireAuth>
+            <Templates />
+          </RequireAuth>
+        )
       },
       {
         path: 'materials/load-curves/:loadCurveId',

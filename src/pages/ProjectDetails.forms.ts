@@ -23,6 +23,7 @@ export type ProjectDetailsTab =
   | 'cables'
   | 'cable-list'
   | 'trays'
+  | 'files'
   | 'cable-report';
 
 export type CableTypeFormState = {

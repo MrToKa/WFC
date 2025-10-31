@@ -5,6 +5,7 @@ export type TrayFormState = {
   heightMm: string;
   widthMm: string;
   weightKgPerM: string;
+  imageTemplateId: string | null;
 };
 
 export type SupportFormState = {
@@ -13,6 +14,7 @@ export type SupportFormState = {
   widthMm: string;
   lengthMm: string;
   weightKg: string;
+  imageTemplateId: string | null;
 };
 
 export type TrayFormErrors = Partial<Record<keyof TrayFormState, string>>;
@@ -28,7 +30,8 @@ export const initialTrayForm: TrayFormState = {
   type: '',
   heightMm: '',
   widthMm: '',
-  weightKgPerM: ''
+  weightKgPerM: '',
+  imageTemplateId: null
 };
 
 export const initialSupportForm: SupportFormState = {
@@ -36,7 +39,8 @@ export const initialSupportForm: SupportFormState = {
   heightMm: '',
   widthMm: '',
   lengthMm: '',
-  weightKg: ''
+  weightKg: '',
+  imageTemplateId: null
 };
 
 export const initialLoadCurveForm: LoadCurveFormState = {

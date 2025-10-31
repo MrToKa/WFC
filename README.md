@@ -9,9 +9,23 @@ served by Node.js with PostgreSQL for persistence.
 - Node.js 18 or later
 - npm 9 or later
 - PostgreSQL 14 or later (or a compatible hosted instance)
+- Docker (for running MinIO via `docker compose`)
 
 Create a `.env` file in the project root with the variables referenced by `server/config.ts` (for
 example `DATABASE_URL`, `JWT_SECRET`, `CLIENT_ORIGIN`, and optional port overrides).
+
+MinIO requires the following environment variables inside `server/.env` (defaults shown):
+
+```
+MINIO_ENDPOINT=localhost
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=wfcminio
+MINIO_SECRET_KEY=wfcminio123
+MINIO_USE_SSL=false
+MINIO_BUCKET_PROJECTS=wfc-project-files
+MINIO_BUCKET_TEMPLATES=wfc-template-files
+MINIO_URL_EXPIRY_SECONDS=900
+```
 
 ## Installation
 
@@ -29,6 +43,9 @@ npm run dev
 
 # backend (Express + tsx watch)
 npm run server:dev
+
+# object storage (MinIO)
+docker compose up -d minio
 ```
 
 The client runs on `http://localhost:5173` and proxies API requests to `http://localhost:4000` by
@@ -48,6 +65,17 @@ default.
 | `npm run format`     | Formats files using Prettier.                         |
 | `npm run typecheck`  | Performs TypeScript type checking (`tsc --noEmit`).   |
 
+### Object Storage (MinIO)
+
+A Docker Compose definition is provided for MinIO (`docker-compose.yml`). Start it locally with:
+
+```bash
+docker compose up -d minio
+```
+
+The API will automatically create the configured buckets if they are missing. MinIO serves the S3
+API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
+
 ## Features
 
 - **Authentication** – Users can register, sign in, update their profile, and store sessions via
@@ -64,6 +92,10 @@ default.
   - Any authenticated user can create, edit, delete, import, export, and inline-edit cables. Admin
     users additionally see the "Import from Excel" button.
 - **Tray management** – CRUD, import, and export flows similar to the cable lists.
+- **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files
+  stored in MinIO object storage.
+- **Template library** – Administrators can manage a global set of shared templates available from
+  the new Templates navigation item.
 - **Notifications** – Toast-based feedback for success and error states throughout the UI.
 
 ## Project Structure (high level)

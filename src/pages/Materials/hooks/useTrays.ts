@@ -136,7 +136,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       type: tray.type,
       heightMm: toFormValue(tray.heightMm),
       widthMm: toFormValue(tray.widthMm),
-      weightKgPerM: toFormValue(tray.weightKgPerM)
+      weightKgPerM: toFormValue(tray.weightKgPerM),
+      imageTemplateId: tray.imageTemplateId
     });
     setTrayFormErrors({});
     setIsTrayDialogOpen(true);
@@ -263,6 +264,11 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     []
   );
 
+  const handleTrayImageTemplateChange = useCallback((templateId: string | null) => {
+    setTrayForm((previous) => ({ ...previous, imageTemplateId: templateId }));
+    setTrayFormErrors((previous) => ({ ...previous, imageTemplateId: undefined }));
+  }, []);
+
   const handleTraySubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -304,13 +310,16 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
 
       setIsTraySubmitting(true);
 
+      const imageTemplateId = trayForm.imageTemplateId ?? null;
+
       try {
         if (trayDialogMode === 'create') {
           await createMaterialTray(token, {
             type,
             heightMm: heightResult.numeric,
             widthMm: widthResult.numeric,
-            weightKgPerM: weightResult.numeric
+            weightKgPerM: weightResult.numeric,
+            imageTemplateId
           });
           showToast({ intent: 'success', title: 'Tray added' });
 
@@ -324,7 +333,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             type,
             heightMm: heightResult.numeric,
             widthMm: widthResult.numeric,
-            weightKgPerM: weightResult.numeric
+            weightKgPerM: weightResult.numeric,
+            imageTemplateId
           });
           showToast({ intent: 'success', title: 'Tray updated' });
           await loadTrays(trayPage, { silent: true });
@@ -338,6 +348,12 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             ...previous,
             type: 'A tray with this type already exists'
           }));
+        } else if (error instanceof ApiError && error.status === 400) {
+          showToast({
+            intent: 'error',
+            title: 'Failed to save tray',
+            body: error.message
+          });
         } else {
           showToast({
             intent: 'error',
@@ -532,6 +548,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     handleTrayLoadCurveChange,
     handleTrayLoadCurveSubmit,
     handleTrayFieldChange,
+    handleTrayImageTemplateChange,
     handleTraySubmit,
     handleTrayImportClick,
     handleTrayImportChange,

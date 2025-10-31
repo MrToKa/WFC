@@ -8,10 +8,13 @@ import {
   DialogSurface,
   DialogTitle,
   Field,
-  Input
+  Input,
+  Dropdown,
+  Option
 } from '@fluentui/react-components';
 import { MaterialSupport } from '@/api/client';
 import { SupportFormErrors, SupportFormState } from '../Materials.types';
+import type { TemplateImageOption } from '../hooks/useTemplateImages';
 
 type SupportDialogProps = {
   open: boolean;
@@ -21,10 +24,16 @@ type SupportDialogProps = {
   formErrors: SupportFormErrors;
   isSubmitting: boolean;
   onFieldChange: (field: keyof SupportFormState) => (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
+  onTemplateChange: (templateId: string | null) => void;
+  templateOptions: TemplateImageOption[];
+  selectedTemplateId: string | null;
+  isTemplateLoading: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
   dialogActionsClassName: string;
 };
+
+const NONE_OPTION_VALUE = '__none__';
 
 export const SupportDialog = ({
   open,
@@ -34,10 +43,19 @@ export const SupportDialog = ({
   formErrors,
   isSubmitting,
   onFieldChange,
+  onTemplateChange,
+  templateOptions,
+  selectedTemplateId,
+  isTemplateLoading,
   onSubmit,
   onClose,
   dialogActionsClassName
 }: SupportDialogProps) => {
+  const selectedOptions =
+    selectedTemplateId && selectedTemplateId !== ''
+      ? [selectedTemplateId]
+      : [NONE_OPTION_VALUE];
+
   return (
     <Dialog
       open={open}
@@ -107,6 +125,34 @@ export const SupportDialog = ({
                   value={form.weightKg}
                   onChange={onFieldChange('weightKg')}
                 />
+              </Field>
+              <Field
+                label='Image template'
+                hint={
+                  isTemplateLoading
+                    ? 'Loading templates...'
+                    : templateOptions.length === 0
+                    ? 'No shared images available yet.'
+                    : 'Assign an image from the Templates library.'
+                }
+              >
+                <Dropdown
+                  selectedOptions={selectedOptions}
+                  onOptionSelect={(_, data) => {
+                    const optionValue = data.optionValue ?? NONE_OPTION_VALUE;
+                    onTemplateChange(
+                      optionValue === NONE_OPTION_VALUE ? null : optionValue
+                    );
+                  }}
+                  disabled={isTemplateLoading}
+                >
+                  <Option value={NONE_OPTION_VALUE}>No image</Option>
+                  {templateOptions.map((option) => (
+                    <Option key={option.id} value={option.id}>
+                      {option.fileName}
+                    </Option>
+                  ))}
+                </Dropdown>
               </Field>
             </DialogContent>
             <DialogActions className={dialogActionsClassName}>

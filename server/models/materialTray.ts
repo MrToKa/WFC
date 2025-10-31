@@ -5,6 +5,9 @@ export type MaterialTrayRow = {
   width_mm: string | number | null;
   weight_kg_per_m: string | number | null;
   load_curve_id: string | null;
+  image_template_id: string | null;
+  image_template_file_name: string | null;
+  image_template_content_type: string | null;
   load_curve_name?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -30,6 +33,9 @@ export type PublicMaterialTray = {
   weightKgPerM: number | null;
   loadCurveId: string | null;
   loadCurveName: string | null;
+  imageTemplateId: string | null;
+  imageTemplateFileName: string | null;
+  imageTemplateContentType: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -42,6 +48,9 @@ export const mapMaterialTrayRow = (row: MaterialTrayRow): PublicMaterialTray => 
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
   loadCurveId: row.load_curve_id ?? null,
   loadCurveName: row.load_curve_name ?? null,
+  imageTemplateId: row.image_template_id ?? null,
+  imageTemplateFileName: row.image_template_file_name ?? null,
+  imageTemplateContentType: row.image_template_content_type ?? null,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at)
 });

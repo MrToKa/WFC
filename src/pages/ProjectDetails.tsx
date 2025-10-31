@@ -29,6 +29,7 @@ import { DetailsTab } from './ProjectDetails/DetailsTab';
 import { ProgressDialog } from './ProjectDetails/ProgressDialog';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
+import { ProjectFilesTab } from './ProjectDetails/ProjectFilesTab';
 import { useCableListSection } from './ProjectDetails/hooks/useCableListSection';
 import { useCableTypesSection } from './ProjectDetails/hooks/useCableTypesSection';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
@@ -40,12 +41,14 @@ import {
 import { useMaterialSupports } from './ProjectDetails/hooks/useMaterialSupports';
 import { useSupportDistanceOverrides } from './ProjectDetails/hooks/useSupportDistanceOverrides';
 import { useTrayTypeDetails } from './ProjectDetails/hooks/useTrayTypeDetails';
+import { useProjectFilesSection } from './ProjectDetails/hooks/useProjectFilesSection';
 
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
   'cables',
   'cable-list',
   'trays',
+  'files',
   'cable-report'
 ];
 
@@ -198,6 +201,27 @@ export const ProjectDetails = () => {
   } = useTraysSection({
     projectId,
     project,
+    token,
+    showToast
+  });
+
+  const {
+    files: projectFiles,
+    isLoading: projectFilesLoading,
+    isRefreshing: projectFilesRefreshing,
+    isUploading: projectFilesUploading,
+    downloadingFileId: downloadingProjectFileId,
+    pendingFileId: deletingProjectFileId,
+    error: projectFilesError,
+    fileInputRef: projectFilesInputRef,
+    canUpload: canUploadProjectFiles,
+    maxFileSizeBytes: projectFileMaxSize,
+    reloadFiles: reloadProjectFiles,
+    handleFileInputChange: handleProjectFileInputChange,
+    handleDeleteFile: handleProjectFileDelete,
+    handleDownloadFile: handleProjectFileDownload
+  } = useProjectFilesSection({
+    projectId,
     token,
     showToast
   });
@@ -398,6 +422,7 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="trays">Trays</Tab>
+        <Tab value="files">Files</Tab>
         <Tab value="cable-report">Cables report</Tab>
       </TabList>
 
@@ -467,6 +492,27 @@ export const ProjectDetails = () => {
           totalPages={totalTrayPages}
           onPreviousPage={handleTraysPreviousPage}
           onNextPage={handleTraysNextPage}
+        />
+      ) : null}
+
+      {selectedTab === 'files' ? (
+        <ProjectFilesTab
+          styles={styles}
+          files={projectFiles}
+          isLoading={projectFilesLoading}
+          isRefreshing={projectFilesRefreshing}
+          isUploading={projectFilesUploading}
+          downloadingFileId={downloadingProjectFileId}
+          pendingFileId={deletingProjectFileId}
+          error={projectFilesError}
+          canUpload={canUploadProjectFiles}
+          maxFileSizeBytes={projectFileMaxSize}
+          onRefresh={() => void reloadProjectFiles({ showSpinner: false })}
+          onFileInputChange={handleProjectFileInputChange}
+          onDownload={handleProjectFileDownload}
+          onDelete={handleProjectFileDelete}
+          fileInputAccept=".doc,.docx,.xls,.xlsx,.pdf,.jpg,.jpeg,.png"
+          fileInputRef={projectFilesInputRef}
         />
       ) : null}
 

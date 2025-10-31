@@ -376,12 +376,17 @@ const materialNumericField = z
   .nullable()
   .optional();
 
+const materialImageTemplateField = z
+  .union([z.string().trim().uuid(), z.null()])
+  .optional();
+
 export const createMaterialTraySchema = z
   .object({
     type: z.string().trim().min(1).max(200),
     heightMm: materialNumericField,
     widthMm: materialNumericField,
-    weightKgPerM: materialNumericField
+    weightKgPerM: materialNumericField,
+    imageTemplateId: materialImageTemplateField
   })
   .strict();
 
@@ -391,7 +396,8 @@ export const createMaterialSupportSchema = z
     heightMm: materialNumericField,
     widthMm: materialNumericField,
     lengthMm: materialNumericField,
-    weightKg: materialNumericField
+    weightKg: materialNumericField,
+    imageTemplateId: materialImageTemplateField
   })
   .strict();
 
@@ -401,7 +407,8 @@ export const updateMaterialTraySchema = z
     heightMm: materialNumericField,
     widthMm: materialNumericField,
     weightKgPerM: materialNumericField,
-    loadCurveId: z.string().uuid().optional().nullable()
+    loadCurveId: z.string().uuid().optional().nullable(),
+    imageTemplateId: materialImageTemplateField
   })
   .strict()
   .refine(
@@ -410,7 +417,8 @@ export const updateMaterialTraySchema = z
       value.heightMm !== undefined ||
       value.widthMm !== undefined ||
       value.weightKgPerM !== undefined ||
-      value.loadCurveId !== undefined,
+      value.loadCurveId !== undefined ||
+      value.imageTemplateId !== undefined,
     { message: 'At least one field must be provided' }
   );
 
@@ -420,7 +428,8 @@ export const updateMaterialSupportSchema = z
     heightMm: materialNumericField,
     widthMm: materialNumericField,
     lengthMm: materialNumericField,
-    weightKg: materialNumericField
+    weightKg: materialNumericField,
+    imageTemplateId: materialImageTemplateField
   })
   .strict()
   .refine(
@@ -429,7 +438,8 @@ export const updateMaterialSupportSchema = z
       value.heightMm !== undefined ||
       value.widthMm !== undefined ||
       value.lengthMm !== undefined ||
-      value.weightKg !== undefined,
+      value.weightKg !== undefined ||
+      value.imageTemplateId !== undefined,
     { message: 'At least one field must be provided' }
   );
 

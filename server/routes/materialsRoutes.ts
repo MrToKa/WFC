@@ -116,6 +116,82 @@ const normalizeOptionalUuid = (value?: string | null): string | null => {
   return trimmed === '' ? null : trimmed;
 };
 
+const IMAGE_TEMPLATE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
+
+const isImageTemplateFile = (
+  fileName: string | null,
+  contentType: string | null
+): boolean => {
+  if (contentType && contentType.toLowerCase().startsWith('image/')) {
+    return true;
+  }
+
+  if (!fileName) {
+    return false;
+  }
+
+  const extension = path.extname(fileName).toLowerCase();
+  return IMAGE_TEMPLATE_EXTENSIONS.has(extension);
+};
+
+const ensureTemplateIsImage = async (templateId: string): Promise<void> => {
+  const result = await pool.query<{
+    file_name: string | null;
+    content_type: string | null;
+  }>(
+    `
+      SELECT file_name, content_type
+      FROM template_files
+      WHERE id = $1
+      LIMIT 1;
+    `,
+    [templateId]
+  );
+
+  const template = result.rows[0];
+
+  if (!template) {
+    const error = new Error('Template not found');
+    (error as { code?: string }).code = 'TEMPLATE_NOT_FOUND';
+    throw error;
+  }
+
+  if (!isImageTemplateFile(template.file_name, template.content_type)) {
+    const error = new Error('Template must be an image (.jpg, .jpeg, .png)');
+    (error as { code?: string }).code = 'TEMPLATE_NOT_IMAGE';
+    throw error;
+  }
+};
+
+const respondToTemplateValidationError = (
+  res: Response,
+  error: unknown
+): boolean => {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: string }).code === 'string'
+  ) {
+    const code = (error as { code?: string }).code;
+    if (code === 'TEMPLATE_NOT_FOUND') {
+      res
+        .status(400)
+        .json({ error: 'Selected template file could not be found. Refresh and try again.' });
+      return true;
+    }
+
+    if (code === 'TEMPLATE_NOT_IMAGE') {
+      res
+        .status(400)
+        .json({ error: 'Template file must be an image (jpg or png).' });
+      return true;
+    }
+  }
+
+  return false;
+};
+
 type NormalizedLoadCurvePoint = {
   spanM: number;
   loadKnPerM: number;
@@ -193,24 +269,32 @@ const selectMaterialTraysQuery = `
     mt.width_mm,
     mt.weight_kg_per_m,
     mt.load_curve_id,
+    mt.image_template_id,
+    tf.file_name AS image_template_file_name,
+    tf.content_type AS image_template_content_type,
     mt.created_at,
     mt.updated_at,
     lc.name AS load_curve_name
   FROM material_trays mt
   LEFT JOIN material_load_curves lc ON mt.load_curve_id = lc.id
+  LEFT JOIN template_files tf ON tf.id = mt.image_template_id
 `;
 
 const selectMaterialSupportsQuery = `
   SELECT
-    id,
-    support_type,
-    height_mm,
-    width_mm,
-    length_mm,
-    weight_kg,
-    created_at,
-    updated_at
-  FROM material_supports
+    ms.id,
+    ms.support_type,
+    ms.height_mm,
+    ms.width_mm,
+    ms.length_mm,
+    ms.weight_kg,
+    ms.image_template_id,
+    tf.file_name AS image_template_file_name,
+    tf.content_type AS image_template_content_type,
+    ms.created_at,
+    ms.updated_at
+  FROM material_supports ms
+  LEFT JOIN template_files tf ON tf.id = ms.image_template_id
 `;
 
 const selectMaterialLoadCurvesQuery = `
@@ -326,7 +410,7 @@ materialsRouter.get(
       const result = await pool.query<MaterialTrayRow>(
         `
           ${selectMaterialTraysQuery}
-          ORDER BY tray_type ASC
+          ORDER BY mt.tray_type ASC
           LIMIT $1 OFFSET $2;
         `,
         [pageSize, offset]
@@ -350,7 +434,7 @@ materialsRouter.get(
       const result = await pool.query<MaterialTrayRow>(
         `
           ${selectMaterialTraysQuery}
-          ORDER BY tray_type ASC;
+          ORDER BY mt.tray_type ASC;
         `
       );
 
@@ -376,9 +460,27 @@ materialsRouter.post(
 
     const data = parseResult.data;
     const type = normalizeType(data.type);
+    const normalizedImageTemplateId = normalizeOptionalUuid(
+      data.imageTemplateId ?? null
+    );
+
+    if (normalizedImageTemplateId) {
+      try {
+        await ensureTemplateIsImage(normalizedImageTemplateId);
+      } catch (error) {
+        if (respondToTemplateValidationError(res, error)) {
+          return;
+        }
+        console.error('Validate tray image template error', error);
+        res.status(500).json({ error: 'Failed to validate template file' });
+        return;
+      }
+    }
+
+    const trayId = randomUUID();
 
     try {
-      const result = await pool.query<MaterialTrayRow>(
+      await pool.query(
         `
           INSERT INTO material_trays (
             id,
@@ -386,28 +488,37 @@ materialsRouter.post(
             height_mm,
             width_mm,
             weight_kg_per_m,
-            load_curve_id
-          ) VALUES ($1, $2, $3, $4, $5, NULL)
-          RETURNING
-            id,
-            tray_type,
-            height_mm,
-            width_mm,
-            weight_kg_per_m,
             load_curve_id,
-            created_at,
-            updated_at;
+            image_template_id
+          ) VALUES ($1, $2, $3, $4, $5, NULL, $6);
         `,
         [
-          randomUUID(),
+          trayId,
           type,
           data.heightMm ?? null,
           data.widthMm ?? null,
-          data.weightKgPerM ?? null
+          data.weightKgPerM ?? null,
+          normalizedImageTemplateId
         ]
       );
 
-      res.status(201).json({ tray: mapMaterialTrayRow(result.rows[0]) });
+      const trayResult = await pool.query<MaterialTrayRow>(
+        `
+          ${selectMaterialTraysQuery}
+          WHERE mt.id = $1
+          LIMIT 1;
+        `,
+        [trayId]
+      );
+
+      const trayRow = trayResult.rows[0];
+
+      if (!trayRow) {
+        res.status(500).json({ error: 'Failed to create tray' });
+        return;
+      }
+
+      res.status(201).json({ tray: mapMaterialTrayRow(trayRow) });
     } catch (error) {
       if (
         error &&
@@ -442,16 +553,35 @@ materialsRouter.patch(
 
     if (!parseResult.success) {
       res.status(400).json({ error: parseResult.error.flatten() });
-      return;
+    return;
+  }
+
+  const data = parseResult.data;
+
+  let normalizedImageTemplateId: string | null | undefined;
+
+  if (data.imageTemplateId !== undefined) {
+    normalizedImageTemplateId = normalizeOptionalUuid(data.imageTemplateId);
+
+    if (normalizedImageTemplateId) {
+      try {
+        await ensureTemplateIsImage(normalizedImageTemplateId);
+      } catch (error) {
+        if (respondToTemplateValidationError(res, error)) {
+          return;
+        }
+        console.error('Validate tray image template error', error);
+        res.status(500).json({ error: 'Failed to validate template file' });
+        return;
+      }
     }
+  }
 
-    const data = parseResult.data;
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+  let parameterIndex = 1;
 
-    const setClauses: string[] = [];
-    const values: unknown[] = [];
-    let parameterIndex = 1;
-
-    if (data.type !== undefined) {
+  if (data.type !== undefined) {
       setClauses.push(`tray_type = $${parameterIndex}`);
       values.push(normalizeType(data.type));
       parameterIndex += 1;
@@ -477,11 +607,17 @@ materialsRouter.patch(
 
     if (data.loadCurveId !== undefined) {
       setClauses.push(`load_curve_id = $${parameterIndex}`);
-      values.push(normalizeOptionalUuid(data.loadCurveId));
-      parameterIndex += 1;
-    }
+    values.push(normalizeOptionalUuid(data.loadCurveId));
+    parameterIndex += 1;
+  }
 
-    setClauses.push('updated_at = NOW()');
+  if (normalizedImageTemplateId !== undefined) {
+    setClauses.push(`image_template_id = $${parameterIndex}`);
+    values.push(normalizedImageTemplateId);
+    parameterIndex += 1;
+  }
+
+  setClauses.push('updated_at = NOW()');
 
     const idParamIndex = parameterIndex;
     values.push(trayId);
@@ -609,16 +745,8 @@ materialsRouter.post(
       if (rows.length === 0) {
         const listResult = await pool.query<MaterialTrayRow>(
           `
-            SELECT
-              id,
-              tray_type,
-              height_mm,
-              width_mm,
-              weight_kg_per_m,
-              created_at,
-              updated_at
-            FROM material_trays
-            ORDER BY tray_type ASC;
+            ${selectMaterialTraysQuery}
+            ORDER BY mt.tray_type ASC;
           `
         );
 
@@ -731,16 +859,8 @@ materialsRouter.post(
 
       const listResult = await pool.query<MaterialTrayRow>(
         `
-          SELECT
-            id,
-            tray_type,
-            height_mm,
-            width_mm,
-            weight_kg_per_m,
-            created_at,
-            updated_at
-          FROM material_trays
-          ORDER BY tray_type ASC;
+          ${selectMaterialTraysQuery}
+          ORDER BY mt.tray_type ASC;
         `
       );
 
@@ -766,16 +886,8 @@ materialsRouter.get(
     try {
       const result = await pool.query<MaterialTrayRow>(
         `
-          SELECT
-            id,
-            tray_type,
-            height_mm,
-            width_mm,
-            weight_kg_per_m,
-            created_at,
-            updated_at
-          FROM material_trays
-          ORDER BY tray_type ASC;
+          ${selectMaterialTraysQuery}
+          ORDER BY mt.tray_type ASC;
         `
       );
 
@@ -860,7 +972,7 @@ materialsRouter.get(
       const result = await pool.query<MaterialSupportRow>(
         `
           ${selectMaterialSupportsQuery}
-          ORDER BY support_type ASC
+          ORDER BY ms.support_type ASC
           LIMIT $1 OFFSET $2;
         `,
         [pageSize, offset]
@@ -882,18 +994,37 @@ materialsRouter.post(
   authenticate,
   requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
-    const parseResult = createMaterialSupportSchema.safeParse(req.body);
+  const parseResult = createMaterialSupportSchema.safeParse(req.body);
 
-    if (!parseResult.success) {
-      res.status(400).json({ error: parseResult.error.flatten() });
+  if (!parseResult.success) {
+    res.status(400).json({ error: parseResult.error.flatten() });
+    return;
+  }
+
+  const data = parseResult.data;
+  const type = normalizeType(data.type);
+
+  const normalizedImageTemplateId = normalizeOptionalUuid(
+    data.imageTemplateId ?? null
+  );
+
+  if (normalizedImageTemplateId) {
+    try {
+      await ensureTemplateIsImage(normalizedImageTemplateId);
+    } catch (error) {
+      if (respondToTemplateValidationError(res, error)) {
+        return;
+      }
+      console.error('Validate support image template error', error);
+      res.status(500).json({ error: 'Failed to validate template file' });
       return;
     }
+  }
 
-    const data = parseResult.data;
-    const type = normalizeType(data.type);
+  const supportId = randomUUID();
 
-    try {
-      const result = await pool.query<MaterialSupportRow>(
+  try {
+      await pool.query(
         `
           INSERT INTO material_supports (
             id,
@@ -901,29 +1032,38 @@ materialsRouter.post(
             height_mm,
             width_mm,
             length_mm,
-            weight_kg
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING
-            id,
-            support_type,
-            height_mm,
-            width_mm,
-            length_mm,
             weight_kg,
-            created_at,
-            updated_at;
+            image_template_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7);
         `,
         [
-          randomUUID(),
+          supportId,
           type,
           data.heightMm ?? null,
           data.widthMm ?? null,
           data.lengthMm ?? null,
-          data.weightKg ?? null
+          data.weightKg ?? null,
+          normalizedImageTemplateId
         ]
       );
 
-      res.status(201).json({ support: mapMaterialSupportRow(result.rows[0]) });
+      const supportResult = await pool.query<MaterialSupportRow>(
+        `
+          ${selectMaterialSupportsQuery}
+          WHERE ms.id = $1
+          LIMIT 1;
+        `,
+        [supportId]
+      );
+
+      const supportRow = supportResult.rows[0];
+
+      if (!supportRow) {
+        res.status(500).json({ error: 'Failed to create support' });
+        return;
+      }
+
+      res.status(201).json({ support: mapMaterialSupportRow(supportRow) });
     } catch (error) {
       if (
         error &&
@@ -960,74 +1100,106 @@ materialsRouter.patch(
     if (!parseResult.success) {
       res.status(400).json({ error: parseResult.error.flatten() });
       return;
-    }
+  }
 
-    const data = parseResult.data;
+  const data = parseResult.data;
 
-    const setClauses: string[] = [];
-    const values: unknown[] = [];
-    let parameterIndex = 1;
+  let normalizedImageTemplateId: string | null | undefined;
 
-    if (data.type !== undefined) {
-      setClauses.push(`support_type = $${parameterIndex}`);
-      values.push(normalizeType(data.type));
-      parameterIndex += 1;
-    }
+  if (data.imageTemplateId !== undefined) {
+    normalizedImageTemplateId = normalizeOptionalUuid(data.imageTemplateId);
 
-    if (data.heightMm !== undefined) {
-      setClauses.push(`height_mm = $${parameterIndex}`);
-      values.push(data.heightMm ?? null);
-      parameterIndex += 1;
-    }
-
-    if (data.widthMm !== undefined) {
-      setClauses.push(`width_mm = $${parameterIndex}`);
-      values.push(data.widthMm ?? null);
-      parameterIndex += 1;
-    }
-
-    if (data.lengthMm !== undefined) {
-      setClauses.push(`length_mm = $${parameterIndex}`);
-      values.push(data.lengthMm ?? null);
-      parameterIndex += 1;
-    }
-
-    if (data.weightKg !== undefined) {
-      setClauses.push(`weight_kg = $${parameterIndex}`);
-      values.push(data.weightKg ?? null);
-      parameterIndex += 1;
-    }
-
-    setClauses.push('updated_at = NOW()');
-
-    const idParamIndex = parameterIndex;
-    values.push(supportId);
-
-    try {
-      const result = await pool.query<MaterialSupportRow>(
-        `
-          UPDATE material_supports
-          SET ${setClauses.join(', ')}
-          WHERE id = $${idParamIndex}
-          RETURNING
-            id,
-            support_type,
-            height_mm,
-            width_mm,
-            length_mm,
-            weight_kg,
-            created_at,
-            updated_at;
-        `,
-        values
-      );
-
-      if (result.rowCount === 0) {
-        res.status(404).json({ error: 'Support not found' });
+    if (normalizedImageTemplateId) {
+      try {
+        await ensureTemplateIsImage(normalizedImageTemplateId);
+      } catch (error) {
+        if (respondToTemplateValidationError(res, error)) {
+          return;
+        }
+        console.error('Validate support image template error', error);
+        res.status(500).json({ error: 'Failed to validate template file' });
         return;
       }
+    }
+  }
 
-      res.json({ support: mapMaterialSupportRow(result.rows[0]) });
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+  let parameterIndex = 1;
+
+  if (data.type !== undefined) {
+    setClauses.push(`support_type = $${parameterIndex}`);
+    values.push(normalizeType(data.type));
+    parameterIndex += 1;
+  }
+
+  if (data.heightMm !== undefined) {
+    setClauses.push(`height_mm = $${parameterIndex}`);
+    values.push(data.heightMm ?? null);
+    parameterIndex += 1;
+  }
+
+  if (data.widthMm !== undefined) {
+    setClauses.push(`width_mm = $${parameterIndex}`);
+    values.push(data.widthMm ?? null);
+    parameterIndex += 1;
+  }
+
+  if (data.lengthMm !== undefined) {
+    setClauses.push(`length_mm = $${parameterIndex}`);
+    values.push(data.lengthMm ?? null);
+    parameterIndex += 1;
+  }
+
+  if (data.weightKg !== undefined) {
+    setClauses.push(`weight_kg = $${parameterIndex}`);
+    values.push(data.weightKg ?? null);
+    parameterIndex += 1;
+  }
+
+  if (normalizedImageTemplateId !== undefined) {
+    setClauses.push(`image_template_id = $${parameterIndex}`);
+    values.push(normalizedImageTemplateId);
+    parameterIndex += 1;
+  }
+
+  setClauses.push('updated_at = NOW()');
+
+  const idParamIndex = parameterIndex;
+  values.push(supportId);
+
+  try {
+    const updateResult = await pool.query(
+      `
+        UPDATE material_supports
+        SET ${setClauses.join(', ')}
+        WHERE id = $${idParamIndex};
+      `,
+      values
+    );
+
+    if (updateResult.rowCount === 0) {
+      res.status(404).json({ error: 'Support not found' });
+      return;
+    }
+
+    const supportResult = await pool.query<MaterialSupportRow>(
+      `
+        ${selectMaterialSupportsQuery}
+        WHERE ms.id = $1
+        LIMIT 1;
+      `,
+      [supportId]
+    );
+
+    const supportRow = supportResult.rows[0];
+
+    if (!supportRow) {
+      res.status(404).json({ error: 'Support not found' });
+      return;
+    }
+
+    res.json({ support: mapMaterialSupportRow(supportRow) });
     } catch (error) {
       if (
         error &&
@@ -1112,17 +1284,8 @@ materialsRouter.post(
       if (rows.length === 0) {
         const listResult = await pool.query<MaterialSupportRow>(
           `
-            SELECT
-              id,
-              support_type,
-              height_mm,
-              width_mm,
-              length_mm,
-              weight_kg,
-              created_at,
-              updated_at
-            FROM material_supports
-            ORDER BY support_type ASC;
+            ${selectMaterialSupportsQuery}
+            ORDER BY ms.support_type ASC;
           `
         );
 
@@ -1241,17 +1404,8 @@ materialsRouter.post(
 
       const listResult = await pool.query<MaterialSupportRow>(
         `
-          SELECT
-            id,
-            support_type,
-            height_mm,
-            width_mm,
-            length_mm,
-            weight_kg,
-            created_at,
-            updated_at
-          FROM material_supports
-          ORDER BY support_type ASC;
+          ${selectMaterialSupportsQuery}
+          ORDER BY ms.support_type ASC;
         `
       );
 
@@ -1277,17 +1431,8 @@ materialsRouter.get(
     try {
       const result = await pool.query<MaterialSupportRow>(
         `
-          SELECT
-            id,
-            support_type,
-            height_mm,
-            width_mm,
-            length_mm,
-            weight_kg,
-            created_at,
-            updated_at
-          FROM material_supports
-          ORDER BY support_type ASC;
+          ${selectMaterialSupportsQuery}
+          ORDER BY ms.support_type ASC;
         `
       );
 

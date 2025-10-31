@@ -108,7 +108,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       heightMm: toFormValue(support.heightMm),
       widthMm: toFormValue(support.widthMm),
       lengthMm: toFormValue(support.lengthMm),
-      weightKg: toFormValue(support.weightKg)
+      weightKg: toFormValue(support.weightKg),
+      imageTemplateId: support.imageTemplateId
     });
     setSupportFormErrors({});
     setIsSupportDialogOpen(true);
@@ -130,6 +131,11 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       },
     []
   );
+
+  const handleSupportImageTemplateChange = useCallback((templateId: string | null) => {
+    setSupportForm((previous) => ({ ...previous, imageTemplateId: templateId }));
+    setSupportFormErrors((previous) => ({ ...previous, imageTemplateId: undefined }));
+  }, []);
 
   const handleSupportSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -177,6 +183,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
 
       setIsSupportSubmitting(true);
 
+      const imageTemplateId = supportForm.imageTemplateId ?? null;
+
       try {
         if (supportDialogMode === 'create') {
           await createMaterialSupport(token, {
@@ -184,7 +192,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             heightMm: heightResult.numeric,
             widthMm: widthResult.numeric,
             lengthMm: lengthResult.numeric,
-            weightKg: weightResult.numeric
+            weightKg: weightResult.numeric,
+            imageTemplateId
           });
           showToast({ intent: 'success', title: 'Support added' });
 
@@ -199,7 +208,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             heightMm: heightResult.numeric,
             widthMm: widthResult.numeric,
             lengthMm: lengthResult.numeric,
-            weightKg: weightResult.numeric
+            weightKg: weightResult.numeric,
+            imageTemplateId
           });
           showToast({ intent: 'success', title: 'Support updated' });
           await loadSupports(supportPage, { silent: true });
@@ -213,6 +223,12 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             ...previous,
             type: 'A support with this type already exists'
           }));
+        } else if (error instanceof ApiError && error.status === 400) {
+          showToast({
+            intent: 'error',
+            title: 'Failed to save support',
+            body: error.message
+          });
         } else {
           showToast({
             intent: 'error',
@@ -394,6 +410,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     openSupportEditDialog,
     closeSupportDialog,
     handleSupportFieldChange,
+    handleSupportImageTemplateChange,
     handleSupportSubmit,
     handleSupportImportClick,
     handleSupportImportChange,

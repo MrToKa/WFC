@@ -18,9 +18,15 @@ type NavLinkConfig = {
   end?: boolean;
 };
 
-const PRIMARY_LINKS: NavLinkConfig[] = [
+const PUBLIC_LINKS: NavLinkConfig[] = [
   { to: '/', label: 'Projects', end: true },
   { to: '/materials', label: 'Materials' }
+] as const;
+
+const AUTH_LINKS: NavLinkConfig[] = [
+  { to: '/', label: 'Projects', end: true },
+  { to: '/materials', label: 'Materials' },
+  { to: '/templates', label: 'Templates' }
 ] as const;
 
 const ADMIN_LINKS: NavLinkConfig[] = [{ to: '/admin', label: 'Admin' }];
@@ -145,8 +151,8 @@ export const AppShell = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const navLinks = user
-    ? [...PRIMARY_LINKS, ...(user.isAdmin ? ADMIN_LINKS : [])]
-    : [...PRIMARY_LINKS, ...GUEST_LINKS];
+    ? [...AUTH_LINKS, ...(user.isAdmin ? ADMIN_LINKS : [])]
+    : [...PUBLIC_LINKS, ...GUEST_LINKS];
 
   const displayName = (() => {
     if (!user) {

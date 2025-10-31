@@ -15,6 +15,7 @@ import { MaterialsTab } from './Materials/Materials.types';
 import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
 import { useLoadCurves } from './Materials/hooks/useLoadCurves';
+import { useTemplateImages } from './Materials/hooks/useTemplateImages';
 import { TrayDialog } from './Materials/components/TrayDialog';
 import { TrayLoadCurveDialog } from './Materials/components/TrayLoadCurveDialog';
 import { SupportDialog } from './Materials/components/SupportDialog';
@@ -72,6 +73,7 @@ export const Materials = () => {
   const traysHook = useTrays({ token, isAdmin, showToast });
   const supportsHook = useSupports({ token, isAdmin, showToast });
   const loadCurvesHook = useLoadCurves({ token, isAdmin, showToast });
+  const templateImagesHook = useTemplateImages({ token, showToast });
 
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
@@ -163,13 +165,14 @@ export const Materials = () => {
               formatNumeric={formatNumeric}
               formatWeight={formatWeight}
               onEdit={traysHook.openTrayEditDialog}
-              onDelete={traysHook.handleTrayDelete}
-              onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
-              page={traysHook.trayPage}
-              totalPages={trayTotalPages}
-              onSetPage={traysHook.setTrayPage}
-              styles={styles}
-            />
+            onDelete={traysHook.handleTrayDelete}
+            onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
+            token={token}
+            page={traysHook.trayPage}
+            totalPages={trayTotalPages}
+            onSetPage={traysHook.setTrayPage}
+            styles={styles}
+          />
           </>
         ) : selectedTab === 'supports' ? (
           <>
@@ -216,14 +219,15 @@ export const Materials = () => {
               pendingId={supportsHook.supportPendingId}
               isSubmitting={supportsHook.isSupportSubmitting}
               formatNumeric={formatNumeric}
-              formatWeight={formatWeight}
-              onEdit={supportsHook.openSupportEditDialog}
-              onDelete={supportsHook.handleSupportDelete}
-              page={supportsHook.supportPage}
-              totalPages={supportTotalPages}
-              onSetPage={supportsHook.setSupportPage}
-              styles={styles}
-            />
+            formatWeight={formatWeight}
+            onEdit={supportsHook.openSupportEditDialog}
+            onDelete={supportsHook.handleSupportDelete}
+            token={token}
+            page={supportsHook.supportPage}
+            totalPages={supportTotalPages}
+            onSetPage={supportsHook.setSupportPage}
+            styles={styles}
+          />
           </>
         ) : (
           <>
@@ -275,6 +279,10 @@ export const Materials = () => {
         formErrors={traysHook.trayFormErrors}
         isSubmitting={traysHook.isTraySubmitting}
         onFieldChange={traysHook.handleTrayFieldChange}
+        onTemplateChange={traysHook.handleTrayImageTemplateChange}
+        templateOptions={templateImagesHook.templateImages}
+        selectedTemplateId={traysHook.trayForm.imageTemplateId}
+        isTemplateLoading={templateImagesHook.isLoadingTemplateImages}
         onSubmit={traysHook.handleTraySubmit}
         onClose={traysHook.closeTrayDialog}
         dialogActionsClassName={styles.dialogActions}
@@ -302,6 +310,10 @@ export const Materials = () => {
         formErrors={supportsHook.supportFormErrors}
         isSubmitting={supportsHook.isSupportSubmitting}
         onFieldChange={supportsHook.handleSupportFieldChange}
+        onTemplateChange={supportsHook.handleSupportImageTemplateChange}
+        templateOptions={templateImagesHook.templateImages}
+        selectedTemplateId={supportsHook.supportForm.imageTemplateId}
+        isTemplateLoading={templateImagesHook.isLoadingTemplateImages}
         onSubmit={supportsHook.handleSupportSubmit}
         onClose={supportsHook.closeSupportDialog}
         dialogActionsClassName={styles.dialogActions}

@@ -1,12 +1,14 @@
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { initializeDatabase } from './db.js';
+import { initializeObjectStorage } from './services/objectStorageService.js';
 
 const app = createApp();
 
 const startServer = async (): Promise<void> => {
   try {
     await initializeDatabase();
+    await initializeObjectStorage();
     app.listen(config.port, () => {
       console.log(`API listening on http://localhost:${config.port}`);
     });

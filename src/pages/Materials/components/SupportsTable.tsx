@@ -1,5 +1,6 @@
 import { Body1, Button, Caption1, Spinner, mergeClasses } from '@fluentui/react-components';
 import { MaterialSupport } from '@/api/client';
+import { TemplateImagePreview } from './TemplateImagePreview';
 
 type SupportsTableProps = {
   supports: MaterialSupport[];
@@ -12,6 +13,7 @@ type SupportsTableProps = {
   formatWeight: (value: number | null) => string;
   onEdit: (support: MaterialSupport) => void;
   onDelete: (support: MaterialSupport) => void;
+  token: string | null;
   page: number;
   totalPages: number;
   onSetPage: (page: number) => void;
@@ -39,6 +41,7 @@ export const SupportsTable = ({
   formatWeight,
   onEdit,
   onDelete,
+  token,
   page,
   totalPages,
   onSetPage,
@@ -107,6 +110,14 @@ export const SupportsTable = ({
                   </td>
                   {isAdmin ? (
                     <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                      {support.imageTemplateId ? (
+                        <TemplateImagePreview
+                          token={token}
+                          templateId={support.imageTemplateId}
+                          fileName={support.imageTemplateFileName}
+                          contentType={support.imageTemplateContentType}
+                        />
+                      ) : null}
                       <Button
                         size='small'
                         onClick={() => onEdit(support)}

@@ -83,6 +83,29 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_files (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      object_key TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      content_type TEXT,
+      size_bytes BIGINT,
+      uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_files_project_id_idx
+      ON project_files (project_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_files_uploaded_at_idx
+      ON project_files (uploaded_at DESC);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cable_types (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -346,6 +369,43 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE project_support_distances
     ADD COLUMN IF NOT EXISTS support_id UUID REFERENCES material_supports(id) ON DELETE SET NULL;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS template_files (
+      id UUID PRIMARY KEY,
+      object_key TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      content_type TEXT,
+      size_bytes BIGINT,
+      uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS template_files_uploaded_at_idx
+      ON template_files (uploaded_at DESC);
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_trays
+    ADD COLUMN IF NOT EXISTS image_template_id UUID REFERENCES template_files(id) ON DELETE SET NULL;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_trays_image_template_id_idx
+      ON material_trays (image_template_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_supports
+    ADD COLUMN IF NOT EXISTS image_template_id UUID REFERENCES template_files(id) ON DELETE SET NULL;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_supports_image_template_id_idx
+      ON material_supports (image_template_id);
   `);
 }
 

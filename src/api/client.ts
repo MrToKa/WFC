@@ -88,6 +88,34 @@ export type Tray = {
   updatedAt: string;
 };
 
+export type FileUploader = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+};
+
+export type ProjectFile = {
+  id: string;
+  projectId: string;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number;
+  uploadedAt: string;
+  uploadedBy: FileUploader | null;
+  canDelete: boolean;
+};
+
+export type TemplateFile = {
+  id: string;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number;
+  uploadedAt: string;
+  uploadedBy: FileUploader | null;
+  canDelete: boolean;
+};
+
 export type MaterialTray = {
   id: string;
   type: string;
@@ -96,6 +124,9 @@ export type MaterialTray = {
   weightKgPerM: number | null;
   loadCurveId: string | null;
   loadCurveName: string | null;
+  imageTemplateId: string | null;
+  imageTemplateFileName: string | null;
+  imageTemplateContentType: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -107,6 +138,9 @@ export type MaterialSupport = {
   widthMm: number | null;
   lengthMm: number | null;
   weightKg: number | null;
+  imageTemplateId: string | null;
+  imageTemplateFileName: string | null;
+  imageTemplateContentType: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -266,6 +300,7 @@ export type MaterialTrayInput = {
   widthMm?: number | null;
   weightKgPerM?: number | null;
   loadCurveId?: string | null;
+  imageTemplateId?: string | null;
 };
 
 export type MaterialSupportInput = {
@@ -274,6 +309,7 @@ export type MaterialSupportInput = {
   widthMm?: number | null;
   lengthMm?: number | null;
   weightKg?: number | null;
+  imageTemplateId?: string | null;
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
@@ -458,6 +494,212 @@ export async function deleteProject(token: string, projectId: string): Promise<v
     method: 'DELETE',
     token
   });
+}
+
+export async function fetchProjectFiles(
+  projectId: string
+): Promise<{ files: ProjectFile[] }> {
+  return request<{ files: ProjectFile[] }>(
+    `/api/projects/${projectId}/files`,
+    { method: 'GET' }
+  );
+}
+
+export async function uploadProjectFile(
+  token: string,
+  projectId: string,
+  file: File
+): Promise<{ file: ProjectFile }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/projects/${projectId}/files`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: formData
+    }
+  );
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error(
+        'Received unexpected response from project file upload endpoint'
+      );
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload &&
+      typeof payload === 'object' &&
+      'error' in payload &&
+      typeof (payload as { error: unknown }).error === 'string'
+        ? (payload as { error: string }).error
+        : 'Failed to upload project file';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as { file: ProjectFile };
+}
+
+export async function deleteProjectFile(
+  token: string,
+  projectId: string,
+  fileId: string
+): Promise<void> {
+  await request<null>(`/api/projects/${projectId}/files/${fileId}`, {
+    method: 'DELETE',
+    token
+  });
+}
+
+export async function downloadProjectFile(
+  token: string,
+  projectId: string,
+  fileId: string
+): Promise<{ blob: Blob; contentType: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/projects/${projectId}/files/${fileId}/download`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // Ignore parse errors for non-JSON responses
+    }
+
+    const errorPayload =
+      payload &&
+      typeof payload === 'object' &&
+      'error' in payload &&
+      typeof (payload as { error: unknown }).error === 'string'
+        ? (payload as { error: string }).error
+        : 'Failed to download project file';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    contentType: response.headers.get('content-type') ?? 'application/octet-stream'
+  };
+}
+
+export async function fetchTemplateFiles(
+  token: string
+): Promise<{ files: TemplateFile[] }> {
+  return request<{ files: TemplateFile[] }>('/api/templates', {
+    method: 'GET',
+    token
+  });
+}
+
+export async function uploadTemplateFile(
+  token: string,
+  file: File
+): Promise<{ file: TemplateFile }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/api/templates`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error(
+        'Received unexpected response from template upload endpoint'
+      );
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload &&
+      typeof payload === 'object' &&
+      'error' in payload &&
+      typeof (payload as { error: unknown }).error === 'string'
+        ? (payload as { error: string }).error
+        : 'Failed to upload template file';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as { file: TemplateFile };
+}
+
+export async function deleteTemplateFile(
+  token: string,
+  templateId: string
+): Promise<void> {
+  await request<null>(`/api/templates/${templateId}`, {
+    method: 'DELETE',
+    token
+  });
+}
+
+export async function downloadTemplateFile(
+  token: string,
+  templateId: string
+): Promise<{ blob: Blob; contentType: string }> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/templates/${templateId}/download`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // Ignore parse errors for non-JSON responses
+    }
+
+    const errorPayload =
+      payload &&
+      typeof payload === 'object' &&
+      'error' in payload &&
+      typeof (payload as { error: unknown }).error === 'string'
+        ? (payload as { error: string }).error
+        : 'Failed to download template file';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    contentType: response.headers.get('content-type') ?? 'application/octet-stream'
+  };
 }
 
 export async function fetchCableTypes(

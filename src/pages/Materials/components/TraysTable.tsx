@@ -1,5 +1,6 @@
 import { Body1, Button, Caption1, Spinner, mergeClasses } from '@fluentui/react-components';
 import { MaterialTray } from '@/api/client';
+import { TemplateImagePreview } from './TemplateImagePreview';
 
 type TraysTableProps = {
   trays: MaterialTray[];
@@ -14,6 +15,7 @@ type TraysTableProps = {
   onEdit: (tray: MaterialTray) => void;
   onDelete: (tray: MaterialTray) => void;
   onAssignLoadCurve: (tray: MaterialTray) => void;
+  token: string | null;
   page: number;
   totalPages: number;
   onSetPage: (page: number) => void;
@@ -43,6 +45,7 @@ export const TraysTable = ({
   onEdit,
   onDelete,
   onAssignLoadCurve,
+  token,
   page,
   totalPages,
   onSetPage,
@@ -118,6 +121,14 @@ export const TraysTable = ({
                       >
                         {isAssigning ? 'Updating...' : 'Assign load curve'}
                       </Button>
+                      {tray.imageTemplateId ? (
+                        <TemplateImagePreview
+                          token={token}
+                          templateId={tray.imageTemplateId}
+                          fileName={tray.imageTemplateFileName}
+                          contentType={tray.imageTemplateContentType}
+                        />
+                      ) : null}
                       <Button
                         size='small'
                         onClick={() => onEdit(tray)}

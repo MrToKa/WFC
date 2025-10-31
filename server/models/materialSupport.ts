@@ -5,6 +5,9 @@ export type MaterialSupportRow = {
   width_mm: string | number | null;
   length_mm: string | number | null;
   weight_kg: string | number | null;
+  image_template_id: string | null;
+  image_template_file_name: string | null;
+  image_template_content_type: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -28,6 +31,9 @@ export type PublicMaterialSupport = {
   widthMm: number | null;
   lengthMm: number | null;
   weightKg: number | null;
+  imageTemplateId: string | null;
+  imageTemplateFileName: string | null;
+  imageTemplateContentType: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -41,6 +47,9 @@ export const mapMaterialSupportRow = (
   widthMm: toNumberOrNull(row.width_mm),
   lengthMm: toNumberOrNull(row.length_mm),
   weightKg: toNumberOrNull(row.weight_kg),
+  imageTemplateId: row.image_template_id ?? null,
+  imageTemplateFileName: row.image_template_file_name ?? null,
+  imageTemplateContentType: row.image_template_content_type ?? null,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at)
 });

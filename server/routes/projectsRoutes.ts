@@ -13,6 +13,7 @@ import { ensureProjectExists } from '../services/projectService.js';
 import { cableTypesRouter } from './cableTypesRoutes.js';
 import { cablesRouter } from './cablesRoutes.js';
 import { traysRouter } from './traysRoutes.js';
+import { projectFilesRouter } from './projectFilesRoutes.js';
 
 const projectsRouter = Router();
 
@@ -476,5 +477,6 @@ projectsRouter.delete(
 projectsRouter.use('/:projectId/cable-types', cableTypesRouter);
 projectsRouter.use('/:projectId/cables', cablesRouter);
 projectsRouter.use('/:projectId/trays', traysRouter);
+projectsRouter.use('/:projectId/files', projectFilesRouter);
 
 export { projectsRouter };
