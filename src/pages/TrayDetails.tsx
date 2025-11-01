@@ -1069,11 +1069,11 @@ export const TrayDetails = () => {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {trayBundleDetails.map((detail) => (
-              <Body1 key={detail.key} className={styles.fieldTitle} style={{ marginBottom: '0.25rem' }}>
+              <Body1 key={detail.key} style={{ marginBottom: '0.25rem', fontWeight: 'normal' }}>
                 {detail.label}<br />
-                Current max rows - {numberFormatter.format(detail.maxRows)}{'    '}
-                Current max columns - {numberFormatter.format(detail.maxColumns)}{'    '}
-                Current space between bundles - {detail.bundleSpacing}{'    '}
+                Current max rows - {numberFormatter.format(detail.maxRows)}{'    '}<br />
+                Current max columns - {numberFormatter.format(detail.maxColumns)}{'    '}<br />
+                Current space between bundles - {detail.bundleSpacing}{'    '}<br />
                 Trefoil - {
                   detail.trefoil === null
                     ? 'Not applicable'
