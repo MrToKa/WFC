@@ -1,10 +1,18 @@
 import { randomUUID } from 'crypto';
 import path from 'node:path';
-import type { Request, Response } from 'express';
+import type { Request as ExpressRequest, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+
+// Extend Request type to include params, body, query, and file
+interface Request extends ExpressRequest {
+  params: Record<string, string>;
+  body: any;
+  query: Record<string, any>;
+  file?: Express.Multer.File;
+}
 import { pool } from '../db.js';
 import {
   mapCableRow,
@@ -55,6 +63,7 @@ const LIST_OUTPUT_HEADERS = {
 } as const;
 
 const REPORT_OUTPUT_HEADERS = {
+  cableId: 'Cable Id',
   tag: 'Tag',
   fromLocation: 'From Location',
   toLocation: 'To Location',
@@ -762,7 +771,7 @@ cablesRouter.post(
     const fieldProvided = <K extends keyof PreparedCableFields>(
       fields: Partial<PreparedCableFields>,
       field: K
-    ): field is Partial<PreparedCableFields> & Record<K, PreparedCableFields[K]> =>
+    ): boolean =>
       Object.prototype.hasOwnProperty.call(fields, field);
 
     for (const row of rows) {
@@ -919,7 +928,7 @@ cablesRouter.post(
       );
 
       cableTypesMap = new Map(
-        typeResult.rows.map((type) => [type.name.toLowerCase(), type])
+        typeResult.rows.map((type: CableTypeRow) => [type.name.toLowerCase(), type])
       );
     } catch (error) {
       console.error('Fetch cable types for import error', error);
@@ -1011,14 +1020,14 @@ cablesRouter.post(
           >,
           fallback: string | null
         ): string | null =>
-          fieldProvided(fields, field) ? fields[field] ?? null : fallback ?? null;
+          fieldProvided(fields, field) ? (fields[field] as string | null) ?? null : fallback ?? null;
 
         const resolveIntegerField = (
           field: keyof Pick<PreparedCableFields, 'designLength' | 'installLength'>,
           fallback: number | string | null
         ): number | null =>
           fieldProvided(fields, field)
-            ? fields[field] ?? null
+            ? (fields[field] as number | null) ?? null
             : parseInstallLength(fallback);
 
         const resolveDateField = (
@@ -1028,7 +1037,7 @@ cablesRouter.post(
           >,
           fallback: string | Date | null | undefined
         ): string | Date | null =>
-          fieldProvided(fields, field) ? fields[field] ?? null : fallback ?? null;
+          fieldProvided(fields, field) ? (fields[field] as string | null) ?? null : fallback ?? null;
 
         if (existing) {
           const nextTag = resolveStringField('tag', existing.tag ?? null);
@@ -1306,6 +1315,11 @@ cablesRouter.get(
       const columns =
         exportView === 'report'
           ? [
+              {
+                name: REPORT_OUTPUT_HEADERS.cableId,
+                key: 'cableId',
+                width: 18
+              },
               { name: REPORT_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
               {
                 name: REPORT_OUTPUT_HEADERS.fromLocation,
@@ -1379,7 +1393,8 @@ cablesRouter.get(
 
       const rows =
         exportView === 'report'
-          ? result.rows.map((row) => [
+          ? result.rows.map((row: CableWithTypeRow) => [
+              row.cable_id ?? '',
               row.tag ?? '',
               row.from_location ?? '',
               row.to_location ?? '',
@@ -1394,7 +1409,7 @@ cablesRouter.get(
               formatDateCell(row.connected_to),
               formatDateCell(row.tested)
             ])
-          : result.rows.map((row) => [
+          : result.rows.map((row: CableWithTypeRow) => [
               row.cable_id ?? '',
               row.tag ?? '',
               row.type_name ?? '',
