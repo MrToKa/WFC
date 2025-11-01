@@ -4,6 +4,13 @@ import { ApiError, Project, updateProject } from '@/api/client';
 import type { CableBundleSpacing } from '@/api/types';
 
 import { parseNumberInput } from '../../ProjectDetails.utils';
+import {
+  CABLE_CATEGORY_CONFIG,
+  CABLE_CATEGORY_ORDER,
+  DEFAULT_CABLE_SPACING,
+  DEFAULT_CATEGORY_SETTINGS,
+  type CableCategoryKey
+} from './cableLayoutDefaults';
 
 type ShowToast = (props: {
   intent: 'success' | 'error' | 'warning' | 'info';
@@ -11,27 +18,7 @@ type ShowToast = (props: {
   body?: string;
 }) => void;
 
-type CategoryKey = 'mv' | 'power' | 'vfd' | 'control';
-
-const CATEGORY_CONFIG: Record<CategoryKey, { label: string; showTrefoil: boolean }> =
-  {
-    mv: { label: 'MV cables', showTrefoil: true },
-    power: { label: 'Power cables', showTrefoil: true },
-    vfd: { label: 'VFD cables', showTrefoil: true },
-    control: { label: 'Control cables', showTrefoil: false }
-  };
-
-const DEFAULT_CABLE_SPACING = 1;
-
-const DEFAULT_CATEGORY_SETTINGS: Record<
-  CategoryKey,
-  { maxRows: number; maxColumns: number; bundleSpacing: CableBundleSpacing; trefoil: boolean }
-> = {
-  mv: { maxRows: 2, maxColumns: 2, bundleSpacing: '2D', trefoil: true },
-  power: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true },
-  vfd: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true },
-  control: { maxRows: 7, maxColumns: 20, bundleSpacing: '2D', trefoil: true }
-};
+type CategoryKey = CableCategoryKey;
 
 type CategoryInputState = {
   maxRows: string;
@@ -46,7 +33,7 @@ type CategoryErrorState = {
   general?: string;
 };
 
-const CATEGORY_KEYS: CategoryKey[] = ['mv', 'power', 'vfd', 'control'];
+const CATEGORY_KEYS: CategoryKey[] = CABLE_CATEGORY_ORDER;
 
 const formatCategoryInput = (
   project: Project | null,
@@ -349,7 +336,7 @@ export const useCableLayoutSettings = ({
 
   const handleSaveCategory = useCallback(
     async (key: CategoryKey) => {
-      const config = CATEGORY_CONFIG[key];
+      const config = CABLE_CATEGORY_CONFIG[key];
       const inputs = categoryInputs[key];
 
       if (!project || !token) {
@@ -510,7 +497,7 @@ export const useCableLayoutSettings = ({
 
   const categoryCards = useMemo<CableCategoryController[]>(() => {
     return CATEGORY_KEYS.map((key) => {
-      const config = CATEGORY_CONFIG[key];
+      const config = CABLE_CATEGORY_CONFIG[key];
       const currentSettings = project?.cableLayout?.[key] ?? null;
       const defaults = DEFAULT_CATEGORY_SETTINGS[key];
       const displayMaxRows = currentSettings?.maxRows ?? defaults.maxRows;

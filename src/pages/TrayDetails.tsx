@@ -48,6 +48,12 @@ import {
   GroundingCableControls,
   LoadCurveSection
 } from './TrayDetails/components';
+import {
+  CABLE_CATEGORY_CONFIG,
+  CABLE_CATEGORY_ORDER,
+  DEFAULT_CATEGORY_SETTINGS,
+  type CableCategoryKey
+} from './ProjectDetails/hooks/cableLayoutDefaults';
 
 const useStyles = makeStyles({
   root: {
@@ -110,6 +116,9 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     gap: '0.25rem'
   },
+  fieldTitle: {
+    fontWeight: tokens.fontWeightSemibold
+  },
   emptyState: {
     padding: '0.5rem 0'
   },
@@ -132,6 +141,35 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold
   }
 });
+
+const matchCableCategory = (purpose: string | null): CableCategoryKey | null => {
+  if (!purpose) {
+    return null;
+  }
+
+  const normalized = purpose.trim().toLowerCase();
+  if (normalized === '') {
+    return null;
+  }
+
+  if (normalized.startsWith('mv') || normalized.includes('medium voltage')) {
+    return 'mv';
+  }
+
+  if (normalized.includes('vfd')) {
+    return 'vfd';
+  }
+
+  if (normalized.startsWith('power') || normalized.includes(' power')) {
+    return 'power';
+  }
+
+  if (normalized.includes('control')) {
+    return 'control';
+  }
+
+  return null;
+};
 
 export const TrayDetails = () => {
   const styles = useStyles();
@@ -444,6 +482,49 @@ export const TrayDetails = () => {
         maximumFractionDigits: 3
       }),
     []
+  );
+
+  const trayCableCategories = useMemo(() => {
+    if (trayCables.length === 0) {
+      return [];
+    }
+
+    const categories = new Set<CableCategoryKey>();
+
+    for (const cable of trayCables) {
+      const category = matchCableCategory(cable.purpose);
+      if (category) {
+        categories.add(category);
+      }
+    }
+
+    return CABLE_CATEGORY_ORDER.filter((key) => categories.has(key));
+  }, [trayCables]);
+
+  const trayBundleDetails = useMemo(
+    () =>
+      trayCableCategories.map((key) => {
+        const config = CABLE_CATEGORY_CONFIG[key];
+        const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+        const layout = project?.cableLayout?.[key] ?? null;
+
+        const maxRows = layout?.maxRows ?? defaults.maxRows;
+        const maxColumns = layout?.maxColumns ?? defaults.maxColumns;
+        const bundleSpacing = layout?.bundleSpacing ?? defaults.bundleSpacing;
+        const trefoil = config.showTrefoil
+          ? layout?.trefoil ?? defaults.trefoil
+          : null;
+
+        return {
+          key,
+          label: config.label,
+          maxRows,
+          maxColumns,
+          bundleSpacing,
+          trefoil
+        };
+      }),
+    [project?.cableLayout, trayCableCategories]
   );
 
   const formatCableTypeLabel = useCallback(
@@ -976,6 +1057,35 @@ export const TrayDetails = () => {
         numberFormatter={numberFormatter}
         styles={styles}
       />
+
+      <div className={styles.section}>
+        <Caption1>Bundle configuration for cables on this tray</Caption1>
+        {trayBundleDetails.length === 0 ? (
+          <Body1 className={styles.emptyState}>
+            {trayCables.length === 0
+              ? 'There are no cables on this tray.'
+              : 'Bundles configuration is not defined for the cables on this tray.'}
+          </Body1>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {trayBundleDetails.map((detail) => (
+              <Body1 key={detail.key} className={styles.fieldTitle} style={{ marginBottom: '0.25rem' }}>
+                {detail.label}<br />
+                Current max rows - {numberFormatter.format(detail.maxRows)}{'    '}
+                Current max columns - {numberFormatter.format(detail.maxColumns)}{'    '}
+                Current space between bundles - {detail.bundleSpacing}{'    '}
+                Trefoil - {
+                  detail.trefoil === null
+                    ? 'Not applicable'
+                    : detail.trefoil
+                    ? 'Enabled'
+                    : 'Disabled'
+                }
+              </Body1>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Navigation Footer */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
