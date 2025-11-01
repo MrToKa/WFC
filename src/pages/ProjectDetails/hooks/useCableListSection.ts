@@ -163,15 +163,24 @@ export const useCableListSection = ({
   const [filterText, setFilterText] = useState<string>('');
   const [filterCriteria, setFilterCriteria] = useState<CableSearchCriteria>('all');
 
-  const sortCables = useCallback(
-    (items: Cable[]) =>
-      [...items].sort((a, b) =>
-        a.cableId.localeCompare(b.cableId, undefined, {
-          sensitivity: 'base'
-        })
-      ),
-    []
-  );
+  const sortCables = useCallback((items: Cable[]) => {
+    const toSortKey = (cable: Cable): string =>
+      (cable.tag ?? cable.cableId ?? '').toLocaleLowerCase();
+
+    return [...items].sort((a, b) => {
+      const tagComparison = toSortKey(a).localeCompare(toSortKey(b), undefined, {
+        sensitivity: 'base'
+      });
+
+      if (tagComparison !== 0) {
+        return tagComparison;
+      }
+
+      return (a.cableId ?? '').localeCompare(b.cableId ?? '', undefined, {
+        sensitivity: 'base'
+      });
+    });
+  }, []);
 
   const filteredCables = useMemo(() => {
     const normalizedFilter = filterText.trim().toLowerCase();
