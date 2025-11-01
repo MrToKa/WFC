@@ -2,6 +2,7 @@ import {
   Body1,
   Button,
   Caption1,
+  Checkbox,
   Dropdown,
   Field,
   Input,
@@ -9,9 +10,14 @@ import {
 } from '@fluentui/react-components';
 
 import type { MaterialSupport, Project } from '@/api/client';
+import type { CableBundleSpacing } from '@/api/types';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { formatNumeric } from '../ProjectDetails.utils';
+import type {
+  CableCategoryController,
+  CableSpacingController
+} from './hooks/useCableLayoutSettings';
 
 type NumericFieldName =
   | 'secondaryTrayLength'
@@ -61,6 +67,8 @@ type DetailsTabProps = {
   project: Project;
   formattedDates: FormattedDates;
   isAdmin: boolean;
+  cableSpacingField: CableSpacingController;
+  cableCategoryCards: CableCategoryController[];
   numericFields: NumericFieldConfig[];
   supportDistanceOverrides: SupportDistanceOverrideConfig[];
 };
@@ -70,6 +78,8 @@ export const DetailsTab = ({
   project,
   formattedDates,
   isAdmin,
+  cableSpacingField,
+  cableCategoryCards,
   numericFields,
   supportDistanceOverrides
 }: DetailsTabProps) => {
@@ -92,6 +102,7 @@ export const DetailsTab = ({
           </div>
         </div>
       ) : null}
+
 
       <div className={styles.panel}>
         <Caption1>Description</Caption1>
@@ -300,11 +311,185 @@ export const DetailsTab = ({
               Leave the distance empty and clear the support selection to use the defaults.
             </Caption1>
           ) : null}
-          {supportsErrorMessage ? (
-            <Body1 className={styles.errorText}>{supportsErrorMessage}</Body1>
-          ) : null}
-        </div>
+      {supportsErrorMessage ? (
+        <Body1 className={styles.errorText}>{supportsErrorMessage}</Body1>
       ) : null}
+    </div>
+  ) : null}
+
+      <div className={styles.panel}>
+        <Caption1>Bundles configuration</Caption1>
+        <div className={styles.numericFieldsRow}>
+          <div className={styles.numericField}>
+            <Body1 className={styles.numericFieldLabel}>
+              {cableSpacingField.label}
+            </Body1>
+            <Caption1>Current value</Caption1>
+            <Body1>{formatNumeric(cableSpacingField.currentValue)}</Body1>
+            {isAdmin ? (
+              <div className={styles.numericFieldControls}>
+                <Field
+                  className={styles.numericFieldInput}
+                  label="Update value (1-5)"
+                  validationState={cableSpacingField.error ? 'error' : undefined}
+                  validationMessage={cableSpacingField.error ?? undefined}
+                >
+                  <Input
+                    value={cableSpacingField.input}
+                    onChange={(_, data) =>
+                      cableSpacingField.onInputChange(data.value)
+                    }
+                    disabled={cableSpacingField.saving}
+                    inputMode="decimal"
+                    type="number"
+                    step="0.1"
+                    min={1}
+                    max={5}
+                    size="small"
+                  />
+                </Field>
+                <Button
+                  appearance="primary"
+                  size="small"
+                  onClick={() => void cableSpacingField.onSave()}
+                  disabled={cableSpacingField.saving}
+                >
+                  {cableSpacingField.saving ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {cableCategoryCards.map((card) => {
+            const currentMaxRows = card.displayMaxRows.toLocaleString();
+            const currentMaxColumns = card.displayMaxColumns.toLocaleString();
+            const currentBundleSpacing = card.displayBundleSpacing;
+            const currentTrefoilDisplay = card.showTrefoil
+              ? card.displayTrefoil === null
+                ? 'Not specified'
+                : card.displayTrefoil
+                ? 'Enabled'
+                : 'Disabled'
+              : null;
+
+            return (
+              <div key={card.key} className={styles.numericField}>
+                <Body1 className={styles.numericFieldLabel}>{card.label}</Body1>
+                <Caption1>Current max rows</Caption1>
+                <Body1>{currentMaxRows}</Body1>
+                <Caption1>Current max columns</Caption1>
+                <Body1>{currentMaxColumns}</Body1>
+                <Caption1>Current space between bundles</Caption1>
+                <Body1>{currentBundleSpacing}</Body1>
+                {card.showTrefoil ? (
+                  <>
+                    <Caption1>Trefoil</Caption1>
+                    <Body1>{currentTrefoilDisplay}</Body1>
+                  </>
+                ) : null}
+                {isAdmin ? (
+                  <>
+                    <Field
+                      className={styles.numericFieldInput}
+                      label="Max rows"
+                      validationState={card.errors.maxRows ? 'error' : undefined}
+                      validationMessage={card.errors.maxRows}
+                    >
+                      <Input
+                        value={card.inputMaxRows}
+                        onChange={(_, data) =>
+                          card.onMaxRowsChange(data.value)
+                        }
+                        disabled={card.saving}
+                        inputMode="numeric"
+                        type="number"
+                        min={1}
+                        max={1000}
+                        step="1"
+                        size="small"
+                      />
+                    </Field>
+                    <Field
+                      className={styles.numericFieldInput}
+                      label="Max columns"
+                      validationState={
+                        card.errors.maxColumns ? 'error' : undefined
+                      }
+                      validationMessage={card.errors.maxColumns}
+                    >
+                      <Input
+                        value={card.inputMaxColumns}
+                        onChange={(_, data) =>
+                          card.onMaxColumnsChange(data.value)
+                        }
+                        disabled={card.saving}
+                        inputMode="numeric"
+                        type="number"
+                        min={1}
+                        max={1000}
+                        step="1"
+                        size="small"
+                      />
+                    </Field>
+                    <Field
+                      className={styles.numericFieldInput}
+                      label="Space between bundles"
+                    >
+                      <Dropdown
+                        value={card.inputBundleSpacing ?? ''}
+                        placeholder="Not specified"
+                        selectedOptions={
+                          card.inputBundleSpacing
+                            ? [card.inputBundleSpacing]
+                            : []
+                        }
+                        onOptionSelect={(_, data) => {
+                          const optionValue =
+                            typeof data.optionValue === 'string' &&
+                            data.optionValue !== ''
+                              ? (data.optionValue as CableBundleSpacing)
+                              : null;
+                          card.onBundleSpacingChange(optionValue);
+                        }}
+                        disabled={card.saving}
+                      >
+                        <Option value="">Not specified</Option>
+                        <Option value="0">0</Option>
+                        <Option value="1D">1D</Option>
+                        <Option value="2D">2D</Option>
+                      </Dropdown>
+                    </Field>
+                    {card.showTrefoil ? (
+                      <Checkbox
+                        label="Trefoil"
+                        checked={card.inputTrefoil}
+                        onChange={(_, data) =>
+                          card.onTrefoilChange(Boolean(data.checked))
+                        }
+                        disabled={card.saving}
+                      />
+                    ) : null}
+                    {card.errors.general ? (
+                      <Body1 className={styles.errorText}>
+                        {card.errors.general}
+                      </Body1>
+                    ) : null}
+                    <div className={styles.numericFieldControls}>
+                      <Button
+                        appearance="primary"
+                        size="small"
+                        onClick={() => void card.onSave()}
+                        disabled={card.saving}
+                      >
+                        {card.saving ? 'Saving...' : 'Save'}
+                      </Button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 };

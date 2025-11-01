@@ -36,6 +36,7 @@ export async function initializeDatabase(): Promise<void> {
       support_distance NUMERIC,
       support_weight NUMERIC,
       tray_load_safety_factor NUMERIC,
+      cable_layout_settings JSONB,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -64,6 +65,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS tray_load_safety_factor NUMERIC;
+  `);
+
+  await pool.query(`
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS cable_layout_settings JSONB;
   `);
 
   await pool.query(`

@@ -1,0 +1,575 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+import { ApiError, Project, updateProject } from '@/api/client';
+import type { CableBundleSpacing } from '@/api/types';
+
+import { parseNumberInput } from '../../ProjectDetails.utils';
+
+type ShowToast = (props: {
+  intent: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  body?: string;
+}) => void;
+
+type CategoryKey = 'mv' | 'power' | 'vfd' | 'control';
+
+const CATEGORY_CONFIG: Record<CategoryKey, { label: string; showTrefoil: boolean }> =
+  {
+    mv: { label: 'MV cables', showTrefoil: true },
+    power: { label: 'Power cables', showTrefoil: true },
+    vfd: { label: 'VFD cables', showTrefoil: true },
+    control: { label: 'Control cables', showTrefoil: false }
+  };
+
+const DEFAULT_CABLE_SPACING = 1;
+
+const DEFAULT_CATEGORY_SETTINGS: Record<
+  CategoryKey,
+  { maxRows: number; maxColumns: number; bundleSpacing: CableBundleSpacing; trefoil: boolean }
+> = {
+  mv: { maxRows: 2, maxColumns: 2, bundleSpacing: '2D', trefoil: true },
+  power: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true },
+  vfd: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true },
+  control: { maxRows: 7, maxColumns: 20, bundleSpacing: '2D', trefoil: true }
+};
+
+type CategoryInputState = {
+  maxRows: string;
+  maxColumns: string;
+  bundleSpacing: CableBundleSpacing | null;
+  trefoil: boolean;
+};
+
+type CategoryErrorState = {
+  maxRows?: string;
+  maxColumns?: string;
+  general?: string;
+};
+
+const CATEGORY_KEYS: CategoryKey[] = ['mv', 'power', 'vfd', 'control'];
+
+const formatCategoryInput = (
+  project: Project | null,
+  key: CategoryKey
+): CategoryInputState => {
+  const settings = project?.cableLayout?.[key] ?? null;
+  const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+  const maxRows = settings?.maxRows ?? defaults.maxRows;
+  const maxColumns = settings?.maxColumns ?? defaults.maxColumns;
+  const bundleSpacing = settings?.bundleSpacing ?? defaults.bundleSpacing;
+  const trefoil =
+    settings?.trefoil === null || settings?.trefoil === undefined
+      ? defaults.trefoil
+      : settings.trefoil;
+
+  return {
+    maxRows: maxRows !== null && maxRows !== undefined ? String(maxRows) : '',
+    maxColumns:
+      maxColumns !== null && maxColumns !== undefined ? String(maxColumns) : '',
+    bundleSpacing,
+    trefoil: Boolean(trefoil)
+  };
+};
+
+const createInitialCategoryInputs = (project: Project | null) =>
+  CATEGORY_KEYS.reduce<Record<CategoryKey, CategoryInputState>>((acc, key) => {
+    acc[key] = formatCategoryInput(project, key);
+    return acc;
+  }, {} as Record<CategoryKey, CategoryInputState>);
+
+const createInitialCategoryErrors = () =>
+  CATEGORY_KEYS.reduce<Record<CategoryKey, CategoryErrorState>>((acc, key) => {
+    acc[key] = {};
+    return acc;
+  }, {} as Record<CategoryKey, CategoryErrorState>);
+
+const createInitialSavingState = () =>
+  CATEGORY_KEYS.reduce<Record<CategoryKey, boolean>>((acc, key) => {
+    acc[key] = false;
+    return acc;
+  }, {} as Record<CategoryKey, boolean>);
+
+export type CableSpacingController = {
+  label: string;
+  currentValue: number | null;
+  input: string;
+  error: string | null;
+  saving: boolean;
+  onInputChange: (value: string) => void;
+  onSave: () => Promise<void>;
+};
+
+export type CableCategoryController = {
+  key: CategoryKey;
+  label: string;
+  showTrefoil: boolean;
+  currentMaxRows: number | null;
+  currentMaxColumns: number | null;
+  currentBundleSpacing: CableBundleSpacing | null;
+  currentTrefoil: boolean | null;
+  displayMaxRows: number;
+  displayMaxColumns: number;
+  displayBundleSpacing: CableBundleSpacing;
+  displayTrefoil: boolean | null;
+  inputMaxRows: string;
+  inputMaxColumns: string;
+  inputBundleSpacing: CableBundleSpacing | null;
+  inputTrefoil: boolean;
+  errors: CategoryErrorState;
+  saving: boolean;
+  onMaxRowsChange: (value: string) => void;
+  onMaxColumnsChange: (value: string) => void;
+  onBundleSpacingChange: (value: CableBundleSpacing | null) => void;
+  onTrefoilChange: (value: boolean) => void;
+  onSave: () => Promise<void>;
+};
+
+type UseCableLayoutSettingsParams = {
+  project: Project | null;
+  token: string | null;
+  isAdmin: boolean;
+  showToast: ShowToast;
+  reloadProject: () => Promise<void>;
+};
+
+type UseCableLayoutSettingsResult = {
+  cableSpacingField: CableSpacingController;
+  categoryCards: CableCategoryController[];
+};
+
+const parseIntegerInput = (
+  value: string,
+  fieldName: 'maxRows' | 'maxColumns'
+): { numeric: number | null; error?: string } => {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return { numeric: null };
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return { numeric: null, error: `Enter a whole number for ${fieldName === 'maxRows' ? 'max rows' : 'max columns'}` };
+  }
+
+  if (!Number.isInteger(parsed)) {
+    return { numeric: null, error: 'Only whole numbers are allowed' };
+  }
+
+  if (parsed < 1) {
+    return { numeric: null, error: 'Value must be at least 1' };
+  }
+
+  if (parsed > 1_000) {
+    return { numeric: null, error: 'Value is too large' };
+  }
+
+  return { numeric: parsed };
+};
+
+export const useCableLayoutSettings = ({
+  project,
+  token,
+  isAdmin,
+  showToast,
+  reloadProject
+}: UseCableLayoutSettingsParams): UseCableLayoutSettingsResult => {
+  const [spacingInput, setSpacingInput] = useState<string>('');
+  const [spacingError, setSpacingError] = useState<string | null>(null);
+  const [spacingSaving, setSpacingSaving] = useState<boolean>(false);
+
+  const [categoryInputs, setCategoryInputs] = useState<
+    Record<CategoryKey, CategoryInputState>
+  >(() => createInitialCategoryInputs(null));
+  const [categoryErrors, setCategoryErrors] = useState<
+    Record<CategoryKey, CategoryErrorState>
+  >(() => createInitialCategoryErrors());
+  const [categorySaving, setCategorySaving] = useState<
+    Record<CategoryKey, boolean>
+  >(() => createInitialSavingState());
+
+  useEffect(() => {
+    const currentValue =
+      project?.cableLayout?.cableSpacing ?? DEFAULT_CABLE_SPACING;
+    setSpacingInput(String(currentValue));
+    setSpacingError(null);
+  }, [project?.cableLayout?.cableSpacing]);
+
+  useEffect(() => {
+    setCategoryInputs(createInitialCategoryInputs(project));
+    setCategoryErrors(createInitialCategoryErrors());
+    setCategorySaving(createInitialSavingState());
+  }, [project]);
+
+  const handleSpacingChange = useCallback((value: string) => {
+    setSpacingInput(value);
+    setSpacingError(null);
+  }, []);
+
+  const handleSaveSpacing = useCallback(async () => {
+    const label = 'Space between the cables';
+
+    if (!project || !token) {
+      const message = 'You need to be signed in to update the cable spacing.';
+      setSpacingError(message);
+      showToast({
+        intent: 'error',
+        title: 'Sign-in required',
+        body: message
+      });
+      return;
+    }
+
+    if (!isAdmin) {
+      const message = 'Only administrators can update the cable spacing.';
+      setSpacingError(message);
+      showToast({
+        intent: 'error',
+        title: 'Administrator access required',
+        body: message
+      });
+      return;
+    }
+
+    const parsed = parseNumberInput(spacingInput);
+    if (parsed.error) {
+      setSpacingError(parsed.error);
+      return;
+    }
+
+    if (parsed.numeric !== null) {
+      if (parsed.numeric < 1 || parsed.numeric > 5) {
+        setSpacingError('Value must be between 1 and 5.');
+        return;
+      }
+    }
+
+    const currentValue = project.cableLayout?.cableSpacing ?? null;
+    const nextValue =
+      parsed.numeric !== null
+        ? Math.round(parsed.numeric * 1000) / 1000
+        : null;
+
+    if (currentValue === nextValue) {
+      setSpacingError('No changes to save.');
+      return;
+    }
+
+    setSpacingSaving(true);
+    setSpacingError(null);
+
+    try {
+      await updateProject(token, project.id, {
+        cableLayout: {
+          cableSpacing: nextValue
+        }
+      });
+      await reloadProject();
+      showToast({
+        intent: 'success',
+        title: `${label} updated`
+      });
+    } catch (error) {
+      console.error('Failed to update cable spacing', error);
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to update cable spacing.';
+      setSpacingError(message);
+      showToast({
+        intent: 'error',
+        title: 'Update failed',
+        body: message
+      });
+    } finally {
+      setSpacingSaving(false);
+    }
+  }, [isAdmin, project, reloadProject, showToast, spacingInput, token]);
+
+  const handleMaxRowsChange = useCallback((key: CategoryKey, value: string) => {
+    setCategoryInputs((previous) => ({
+      ...previous,
+      [key]: {
+        ...previous[key],
+        maxRows: value
+      }
+    }));
+    setCategoryErrors((previous) => ({
+      ...previous,
+      [key]: { ...previous[key], maxRows: undefined, general: undefined }
+    }));
+  }, []);
+
+  const handleMaxColumnsChange = useCallback(
+    (key: CategoryKey, value: string) => {
+      setCategoryInputs((previous) => ({
+        ...previous,
+        [key]: {
+          ...previous[key],
+          maxColumns: value
+        }
+      }));
+      setCategoryErrors((previous) => ({
+        ...previous,
+        [key]: { ...previous[key], maxColumns: undefined, general: undefined }
+      }));
+    },
+    []
+  );
+
+  const handleBundleSpacingChange = useCallback(
+    (key: CategoryKey, value: CableBundleSpacing | null) => {
+      setCategoryInputs((previous) => ({
+        ...previous,
+        [key]: {
+          ...previous[key],
+          bundleSpacing: value
+        }
+      }));
+      setCategoryErrors((previous) => ({
+        ...previous,
+        [key]: { ...previous[key], general: undefined }
+      }));
+    },
+    []
+  );
+
+  const handleTrefoilChange = useCallback((key: CategoryKey, value: boolean) => {
+    setCategoryInputs((previous) => ({
+      ...previous,
+      [key]: {
+        ...previous[key],
+        trefoil: value
+      }
+    }));
+    setCategoryErrors((previous) => ({
+      ...previous,
+      [key]: { ...previous[key], general: undefined }
+    }));
+  }, []);
+
+  const handleSaveCategory = useCallback(
+    async (key: CategoryKey) => {
+      const config = CATEGORY_CONFIG[key];
+      const inputs = categoryInputs[key];
+
+      if (!project || !token) {
+        const message = `You need to be signed in to update ${config.label.toLowerCase()}.`;
+        setCategoryErrors((previous) => ({
+          ...previous,
+          [key]: { ...previous[key], general: message }
+        }));
+        showToast({
+          intent: 'error',
+          title: 'Sign-in required',
+          body: message
+        });
+        return;
+      }
+
+      if (!isAdmin) {
+        const message = `Only administrators can update ${config.label.toLowerCase()}.`;
+        setCategoryErrors((previous) => ({
+          ...previous,
+          [key]: { ...previous[key], general: message }
+        }));
+        showToast({
+          intent: 'error',
+          title: 'Administrator access required',
+          body: message
+        });
+        return;
+      }
+
+      const maxRowsResult = parseIntegerInput(inputs.maxRows, 'maxRows');
+      const maxColumnsResult = parseIntegerInput(inputs.maxColumns, 'maxColumns');
+
+      const nextErrors: CategoryErrorState = {};
+      if (maxRowsResult.error) {
+        nextErrors.maxRows = maxRowsResult.error;
+      }
+      if (maxColumnsResult.error) {
+        nextErrors.maxColumns = maxColumnsResult.error;
+      }
+
+      if (nextErrors.maxRows || nextErrors.maxColumns) {
+        setCategoryErrors((previous) => ({
+          ...previous,
+          [key]: { ...previous[key], ...nextErrors }
+        }));
+        return;
+      }
+
+      const maxRowsValue = maxRowsResult.numeric;
+      const maxColumnsValue = maxColumnsResult.numeric;
+      const bundleSpacingValue = inputs.bundleSpacing;
+      const trefoilValue = config.showTrefoil ? inputs.trefoil : null;
+
+      const currentSettings = project.cableLayout?.[key] ?? null;
+      const currentMaxRows = currentSettings?.maxRows ?? null;
+      const currentMaxColumns = currentSettings?.maxColumns ?? null;
+      const currentBundleSpacing = currentSettings?.bundleSpacing ?? null;
+      const currentTrefoil = config.showTrefoil
+        ? currentSettings?.trefoil ?? false
+        : null;
+
+      const hasChanges =
+        currentMaxRows !== maxRowsValue ||
+        currentMaxColumns !== maxColumnsValue ||
+        currentBundleSpacing !== bundleSpacingValue ||
+        (config.showTrefoil
+          ? Boolean(currentTrefoil) !== trefoilValue
+          : false);
+
+      if (!hasChanges) {
+        setCategoryErrors((previous) => ({
+          ...previous,
+          [key]: { ...previous[key], general: 'No changes to save.' }
+        }));
+        return;
+      }
+
+      setCategorySaving((previous) => ({
+        ...previous,
+        [key]: true
+      }));
+      setCategoryErrors((previous) => ({
+        ...previous,
+        [key]: {}
+      }));
+
+      const payload =
+        trefoilValue === null
+          ? {
+              maxRows: maxRowsValue,
+              maxColumns: maxColumnsValue,
+              bundleSpacing: bundleSpacingValue
+            }
+          : {
+              maxRows: maxRowsValue,
+              maxColumns: maxColumnsValue,
+              bundleSpacing: bundleSpacingValue,
+              trefoil: trefoilValue
+            };
+
+      try {
+        await updateProject(token, project.id, {
+          cableLayout: {
+            [key]: payload
+          }
+        });
+        await reloadProject();
+        showToast({
+          intent: 'success',
+          title: `${config.label} updated`
+        });
+      } catch (error) {
+        console.error(`Failed to update ${config.label}`, error);
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : `Failed to update ${config.label.toLowerCase()}.`;
+        setCategoryErrors((previous) => ({
+          ...previous,
+          [key]: { general: message }
+        }));
+        showToast({
+          intent: 'error',
+          title: 'Update failed',
+          body: message
+        });
+      } finally {
+        setCategorySaving((previous) => ({
+          ...previous,
+          [key]: false
+        }));
+      }
+    },
+    [categoryInputs, isAdmin, project, reloadProject, showToast, token]
+  );
+
+  const cableSpacingField = useMemo<CableSpacingController>(
+    () => ({
+      label: 'Space between the cables',
+      currentValue:
+        project?.cableLayout?.cableSpacing ?? DEFAULT_CABLE_SPACING,
+      input: spacingInput,
+      error: spacingError,
+      saving: spacingSaving,
+      onInputChange: handleSpacingChange,
+      onSave: handleSaveSpacing
+    }),
+    [
+      handleSaveSpacing,
+      handleSpacingChange,
+      project?.cableLayout?.cableSpacing,
+      spacingError,
+      spacingInput,
+      spacingSaving
+    ]
+  );
+
+  const categoryCards = useMemo<CableCategoryController[]>(() => {
+    return CATEGORY_KEYS.map((key) => {
+      const config = CATEGORY_CONFIG[key];
+      const currentSettings = project?.cableLayout?.[key] ?? null;
+      const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+      const displayMaxRows = currentSettings?.maxRows ?? defaults.maxRows;
+      const displayMaxColumns = currentSettings?.maxColumns ?? defaults.maxColumns;
+      const displayBundleSpacing = currentSettings?.bundleSpacing ?? defaults.bundleSpacing;
+      const displayTrefoil = config.showTrefoil
+        ? currentSettings?.trefoil ?? defaults.trefoil
+        : null;
+      const inputState = categoryInputs[key];
+      const errorState = categoryErrors[key];
+      const savingState = categorySaving[key];
+
+      return {
+        key,
+        label: config.label,
+        showTrefoil: config.showTrefoil,
+        currentMaxRows: currentSettings?.maxRows ?? null,
+        currentMaxColumns: currentSettings?.maxColumns ?? null,
+        currentBundleSpacing: currentSettings?.bundleSpacing ?? null,
+        currentTrefoil: config.showTrefoil
+          ? currentSettings?.trefoil ?? null
+          : null,
+        displayMaxRows,
+        displayMaxColumns,
+        displayBundleSpacing,
+        displayTrefoil,
+        inputMaxRows:
+          inputState?.maxRows ?? (defaults.maxRows ? String(defaults.maxRows) : ''),
+        inputMaxColumns:
+          inputState?.maxColumns ??
+          (defaults.maxColumns ? String(defaults.maxColumns) : ''),
+        inputBundleSpacing: inputState?.bundleSpacing ?? defaults.bundleSpacing,
+        inputTrefoil:
+          inputState?.trefoil ?? (config.showTrefoil ? defaults.trefoil : false),
+        errors: errorState ?? {},
+        saving: savingState ?? false,
+        onMaxRowsChange: (value: string) => handleMaxRowsChange(key, value),
+        onMaxColumnsChange: (value: string) =>
+          handleMaxColumnsChange(key, value),
+        onBundleSpacingChange: (value: CableBundleSpacing | null) =>
+          handleBundleSpacingChange(key, value),
+        onTrefoilChange: (value: boolean) => handleTrefoilChange(key, value),
+        onSave: () => handleSaveCategory(key)
+      };
+    });
+  }, [
+    categoryErrors,
+    categoryInputs,
+    categorySaving,
+    handleBundleSpacingChange,
+    handleMaxColumnsChange,
+    handleMaxRowsChange,
+    handleSaveCategory,
+    handleTrefoilChange,
+    project?.cableLayout
+  ]);
+
+  return {
+    cableSpacingField,
+    categoryCards
+  };
+};

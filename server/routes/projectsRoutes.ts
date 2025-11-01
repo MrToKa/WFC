@@ -86,6 +86,36 @@ type SupportOverrideInput =
   | null
   | undefined;
 
+type CableBundleSpacingInput = '0' | '1D' | '2D';
+
+type CableCategorySettingsInput =
+  | {
+      maxRows?: number | null;
+      maxColumns?: number | null;
+      bundleSpacing?: CableBundleSpacingInput | null;
+      trefoil?: boolean | null;
+    }
+  | null
+  | undefined;
+
+type CableLayoutInput =
+  | {
+      cableSpacing?: number | null;
+      mv?: CableCategorySettingsInput;
+      power?: CableCategorySettingsInput;
+      vfd?: CableCategorySettingsInput;
+      control?: CableCategorySettingsInput;
+    }
+  | null
+  | undefined;
+
+type NormalizedCableCategorySettings = {
+  maxRows: number | null;
+  maxColumns: number | null;
+  bundleSpacing: CableBundleSpacingInput | null;
+  trefoil: boolean | null;
+};
+
 const normalizeSupportDistances = (
   distances: Record<string, SupportOverrideInput>
 ): NormalizedSupportOverrides => {
@@ -157,6 +187,102 @@ const normalizeSupportDistances = (
   );
 };
 
+const normalizeCableCategory = (
+  settings: CableCategorySettingsInput
+): NormalizedCableCategorySettings | null => {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    return null;
+  }
+
+  const maxRows =
+    settings.maxRows === undefined || settings.maxRows === null
+      ? null
+      : Number.isInteger(settings.maxRows)
+      ? settings.maxRows
+      : null;
+  const maxColumns =
+    settings.maxColumns === undefined || settings.maxColumns === null
+      ? null
+      : Number.isInteger(settings.maxColumns)
+      ? settings.maxColumns
+      : null;
+  const bundleSpacing =
+    settings.bundleSpacing === undefined ? null : settings.bundleSpacing ?? null;
+  const trefoil =
+    settings.trefoil === undefined
+      ? null
+      : settings.trefoil === null
+      ? null
+      : settings.trefoil;
+
+  if (
+    maxRows === null &&
+    maxColumns === null &&
+    bundleSpacing === null &&
+    trefoil === null
+  ) {
+    return null;
+  }
+
+  return {
+    maxRows,
+    maxColumns,
+    bundleSpacing,
+    trefoil
+  };
+};
+
+const normalizeCableLayout = (
+  layout: CableLayoutInput
+): Record<string, unknown> | null => {
+  if (layout === null || layout === undefined) {
+    return null;
+  }
+
+  if (typeof layout !== 'object' || Array.isArray(layout)) {
+    return null;
+  }
+
+  const normalized: Record<string, unknown> = {};
+
+  if ('cableSpacing' in layout) {
+    const value = layout.cableSpacing;
+    normalized.cableSpacing =
+      value === null || value === undefined
+        ? null
+        : Number.isFinite(value)
+        ? Math.round(value * 1000) / 1000
+        : null;
+  }
+
+  const assignCategory = (
+    key: 'mv' | 'power' | 'vfd' | 'control',
+    value: CableCategorySettingsInput
+  ) => {
+    const normalizedCategory = normalizeCableCategory(value);
+    if (normalizedCategory) {
+      normalized[key] = normalizedCategory;
+    } else if (value !== undefined) {
+      normalized[key] = null;
+    }
+  };
+
+  if ('mv' in layout) {
+    assignCategory('mv', layout.mv);
+  }
+  if ('power' in layout) {
+    assignCategory('power', layout.power);
+  }
+  if ('vfd' in layout) {
+    assignCategory('vfd', layout.vfd);
+  }
+  if ('control' in layout) {
+    assignCategory('control', layout.control);
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+};
+
 projectsRouter.get(
   '/',
   async (_req: Request, res: Response): Promise<void> => {
@@ -173,6 +299,8 @@ projectsRouter.get(
             p.secondary_tray_length,
             p.support_distance,
             p.support_weight,
+            p.tray_load_safety_factor,
+            p.cable_layout_settings,
             COALESCE(
               (
                 SELECT jsonb_object_agg(
@@ -251,12 +379,14 @@ projectsRouter.post(
       supportDistance,
       supportWeight,
       trayLoadSafetyFactor,
+      cableLayout,
       supportDistances
     } = parseResult.data;
     const projectId = randomUUID();
     const normalizedDescription =
       description === undefined ? undefined : description.trim();
     const normalizedManager = manager === undefined ? undefined : manager.trim();
+    const normalizedCableLayout = normalizeCableLayout(cableLayout);
 
     try {
       await pool.query<{ id: string }>(
@@ -271,9 +401,10 @@ projectsRouter.post(
             secondary_tray_length,
             support_distance,
             support_weight,
-            tray_load_safety_factor
+            tray_load_safety_factor,
+            cable_layout_settings
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           RETURNING id;
         `,
         [
@@ -290,7 +421,8 @@ projectsRouter.post(
           secondaryTrayLength ?? null,
           supportDistance ?? null,
           supportWeight ?? null,
-          trayLoadSafetyFactor ?? null
+          trayLoadSafetyFactor ?? null,
+          normalizedCableLayout
         ]
       );
 
@@ -342,8 +474,15 @@ projectsRouter.patch(
       return;
     }
 
-    const { projectNumber, name, customer, description, manager, supportDistances } =
-      parseResult.data;
+    const {
+      projectNumber,
+      name,
+      customer,
+      description,
+      manager,
+      supportDistances,
+      cableLayout
+    } = parseResult.data;
 
     const fields: string[] = [];
     const values: Array<string | number | null> = [];
@@ -394,6 +533,15 @@ projectsRouter.patch(
     if (parseResult.data.trayLoadSafetyFactor !== undefined) {
       fields.push(`tray_load_safety_factor = $${index++}`);
       values.push(parseResult.data.trayLoadSafetyFactor);
+    }
+
+    if (parseResult.data.cableLayout !== undefined) {
+      const normalizedCableLayout = normalizeCableLayout(cableLayout);
+      fields.push(
+        `cable_layout_settings = CASE WHEN $${index}::jsonb IS NULL THEN NULL ELSE COALESCE(cable_layout_settings, '{}'::jsonb) || $${index}::jsonb END`
+      );
+      values.push(normalizedCableLayout);
+      index += 1;
     }
 
     fields.push(`updated_at = NOW()`);

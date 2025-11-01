@@ -42,6 +42,7 @@ import { useMaterialSupports } from './ProjectDetails/hooks/useMaterialSupports'
 import { useSupportDistanceOverrides } from './ProjectDetails/hooks/useSupportDistanceOverrides';
 import { useTrayTypeDetails } from './ProjectDetails/hooks/useTrayTypeDetails';
 import { useProjectFilesSection } from './ProjectDetails/hooks/useProjectFilesSection';
+import { useCableLayoutSettings } from './ProjectDetails/hooks/useCableLayoutSettings';
 
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
@@ -330,6 +331,15 @@ export const ProjectDetails = () => {
     reloadProject
   });
 
+  const { cableSpacingField, categoryCards: cableCategoryCards } =
+    useCableLayoutSettings({
+      project,
+      token,
+      isAdmin,
+      showToast,
+      reloadProject
+    });
+
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     const nextTab =
@@ -446,6 +456,8 @@ export const ProjectDetails = () => {
           project={project}
           formattedDates={formattedDates}
           isAdmin={isAdmin}
+          cableSpacingField={cableSpacingField}
+          cableCategoryCards={cableCategoryCards}
           numericFields={numericFields}
           supportDistanceOverrides={supportDistanceOverrideFields}
         />

@@ -70,6 +70,45 @@ const supportOverrideValueSchema = z.union([
   traySupportOverrideSchema
 ]);
 
+const cableBundleSpacingSchema = z.enum(['0', '1D', '2D']);
+
+const cableCategorySettingsSchema = z
+  .object({
+    maxRows: z
+      .number()
+      .int()
+      .min(1)
+      .max(1_000)
+      .nullable()
+      .optional(),
+    maxColumns: z
+      .number()
+      .int()
+      .min(1)
+      .max(1_000)
+      .nullable()
+      .optional(),
+    bundleSpacing: cableBundleSpacingSchema.nullable().optional(),
+    trefoil: z.boolean().nullable().optional()
+  })
+  .strict();
+
+const cableLayoutSchema = z
+  .object({
+    cableSpacing: z
+      .number()
+      .min(1)
+      .max(5)
+      .nullable()
+      .optional(),
+    mv: cableCategorySettingsSchema.optional(),
+    power: cableCategorySettingsSchema.optional(),
+    vfd: cableCategorySettingsSchema.optional(),
+    control: cableCategorySettingsSchema.optional()
+  })
+  .strict()
+  .nullable();
+
 const projectFieldSchema = {
   projectNumber: z.string().trim().min(1).max(50),
   name: z.string().trim().min(1).max(200),
@@ -105,7 +144,8 @@ const projectFieldSchema = {
       z.string().trim().min(1).max(200),
       supportOverrideValueSchema
     )
-    .optional()
+    .optional(),
+  cableLayout: cableLayoutSchema.optional()
 } as const;
 
 export const createProjectSchema = z
@@ -123,7 +163,8 @@ export const updateProjectSchema = z
     supportDistance: projectFieldSchema.supportDistance,
     supportWeight: projectFieldSchema.supportWeight,
     trayLoadSafetyFactor: projectFieldSchema.trayLoadSafetyFactor,
-    supportDistances: projectFieldSchema.supportDistances
+    supportDistances: projectFieldSchema.supportDistances,
+    cableLayout: projectFieldSchema.cableLayout
   })
   .strict()
   .refine(
@@ -137,7 +178,8 @@ export const updateProjectSchema = z
       value.supportDistance !== undefined ||
       value.supportWeight !== undefined ||
       value.trayLoadSafetyFactor !== undefined ||
-      value.supportDistances !== undefined,
+      value.supportDistances !== undefined ||
+      value.cableLayout !== undefined,
     {
       message: 'At least one field must be provided'
     }

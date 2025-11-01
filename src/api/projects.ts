@@ -1,5 +1,9 @@
 import { request } from './http';
-import type { Project, ProjectSupportOverridePayload } from './types';
+import type {
+  Project,
+  ProjectCableLayoutInput,
+  ProjectSupportOverridePayload
+} from './types';
 
 export async function fetchProjects(): Promise<{ projects: Project[] }> {
   return request<{ projects: Project[] }>('/api/projects', { method: 'GET' });
@@ -26,6 +30,7 @@ export async function createProject(
     supportWeight?: number | null;
     trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
+    cableLayout?: ProjectCableLayoutInput;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>('/api/projects', {
@@ -49,6 +54,7 @@ export async function updateProject(
     supportWeight?: number | null;
     trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
+    cableLayout?: ProjectCableLayoutInput;
   }
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>(`/api/projects/${projectId}`, {
