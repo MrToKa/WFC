@@ -52,11 +52,13 @@ import {
   CABLE_CATEGORY_CONFIG,
   CABLE_CATEGORY_ORDER,
   DEFAULT_CATEGORY_SETTINGS,
+  DEFAULT_CABLE_SPACING,
   type CableCategoryKey
 } from './ProjectDetails/hooks/cableLayoutDefaults';
 import {
   TrayDrawingService,
   type CableBundleMap,
+  type CategoryLayoutConfig,
   determineCableDiameterGroup
 } from './TrayDetails/trayDrawingService';
 
@@ -542,8 +544,28 @@ export const TrayDetails = () => {
     if (typeof spacing === 'number' && Number.isFinite(spacing) && spacing >= 0) {
       return spacing;
     }
-    return 15;
+    return DEFAULT_CABLE_SPACING;
   }, [project?.cableLayout?.cableSpacing]);
+
+  const projectLayoutConfig = useMemo<CategoryLayoutConfig>(() => {
+    const categories: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
+    return categories.reduce<CategoryLayoutConfig>((acc, category) => {
+      const defaults = DEFAULT_CATEGORY_SETTINGS[category];
+      const layout = project?.cableLayout?.[category] ?? null;
+      const trefoil =
+        CABLE_CATEGORY_CONFIG[category].showTrefoil
+          ? layout?.trefoil ?? defaults.trefoil
+          : false;
+      acc[category] = {
+        maxRows: layout?.maxRows ?? defaults.maxRows,
+        maxColumns: layout?.maxColumns ?? defaults.maxColumns,
+        bundleSpacing: layout?.bundleSpacing ?? defaults.bundleSpacing,
+        cableSpacing: projectCableSpacingMm,
+        trefoil
+      };
+      return acc;
+    }, {} as CategoryLayoutConfig);
+  }, [project?.cableLayout, projectCableSpacingMm]);
 
   const drawTrayVisualization = useCallback(() => {
     const canvasElement = trayCanvasRef.current;
@@ -562,14 +584,15 @@ export const TrayDetails = () => {
         nonGroundingCables,
         cableBundles,
         6,
-        projectCableSpacingMm
+        projectCableSpacingMm,
+        projectLayoutConfig
       );
       return true;
     } catch (error) {
       console.error('Failed to render tray visualization', error);
       return false;
     }
-  }, [tray, nonGroundingCables, cableBundles, projectCableSpacingMm]);
+  }, [tray, nonGroundingCables, cableBundles, projectCableSpacingMm, projectLayoutConfig]);
 
   useEffect(() => {
     let cancelled = false;

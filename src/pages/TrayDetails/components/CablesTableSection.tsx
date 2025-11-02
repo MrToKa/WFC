@@ -27,16 +27,19 @@ export const CablesTableSection: React.FC<CablesTableSectionProps> = ({
           <table className={styles.table}>
             <thead>
               <tr>
+                <th className={styles.tableHeadCell}>#</th>
                 <th className={styles.tableHeadCell}>Tag</th>
                 <th className={styles.tableHeadCell}>From</th>
                 <th className={styles.tableHeadCell}>To</th>
                 <th className={styles.tableHeadCell}>Purpose</th>
                 <th className={styles.tableHeadCell}>Weight [kg/m]</th>
+                <th className={styles.tableHeadCell}>Diameter [mm]</th>
               </tr>
             </thead>
             <tbody>
-              {trayCables.map((cable) => (
+              {trayCables.map((cable, index) => (
                 <tr key={cable.id}>
+                  <td className={styles.tableCell}>{index + 1}</td>
                   <td className={styles.tableCell}>{cable.tag || '-'}</td>
                   <td className={styles.tableCell}>{cable.fromLocation || '-'}</td>
                   <td className={styles.tableCell}>{cable.toLocation || '-'}</td>
@@ -44,6 +47,11 @@ export const CablesTableSection: React.FC<CablesTableSectionProps> = ({
                   <td className={styles.tableCell}>
                     {cable.weightKgPerM !== null
                       ? numberFormatter.format(cable.weightKgPerM)
+                      : '-'}
+                  </td>
+                  <td className={styles.tableCell}>
+                    {cable.diameterMm !== null && !Number.isNaN(cable.diameterMm)
+                      ? numberFormatter.format(cable.diameterMm)
                       : '-'}
                   </td>
                 </tr>
