@@ -11,12 +11,12 @@ export const CABLE_CATEGORY_ORDER: CableCategoryKey[] = [
 
 export const CABLE_CATEGORY_CONFIG: Record<
   CableCategoryKey,
-  { label: string; showTrefoil: boolean }
+  { label: string; showTrefoil: boolean; allowTrefoilSpacing: boolean }
 > = {
-  mv: { label: 'MV cables', showTrefoil: true },
-  power: { label: 'Power cables', showTrefoil: true },
-  vfd: { label: 'VFD cables', showTrefoil: true },
-  control: { label: 'Control cables', showTrefoil: false }
+  mv: { label: 'MV cables', showTrefoil: true, allowTrefoilSpacing: false },
+  power: { label: 'Power cables', showTrefoil: true, allowTrefoilSpacing: true },
+  vfd: { label: 'VFD cables', showTrefoil: true, allowTrefoilSpacing: true },
+  control: { label: 'Control cables', showTrefoil: false, allowTrefoilSpacing: false }
 };
 
 export const DEFAULT_CABLE_SPACING = 1;
@@ -28,11 +28,11 @@ export const DEFAULT_CATEGORY_SETTINGS: Record<
     maxColumns: number;
     bundleSpacing: CableBundleSpacing;
     trefoil: boolean;
+    trefoilSpacingBetweenBundles: boolean;
   }
 > = {
-  mv: { maxRows: 2, maxColumns: 2, bundleSpacing: '2D', trefoil: true },
-  power: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true },
-  vfd: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true },
-  control: { maxRows: 7, maxColumns: 20, bundleSpacing: '2D', trefoil: true }
+  mv: { maxRows: 2, maxColumns: 2, bundleSpacing: '2D', trefoil: true, trefoilSpacingBetweenBundles: false },
+  power: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true, trefoilSpacingBetweenBundles: false },
+  vfd: { maxRows: 3, maxColumns: 20, bundleSpacing: '2D', trefoil: true, trefoilSpacingBetweenBundles: false },
+  control: { maxRows: 7, maxColumns: 20, bundleSpacing: '2D', trefoil: true, trefoilSpacingBetweenBundles: false }
 };
-

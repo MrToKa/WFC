@@ -25,6 +25,7 @@ type CategoryInputState = {
   maxColumns: string;
   bundleSpacing: CableBundleSpacing | null;
   trefoil: boolean;
+  trefoilSpacing: boolean;
 };
 
 type CategoryErrorState = {
@@ -48,13 +49,19 @@ const formatCategoryInput = (
     settings?.trefoil === null || settings?.trefoil === undefined
       ? defaults.trefoil
       : settings.trefoil;
+  const trefoilSpacing =
+    settings?.trefoilSpacingBetweenBundles === null ||
+    settings?.trefoilSpacingBetweenBundles === undefined
+      ? defaults.trefoilSpacingBetweenBundles
+      : settings.trefoilSpacingBetweenBundles;
 
   return {
     maxRows: maxRows !== null && maxRows !== undefined ? String(maxRows) : '',
     maxColumns:
       maxColumns !== null && maxColumns !== undefined ? String(maxColumns) : '',
     bundleSpacing,
-    trefoil: Boolean(trefoil)
+    trefoil: Boolean(trefoil),
+    trefoilSpacing: Boolean(trefoilSpacing)
   };
 };
 
@@ -90,24 +97,29 @@ export type CableCategoryController = {
   key: CategoryKey;
   label: string;
   showTrefoil: boolean;
+  allowTrefoilSpacing: boolean;
   currentMaxRows: number | null;
   currentMaxColumns: number | null;
   currentBundleSpacing: CableBundleSpacing | null;
   currentTrefoil: boolean | null;
+  currentTrefoilSpacing: boolean | null;
   displayMaxRows: number;
   displayMaxColumns: number;
   displayBundleSpacing: CableBundleSpacing;
   displayTrefoil: boolean | null;
+  displayTrefoilSpacing: boolean | null;
   inputMaxRows: string;
   inputMaxColumns: string;
   inputBundleSpacing: CableBundleSpacing | null;
   inputTrefoil: boolean;
+  inputTrefoilSpacing: boolean;
   errors: CategoryErrorState;
   saving: boolean;
   onMaxRowsChange: (value: string) => void;
   onMaxColumnsChange: (value: string) => void;
   onBundleSpacingChange: (value: CableBundleSpacing | null) => void;
   onTrefoilChange: (value: boolean) => void;
+  onTrefoilSpacingChange: (value: boolean) => void;
   onSave: () => Promise<void>;
 };
 
@@ -325,7 +337,8 @@ export const useCableLayoutSettings = ({
       ...previous,
       [key]: {
         ...previous[key],
-        trefoil: value
+        trefoil: value,
+        trefoilSpacing: value ? previous[key].trefoilSpacing : false
       }
     }));
     setCategoryErrors((previous) => ({
@@ -334,9 +347,27 @@ export const useCableLayoutSettings = ({
     }));
   }, []);
 
+  const handleTrefoilSpacingChange = useCallback(
+    (key: CategoryKey, value: boolean) => {
+      setCategoryInputs((previous) => ({
+        ...previous,
+        [key]: {
+          ...previous[key],
+          trefoilSpacing: value
+        }
+      }));
+      setCategoryErrors((previous) => ({
+        ...previous,
+        [key]: { ...previous[key], general: undefined }
+      }));
+    },
+    []
+  );
+
   const handleSaveCategory = useCallback(
     async (key: CategoryKey) => {
       const config = CABLE_CATEGORY_CONFIG[key];
+      const defaults = DEFAULT_CATEGORY_SETTINGS[key];
       const inputs = categoryInputs[key];
 
       if (!project || !token) {
@@ -390,6 +421,11 @@ export const useCableLayoutSettings = ({
       const maxColumnsValue = maxColumnsResult.numeric;
       const bundleSpacingValue = inputs.bundleSpacing;
       const trefoilValue = config.showTrefoil ? inputs.trefoil : null;
+      const trefoilSpacingValue = config.allowTrefoilSpacing
+        ? inputs.trefoil
+          ? inputs.trefoilSpacing
+          : false
+        : null;
 
       const currentSettings = project.cableLayout?.[key] ?? null;
       const currentMaxRows = currentSettings?.maxRows ?? null;
@@ -398,6 +434,9 @@ export const useCableLayoutSettings = ({
       const currentTrefoil = config.showTrefoil
         ? currentSettings?.trefoil ?? false
         : null;
+      const currentTrefoilSpacing = config.allowTrefoilSpacing
+        ? currentSettings?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
+        : null;
 
       const hasChanges =
         currentMaxRows !== maxRowsValue ||
@@ -405,6 +444,9 @@ export const useCableLayoutSettings = ({
         currentBundleSpacing !== bundleSpacingValue ||
         (config.showTrefoil
           ? Boolean(currentTrefoil) !== trefoilValue
+          : false) ||
+        (config.allowTrefoilSpacing
+          ? Boolean(currentTrefoilSpacing) !== trefoilSpacingValue
           : false);
 
       if (!hasChanges) {
@@ -424,19 +466,17 @@ export const useCableLayoutSettings = ({
         [key]: {}
       }));
 
-      const payload =
-        trefoilValue === null
-          ? {
-              maxRows: maxRowsValue,
-              maxColumns: maxColumnsValue,
-              bundleSpacing: bundleSpacingValue
-            }
-          : {
-              maxRows: maxRowsValue,
-              maxColumns: maxColumnsValue,
-              bundleSpacing: bundleSpacingValue,
-              trefoil: trefoilValue
-            };
+      const payload: Record<string, unknown> = {
+        maxRows: maxRowsValue,
+        maxColumns: maxColumnsValue,
+        bundleSpacing: bundleSpacingValue
+      };
+      if (trefoilValue !== null) {
+        payload.trefoil = trefoilValue;
+      }
+      if (trefoilSpacingValue !== null) {
+        payload.trefoilSpacingBetweenBundles = trefoilSpacingValue;
+      }
 
       try {
         await updateProject(token, project.id, {
@@ -506,6 +546,9 @@ export const useCableLayoutSettings = ({
       const displayTrefoil = config.showTrefoil
         ? currentSettings?.trefoil ?? defaults.trefoil
         : null;
+      const displayTrefoilSpacing = config.allowTrefoilSpacing
+        ? currentSettings?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
+        : null;
       const inputState = categoryInputs[key];
       const errorState = categoryErrors[key];
       const savingState = categorySaving[key];
@@ -514,16 +557,21 @@ export const useCableLayoutSettings = ({
         key,
         label: config.label,
         showTrefoil: config.showTrefoil,
+        allowTrefoilSpacing: config.allowTrefoilSpacing,
         currentMaxRows: currentSettings?.maxRows ?? null,
         currentMaxColumns: currentSettings?.maxColumns ?? null,
         currentBundleSpacing: currentSettings?.bundleSpacing ?? null,
         currentTrefoil: config.showTrefoil
           ? currentSettings?.trefoil ?? null
           : null,
+        currentTrefoilSpacing: config.allowTrefoilSpacing
+          ? currentSettings?.trefoilSpacingBetweenBundles ?? null
+          : null,
         displayMaxRows,
         displayMaxColumns,
         displayBundleSpacing,
         displayTrefoil,
+        displayTrefoilSpacing,
         inputMaxRows:
           inputState?.maxRows ?? (defaults.maxRows ? String(defaults.maxRows) : ''),
         inputMaxColumns:
@@ -532,6 +580,9 @@ export const useCableLayoutSettings = ({
         inputBundleSpacing: inputState?.bundleSpacing ?? defaults.bundleSpacing,
         inputTrefoil:
           inputState?.trefoil ?? (config.showTrefoil ? defaults.trefoil : false),
+        inputTrefoilSpacing:
+          inputState?.trefoilSpacing ??
+          (config.allowTrefoilSpacing ? defaults.trefoilSpacingBetweenBundles : false),
         errors: errorState ?? {},
         saving: savingState ?? false,
         onMaxRowsChange: (value: string) => handleMaxRowsChange(key, value),
@@ -540,6 +591,8 @@ export const useCableLayoutSettings = ({
         onBundleSpacingChange: (value: CableBundleSpacing | null) =>
           handleBundleSpacingChange(key, value),
         onTrefoilChange: (value: boolean) => handleTrefoilChange(key, value),
+        onTrefoilSpacingChange: (value: boolean) =>
+          handleTrefoilSpacingChange(key, value),
         onSave: () => handleSaveCategory(key)
       };
     });
@@ -552,6 +605,7 @@ export const useCableLayoutSettings = ({
     handleMaxRowsChange,
     handleSaveCategory,
     handleTrefoilChange,
+    handleTrefoilSpacingChange,
     project?.cableLayout
   ]);
 

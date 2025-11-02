@@ -33,6 +33,7 @@ export type ProjectCableCategorySettings = {
   maxColumns: number | null;
   bundleSpacing: CableBundleSpacing | null;
   trefoil: boolean | null;
+  trefoilSpacingBetweenBundles: boolean | null;
 };
 
 export type ProjectCableLayout = {

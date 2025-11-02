@@ -370,6 +370,12 @@ export const DetailsTab = ({
                 ? 'Enabled'
                 : 'Disabled'
               : null;
+            const currentTrefoilSpacingDisplay =
+              card.allowTrefoilSpacing && card.displayTrefoilSpacing !== null
+                ? card.displayTrefoilSpacing
+                  ? 'Enabled'
+                  : 'Disabled'
+                : null;
 
             return (
               <div key={card.key} className={styles.numericField}>
@@ -384,6 +390,14 @@ export const DetailsTab = ({
                   <>
                     <Caption1>Trefoil</Caption1>
                     <Body1>{currentTrefoilDisplay}</Body1>
+                    {card.allowTrefoilSpacing ? (
+                      <>
+                        <Caption1>Space between trefoil bundles</Caption1>
+                        <Body1>
+                          {currentTrefoilSpacingDisplay ?? 'Not specified'}
+                        </Body1>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
                 {isAdmin ? (
@@ -464,6 +478,16 @@ export const DetailsTab = ({
                         checked={card.inputTrefoil}
                         onChange={(_, data) =>
                           card.onTrefoilChange(Boolean(data.checked))
+                        }
+                        disabled={card.saving}
+                      />
+                    ) : null}
+                    {card.allowTrefoilSpacing && card.inputTrefoil ? (
+                      <Checkbox
+                        label="Space between trefoil bundles"
+                        checked={card.inputTrefoilSpacing}
+                        onChange={(_, data) =>
+                          card.onTrefoilSpacingChange(Boolean(data.checked))
                         }
                         disabled={card.saving}
                       />

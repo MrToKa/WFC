@@ -38,6 +38,7 @@ export type ProjectLayoutConfig = {
   bundleSpacing: '0' | '1D' | '2D';
   cableSpacing: number;
   trefoil: boolean;
+  trefoilSpacingBetweenBundles: boolean;
 };
 
 export type CategoryLayoutConfig = Record<CategoryKey, ProjectLayoutConfig>;
@@ -389,7 +390,9 @@ class CableBundleDrawer {
           }
 
           if (groupIdx < grouped.length - 1) {
-            leftStartX += bundleSpacingPx;
+            if (group.kind !== 'trefoil' || layoutConfig.trefoilSpacingBetweenBundles) {
+              leftStartX += bundleSpacingPx;
+            }
           }
         }
 
@@ -657,7 +660,9 @@ class CableBundleDrawer {
           }
 
           if (groupIdx < grouped.length - 1) {
-            rightStartX -= bundleSpacingPx;
+            if (group.kind !== 'trefoil' || layoutConfig.trefoilSpacingBetweenBundles) {
+              rightStartX -= bundleSpacingPx;
+            }
           }
         }
 
@@ -1247,10 +1252,10 @@ export class TrayDrawingService {
 
     // Create default layout config if not provided
     const defaultLayoutConfig: CategoryLayoutConfig = {
-      power: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false },
-      control: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false },
-      mv: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false },
-      vfd: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false }
+      power: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false },
+      control: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false },
+      mv: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false },
+      vfd: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false }
     };
 
     const effectiveLayoutConfig: CategoryLayoutConfig = {

@@ -556,12 +556,17 @@ export const TrayDetails = () => {
         CABLE_CATEGORY_CONFIG[category].showTrefoil
           ? layout?.trefoil ?? defaults.trefoil
           : false;
+      const trefoilSpacingBetweenBundles =
+        CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
+          ? layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
+          : defaults.trefoilSpacingBetweenBundles;
       acc[category] = {
         maxRows: layout?.maxRows ?? defaults.maxRows,
         maxColumns: layout?.maxColumns ?? defaults.maxColumns,
         bundleSpacing: layout?.bundleSpacing ?? defaults.bundleSpacing,
         cableSpacing: projectCableSpacingMm,
-        trefoil
+        trefoil,
+        trefoilSpacingBetweenBundles
       };
       return acc;
     }, {} as CategoryLayoutConfig);

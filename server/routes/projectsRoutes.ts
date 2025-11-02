@@ -94,6 +94,7 @@ type CableCategorySettingsInput =
       maxColumns?: number | null;
       bundleSpacing?: CableBundleSpacingInput | null;
       trefoil?: boolean | null;
+      trefoilSpacingBetweenBundles?: boolean | null;
     }
   | null
   | undefined;
@@ -114,6 +115,7 @@ type NormalizedCableCategorySettings = {
   maxColumns: number | null;
   bundleSpacing: CableBundleSpacingInput | null;
   trefoil: boolean | null;
+  trefoilSpacingBetweenBundles: boolean | null;
 };
 
 const normalizeSupportDistances = (
@@ -214,12 +216,19 @@ const normalizeCableCategory = (
       : settings.trefoil === null
       ? null
       : settings.trefoil;
+  const trefoilSpacingBetweenBundles =
+    settings.trefoilSpacingBetweenBundles === undefined
+      ? null
+      : settings.trefoilSpacingBetweenBundles === null
+      ? null
+      : settings.trefoilSpacingBetweenBundles;
 
   if (
     maxRows === null &&
     maxColumns === null &&
     bundleSpacing === null &&
-    trefoil === null
+    trefoil === null &&
+    trefoilSpacingBetweenBundles === null
   ) {
     return null;
   }
@@ -228,7 +237,8 @@ const normalizeCableCategory = (
     maxRows,
     maxColumns,
     bundleSpacing,
-    trefoil
+    trefoil,
+    trefoilSpacingBetweenBundles
   };
 };
 
