@@ -320,7 +320,8 @@ class CableBundleDrawer {
     bundles: Record<string, Cable[]>,
     leftStartX: number,
     bottomStartY: number,
-    spacingPx: number
+    spacingPx: number,
+    purpose: 'power' | 'vfd' | 'control' = 'power'
   ): PowerResult {
     const sortedBundles = Object.entries(bundles)
       .filter(([, cables]) => cables.length > 0)
@@ -332,7 +333,11 @@ class CableBundleDrawer {
     const lastBundleKey = sortedBundles.length > 0 ? sortedBundles[sortedBundles.length - 1][0] : null;
 
     for (const [bundleKey, bundleCables] of sortedBundles) {
-      const layoutConfig = data.layoutConfig.power;
+      // Select the correct layout config based on purpose
+      const layoutConfig = purpose === 'power' ? data.layoutConfig.power :
+                          purpose === 'vfd' ? data.layoutConfig.vfd :
+                          data.layoutConfig.control;
+      
       const sortedCables = [...bundleCables].sort(
         (a, b) => getCableDiameter(b) - getCableDiameter(a)
       );
@@ -352,125 +357,133 @@ class CableBundleDrawer {
         const subBundle = subBundles[subBundleIdx];
         const grouped = this.splitTrefoilGroups(subBundle, layoutConfig.trefoil);
 
+        // Log bundle composition
+        console.log(`[${purpose.toUpperCase()} Bundles (left-to-right)] Bundle Key: ${bundleKey}, Sub-bundle ${subBundleIdx + 1}:`);
+        grouped.forEach((group, idx) => {
+          if (group.kind === 'trefoil') {
+            console.log(`  Trefoil bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
+          } else {
+            console.log(`  Normal bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
+          }
+        });
+
+        // Select the correct bottom row array based on purpose
+        const bottomRowCables = purpose === 'power' ? data.bottomRowPowerCables :
+                               purpose === 'vfd' ? data.bottomRowVFDCables :
+                               data.bottomRowControlCables;
+        const purposeString = purpose === 'power' ? TrayConstants.cablePurposes.power :
+                             purpose === 'vfd' ? TrayConstants.cablePurposes.vfd :
+                             TrayConstants.cablePurposes.control;
+
+        // First pass: Draw all trefoil bundles
         for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
           const group = grouped[groupIdx];
+          if (group.kind !== 'trefoil') continue;
 
-          if (group.kind === 'trefoil') {
-            const geometry = this.computeTrefoilGeometry(data, group.cables);
-            if (geometry.success) {
-              leftStartX = this.renderTrefoilCluster(
-                ctx,
-                data,
-                geometry,
-                leftStartX,
-                baseBottomY,
-                TrayConstants.cablePurposes.power,
-                data.bottomRowPowerCables
-              );
-              bottomStartY = baseBottomY;
-            } else {
-              const rows = this.calculateRowsAndColumns(
-                data.tray.heightMm ?? 0,
-                group.cables,
-                TrayConstants.cablePurposes.power,
-                layoutConfig
-              ).rows;
-              ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
-                ctx,
-                data,
-                group.cables,
-                leftStartX,
-                bottomStartY,
-                spacingPx,
-                rows,
-                data.bottomRowPowerCables,
-                TrayConstants.cablePurposes.power
-              ));
-            }
+          bottomStartY = baseBottomY;
+
+          const geometry = this.computeTrefoilGeometry(data, group.cables);
+          if (geometry.success) {
+            leftStartX = this.renderTrefoilCluster(
+              ctx,
+              data,
+              geometry,
+              leftStartX,
+              baseBottomY,
+              purposeString,
+              bottomRowCables
+            );
+            bottomStartY = baseBottomY;
           } else {
             const rows = this.calculateRowsAndColumns(
               data.tray.heightMm ?? 0,
               group.cables,
-              TrayConstants.cablePurposes.power,
+              purposeString,
               layoutConfig
             ).rows;
-
-            if (
-              bundleKey === TrayConstants.bundleTypes.range40_1_45 ||
-              bundleKey === TrayConstants.bundleTypes.range45_1_60
-            ) {
-              ({ leftStartX, bottomStartY } = this.drawHexagonalPacking(
-                ctx,
-                data,
-                group.cables,
-                leftStartX,
-                bottomStartY,
-                spacingPx
-              ));
-            } else {
-              ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
-                ctx,
-                data,
-                group.cables,
-                leftStartX,
-                bottomStartY,
-                spacingPx,
-                rows,
-                data.bottomRowPowerCables,
-                TrayConstants.cablePurposes.power
-              ));
-            }
+            ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
+              ctx,
+              data,
+              group.cables,
+              leftStartX,
+              bottomStartY,
+              spacingPx,
+              rows,
+              bottomRowCables,
+              purposeString
+            ));
           }
 
+          // Add spacing between trefoil bundles
           if (groupIdx < grouped.length - 1) {
-            const nextGroup = grouped[groupIdx + 1];
-            if (group.kind === 'trefoil') {
-              // After a trefoil bundle, check what comes next
-              if (nextGroup.kind === 'trefoil') {
-                // Trefoil to trefoil: use cable spacing unless trefoilSpacingBetweenBundles is enabled
-                if (layoutConfig.trefoilSpacingBetweenBundles) {
-                  leftStartX += bundleSpacingPx;
-                } else {
-                  leftStartX += data.spacingMm * data.canvasScale;
-                }
-              } else {
-                // Trefoil to normal: always use bundle spacing
-                leftStartX += bundleSpacingPx;
-              }
-            } else {
-              // Normal to anything: use bundle spacing if trefoilSpacingBetweenBundles is enabled
+            const nextTrefoil = grouped.slice(groupIdx + 1).find(g => g.kind === 'trefoil');
+            if (nextTrefoil) {
               if (layoutConfig.trefoilSpacingBetweenBundles) {
                 leftStartX += bundleSpacingPx;
+              } else {
+                leftStartX += data.spacingMm * data.canvasScale;
               }
             }
+          }
+        }
+
+        // Check if we drew any trefoils and if there are normal cables
+        const hasTrefoils = grouped.some(g => g.kind === 'trefoil');
+        const hasNormals = grouped.some(g => g.kind === 'normal');
+        
+        // Add bundle spacing between trefoils and normal cables
+        if (hasTrefoils && hasNormals) {
+          leftStartX += bundleSpacingPx;
+        }
+
+        // Second pass: Draw all normal cables
+        for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
+          const group = grouped[groupIdx];
+          if (group.kind !== 'normal') continue;
+
+          bottomStartY = baseBottomY;
+
+          const rows = this.calculateRowsAndColumns(
+            data.tray.heightMm ?? 0,
+            group.cables,
+            purposeString,
+            layoutConfig
+          ).rows;
+
+          if (
+            bundleKey === TrayConstants.bundleTypes.range40_1_45 ||
+            bundleKey === TrayConstants.bundleTypes.range45_1_60
+          ) {
+            ({ leftStartX, bottomStartY } = this.drawHexagonalPacking(
+              ctx,
+              data,
+              group.cables,
+              leftStartX,
+              bottomStartY,
+              spacingPx
+            ));
           } else {
-            // After the last group, if it's a trefoil, we need to apply bundle spacing
-            // for the transition to the next sub-bundle or bundle group
-            if (group.kind === 'trefoil' && (subBundleIdx < subBundles.length - 1 || bundleKey !== lastBundleKey)) {
-              leftStartX += bundleSpacingPx;
-            }
+            ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
+              ctx,
+              data,
+              group.cables,
+              leftStartX,
+              bottomStartY,
+              spacingPx,
+              rows,
+              bottomRowCables,
+              purposeString
+            ));
           }
         }
 
         if (subBundleIdx < subBundles.length - 1) {
-          // Only add spacing if the last group wasn't a trefoil (already added above)
-          const lastGroup = grouped[grouped.length - 1];
-          if (lastGroup && lastGroup.kind !== 'trefoil') {
-            leftStartX += bundleSpacingPx;
-          }
+          leftStartX += bundleSpacingPx;
         }
       }
 
       if (bundleKey !== lastBundleKey) {
-        // Only add spacing if the last group wasn't a trefoil (already added above)
-        const lastSubBundle = subBundles[subBundles.length - 1];
-        if (lastSubBundle) {
-          const grouped = this.splitTrefoilGroups(lastSubBundle, layoutConfig.trefoil);
-          const lastGroup = grouped[grouped.length - 1];
-          if (lastGroup && lastGroup.kind !== 'trefoil') {
-            leftStartX += bundleSpacingPx;
-          }
-        }
+        leftStartX += bundleSpacingPx;
       }
     }
 
@@ -666,43 +679,37 @@ class CableBundleDrawer {
         const subBundle = subBundles[subBundleIdx];
         const grouped = this.splitTrefoilGroups(subBundle, layoutConfig.trefoil);
 
+        // Log bundle composition for VFD cables
+        console.log(`[VFD Bundles] Bundle Key: ${bundleKey}, Sub-bundle ${subBundleIdx + 1}:`);
+        grouped.forEach((group, idx) => {
+          if (group.kind === 'trefoil') {
+            console.log(`  Trefoil bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
+          } else {
+            console.log(`  Normal bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
+          }
+        });
+
+        // First pass: Draw all trefoil bundles
         for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
           const group = grouped[groupIdx];
+          if (group.kind !== 'trefoil') continue;
 
-          if (group.kind === 'trefoil') {
-            const geometry = this.computeTrefoilGeometry(data, group.cables);
-            if (geometry.success) {
-              const startLeftX = rightStartX - geometry.widthPx;
-              this.renderTrefoilCluster(
-                ctx,
-                data,
-                geometry,
-                startLeftX,
-                baseBottomY,
-                TrayConstants.cablePurposes.vfd,
-                data.bottomRowVFDCables
-              );
-              rightStartX = startLeftX;
-              bottomStartY = baseBottomY;
-            } else {
-              const { rows } = this.calculateRowsAndColumns(
-                data.tray.heightMm ?? 0,
-                group.cables,
-                TrayConstants.cablePurposes.vfd,
-                layoutConfig
-              );
-              rightStartX = this.drawStandardVfdCables(
-                ctx,
-                data,
-                group.cables,
-                rightStartX,
-                bottomStartY,
-                spacingPx,
-                rows,
-                sortedBundles,
-                bundleKey
-              );
-            }
+          bottomStartY = baseBottomY;
+
+          const geometry = this.computeTrefoilGeometry(data, group.cables);
+          if (geometry.success) {
+            const startLeftX = rightStartX - geometry.widthPx;
+            this.renderTrefoilCluster(
+              ctx,
+              data,
+              geometry,
+              startLeftX,
+              baseBottomY,
+              TrayConstants.cablePurposes.vfd,
+              data.bottomRowVFDCables
+            );
+            rightStartX = startLeftX;
+            bottomStartY = baseBottomY;
           } else {
             const { rows } = this.calculateRowsAndColumns(
               data.tray.heightMm ?? 0,
@@ -710,93 +717,96 @@ class CableBundleDrawer {
               TrayConstants.cablePurposes.vfd,
               layoutConfig
             );
-
-            if (
-              bundleKey === TrayConstants.bundleTypes.range30_1_40 ||
-              bundleKey === TrayConstants.bundleTypes.range40_1_45
-            ) {
-              rightStartX = this.drawGroupedVfdCables(
-                ctx,
-                data,
-                group.cables,
-                rightStartX,
-                bottomStartY,
-                spacingPx,
-                sortedBundles,
-                bundleKey
-              );
-            } else {
-              rightStartX = this.drawStandardVfdCables(
-                ctx,
-                data,
-                group.cables,
-                rightStartX,
-                bottomStartY,
-                spacingPx,
-                rows,
-                sortedBundles,
-                bundleKey
-              );
-            }
+            rightStartX = this.drawStandardVfdCables(
+              ctx,
+              data,
+              group.cables,
+              rightStartX,
+              bottomStartY,
+              spacingPx,
+              rows,
+              sortedBundles,
+              bundleKey
+            );
           }
 
+          // Add spacing between trefoil bundles
           if (groupIdx < grouped.length - 1) {
-            const nextGroup = grouped[groupIdx + 1];
-            if (group.kind === 'trefoil') {
-              // After a trefoil bundle, check what comes next
-              if (nextGroup.kind === 'trefoil') {
-                // Trefoil to trefoil: use cable spacing unless trefoilSpacingBetweenBundles is enabled
-                if (layoutConfig.trefoilSpacingBetweenBundles) {
-                  rightStartX -= bundleSpacingPx;
-                } else {
-                  rightStartX -= data.spacingMm * data.canvasScale;
-                }
-              } else {
-                // Trefoil to normal: always use bundle spacing
-                rightStartX -= bundleSpacingPx;
-              }
-            } else {
-              // Normal to anything: use bundle spacing if trefoilSpacingBetweenBundles is enabled
+            const nextTrefoil = grouped.slice(groupIdx + 1).find(g => g.kind === 'trefoil');
+            if (nextTrefoil) {
               if (layoutConfig.trefoilSpacingBetweenBundles) {
                 rightStartX -= bundleSpacingPx;
+              } else {
+                rightStartX -= data.spacingMm * data.canvasScale;
               }
             }
+          }
+        }
+
+        // Check if we drew any trefoils and if there are normal cables
+        const hasTrefoils = grouped.some(g => g.kind === 'trefoil');
+        const hasNormals = grouped.some(g => g.kind === 'normal');
+        
+        // Add bundle spacing between trefoils and normal cables
+        if (hasTrefoils && hasNormals) {
+          rightStartX -= bundleSpacingPx;
+        }
+
+        // Second pass: Draw all normal cables
+        for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
+          const group = grouped[groupIdx];
+          if (group.kind !== 'normal') continue;
+
+          bottomStartY = baseBottomY;
+
+          const { rows } = this.calculateRowsAndColumns(
+            data.tray.heightMm ?? 0,
+            group.cables,
+            TrayConstants.cablePurposes.vfd,
+            layoutConfig
+          );
+
+          if (
+            bundleKey === TrayConstants.bundleTypes.range30_1_40 ||
+            bundleKey === TrayConstants.bundleTypes.range40_1_45
+          ) {
+            rightStartX = this.drawGroupedVfdCables(
+              ctx,
+              data,
+              group.cables,
+              rightStartX,
+              bottomStartY,
+              spacingPx,
+              sortedBundles,
+              bundleKey
+            );
           } else {
-            // After the last group, if it's a trefoil, we need to apply bundle spacing
-            // for the transition to the next sub-bundle or bundle group
-            if (group.kind === 'trefoil' && (subBundleIdx < subBundles.length - 1 || bundleKey !== lastBundleKey)) {
-              rightStartX -= bundleSpacingPx;
-            }
+            rightStartX = this.drawStandardVfdCables(
+              ctx,
+              data,
+              group.cables,
+              rightStartX,
+              bottomStartY,
+              spacingPx,
+              rows,
+              sortedBundles,
+              bundleKey
+            );
           }
         }
 
         if (subBundleIdx < subBundles.length - 1) {
-          // Only add spacing if the last group wasn't a trefoil (already added above)
-          const lastGroup = grouped[grouped.length - 1];
-          if (lastGroup && lastGroup.kind !== 'trefoil') {
-            rightStartX -= bundleSpacingPx;
-          }
+          rightStartX -= bundleSpacingPx;
         }
       }
 
       if (bundleKey !== lastBundleKey) {
-        // Only add spacing if the last group wasn't a trefoil (already added above)
-        const lastSubBundle = subBundles[subBundles.length - 1];
-        if (lastSubBundle) {
-          const grouped = this.splitTrefoilGroups(lastSubBundle, layoutConfig.trefoil);
-          const lastGroup = grouped[grouped.length - 1];
-          if (lastGroup && lastGroup.kind !== 'trefoil') {
-            rightStartX -= bundleSpacingPx;
-          }
-        }
+        rightStartX -= bundleSpacingPx;
       }
     }
 
-    rightStartX =
-      TrayConstants.canvasMargin +
-      (data.tray.widthMm ?? 0) * data.canvasScale -
-      spacingPx -
-      sumCableWidthsPx(data.bottomRowVFDCables, data.canvasScale, data.spacingMm);
+    // Don't recalculate rightStartX - we've been tracking it correctly during drawing
+    // rightStartX is already at the correct position after drawing all cables
     bottomStartY = baseBottomY;
 
     // Track the leftmost position of VFD cables (right side)
@@ -815,6 +825,7 @@ class CableBundleDrawer {
   ): PowerResult {
     let row = 0;
     const usableTrayHeight = (data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm;
+    let currentX = leftStartX;
 
     for (let index = 0; index < sortedCables.length; index++) {
       const cable = sortedCables[index];
@@ -831,17 +842,15 @@ class CableBundleDrawer {
           ((diameterMm * data.canvasScale) / 2) * (Math.sqrt(3) / 2) +
           (diameterMm * data.canvasScale) / 2 -
           spacingPx * 2;
-        leftStartX =
-          TrayConstants.canvasMargin +
-          spacingPx +
-          sumCableWidthsPx(data.bottomRowPowerCables, data.canvasScale, data.spacingMm) -
+        currentX = leftStartX + 
+          sumCableWidthsPx(data.bottomRowPowerCables.slice(-1), data.canvasScale, data.spacingMm) -
           (diameterMm * data.canvasScale + spacingPx) * 1.5;
         row = 1;
       }
 
-      const cableLeftEdge = leftStartX;
-      const cableRightEdge = leftStartX + diameterPx;
-      this.drawCable(ctx, data, cable, leftStartX, bottomStartY);
+      const cableLeftEdge = currentX;
+      const cableRightEdge = currentX + diameterPx;
+      this.drawCable(ctx, data, cable, currentX, bottomStartY);
       bottomStartY =
         TrayConstants.canvasMargin +
         ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
@@ -854,22 +863,17 @@ class CableBundleDrawer {
           cableRightEdge
         );
         data.bottomRowPowerCables.push(cable);
-        leftStartX =
-          TrayConstants.canvasMargin +
-          spacingPx +
-          sumCableWidthsPx(data.bottomRowPowerCables, data.canvasScale, data.spacingMm);
+        currentX += (diameterMm + data.spacingMm) * data.canvasScale;
       } else if (row === 1) {
         row = 0;
-        leftStartX =
-          TrayConstants.canvasMargin +
-          spacingPx +
-          sumCableWidthsPx(data.bottomRowPowerCables, data.canvasScale, data.spacingMm);
+        currentX = leftStartX + sumCableWidthsPx(data.bottomRowPowerCables, data.canvasScale, data.spacingMm);
         bottomStartY =
           TrayConstants.canvasMargin +
           ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
       }
     }
 
+    leftStartX = currentX;
     return { leftStartX, bottomStartY };
   }
 
@@ -1598,6 +1602,22 @@ export class TrayDrawingService {
                   Object.values(data.cableBundles[TrayConstants.cablePurposes.mv]).some(
                     (cables: Cable[]) => cables.length > 0
                   );
+    
+    // Check which cable types are present
+    const hasPower = data.cableBundles[TrayConstants.cablePurposes.power] &&
+                     Object.values(data.cableBundles[TrayConstants.cablePurposes.power]).some(
+                       (cables: Cable[]) => cables.length > 0
+                     );
+    const hasVfd = data.cableBundles[TrayConstants.cablePurposes.vfd] &&
+                   Object.values(data.cableBundles[TrayConstants.cablePurposes.vfd]).some(
+                     (cables: Cable[]) => cables.length > 0
+                   );
+    const hasControl = data.cableBundles[TrayConstants.cablePurposes.control] &&
+                       Object.values(data.cableBundles[TrayConstants.cablePurposes.control]).some(
+                         (cables: Cable[]) => cables.length > 0
+                       );
+
+    console.log('[TrayDrawing] Cable types present:', { hasMv, hasPower, hasVfd, hasControl });
 
     // Determine drawing strategy based on cable types
     if (hasMv) {
@@ -1676,34 +1696,83 @@ export class TrayDrawingService {
         }
       }
     } else {
-      // No MV cables - use standard logic
-      // Power on left, VFD/Control on right
-      for (const [purposeKey, bundles] of Object.entries(data.cableBundles)) {
-        const normalizedPurpose = purposeKey.trim().toLowerCase();
-
-        if (normalizedPurpose === TrayConstants.cablePurposes.power) {
-          ({ leftStartX, bottomStartY } = this.bundleDrawer.drawPowerBundles(
-            ctx,
-            data,
-            bundles,
-            leftStartX,
-            bottomStartY,
-            spacingPx
-          ));
-        } else if (normalizedPurpose === TrayConstants.cablePurposes.vfd) {
+      // No MV cables - determine drawing strategy based on what's present
+      
+      if (hasPower) {
+        // Power on left
+        ({ leftStartX, bottomStartY } = this.bundleDrawer.drawPowerBundles(
+          ctx,
+          data,
+          data.cableBundles[TrayConstants.cablePurposes.power],
+          leftStartX,
+          bottomStartY,
+          spacingPx
+        ));
+        
+        // VFD and/or Control on right
+        if (hasVfd) {
           ({ rightStartX, bottomStartY } = this.bundleDrawer.drawVfdBundles(
             ctx,
             data,
-            bundles,
+            data.cableBundles[TrayConstants.cablePurposes.vfd],
             rightStartX,
             bottomStartY,
             spacingPx
           ));
-        } else if (normalizedPurpose === TrayConstants.cablePurposes.control) {
+        }
+        if (hasControl) {
           ({ rightStartX, bottomStartY } = this.bundleDrawer.drawControlBundles(
             ctx,
             data,
-            bundles,
+            data.cableBundles[TrayConstants.cablePurposes.control],
+            rightStartX,
+            bottomStartY,
+            spacingPx
+          ));
+        }
+      } else if (hasVfd && hasControl) {
+        // VFD on left, Control on right (no Power or MV)
+        console.log('[TrayDrawing] VFD and Control only: VFD on left, Control on right');
+        // Draw VFD from left using Power drawing logic but with VFD config
+        ({ leftStartX, bottomStartY } = this.bundleDrawer.drawPowerBundles(
+          ctx,
+          data,
+          data.cableBundles[TrayConstants.cablePurposes.vfd],
+          leftStartX,
+          bottomStartY,
+          spacingPx,
+          'vfd'
+        ));
+        
+        // Draw Control from right
+        ({ rightStartX, bottomStartY } = this.bundleDrawer.drawControlBundles(
+          ctx,
+          data,
+          data.cableBundles[TrayConstants.cablePurposes.control],
+          rightStartX,
+          bottomStartY,
+          spacingPx
+        ));
+      } else {
+        // Only one type present
+        if (hasVfd) {
+          // Only VFD - draw from left using Power drawing logic but with VFD config
+          ({ leftStartX, bottomStartY } = this.bundleDrawer.drawPowerBundles(
+            ctx,
+            data,
+            data.cableBundles[TrayConstants.cablePurposes.vfd],
+            leftStartX,
+            bottomStartY,
+            spacingPx,
+            'vfd'
+          ));
+        }
+        if (hasControl) {
+          // Only Control - draw from right using Control drawing logic
+          ({ rightStartX, bottomStartY } = this.bundleDrawer.drawControlBundles(
+            ctx,
+            data,
+            data.cableBundles[TrayConstants.cablePurposes.control],
             rightStartX,
             bottomStartY,
             spacingPx
