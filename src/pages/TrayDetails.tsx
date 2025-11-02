@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Body1,
   Button,
@@ -54,6 +54,11 @@ import {
   DEFAULT_CATEGORY_SETTINGS,
   type CableCategoryKey
 } from './ProjectDetails/hooks/cableLayoutDefaults';
+import {
+  TrayDrawingService,
+  type CableBundleMap,
+  determineCableDiameterGroup
+} from './TrayDetails/trayDrawingService';
 
 const useStyles = makeStyles({
   root: {
@@ -139,6 +144,27 @@ const useStyles = makeStyles({
   },
   chartStatus: {
     fontWeight: tokens.fontWeightSemibold
+  },
+  canvasSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    width: '100vw',
+    marginLeft: 'calc(50% - 50vw)',
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    ...shorthands.padding('1.25rem')
+  },
+  canvasScroll: {
+    width: '100%',
+    overflowX: 'auto'
+  },
+  trayCanvas: {
+    display: 'block',
+    maxWidth: '100%',
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    backgroundColor: tokens.colorNeutralBackground1
   }
 });
 
@@ -173,6 +199,8 @@ const matchCableCategory = (purpose: string | null): CableCategoryKey | null => 
 
 export const TrayDetails = () => {
   const styles = useStyles();
+  const trayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const trayDrawingServiceRef = useRef<TrayDrawingService | null>(null);
   const navigate = useNavigate();
   const { projectId, trayId } = useParams<{ projectId: string; trayId: string }>();
   const { user, token } = useAuth();
@@ -483,6 +511,127 @@ export const TrayDetails = () => {
       }),
     []
   );
+
+  const cableBundles: CableBundleMap = useMemo(() => {
+    const bundles: CableBundleMap = {};
+
+    for (const cable of nonGroundingCables) {
+      const category = matchCableCategory(cable.purpose);
+      if (!category) {
+        continue;
+      }
+
+      const bundleKey = determineCableDiameterGroup(cable.diameterMm ?? null);
+
+      if (!bundles[category]) {
+        bundles[category] = {};
+      }
+
+      const bucket = bundles[category];
+      if (!bucket[bundleKey]) {
+        bucket[bundleKey] = [];
+      }
+      bucket[bundleKey].push(cable);
+    }
+
+    return bundles;
+  }, [nonGroundingCables]);
+
+  const projectCableSpacingMm = useMemo(() => {
+    const spacing = project?.cableLayout?.cableSpacing;
+    if (typeof spacing === 'number' && Number.isFinite(spacing) && spacing >= 0) {
+      return spacing;
+    }
+    return 15;
+  }, [project?.cableLayout?.cableSpacing]);
+
+  const drawTrayVisualization = useCallback(() => {
+    const canvasElement = trayCanvasRef.current;
+    if (!tray || !canvasElement) {
+      return false;
+    }
+
+    if (!trayDrawingServiceRef.current) {
+      trayDrawingServiceRef.current = new TrayDrawingService();
+    }
+
+    try {
+      trayDrawingServiceRef.current.drawTrayLayout(
+        canvasElement,
+        tray,
+        nonGroundingCables,
+        cableBundles,
+        6,
+        projectCableSpacingMm
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to render tray visualization', error);
+      return false;
+    }
+  }, [tray, nonGroundingCables, cableBundles, projectCableSpacingMm]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let attempt = 0;
+    const maxAttempts = 5;
+    const timeouts: Array<ReturnType<typeof setTimeout>> = [];
+
+    const scheduleAttempt = () => {
+      if (cancelled || attempt >= maxAttempts) {
+        return;
+      }
+      const delay = 150 * (attempt + 1);
+      attempt += 1;
+      const timeoutId = setTimeout(() => {
+        if (!cancelled) {
+          if (!drawTrayVisualization()) {
+            scheduleAttempt();
+          }
+        }
+      }, delay);
+      timeouts.push(timeoutId);
+    };
+
+    if (!drawTrayVisualization()) {
+      scheduleAttempt();
+    }
+
+    return () => {
+      cancelled = true;
+      for (const timeoutId of timeouts) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [drawTrayVisualization]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        window.requestAnimationFrame(() => {
+          void drawTrayVisualization();
+        });
+      }
+    };
+
+    const handleResize = () => {
+      window.requestAnimationFrame(() => {
+        void drawTrayVisualization();
+      });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [drawTrayVisualization]);
 
   const trayCableCategories = useMemo(() => {
     if (trayCables.length === 0) {
@@ -1085,6 +1234,14 @@ export const TrayDetails = () => {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Tray Canvas Section */}
+      <div className={styles.canvasSection}>
+        <Caption1>Tray laying concept visualization</Caption1>
+        <div className={styles.canvasScroll}>
+          <canvas ref={trayCanvasRef} className={styles.trayCanvas} />
+        </div>
       </div>
 
       {/* Navigation Footer */}
