@@ -709,6 +709,12 @@ export const TrayDetails = () => {
         const trefoil = config.showTrefoil
           ? layout?.trefoil ?? defaults.trefoil
           : null;
+        const trefoilSpacing = config.allowTrefoilSpacing
+          ? layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
+          : null;
+        const phaseRotation = config.allowPhaseRotation
+          ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
+          : null;
 
         return {
           key,
@@ -716,7 +722,9 @@ export const TrayDetails = () => {
           maxRows,
           maxColumns,
           bundleSpacing,
-          trefoil
+          trefoil,
+          trefoilSpacing,
+          phaseRotation
         };
       }),
     [project?.cableLayout, trayCableCategories]
@@ -1275,7 +1283,19 @@ export const TrayDetails = () => {
                     : detail.trefoil
                     ? 'Enabled'
                     : 'Disabled'
-                }
+                }<br />
+                {detail.trefoilSpacing !== null ? (
+                  <>
+                    Space between trefoil bundles -{' '}
+                    {detail.trefoilSpacing ? 'Enabled' : 'Disabled'}{'    '}<br />
+                  </>
+                ) : null}
+                {detail.phaseRotation !== null ? (
+                  <>
+                    Apply phase rotation -{' '}
+                    {detail.phaseRotation ? 'Enabled' : 'Disabled'}
+                  </>
+                ) : null}
               </Body1>
             ))}
           </div>

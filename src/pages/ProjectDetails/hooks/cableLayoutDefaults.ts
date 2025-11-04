@@ -28,13 +28,13 @@ export const CABLE_CATEGORY_CONFIG: Record<
     label: 'Power cables',
     showTrefoil: true,
     allowTrefoilSpacing: true,
-    allowPhaseRotation: false
+    allowPhaseRotation: true
   },
   vfd: {
     label: 'VFD cables',
     showTrefoil: true,
     allowTrefoilSpacing: true,
-    allowPhaseRotation: false
+    allowPhaseRotation: true
   },
   control: {
     label: 'Control cables',

@@ -156,6 +156,9 @@ class CableBundleDrawer {
 
     for (const indices of groupsByKey.values()) {
       const sortedIndices = [...indices].sort((a, b) => a - b);
+      if (sortedIndices.length % 3 !== 0) {
+        continue;
+      }
       for (let i = 0; i + 2 < sortedIndices.length; i += 3) {
         const clusterIndices = sortedIndices.slice(i, i + 3);
         const clusterCables = clusterIndices.map((idx) => cables[idx]);
@@ -193,6 +196,42 @@ class CableBundleDrawer {
     }
 
     return result;
+  }
+
+  private canApplyPhaseRotationGroup(cables: Cable[], purpose: string): boolean {
+    if (purpose === TrayConstants.cablePurposes.mv) {
+      return cables.length > 0;
+    }
+
+    if (
+      purpose !== TrayConstants.cablePurposes.power &&
+      purpose !== TrayConstants.cablePurposes.vfd
+    ) {
+      return false;
+    }
+
+    if (cables.length < 3 || cables.length % 3 !== 0) {
+      return false;
+    }
+
+    const normalizeLocation = (value?: string | null) =>
+      value ? value.trim().toLowerCase() : '';
+
+    const [first] = cables;
+    const fromRaw = first.fromLocation?.trim() ?? '';
+    const toRaw = first.toLocation?.trim() ?? '';
+    if (!fromRaw || !toRaw) {
+      return false;
+    }
+
+    const from = normalizeLocation(fromRaw);
+    const to = normalizeLocation(toRaw);
+
+    return cables.every(
+      (candidate) =>
+        normalizeLocation(candidate.fromLocation) === from &&
+        normalizeLocation(candidate.toLocation) === to
+    );
   }
 
   private updateSeparatorBounds(
@@ -387,11 +426,13 @@ class CableBundleDrawer {
             purpose as keyof typeof TrayConstants.cablePurposes
           ];
 
-        if (
-          purpose === 'mv' &&
+        const canApplyPhaseRotation =
           layoutConfig.trefoil &&
-          layoutConfig.applyPhaseRotation
-        ) {
+          layoutConfig.applyPhaseRotation &&
+          (purpose === 'mv' || purpose === 'power' || purpose === 'vfd') &&
+          this.canApplyPhaseRotationGroup(subBundle, purposeString);
+
+        if (canApplyPhaseRotation) {
           ({ leftStartX, bottomStartY } = this.drawPhaseRotationBundles(
             ctx,
             data,
@@ -446,17 +487,25 @@ class CableBundleDrawer {
               const chunkLength = Math.min(maxCapacityPerChunk, remainingCables.length);
               const chunk = remainingCables.slice(0, chunkLength);
 
-              let rows = referenceRows;
-              let columns = referenceColumns;
-              if (chunkLength < rows * columns) {
-                rows = Math.min(referenceRows, Math.max(chunkLength, 1));
-                columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
-              }
+          let rows = referenceRows;
+          let columns = referenceColumns;
+          if (chunkLength < rows * columns) {
+            rows = Math.min(referenceRows, Math.max(chunkLength, 1));
+            columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
+          }
 
-              ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
-                ctx,
-                data,
-                chunk,
+          if (
+            purposeString !== TrayConstants.cablePurposes.mv &&
+            chunkLength === 2
+          ) {
+            rows = 1;
+            columns = Math.max(columns, 2);
+          }
+
+          ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
+            ctx,
+            data,
+            chunk,
                 leftStartX,
                 bottomStartY,
                 spacingPx,
@@ -524,6 +573,14 @@ class CableBundleDrawer {
             if (chunkLength < rows * columns) {
               rows = Math.min(referenceRows, Math.max(chunkLength, 1));
               columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
+            }
+
+            if (
+              purposeString !== TrayConstants.cablePurposes.mv &&
+              chunkLength === 2
+            ) {
+              rows = 1;
+              columns = Math.max(columns, 2);
             }
 
             if (
@@ -635,6 +692,11 @@ class CableBundleDrawer {
             columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
           }
 
+          if (chunkLength === 2) {
+            rows = 1;
+            columns = Math.max(columns, 2);
+          }
+
           rightStartX = this.drawVerticalStackingFromRight(
             ctx,
             data,
@@ -742,121 +804,152 @@ class CableBundleDrawer {
 
       for (let subBundleIdx = 0; subBundleIdx < subBundles.length; subBundleIdx++) {
         const subBundle = subBundles[subBundleIdx];
-        const grouped = this.splitTrefoilGroups(subBundle, layoutConfig.trefoil);
 
-        // Log bundle composition for VFD cables
-        console.log(`[VFD Bundles] Bundle Key: ${bundleKey}, Sub-bundle ${subBundleIdx + 1}:`);
-        grouped.forEach((group, idx) => {
-          if (group.kind === 'trefoil') {
-            console.log(`  Trefoil bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
-          } else {
-            console.log(`  Normal bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
-          }
-        });
+        const canApplyPhaseRotation =
+          layoutConfig.trefoil &&
+          layoutConfig.applyPhaseRotation &&
+          this.canApplyPhaseRotationGroup(
+            subBundle,
+            TrayConstants.cablePurposes.vfd
+          );
 
-        // First pass: Draw all trefoil bundles
-        for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
-          const group = grouped[groupIdx];
-          if (group.kind !== 'trefoil') continue;
+        if (canApplyPhaseRotation) {
+          const result = this.drawPhaseRotationBundlesFromRight(
+            ctx,
+            data,
+            subBundle,
+            rightStartX,
+            spacingPx,
+            data.bottomRowVFDCables,
+            TrayConstants.cablePurposes.vfd
+          );
+          rightStartX = result.rightStartX;
+          bottomStartY = result.bottomStartY;
+        } else {
+          const grouped = this.splitTrefoilGroups(subBundle, layoutConfig.trefoil);
 
-          bottomStartY = baseBottomY;
+          // Log bundle composition for VFD cables
+          console.log(
+            `[VFD Bundles] Bundle Key: ${bundleKey}, Sub-bundle ${subBundleIdx + 1}:`
+          );
+          grouped.forEach((group, idx) => {
+            if (group.kind === 'trefoil') {
+              console.log(
+                `  Trefoil bundle ${idx + 1}:`,
+                group.cables.map((cable) => `Cable ${data.cablesOnTray.indexOf(cable) + 1}`)
+              );
+            } else {
+              console.log(
+                `  Normal bundle ${idx + 1}:`,
+                group.cables.map((cable) => `Cable ${data.cablesOnTray.indexOf(cable) + 1}`)
+              );
+            }
+          });
 
-          const geometry = this.computeTrefoilGeometry(data, group.cables);
-          if (geometry.success) {
-            const startLeftX = rightStartX - geometry.widthPx;
-            this.renderTrefoilCluster(
-              ctx,
-              data,
-              geometry,
-              startLeftX,
-              baseBottomY,
-              TrayConstants.cablePurposes.vfd,
-              data.bottomRowVFDCables
-            );
-            rightStartX = startLeftX;
+          // First pass: Draw all trefoil bundles
+          for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
+            const group = grouped[groupIdx];
+            if (group.kind !== 'trefoil') continue;
+
             bottomStartY = baseBottomY;
-          } else {
+
+            const geometry = this.computeTrefoilGeometry(data, group.cables);
+            if (geometry.success) {
+              const startLeftX = rightStartX - geometry.widthPx;
+              this.renderTrefoilCluster(
+                ctx,
+                data,
+                geometry,
+                startLeftX,
+                baseBottomY,
+                TrayConstants.cablePurposes.vfd,
+                data.bottomRowVFDCables
+              );
+              rightStartX = startLeftX;
+              bottomStartY = baseBottomY;
+            } else {
+              const { rows } = this.calculateRowsAndColumns(
+                data.tray.heightMm ?? 0,
+                group.cables,
+                TrayConstants.cablePurposes.vfd,
+                layoutConfig
+              );
+              rightStartX = this.drawStandardVfdCables(
+                ctx,
+                data,
+                group.cables,
+                rightStartX,
+                bottomStartY,
+                spacingPx,
+                rows,
+                sortedBundles,
+                bundleKey
+              );
+            }
+
+            // Add spacing between trefoil bundles
+            if (groupIdx < grouped.length - 1) {
+              const nextTrefoil = grouped.slice(groupIdx + 1).find((g) => g.kind === 'trefoil');
+              if (nextTrefoil) {
+                if (layoutConfig.trefoilSpacingBetweenBundles) {
+                  rightStartX -= bundleSpacingPx;
+                } else {
+                  rightStartX -= data.spacingMm * data.canvasScale;
+                }
+              }
+            }
+          }
+
+          // Check if we drew any trefoils and if there are normal cables
+          const hasTrefoils = grouped.some((group) => group.kind === 'trefoil');
+          const hasNormals = grouped.some((group) => group.kind === 'normal');
+
+          // Add bundle spacing between trefoils and normal cables
+          if (hasTrefoils && hasNormals) {
+            rightStartX -= bundleSpacingPx;
+          }
+
+          // Second pass: Draw all normal cables
+          for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
+            const group = grouped[groupIdx];
+            if (group.kind !== 'normal') continue;
+
+            bottomStartY = baseBottomY;
+
             const { rows } = this.calculateRowsAndColumns(
               data.tray.heightMm ?? 0,
               group.cables,
               TrayConstants.cablePurposes.vfd,
               layoutConfig
             );
-            rightStartX = this.drawStandardVfdCables(
-              ctx,
-              data,
-              group.cables,
-              rightStartX,
-              bottomStartY,
-              spacingPx,
-              rows,
-              sortedBundles,
-              bundleKey
-            );
-          }
 
-          // Add spacing between trefoil bundles
-          if (groupIdx < grouped.length - 1) {
-            const nextTrefoil = grouped.slice(groupIdx + 1).find(g => g.kind === 'trefoil');
-            if (nextTrefoil) {
-              if (layoutConfig.trefoilSpacingBetweenBundles) {
-                rightStartX -= bundleSpacingPx;
-              } else {
-                rightStartX -= data.spacingMm * data.canvasScale;
-              }
+            if (
+              bundleKey === TrayConstants.bundleTypes.range30_1_40 ||
+              bundleKey === TrayConstants.bundleTypes.range40_1_45
+            ) {
+              rightStartX = this.drawGroupedVfdCables(
+                ctx,
+                data,
+                group.cables,
+                rightStartX,
+                bottomStartY,
+                spacingPx,
+                sortedBundles,
+                bundleKey
+              );
+            } else {
+              rightStartX = this.drawStandardVfdCables(
+                ctx,
+                data,
+                group.cables,
+                rightStartX,
+                bottomStartY,
+                spacingPx,
+                rows,
+                sortedBundles,
+                bundleKey
+              );
             }
-          }
-        }
-
-        // Check if we drew any trefoils and if there are normal cables
-        const hasTrefoils = grouped.some(g => g.kind === 'trefoil');
-        const hasNormals = grouped.some(g => g.kind === 'normal');
-        
-        // Add bundle spacing between trefoils and normal cables
-        if (hasTrefoils && hasNormals) {
-          rightStartX -= bundleSpacingPx;
-        }
-
-        // Second pass: Draw all normal cables
-        for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
-          const group = grouped[groupIdx];
-          if (group.kind !== 'normal') continue;
-
-          bottomStartY = baseBottomY;
-
-          const { rows } = this.calculateRowsAndColumns(
-            data.tray.heightMm ?? 0,
-            group.cables,
-            TrayConstants.cablePurposes.vfd,
-            layoutConfig
-          );
-
-          if (
-            bundleKey === TrayConstants.bundleTypes.range30_1_40 ||
-            bundleKey === TrayConstants.bundleTypes.range40_1_45
-          ) {
-            rightStartX = this.drawGroupedVfdCables(
-              ctx,
-              data,
-              group.cables,
-              rightStartX,
-              bottomStartY,
-              spacingPx,
-              sortedBundles,
-              bundleKey
-            );
-          } else {
-            rightStartX = this.drawStandardVfdCables(
-              ctx,
-              data,
-              group.cables,
-              rightStartX,
-              bottomStartY,
-              spacingPx,
-              rows,
-              sortedBundles,
-              bundleKey
-            );
           }
         }
 
@@ -956,14 +1049,21 @@ class CableBundleDrawer {
     bundleSpacingPx?: number,
     enforceBundleSpacingBetweenColumns = false
   ): PowerResult {
-    const targetRows = Math.max(rows, 1);
+    let targetRows = Math.max(rows, 1);
+    let requestedColumns = columnsCount;
+
+    if (purpose !== TrayConstants.cablePurposes.mv && sortedCables.length === 2) {
+      targetRows = 1;
+      requestedColumns = Math.max(requestedColumns, 2);
+    }
+
     const baseBottomY =
       TrayConstants.canvasMargin +
       ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
 
     const minimumColumns = Math.max(Math.ceil(sortedCables.length / targetRows), 1);
-    const normalizedColumnsCount = Number.isFinite(columnsCount)
-      ? Math.max(Math.floor(columnsCount), 0)
+    const normalizedColumnsCount = Number.isFinite(requestedColumns)
+      ? Math.max(Math.floor(requestedColumns), 0)
       : 0;
     const totalColumns = Math.max(normalizedColumnsCount, minimumColumns);
     const columns: Cable[][] = [];
@@ -1033,14 +1133,21 @@ class CableBundleDrawer {
     bottomRowCables: Cable[],
     purpose: string
   ): number {
-    const targetRows = Math.max(rows, 1);
+    let targetRows = Math.max(rows, 1);
+    let requestedColumns = columnsCount;
+
+    if (purpose !== TrayConstants.cablePurposes.mv && sortedCables.length === 2) {
+      targetRows = 1;
+      requestedColumns = Math.max(requestedColumns, 2);
+    }
+
     const baseBottomY =
       TrayConstants.canvasMargin +
       ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
 
     const minimumColumns = Math.max(Math.ceil(sortedCables.length / targetRows), 1);
-    const normalizedColumnsCount = Number.isFinite(columnsCount)
-      ? Math.max(Math.floor(columnsCount), 0)
+    const normalizedColumnsCount = Number.isFinite(requestedColumns)
+      ? Math.max(Math.floor(requestedColumns), 0)
       : 0;
     const totalColumns = Math.max(normalizedColumnsCount, minimumColumns);
     const columns: Cable[][] = [];
@@ -1172,6 +1279,87 @@ class CableBundleDrawer {
     }
 
     return { leftStartX, bottomStartY: baseBottomY };
+  }
+
+  private drawPhaseRotationBundlesFromRight(
+    ctx: CanvasRenderingContext2D,
+    data: TrayDrawingData,
+    bundleCables: Cable[],
+    rightStartX: number,
+    spacingPx: number,
+    bottomRowTarget: Cable[],
+    purpose: string
+  ): ControlResult {
+    const sortedCables = [...bundleCables].sort(
+      (a, b) => getCableDiameter(b) - getCableDiameter(a)
+    );
+    if (sortedCables.length === 0) {
+      return {
+        rightStartX,
+        bottomStartY:
+          TrayConstants.canvasMargin +
+          ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale
+      };
+    }
+
+    const phaseRotations = this.applyPhaseRotation(sortedCables);
+
+    const baseBottomY =
+      TrayConstants.canvasMargin +
+      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+    let bottomStartY = baseBottomY;
+
+    let row = 0;
+    let cableIndex = 2;
+    let rightStartBottom = rightStartX;
+    let rightStartTop =
+      rightStartX -
+      ((getCableDiameter(phaseRotations[0]) / 2 + 0.5) * data.canvasScale);
+
+    for (let index = 0; index < phaseRotations.length; index++) {
+      const cable = phaseRotations[index];
+      const diameterMm = getCableDiameter(cable);
+      const diameterPx = diameterMm * data.canvasScale;
+
+      if (index === cableIndex) {
+        bottomStartY -=
+          ((diameterMm * data.canvasScale) / 2) * (Math.sqrt(3) / 2) +
+          (diameterMm * data.canvasScale) / 2 -
+          spacingPx * 2;
+        rightStartX = rightStartTop;
+        row = 1;
+        cableIndex += 3;
+      }
+
+      const cableLeftEdge = rightStartX - diameterPx;
+      const cableRightEdge = rightStartX;
+      this.drawCable(ctx, data, cable, cableLeftEdge, bottomStartY);
+      bottomStartY =
+        TrayConstants.canvasMargin +
+        ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+
+      if (row === 0) {
+        this.updateSeparatorBounds(
+          data,
+          purpose,
+          cableLeftEdge,
+          cableRightEdge
+        );
+        bottomRowTarget.push(cable);
+        rightStartX -= (diameterMm + data.spacingMm) * data.canvasScale;
+        rightStartBottom = rightStartX;
+      } else {
+        row = 0;
+        rightStartBottom -= (diameterMm + data.spacingMm) * data.canvasScale * 2;
+        rightStartX = rightStartBottom;
+        rightStartTop -= (diameterMm + data.spacingMm) * data.canvasScale * 4;
+        bottomStartY =
+          TrayConstants.canvasMargin +
+          ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      }
+    }
+
+    return { rightStartX, bottomStartY: baseBottomY };
   }
 
   private drawGroupedVfdCables(
@@ -1428,6 +1616,11 @@ class CableBundleDrawer {
     const inferredColumns = Math.ceil(bundle.length / rows) || 1;
     columns = Number.isFinite(columns) && columns > 0 ? Math.floor(columns) : inferredColumns;
     columns = Math.max(1, Math.min(columns, maxColumnsSetting));
+
+    if (purpose !== TrayConstants.cablePurposes.mv && bundle.length === 2) {
+      rows = 1;
+      columns = Math.max(2, columns);
+    }
 
     logLayoutDebug('[TrayDrawing] rows/columns result', {
       purpose,
@@ -1732,34 +1925,25 @@ export class TrayDrawingService {
 
         // For MV scenarios, all other cables are drawn from the right
         if (normalizedPurpose === TrayConstants.cablePurposes.power) {
-          // Draw power cables from right using the same logic as VFD
-          // We'll treat power cables like VFD cables when MV is present
-          const sortedBundles = Object.entries(bundles)
-            .filter(([, cables]) => cables.length > 0)
-            .sort(([, cablesA], [, cablesB]) => getCableDiameter(cablesB[0]) - getCableDiameter(cablesA[0]));
-
-          for (const [, bundleCables] of sortedBundles) {
-            const sortedCables = [...bundleCables].sort(
-              (a, b) => getCableDiameter(b) - getCableDiameter(a)
-            );
-            
-            for (const cable of sortedCables) {
-              const diameterMm = getCableDiameter(cable);
-              const radius = (diameterMm / 2) * data.canvasScale;
-              
-              ctx.save();
-              ctx.lineWidth = 1;
-              ctx.beginPath();
-              ctx.arc(rightStartX - radius, bottomStartY - radius, radius, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.restore();
-              
-              this.bundleDrawer['drawCableNumber'](ctx, data, cable, rightStartX - radius, bottomStartY - radius);
-              data.bottomRowPowerCables.push(cable);
-              rightStartX -= (diameterMm + data.spacingMm) * data.canvasScale;
-            }
+          // Reuse VFD drawing logic for right-side power bundles by temporarily
+          // swapping the relevant layout configuration & bottom-row tracking.
+          const originalLayout = data.layoutConfig.vfd;
+          const originalBottomRowRef = data.bottomRowVFDCables;
+          try {
+            data.layoutConfig.vfd = data.layoutConfig.power;
+            data.bottomRowVFDCables = data.bottomRowPowerCables;
+            ({ rightStartX, bottomStartY } = this.bundleDrawer.drawVfdBundles(
+              ctx,
+              data,
+              bundles,
+              rightStartX,
+              bottomStartY,
+              spacingPx
+            ));
+          } finally {
+            data.layoutConfig.vfd = originalLayout;
+            data.bottomRowVFDCables = originalBottomRowRef;
           }
-          
           data.rightSideLeftEdgePx = rightStartX;
         } else if (normalizedPurpose === TrayConstants.cablePurposes.vfd) {
           ({ rightStartX, bottomStartY } = this.bundleDrawer.drawVfdBundles(
