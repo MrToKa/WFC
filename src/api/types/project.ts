@@ -34,6 +34,7 @@ export type ProjectCableCategorySettings = {
   bundleSpacing: CableBundleSpacing | null;
   trefoil: boolean | null;
   trefoilSpacingBetweenBundles: boolean | null;
+  applyPhaseRotation: boolean | null;
 };
 
 export type ProjectCableLayout = {

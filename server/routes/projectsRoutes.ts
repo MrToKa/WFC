@@ -95,6 +95,7 @@ type CableCategorySettingsInput =
       bundleSpacing?: CableBundleSpacingInput | null;
       trefoil?: boolean | null;
       trefoilSpacingBetweenBundles?: boolean | null;
+      applyPhaseRotation?: boolean | null;
     }
   | null
   | undefined;
@@ -116,6 +117,7 @@ type NormalizedCableCategorySettings = {
   bundleSpacing: CableBundleSpacingInput | null;
   trefoil: boolean | null;
   trefoilSpacingBetweenBundles: boolean | null;
+  applyPhaseRotation: boolean | null;
 };
 
 const normalizeSupportDistances = (
@@ -222,13 +224,20 @@ const normalizeCableCategory = (
       : settings.trefoilSpacingBetweenBundles === null
       ? null
       : settings.trefoilSpacingBetweenBundles;
+  const applyPhaseRotation =
+    settings.applyPhaseRotation === undefined
+      ? null
+      : settings.applyPhaseRotation === null
+      ? null
+      : settings.applyPhaseRotation;
 
   if (
     maxRows === null &&
     maxColumns === null &&
     bundleSpacing === null &&
     trefoil === null &&
-    trefoilSpacingBetweenBundles === null
+    trefoilSpacingBetweenBundles === null &&
+    applyPhaseRotation === null
   ) {
     return null;
   }
@@ -238,7 +247,8 @@ const normalizeCableCategory = (
     maxColumns,
     bundleSpacing,
     trefoil,
-    trefoilSpacingBetweenBundles
+    trefoilSpacingBetweenBundles,
+    applyPhaseRotation
   };
 };
 

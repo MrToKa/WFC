@@ -90,7 +90,8 @@ const cableCategorySettingsSchema = z
       .optional(),
     bundleSpacing: cableBundleSpacingSchema.nullable().optional(),
     trefoil: z.boolean().nullable().optional(),
-    trefoilSpacingBetweenBundles: z.boolean().nullable().optional()
+    trefoilSpacingBetweenBundles: z.boolean().nullable().optional(),
+    applyPhaseRotation: z.boolean().nullable().optional()
   })
   .strict();
 

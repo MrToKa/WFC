@@ -65,6 +65,7 @@ export type PublicCableCategorySettings = {
   bundleSpacing: CableBundleSpacing | null;
   trefoil: boolean | null;
   trefoilSpacingBetweenBundles: boolean | null;
+  applyPhaseRotation: boolean | null;
 };
 
 export type PublicCableLayout = {
@@ -174,6 +175,13 @@ const parseTrefoilSpacingBetweenBundles = (value: unknown): boolean | null => {
   return null;
 };
 
+const parseApplyPhaseRotation = (value: unknown): boolean | null => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return null;
+};
+
 const parseCableSpacing = (value: unknown): number | null => {
   const numeric = parseNumericValue(value);
   if (numeric === null) {
@@ -202,7 +210,8 @@ const parseCategorySettings = (
     trefoil: parseTrefoil(record.trefoil),
     trefoilSpacingBetweenBundles: parseTrefoilSpacingBetweenBundles(
       record.trefoilSpacingBetweenBundles
-    )
+    ),
+    applyPhaseRotation: parseApplyPhaseRotation(record.applyPhaseRotation)
   };
 
   if (
@@ -210,7 +219,8 @@ const parseCategorySettings = (
     parsed.maxColumns === null &&
     parsed.bundleSpacing === null &&
     parsed.trefoil === null &&
-    parsed.trefoilSpacingBetweenBundles === null
+    parsed.trefoilSpacingBetweenBundles === null &&
+    parsed.applyPhaseRotation === null
   ) {
     return null;
   }

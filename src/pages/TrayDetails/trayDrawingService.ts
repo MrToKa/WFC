@@ -39,6 +39,7 @@ export type ProjectLayoutConfig = {
   cableSpacing: number;
   trefoil: boolean;
   trefoilSpacingBetweenBundles: boolean;
+  applyPhaseRotation: boolean;
 };
 
 export type CategoryLayoutConfig = Record<CategoryKey, ProjectLayoutConfig>;
@@ -355,7 +356,11 @@ class CableBundleDrawer {
         (a, b) => getCableDiameter(b) - getCableDiameter(a)
       );
 
-      const subBundles = this.splitIntoSubBundles(sortedCables, layoutConfig);
+      const shouldIgnoreBundleLimits =
+        purpose === 'mv' && layoutConfig.trefoil;
+      const subBundles = shouldIgnoreBundleLimits
+        ? [sortedCables]
+        : [sortedCables];
       const maxDiameter = sortedCables.length > 0
         ? getCableDiameter(sortedCables[0])
         : TrayConstants.defaultCableDiameterMm;
@@ -365,20 +370,10 @@ class CableBundleDrawer {
         data.canvasScale,
         data.spacingMm
       );
+      const enforceSingleColumnSpacing = layoutConfig.maxColumns === 1;
 
       for (let subBundleIdx = 0; subBundleIdx < subBundles.length; subBundleIdx++) {
         const subBundle = subBundles[subBundleIdx];
-        const grouped = this.splitTrefoilGroups(subBundle, layoutConfig.trefoil);
-
-        // Log bundle composition
-        console.log(`[${purpose.toUpperCase()} Bundles (left-to-right)] Bundle Key: ${bundleKey}, Sub-bundle ${subBundleIdx + 1}:`);
-        grouped.forEach((group, idx) => {
-          if (group.kind === 'trefoil') {
-            console.log(`  Trefoil bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
-          } else {
-            console.log(`  Normal bundle ${idx + 1}:`, group.cables.map(c => `Cable ${data.cablesOnTray.indexOf(c) + 1}`));
-          }
-        });
 
         // Select the correct bottom row array based on purpose
         const bottomRowCables =
@@ -392,10 +387,34 @@ class CableBundleDrawer {
             purpose as keyof typeof TrayConstants.cablePurposes
           ];
 
-        // First pass: Draw all trefoil bundles
+        if (
+          purpose === 'mv' &&
+          layoutConfig.trefoil &&
+          layoutConfig.applyPhaseRotation
+        ) {
+          ({ leftStartX, bottomStartY } = this.drawPhaseRotationBundles(
+            ctx,
+            data,
+            subBundle,
+            leftStartX,
+            spacingPx,
+            bottomRowCables,
+            purposeString
+          ));
+          bottomStartY = baseBottomY;
+          continue;
+        }
+        const grouped = this.splitTrefoilGroups(subBundle, layoutConfig.trefoil);
+
+        const normalCableQueue: Cable[] = [];
+
+        // First pass: Draw all trefoil bundles and collect normal cables
         for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
           const group = grouped[groupIdx];
-          if (group.kind !== 'trefoil') continue;
+          if (group.kind !== 'trefoil') {
+            normalCableQueue.push(...group.cables);
+            continue;
+          }
 
           bottomStartY = baseBottomY;
 
@@ -412,23 +431,50 @@ class CableBundleDrawer {
             );
             bottomStartY = baseBottomY;
           } else {
-            const rows = this.calculateRowsAndColumns(
+            let remainingCables = [...group.cables];
+            const referenceLayout = this.calculateRowsAndColumns(
               data.tray.heightMm ?? 0,
               group.cables,
               purposeString,
               layoutConfig
-            ).rows;
-            ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
-              ctx,
-              data,
-              group.cables,
-              leftStartX,
-              bottomStartY,
-              spacingPx,
-              rows,
-              bottomRowCables,
-              purposeString
-            ));
+            );
+            const referenceRows = Math.max(referenceLayout.rows, 1);
+            const referenceColumns = Math.max(referenceLayout.columns, 1);
+            const maxCapacityPerChunk = Math.max(referenceRows * referenceColumns, 1);
+
+            while (remainingCables.length > 0) {
+              const chunkLength = Math.min(maxCapacityPerChunk, remainingCables.length);
+              const chunk = remainingCables.slice(0, chunkLength);
+
+              let rows = referenceRows;
+              let columns = referenceColumns;
+              if (chunkLength < rows * columns) {
+                rows = Math.min(referenceRows, Math.max(chunkLength, 1));
+                columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
+              }
+
+              ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
+                ctx,
+                data,
+                chunk,
+                leftStartX,
+                bottomStartY,
+                spacingPx,
+                rows,
+                columns,
+                bottomRowCables,
+                purposeString,
+                bundleSpacingPx,
+                enforceSingleColumnSpacing
+              ));
+
+              remainingCables = remainingCables.slice(chunk.length);
+              bottomStartY = baseBottomY;
+
+              if (remainingCables.length > 0) {
+                leftStartX += bundleSpacingPx;
+              }
+            }
           }
 
           // Add spacing between trefoil bundles
@@ -446,51 +492,75 @@ class CableBundleDrawer {
 
         // Check if we drew any trefoils and if there are normal cables
         const hasTrefoils = grouped.some(g => g.kind === 'trefoil');
-        const hasNormals = grouped.some(g => g.kind === 'normal');
+        const hasNormals = normalCableQueue.length > 0;
         
         // Add bundle spacing between trefoils and normal cables
         if (hasTrefoils && hasNormals) {
           leftStartX += bundleSpacingPx;
         }
 
-        // Second pass: Draw all normal cables
-        for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
-          const group = grouped[groupIdx];
-          if (group.kind !== 'normal') continue;
-
+        // Draw all normal cables together so columns stay full
+        if (hasNormals) {
           bottomStartY = baseBottomY;
+          let remainingNormals = [...normalCableQueue];
 
-          const rows = this.calculateRowsAndColumns(
+          // Determine reference layout using the full normal set
+          const referenceLayout = this.calculateRowsAndColumns(
             data.tray.heightMm ?? 0,
-            group.cables,
+            normalCableQueue,
             purposeString,
             layoutConfig
-          ).rows;
+          );
+          const referenceRows = Math.max(referenceLayout.rows, 1);
+          const referenceColumns = Math.max(referenceLayout.columns, 1);
+          const maxCapacityPerChunk = Math.max(referenceRows * referenceColumns, 1);
 
-          if (
-            bundleKey === TrayConstants.bundleTypes.range40_1_45 ||
-            bundleKey === TrayConstants.bundleTypes.range45_1_60
-          ) {
-            ({ leftStartX, bottomStartY } = this.drawHexagonalPacking(
-              ctx,
-              data,
-              group.cables,
-              leftStartX,
-              bottomStartY,
-              spacingPx
-            ));
-          } else {
-            ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
-              ctx,
-              data,
-              group.cables,
-              leftStartX,
-              bottomStartY,
-              spacingPx,
-              rows,
-              bottomRowCables,
-              purposeString
-            ));
+          while (remainingNormals.length > 0) {
+            const chunkLength = Math.min(maxCapacityPerChunk, remainingNormals.length);
+            const chunk = remainingNormals.slice(0, chunkLength);
+
+            let rows = referenceRows;
+            let columns = referenceColumns;
+            if (chunkLength < rows * columns) {
+              rows = Math.min(referenceRows, Math.max(chunkLength, 1));
+              columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
+            }
+
+            if (
+              bundleKey === TrayConstants.bundleTypes.range40_1_45 ||
+              bundleKey === TrayConstants.bundleTypes.range45_1_60
+            ) {
+              ({ leftStartX, bottomStartY } = this.drawHexagonalPacking(
+                ctx,
+                data,
+                chunk,
+                leftStartX,
+                bottomStartY,
+                spacingPx
+              ));
+            } else {
+              ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
+                ctx,
+                data,
+                chunk,
+                leftStartX,
+                bottomStartY,
+                spacingPx,
+                rows,
+                columns,
+                bottomRowCables,
+                purposeString,
+                bundleSpacingPx,
+                enforceSingleColumnSpacing
+              ));
+            }
+
+            remainingNormals = remainingNormals.slice(chunkLength);
+            bottomStartY = baseBottomY;
+
+            if (remainingNormals.length > 0) {
+              leftStartX += bundleSpacingPx;
+            }
           }
         }
 
@@ -530,7 +600,7 @@ class CableBundleDrawer {
       );
 
       // Split into sub-bundles if needed
-      const subBundles = this.splitIntoSubBundles(sortedCables, layoutConfig);
+      const subBundles = [sortedCables];
       const maxDiameter = sortedCables.length > 0 
         ? getCableDiameter(sortedCables[0]) 
         : TrayConstants.defaultCableDiameterMm;
@@ -543,24 +613,50 @@ class CableBundleDrawer {
 
       for (let subBundleIdx = 0; subBundleIdx < subBundles.length; subBundleIdx++) {
         const subBundle = subBundles[subBundleIdx];
-        const rows = this.calculateRowsAndColumns(
+        let remainingCables = [...subBundle];
+        const referenceLayout = this.calculateRowsAndColumns(
           data.tray.heightMm ?? 0,
           subBundle,
           TrayConstants.cablePurposes.control,
           layoutConfig
-        ).rows;
-
-        rightStartX = this.drawVerticalStackingFromRight(
-          ctx,
-          data,
-          subBundle,
-          rightStartX,
-          bottomStartY,
-          spacingPx,
-          rows,
-          data.bottomRowControlCables,
-          TrayConstants.cablePurposes.control
         );
+        const referenceRows = Math.max(referenceLayout.rows, 1);
+        const referenceColumns = Math.max(referenceLayout.columns, 1);
+        const maxCapacityPerChunk = Math.max(referenceRows * referenceColumns, 1);
+
+        while (remainingCables.length > 0) {
+          const chunkLength = Math.min(maxCapacityPerChunk, remainingCables.length);
+          const chunk = remainingCables.slice(0, chunkLength);
+
+          let rows = referenceRows;
+          let columns = referenceColumns;
+          if (chunkLength < rows * columns) {
+            rows = Math.min(referenceRows, Math.max(chunkLength, 1));
+            columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
+          }
+
+          rightStartX = this.drawVerticalStackingFromRight(
+            ctx,
+            data,
+            chunk,
+            rightStartX,
+            bottomStartY,
+            spacingPx,
+            rows,
+            columns,
+            data.bottomRowControlCables,
+            TrayConstants.cablePurposes.control
+          );
+
+          remainingCables = remainingCables.slice(chunk.length);
+          bottomStartY =
+            TrayConstants.canvasMargin +
+            ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+
+          if (remainingCables.length > 0) {
+            rightStartX -= bundleSpacingPx;
+          }
+        }
 
         // Add spacing between sub-bundles (not after the last one)
         if (subBundleIdx < subBundles.length - 1) {
@@ -633,7 +729,7 @@ class CableBundleDrawer {
         (a, b) => getCableDiameter(b) - getCableDiameter(a)
       );
 
-      const subBundles = this.splitIntoSubBundles(sortedCables, layoutConfig);
+      const subBundles = [sortedCables];
       const maxDiameter = sortedCables.length > 0
         ? getCableDiameter(sortedCables[0])
         : TrayConstants.defaultCableDiameterMm;
@@ -854,22 +950,39 @@ class CableBundleDrawer {
     bottomStartY: number,
     spacingPx: number,
     rows: number,
+    columnsCount = Math.ceil(sortedCables.length / Math.max(rows, 1)),
     bottomRowCables: Cable[],
-    purpose: string
+    purpose: string,
+    bundleSpacingPx?: number,
+    enforceBundleSpacingBetweenColumns = false
   ): PowerResult {
     const targetRows = Math.max(rows, 1);
     const baseBottomY =
       TrayConstants.canvasMargin +
       ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
 
+    const minimumColumns = Math.max(Math.ceil(sortedCables.length / targetRows), 1);
+    const normalizedColumnsCount = Number.isFinite(columnsCount)
+      ? Math.max(Math.floor(columnsCount), 0)
+      : 0;
+    const totalColumns = Math.max(normalizedColumnsCount, minimumColumns);
     const columns: Cable[][] = [];
-    for (let index = 0; index < sortedCables.length; index += targetRows) {
-      columns.push(sortedCables.slice(index, index + targetRows));
+    let cursor = 0;
+    for (let columnIndex = 0; columnIndex < totalColumns && cursor < sortedCables.length; columnIndex++) {
+      const remainingColumns = totalColumns - columnIndex;
+      const remainingCables = sortedCables.length - cursor;
+      const rowsForColumn = Math.min(
+        targetRows,
+        Math.max(Math.ceil(remainingCables / remainingColumns), 1)
+      );
+      columns.push(sortedCables.slice(cursor, cursor + rowsForColumn));
+      cursor += rowsForColumn;
     }
 
     let currentX = leftStartX;
 
-    for (const column of columns) {
+    for (let columnIndex = 0; columnIndex < columns.length; columnIndex++) {
+      const column = columns[columnIndex];
       if (column.length === 0) {
         continue;
       }
@@ -889,7 +1002,17 @@ class CableBundleDrawer {
       );
       const columnMaxDiameterPx = columnMaxDiameterMm * data.canvasScale;
       this.updateSeparatorBounds(data, purpose, currentX, currentX + columnMaxDiameterPx);
-      currentX += (columnMaxDiameterMm + data.spacingMm) * data.canvasScale;
+
+      // Advance past the current column width
+      currentX += columnMaxDiameterPx;
+
+      // Add spacing between columns when needed
+      if (columnIndex < columns.length - 1) {
+        const spacingBetweenColumnsPx = enforceBundleSpacingBetweenColumns
+          ? (bundleSpacingPx ?? spacingPx)
+          : spacingPx;
+        currentX += spacingBetweenColumnsPx;
+      }
     }
 
     leftStartX = currentX;
@@ -906,6 +1029,7 @@ class CableBundleDrawer {
     bottomStartY: number,
     spacingPx: number,
     rows: number,
+    columnsCount = Math.ceil(sortedCables.length / Math.max(rows, 1)),
     bottomRowCables: Cable[],
     purpose: string
   ): number {
@@ -914,14 +1038,28 @@ class CableBundleDrawer {
       TrayConstants.canvasMargin +
       ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
 
+    const minimumColumns = Math.max(Math.ceil(sortedCables.length / targetRows), 1);
+    const normalizedColumnsCount = Number.isFinite(columnsCount)
+      ? Math.max(Math.floor(columnsCount), 0)
+      : 0;
+    const totalColumns = Math.max(normalizedColumnsCount, minimumColumns);
     const columns: Cable[][] = [];
-    for (let index = 0; index < sortedCables.length; index += targetRows) {
-      columns.push(sortedCables.slice(index, index + targetRows));
+    let cursor = 0;
+    for (let columnIndex = 0; columnIndex < totalColumns && cursor < sortedCables.length; columnIndex++) {
+      const remainingColumns = totalColumns - columnIndex;
+      const remainingCables = sortedCables.length - cursor;
+      const rowsForColumn = Math.min(
+        targetRows,
+        Math.max(Math.ceil(remainingCables / remainingColumns), 1)
+      );
+      columns.push(sortedCables.slice(cursor, cursor + rowsForColumn));
+      cursor += rowsForColumn;
     }
 
     let currentX = rightStartX;
 
-    for (const column of columns) {
+    for (let columnIndex = 0; columnIndex < columns.length; columnIndex++) {
+      const column = columns[columnIndex];
       if (column.length === 0) {
         continue;
       }
@@ -951,7 +1089,15 @@ class CableBundleDrawer {
       const columnMaxDiameterPx = columnMaxDiameterMm * data.canvasScale;
       const columnLeftEdge = columnRightEdge - columnMaxDiameterPx;
       this.updateSeparatorBounds(data, purpose, columnLeftEdge, columnRightEdge);
-      currentX -= (columnMaxDiameterMm + data.spacingMm) * data.canvasScale;
+
+      // Move left past column width
+      currentX -= columnMaxDiameterPx;
+
+      // Apply spacing before next column if needed
+      if (columnIndex < columns.length - 1) {
+        const spacingBetweenColumnsPx = spacingPx;
+        currentX -= spacingBetweenColumnsPx;
+      }
     }
 
     return currentX;
@@ -963,7 +1109,8 @@ class CableBundleDrawer {
     bundleCables: Cable[],
     leftStartX: number,
     spacingPx: number,
-    bottomRowTarget: Cable[]
+    bottomRowTarget: Cable[],
+    purpose: string
   ): PowerResult {
     const sortedCables = [...bundleCables].sort(
       (a, b) => getCableDiameter(b) - getCableDiameter(a)
@@ -1006,7 +1153,7 @@ class CableBundleDrawer {
       if (row === 0) {
         this.updateSeparatorBounds(
           data,
-          TrayConstants.cablePurposes.power,
+          purpose,
           cableLeftEdge,
           cableRightEdge
         );
@@ -1246,48 +1393,41 @@ class CableBundleDrawer {
       return { rows: 1, columns: bundle.length };
     }
 
-    // Special case for 2 cables
-    if (bundle.length === 2) {
-      logLayoutDebug('[TrayDrawing] rows/columns special-case (two cables)', {
-        purpose,
-        trayHeightMm,
-        usableHeight,
-        maxDiameter
-      });
-      return { rows: 1, columns: 2 };
-    }
-
     // Get project settings for max rows and columns
-    const maxRows = Math.max(layoutConfig.maxRows || 1, 1);
-    const maxColumns = Math.max(layoutConfig.maxColumns || 1, 1);
+    const maxRowsSetting = Math.max(layoutConfig.maxRows || 1, 1);
+    const maxColumnsSetting = Math.max(layoutConfig.maxColumns || 1, 1);
 
-    const spacingMm = layoutConfig.cableSpacing ?? TrayConstants.defaultSpacingMm;
+    const spacingMm = Math.max(layoutConfig.cableSpacing ?? TrayConstants.defaultSpacingMm, 0);
+    const perCableHeightMm = Math.max(maxDiameter, 0) + spacingMm;
     const physicalMaxRows = Math.max(
-      Math.floor((usableHeight) / (maxDiameter)),
+      Math.floor((usableHeight + spacingMm) / Math.max(perCableHeightMm, 1)),
       1
     );
-    let rows = Math.min(physicalMaxRows, maxRows);
-    rows = Math.max(rows, 1);
 
-    let columns: number;
-    if (purpose === TrayConstants.cablePurposes.control) {
-      rows = Math.min(rows, maxRows);
-      columns = Math.ceil(bundle.length / rows);
-    } else {
+    const maxRowsAllowed = Math.max(Math.min(maxRowsSetting, physicalMaxRows), 1);
+    let rows = maxRowsAllowed;
+    let columns = Math.max(Math.ceil(bundle.length / rows), 1);
+
+    while (columns > maxColumnsSetting && rows > 1) {
+      rows -= 1;
       columns = Math.max(Math.ceil(bundle.length / rows), 1);
     }
 
-    if (columns > maxColumns) {
-      columns = maxColumns;
-      rows = Math.ceil(bundle.length / columns);
+    if (columns > maxColumnsSetting) {
+      columns = maxColumnsSetting;
+      rows = Math.max(Math.ceil(bundle.length / columns), 1);
+      if (rows > maxRowsAllowed) {
+        rows = maxRowsAllowed;
+        columns = Math.max(Math.ceil(bundle.length / rows), 1);
+      }
     }
 
-    if (rows > maxRows) {
-      rows = maxRows;
-    }
+    rows = Number.isFinite(rows) && rows > 0 ? Math.floor(rows) : 1;
+    rows = Math.max(1, Math.min(rows, maxRowsAllowed));
 
-    rows = Math.max(1, rows);
-    columns = Math.max(1, Math.min(columns, maxColumns));
+    const inferredColumns = Math.ceil(bundle.length / rows) || 1;
+    columns = Number.isFinite(columns) && columns > 0 ? Math.floor(columns) : inferredColumns;
+    columns = Math.max(1, Math.min(columns, maxColumnsSetting));
 
     logLayoutDebug('[TrayDrawing] rows/columns result', {
       purpose,
@@ -1296,36 +1436,13 @@ class CableBundleDrawer {
       maxDiameter,
       bundleCount: bundle.length,
       physicalMaxRows,
-      maxRows,
-      maxColumns,
+      maxRows: maxRowsSetting,
+      maxColumns: maxColumnsSetting,
       rows,
       columns      
     });
 
     return { rows, columns };
-  }
-
-  /**
-   * Split cables into sub-bundles based on max rows and columns
-   */
-  private splitIntoSubBundles(
-    cables: Cable[],
-    layoutConfig: ProjectLayoutConfig
-  ): Cable[][] {
-    const maxRows = layoutConfig.maxRows || 2;
-    const maxColumns = layoutConfig.maxColumns || 20;
-    const maxCablesPerBundle = maxRows * maxColumns;
-
-    if (cables.length <= maxCablesPerBundle) {
-      return [cables];
-    }
-
-    const subBundles: Cable[][] = [];
-    for (let i = 0; i < cables.length; i += maxCablesPerBundle) {
-      subBundles.push(cables.slice(i, i + maxCablesPerBundle));
-    }
-
-    return subBundles;
   }
 
   /**

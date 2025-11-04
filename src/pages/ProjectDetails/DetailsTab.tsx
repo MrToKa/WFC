@@ -376,6 +376,12 @@ export const DetailsTab = ({
                   ? 'Enabled'
                   : 'Disabled'
                 : null;
+            const currentPhaseRotationDisplay =
+              card.allowPhaseRotation && card.displayPhaseRotation !== null
+                ? card.displayPhaseRotation
+                  ? 'Enabled'
+                  : 'Disabled'
+                : null;
 
             return (
               <div key={card.key} className={styles.numericField}>
@@ -395,6 +401,14 @@ export const DetailsTab = ({
                         <Caption1>Space between trefoil bundles</Caption1>
                         <Body1>
                           {currentTrefoilSpacingDisplay ?? 'Not specified'}
+                        </Body1>
+                      </>
+                    ) : null}
+                    {card.allowPhaseRotation ? (
+                      <>
+                        <Caption1>Phase rotation</Caption1>
+                        <Body1>
+                          {currentPhaseRotationDisplay ?? 'Not specified'}
                         </Body1>
                       </>
                     ) : null}
@@ -488,6 +502,16 @@ export const DetailsTab = ({
                         checked={card.inputTrefoilSpacing}
                         onChange={(_, data) =>
                           card.onTrefoilSpacingChange(Boolean(data.checked))
+                        }
+                        disabled={card.saving}
+                      />
+                    ) : null}
+                    {card.allowPhaseRotation && card.inputTrefoil ? (
+                      <Checkbox
+                        label="Apply phase rotation"
+                        checked={card.inputPhaseRotation}
+                        onChange={(_, data) =>
+                          card.onPhaseRotationChange(Boolean(data.checked))
                         }
                         disabled={card.saving}
                       />

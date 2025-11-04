@@ -54,6 +54,12 @@ const formatCategoryInput = (
     settings?.trefoilSpacingBetweenBundles === undefined
       ? defaults.trefoilSpacingBetweenBundles
       : settings.trefoilSpacingBetweenBundles;
+  const phaseRotation =
+    CABLE_CATEGORY_CONFIG[key].allowPhaseRotation &&
+    settings?.applyPhaseRotation !== null &&
+    settings?.applyPhaseRotation !== undefined
+      ? settings.applyPhaseRotation
+      : defaults.applyPhaseRotation;
 
   return {
     maxRows: maxRows !== null && maxRows !== undefined ? String(maxRows) : '',
@@ -61,7 +67,8 @@ const formatCategoryInput = (
       maxColumns !== null && maxColumns !== undefined ? String(maxColumns) : '',
     bundleSpacing,
     trefoil: Boolean(trefoil),
-    trefoilSpacing: Boolean(trefoilSpacing)
+    trefoilSpacing: Boolean(trefoilSpacing),
+    phaseRotation: Boolean(phaseRotation)
   };
 };
 
@@ -98,21 +105,25 @@ export type CableCategoryController = {
   label: string;
   showTrefoil: boolean;
   allowTrefoilSpacing: boolean;
+  allowPhaseRotation: boolean;
   currentMaxRows: number | null;
   currentMaxColumns: number | null;
   currentBundleSpacing: CableBundleSpacing | null;
   currentTrefoil: boolean | null;
   currentTrefoilSpacing: boolean | null;
+  currentPhaseRotation: boolean | null;
   displayMaxRows: number;
   displayMaxColumns: number;
   displayBundleSpacing: CableBundleSpacing;
   displayTrefoil: boolean | null;
   displayTrefoilSpacing: boolean | null;
+  displayPhaseRotation: boolean | null;
   inputMaxRows: string;
   inputMaxColumns: string;
   inputBundleSpacing: CableBundleSpacing | null;
   inputTrefoil: boolean;
   inputTrefoilSpacing: boolean;
+  inputPhaseRotation: boolean;
   errors: CategoryErrorState;
   saving: boolean;
   onMaxRowsChange: (value: string) => void;
@@ -120,6 +131,7 @@ export type CableCategoryController = {
   onBundleSpacingChange: (value: CableBundleSpacing | null) => void;
   onTrefoilChange: (value: boolean) => void;
   onTrefoilSpacingChange: (value: boolean) => void;
+  onPhaseRotationChange: (value: boolean) => void;
   onSave: () => Promise<void>;
 };
 
@@ -338,7 +350,8 @@ export const useCableLayoutSettings = ({
       [key]: {
         ...previous[key],
         trefoil: value,
-        trefoilSpacing: value ? previous[key].trefoilSpacing : false
+        trefoilSpacing: value ? previous[key].trefoilSpacing : false,
+        phaseRotation: value ? previous[key].phaseRotation : false
       }
     }));
     setCategoryErrors((previous) => ({
@@ -354,6 +367,23 @@ export const useCableLayoutSettings = ({
         [key]: {
           ...previous[key],
           trefoilSpacing: value
+        }
+      }));
+      setCategoryErrors((previous) => ({
+        ...previous,
+        [key]: { ...previous[key], general: undefined }
+      }));
+    },
+    []
+  );
+
+  const handlePhaseRotationChange = useCallback(
+    (key: CategoryKey, value: boolean) => {
+      setCategoryInputs((previous) => ({
+        ...previous,
+        [key]: {
+          ...previous[key],
+          phaseRotation: value
         }
       }));
       setCategoryErrors((previous) => ({
@@ -426,6 +456,11 @@ export const useCableLayoutSettings = ({
           ? inputs.trefoilSpacing
           : false
         : null;
+      const phaseRotationValue = config.allowPhaseRotation
+        ? inputs.trefoil
+          ? inputs.phaseRotation
+          : false
+        : null;
 
       const currentSettings = project.cableLayout?.[key] ?? null;
       const currentMaxRows = currentSettings?.maxRows ?? null;
@@ -437,6 +472,9 @@ export const useCableLayoutSettings = ({
       const currentTrefoilSpacing = config.allowTrefoilSpacing
         ? currentSettings?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
         : null;
+      const currentPhaseRotation = config.allowPhaseRotation
+        ? currentSettings?.applyPhaseRotation ?? defaults.applyPhaseRotation
+        : null;
 
       const hasChanges =
         currentMaxRows !== maxRowsValue ||
@@ -447,6 +485,9 @@ export const useCableLayoutSettings = ({
           : false) ||
         (config.allowTrefoilSpacing
           ? Boolean(currentTrefoilSpacing) !== trefoilSpacingValue
+          : false) ||
+        (config.allowPhaseRotation
+          ? Boolean(currentPhaseRotation) !== phaseRotationValue
           : false);
 
       if (!hasChanges) {
@@ -476,6 +517,9 @@ export const useCableLayoutSettings = ({
       }
       if (trefoilSpacingValue !== null) {
         payload.trefoilSpacingBetweenBundles = trefoilSpacingValue;
+      }
+      if (phaseRotationValue !== null) {
+        payload.applyPhaseRotation = phaseRotationValue;
       }
 
       try {
@@ -558,6 +602,7 @@ export const useCableLayoutSettings = ({
         label: config.label,
         showTrefoil: config.showTrefoil,
         allowTrefoilSpacing: config.allowTrefoilSpacing,
+        allowPhaseRotation: config.allowPhaseRotation,
         currentMaxRows: currentSettings?.maxRows ?? null,
         currentMaxColumns: currentSettings?.maxColumns ?? null,
         currentBundleSpacing: currentSettings?.bundleSpacing ?? null,
@@ -567,11 +612,17 @@ export const useCableLayoutSettings = ({
         currentTrefoilSpacing: config.allowTrefoilSpacing
           ? currentSettings?.trefoilSpacingBetweenBundles ?? null
           : null,
+        currentPhaseRotation: config.allowPhaseRotation
+          ? currentSettings?.applyPhaseRotation ?? null
+          : null,
         displayMaxRows,
         displayMaxColumns,
         displayBundleSpacing,
         displayTrefoil,
         displayTrefoilSpacing,
+        displayPhaseRotation: config.allowPhaseRotation
+          ? currentSettings?.applyPhaseRotation ?? defaults.applyPhaseRotation
+          : null,
         inputMaxRows:
           inputState?.maxRows ?? (defaults.maxRows ? String(defaults.maxRows) : ''),
         inputMaxColumns:
@@ -582,7 +633,12 @@ export const useCableLayoutSettings = ({
           inputState?.trefoil ?? (config.showTrefoil ? defaults.trefoil : false),
         inputTrefoilSpacing:
           inputState?.trefoilSpacing ??
-          (config.allowTrefoilSpacing ? defaults.trefoilSpacingBetweenBundles : false),
+          (config.allowTrefoilSpacing
+            ? defaults.trefoilSpacingBetweenBundles
+            : false),
+        inputPhaseRotation:
+          inputState?.phaseRotation ??
+          (config.allowPhaseRotation ? defaults.applyPhaseRotation : false),
         errors: errorState ?? {},
         saving: savingState ?? false,
         onMaxRowsChange: (value: string) => handleMaxRowsChange(key, value),
@@ -593,6 +649,8 @@ export const useCableLayoutSettings = ({
         onTrefoilChange: (value: boolean) => handleTrefoilChange(key, value),
         onTrefoilSpacingChange: (value: boolean) =>
           handleTrefoilSpacingChange(key, value),
+        onPhaseRotationChange: (value: boolean) =>
+          handlePhaseRotationChange(key, value),
         onSave: () => handleSaveCategory(key)
       };
     });
@@ -606,6 +664,7 @@ export const useCableLayoutSettings = ({
     handleSaveCategory,
     handleTrefoilChange,
     handleTrefoilSpacingChange,
+    handlePhaseRotationChange,
     project?.cableLayout
   ]);
 

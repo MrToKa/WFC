@@ -573,13 +573,18 @@ export const TrayDetails = () => {
         CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
           ? layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
           : defaults.trefoilSpacingBetweenBundles;
+      const applyPhaseRotation =
+        CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
+          ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
+          : defaults.applyPhaseRotation;
       acc[category] = {
         maxRows: layout?.maxRows ?? defaults.maxRows,
         maxColumns: layout?.maxColumns ?? defaults.maxColumns,
         bundleSpacing: layout?.bundleSpacing ?? defaults.bundleSpacing,
         cableSpacing: projectCableSpacingMm,
         trefoil,
-        trefoilSpacingBetweenBundles
+        trefoilSpacingBetweenBundles,
+        applyPhaseRotation
       };
       return acc;
     }, {} as CategoryLayoutConfig);
