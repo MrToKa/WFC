@@ -67,9 +67,9 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
-    maxWidth: '60rem',
     width: '100%',
     margin: '0 auto',
+    boxSizing: 'border-box',
     ...shorthands.padding('2rem', '1.5rem', '4rem')
   },
   header: {
@@ -88,9 +88,7 @@ const useStyles = makeStyles({
     overflowX: 'auto'
   },
   tableSection: {
-    width: '100vw',
-    marginLeft: 'calc(50% - 50vw)',
-    marginRight: 'calc(50% - 50vw)'
+    boxSizing: 'border-box'
   },
   table: {
     width: '100%',
@@ -116,7 +114,17 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('1.25rem')
+    ...shorthands.padding('1.25rem'),
+    width: '100%',
+    maxWidth: '60rem',
+    margin: '0 auto',
+    boxSizing: 'border-box'
+  },
+  fullWidthSection: {
+    maxWidth: 'none',
+    width: 'calc(100% + 3rem)',
+    marginLeft: '-1.5rem',
+    marginRight: '-1.5rem'
   },
   grid: {
     display: 'grid',
@@ -156,12 +164,11 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '0.75rem',
-    width: '100vw',
-    marginLeft: 'calc(50% - 50vw)',
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('1.25rem')
+    ...shorthands.padding('1.25rem'),
+    boxSizing: 'border-box'
   },
   canvasScroll: {
     width: '100%',
@@ -169,6 +176,7 @@ const useStyles = makeStyles({
   },
   trayCanvas: {
     display: 'block',
+    width: '100%',
     maxWidth: '100%',
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground1
@@ -1270,7 +1278,7 @@ export const TrayDetails = () => {
       </div>
 
       {/* Tray Canvas Section */}
-      <div className={styles.canvasSection}>
+      <div className={`${styles.section} ${styles.fullWidthSection} ${styles.canvasSection}`}>
         <Caption1>Tray laying concept visualization</Caption1>
         <div className={styles.canvasScroll}>
           <canvas ref={trayCanvasRef} className={styles.trayCanvas} />

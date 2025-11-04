@@ -16,7 +16,7 @@ export const CablesTableSection: React.FC<CablesTableSectionProps> = ({
   numberFormatter
 }) => {
   return (
-    <div className={`${styles.section} ${styles.tableSection}`}>
+    <div className={`${styles.section} ${styles.fullWidthSection} ${styles.tableSection}`}>
       <Caption1>Cables laying on the tray</Caption1>
       {cablesError ? (
         <Body1 className={styles.errorText}>{cablesError}</Body1>
