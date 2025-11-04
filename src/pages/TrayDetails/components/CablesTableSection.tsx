@@ -16,7 +16,7 @@ export const CablesTableSection: React.FC<CablesTableSectionProps> = ({
   numberFormatter
 }) => {
   return (
-    <div className={styles.section}>
+    <div className={`${styles.section} ${styles.tableSection}`}>
       <Caption1>Cables laying on the tray</Caption1>
       {cablesError ? (
         <Body1 className={styles.errorText}>{cablesError}</Body1>
@@ -29,6 +29,7 @@ export const CablesTableSection: React.FC<CablesTableSectionProps> = ({
               <tr>
                 <th className={styles.tableHeadCell}>#</th>
                 <th className={styles.tableHeadCell}>Tag</th>
+                <th className={styles.tableHeadCell}>Cable Type</th>
                 <th className={styles.tableHeadCell}>From</th>
                 <th className={styles.tableHeadCell}>To</th>
                 <th className={styles.tableHeadCell}>Purpose</th>
@@ -41,6 +42,7 @@ export const CablesTableSection: React.FC<CablesTableSectionProps> = ({
                 <tr key={cable.id}>
                   <td className={styles.tableCell}>{index + 1}</td>
                   <td className={styles.tableCell}>{cable.tag || '-'}</td>
+                  <td className={styles.tableCell}>{cable.typeName || '-'}</td>
                   <td className={styles.tableCell}>{cable.fromLocation || '-'}</td>
                   <td className={styles.tableCell}>{cable.toLocation || '-'}</td>
                   <td className={styles.tableCell}>{cable.purpose || '-'}</td>

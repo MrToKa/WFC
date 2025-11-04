@@ -321,7 +321,7 @@ class CableBundleDrawer {
     leftStartX: number,
     bottomStartY: number,
     spacingPx: number,
-    purpose: 'power' | 'vfd' | 'control' = 'power'
+    purpose: 'power' | 'mv' | 'vfd' | 'control' = 'power'
   ): PowerResult {
     const sortedBundles = Object.entries(bundles)
       .filter(([, cables]) => cables.length > 0)
@@ -334,10 +334,23 @@ class CableBundleDrawer {
 
     for (const [bundleKey, bundleCables] of sortedBundles) {
       // Select the correct layout config based on purpose
-      const layoutConfig = purpose === 'power' ? data.layoutConfig.power :
-                          purpose === 'vfd' ? data.layoutConfig.vfd :
-                          data.layoutConfig.control;
-      
+      let layoutConfig: ProjectLayoutConfig;
+      switch (purpose) {
+        case 'mv':
+          layoutConfig = data.layoutConfig.mv;
+          break;
+        case 'vfd':
+          layoutConfig = data.layoutConfig.vfd;
+          break;
+        case 'control':
+          layoutConfig = data.layoutConfig.control;
+          break;
+        case 'power':
+        default:
+          layoutConfig = data.layoutConfig.power;
+          break;
+      }
+
       const sortedCables = [...bundleCables].sort(
         (a, b) => getCableDiameter(b) - getCableDiameter(a)
       );
@@ -368,12 +381,16 @@ class CableBundleDrawer {
         });
 
         // Select the correct bottom row array based on purpose
-        const bottomRowCables = purpose === 'power' ? data.bottomRowPowerCables :
-                               purpose === 'vfd' ? data.bottomRowVFDCables :
-                               data.bottomRowControlCables;
-        const purposeString = purpose === 'power' ? TrayConstants.cablePurposes.power :
-                             purpose === 'vfd' ? TrayConstants.cablePurposes.vfd :
-                             TrayConstants.cablePurposes.control;
+        const bottomRowCables =
+          purpose === 'vfd'
+            ? data.bottomRowVFDCables
+            : purpose === 'control'
+            ? data.bottomRowControlCables
+            : data.bottomRowPowerCables;
+        const purposeString =
+          TrayConstants.cablePurposes[
+            purpose as keyof typeof TrayConstants.cablePurposes
+          ];
 
         // First pass: Draw all trefoil bundles
         for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
@@ -582,63 +599,15 @@ class CableBundleDrawer {
     bottomStartY: number,
     spacingPx: number
   ): PowerResult {
-    const sortedBundles = Object.entries(bundles)
-      .filter(([, cables]) => cables.length > 0)
-      .sort(([, cablesA], [, cablesB]) => getCableDiameter(cablesB[0]) - getCableDiameter(cablesA[0]));
-
-    const baseBottomY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
-
-    for (const [, bundleCables] of sortedBundles) {
-      const sortedCables = [...bundleCables].sort(
-        (a, b) => getCableDiameter(b) - getCableDiameter(a)
-      );
-
-      const phaseRotations = this.applyPhaseRotation(sortedCables);
-
-      let row = 0;
-      let cableIndex = 2;
-      let leftStartBottom = leftStartX;
-      let leftStartTop =
-        leftStartX + (getCableDiameter(phaseRotations[0]) / 2 + 0.5) * data.canvasScale;
-      let currentBottomY = baseBottomY;
-
-      for (let index = 0; index < phaseRotations.length; index++) {
-        const cable = phaseRotations[index];
-        const diameterMm = getCableDiameter(cable);
-
-        if (index === cableIndex) {
-          currentBottomY -=
-            ((diameterMm * data.canvasScale) / 2) * (Math.sqrt(3) / 2) +
-            (diameterMm * data.canvasScale) / 2 -
-            spacingPx * 2;
-          leftStartX = leftStartTop;
-          row = 1;
-          cableIndex += 3;
-        }
-
-        this.drawCable(ctx, data, cable, leftStartX, currentBottomY);
-        currentBottomY = baseBottomY;
-
-        if (row === 0) {
-          data.bottomRowPowerCables.push(cable);
-          leftStartX += (diameterMm + data.spacingMm) * data.canvasScale;
-          leftStartBottom = leftStartX;
-        } else {
-          row = 0;
-          leftStartBottom += (diameterMm + data.spacingMm) * data.canvasScale * 2;
-          leftStartX = leftStartBottom;
-          leftStartTop += (diameterMm + data.spacingMm) * data.canvasScale * 4;
-          currentBottomY = baseBottomY;
-        }
-      }
-    }
-
-    // Track the rightmost position of MV cables (left side)
-    data.leftSideRightEdgePx = Math.max(data.leftSideRightEdgePx, leftStartX);
-
-    return { leftStartX, bottomStartY: baseBottomY };
+    return this.drawPowerBundles(
+      ctx,
+      data,
+      bundles,
+      leftStartX,
+      bottomStartY,
+      spacingPx,
+      'mv'
+    );
   }
 
   drawVfdBundles(

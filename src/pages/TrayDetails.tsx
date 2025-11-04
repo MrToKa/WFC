@@ -87,6 +87,11 @@ const useStyles = makeStyles({
     width: '100%',
     overflowX: 'auto'
   },
+  tableSection: {
+    width: '100vw',
+    marginLeft: 'calc(50% - 50vw)',
+    marginRight: 'calc(50% - 50vw)'
+  },
   table: {
     width: '100%',
     borderCollapse: 'collapse',

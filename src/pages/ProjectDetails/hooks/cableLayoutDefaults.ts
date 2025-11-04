@@ -13,7 +13,7 @@ export const CABLE_CATEGORY_CONFIG: Record<
   CableCategoryKey,
   { label: string; showTrefoil: boolean; allowTrefoilSpacing: boolean }
 > = {
-  mv: { label: 'MV cables', showTrefoil: true, allowTrefoilSpacing: false },
+  mv: { label: 'MV cables', showTrefoil: true, allowTrefoilSpacing: true },
   power: { label: 'Power cables', showTrefoil: true, allowTrefoilSpacing: true },
   vfd: { label: 'VFD cables', showTrefoil: true, allowTrefoilSpacing: true },
   control: { label: 'Control cables', showTrefoil: false, allowTrefoilSpacing: false }
