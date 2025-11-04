@@ -1100,6 +1100,11 @@ export const TrayDetails = () => {
     return { text, color };
   }, [chartEvaluation.limitHighlight, numberFormatter]);
 
+  const loadCurveRefreshKey = useMemo(
+    () => `${includeGroundingCable}-${selectedGroundingCableTypeId ?? 'none'}-${groundingCableWeightKgPerM ?? 'na'}`,
+    [includeGroundingCable, selectedGroundingCableTypeId, groundingCableWeightKgPerM]
+  );
+
   // Loading and error states
   if (isLoading) {
     return (
@@ -1259,6 +1264,7 @@ export const TrayDetails = () => {
         chartPointLoadDisplay={chartPointLoadDisplay}
         numberFormatter={numberFormatter}
         styles={styles}
+        refreshKey={loadCurveRefreshKey}
       />
 
       <div className={styles.section}>

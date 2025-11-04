@@ -22,6 +22,7 @@ interface LoadCurveSectionProps {
   chartSummary: { text: string | null; color: string | undefined };
   numberFormatter: Intl.NumberFormat;
   styles: Record<string, string>;
+  refreshKey?: string;
 }
 
 export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
@@ -41,7 +42,8 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
   chartHorizontalLines,
   chartSummary,
   numberFormatter,
-  styles
+  styles,
+  refreshKey
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingServiceRef = useRef<LoadCurveDrawingService | null>(null);
@@ -124,7 +126,7 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
         clearTimeout(timeoutId);
       }
     };
-  }, [drawLoadCurve, chartLoadCurvePoints.length]);
+  }, [drawLoadCurve, chartLoadCurvePoints.length, refreshKey]);
 
   return (
     <div className={styles.section}>
