@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { Caption1, Body1, Spinner } from '@fluentui/react-components';
 import { MaterialLoadCurve, MaterialTray, MaterialLoadCurvePoint } from '../../../api/client';
 import { ChartEvaluation } from '../TrayDetails.types';
-import { LoadCurveChart } from '../../Materials/components/LoadCurveChart';
+import { LoadCurveDrawingService } from '../loadCurveDrawingService';
 
 interface LoadCurveSectionProps {
   selectedMaterialTray: MaterialTray | null;
@@ -43,6 +43,89 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
   numberFormatter,
   styles
 }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingServiceRef = useRef<LoadCurveDrawingService | null>(null);
+
+  const drawLoadCurve = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || chartLoadCurvePoints.length === 0) {
+      return false;
+    }
+
+    if (!drawingServiceRef.current) {
+      drawingServiceRef.current = new LoadCurveDrawingService();
+    }
+
+    try {
+      const title = selectedMaterialTray?.loadCurveName 
+        ? `Load Curve: ${selectedMaterialTray.loadCurveName}`
+        : undefined;
+
+      drawingServiceRef.current.drawLoadCurve(
+        canvas,
+        chartLoadCurvePoints,
+        title,
+        chartEvaluation.marker,
+        chartEvaluation.limitHighlight,
+        chartVerticalLines,
+        chartHorizontalLines,
+        chartSummary.text,
+        chartSummary.color
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to render load curve', error);
+      return false;
+    }
+  }, [
+    chartLoadCurvePoints,
+    chartEvaluation.marker,
+    chartEvaluation.limitHighlight,
+    chartVerticalLines,
+    chartHorizontalLines,
+    chartSummary.text,
+    chartSummary.color,
+    selectedMaterialTray?.loadCurveName
+  ]);
+
+  useEffect(() => {
+    if (chartLoadCurvePoints.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    let attempt = 0;
+    const maxAttempts = 5;
+    const timeouts: Array<ReturnType<typeof setTimeout>> = [];
+
+    const scheduleAttempt = () => {
+      if (cancelled || attempt >= maxAttempts) {
+        return;
+      }
+      const delay = 100 * (attempt + 1);
+      attempt += 1;
+      const timeoutId = setTimeout(() => {
+        if (!cancelled) {
+          if (!drawLoadCurve()) {
+            scheduleAttempt();
+          }
+        }
+      }, delay);
+      timeouts.push(timeoutId);
+    };
+
+    if (!drawLoadCurve()) {
+      scheduleAttempt();
+    }
+
+    return () => {
+      cancelled = true;
+      for (const timeoutId of timeouts) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [drawLoadCurve, chartLoadCurvePoints.length]);
+
   return (
     <div className={styles.section}>
       <Caption1>Tray load curve</Caption1>
@@ -83,15 +166,16 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
       ) : (
         <>
           <div className={styles.chartWrapper}>
-            <LoadCurveChart
-              points={chartLoadCurvePoints}
+            <canvas 
+              ref={canvasRef} 
               className={styles.chartCanvas}
-              marker={chartEvaluation.marker}
-              limitHighlight={chartEvaluation.limitHighlight}
-              verticalLines={chartVerticalLines}
-              horizontalLines={chartHorizontalLines}
-              summaryText={chartSummary.text}
-              summaryColor={chartSummary.color}
+              style={{ 
+                display: 'block', 
+                width: '100%', 
+                maxWidth: '100%',
+                border: '1px solid #e0e0e0',
+                backgroundColor: '#ffffff'
+              }}
             />
           </div>
           <Body1 className={styles.chartStatus} style={{ color: chartStatusColor }}>
