@@ -81,6 +81,16 @@ const logLayoutDebug = (message: string, details: Record<string, unknown>) => {
 const sumCableWidthsPx = (cables: Cable[], scale: number, spacingMm: number): number =>
   cables.reduce((total, cable) => total + (getCableDiameter(cable) + spacingMm) * scale, 0);
 
+export type TrayLayoutSummary = {
+  spacingMm: number;
+  totalCableWidthMm: number;
+  occupiedWidthWithBundleSpacingMm: number;
+  occupiedWidthWithoutBundleSpacingMm: number;
+  bundleSpacingContributionMm: number;
+  segmentCount: number;
+  hasBottomRow: boolean;
+};
+
 class TrayDrawingData {
   tray: Tray;
   cablesOnTray: Cable[];
@@ -98,6 +108,12 @@ class TrayDrawingData {
   // Track actual drawn positions for accurate separator placement
   leftSideRightEdgePx = 0;
   rightSideLeftEdgePx = 0;
+  bottomRowSegments: Record<string, Array<{ leftPx: number; rightPx: number }>> = {
+    [TrayConstants.cablePurposes.power]: [],
+    [TrayConstants.cablePurposes.vfd]: [],
+    [TrayConstants.cablePurposes.control]: [],
+    [TrayConstants.cablePurposes.mv]: []
+  };
 
   constructor(
     tray: Tray,
@@ -124,6 +140,36 @@ class TrayDrawingData {
     this.controlLeftEdgePx = Number.POSITIVE_INFINITY;
     this.leftSideRightEdgePx = 0;
     this.rightSideLeftEdgePx = 0;
+    for (const key of Object.keys(this.bottomRowSegments)) {
+      this.bottomRowSegments[key] = [];
+    }
+  }
+
+  recordBottomRowSegment(purpose: string, leftPx: number, rightPx: number) {
+    if (!Number.isFinite(leftPx) || !Number.isFinite(rightPx)) {
+      return;
+    }
+
+    const normalizedPurpose = purpose.trim().toLowerCase();
+    if (!normalizedPurpose) {
+      return;
+    }
+
+    const left = Math.min(leftPx, rightPx);
+    const right = Math.max(leftPx, rightPx);
+    if (right - left <= 0) {
+      return;
+    }
+
+    if (!this.bottomRowSegments[normalizedPurpose]) {
+      this.bottomRowSegments[normalizedPurpose] = [];
+    }
+
+    this.bottomRowSegments[normalizedPurpose].push({ leftPx: left, rightPx: right });
+  }
+
+  getAllBottomRowSegments(): Array<{ leftPx: number; rightPx: number }> {
+    return Object.values(this.bottomRowSegments).flat();
   }
 }
 
@@ -347,6 +393,8 @@ class CableBundleDrawer {
       const absoluteBottom = baseBottomY + bottomOffset;
       this.drawCable(ctx, data, cable, absoluteLeft, absoluteBottom);
       if (Math.abs(bottomOffset) < 0.5) {
+        const diameterPx = getCableDiameter(cable) * data.canvasScale;
+        data.recordBottomRowSegment(purpose, absoluteLeft, absoluteLeft + diameterPx);
         bottomRowTarget.push(cable);
       }
     }
@@ -369,6 +417,7 @@ class CableBundleDrawer {
     const baseBottomY =
       TrayConstants.canvasMargin +
       ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+    bottomStartY = baseBottomY;
 
     const lastBundleKey = sortedBundles.length > 0 ? sortedBundles[sortedBundles.length - 1][0] : null;
 
@@ -1020,6 +1069,7 @@ class CableBundleDrawer {
           cableLeftEdge,
           cableRightEdge
         );
+        data.recordBottomRowSegment(TrayConstants.cablePurposes.power, cableLeftEdge, cableRightEdge);
         data.bottomRowPowerCables.push(cable);
         currentX += (diameterMm + data.spacingMm) * data.canvasScale;
       } else if (row === 1) {
@@ -1040,7 +1090,7 @@ class CableBundleDrawer {
     data: TrayDrawingData,
     sortedCables: Cable[],
     leftStartX: number,
-    bottomStartY: number,
+    _bottomStartY: number,
     spacingPx: number,
     rows: number,
     columnsCount = Math.ceil(sortedCables.length / Math.max(rows, 1)),
@@ -1091,6 +1141,7 @@ class CableBundleDrawer {
       bottomRowCables.push(columnBottomCable);
 
       let currentBottomY = baseBottomY;
+      const columnLeftEdgePx = currentX;
       for (const cable of column) {
         this.drawCable(ctx, data, cable, currentX, currentBottomY);
         currentBottomY -= getCableDiameter(cable) * data.canvasScale + spacingPx;
@@ -1101,7 +1152,9 @@ class CableBundleDrawer {
         0
       );
       const columnMaxDiameterPx = columnMaxDiameterMm * data.canvasScale;
+      const columnRightEdgePx = columnLeftEdgePx + columnMaxDiameterPx;
       this.updateSeparatorBounds(data, purpose, currentX, currentX + columnMaxDiameterPx);
+      data.recordBottomRowSegment(purpose, columnLeftEdgePx, columnRightEdgePx);
 
       // Advance past the current column width
       currentX += columnMaxDiameterPx;
@@ -1116,9 +1169,7 @@ class CableBundleDrawer {
     }
 
     leftStartX = currentX;
-    bottomStartY = baseBottomY;
-
-    return { leftStartX, bottomStartY };
+    return { leftStartX, bottomStartY: baseBottomY };
   }
 
   private drawVerticalStackingFromRight(
@@ -1126,7 +1177,7 @@ class CableBundleDrawer {
     data: TrayDrawingData,
     sortedCables: Cable[],
     rightStartX: number,
-    bottomStartY: number,
+    _bottomStartY: number,
     spacingPx: number,
     rows: number,
     columnsCount = Math.ceil(sortedCables.length / Math.max(rows, 1)),
@@ -1196,6 +1247,7 @@ class CableBundleDrawer {
       const columnMaxDiameterPx = columnMaxDiameterMm * data.canvasScale;
       const columnLeftEdge = columnRightEdge - columnMaxDiameterPx;
       this.updateSeparatorBounds(data, purpose, columnLeftEdge, columnRightEdge);
+      data.recordBottomRowSegment(purpose, columnLeftEdge, columnRightEdge);
 
       // Move left past column width
       currentX -= columnMaxDiameterPx;
@@ -1264,6 +1316,7 @@ class CableBundleDrawer {
           cableLeftEdge,
           cableRightEdge
         );
+        data.recordBottomRowSegment(purpose, cableLeftEdge, cableRightEdge);
         bottomRowTarget.push(cable);
         leftStartX += (diameterMm + data.spacingMm) * data.canvasScale;
         leftStartBottom = leftStartX;
@@ -1345,6 +1398,7 @@ class CableBundleDrawer {
           cableLeftEdge,
           cableRightEdge
         );
+        data.recordBottomRowSegment(purpose, cableLeftEdge, cableRightEdge);
         bottomRowTarget.push(cable);
         rightStartX -= (diameterMm + data.spacingMm) * data.canvasScale;
         rightStartBottom = rightStartX;
@@ -1423,6 +1477,7 @@ class CableBundleDrawer {
             leftEdge,
             rightEdge
           );
+          data.recordBottomRowSegment(TrayConstants.cablePurposes.vfd, leftEdge, rightEdge);
           data.bottomRowVFDCables.push(cable);
           rightStartX -= (diameterMm + data.spacingMm) * data.canvasScale;
         } else {
@@ -1485,6 +1540,7 @@ class CableBundleDrawer {
           leftEdge,
           rightEdge
         );
+        data.recordBottomRowSegment(TrayConstants.cablePurposes.vfd, leftEdge, rightEdge);
         data.bottomRowVFDCables.push(cable);
       }
 
@@ -1669,7 +1725,7 @@ export class TrayDrawingService {
     canvasScale: number,
     spacingMm?: number,
     layoutConfig?: CategoryLayoutConfig
-  ) {
+  ): TrayLayoutSummary | null {
     if (!canvas) {
       throw new Error('Canvas cannot be null');
     }
@@ -1682,7 +1738,7 @@ export class TrayDrawingService {
 
     if (trayWidth <= 0 || trayHeight <= 0) {
       this.drawMissingDimensions(canvas);
-      return;
+      return null;
     }
 
     const context = canvas.getContext('2d');
@@ -1698,10 +1754,10 @@ export class TrayDrawingService {
     // Space between the cables is set by effectiveSpacingMm
     // Create default layout config if not provided
     const defaultLayoutConfig: CategoryLayoutConfig = {
-      power: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false },
-      control: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false },
-      mv: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false },
-      vfd: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false }
+      power: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false, applyPhaseRotation: false },
+      control: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false, applyPhaseRotation: false },
+      mv: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false, applyPhaseRotation: false },
+      vfd: { maxRows: 2, maxColumns: 20, bundleSpacing: '2D', cableSpacing: effectiveSpacingMm, trefoil: false, trefoilSpacingBetweenBundles: false, applyPhaseRotation: false }
     };
 
     const effectiveLayoutConfig: CategoryLayoutConfig = {
@@ -1723,6 +1779,7 @@ export class TrayDrawingService {
     this.drawBaseTrayStructure(context, drawingData);
     this.drawCableBundles(context, drawingData);
     this.drawSeparators(context, drawingData);
+    return this.buildLayoutSummary(drawingData, effectiveSpacingMm);
   }
 
   private drawMissingDimensions(canvas: HTMLCanvasElement) {
@@ -2050,6 +2107,63 @@ export class TrayDrawingService {
         }
       }
     }
+  }
+
+  private buildLayoutSummary(data: TrayDrawingData, spacingMm: number): TrayLayoutSummary {
+    const segments = data.getAllBottomRowSegments();
+    const scale = data.canvasScale;
+
+    if (!Number.isFinite(scale) || scale <= 0) {
+      return {
+        spacingMm,
+        totalCableWidthMm: 0,
+        occupiedWidthWithBundleSpacingMm: 0,
+        occupiedWidthWithoutBundleSpacingMm: 0,
+        bundleSpacingContributionMm: 0,
+        segmentCount: 0,
+        hasBottomRow: false
+      };
+    }
+
+    const normalizedSpacingMm = Math.max(spacingMm, 0);
+    const sortedSegments = [...segments].sort((a, b) => a.leftPx - b.leftPx);
+    let totalCableWidthPx = 0;
+    let totalGapPx = 0;
+    let totalGapCappedPx = 0;
+
+    for (const segment of sortedSegments) {
+      const lengthPx = Math.max(0, segment.rightPx - segment.leftPx);
+      totalCableWidthPx += lengthPx;
+    }
+
+    for (let index = 0; index < sortedSegments.length - 1; index += 1) {
+      const current = sortedSegments[index];
+      const next = sortedSegments[index + 1];
+      const gapPx = next.leftPx - current.rightPx;
+      if (gapPx > 0) {
+        totalGapPx += gapPx;
+        const baseGapPx = normalizedSpacingMm * scale;
+        totalGapCappedPx += Math.min(gapPx, baseGapPx);
+      }
+    }
+
+    const totalCableWidthMm = totalCableWidthPx / scale;
+    const occupiedWithBundleSpacingMm = (totalCableWidthPx + totalGapPx) / scale;
+    const occupiedWithoutBundleSpacingMm = (totalCableWidthPx + totalGapCappedPx) / scale;
+    const bundleSpacingContributionMm = Math.max(
+      0,
+      occupiedWithBundleSpacingMm - occupiedWithoutBundleSpacingMm
+    );
+
+    return {
+      spacingMm: normalizedSpacingMm,
+      totalCableWidthMm,
+      occupiedWidthWithBundleSpacingMm: occupiedWithBundleSpacingMm,
+      occupiedWidthWithoutBundleSpacingMm: occupiedWithoutBundleSpacingMm,
+      bundleSpacingContributionMm,
+      segmentCount: sortedSegments.length,
+      hasBottomRow: sortedSegments.length > 0
+    };
   }
 
   private drawSeparators(ctx: CanvasRenderingContext2D, data: TrayDrawingData) {

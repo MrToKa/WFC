@@ -103,6 +103,7 @@ type CableCategorySettingsInput =
 type CableLayoutInput =
   | {
       cableSpacing?: number | null;
+      considerBundleSpacingAsFree?: boolean | null;
       mv?: CableCategorySettingsInput;
       power?: CableCategorySettingsInput;
       vfd?: CableCategorySettingsInput;
@@ -273,6 +274,12 @@ const normalizeCableLayout = (
         : Number.isFinite(value)
         ? Math.round(value * 1000) / 1000
         : null;
+  }
+
+  if ('considerBundleSpacingAsFree' in layout) {
+    const value = layout.considerBundleSpacingAsFree;
+    normalized.considerBundleSpacingAsFree =
+      value === null || value === undefined ? null : Boolean(value);
   }
 
   const assignCategory = (
@@ -505,7 +512,7 @@ projectsRouter.patch(
     } = parseResult.data;
 
     const fields: string[] = [];
-    const values: Array<string | number | null> = [];
+    const values: Array<string | number | null | Record<string, unknown>> = [];
     let index = 1;
 
     if (projectNumber !== undefined) {

@@ -70,6 +70,7 @@ export type PublicCableCategorySettings = {
 
 export type PublicCableLayout = {
   cableSpacing: number | null;
+  considerBundleSpacingAsFree: boolean | null;
   mv: PublicCableCategorySettings | null;
   power: PublicCableCategorySettings | null;
   vfd: PublicCableCategorySettings | null;
@@ -182,6 +183,13 @@ const parseApplyPhaseRotation = (value: unknown): boolean | null => {
   return null;
 };
 
+const parseConsiderBundleSpacingAsFree = (value: unknown): boolean | null => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return null;
+};
+
 const parseCableSpacing = (value: unknown): number | null => {
   const numeric = parseNumericValue(value);
   if (numeric === null) {
@@ -232,6 +240,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {
       cableSpacing: null,
+      considerBundleSpacingAsFree: null,
       mv: null,
       power: null,
       vfd: null,
@@ -243,6 +252,9 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
 
   return {
     cableSpacing: parseCableSpacing(record.cableSpacing),
+    considerBundleSpacingAsFree: parseConsiderBundleSpacingAsFree(
+      record.considerBundleSpacingAsFree
+    ),
     mv: parseCategorySettings(record.mv),
     power: parseCategorySettings(record.power),
     vfd: parseCategorySettings(record.vfd),

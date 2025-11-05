@@ -39,6 +39,7 @@ export type ProjectCableCategorySettings = {
 
 export type ProjectCableLayout = {
   cableSpacing: number | null;
+  considerBundleSpacingAsFree: boolean | null;
   mv: ProjectCableCategorySettings | null;
   power: ProjectCableCategorySettings | null;
   vfd: ProjectCableCategorySettings | null;
@@ -51,6 +52,7 @@ export type ProjectCableCategorySettingsInput =
 
 export type ProjectCableLayoutInput = {
   cableSpacing?: number | null;
+  considerBundleSpacingAsFree?: boolean | null;
   mv?: ProjectCableCategorySettingsInput;
   power?: ProjectCableCategorySettingsInput;
   vfd?: ProjectCableCategorySettingsInput;

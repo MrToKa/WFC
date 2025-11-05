@@ -103,6 +103,7 @@ const cableLayoutSchema = z
       .max(5)
       .nullable()
       .optional(),
+    considerBundleSpacingAsFree: z.boolean().nullable().optional(),
     mv: cableCategorySettingsSchema.optional(),
     power: cableCategorySettingsSchema.optional(),
     vfd: cableCategorySettingsSchema.optional(),

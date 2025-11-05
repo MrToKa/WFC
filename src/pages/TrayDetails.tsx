@@ -35,7 +35,9 @@ import {
   parseNumberInput,
   buildTrayInput,
   formatDimensionValue,
-  formatWeightValue
+  formatWeightValue,
+  matchCableCategory,
+  calculateTrayFreeSpaceMetrics
 } from './TrayDetails/TrayDetails.utils';
 import { TrayFormState, TrayFormErrors } from './TrayDetails/TrayDetails.types';
 import {
@@ -59,6 +61,7 @@ import {
   TrayDrawingService,
   type CableBundleMap,
   type CategoryLayoutConfig,
+  type TrayLayoutSummary,
   determineCableDiameterGroup
 } from './TrayDetails/trayDrawingService';
 
@@ -183,35 +186,6 @@ const useStyles = makeStyles({
   }
 });
 
-const matchCableCategory = (purpose: string | null): CableCategoryKey | null => {
-  if (!purpose) {
-    return null;
-  }
-
-  const normalized = purpose.trim().toLowerCase();
-  if (normalized === '') {
-    return null;
-  }
-
-  if (normalized.startsWith('mv') || normalized.includes('medium voltage')) {
-    return 'mv';
-  }
-
-  if (normalized.includes('vfd')) {
-    return 'vfd';
-  }
-
-  if (normalized.startsWith('power') || normalized.includes(' power')) {
-    return 'power';
-  }
-
-  if (normalized.includes('control')) {
-    return 'control';
-  }
-
-  return null;
-};
-
 export const TrayDetails = () => {
   const styles = useStyles();
   const trayCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -259,6 +233,7 @@ export const TrayDetails = () => {
   const [formErrors, setFormErrors] = useState<TrayFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [layoutSummary, setLayoutSummary] = useState<TrayLayoutSummary | null>(null);
 
   // Initialize form when tray loads
   useEffect(() => {
@@ -527,6 +502,14 @@ export const TrayDetails = () => {
     []
   );
 
+  const percentageFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(undefined, {
+        maximumFractionDigits: 1
+      }),
+    []
+  );
+
   const cableBundles: CableBundleMap = useMemo(() => {
     const bundles: CableBundleMap = {};
 
@@ -590,9 +573,34 @@ export const TrayDetails = () => {
     }, {} as CategoryLayoutConfig);
   }, [project?.cableLayout, projectCableSpacingMm]);
 
+  const considerBundleSpacingAsFree = Boolean(
+    project?.cableLayout?.considerBundleSpacingAsFree
+  );
+
+  const freeSpaceMetrics = useMemo(
+    () =>
+      calculateTrayFreeSpaceMetrics({
+        tray,
+        cables: nonGroundingCables,
+        layout: project?.cableLayout ?? null,
+        spacingBetweenCablesMm: projectCableSpacingMm,
+        considerBundleSpacingAsFree,
+        layoutSummary
+      }),
+    [
+      considerBundleSpacingAsFree,
+      layoutSummary,
+      nonGroundingCables,
+      project?.cableLayout,
+      projectCableSpacingMm,
+      tray
+    ]
+  );
+
   const drawTrayVisualization = useCallback(() => {
     const canvasElement = trayCanvasRef.current;
     if (!tray || !canvasElement) {
+      setLayoutSummary(null);
       return false;
     }
 
@@ -601,7 +609,7 @@ export const TrayDetails = () => {
     }
 
     try {
-      trayDrawingServiceRef.current.drawTrayLayout(
+      const summary = trayDrawingServiceRef.current.drawTrayLayout(
         canvasElement,
         tray,
         nonGroundingCables,
@@ -610,9 +618,11 @@ export const TrayDetails = () => {
         projectCableSpacingMm,
         projectLayoutConfig
       );
-      return true;
+      setLayoutSummary(summary ?? null);
+      return summary !== null;
     } catch (error) {
       console.error('Failed to render tray visualization', error);
+      setLayoutSummary(null);
       return false;
     }
   }, [tray, nonGroundingCables, cableBundles, projectCableSpacingMm, projectLayoutConfig]);
@@ -752,6 +762,14 @@ export const TrayDetails = () => {
       value === null || Number.isNaN(value) ? '-' : numberFormatter.format(value),
     [numberFormatter]
   );
+
+  const occupiedWidthDisplay = freeSpaceMetrics.occupiedWidthMm === null
+    ? 'N/A'
+    : `${numberFormatter.format(freeSpaceMetrics.occupiedWidthMm)} mm`;
+
+  const trayFreeSpaceDisplay = freeSpaceMetrics.freeWidthPercent === null
+    ? 'N/A'
+    : `${percentageFormatter.format(freeSpaceMetrics.freeWidthPercent)} %`;
 
   // Form handlers
   const handleFieldChange =
@@ -1306,6 +1324,20 @@ export const TrayDetails = () => {
             ))}
           </div>
         )}
+      </div>
+
+      <div className={styles.section}>
+        <Caption1>Free space calculations</Caption1>
+        <div className={styles.grid}>
+          <div className={styles.field}>
+            <Caption1>Space occupied by cables</Caption1>
+            <Body1>{occupiedWidthDisplay}</Body1>
+          </div>
+          <div className={styles.field}>
+            <Caption1>Cable tray free space</Caption1>
+            <Body1>{trayFreeSpaceDisplay}</Body1>
+          </div>
+        </div>
       </div>
 
       {/* Tray Canvas Section */}

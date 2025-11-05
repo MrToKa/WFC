@@ -26,6 +26,7 @@ type CategoryInputState = {
   bundleSpacing: CableBundleSpacing | null;
   trefoil: boolean;
   trefoilSpacing: boolean;
+  phaseRotation: boolean;
 };
 
 type CategoryErrorState = {
@@ -96,8 +97,10 @@ export type CableSpacingController = {
   input: string;
   error: string | null;
   saving: boolean;
+  considerBundleSpacingAsFree: boolean;
   onInputChange: (value: string) => void;
   onSave: () => Promise<void>;
+  onToggleConsiderBundleSpacingAsFree: (value: boolean) => Promise<void>;
 };
 
 export type CableCategoryController = {
@@ -187,6 +190,8 @@ export const useCableLayoutSettings = ({
   const [spacingInput, setSpacingInput] = useState<string>('');
   const [spacingError, setSpacingError] = useState<string | null>(null);
   const [spacingSaving, setSpacingSaving] = useState<boolean>(false);
+  const [considerBundleSpacingAsFree, setConsiderBundleSpacingAsFree] =
+    useState<boolean>(false);
 
   const [categoryInputs, setCategoryInputs] = useState<
     Record<CategoryKey, CategoryInputState>
@@ -204,6 +209,12 @@ export const useCableLayoutSettings = ({
     setSpacingInput(String(currentValue));
     setSpacingError(null);
   }, [project?.cableLayout?.cableSpacing]);
+
+  useEffect(() => {
+    setConsiderBundleSpacingAsFree(
+      Boolean(project?.cableLayout?.considerBundleSpacingAsFree)
+    );
+  }, [project?.cableLayout?.considerBundleSpacingAsFree]);
 
   useEffect(() => {
     setCategoryInputs(createInitialCategoryInputs(project));
@@ -295,6 +306,83 @@ export const useCableLayoutSettings = ({
       setSpacingSaving(false);
     }
   }, [isAdmin, project, reloadProject, showToast, spacingInput, token]);
+
+  const handleToggleBundleSpacingAsFree = useCallback(
+    async (checked: boolean) => {
+      const label = 'Consider space between bundles as free';
+
+      if (!project || !token) {
+        const message = 'You need to be signed in to update the bundle spacing preference.';
+        setSpacingError(message);
+        showToast({
+          intent: 'error',
+          title: 'Sign-in required',
+          body: message
+        });
+        return;
+      }
+
+      if (!isAdmin) {
+        const message = 'Only administrators can update the bundle spacing preference.';
+        setSpacingError(message);
+        showToast({
+          intent: 'error',
+          title: 'Administrator access required',
+          body: message
+        });
+        return;
+      }
+
+      const currentValue = Boolean(
+        project.cableLayout?.considerBundleSpacingAsFree
+      );
+      if (currentValue === Boolean(checked)) {
+        setConsiderBundleSpacingAsFree(Boolean(checked));
+        setSpacingError(null);
+        return;
+      }
+
+      const previousValue = considerBundleSpacingAsFree;
+      setConsiderBundleSpacingAsFree(Boolean(checked));
+      setSpacingSaving(true);
+      setSpacingError(null);
+
+      try {
+        await updateProject(token, project.id, {
+          cableLayout: {
+            considerBundleSpacingAsFree: checked
+          }
+        });
+        await reloadProject();
+        showToast({
+          intent: 'success',
+          title: `${label} updated`
+        });
+      } catch (error) {
+        console.error('Failed to update bundle spacing preference', error);
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : 'Failed to update bundle spacing preference.';
+        setSpacingError(message);
+        setConsiderBundleSpacingAsFree(previousValue);
+        showToast({
+          intent: 'error',
+          title: 'Update failed',
+          body: message
+        });
+      } finally {
+        setSpacingSaving(false);
+      }
+    }, [
+      considerBundleSpacingAsFree,
+      isAdmin,
+      project,
+      reloadProject,
+      showToast,
+      token
+    ]
+  );
 
   const handleMaxRowsChange = useCallback((key: CategoryKey, value: string) => {
     setCategoryInputs((previous) => ({
@@ -566,12 +654,16 @@ export const useCableLayoutSettings = ({
       input: spacingInput,
       error: spacingError,
       saving: spacingSaving,
+      considerBundleSpacingAsFree,
       onInputChange: handleSpacingChange,
-      onSave: handleSaveSpacing
+      onSave: handleSaveSpacing,
+      onToggleConsiderBundleSpacingAsFree: handleToggleBundleSpacingAsFree
     }),
     [
+      considerBundleSpacingAsFree,
       handleSaveSpacing,
       handleSpacingChange,
+      handleToggleBundleSpacingAsFree,
       project?.cableLayout?.cableSpacing,
       spacingError,
       spacingInput,

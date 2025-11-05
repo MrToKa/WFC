@@ -358,6 +358,18 @@ export const DetailsTab = ({
                 </Button>
               </div>
             ) : null}
+            <Checkbox
+              label="Consider space between bundles as free"
+              checked={cableSpacingField.considerBundleSpacingAsFree}
+              onChange={(_, data) => {
+                if (typeof data.checked === 'boolean') {
+                  void cableSpacingField.onToggleConsiderBundleSpacingAsFree(
+                    data.checked
+                  );
+                }
+              }}
+              disabled={!isAdmin || cableSpacingField.saving}
+            />
           </div>
           {cableCategoryCards.map((card) => {
             const currentMaxRows = card.displayMaxRows.toLocaleString();
