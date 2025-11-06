@@ -112,6 +112,14 @@ export const useProjectDetailsStyles = makeStyles({
     verticalAlign: 'middle',
     wordBreak: 'break-word'
   },
+  lowFreeSpace: {
+    color: tokens.colorStatusDangerForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  highFreeSpace: {
+    color: tokens.colorStatusWarningForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
   tableSortButton: {
     padding: 0,
     minWidth: 'auto',

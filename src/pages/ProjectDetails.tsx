@@ -409,6 +409,8 @@ export const ProjectDetails = () => {
   const considerBundleSpacingAsFree = Boolean(
     project?.cableLayout?.considerBundleSpacingAsFree
   );
+  const minFreeSpacePercent = project?.cableLayout?.minFreeSpacePercent ?? null;
+  const maxFreeSpacePercent = project?.cableLayout?.maxFreeSpacePercent ?? null;
 
   const trayFreeSpaceById = useMemo<Record<string, number | null>>(() => {
     if (trays.length === 0) {
@@ -683,6 +685,8 @@ export const ProjectDetails = () => {
           totalPages={totalTrayPages}
           onPreviousPage={handleTraysPreviousPage}
           onNextPage={handleTraysNextPage}
+          minFreeSpacePercent={minFreeSpacePercent}
+          maxFreeSpacePercent={maxFreeSpacePercent}
         />
       ) : null}
 

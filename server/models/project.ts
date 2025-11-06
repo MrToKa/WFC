@@ -71,6 +71,8 @@ export type PublicCableCategorySettings = {
 export type PublicCableLayout = {
   cableSpacing: number | null;
   considerBundleSpacingAsFree: boolean | null;
+  minFreeSpacePercent: number | null;
+  maxFreeSpacePercent: number | null;
   mv: PublicCableCategorySettings | null;
   power: PublicCableCategorySettings | null;
   vfd: PublicCableCategorySettings | null;
@@ -203,6 +205,23 @@ const parseCableSpacing = (value: unknown): number | null => {
   return Math.round(numeric * 1000) / 1000;
 };
 
+const parseFreeSpacePercent = (value: unknown): number | null => {
+  const numeric = parseNumericValue(value);
+  if (numeric === null) {
+    return null;
+  }
+
+  if (!Number.isInteger(numeric)) {
+    return null;
+  }
+
+  if (numeric < 1 || numeric > 100) {
+    return null;
+  }
+
+  return numeric;
+};
+
 const parseCategorySettings = (
   value: unknown
 ): PublicCableCategorySettings | null => {
@@ -241,6 +260,8 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
     return {
       cableSpacing: null,
       considerBundleSpacingAsFree: null,
+      minFreeSpacePercent: null,
+      maxFreeSpacePercent: null,
       mv: null,
       power: null,
       vfd: null,
@@ -255,6 +276,8 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
     considerBundleSpacingAsFree: parseConsiderBundleSpacingAsFree(
       record.considerBundleSpacingAsFree
     ),
+    minFreeSpacePercent: parseFreeSpacePercent(record.minFreeSpacePercent),
+    maxFreeSpacePercent: parseFreeSpacePercent(record.maxFreeSpacePercent),
     mv: parseCategorySettings(record.mv),
     power: parseCategorySettings(record.power),
     vfd: parseCategorySettings(record.vfd),

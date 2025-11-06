@@ -38,6 +38,8 @@ type TraysTabProps = {
   items: Tray[];
   pendingId: string | null;
   freeSpaceByTrayId: Record<string, number | null>;
+  minFreeSpacePercent: number | null;
+  maxFreeSpacePercent: number | null;
   onDetails: (tray: Tray) => void;
   onDelete: (tray: Tray) => void;
   formatNumeric: (value: number | null) => string;
@@ -69,6 +71,8 @@ export const TraysTab = ({
   items,
   pendingId,
   freeSpaceByTrayId,
+  minFreeSpacePercent,
+  maxFreeSpacePercent,
   onDetails,
   onDelete,
   formatNumeric,
@@ -222,6 +226,16 @@ export const TraysTab = ({
                 freeSpacePercent === null
                   ? '-'
                   : `${freeSpaceFormatter.format(freeSpacePercent)} %`;
+              const freeSpaceClass =
+                freeSpacePercent === null
+                  ? undefined
+                  : minFreeSpacePercent !== null &&
+                    freeSpacePercent < minFreeSpacePercent
+                  ? styles.lowFreeSpace
+                  : maxFreeSpacePercent !== null &&
+                    freeSpacePercent > maxFreeSpacePercent
+                  ? styles.highFreeSpace
+                  : undefined;
               return (
                 <tr key={tray.id}>
                   <td className={styles.tableCell}>{tray.name}</td>
@@ -254,7 +268,8 @@ export const TraysTab = ({
                   <td
                     className={mergeClasses(
                       styles.tableCell,
-                      styles.numericCell
+                      styles.numericCell,
+                      freeSpaceClass
                     )}
                   >
                     {freeSpaceDisplay}

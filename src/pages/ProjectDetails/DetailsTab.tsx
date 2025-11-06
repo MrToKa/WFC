@@ -326,6 +326,18 @@ export const DetailsTab = ({
             </Body1>
             <Caption1>Current value</Caption1>
             <Body1>{formatNumeric(cableSpacingField.currentValue)}</Body1>
+            <Caption1>Current minimum free space</Caption1>
+            <Body1>
+              {cableSpacingField.minFreeSpaceCurrent !== null
+                ? `${cableSpacingField.minFreeSpaceCurrent}%`
+                : '-'}
+            </Body1>
+            <Caption1>Current maximum free space</Caption1>
+            <Body1>
+              {cableSpacingField.maxFreeSpaceCurrent !== null
+                ? `${cableSpacingField.maxFreeSpaceCurrent}%`
+                : '-'}
+            </Body1>
             {isAdmin ? (
               <div className={styles.numericFieldControls}>
                 <Field
@@ -345,6 +357,54 @@ export const DetailsTab = ({
                     step="0.1"
                     min={1}
                     max={5}
+                    size="small"
+                  />
+                </Field>
+                <Field
+                  className={styles.numericFieldInput}
+                  label="Minimum tray free space (1-100%)"
+                  validationState={
+                    cableSpacingField.minFreeSpaceError ? 'error' : undefined
+                  }
+                  validationMessage={
+                    cableSpacingField.minFreeSpaceError ?? undefined
+                  }
+                >
+                  <Input
+                    value={cableSpacingField.minFreeSpaceInput}
+                    onChange={(_, data) =>
+                      cableSpacingField.onMinFreeSpaceChange(data.value)
+                    }
+                    disabled={cableSpacingField.saving}
+                    inputMode="numeric"
+                    type="number"
+                    step={1}
+                    min={1}
+                    max={100}
+                    size="small"
+                  />
+                </Field>
+                <Field
+                  className={styles.numericFieldInput}
+                  label="Maximum free space (1-100%)"
+                  validationState={
+                    cableSpacingField.maxFreeSpaceError ? 'error' : undefined
+                  }
+                  validationMessage={
+                    cableSpacingField.maxFreeSpaceError ?? undefined
+                  }
+                >
+                  <Input
+                    value={cableSpacingField.maxFreeSpaceInput}
+                    onChange={(_, data) =>
+                      cableSpacingField.onMaxFreeSpaceChange(data.value)
+                    }
+                    disabled={cableSpacingField.saving}
+                    inputMode="numeric"
+                    type="number"
+                    step={1}
+                    min={1}
+                    max={100}
                     size="small"
                   />
                 </Field>

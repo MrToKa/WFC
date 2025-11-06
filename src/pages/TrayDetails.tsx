@@ -148,6 +148,14 @@ const useStyles = makeStyles({
   errorText: {
     color: tokens.colorStatusDangerForeground1
   },
+  freeSpaceDanger: {
+    color: tokens.colorStatusDangerForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
+  freeSpaceWarning: {
+    color: tokens.colorStatusWarningForeground1,
+    fontWeight: tokens.fontWeightSemibold
+  },
   chartWrapper: {
     width: '100%',
     overflowX: 'auto'
@@ -579,6 +587,15 @@ export const TrayDetails = () => {
     project?.cableLayout?.considerBundleSpacingAsFree
   );
 
+  const minFreeSpacePercent = project?.cableLayout?.minFreeSpacePercent ?? null;
+  const maxFreeSpacePercent = project?.cableLayout?.maxFreeSpacePercent ?? null;
+  const trayPurposeNormalized = tray?.purpose
+    ? tray.purpose.trim().toLowerCase()
+    : '';
+  const isMvTrayPurpose =
+    trayPurposeNormalized === 'mv cable trays' ||
+    trayPurposeNormalized === 'type a (pink color) for mv cables';
+
   const freeSpaceMetrics = useMemo(
     () =>
       calculateTrayFreeSpaceMetrics({
@@ -598,6 +615,48 @@ export const TrayDetails = () => {
       tray
     ]
   );
+
+  const freeSpaceAlert = useMemo(() => {
+    if (
+      !freeSpaceMetrics.calculationAvailable ||
+      freeSpaceMetrics.freeWidthPercent === null ||
+      isMvTrayPurpose
+    ) {
+      return null;
+    }
+
+    const percent = freeSpaceMetrics.freeWidthPercent;
+    const percentDisplay = `${percentageFormatter.format(percent)} %`;
+
+    if (minFreeSpacePercent !== null && percent < minFreeSpacePercent) {
+      const minDisplay = `${percentageFormatter.format(
+        minFreeSpacePercent
+      )} %`;
+      return {
+        kind: 'danger' as const,
+        message: `Cable tray free space ${percentDisplay} is below the minimum threshold of ${minDisplay}.`
+      };
+    }
+
+    if (maxFreeSpacePercent !== null && percent > maxFreeSpacePercent) {
+      const maxDisplay = `${percentageFormatter.format(
+        maxFreeSpacePercent
+      )} %`;
+      return {
+        kind: 'warning' as const,
+        message: `Cable tray free space ${percentDisplay} exceeds the maximum threshold of ${maxDisplay}.`
+      };
+    }
+
+    return null;
+  }, [
+    freeSpaceMetrics.calculationAvailable,
+    freeSpaceMetrics.freeWidthPercent,
+    isMvTrayPurpose,
+    maxFreeSpacePercent,
+    minFreeSpacePercent,
+    percentageFormatter
+  ]);
 
   const drawTrayVisualization = useCallback(() => {
     const canvasElement = trayCanvasRef.current;
@@ -1341,6 +1400,17 @@ export const TrayDetails = () => {
             <Body1>{trayFreeSpaceDisplay}</Body1>
           </div>
         </div>
+        {freeSpaceAlert ? (
+          <Body1
+            className={
+              freeSpaceAlert.kind === 'danger'
+                ? styles.freeSpaceDanger
+                : styles.freeSpaceWarning
+            }
+          >
+            {freeSpaceAlert.message}
+          </Body1>
+        ) : null}
       </div>
 
       {/* Tray Canvas Section */}

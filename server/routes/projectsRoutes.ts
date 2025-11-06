@@ -104,6 +104,8 @@ type CableLayoutInput =
   | {
       cableSpacing?: number | null;
       considerBundleSpacingAsFree?: boolean | null;
+      minFreeSpacePercent?: number | null;
+      maxFreeSpacePercent?: number | null;
       mv?: CableCategorySettingsInput;
       power?: CableCategorySettingsInput;
       vfd?: CableCategorySettingsInput;
@@ -280,6 +282,26 @@ const normalizeCableLayout = (
     const value = layout.considerBundleSpacingAsFree;
     normalized.considerBundleSpacingAsFree =
       value === null || value === undefined ? null : Boolean(value);
+  }
+
+  if ('minFreeSpacePercent' in layout) {
+    const value = layout.minFreeSpacePercent;
+    normalized.minFreeSpacePercent =
+      value === null || value === undefined
+        ? null
+        : Number.isFinite(value)
+        ? Math.min(100, Math.max(1, Math.round(value)))
+        : null;
+  }
+
+  if ('maxFreeSpacePercent' in layout) {
+    const value = layout.maxFreeSpacePercent;
+    normalized.maxFreeSpacePercent =
+      value === null || value === undefined
+        ? null
+        : Number.isFinite(value)
+        ? Math.min(100, Math.max(1, Math.round(value)))
+        : null;
   }
 
   const assignCategory = (

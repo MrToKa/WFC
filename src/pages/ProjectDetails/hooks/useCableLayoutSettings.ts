@@ -94,11 +94,19 @@ const createInitialSavingState = () =>
 export type CableSpacingController = {
   label: string;
   currentValue: number | null;
+  minFreeSpaceCurrent: number | null;
+  maxFreeSpaceCurrent: number | null;
   input: string;
+  minFreeSpaceInput: string;
+  maxFreeSpaceInput: string;
   error: string | null;
+  minFreeSpaceError: string | null;
+  maxFreeSpaceError: string | null;
   saving: boolean;
   considerBundleSpacingAsFree: boolean;
   onInputChange: (value: string) => void;
+  onMinFreeSpaceChange: (value: string) => void;
+  onMaxFreeSpaceChange: (value: string) => void;
   onSave: () => Promise<void>;
   onToggleConsiderBundleSpacingAsFree: (value: boolean) => Promise<void>;
 };
@@ -180,6 +188,42 @@ const parseIntegerInput = (
   return { numeric: parsed };
 };
 
+const parsePercentInput = (
+  value: string,
+  label: 'min' | 'max'
+): { numeric: number | null; error?: string } => {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return { numeric: null };
+  }
+
+  if (!/^-?\d+$/.test(trimmed)) {
+    return {
+      numeric: null,
+      error: `Enter a whole number between 1 and 100 for the ${
+        label === 'min' ? 'minimum' : 'maximum'
+      } free space.`
+    };
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed)) {
+    return {
+      numeric: null,
+      error: 'Only whole numbers are allowed.'
+    };
+  }
+
+  if (parsed < 1 || parsed > 100) {
+    return {
+      numeric: null,
+      error: 'Value must be between 1 and 100.'
+    };
+  }
+
+  return { numeric: parsed };
+};
+
 export const useCableLayoutSettings = ({
   project,
   token,
@@ -192,6 +236,14 @@ export const useCableLayoutSettings = ({
   const [spacingSaving, setSpacingSaving] = useState<boolean>(false);
   const [considerBundleSpacingAsFree, setConsiderBundleSpacingAsFree] =
     useState<boolean>(false);
+  const [minFreeSpaceInput, setMinFreeSpaceInput] = useState<string>('');
+  const [maxFreeSpaceInput, setMaxFreeSpaceInput] = useState<string>('');
+  const [minFreeSpaceError, setMinFreeSpaceError] = useState<string | null>(
+    null
+  );
+  const [maxFreeSpaceError, setMaxFreeSpaceError] = useState<string | null>(
+    null
+  );
 
   const [categoryInputs, setCategoryInputs] = useState<
     Record<CategoryKey, CategoryInputState>
@@ -211,6 +263,22 @@ export const useCableLayoutSettings = ({
   }, [project?.cableLayout?.cableSpacing]);
 
   useEffect(() => {
+    const minValue = project?.cableLayout?.minFreeSpacePercent ?? null;
+    setMinFreeSpaceInput(
+      minValue !== null && minValue !== undefined ? String(minValue) : ''
+    );
+    setMinFreeSpaceError(null);
+  }, [project?.cableLayout?.minFreeSpacePercent]);
+
+  useEffect(() => {
+    const maxValue = project?.cableLayout?.maxFreeSpacePercent ?? null;
+    setMaxFreeSpaceInput(
+      maxValue !== null && maxValue !== undefined ? String(maxValue) : ''
+    );
+    setMaxFreeSpaceError(null);
+  }, [project?.cableLayout?.maxFreeSpacePercent]);
+
+  useEffect(() => {
     setConsiderBundleSpacingAsFree(
       Boolean(project?.cableLayout?.considerBundleSpacingAsFree)
     );
@@ -225,6 +293,16 @@ export const useCableLayoutSettings = ({
   const handleSpacingChange = useCallback((value: string) => {
     setSpacingInput(value);
     setSpacingError(null);
+  }, []);
+
+  const handleMinFreeSpaceChange = useCallback((value: string) => {
+    setMinFreeSpaceInput(value);
+    setMinFreeSpaceError(null);
+  }, []);
+
+  const handleMaxFreeSpaceChange = useCallback((value: string) => {
+    setMaxFreeSpaceInput(value);
+    setMaxFreeSpaceError(null);
   }, []);
 
   const handleSaveSpacing = useCallback(async () => {
@@ -265,24 +343,62 @@ export const useCableLayoutSettings = ({
       }
     }
 
+    const parsedMin = parsePercentInput(minFreeSpaceInput, 'min');
+    const parsedMax = parsePercentInput(maxFreeSpaceInput, 'max');
+
+    if (parsedMin.error) {
+      setMinFreeSpaceError(parsedMin.error);
+    }
+
+    if (parsedMax.error) {
+      setMaxFreeSpaceError(parsedMax.error);
+    }
+
+    if (parsedMin.error || parsedMax.error) {
+      return;
+    }
+
+    if (
+      parsedMin.numeric !== null &&
+      parsedMax.numeric !== null &&
+      parsedMin.numeric > parsedMax.numeric
+    ) {
+      const message = 'Minimum free space cannot be greater than the maximum.';
+      setMinFreeSpaceError(message);
+      setMaxFreeSpaceError(message);
+      return;
+    }
+
     const currentValue = project.cableLayout?.cableSpacing ?? null;
     const nextValue =
       parsed.numeric !== null
         ? Math.round(parsed.numeric * 1000) / 1000
         : null;
+    const currentMin = project.cableLayout?.minFreeSpacePercent ?? null;
+    const currentMax = project.cableLayout?.maxFreeSpacePercent ?? null;
+    const nextMin = parsedMin.numeric ?? null;
+    const nextMax = parsedMax.numeric ?? null;
 
-    if (currentValue === nextValue) {
+    if (
+      currentValue === nextValue &&
+      currentMin === nextMin &&
+      currentMax === nextMax
+    ) {
       setSpacingError('No changes to save.');
       return;
     }
 
     setSpacingSaving(true);
     setSpacingError(null);
+    setMinFreeSpaceError(null);
+    setMaxFreeSpaceError(null);
 
     try {
       await updateProject(token, project.id, {
         cableLayout: {
-          cableSpacing: nextValue
+          cableSpacing: nextValue,
+          minFreeSpacePercent: nextMin,
+          maxFreeSpacePercent: nextMax
         }
       });
       await reloadProject();
@@ -305,7 +421,16 @@ export const useCableLayoutSettings = ({
     } finally {
       setSpacingSaving(false);
     }
-  }, [isAdmin, project, reloadProject, showToast, spacingInput, token]);
+  }, [
+    isAdmin,
+    maxFreeSpaceInput,
+    minFreeSpaceInput,
+    project,
+    reloadProject,
+    showToast,
+    spacingInput,
+    token
+  ]);
 
   const handleToggleBundleSpacingAsFree = useCallback(
     async (checked: boolean) => {
@@ -651,20 +776,36 @@ export const useCableLayoutSettings = ({
       label: 'Space between the cables',
       currentValue:
         project?.cableLayout?.cableSpacing ?? DEFAULT_CABLE_SPACING,
+      minFreeSpaceCurrent: project?.cableLayout?.minFreeSpacePercent ?? null,
+      maxFreeSpaceCurrent: project?.cableLayout?.maxFreeSpacePercent ?? null,
       input: spacingInput,
+      minFreeSpaceInput,
+      maxFreeSpaceInput,
       error: spacingError,
+      minFreeSpaceError,
+      maxFreeSpaceError,
       saving: spacingSaving,
       considerBundleSpacingAsFree,
       onInputChange: handleSpacingChange,
+      onMinFreeSpaceChange: handleMinFreeSpaceChange,
+      onMaxFreeSpaceChange: handleMaxFreeSpaceChange,
       onSave: handleSaveSpacing,
       onToggleConsiderBundleSpacingAsFree: handleToggleBundleSpacingAsFree
     }),
     [
       considerBundleSpacingAsFree,
+      handleMaxFreeSpaceChange,
+      handleMinFreeSpaceChange,
       handleSaveSpacing,
       handleSpacingChange,
       handleToggleBundleSpacingAsFree,
+      maxFreeSpaceError,
+      maxFreeSpaceInput,
+      minFreeSpaceError,
+      minFreeSpaceInput,
       project?.cableLayout?.cableSpacing,
+      project?.cableLayout?.maxFreeSpacePercent,
+      project?.cableLayout?.minFreeSpacePercent,
       spacingError,
       spacingInput,
       spacingSaving
