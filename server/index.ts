@@ -9,8 +9,8 @@ const startServer = async (): Promise<void> => {
   try {
     await initializeDatabase();
     await initializeObjectStorage();
-    app.listen(config.port, () => {
-      console.log(`API listening on http://localhost:${config.port}`);
+    app.listen(config.port, config.host, () => {
+      console.log(`API listening on http://${config.host}:${config.port}`);
     });
   } catch (error) {
     console.error('Failed to start server', error);

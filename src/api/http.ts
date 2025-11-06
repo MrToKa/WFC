@@ -25,7 +25,23 @@ type RequestOptions = {
   token?: string;
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+const resolveDefaultApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const hostname = window.location.hostname;
+    const apiPort = import.meta.env.VITE_API_PORT ?? '4000';
+    const portSegment = apiPort ? `:${apiPort}` : '';
+    return `${protocol}//${hostname}${portSegment}`;
+  }
+
+  return 'http://localhost:4000';
+};
+
+const API_BASE_URL = resolveDefaultApiBaseUrl();
 
 export async function request<T>(
   path: string,
