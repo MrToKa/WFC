@@ -83,6 +83,9 @@ export const TraysTable = ({
                 Height [mm]
               </th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                Rung height [mm]
+              </th>
+              <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Width [mm]
               </th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
@@ -101,6 +104,9 @@ export const TraysTable = ({
                   <td className={styles.tableCell}>{tray.type}</td>
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(tray.heightMm)}
+                  </td>
+                  <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                    {formatNumeric(tray.rungHeightMm)}
                   </td>
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(tray.widthMm)}

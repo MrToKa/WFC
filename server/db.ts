@@ -286,6 +286,7 @@ export async function initializeDatabase(): Promise<void> {
       id UUID PRIMARY KEY,
       tray_type TEXT NOT NULL UNIQUE,
       height_mm NUMERIC,
+      rung_height_mm NUMERIC,
       width_mm NUMERIC,
       weight_kg_per_m NUMERIC,
       load_curve_id UUID,
@@ -297,6 +298,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS material_trays_type_lower_idx
       ON material_trays (LOWER(tray_type));
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_trays
+    ADD COLUMN IF NOT EXISTS rung_height_mm NUMERIC;
   `);
 
   await pool.query(`

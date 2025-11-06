@@ -3,7 +3,7 @@ import type { Tray, Cable } from '@/api/client';
 const TrayConstants = {
   canvasMargin: 50,
   textPadding: 40,
-  cProfileHeightMm: 15,
+  defaultRungHeightMm: 15,
   defaultSpacingMm: 15,
   defaultCableDiameterMm: 1,
   cablePurposes: {
@@ -98,6 +98,9 @@ class TrayDrawingData {
   canvasScale: number;
   spacingMm: number;
   layoutConfig: CategoryLayoutConfig;
+  trayHeightMm: number;
+  rungHeightMm: number;
+  usableTrayHeightMm: number;
   bottomRowPowerCables: Cable[] = [];
   bottomRowVFDCables: Cable[] = [];
   bottomRowControlCables: Cable[] = [];
@@ -121,7 +124,8 @@ class TrayDrawingData {
     cableBundles: CableBundleMap | undefined,
     canvasScale: number,
     spacingMm: number,
-    layoutConfig: CategoryLayoutConfig
+    layoutConfig: CategoryLayoutConfig,
+    rungHeightMm: number
   ) {
     this.tray = tray;
     this.cablesOnTray = cablesOnTray;
@@ -129,6 +133,17 @@ class TrayDrawingData {
     this.canvasScale = canvasScale;
     this.spacingMm = spacingMm;
     this.layoutConfig = layoutConfig;
+    const rawTrayHeight =
+      typeof tray.heightMm === 'number' && Number.isFinite(tray.heightMm) && tray.heightMm > 0
+        ? tray.heightMm
+        : 0;
+    const normalisedRung =
+      typeof rungHeightMm === 'number' && Number.isFinite(rungHeightMm) && rungHeightMm >= 0
+        ? rungHeightMm
+        : TrayConstants.defaultRungHeightMm;
+    this.trayHeightMm = rawTrayHeight;
+    this.rungHeightMm = rawTrayHeight > 0 ? Math.min(normalisedRung, rawTrayHeight) : 0;
+    this.usableTrayHeightMm = Math.max(this.trayHeightMm - this.rungHeightMm, 0);
   }
 
   clearBottomRowCables() {
@@ -415,8 +430,7 @@ class CableBundleDrawer {
       .filter(([, cables]) => cables.length > 0)
       .sort(([, cablesA], [, cablesB]) => getCableDiameter(cablesB[0]) - getCableDiameter(cablesA[0]));
     const baseBottomY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
     bottomStartY = baseBottomY;
 
     const lastBundleKey = sortedBundles.length > 0 ? sortedBundles[sortedBundles.length - 1][0] : null;
@@ -523,7 +537,7 @@ class CableBundleDrawer {
           } else {
             let remainingCables = [...group.cables];
             const referenceLayout = this.calculateRowsAndColumns(
-              data.tray.heightMm ?? 0,
+              data.usableTrayHeightMm,
               group.cables,
               purposeString,
               layoutConfig
@@ -604,7 +618,7 @@ class CableBundleDrawer {
 
           // Determine reference layout using the full normal set
           const referenceLayout = this.calculateRowsAndColumns(
-            data.tray.heightMm ?? 0,
+            data.usableTrayHeightMm,
             normalCableQueue,
             purposeString,
             layoutConfig
@@ -721,7 +735,7 @@ class CableBundleDrawer {
         const subBundle = subBundles[subBundleIdx];
         let remainingCables = [...subBundle];
         const referenceLayout = this.calculateRowsAndColumns(
-          data.tray.heightMm ?? 0,
+          data.usableTrayHeightMm,
           subBundle,
           TrayConstants.cablePurposes.control,
           layoutConfig
@@ -761,8 +775,7 @@ class CableBundleDrawer {
 
           remainingCables = remainingCables.slice(chunk.length);
           bottomStartY =
-            TrayConstants.canvasMargin +
-            ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+            TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
 
           if (remainingCables.length > 0) {
             rightStartX -= bundleSpacingPx;
@@ -788,8 +801,7 @@ class CableBundleDrawer {
         spacingPx -
         sumCableWidthsPx(data.bottomRowControlCables, data.canvasScale, data.spacingMm);
       bottomStartY =
-        TrayConstants.canvasMargin +
-        ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+        TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
     }
 
     // Track the leftmost position of Control cables (right side)
@@ -830,8 +842,7 @@ class CableBundleDrawer {
       .sort(([, cablesA], [, cablesB]) => getCableDiameter(cablesB[0]) - getCableDiameter(cablesA[0]));
 
     const baseBottomY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
     const lastBundleKey = sortedBundles.length > 0 ? sortedBundles[sortedBundles.length - 1][0] : null;
 
     for (const [bundleKey, bundleCables] of sortedBundles) {
@@ -918,7 +929,7 @@ class CableBundleDrawer {
               bottomStartY = baseBottomY;
             } else {
               const { rows } = this.calculateRowsAndColumns(
-                data.tray.heightMm ?? 0,
+                data.usableTrayHeightMm,
                 group.cables,
                 TrayConstants.cablePurposes.vfd,
                 layoutConfig
@@ -965,8 +976,8 @@ class CableBundleDrawer {
 
             bottomStartY = baseBottomY;
 
-            const { rows } = this.calculateRowsAndColumns(
-              data.tray.heightMm ?? 0,
+      const { rows } = this.calculateRowsAndColumns(
+              data.usableTrayHeightMm,
               group.cables,
               TrayConstants.cablePurposes.vfd,
               layoutConfig
@@ -1031,7 +1042,7 @@ class CableBundleDrawer {
     spacingPx: number
   ): PowerResult {
     let row = 0;
-    const usableTrayHeight = (data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm;
+    const usableTrayHeight = data.usableTrayHeightMm;
     let currentX = leftStartX;
 
     for (let index = 0; index < sortedCables.length; index++) {
@@ -1059,8 +1070,7 @@ class CableBundleDrawer {
       const cableRightEdge = currentX + diameterPx;
       this.drawCable(ctx, data, cable, currentX, bottomStartY);
       bottomStartY =
-        TrayConstants.canvasMargin +
-        ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+        TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
 
       if (row === 0) {
         this.updateSeparatorBounds(
@@ -1076,8 +1086,7 @@ class CableBundleDrawer {
         row = 0;
         currentX = leftStartX + sumCableWidthsPx(data.bottomRowPowerCables, data.canvasScale, data.spacingMm);
         bottomStartY =
-          TrayConstants.canvasMargin +
-          ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+          TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
       }
     }
 
@@ -1108,8 +1117,7 @@ class CableBundleDrawer {
     }
 
     const baseBottomY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
 
     const minimumColumns = Math.max(Math.ceil(sortedCables.length / targetRows), 1);
     const normalizedColumnsCount = Number.isFinite(requestedColumns)
@@ -1193,8 +1201,7 @@ class CableBundleDrawer {
     }
 
     const baseBottomY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
 
     const minimumColumns = Math.max(Math.ceil(sortedCables.length / targetRows), 1);
     const normalizedColumnsCount = Number.isFinite(requestedColumns)
@@ -1277,8 +1284,7 @@ class CableBundleDrawer {
     const phaseRotations = this.applyPhaseRotation(sortedCables);
 
     const baseBottomY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
     let bottomStartY = baseBottomY;
 
     let row = 0;
@@ -1306,8 +1312,7 @@ class CableBundleDrawer {
       const cableRightEdge = leftStartX + diameterPx;
       this.drawCable(ctx, data, cable, leftStartX, bottomStartY);
       bottomStartY =
-        TrayConstants.canvasMargin +
-        ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+        TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
 
       if (row === 0) {
         this.updateSeparatorBounds(
@@ -1326,8 +1331,7 @@ class CableBundleDrawer {
         leftStartX = leftStartBottom;
         leftStartTop += (diameterMm + data.spacingMm) * data.canvasScale * 4;
         bottomStartY =
-          TrayConstants.canvasMargin +
-          ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+          TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
       }
     }
 
@@ -1350,16 +1354,14 @@ class CableBundleDrawer {
       return {
         rightStartX,
         bottomStartY:
-          TrayConstants.canvasMargin +
-          ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale
+          TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale
       };
     }
 
     const phaseRotations = this.applyPhaseRotation(sortedCables);
 
     const baseBottomY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
     let bottomStartY = baseBottomY;
 
     let row = 0;
@@ -1388,8 +1390,7 @@ class CableBundleDrawer {
       const cableRightEdge = rightStartX;
       this.drawCable(ctx, data, cable, cableLeftEdge, bottomStartY);
       bottomStartY =
-        TrayConstants.canvasMargin +
-        ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+        TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
 
       if (row === 0) {
         this.updateSeparatorBounds(
@@ -1408,8 +1409,7 @@ class CableBundleDrawer {
         rightStartX = rightStartBottom;
         rightStartTop -= (diameterMm + data.spacingMm) * data.canvasScale * 4;
         bottomStartY =
-          TrayConstants.canvasMargin +
-          ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+          TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
       }
     }
 
@@ -1549,8 +1549,7 @@ class CableBundleDrawer {
         row = 0;
         rightStartX -= diameterMm * data.canvasScale + spacingPx;
         bottomStartY =
-          TrayConstants.canvasMargin +
-          ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+          TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
       }
     }
 
@@ -1616,12 +1615,12 @@ class CableBundleDrawer {
   }
 
   private calculateRowsAndColumns(
-    trayHeightMm: number,
+    usableTrayHeightMm: number,
     bundle: Cable[],
     purpose: string,
     layoutConfig: ProjectLayoutConfig
   ) {
-    const usableHeight = Math.max(trayHeightMm - TrayConstants.cProfileHeightMm, 1);
+    const usableHeight = Math.max(usableTrayHeightMm, 1);
     const maxDiameter: number = bundle.reduce(
       (max: number, cable) => Math.max(max, getCableDiameter(cable)),
       TrayConstants.defaultCableDiameterMm
@@ -1630,7 +1629,7 @@ class CableBundleDrawer {
     if (maxDiameter <= 0 || bundle.length === 0) {
       logLayoutDebug('[TrayDrawing] rows/columns fallback (no diameter or cables)', {
         purpose,
-        trayHeightMm,
+        usableTrayHeightMm,
         usableHeight,
         maxDiameter
       });
@@ -1680,7 +1679,7 @@ class CableBundleDrawer {
 
     logLayoutDebug('[TrayDrawing] rows/columns result', {
       purpose,
-      trayHeightMm,
+      usableTrayHeightMm,
       usableHeight,
       maxDiameter,
       bundleCount: bundle.length,
@@ -1724,7 +1723,8 @@ export class TrayDrawingService {
     cableBundles: CableBundleMap | undefined,
     canvasScale: number,
     spacingMm?: number,
-    layoutConfig?: CategoryLayoutConfig
+    layoutConfig?: CategoryLayoutConfig,
+    options?: { rungHeightMm?: number | null }
   ): TrayLayoutSummary | null {
     if (!canvas) {
       throw new Error('Canvas cannot be null');
@@ -1767,13 +1767,16 @@ export class TrayDrawingService {
       vfd: layoutConfig?.vfd ?? defaultLayoutConfig.vfd
     };
 
+    const rungHeightMm = options?.rungHeightMm ?? TrayConstants.defaultRungHeightMm;
+
     const drawingData = new TrayDrawingData(
       tray,
       cablesOnTray,
       cableBundles,
       canvasScale,
       effectiveSpacingMm,
-      effectiveLayoutConfig
+      effectiveLayoutConfig,
+      rungHeightMm
     );
 
     this.drawBaseTrayStructure(context, drawingData);
@@ -1802,7 +1805,7 @@ export class TrayDrawingService {
 
   private drawBaseTrayStructure(ctx: CanvasRenderingContext2D, data: TrayDrawingData) {
     const trayWidth = data.tray.widthMm ?? 0;
-    const trayHeight = data.tray.heightMm ?? 0;
+    const trayHeight = data.trayHeightMm;
     const originX = TrayConstants.canvasMargin;
     const originY = TrayConstants.canvasMargin;
 
@@ -1854,7 +1857,7 @@ export class TrayDrawingService {
     ctx.textBaseline = 'middle';
     ctx.translate(TrayConstants.textPadding / 2, originY + (trayHeight * data.canvasScale) / 2);
     ctx.rotate(Math.PI / 2);
-    const usefulHeight = trayHeight - TrayConstants.cProfileHeightMm;
+    const usefulHeight = data.usableTrayHeightMm;
     ctx.fillText(`Useful tray height: ${usefulHeight} mm`, 0, 0);
     ctx.restore();
   }
@@ -1866,9 +1869,10 @@ export class TrayDrawingService {
     originY: number
   ) {
     const trayWidth = data.tray.widthMm ?? 0;
-    const trayHeight = data.tray.heightMm ?? 0;
-    const cProfileHeightPx = TrayConstants.cProfileHeightMm * data.canvasScale;
+    const trayHeight = data.trayHeightMm;
+    const rungHeightPx = data.rungHeightMm * data.canvasScale;
     const trayHeightPx = trayHeight * data.canvasScale;
+    const usableHeightPx = data.usableTrayHeightMm * data.canvasScale;
     const trayWidthPx = trayWidth * data.canvasScale;
 
     ctx.strokeStyle = '#000000';
@@ -1877,21 +1881,21 @@ export class TrayDrawingService {
       originX,
       originY,
       trayWidthPx,
-      (trayHeight - TrayConstants.cProfileHeightMm) * data.canvasScale
+      usableHeightPx
     );
     ctx.strokeRect(
       originX,
-      originY + trayHeightPx - cProfileHeightPx,
+      originY + trayHeightPx - rungHeightPx,
       trayWidthPx,
-      cProfileHeightPx
+      rungHeightPx
     );
 
     ctx.fillStyle = '#d3d3d3';
     ctx.fillRect(
       originX,
-      originY + trayHeightPx - cProfileHeightPx,
+      originY + trayHeightPx - rungHeightPx,
       trayWidthPx,
-      cProfileHeightPx
+      rungHeightPx
     );
   }
 
@@ -1930,8 +1934,7 @@ export class TrayDrawingService {
     let leftStartX = TrayConstants.canvasMargin + spacingPx;
     let rightStartX = TrayConstants.canvasMargin + trayWidthPx - spacingPx;
     let bottomStartY =
-      TrayConstants.canvasMargin +
-      ((data.tray.heightMm ?? 0) - TrayConstants.cProfileHeightMm) * data.canvasScale;
+      TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
 
     // Check if MV cables are present
     const hasMv = data.cableBundles[TrayConstants.cablePurposes.mv] && 
@@ -2319,10 +2322,10 @@ export class TrayDrawingService {
       const separatorX = leftEdgePx + (rightEdgePx - leftEdgePx) / 2;
 
       // Calculate Y positions
-      const bottomY = TrayConstants.canvasMargin + 
-                     (data.tray.heightMm - TrayConstants.cProfileHeightMm) * data.canvasScale;
-      const topY = TrayConstants.canvasMargin + 
-                  TrayConstants.cProfileHeightMm * data.canvasScale;
+      const bottomY =
+        TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
+      const topY =
+        TrayConstants.canvasMargin + data.rungHeightMm * data.canvasScale;
 
       console.log('[TrayDrawing] Drawing separator line', {
         separatorX,

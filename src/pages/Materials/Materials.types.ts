@@ -3,6 +3,7 @@ export type MaterialsTab = 'trays' | 'supports' | 'loadCurves';
 export type TrayFormState = {
   type: string;
   heightMm: string;
+  rungHeightMm: string;
   widthMm: string;
   weightKgPerM: string;
   imageTemplateId: string | null;
@@ -29,6 +30,7 @@ export type LoadCurveFormErrors = Partial<Record<keyof LoadCurveFormState, strin
 export const initialTrayForm: TrayFormState = {
   type: '',
   heightMm: '',
+  rungHeightMm: '',
   widthMm: '',
   weightKgPerM: '',
   imageTemplateId: null

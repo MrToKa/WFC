@@ -2,6 +2,7 @@ export type MaterialTray = {
   id: string;
   type: string;
   heightMm: number | null;
+  rungHeightMm: number | null;
   widthMm: number | null;
   weightKgPerM: number | null;
   loadCurveId: string | null;
@@ -91,6 +92,7 @@ export type MaterialLoadCurveImportSummary = {
 export type MaterialTrayInput = {
   type: string;
   heightMm?: number | null;
+  rungHeightMm?: number | null;
   widthMm?: number | null;
   weightKgPerM?: number | null;
   loadCurveId?: string | null;

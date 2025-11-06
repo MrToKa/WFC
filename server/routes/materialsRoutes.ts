@@ -43,6 +43,7 @@ const upload = multer({
 const TRAY_HEADERS = {
   type: 'Type',
   height: 'Height [mm]',
+  rungHeight: 'Rung height [mm]',
   width: 'Width [mm]',
   weight: 'Weight [kg/m]'
 } as const;
@@ -266,6 +267,7 @@ const selectMaterialTraysQuery = `
     mt.id,
     mt.tray_type,
     mt.height_mm,
+    mt.rung_height_mm,
     mt.width_mm,
     mt.weight_kg_per_m,
     mt.load_curve_id,
@@ -486,16 +488,18 @@ materialsRouter.post(
             id,
             tray_type,
             height_mm,
+            rung_height_mm,
             width_mm,
             weight_kg_per_m,
             load_curve_id,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, NULL, $6);
+          ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7);
         `,
         [
           trayId,
           type,
           data.heightMm ?? null,
+          data.rungHeightMm ?? null,
           data.widthMm ?? null,
           data.weightKgPerM ?? null,
           normalizedImageTemplateId
@@ -590,6 +594,12 @@ materialsRouter.patch(
     if (data.heightMm !== undefined) {
       setClauses.push(`height_mm = $${parameterIndex}`);
       values.push(data.heightMm ?? null);
+      parameterIndex += 1;
+    }
+
+    if (data.rungHeightMm !== undefined) {
+      setClauses.push(`rung_height_mm = $${parameterIndex}`);
+      values.push(data.rungHeightMm ?? null);
       parameterIndex += 1;
     }
 
@@ -774,6 +784,7 @@ materialsRouter.post(
         for (const row of rows) {
           const typeRaw = row[TRAY_HEADERS.type];
           const heightRaw = row[TRAY_HEADERS.height];
+          const rungRaw = row[TRAY_HEADERS.rungHeight];
           const widthRaw = row[TRAY_HEADERS.width];
           const weightRaw = row[TRAY_HEADERS.weight];
 
@@ -785,6 +796,7 @@ materialsRouter.post(
           const parseResult = createMaterialTraySchema.safeParse({
             type: normalizeType(String(typeRaw)),
             heightMm: toNullableNumber(heightRaw),
+            rungHeightMm: toNullableNumber(rungRaw),
             widthMm: toNullableNumber(widthRaw),
             weightKgPerM: toNullableNumber(weightRaw)
           });
@@ -812,14 +824,16 @@ materialsRouter.post(
                 SET
                   tray_type = $1,
                   height_mm = $2,
-                  width_mm = $3,
-                  weight_kg_per_m = $4,
+                  rung_height_mm = $3,
+                  width_mm = $4,
+                  weight_kg_per_m = $5,
                   updated_at = NOW()
-                WHERE id = $5;
+                WHERE id = $6;
               `,
               [
                 data.type,
                 data.heightMm ?? null,
+                data.rungHeightMm ?? null,
                 data.widthMm ?? null,
                 data.weightKgPerM ?? null,
                 existing.rows[0].id
@@ -833,14 +847,16 @@ materialsRouter.post(
                   id,
                   tray_type,
                   height_mm,
+                  rung_height_mm,
                   width_mm,
                   weight_kg_per_m
-                ) VALUES ($1, $2, $3, $4, $5);
+                ) VALUES ($1, $2, $3, $4, $5, $6);
               `,
               [
                 randomUUID(),
                 data.type,
                 data.heightMm ?? null,
+                data.rungHeightMm ?? null,
                 data.widthMm ?? null,
                 data.weightKgPerM ?? null
               ]
@@ -899,6 +915,7 @@ materialsRouter.get(
       const columns = [
         { name: TRAY_HEADERS.type, key: 'type', width: 30 },
         { name: TRAY_HEADERS.height, key: 'height', width: 18 },
+        { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
         { name: TRAY_HEADERS.weight, key: 'weight', width: 18 }
       ] as const;
@@ -906,6 +923,7 @@ materialsRouter.get(
       const rows = result.rows.map((row) => [
         row.tray_type,
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',
+        row.rung_height_mm !== null && row.rung_height_mm !== '' ? Number(row.rung_height_mm) : '',
         row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
         row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
           ? Number(row.weight_kg_per_m)

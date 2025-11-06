@@ -250,6 +250,8 @@ export const TrayDetails = () => {
     [findMaterialTrayByType, formValues.type]
   );
 
+  const selectedRungHeightMm = selectedMaterialTray?.rungHeightMm ?? null;
+
   const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
   const { selectedLoadCurve, loadCurveLoadingId, loadCurveError } =
     useLoadCurveData(selectedLoadCurveId);
@@ -616,7 +618,8 @@ export const TrayDetails = () => {
         cableBundles,
         6,
         projectCableSpacingMm,
-        projectLayoutConfig
+        projectLayoutConfig,
+        { rungHeightMm: selectedRungHeightMm ?? undefined }
       );
       setLayoutSummary(summary ?? null);
       return summary !== null;
@@ -625,7 +628,7 @@ export const TrayDetails = () => {
       setLayoutSummary(null);
       return false;
     }
-  }, [tray, nonGroundingCables, cableBundles, projectCableSpacingMm, projectLayoutConfig]);
+  }, [tray, nonGroundingCables, cableBundles, projectCableSpacingMm, projectLayoutConfig, selectedRungHeightMm]);
 
   useEffect(() => {
     let cancelled = false;

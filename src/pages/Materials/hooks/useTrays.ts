@@ -135,6 +135,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     setTrayForm({
       type: tray.type,
       heightMm: toFormValue(tray.heightMm),
+      rungHeightMm: toFormValue(tray.rungHeightMm),
       widthMm: toFormValue(tray.widthMm),
       weightKgPerM: toFormValue(tray.weightKgPerM),
       imageTemplateId: tray.imageTemplateId
@@ -293,6 +294,11 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         errors.heightMm = heightResult.error;
       }
 
+      const rungHeightResult = parseNumberInput(trayForm.rungHeightMm);
+      if (rungHeightResult.error) {
+        errors.rungHeightMm = rungHeightResult.error;
+      }
+
       const widthResult = parseNumberInput(trayForm.widthMm);
       if (widthResult.error) {
         errors.widthMm = widthResult.error;
@@ -317,6 +323,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
           await createMaterialTray(token, {
             type,
             heightMm: heightResult.numeric,
+            rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,
             weightKgPerM: weightResult.numeric,
             imageTemplateId
@@ -332,6 +339,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
           await updateMaterialTray(token, editingTray.id, {
             type,
             heightMm: heightResult.numeric,
+            rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,
             weightKgPerM: weightResult.numeric,
             imageTemplateId

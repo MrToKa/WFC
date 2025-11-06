@@ -97,6 +97,13 @@ export const TrayDialog = ({
                 <Input value={form.heightMm} onChange={onFieldChange('heightMm')} />
               </Field>
               <Field
+                label='Rung height [mm]'
+                validationState={formErrors.rungHeightMm ? 'error' : undefined}
+                validationMessage={formErrors.rungHeightMm}
+              >
+                <Input value={form.rungHeightMm} onChange={onFieldChange('rungHeightMm')} />
+              </Field>
+              <Field
                 label='Width [mm]'
                 validationState={formErrors.widthMm ? 'error' : undefined}
                 validationMessage={formErrors.widthMm}

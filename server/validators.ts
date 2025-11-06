@@ -429,6 +429,7 @@ export const createMaterialTraySchema = z
   .object({
     type: z.string().trim().min(1).max(200),
     heightMm: materialNumericField,
+    rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
     weightKgPerM: materialNumericField,
     imageTemplateId: materialImageTemplateField
@@ -450,6 +451,7 @@ export const updateMaterialTraySchema = z
   .object({
     type: z.string().trim().min(1).max(200).optional(),
     heightMm: materialNumericField,
+    rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
     weightKgPerM: materialNumericField,
     loadCurveId: z.string().uuid().optional().nullable(),
@@ -460,6 +462,7 @@ export const updateMaterialTraySchema = z
     (value) =>
       value.type !== undefined ||
       value.heightMm !== undefined ||
+      value.rungHeightMm !== undefined ||
       value.widthMm !== undefined ||
       value.weightKgPerM !== undefined ||
       value.loadCurveId !== undefined ||
