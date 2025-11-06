@@ -825,6 +825,7 @@ export const ProjectDetails = () => {
         errors={cableTypeDialog.errors}
         submitting={cableTypeDialog.submitting}
         onFieldChange={cableTypeDialog.handleFieldChange}
+        onPurposeSelect={cableTypeDialog.handlePurposeSelect}
         onSubmit={(event) => void cableTypeDialog.handleSubmit(event)}
         onDismiss={cableTypeDialog.reset}
       />

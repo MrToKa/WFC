@@ -9,8 +9,10 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Dropdown,
   Field,
-  Input
+  Input,
+  Option
 } from '@fluentui/react-components';
 
 import type {
@@ -29,6 +31,7 @@ type CableTypeDialogProps = {
   onFieldChange: (
     field: keyof CableTypeFormState
   ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
+  onPurposeSelect?: (_event: unknown, data: { optionValue?: string }) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDismiss: () => void;
 };
@@ -41,6 +44,7 @@ export const CableTypeDialog = ({
   errors,
   submitting,
   onFieldChange,
+  onPurposeSelect,
   onSubmit,
   onDismiss
 }: CableTypeDialogProps) => (
@@ -76,10 +80,18 @@ export const CableTypeDialog = ({
               validationState={errors.purpose ? 'error' : undefined}
               validationMessage={errors.purpose}
             >
-              <Input
-                value={values.purpose}
-                onChange={onFieldChange('purpose')}
-              />
+              <Dropdown
+                placeholder="Select purpose"
+                selectedOptions={values.purpose ? [values.purpose] : []}
+                value={values.purpose || undefined}
+                onOptionSelect={onPurposeSelect}
+              >
+                <Option value="Grounding">Grounding</Option>
+                <Option value="Control">Control</Option>
+                <Option value="Power">Power</Option>
+                <Option value="VFD">VFD</Option>
+                <Option value="MV">MV</Option>
+              </Dropdown>
             </Field>
             <Field
               label="Diameter [mm]"

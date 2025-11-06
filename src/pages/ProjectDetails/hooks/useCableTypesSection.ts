@@ -62,6 +62,7 @@ type CableTypeDialogController = {
     event: ChangeEvent<HTMLInputElement>,
     data: { value: string }
   ) => void;
+  handlePurposeSelect: (_event: unknown, data: { optionValue?: string }) => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   reset: () => void;
 };
@@ -282,6 +283,16 @@ export const useCableTypesSection = ({
         [field]: data.value
       }));
     };
+
+  const handlePurposeSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setDialogValues((previous: CableTypeFormState) => ({
+        ...previous,
+        purpose: data.optionValue ?? ''
+      }));
+    },
+    []
+  );
 
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
@@ -584,6 +595,7 @@ export const useCableTypesSection = ({
       errors: dialogErrors,
       submitting: dialogSubmitting,
       handleFieldChange: handleFieldChange,
+      handlePurposeSelect,
       handleSubmit,
       reset: resetDialog
     }
