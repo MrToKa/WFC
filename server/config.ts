@@ -154,6 +154,18 @@ const combineClientOrigins = (): string | string[] | boolean => {
 
 const clientOrigin = combineClientOrigins();
 
+const httpsEnabled = parseBoolean(process.env.API_USE_HTTPS, false);
+const httpsKeyPath = process.env.API_TLS_KEY_PATH;
+const httpsCertPath = process.env.API_TLS_CERT_PATH;
+const httpsCaPath = process.env.API_TLS_CA_PATH;
+const httpsPassphrase = process.env.API_TLS_PASSPHRASE;
+
+if (httpsEnabled && (!httpsKeyPath || !httpsCertPath)) {
+  throw new Error(
+    'API_TLS_KEY_PATH and API_TLS_CERT_PATH must be set when API_USE_HTTPS is enabled'
+  );
+}
+
 export const config = {
   host: apiHost,
   port: parseNumber(process.env.API_PORT, 4000),
@@ -171,5 +183,12 @@ export const config = {
     templateBucket:
       process.env.MINIO_BUCKET_TEMPLATES ?? 'wfc-template-files',
     urlExpirySeconds: parseNumber(process.env.MINIO_URL_EXPIRY_SECONDS, 900)
+  },
+  https: {
+    enabled: httpsEnabled,
+    keyPath: httpsKeyPath,
+    certPath: httpsCertPath,
+    caPath: httpsCaPath,
+    passphrase: httpsPassphrase
   }
 } as const;
