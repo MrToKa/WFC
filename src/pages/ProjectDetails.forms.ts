@@ -189,7 +189,11 @@ export const buildTrayInput = (
     errors.name = 'Name is required';
   }
 
-  const type = toNullableString(values.type);
+  const typeValue = values.type.trim();
+  if (typeValue === '') {
+    errors.type = 'Type is required';
+  }
+  const type = typeValue === '' ? null : typeValue;
   const purpose = toNullableString(values.purpose);
   const widthResult = parseNumberInput(values.widthMm);
   if (widthResult.error) {
@@ -306,20 +310,25 @@ export const buildCableInput = (
     errors.cableId = 'Cable ID is required';
   }
 
+  const tag = values.tag.trim();
+  if (tag === '') {
+    errors.tag = 'Tag is required';
+  }
+
   const cableTypeId = values.cableTypeId.trim();
   if (cableTypeId === '') {
     errors.cableTypeId = 'Cable type is required';
   }
 
-  const normalize = (text: string): string | null => {
+  const normalize = (text: string): string => {
     const trimmed = text.trim();
-    return trimmed === '' ? null : trimmed;
+    return trimmed === '' ? '' : trimmed;
   };
 
   const input: CableInput = {
     cableId,
     cableTypeId,
-    tag: normalize(values.tag),
+    tag,
     fromLocation: normalize(values.fromLocation),
     toLocation: normalize(values.toLocation),
     routing: normalize(values.routing)

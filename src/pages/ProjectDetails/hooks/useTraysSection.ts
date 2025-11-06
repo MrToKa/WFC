@@ -12,10 +12,12 @@ import type { ToastIntent } from '@fluentui/react-components';
 import {
   ApiError,
   CableImportSummary,
+  MaterialTray,
   Tray,
   createTray,
   deleteTray,
   exportTrays,
+  fetchAllMaterialTrays,
   fetchTrays,
   importTrays,
   updateTray
@@ -55,12 +57,15 @@ type TrayDialogController = {
   values: TrayFormState;
   errors: TrayFormErrors;
   submitting: boolean;
+  materialTrays: MaterialTray[];
   handleFieldChange: (
     field: keyof TrayFormState
   ) => (
     event: ChangeEvent<HTMLInputElement>,
     data: { value: string }
   ) => void;
+  handleTypeSelect: (_event: unknown, data: { optionValue?: string }) => void;
+  handlePurposeSelect: (_event: unknown, data: { optionValue?: string }) => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   reset: () => void;
 };
@@ -115,6 +120,8 @@ export const useTraysSection = ({
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [pendingTrayId, setPendingTrayId] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
+
+  const [materialTrays, setMaterialTrays] = useState<MaterialTray[]>([]);
 
   const [isDialogOpen, setDialogOpen] = useState<boolean>(false);
   const [dialogMode, setDialogMode] = useState<TrayDialogMode>('create');
@@ -248,6 +255,19 @@ export const useTraysSection = ({
     void reloadTrays({ showSpinner: true });
   }, [projectId, reloadTrays]);
 
+  // Fetch material trays
+  useEffect(() => {
+      const loadMaterialTrays = async () => {
+        try {
+          const response = await fetchAllMaterialTrays();
+          setMaterialTrays(response.trays);
+        } catch (err) {
+          console.error('Failed to load material trays', err);
+        }
+      };
+      void loadMaterialTrays();
+  }, []);
+
   const goToPreviousPage = useCallback(() => {
     setPage((previous) => Math.max(1, previous - 1));
   }, []);
@@ -274,6 +294,26 @@ export const useTraysSection = ({
         [field]: data.value
       }));
     };
+
+  const handlePurposeSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setDialogValues((previous: TrayFormState) => ({
+        ...previous,
+        purpose: data.optionValue ?? ''
+      }));
+    },
+    []
+  );
+
+  const handleTypeSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setDialogValues((previous: TrayFormState) => ({
+        ...previous,
+        type: data.optionValue ?? ''
+      }));
+    },
+    []
+  );
 
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
@@ -559,7 +599,10 @@ export const useTraysSection = ({
       values: dialogValues,
       errors: dialogErrors,
       submitting: dialogSubmitting,
+      materialTrays,
       handleFieldChange,
+      handleTypeSelect,
+      handlePurposeSelect,
       handleSubmit,
       reset: resetDialog
     }

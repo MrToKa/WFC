@@ -3,13 +3,13 @@ import type { ChangeEvent, FormEvent } from 'react';
 import {
   Body1,
   Button,
+  Combobox,
   Dialog,
   DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
   DialogTitle,
-  Dropdown,
   Field,
   Input,
   Option
@@ -80,7 +80,7 @@ export const CableTypeDialog = ({
               validationState={errors.purpose ? 'error' : undefined}
               validationMessage={errors.purpose}
             >
-              <Dropdown
+              <Combobox
                 placeholder="Select purpose"
                 selectedOptions={values.purpose ? [values.purpose] : []}
                 value={values.purpose || undefined}
@@ -91,7 +91,7 @@ export const CableTypeDialog = ({
                 <Option value="Power">Power</Option>
                 <Option value="VFD">VFD</Option>
                 <Option value="MV">MV</Option>
-              </Dropdown>
+              </Combobox>
             </Field>
             <Field
               label="Diameter [mm]"

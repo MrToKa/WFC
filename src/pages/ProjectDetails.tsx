@@ -812,7 +812,10 @@ export const ProjectDetails = () => {
         values={trayDialog.values}
         errors={trayDialog.errors}
         submitting={trayDialog.submitting}
+        materialTrays={trayDialog.materialTrays}
         onFieldChange={trayDialog.handleFieldChange}
+        onTypeSelect={trayDialog.handleTypeSelect}
+        onPurposeSelect={trayDialog.handlePurposeSelect}
         onSubmit={(event) => void trayDialog.handleSubmit(event)}
         onDismiss={trayDialog.reset}
       />
