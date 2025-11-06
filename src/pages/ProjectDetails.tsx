@@ -43,6 +43,24 @@ import { useSupportDistanceOverrides } from './ProjectDetails/hooks/useSupportDi
 import { useTrayTypeDetails } from './ProjectDetails/hooks/useTrayTypeDetails';
 import { useProjectFilesSection } from './ProjectDetails/hooks/useProjectFilesSection';
 import { useCableLayoutSettings } from './ProjectDetails/hooks/useCableLayoutSettings';
+import {
+  CABLE_CATEGORY_CONFIG,
+  DEFAULT_CABLE_SPACING,
+  DEFAULT_CATEGORY_SETTINGS,
+  type CableCategoryKey
+} from './ProjectDetails/hooks/cableLayoutDefaults';
+import {
+  calculateTrayFreeSpaceMetrics,
+  filterCablesByTray,
+  isGroundingPurpose,
+  matchCableCategory
+} from './TrayDetails/TrayDetails.utils';
+import {
+  TrayDrawingService,
+  determineCableDiameterGroup,
+  type CableBundleMap,
+  type CategoryLayoutConfig
+} from './TrayDetails/trayDrawingService';
 
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
@@ -340,6 +358,144 @@ export const ProjectDetails = () => {
       reloadProject
     });
 
+  const trayDrawingService = useMemo(
+    () => new TrayDrawingService(),
+    []
+  );
+
+  const projectCableSpacingMm = useMemo(() => {
+    const spacing = project?.cableLayout?.cableSpacing;
+    if (
+      typeof spacing === 'number' &&
+      Number.isFinite(spacing) &&
+      spacing >= 0
+    ) {
+      return spacing;
+    }
+    return DEFAULT_CABLE_SPACING;
+  }, [project?.cableLayout?.cableSpacing]);
+
+  const projectLayoutConfig = useMemo<CategoryLayoutConfig>(() => {
+    const categories: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
+    return categories.reduce<CategoryLayoutConfig>((acc, category) => {
+      const defaults = DEFAULT_CATEGORY_SETTINGS[category];
+      const layout = project?.cableLayout?.[category] ?? null;
+      const trefoil =
+        CABLE_CATEGORY_CONFIG[category].showTrefoil
+          ? layout?.trefoil ?? defaults.trefoil
+          : false;
+      const trefoilSpacingBetweenBundles =
+        CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
+          ? layout?.trefoilSpacingBetweenBundles ??
+            defaults.trefoilSpacingBetweenBundles
+          : defaults.trefoilSpacingBetweenBundles;
+      const applyPhaseRotation =
+        CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
+          ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
+          : defaults.applyPhaseRotation;
+      acc[category] = {
+        maxRows: layout?.maxRows ?? defaults.maxRows,
+        maxColumns: layout?.maxColumns ?? defaults.maxColumns,
+        bundleSpacing: layout?.bundleSpacing ?? defaults.bundleSpacing,
+        cableSpacing: projectCableSpacingMm,
+        trefoil,
+        trefoilSpacingBetweenBundles,
+        applyPhaseRotation
+      };
+      return acc;
+    }, {} as CategoryLayoutConfig);
+  }, [project?.cableLayout, projectCableSpacingMm]);
+
+  const considerBundleSpacingAsFree = Boolean(
+    project?.cableLayout?.considerBundleSpacingAsFree
+  );
+
+  const trayFreeSpaceById = useMemo<Record<string, number | null>>(() => {
+    if (trays.length === 0) {
+      return {};
+    }
+
+    const layout = project?.cableLayout ?? null;
+    const docAvailable = typeof document !== 'undefined';
+    const canvas = docAvailable ? document.createElement('canvas') : null;
+
+    return trays.reduce<Record<string, number | null>>((acc, tray) => {
+      const trayCables = filterCablesByTray(cables, tray.name).filter(
+        (cable) => !isGroundingPurpose(cable.purpose)
+      );
+
+      const cableBundles = trayCables.reduce<CableBundleMap>((bundleAcc, cable) => {
+        const category = matchCableCategory(cable.purpose);
+        if (!category) {
+          return bundleAcc;
+        }
+
+        if (!bundleAcc[category]) {
+          bundleAcc[category] = {};
+        }
+
+        const bucket = bundleAcc[category];
+        const bundleKey = determineCableDiameterGroup(cable.diameterMm ?? null);
+        if (!bucket[bundleKey]) {
+          bucket[bundleKey] = [];
+        }
+        bucket[bundleKey].push(cable);
+        return bundleAcc;
+      }, {} as CableBundleMap);
+
+      let layoutSummary = null;
+      if (
+        canvas &&
+        trayDrawingService &&
+        typeof tray.widthMm === 'number' &&
+        tray.widthMm > 0 &&
+        typeof tray.heightMm === 'number' &&
+        tray.heightMm > 0
+      ) {
+        try {
+          layoutSummary = trayDrawingService.drawTrayLayout(
+            canvas,
+            tray,
+            trayCables,
+            cableBundles,
+            6,
+            projectCableSpacingMm,
+            projectLayoutConfig
+          );
+        } catch (error) {
+          console.error('Failed to build tray layout summary', {
+            trayId: tray.id,
+            error
+          });
+        }
+      }
+
+      const metrics = calculateTrayFreeSpaceMetrics({
+        tray,
+        cables: trayCables,
+        layout,
+        spacingBetweenCablesMm: projectCableSpacingMm,
+        considerBundleSpacingAsFree,
+        layoutSummary: layoutSummary ?? undefined
+      });
+
+      acc[tray.id] =
+        metrics.calculationAvailable && metrics.freeWidthPercent !== null
+          ? metrics.freeWidthPercent
+          : null;
+
+      return acc;
+    }, {});
+  }, [
+    cables,
+    considerBundleSpacingAsFree,
+    projectLayoutConfig,
+    project?.cableLayout,
+    projectCableSpacingMm,
+    trayDrawingService,
+    trays
+  ]);
+
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     const nextTab =
@@ -518,6 +674,7 @@ export const ProjectDetails = () => {
           isLoading={traysLoading}
           items={pagedTrays}
           pendingId={pendingTrayId}
+          freeSpaceByTrayId={trayFreeSpaceById}
           onDetails={openTrayDetails}
           onDelete={(tray) => void handleDeleteTray(tray)}
           formatNumeric={formatNumeric}

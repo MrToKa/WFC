@@ -37,6 +37,7 @@ type TraysTabProps = {
   isLoading: boolean;
   items: Tray[];
   pendingId: string | null;
+  freeSpaceByTrayId: Record<string, number | null>;
   onDetails: (tray: Tray) => void;
   onDelete: (tray: Tray) => void;
   formatNumeric: (value: number | null) => string;
@@ -67,6 +68,7 @@ export const TraysTab = ({
   isLoading,
   items,
   pendingId,
+  freeSpaceByTrayId,
   onDetails,
   onDelete,
   formatNumeric,
@@ -79,6 +81,15 @@ export const TraysTab = ({
   const selectedCriteria = useMemo<string[]>(
     () => [searchCriteria],
     [searchCriteria]
+  );
+
+  const freeSpaceFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }),
+    []
   );
 
   return (
@@ -189,12 +200,28 @@ export const TraysTab = ({
               >
                 Length
               </th>
+              <th
+                className={mergeClasses(
+                  styles.tableHeadCell,
+                  styles.numericCell
+                )}
+              >
+                Cable tray free space [%]
+              </th>
               <th className={styles.tableHeadCell}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {items.map((tray) => {
               const isBusy = pendingId === tray.id;
+              const freeSpacePercent =
+                tray.id in freeSpaceByTrayId
+                  ? freeSpaceByTrayId[tray.id]
+                  : null;
+              const freeSpaceDisplay =
+                freeSpacePercent === null
+                  ? '-'
+                  : `${freeSpaceFormatter.format(freeSpacePercent)} %`;
               return (
                 <tr key={tray.id}>
                   <td className={styles.tableCell}>{tray.name}</td>
@@ -223,6 +250,14 @@ export const TraysTab = ({
                     )}
                   >
                     {formatNumeric(tray.lengthMm)}
+                  </td>
+                  <td
+                    className={mergeClasses(
+                      styles.tableCell,
+                      styles.numericCell
+                    )}
+                  >
+                    {freeSpaceDisplay}
                   </td>
                   <td
                     className={mergeClasses(
