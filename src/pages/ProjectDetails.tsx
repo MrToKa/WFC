@@ -604,8 +604,8 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="trays">Trays</Tab>
-        <Tab value="files">Files</Tab>
         <Tab value="cable-report">Cables report</Tab>
+        <Tab value="files">Files</Tab>
       </TabList>
 
       {selectedTab === 'details' ? (
