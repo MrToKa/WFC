@@ -663,7 +663,7 @@ export const ProjectDetails = () => {
           onRefresh={() => void reloadTrays({ showSpinner: false })}
           onCreate={openCreateTrayDialog}
           onImportClick={() => traysFileInputRef.current?.click()}
-          onExport={() => void handleExportTrays()}
+          onExport={() => void handleExportTrays(trayFreeSpaceById)}
           onImportFileChange={handleImportTrays}
           isImporting={traysImporting}
           isExporting={traysExporting}

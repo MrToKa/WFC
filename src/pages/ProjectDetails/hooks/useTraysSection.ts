@@ -94,7 +94,9 @@ type UseTraysSectionResult = {
   openEditTrayDialog: (tray: Tray) => void;
   handleDeleteTray: (tray: Tray) => Promise<void>;
   handleImportTrays: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
-  handleExportTrays: () => Promise<void>;
+  handleExportTrays: (
+    freeSpaceByTrayId?: Record<string, number | null>
+  ) => Promise<void>;
   trayDialog: TrayDialogController;
 };
 
@@ -520,53 +522,58 @@ export const useTraysSection = ({
     [projectSnapshot, showToast, sortTrays, token]
   );
 
-  const handleExportTrays = useCallback(async () => {
-    if (!projectSnapshot || !token) {
-      showToast({
-        intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export trays.'
-      });
-      return;
-    }
-
-    setIsExporting(true);
-
-    try {
-      const blob = await exportTrays(token, projectSnapshot.id);
-      const link = document.createElement('a');
-      const url = window.URL.createObjectURL(blob);
-      const fileName = `${sanitizeFileSegment(
-        projectSnapshot.projectNumber
-      )}-trays.xlsx`;
-
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      showToast({ intent: 'success', title: 'Trays exported' });
-    } catch (err) {
-      console.error('Export trays failed', err);
-      if (err instanceof ApiError && err.status === 404) {
+  const handleExportTrays = useCallback(
+    async (freeSpaceByTrayId?: Record<string, number | null>) => {
+      if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
-          title: 'Export endpoint unavailable',
-          body: 'Please restart the API server after updating it.'
+          title: 'Admin access required',
+          body: 'You need to be signed in as an admin to export trays.'
         });
-      } else {
-        showToast({
-          intent: 'error',
-          title: 'Failed to export trays',
-          body: err instanceof ApiError ? err.message : undefined
-        });
+        return;
       }
-    } finally {
-      setIsExporting(false);
-    }
-  }, [projectSnapshot, showToast, token]);
+
+      setIsExporting(true);
+
+      try {
+        const blob = await exportTrays(token, projectSnapshot.id, {
+          freeSpaceByTrayId
+        });
+        const link = document.createElement('a');
+        const url = window.URL.createObjectURL(blob);
+        const fileName = `${sanitizeFileSegment(
+          projectSnapshot.projectNumber
+        )}-trays.xlsx`;
+
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        showToast({ intent: 'success', title: 'Trays exported' });
+      } catch (err) {
+        console.error('Export trays failed', err);
+        if (err instanceof ApiError && err.status === 404) {
+          showToast({
+            intent: 'error',
+            title: 'Export endpoint unavailable',
+            body: 'Please restart the API server after updating it.'
+          });
+        } else {
+          showToast({
+            intent: 'error',
+            title: 'Failed to export trays',
+            body: err instanceof ApiError ? err.message : undefined
+          });
+        }
+      } finally {
+        setIsExporting(false);
+      }
+    },
+    [projectSnapshot, showToast, token]
+  );
 
   return {
     trays,

@@ -98,15 +98,22 @@ export async function importTrays(
 
 export async function exportTrays(
   token: string,
-  projectId: string
+  projectId: string,
+  options?: { freeSpaceByTrayId?: Record<string, number | null> }
 ): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/projects/${projectId}/trays/export`,
     {
-      method: 'GET',
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        ...(options?.freeSpaceByTrayId
+          ? { freeSpaceByTrayId: options.freeSpaceByTrayId }
+          : {})
+      })
     }
   );
 

@@ -7,7 +7,12 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
 import { mapTrayRow } from '../models/tray.js';
-import type { TrayRow } from '../models/tray.js';
+import type { PublicTray, TrayRow } from '../models/tray.js';
+import { mapProjectRow } from '../models/project.js';
+import {
+  computeTrayFreeSpaceByTrayId,
+  type TrayCableForFreeSpace
+} from '../utils/trayFreeSpace.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { createTraySchema, updateTraySchema } from '../validators.js';
@@ -25,7 +30,8 @@ const TRAY_EXCEL_HEADERS = {
   purpose: 'Purpose',
   width: 'Width [mm]',
   height: 'Height [mm]',
-  length: 'Length [mm]'
+  length: 'Length [mm]',
+  freeSpace: 'Cable tray free space [%]'
 } as const;
 
 const normalizeOptionalString = (
@@ -79,6 +85,36 @@ const selectTraysQuery = `
   FROM trays
 `;
 
+type CableFreeSpaceRow = {
+  routing: string | null;
+  purpose: string | null;
+  diameter_mm: string | number | null;
+};
+
+const selectTrayCablesQuery = `
+  SELECT
+    c.routing,
+    ct.purpose AS purpose,
+    ct.diameter_mm AS diameter_mm
+  FROM cables c
+  JOIN cable_types ct ON ct.id = c.cable_type_id
+  WHERE c.project_id = $1;
+`;
+
+type TrayImportRequest = Request & {
+  params: {
+    projectId?: string;
+  };
+  file?: {
+    buffer: Buffer;
+    originalname?: string;
+  };
+};
+
+type TrayExportBody = {
+  freeSpaceByTrayId?: Record<string, unknown>;
+};
+
 const traysRouter = Router({ mergeParams: true });
 
 traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
@@ -113,11 +149,14 @@ traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-traysRouter.get(
+traysRouter.post(
   '/export',
   authenticate,
   requireAdmin,
-  async (req: Request, res: Response): Promise<void> => {
+  async (
+    req: Request<{ projectId?: string }, unknown, TrayExportBody>,
+    res: Response
+  ): Promise<void> => {
     const { projectId } = req.params;
 
     if (!projectId) {
@@ -126,21 +165,75 @@ traysRouter.get(
     }
 
     try {
-      const project = await ensureProjectExists(projectId);
+      const projectRow = await ensureProjectExists(projectId);
 
-      if (!project) {
+      if (!projectRow) {
         res.status(404).json({ error: 'Project not found' });
         return;
       }
 
-      const result = await pool.query<TrayRow>(
-        `
-          ${selectTraysQuery}
-          WHERE project_id = $1
-          ORDER BY name ASC;
-        `,
-        [projectId]
+      const [traysResult, cablesResult] = await Promise.all([
+        pool.query<TrayRow>(
+          `
+            ${selectTraysQuery}
+            WHERE project_id = $1
+            ORDER BY name ASC;
+          `,
+          [projectId]
+        ),
+        pool.query<CableFreeSpaceRow>(selectTrayCablesQuery, [projectId])
+      ]);
+
+      const trays = traysResult.rows.map(mapTrayRow);
+      const project = mapProjectRow(projectRow);
+
+      const cables: TrayCableForFreeSpace[] = cablesResult.rows.map(
+        (row: CableFreeSpaceRow) => ({
+          routing: row.routing ?? null,
+          purpose: row.purpose ?? null,
+          diameterMm: toNumberOrNull(row.diameter_mm)
+        })
       );
+
+      const computedFreeSpaceByTrayId = computeTrayFreeSpaceByTrayId({
+        trays,
+        cables,
+        layout: project.cableLayout
+      });
+
+      const providedMap = req.body?.freeSpaceByTrayId;
+      const sanitizedProvided: Record<string, number | null> = {};
+
+      if (providedMap && typeof providedMap === 'object' && !Array.isArray(providedMap)) {
+        for (const [trayId, value] of Object.entries(providedMap)) {
+          if (value === null) {
+            sanitizedProvided[trayId] = null;
+            continue;
+          }
+
+          if (typeof value === 'number') {
+            if (Number.isFinite(value)) {
+              sanitizedProvided[trayId] = value;
+            }
+            continue;
+          }
+
+          if (typeof value === 'string') {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) {
+              sanitizedProvided[trayId] = parsed;
+            }
+          }
+        }
+      }
+
+      const freeSpaceByTrayId: Record<string, number | null> = {
+        ...computedFreeSpaceByTrayId
+      };
+
+      for (const [trayId, value] of Object.entries(sanitizedProvided)) {
+        freeSpaceByTrayId[trayId] = value;
+      }
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Trays', {
@@ -153,21 +246,27 @@ traysRouter.get(
         { name: TRAY_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
         { name: TRAY_EXCEL_HEADERS.width, key: 'width', width: 18 },
         { name: TRAY_EXCEL_HEADERS.height, key: 'height', width: 18 },
-        { name: TRAY_EXCEL_HEADERS.length, key: 'length', width: 18 }
+        { name: TRAY_EXCEL_HEADERS.length, key: 'length', width: 18 },
+        { name: TRAY_EXCEL_HEADERS.freeSpace, key: 'freeSpace', width: 24 }
       ] as const;
 
-      const rows = result.rows.map((row) => [
-        row.name ?? '',
-        row.tray_type ?? '',
-        row.purpose ?? '',
-        row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
-        row.height_mm !== null && row.height_mm !== ''
-          ? Number(row.height_mm)
-          : '',
-        row.length_mm !== null && row.length_mm !== ''
-          ? Number(row.length_mm)
-          : ''
-      ]);
+      const rows = trays.map((tray: PublicTray) => {
+        const freeSpacePercent = freeSpaceByTrayId[tray.id];
+        const roundedFreeSpace =
+          typeof freeSpacePercent === 'number' && Number.isFinite(freeSpacePercent)
+            ? Math.round(freeSpacePercent * 100) / 100
+            : null;
+
+        return [
+          tray.name,
+          tray.type ?? '',
+          tray.purpose ?? '',
+          tray.widthMm ?? '',
+          tray.heightMm ?? '',
+          tray.lengthMm ?? '',
+          roundedFreeSpace ?? ''
+        ];
+      });
 
       const table = worksheet.addTable({
         name: 'Trays',
@@ -185,24 +284,27 @@ traysRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '']]
+        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '']]
       });
 
       table.commit();
 
       columns.forEach((column, index) => {
-        worksheet.getColumn(index + 1).width = column.width;
+        const excelColumn = worksheet.getColumn(index + 1);
+        excelColumn.width = column.width;
+
         if (column.key === 'width' || column.key === 'height') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
-        }
-        if (column.key === 'length') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+          excelColumn.numFmt = '#,##0.00';
+        } else if (column.key === 'length') {
+          excelColumn.numFmt = '#,##0.00';
+        } else if (column.key === 'freeSpace') {
+          excelColumn.numFmt = '0.00" %"';
         }
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
 
-      const projectSegment = sanitizeFileSegment(project.project_number);
+      const projectSegment = sanitizeFileSegment(project.projectNumber);
       const fileName = `${projectSegment}-trays.xlsx`;
 
       res.setHeader(
@@ -569,7 +671,7 @@ traysRouter.post(
   authenticate,
   requireAdmin,
   upload.single('file'),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: TrayImportRequest, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
     if (!projectId) {
@@ -820,117 +922,6 @@ traysRouter.post(
         error: 'Trays imported but failed to refresh list',
         summary
       });
-    }
-  }
-);
-
-traysRouter.get(
-  '/export',
-  authenticate,
-  requireAdmin,
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId } = req.params;
-
-    if (!projectId) {
-      res.status(400).json({ error: 'Project ID is required' });
-      return;
-    }
-
-    try {
-      const project = await ensureProjectExists(projectId);
-
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      const result = await pool.query<TrayRow>(
-        `
-          ${selectTraysQuery}
-          WHERE project_id = $1
-          ORDER BY name ASC;
-        `,
-        [projectId]
-      );
-
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Trays', {
-        views: [{ state: 'frozen', ySplit: 1 }]
-      });
-
-      const columns = [
-        { name: TRAY_EXCEL_HEADERS.name, key: 'name', width: 30 },
-        { name: TRAY_EXCEL_HEADERS.type, key: 'type', width: 24 },
-        { name: TRAY_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
-        { name: TRAY_EXCEL_HEADERS.width, key: 'width', width: 18 },
-        { name: TRAY_EXCEL_HEADERS.height, key: 'height', width: 18 },
-        { name: TRAY_EXCEL_HEADERS.length, key: 'length', width: 18 }
-      ] as const;
-
-      const rows = result.rows.map((row) => [
-        row.name ?? '',
-        row.tray_type ?? '',
-        row.purpose ?? '',
-        row.width_mm !== null && row.width_mm !== ''
-          ? Number(row.width_mm)
-          : '',
-        row.height_mm !== null && row.height_mm !== ''
-          ? Number(row.height_mm)
-          : '',
-        row.length_mm !== null && row.length_mm !== ''
-          ? Number(row.length_mm)
-          : ''
-      ]);
-
-      const table = worksheet.addTable({
-        name: 'Trays',
-        ref: 'A1',
-        headerRow: true,
-        totalsRow: false,
-        style: {
-          theme: 'TableStyleLight8',
-          showFirstColumn: false,
-          showLastColumn: false,
-          showRowStripes: true,
-          showColumnStripes: true
-        },
-        columns: columns.map((column) => ({
-          name: column.name,
-          filterButton: true
-        })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '']]
-      });
-
-      table.commit();
-
-      columns.forEach((column, index) => {
-        worksheet.getColumn(index + 1).width = column.width;
-        if (column.key === 'width' || column.key === 'height') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
-        }
-        if (column.key === 'length') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
-        }
-      });
-
-      const buffer = await workbook.xlsx.writeBuffer();
-
-      const projectSegment = sanitizeFileSegment(project.project_number);
-      const fileName = `${projectSegment}-trays.xlsx`;
-
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`
-      );
-
-      res.send(Buffer.from(buffer));
-    } catch (error) {
-      console.error('Export trays error', error);
-      res.status(500).json({ error: 'Failed to export trays' });
     }
   }
 );
