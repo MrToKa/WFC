@@ -114,6 +114,23 @@ const normalizeDateValue = (
   return `${year}-${month}-${day}`;
 };
 
+const normalizeDateForComparison = (
+  value: string | Date | null | undefined
+): string | null => {
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  if (typeof value === 'string') {
+    return normalizeDateValue(value);
+  }
+
+  return null;
+};
+
 const parseInstallLength = (value: unknown): number | null => {
   if (value === null || value === undefined) {
     return null;
@@ -958,6 +975,7 @@ cablesRouter.post(
       | 'id'
       | 'cable_id'
       | 'tag'
+      | 'cable_type_id'
       | 'from_location'
       | 'to_location'
       | 'routing'
@@ -980,6 +998,7 @@ cablesRouter.post(
             id,
             cable_id,
             tag,
+            cable_type_id,
             from_location,
             to_location,
             routing,
@@ -1040,76 +1059,198 @@ cablesRouter.post(
           fieldProvided(fields, field) ? (fields[field] as string | null) ?? null : fallback ?? null;
 
         if (existing) {
+          const updateAssignments: string[] = [];
+          const updateValues: Array<string | number | null> = [];
+          let parameterIndex = 1;
+
+          const enqueueUpdate = (
+            column: string,
+            provided: boolean,
+            hasChanged: boolean,
+            value: string | number | null
+          ): void => {
+            if (!provided || !hasChanged) {
+              return;
+            }
+
+            updateAssignments.push(`${column} = $${parameterIndex}`);
+            updateValues.push(value);
+            parameterIndex += 1;
+          };
+
           const nextTag = resolveStringField('tag', existing.tag ?? null);
+          const tagProvided = fieldProvided(fields, 'tag');
+          const normalizedExistingTag = normalizeOptionalString(existing.tag ?? null);
+          const tagChanged =
+            tagProvided && (nextTag ?? null) !== normalizedExistingTag;
+          enqueueUpdate('tag', tagProvided, tagChanged, nextTag ?? null);
+
           const nextFromLocation = resolveStringField(
             'fromLocation',
             existing.from_location ?? null
           );
+          const fromLocationProvided = fieldProvided(fields, 'fromLocation');
+          const normalizedExistingFromLocation = normalizeOptionalString(
+            existing.from_location ?? null
+          );
+          const fromLocationChanged =
+            fromLocationProvided &&
+            (nextFromLocation ?? null) !== normalizedExistingFromLocation;
+          enqueueUpdate(
+            'from_location',
+            fromLocationProvided,
+            fromLocationChanged,
+            nextFromLocation ?? null
+          );
+
           const nextToLocation = resolveStringField(
             'toLocation',
             existing.to_location ?? null
           );
+          const toLocationProvided = fieldProvided(fields, 'toLocation');
+          const normalizedExistingToLocation = normalizeOptionalString(
+            existing.to_location ?? null
+          );
+          const toLocationChanged =
+            toLocationProvided &&
+            (nextToLocation ?? null) !== normalizedExistingToLocation;
+          enqueueUpdate(
+            'to_location',
+            toLocationProvided,
+            toLocationChanged,
+            nextToLocation ?? null
+          );
+
           const nextRouting = resolveStringField(
             'routing',
             existing.routing ?? null
           );
+          const routingProvided = fieldProvided(fields, 'routing');
+          const normalizedExistingRouting = normalizeOptionalString(
+            existing.routing ?? null
+          );
+          const routingChanged =
+            routingProvided && (nextRouting ?? null) !== normalizedExistingRouting;
+          enqueueUpdate('routing', routingProvided, routingChanged, nextRouting ?? null);
+
           const nextDesignLength = resolveIntegerField(
             'designLength',
             existing.design_length ?? null
           );
+          const designLengthProvided = fieldProvided(fields, 'designLength');
+          const normalizedExistingDesignLength = parseInstallLength(
+            existing.design_length ?? null
+          );
+          const designLengthChanged =
+            designLengthProvided && nextDesignLength !== normalizedExistingDesignLength;
+          enqueueUpdate(
+            'design_length',
+            designLengthProvided,
+            designLengthChanged,
+            nextDesignLength
+          );
+
           const nextInstallLength = resolveIntegerField(
             'installLength',
             existing.install_length ?? null
           );
+          const installLengthProvided = fieldProvided(fields, 'installLength');
+          const normalizedExistingInstallLength = parseInstallLength(
+            existing.install_length ?? null
+          );
+          const installLengthChanged =
+            installLengthProvided &&
+            nextInstallLength !== normalizedExistingInstallLength;
+          enqueueUpdate(
+            'install_length',
+            installLengthProvided,
+            installLengthChanged,
+            nextInstallLength
+          );
+
           const nextPullDate = resolveDateField(
             'pullDate',
             existing.pull_date ?? null
           );
+          const pullDateProvided = fieldProvided(fields, 'pullDate');
+          const normalizedExistingPullDate = normalizeDateForComparison(
+            existing.pull_date ?? null
+          );
+          const pullDateValue = pullDateProvided ? (nextPullDate as string | null) : null;
+          const pullDateChanged =
+            pullDateProvided && pullDateValue !== normalizedExistingPullDate;
+          enqueueUpdate('pull_date', pullDateProvided, pullDateChanged, pullDateValue);
+
           const nextConnectedFrom = resolveDateField(
             'connectedFrom',
             existing.connected_from ?? null
           );
+          const connectedFromProvided = fieldProvided(fields, 'connectedFrom');
+          const normalizedExistingConnectedFrom = normalizeDateForComparison(
+            existing.connected_from ?? null
+          );
+          const connectedFromValue = connectedFromProvided
+            ? (nextConnectedFrom as string | null)
+            : null;
+          const connectedFromChanged =
+            connectedFromProvided &&
+            connectedFromValue !== normalizedExistingConnectedFrom;
+          enqueueUpdate(
+            'connected_from',
+            connectedFromProvided,
+            connectedFromChanged,
+            connectedFromValue
+          );
+
           const nextConnectedTo = resolveDateField(
             'connectedTo',
             existing.connected_to ?? null
           );
-          const nextTested = resolveDateField(
-            'tested',
+          const connectedToProvided = fieldProvided(fields, 'connectedTo');
+          const normalizedExistingConnectedTo = normalizeDateForComparison(
+            existing.connected_to ?? null
+          );
+          const connectedToValue = connectedToProvided
+            ? (nextConnectedTo as string | null)
+            : null;
+          const connectedToChanged =
+            connectedToProvided && connectedToValue !== normalizedExistingConnectedTo;
+          enqueueUpdate(
+            'connected_to',
+            connectedToProvided,
+            connectedToChanged,
+            connectedToValue
+          );
+
+          const nextTested = resolveDateField('tested', existing.tested ?? null);
+          const testedProvided = fieldProvided(fields, 'tested');
+          const normalizedExistingTested = normalizeDateForComparison(
             existing.tested ?? null
+          );
+          const testedValue = testedProvided ? (nextTested as string | null) : null;
+          const testedChanged =
+            testedProvided && testedValue !== normalizedExistingTested;
+          enqueueUpdate('tested', testedProvided, testedChanged, testedValue);
+
+          const cableTypeChanged = existing.cable_type_id !== cableType.id;
+          enqueueUpdate('cable_type_id', true, cableTypeChanged, cableType.id);
+
+          if (updateAssignments.length === 0) {
+            continue;
+          }
+
+          const assignments = [...updateAssignments, 'updated_at = NOW()'].join(
+            ',\n                '
           );
 
           await client.query(
             `
               UPDATE cables
               SET
-                tag = $1,
-                cable_type_id = $2,
-                from_location = $3,
-                to_location = $4,
-                routing = $5,
-                design_length = $6,
-                install_length = $7,
-                pull_date = $8,
-                connected_from = $9,
-                connected_to = $10,
-                tested = $11,
-                updated_at = NOW()
-              WHERE id = $12;
+                ${assignments}
+              WHERE id = $${parameterIndex};
             `,
-            [
-              nextTag,
-              cableType.id,
-              nextFromLocation,
-              nextToLocation,
-              nextRouting,
-              nextDesignLength,
-              nextInstallLength,
-              nextPullDate,
-              nextConnectedFrom,
-              nextConnectedTo,
-              nextTested,
-              existing.id
-            ]
+            [...updateValues, existing.id]
           );
           summary.updated += 1;
         } else {
