@@ -60,10 +60,25 @@ const toNumberOrNull = (value: string | number | null): number | null => {
     return Number.isFinite(value) ? value : null;
   }
 
-  const normalized = value.trim().replace(',', '.');
+  let normalized = value.trim();
+
   if (normalized === '') {
     return null;
   }
+
+  normalized = normalized.replace(/\s*(mm|m)$/i, '').trim();
+  normalized = normalized.replace(/\s+/g, '');
+
+  if (normalized.includes(',') && normalized.includes('.')) {
+    if (normalized.lastIndexOf(',') > normalized.lastIndexOf('.')) {
+      normalized = normalized.replace(/\./g, '').replace(',', '.');
+    } else {
+      normalized = normalized.replace(/,/g, '');
+    }
+  } else if (normalized.includes(',')) {
+    normalized = normalized.replace(',', '.');
+  }
+
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 };
@@ -741,6 +756,7 @@ traysRouter.post(
       key: string;
       name: string;
       type: string | null;
+      typeKey: string | null;
       purpose: string | null;
       width: number | null;
       height: number | null;
@@ -770,12 +786,15 @@ traysRouter.post(
 
       seenNames.add(key);
 
+      const typeValue = normalizeOptionalString(
+        row[TRAY_EXCEL_HEADERS.type] as string | null | undefined
+      );
+
       prepared.push({
         key,
         name,
-        type: normalizeOptionalString(
-          row[TRAY_EXCEL_HEADERS.type] as string | null | undefined
-        ),
+        type: typeValue,
+        typeKey: typeValue ? typeValue.toLowerCase() : null,
         purpose: normalizeOptionalString(
           row[TRAY_EXCEL_HEADERS.purpose] as string | null | undefined
         ),
@@ -816,6 +835,50 @@ traysRouter.post(
       return;
     }
 
+    const materialDimensionsByType = new Map<
+      string,
+      { width: number | null; height: number | null }
+    >();
+
+    const materialTypeKeys = Array.from(
+      new Set(
+        prepared
+          .map((row) => row.typeKey)
+          .filter((typeKey): typeKey is string => Boolean(typeKey))
+      )
+    );
+
+    if (materialTypeKeys.length > 0) {
+      // Enrich tray imports with catalog dimensions when a matching type exists.
+      try {
+        const result = await pool.query<{
+          tray_type: string;
+          width_mm: string | number | null;
+          height_mm: string | number | null;
+        }>(
+          `
+            SELECT
+              tray_type,
+              width_mm,
+              height_mm
+            FROM material_trays
+            WHERE LOWER(tray_type) = ANY($1::text[]);
+          `,
+          [materialTypeKeys]
+        );
+
+        for (const row of result.rows) {
+          const key = row.tray_type.toLowerCase();
+          materialDimensionsByType.set(key, {
+            width: toNumberOrNull(row.width_mm),
+            height: toNumberOrNull(row.height_mm)
+          });
+        }
+      } catch (error) {
+        console.error('Fetch material tray dimensions error', error);
+      }
+    }
+
     const client = await pool.connect();
 
     try {
@@ -837,6 +900,13 @@ traysRouter.post(
       }
 
       for (const row of prepared) {
+        const dimensions =
+          row.typeKey !== null
+            ? materialDimensionsByType.get(row.typeKey)
+            : undefined;
+        const widthMm = dimensions?.width ?? row.width ?? null;
+        const heightMm = dimensions?.height ?? row.height ?? null;
+
         const existing = existingMap.get(row.key);
 
         if (existing) {
@@ -855,8 +925,8 @@ traysRouter.post(
             [
               row.type,
               row.purpose,
-              row.width,
-              row.height,
+              widthMm,
+              heightMm,
               row.length,
               existing.id
             ]
@@ -883,8 +953,8 @@ traysRouter.post(
               row.name,
               row.type,
               row.purpose,
-              row.width,
-              row.height,
+              widthMm,
+              heightMm,
               row.length
             ]
           );
