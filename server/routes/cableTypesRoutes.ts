@@ -627,6 +627,76 @@ cableTypesRouter.post(
 );
 
 cableTypesRouter.get(
+  '/template',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Cable Types', {
+        views: [{ state: 'frozen', ySplit: 1 }]
+      });
+
+      const columns = [
+        { name: CABLE_EXCEL_HEADERS.name, key: 'type', width: 32 },
+        { name: CABLE_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
+        { name: CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
+        { name: CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 }
+      ] as const;
+
+      const table = worksheet.addTable({
+        name: 'CableTypes',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: true
+        },
+        columns: columns.map((column) => ({
+          name: column.name,
+          filterButton: true
+        })),
+        rows: [['', '', '', '']]
+      });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        worksheet.getColumn(index + 1).width = column.width;
+        if (column.key === 'diameter') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
+        if (column.key === 'weight') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      const fileName = 'cable-types-template.xlsx';
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${fileName}"`
+      );
+
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error('Generate cable types template error', error);
+      res.status(500).json({ error: 'Failed to generate template' });
+    }
+  }
+);
+
+cableTypesRouter.get(
   '/export',
   authenticate,
   requireAdmin,

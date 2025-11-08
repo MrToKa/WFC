@@ -137,3 +137,38 @@ export async function exportTrays(
 
   return response.blob();
 }
+
+export async function getTraysTemplate(
+  token: string,
+  projectId: string
+): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/projects/${projectId}/trays/template`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to get trays template';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}

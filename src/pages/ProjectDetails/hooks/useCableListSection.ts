@@ -18,6 +18,7 @@ import {
   deleteCable,
   exportCables,
   fetchCables,
+  getCablesTemplate,
   importCables,
   updateCable
 } from '@/api/client';
@@ -81,6 +82,7 @@ type UseCableListSectionResult = {
   cablesError: string | null;
   cablesImporting: boolean;
   cablesExporting: boolean;
+  cablesGettingTemplate: boolean;
   pendingCableId: string | null;
   pagedCables: Cable[];
   totalCablePages: number;
@@ -99,6 +101,7 @@ type UseCableListSectionResult = {
   handleDeleteCable: (cable: Cable) => Promise<void>;
   handleImportCables: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleExportCables: (view?: 'list' | 'report') => Promise<void>;
+  handleGetCablesTemplate: (view?: 'list' | 'report') => Promise<void>;
   handleCableDraftChange: (
     cableId: string,
     field: keyof CableFormState,
@@ -139,6 +142,7 @@ export const useCableListSection = ({
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isGettingTemplate, setIsGettingTemplate] = useState<boolean>(false);
   const [pendingCableId, setPendingCableId] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
 
@@ -830,6 +834,48 @@ export const useCableListSection = ({
     ]
   );
 
+  const handleGetCablesTemplate = useCallback(
+    async (view?: 'list' | 'report') => {
+      if (!projectSnapshot || !token) {
+        showToast({
+          intent: 'error',
+          title: 'Admin access required',
+          body: 'You need to be signed in as an admin to get the template.'
+        });
+        return;
+      }
+
+      setIsGettingTemplate(true);
+
+      try {
+        const blob = await getCablesTemplate(token, projectSnapshot.id, view);
+        const link = document.createElement('a');
+        const url = window.URL.createObjectURL(blob);
+        const fileSuffix = view === 'report' ? 'cables-report' : 'cable-list';
+        const fileName = `${fileSuffix}-template.xlsx`;
+
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+
+        showToast({ intent: 'success', title: 'Template downloaded' });
+      } catch (err) {
+        console.error('Get cables template failed', err);
+        showToast({
+          intent: 'error',
+          title: 'Failed to get template',
+          body: err instanceof ApiError ? err.message : undefined
+        });
+      } finally {
+        setIsGettingTemplate(false);
+      }
+    },
+    [projectSnapshot, showToast, token]
+  );
+
   return {
     cables,
     cablesLoading: isLoading,
@@ -837,6 +883,7 @@ export const useCableListSection = ({
     cablesError: error,
     cablesImporting: isImporting,
     cablesExporting: isExporting,
+    cablesGettingTemplate: isGettingTemplate,
     pendingCableId,
     pagedCables,
     totalCablePages: totalPages,
@@ -855,6 +902,7 @@ export const useCableListSection = ({
     handleDeleteCable,
     handleImportCables,
     handleExportCables,
+    handleGetCablesTemplate,
     handleCableDraftChange,
     handleCableTextFieldBlur,
     handleInlineCableTypeChange,

@@ -139,6 +139,41 @@ export async function exportCableTypes(
   return response.blob();
 }
 
+export async function getCableTypesTemplate(
+  token: string,
+  projectId: string
+): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/projects/${projectId}/cable-types/template`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to get cable types template';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
 export async function fetchCables(
   projectId: string
 ): Promise<{ cables: Cable[] }> {
@@ -286,6 +321,50 @@ export async function exportCables(
         ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (payload as any).error
         : 'Failed to export cables';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function getCablesTemplate(
+  token: string,
+  projectId: string,
+  view?: 'list' | 'report'
+): Promise<Blob> {
+  const params = new URLSearchParams();
+
+  if (view) {
+    params.set('view', view);
+  }
+
+  const query = params.toString();
+  const url = `${getApiBaseUrl()}/api/projects/${projectId}/cables/template${
+    query ? `?${query}` : ''
+  }`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to get cables template';
 
     throw new ApiError(response.status, errorPayload);
   }

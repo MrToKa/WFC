@@ -761,12 +761,7 @@ cablesRouter.post(
       INPUT_HEADERS.type,
       INPUT_HEADERS.fromLocation,
       INPUT_HEADERS.toLocation,
-      INPUT_HEADERS.designLength,
-      INPUT_HEADERS.installLength,
-      INPUT_HEADERS.pullDate,
-      INPUT_HEADERS.connectedFrom,
-      INPUT_HEADERS.connectedTo,
-      INPUT_HEADERS.tested
+      INPUT_HEADERS.designLength
     ];
 
     const missingColumns = requiredColumns.filter((header) => !hasColumn(header));
@@ -1345,6 +1340,148 @@ cablesRouter.get(
     } catch (error) {
       console.error('Export cables error', error);
       res.status(500).json({ error: 'Failed to export cables' });
+    }
+  }
+);
+
+cablesRouter.get(
+  '/template',
+  authenticate,
+  async (req: Request, res: Response): Promise<void> => {
+    const viewParam =
+      typeof req.query.view === 'string'
+        ? req.query.view.toLowerCase()
+        : undefined;
+    const exportView = viewParam === 'report' ? 'report' : 'list';
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet(
+        exportView === 'report' ? 'Cables report' : 'Cables',
+        {
+          views: [{ state: 'frozen', ySplit: 1 }]
+        }
+      );
+
+      const columns =
+        exportView === 'report'
+          ? [
+              {
+                name: REPORT_OUTPUT_HEADERS.cableId,
+                key: 'cableId',
+                width: 18
+              },
+              { name: REPORT_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
+              { name: REPORT_OUTPUT_HEADERS.type, key: 'type', width: 26 },
+              {
+                name: REPORT_OUTPUT_HEADERS.fromLocation,
+                key: 'fromLocation',
+                width: 26
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.toLocation,
+                key: 'toLocation',
+                width: 26
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.designLength,
+                key: 'designLength',
+                width: 18
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.installLength,
+                key: 'installLength',
+                width: 18
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.pullDate,
+                key: 'pullDate',
+                width: 20
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.connectedFrom,
+                key: 'connectedFrom',
+                width: 20
+              },
+              {
+                name: REPORT_OUTPUT_HEADERS.connectedTo,
+                key: 'connectedTo',
+                width: 20
+              },
+              { name: REPORT_OUTPUT_HEADERS.tested, key: 'tested', width: 18 }
+            ] as const
+          : [
+              { name: INPUT_HEADERS.cableId, key: 'cableId', width: 18 },
+              { name: INPUT_HEADERS.tag, key: 'tag', width: 20 },
+              { name: INPUT_HEADERS.type, key: 'type', width: 28 },
+              {
+                name: INPUT_HEADERS.fromLocation,
+                key: 'fromLocation',
+                width: 26
+              },
+              {
+                name: INPUT_HEADERS.toLocation,
+                key: 'toLocation',
+                width: 26
+              },
+              {
+                name: LIST_OUTPUT_HEADERS.routing,
+                key: 'routing',
+                width: 24
+              },
+              {
+                name: INPUT_HEADERS.designLength,
+                key: 'designLength',
+                width: 18
+              }
+            ] as const;
+
+      const table = worksheet.addTable({
+        name: exportView === 'report' ? 'CablesReport' : 'Cables',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: true
+        },
+        columns: columns.map((column) => ({
+          name: column.name,
+          filterButton: true
+        })),
+        rows: [Array(columns.length).fill('')]
+      });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        worksheet.getColumn(index + 1).width = column.width;
+        if (column.key === 'designLength' || column.key === 'installLength') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0';
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      const fileSuffix = exportView === 'report' ? 'cables-report' : 'cable-list';
+      const fileName = `${fileSuffix}-template.xlsx`;
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${fileName}"`
+      );
+
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error('Generate cables template error', error);
+      res.status(500).json({ error: 'Failed to generate template' });
     }
   }
 );

@@ -25,9 +25,11 @@ type TraysTabProps = {
   onCreate: () => void;
   onImportClick: () => void;
   onExport: () => void;
+  onGetTemplate: () => void;
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
   isExporting: boolean;
+  isGettingTemplate: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   searchText: string;
   searchCriteria: TraySearchCriteria;
@@ -58,9 +60,11 @@ export const TraysTab = ({
   onCreate,
   onImportClick,
   onExport,
+  onGetTemplate,
   onImportFileChange,
   isImporting,
   isExporting,
+  isGettingTemplate,
   fileInputRef,
   searchText,
   searchCriteria,
@@ -116,6 +120,13 @@ export const TraysTab = ({
             disabled={isExporting}
           >
             {isExporting ? 'Exporting...' : 'Export to Excel'}
+          </Button>
+          <Button
+            appearance="subtle"
+            onClick={onGetTemplate}
+            disabled={isGettingTemplate}
+          >
+            {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
           </Button>
           <input
             ref={fileInputRef}

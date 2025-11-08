@@ -164,6 +164,92 @@ traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+traysRouter.get(
+  '/template',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId } = req.params;
+
+    if (!projectId) {
+      res.status(400).json({ error: 'Project ID is required' });
+      return;
+    }
+
+    try {
+      const projectRow = await ensureProjectExists(projectId);
+
+      if (!projectRow) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      const project = mapProjectRow(projectRow);
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Trays', {
+        views: [{ state: 'frozen', ySplit: 1 }]
+      });
+
+      const columns = [
+        { name: TRAY_EXCEL_HEADERS.name, key: 'name', width: 30 },
+        { name: TRAY_EXCEL_HEADERS.type, key: 'type', width: 24 },
+        { name: TRAY_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
+        { name: TRAY_EXCEL_HEADERS.length, key: 'length', width: 18 }
+      ] as const;
+
+      const table = worksheet.addTable({
+        name: 'Trays',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: true
+        },
+        columns: columns.map((column) => ({
+          name: column.name,
+          filterButton: true
+        })),
+        rows: [Array(columns.length).fill('')]
+      });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        const excelColumn = worksheet.getColumn(index + 1);
+        excelColumn.width = column.width;
+
+        if (column.key === 'length') {
+          excelColumn.numFmt = '#,##0.00';
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      const projectSegment = sanitizeFileSegment(project.projectNumber);
+      const fileName = `${projectSegment}-trays-template.xlsx`;
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${fileName}"`
+      );
+
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error('Generate trays template error', error);
+      res.status(500).json({ error: 'Failed to generate template' });
+    }
+  }
+);
+
 traysRouter.post(
   '/export',
   authenticate,

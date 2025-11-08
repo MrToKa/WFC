@@ -19,6 +19,7 @@ import {
   exportTrays,
   fetchAllMaterialTrays,
   fetchTrays,
+  getTraysTemplate,
   importTrays,
   updateTray
 } from '@/api/client';
@@ -77,6 +78,7 @@ type UseTraysSectionResult = {
   traysError: string | null;
   traysImporting: boolean;
   traysExporting: boolean;
+  traysGettingTemplate: boolean;
   pendingTrayId: string | null;
   pagedTrays: Tray[];
   totalTrayPages: number;
@@ -97,6 +99,7 @@ type UseTraysSectionResult = {
   handleExportTrays: (
     freeSpaceByTrayId?: Record<string, number | null>
   ) => Promise<void>;
+  handleGetTraysTemplate: () => Promise<void>;
   trayDialog: TrayDialogController;
 };
 
@@ -120,6 +123,7 @@ export const useTraysSection = ({
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isGettingTemplate, setIsGettingTemplate] = useState<boolean>(false);
   const [pendingTrayId, setPendingTrayId] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
 
@@ -575,6 +579,44 @@ export const useTraysSection = ({
     [projectSnapshot, showToast, token]
   );
 
+  const handleGetTraysTemplate = useCallback(async () => {
+    if (!projectSnapshot || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to get the template.'
+      });
+      return;
+    }
+
+    setIsGettingTemplate(true);
+
+    try {
+      const blob = await getTraysTemplate(token, projectSnapshot.id);
+      const link = document.createElement('a');
+      const url = window.URL.createObjectURL(blob);
+      const fileName = 'trays-template.xlsx';
+
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast({ intent: 'success', title: 'Template downloaded' });
+    } catch (err) {
+      console.error('Get trays template failed', err);
+      showToast({
+        intent: 'error',
+        title: 'Failed to get template',
+        body: err instanceof ApiError ? err.message : undefined
+      });
+    } finally {
+      setIsGettingTemplate(false);
+    }
+  }, [projectSnapshot, showToast, token]);
+
   return {
     trays,
     traysLoading: isLoading,
@@ -582,6 +624,7 @@ export const useTraysSection = ({
     traysError: error,
     traysImporting: isImporting,
     traysExporting: isExporting,
+    traysGettingTemplate: isGettingTemplate,
     pendingTrayId,
     pagedTrays,
     totalTrayPages: totalPages,
@@ -600,6 +643,7 @@ export const useTraysSection = ({
     handleDeleteTray,
     handleImportTrays,
     handleExportTrays,
+    handleGetTraysTemplate,
     trayDialog: {
       open: isDialogOpen,
       mode: dialogMode,

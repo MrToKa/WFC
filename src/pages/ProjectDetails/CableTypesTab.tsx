@@ -30,9 +30,11 @@ type CableTypesTabProps = {
   onCreate: () => void;
   onImportClick: () => void;
   onExport: () => void;
+  onGetTemplate: () => void;
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
   isExporting: boolean;
+  isGettingTemplate: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   searchText: string;
   searchCriteria: CableTypeSearchCriteria;
@@ -59,9 +61,11 @@ export const CableTypesTab = ({
   onCreate,
   onImportClick,
   onExport,
+  onGetTemplate,
   onImportFileChange,
   isImporting,
   isExporting,
+  isGettingTemplate,
   fileInputRef,
   searchText,
   searchCriteria,
@@ -104,6 +108,13 @@ export const CableTypesTab = ({
             disabled={isExporting}
           >
             {isExporting ? 'Exporting...' : 'Export to Excel'}
+          </Button>
+          <Button
+            appearance="subtle"
+            onClick={onGetTemplate}
+            disabled={isGettingTemplate}
+          >
+            {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
           </Button>
           <input
             ref={fileInputRef}

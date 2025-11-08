@@ -111,6 +111,7 @@ export const ProjectDetails = () => {
     cablesError,
     cablesImporting,
     cablesExporting,
+    cablesGettingTemplate,
     pendingCableId,
     fileInputRef: cablesFileInputRef,
     inlineEditingEnabled,
@@ -125,6 +126,7 @@ export const ProjectDetails = () => {
     handleDeleteCable,
     handleImportCables,
     handleExportCables,
+    handleGetCablesTemplate,
     handleCableDraftChange,
     handleCableTextFieldBlur,
     handleInlineCableTypeChange,
@@ -170,6 +172,7 @@ export const ProjectDetails = () => {
     cableTypesError,
     cableTypesImporting,
     cableTypesExporting,
+    cableTypesGettingTemplate,
     pendingCableTypeId,
     pagedCableTypes,
     totalCableTypePages,
@@ -188,6 +191,7 @@ export const ProjectDetails = () => {
     handleDeleteCableType,
     handleImportCableTypes,
     handleExportCableTypes,
+    handleGetCableTypesTemplate,
     cableTypeDialog
   } = useCableTypesSection({
     projectId,
@@ -208,6 +212,7 @@ export const ProjectDetails = () => {
     traysError,
     traysImporting,
     traysExporting,
+    traysGettingTemplate,
     pendingTrayId,
     fileInputRef: traysFileInputRef,
     searchText: traysSearchText,
@@ -221,6 +226,7 @@ export const ProjectDetails = () => {
     handleDeleteTray,
     handleImportTrays,
     handleExportTrays,
+    handleGetTraysTemplate,
     trayDialog
   } = useTraysSection({
     projectId,
@@ -630,9 +636,11 @@ export const ProjectDetails = () => {
           onCreate={openCreateCableTypeDialog}
           onImportClick={() => cableTypesFileInputRef.current?.click()}
           onExport={() => void handleExportCableTypes()}
+          onGetTemplate={() => void handleGetCableTypesTemplate()}
           onImportFileChange={handleImportCableTypes}
           isImporting={cableTypesImporting}
           isExporting={cableTypesExporting}
+          isGettingTemplate={cableTypesGettingTemplate}
           fileInputRef={cableTypesFileInputRef}
           searchText={cableTypesSearchText}
           searchCriteria={cableTypesSearchCriteria}
@@ -664,9 +672,11 @@ export const ProjectDetails = () => {
           onCreate={openCreateTrayDialog}
           onImportClick={() => traysFileInputRef.current?.click()}
           onExport={() => void handleExportTrays(trayFreeSpaceById)}
+          onGetTemplate={() => void handleGetTraysTemplate()}
           onImportFileChange={handleImportTrays}
           isImporting={traysImporting}
           isExporting={traysExporting}
+          isGettingTemplate={traysGettingTemplate}
           fileInputRef={traysFileInputRef}
           searchText={traysSearchText}
           searchCriteria={traysSearchCriteria}
@@ -732,9 +742,11 @@ export const ProjectDetails = () => {
           onCreate={handleCreateCable}
           onImportClick={() => cablesFileInputRef.current?.click()}
           onExport={() => void handleExportCables('list')}
+          onGetTemplate={() => void handleGetCablesTemplate('list')}
           onImportFileChange={handleImportCables}
           isImporting={cablesImporting}
           isExporting={cablesExporting}
+          isGettingTemplate={cablesGettingTemplate}
           fileInputRef={cablesFileInputRef}
           inlineEditingEnabled={inlineEditingEnabled}
           onInlineEditingToggle={setInlineEditingEnabled}

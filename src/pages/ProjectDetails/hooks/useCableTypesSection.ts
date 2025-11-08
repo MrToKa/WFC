@@ -17,6 +17,7 @@ import {
   deleteCableType,
   exportCableTypes,
   fetchCableTypes,
+  getCableTypesTemplate,
   importCableTypes,
   updateCableType
 } from '@/api/client';
@@ -74,6 +75,7 @@ type UseCableTypesSectionResult = {
   cableTypesError: string | null;
   cableTypesImporting: boolean;
   cableTypesExporting: boolean;
+  cableTypesGettingTemplate: boolean;
   pendingCableTypeId: string | null;
   pagedCableTypes: CableType[];
   totalCableTypePages: number;
@@ -94,6 +96,7 @@ type UseCableTypesSectionResult = {
     event: ChangeEvent<HTMLInputElement>
   ) => Promise<void>;
   handleExportCableTypes: () => Promise<void>;
+  handleGetCableTypesTemplate: () => Promise<void>;
   cableTypeDialog: CableTypeDialogController;
 };
 
@@ -118,6 +121,7 @@ export const useCableTypesSection = ({
   const [error, setError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isGettingTemplate, setIsGettingTemplate] = useState<boolean>(false);
   const [pendingCableTypeId, setPendingCableTypeId] = useState<string | null>(
     null
   );
@@ -563,6 +567,44 @@ export const useCableTypesSection = ({
     }
   }, [projectSnapshot, showToast, token]);
 
+  const handleGetCableTypesTemplate = useCallback(async () => {
+    if (!projectSnapshot || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to get the template.'
+      });
+      return;
+    }
+
+    setIsGettingTemplate(true);
+
+    try {
+      const blob = await getCableTypesTemplate(token, projectSnapshot.id);
+      const link = document.createElement('a');
+      const url = window.URL.createObjectURL(blob);
+      const fileName = 'cable-types-template.xlsx';
+
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast({ intent: 'success', title: 'Template downloaded' });
+    } catch (err) {
+      console.error('Get cable types template failed', err);
+      showToast({
+        intent: 'error',
+        title: 'Failed to get template',
+        body: err instanceof ApiError ? err.message : undefined
+      });
+    } finally {
+      setIsGettingTemplate(false);
+    }
+  }, [projectSnapshot, showToast, token]);
+
   return {
     cableTypes,
     cableTypesLoading: isLoading,
@@ -570,6 +612,7 @@ export const useCableTypesSection = ({
     cableTypesError: error,
     cableTypesImporting: isImporting,
     cableTypesExporting: isExporting,
+    cableTypesGettingTemplate: isGettingTemplate,
     pendingCableTypeId,
     pagedCableTypes,
     totalCableTypePages: totalPages,
@@ -588,6 +631,7 @@ export const useCableTypesSection = ({
     handleDeleteCableType,
     handleImportCableTypes,
     handleExportCableTypes,
+    handleGetCableTypesTemplate,
     cableTypeDialog: {
       open: isDialogOpen,
       mode: dialogMode,
