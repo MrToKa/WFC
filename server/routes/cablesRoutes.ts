@@ -40,9 +40,8 @@ const INPUT_HEADERS = {
   type: 'Type',
   fromLocation: 'From Location',
   toLocation: 'To Location',
-  routing: 'Routing',
-  designLength: 'Design Length',
-  installLength: 'Install Length',
+  designLength: 'Design Length [m]',
+  installLength: 'Install Length [m]',
   pullDate: 'Pull Date',
   connectedFrom: 'Connected From',
   connectedTo: 'Connected To',
@@ -65,6 +64,7 @@ const LIST_OUTPUT_HEADERS = {
 const REPORT_OUTPUT_HEADERS = {
   cableId: 'Cable Id',
   tag: 'Tag',
+  type: 'Type',
   fromLocation: 'From Location',
   toLocation: 'To Location',
   designLength: 'Design Length [m]',
@@ -107,6 +107,11 @@ const normalizeDateValue = (
 
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
   if (!match) {
+    const europeanMatch = /^(\d{2})-(\d{2})-(\d{4})$/.exec(trimmed);
+    if (europeanMatch) {
+      const [, day, month, year] = europeanMatch;
+      return `${year}-${month}-${day}`;
+    }
     return null;
   }
 
@@ -720,30 +725,23 @@ cablesRouter.post(
     };
 
     type PreparedCableFields = {
-      tag: string | null;
-      fromLocation: string | null;
-      toLocation: string | null;
-      routing: string | null;
-      designLength: number | null;
-      installLength: number | null;
-      pullDate: string | null;
-      connectedFrom: string | null;
-      connectedTo: string | null;
-      tested: string | null;
+      installLength?: number | null;
+      pullDate?: string | null;
+      connectedFrom?: string | null;
+      connectedTo?: string | null;
+      tested?: string | null;
     };
 
     type PreparedCableRow = {
       cableId: string;
       cableKey: string;
       typeName: string;
-      typeKey: string;
-      fields: Partial<PreparedCableFields>;
+      fields: PreparedCableFields;
     };
 
     const prepared: PreparedCableRow[] = [];
 
     const seenCableIds = new Set<string>();
-    const requestedTypeKeys = new Set<string>();
 
     const availableColumns = new Set<string>();
     for (const row of rows) {
@@ -757,39 +755,40 @@ cablesRouter.post(
     const hasColumn = (header: string): boolean =>
       rows.length === 0 || availableColumns.has(header);
 
-    if (!hasColumn(INPUT_HEADERS.cableId)) {
-      res
-        .status(400)
-        .json({ error: 'Import cancelled. Missing required column: Cable Id.' });
+    const requiredColumns = [
+      INPUT_HEADERS.cableId,
+      INPUT_HEADERS.tag,
+      INPUT_HEADERS.type,
+      INPUT_HEADERS.fromLocation,
+      INPUT_HEADERS.toLocation,
+      INPUT_HEADERS.designLength,
+      INPUT_HEADERS.installLength,
+      INPUT_HEADERS.pullDate,
+      INPUT_HEADERS.connectedFrom,
+      INPUT_HEADERS.connectedTo,
+      INPUT_HEADERS.tested
+    ];
+
+    const missingColumns = requiredColumns.filter((header) => !hasColumn(header));
+
+    if (missingColumns.length > 0) {
+      const columnList = missingColumns.join(', ');
+      res.status(400).json({
+        error: `Import cancelled. Missing required column${
+          missingColumns.length === 1 ? '' : 's'
+        }: ${columnList}.`
+      });
       return;
     }
 
-    if (!hasColumn(INPUT_HEADERS.type)) {
-      res
-        .status(400)
-        .json({ error: 'Import cancelled. Missing required column: Type.' });
-      return;
-    }
-
-    // Track optional worksheet columns so we only touch fields the user supplied.
+    // Track worksheet columns so we only touch fields the user supplied.
     const columnAvailability = {
-      tag: hasColumn(INPUT_HEADERS.tag),
-      fromLocation: hasColumn(INPUT_HEADERS.fromLocation),
-      toLocation: hasColumn(INPUT_HEADERS.toLocation),
-      routing: hasColumn(INPUT_HEADERS.routing),
-      designLength: hasColumn(INPUT_HEADERS.designLength),
       installLength: hasColumn(INPUT_HEADERS.installLength),
       pullDate: hasColumn(INPUT_HEADERS.pullDate),
       connectedFrom: hasColumn(INPUT_HEADERS.connectedFrom),
       connectedTo: hasColumn(INPUT_HEADERS.connectedTo),
       tested: hasColumn(INPUT_HEADERS.tested)
     };
-
-    const fieldProvided = <K extends keyof PreparedCableFields>(
-      fields: Partial<PreparedCableFields>,
-      field: K
-    ): boolean =>
-      Object.prototype.hasOwnProperty.call(fields, field);
 
     for (const row of rows) {
       const rawCableId = row[INPUT_HEADERS.cableId] as unknown;
@@ -821,39 +820,7 @@ cablesRouter.post(
         continue;
       }
 
-      const typeKey = typeName.toLowerCase();
-
-      const fields: Partial<PreparedCableFields> = {};
-
-      if (columnAvailability.tag) {
-        fields.tag = normalizeOptionalString(
-          row[INPUT_HEADERS.tag] as string | null | undefined
-        );
-      }
-
-      if (columnAvailability.fromLocation) {
-        fields.fromLocation = normalizeOptionalString(
-          row[INPUT_HEADERS.fromLocation] as string | null | undefined
-        );
-      }
-
-      if (columnAvailability.toLocation) {
-        fields.toLocation = normalizeOptionalString(
-          row[INPUT_HEADERS.toLocation] as string | null | undefined
-        );
-      }
-
-      if (columnAvailability.routing) {
-        fields.routing = normalizeOptionalString(
-          row[INPUT_HEADERS.routing] as string | null | undefined
-        );
-      }
-
-      if (columnAvailability.designLength) {
-        fields.designLength = parseInstallLength(
-          row[INPUT_HEADERS.designLength] as unknown
-        );
-      }
+      const fields: PreparedCableFields = {};
 
       if (columnAvailability.installLength) {
         fields.installLength = parseInstallLength(
@@ -889,12 +856,10 @@ cablesRouter.post(
         cableId,
         cableKey,
         typeName,
-        typeKey,
         fields
       });
 
       seenCableIds.add(cableKey);
-      requestedTypeKeys.add(typeKey);
     }
 
     if (prepared.length === 0) {
@@ -923,69 +888,18 @@ cablesRouter.post(
       return;
     }
 
-    let cableTypesMap = new Map<string, CableTypeRow>();
-
-    try {
-      const typeResult = await pool.query<CableTypeRow>(
-        `
-          SELECT
-            id,
-            project_id,
-            name,
-            purpose,
-            diameter_mm,
-            weight_kg_per_m,
-            created_at,
-            updated_at
-          FROM cable_types
-          WHERE project_id = $1
-            AND lower(name) = ANY($2::text[]);
-        `,
-        [projectId, Array.from(requestedTypeKeys)]
-      );
-
-      cableTypesMap = new Map(
-        typeResult.rows.map((type: CableTypeRow) => [type.name.toLowerCase(), type])
-      );
-    } catch (error) {
-      console.error('Fetch cable types for import error', error);
-      res.status(500).json({ error: 'Failed to import cables' });
-      return;
-    }
-
-    const missingTypes = new Set<string>();
-
-    for (const row of prepared) {
-      if (!cableTypesMap.has(row.typeKey)) {
-        missingTypes.add(row.typeName);
-      }
-    }
-
-    if (missingTypes.size > 0) {
-      res.status(400).json({
-        error: `Import cancelled. Missing cable types: ${Array.from(
-          missingTypes
-        ).join(', ')}.`
-      });
-      return;
-    }
-
     type ExistingCable = Pick<
       CableRow,
       | 'id'
       | 'cable_id'
-      | 'tag'
-      | 'cable_type_id'
-      | 'from_location'
-      | 'to_location'
-      | 'routing'
-      | 'design_length'
       | 'install_length'
       | 'pull_date'
       | 'connected_from'
       | 'connected_to'
       | 'tested'
-    >;
+    > & {
+      type_name: string;
+    };
 
     const client = await pool.connect();
 
@@ -995,22 +909,18 @@ cablesRouter.post(
       const existingResult = await client.query<ExistingCable>(
         `
           SELECT
-            id,
-            cable_id,
-            tag,
-            cable_type_id,
-            from_location,
-            to_location,
-            routing,
-            design_length,
-            install_length,
-            pull_date,
-            connected_from,
-            connected_to,
-            tested
-          FROM cables
-          WHERE project_id = $1
-            AND lower(cable_id) = ANY($2::text[]);
+            c.id,
+            c.cable_id,
+            c.install_length,
+            c.pull_date,
+            c.connected_from,
+            c.connected_to,
+            c.tested,
+            ct.name AS type_name
+          FROM cables c
+          JOIN cable_types ct ON ct.id = c.cable_type_id
+          WHERE c.project_id = $1
+            AND lower(c.cable_id) = ANY($2::text[]);
         `,
         [projectId, prepared.map((row) => row.cableKey)]
       );
@@ -1022,288 +932,99 @@ cablesRouter.post(
       }
 
       for (const row of prepared) {
-        const cableType = cableTypesMap.get(row.typeKey);
-
-        if (!cableType) {
+        const existing = existingMap.get(row.cableKey);
+        if (!existing) {
+          summary.skipped += 1;
           continue;
         }
 
-        const existing = existingMap.get(row.cableKey);
-        const { fields } = row;
+        const existingTypeKey = existing.type_name.trim().toLowerCase();
+        const sheetTypeKey = row.typeName.toLowerCase();
 
-        // Helper getters fallback to existing values when a column is absent.
-        const resolveStringField = (
-          field: keyof Pick<
-            PreparedCableFields,
-            'tag' | 'fromLocation' | 'toLocation' | 'routing'
-          >,
-          fallback: string | null
-        ): string | null =>
-          fieldProvided(fields, field) ? (fields[field] as string | null) ?? null : fallback ?? null;
-
-        const resolveIntegerField = (
-          field: keyof Pick<PreparedCableFields, 'designLength' | 'installLength'>,
-          fallback: number | string | null
-        ): number | null =>
-          fieldProvided(fields, field)
-            ? (fields[field] as number | null) ?? null
-            : parseInstallLength(fallback);
-
-        const resolveDateField = (
-          field: keyof Pick<
-            PreparedCableFields,
-            'pullDate' | 'connectedFrom' | 'connectedTo' | 'tested'
-          >,
-          fallback: string | Date | null | undefined
-        ): string | Date | null =>
-          fieldProvided(fields, field) ? (fields[field] as string | null) ?? null : fallback ?? null;
-
-        if (existing) {
-          const updateAssignments: string[] = [];
-          const updateValues: Array<string | number | null> = [];
-          let parameterIndex = 1;
-
-          const enqueueUpdate = (
-            column: string,
-            provided: boolean,
-            hasChanged: boolean,
-            value: string | number | null
-          ): void => {
-            if (!provided || !hasChanged) {
-              return;
-            }
-
-            updateAssignments.push(`${column} = $${parameterIndex}`);
-            updateValues.push(value);
-            parameterIndex += 1;
-          };
-
-          const nextTag = resolveStringField('tag', existing.tag ?? null);
-          const tagProvided = fieldProvided(fields, 'tag');
-          const normalizedExistingTag = normalizeOptionalString(existing.tag ?? null);
-          const tagChanged =
-            tagProvided && (nextTag ?? null) !== normalizedExistingTag;
-          enqueueUpdate('tag', tagProvided, tagChanged, nextTag ?? null);
-
-          const nextFromLocation = resolveStringField(
-            'fromLocation',
-            existing.from_location ?? null
-          );
-          const fromLocationProvided = fieldProvided(fields, 'fromLocation');
-          const normalizedExistingFromLocation = normalizeOptionalString(
-            existing.from_location ?? null
-          );
-          const fromLocationChanged =
-            fromLocationProvided &&
-            (nextFromLocation ?? null) !== normalizedExistingFromLocation;
-          enqueueUpdate(
-            'from_location',
-            fromLocationProvided,
-            fromLocationChanged,
-            nextFromLocation ?? null
-          );
-
-          const nextToLocation = resolveStringField(
-            'toLocation',
-            existing.to_location ?? null
-          );
-          const toLocationProvided = fieldProvided(fields, 'toLocation');
-          const normalizedExistingToLocation = normalizeOptionalString(
-            existing.to_location ?? null
-          );
-          const toLocationChanged =
-            toLocationProvided &&
-            (nextToLocation ?? null) !== normalizedExistingToLocation;
-          enqueueUpdate(
-            'to_location',
-            toLocationProvided,
-            toLocationChanged,
-            nextToLocation ?? null
-          );
-
-          const nextRouting = resolveStringField(
-            'routing',
-            existing.routing ?? null
-          );
-          const routingProvided = fieldProvided(fields, 'routing');
-          const normalizedExistingRouting = normalizeOptionalString(
-            existing.routing ?? null
-          );
-          const routingChanged =
-            routingProvided && (nextRouting ?? null) !== normalizedExistingRouting;
-          enqueueUpdate('routing', routingProvided, routingChanged, nextRouting ?? null);
-
-          const nextDesignLength = resolveIntegerField(
-            'designLength',
-            existing.design_length ?? null
-          );
-          const designLengthProvided = fieldProvided(fields, 'designLength');
-          const normalizedExistingDesignLength = parseInstallLength(
-            existing.design_length ?? null
-          );
-          const designLengthChanged =
-            designLengthProvided && nextDesignLength !== normalizedExistingDesignLength;
-          enqueueUpdate(
-            'design_length',
-            designLengthProvided,
-            designLengthChanged,
-            nextDesignLength
-          );
-
-          const nextInstallLength = resolveIntegerField(
-            'installLength',
-            existing.install_length ?? null
-          );
-          const installLengthProvided = fieldProvided(fields, 'installLength');
-          const normalizedExistingInstallLength = parseInstallLength(
-            existing.install_length ?? null
-          );
-          const installLengthChanged =
-            installLengthProvided &&
-            nextInstallLength !== normalizedExistingInstallLength;
-          enqueueUpdate(
-            'install_length',
-            installLengthProvided,
-            installLengthChanged,
-            nextInstallLength
-          );
-
-          const nextPullDate = resolveDateField(
-            'pullDate',
-            existing.pull_date ?? null
-          );
-          const pullDateProvided = fieldProvided(fields, 'pullDate');
-          const normalizedExistingPullDate = normalizeDateForComparison(
-            existing.pull_date ?? null
-          );
-          const pullDateValue = pullDateProvided ? (nextPullDate as string | null) : null;
-          const pullDateChanged =
-            pullDateProvided && pullDateValue !== normalizedExistingPullDate;
-          enqueueUpdate('pull_date', pullDateProvided, pullDateChanged, pullDateValue);
-
-          const nextConnectedFrom = resolveDateField(
-            'connectedFrom',
-            existing.connected_from ?? null
-          );
-          const connectedFromProvided = fieldProvided(fields, 'connectedFrom');
-          const normalizedExistingConnectedFrom = normalizeDateForComparison(
-            existing.connected_from ?? null
-          );
-          const connectedFromValue = connectedFromProvided
-            ? (nextConnectedFrom as string | null)
-            : null;
-          const connectedFromChanged =
-            connectedFromProvided &&
-            connectedFromValue !== normalizedExistingConnectedFrom;
-          enqueueUpdate(
-            'connected_from',
-            connectedFromProvided,
-            connectedFromChanged,
-            connectedFromValue
-          );
-
-          const nextConnectedTo = resolveDateField(
-            'connectedTo',
-            existing.connected_to ?? null
-          );
-          const connectedToProvided = fieldProvided(fields, 'connectedTo');
-          const normalizedExistingConnectedTo = normalizeDateForComparison(
-            existing.connected_to ?? null
-          );
-          const connectedToValue = connectedToProvided
-            ? (nextConnectedTo as string | null)
-            : null;
-          const connectedToChanged =
-            connectedToProvided && connectedToValue !== normalizedExistingConnectedTo;
-          enqueueUpdate(
-            'connected_to',
-            connectedToProvided,
-            connectedToChanged,
-            connectedToValue
-          );
-
-          const nextTested = resolveDateField('tested', existing.tested ?? null);
-          const testedProvided = fieldProvided(fields, 'tested');
-          const normalizedExistingTested = normalizeDateForComparison(
-            existing.tested ?? null
-          );
-          const testedValue = testedProvided ? (nextTested as string | null) : null;
-          const testedChanged =
-            testedProvided && testedValue !== normalizedExistingTested;
-          enqueueUpdate('tested', testedProvided, testedChanged, testedValue);
-
-          const cableTypeChanged = existing.cable_type_id !== cableType.id;
-          enqueueUpdate('cable_type_id', true, cableTypeChanged, cableType.id);
-
-          if (updateAssignments.length === 0) {
-            continue;
-          }
-
-          const assignments = [...updateAssignments, 'updated_at = NOW()'].join(
-            ',\n                '
-          );
-
-          await client.query(
-            `
-              UPDATE cables
-              SET
-                ${assignments}
-              WHERE id = $${parameterIndex};
-            `,
-            [...updateValues, existing.id]
-          );
-          summary.updated += 1;
-        } else {
-          const insertTag = resolveStringField('tag', null);
-          const insertFromLocation = resolveStringField('fromLocation', null);
-          const insertToLocation = resolveStringField('toLocation', null);
-          const insertRouting = resolveStringField('routing', null);
-          const insertDesignLength = resolveIntegerField('designLength', null);
-          const insertInstallLength = resolveIntegerField('installLength', null);
-          const insertPullDate = resolveDateField('pullDate', null);
-          const insertConnectedFrom = resolveDateField('connectedFrom', null);
-          const insertConnectedTo = resolveDateField('connectedTo', null);
-          const insertTested = resolveDateField('tested', null);
-
-          await client.query(
-            `
-              INSERT INTO cables (
-                id,
-                project_id,
-                cable_id,
-                tag,
-                cable_type_id,
-                from_location,
-                to_location,
-                routing,
-                design_length,
-                install_length,
-                pull_date,
-                connected_from,
-                connected_to,
-                tested
-              )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
-            `,
-            [
-              randomUUID(),
-              projectId,
-              row.cableId,
-              insertTag,
-              cableType.id,
-              insertFromLocation,
-              insertToLocation,
-              insertRouting,
-              insertDesignLength,
-              insertInstallLength,
-              insertPullDate,
-              insertConnectedFrom,
-              insertConnectedTo,
-              insertTested
-            ]
-          );
-          summary.inserted += 1;
+        if (existingTypeKey !== sheetTypeKey) {
+          summary.skipped += 1;
+          continue;
         }
+
+        const { fields } = row;
+        const updateAssignments: string[] = [];
+        const updateValues: Array<string | number | null> = [];
+        let parameterIndex = 1;
+
+        if (columnAvailability.installLength && fields.installLength !== undefined) {
+          const currentInstallLength = parseInstallLength(existing.install_length);
+          if (fields.installLength !== currentInstallLength) {
+            updateAssignments.push(`install_length = $${parameterIndex}`);
+            updateValues.push(fields.installLength ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (columnAvailability.pullDate && fields.pullDate !== undefined) {
+          const currentPullDate = normalizeDateForComparison(existing.pull_date);
+          if (fields.pullDate !== currentPullDate) {
+            updateAssignments.push(`pull_date = $${parameterIndex}`);
+            updateValues.push(fields.pullDate ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (
+          columnAvailability.connectedFrom &&
+          fields.connectedFrom !== undefined
+        ) {
+          const currentConnectedFrom = normalizeDateForComparison(
+            existing.connected_from
+          );
+          if (fields.connectedFrom !== currentConnectedFrom) {
+            updateAssignments.push(`connected_from = $${parameterIndex}`);
+            updateValues.push(fields.connectedFrom ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (
+          columnAvailability.connectedTo &&
+          fields.connectedTo !== undefined
+        ) {
+          const currentConnectedTo = normalizeDateForComparison(
+            existing.connected_to
+          );
+          if (fields.connectedTo !== currentConnectedTo) {
+            updateAssignments.push(`connected_to = $${parameterIndex}`);
+            updateValues.push(fields.connectedTo ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (columnAvailability.tested && fields.tested !== undefined) {
+          const currentTested = normalizeDateForComparison(existing.tested);
+          if (fields.tested !== currentTested) {
+            updateAssignments.push(`tested = $${parameterIndex}`);
+            updateValues.push(fields.tested ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (updateAssignments.length === 0) {
+          continue;
+        }
+
+        const idParameterIndex = parameterIndex;
+        updateAssignments.push('updated_at = NOW()');
+
+        const assignments = updateAssignments.join(',\n                ');
+
+        await client.query(
+          `
+            UPDATE cables
+            SET
+              ${assignments}
+            WHERE id = $${idParameterIndex};
+          `,
+          [...updateValues, existing.id]
+        );
+        summary.updated += 1;
       }
 
       await client.query('COMMIT');
@@ -1462,6 +1183,7 @@ cablesRouter.get(
                 width: 18
               },
               { name: REPORT_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
+              { name: REPORT_OUTPUT_HEADERS.type, key: 'type', width: 26 },
               {
                 name: REPORT_OUTPUT_HEADERS.fromLocation,
                 key: 'fromLocation',
@@ -1537,6 +1259,7 @@ cablesRouter.get(
           ? result.rows.map((row: CableWithTypeRow) => [
               row.cable_id ?? '',
               row.tag ?? '',
+              row.type_name ?? '',
               row.from_location ?? '',
               row.to_location ?? '',
               row.design_length !== null && row.design_length !== ''

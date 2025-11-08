@@ -189,6 +189,7 @@ export const CableReportTab = ({
             <thead>
               <tr>
                 <th className={styles.tableHeadCell}>Tag</th>
+                <th className={styles.tableHeadCell}>Type</th>
                 <th className={styles.tableHeadCell}>From location</th>
                 <th className={styles.tableHeadCell}>To location</th>
                 <th
@@ -224,6 +225,7 @@ export const CableReportTab = ({
                 return (
                   <tr key={cable.id}>
                     <td className={styles.tableCell}>{cable.tag ?? '-'}</td>
+                    <td className={styles.tableCell}>{cable.typeName ?? '-'}</td>
                     <td className={styles.tableCell}>
                       {cable.fromLocation ?? '-'}
                     </td>
