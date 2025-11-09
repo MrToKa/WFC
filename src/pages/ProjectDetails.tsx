@@ -929,6 +929,21 @@ export const ProjectDetails = () => {
         )
       },
       {
+        id: 'tray-details:rung-height',
+        name: 'Rung height [mm]',
+        value: describeDynamicValue('-')
+      },
+      {
+        id: 'tray-details:material-weight-per-meter',
+        name: 'Tray weight per meter [kg/m]',
+        value: describeDynamicValue('-')
+      },
+      {
+        id: 'tray-details:tray-type-image',
+        name: 'Tray type picture',
+        value: 'Tray type template image'
+      },
+      {
         id: 'tray-details:free-space',
         name: 'Tray free space [%]',
         value: describeDynamicValue(sampleFreeSpace)

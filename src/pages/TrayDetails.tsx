@@ -17,11 +17,17 @@ import {
   updateTray,
   uploadProjectFile,
   downloadProjectFile,
-  fetchProjectFiles
+  fetchProjectFiles,
+  downloadTemplateFile
 } from '@/api/client';
+import type { ProjectFile } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { getProjectPlaceholders } from '@/utils/projectPlaceholders';
+import {
+  getProjectPlaceholders,
+  setProjectPlaceholders,
+  clearProjectPlaceholders
+} from '@/utils/projectPlaceholders';
 
 // Import refactored modules
 import {
@@ -72,7 +78,9 @@ import {
   canvasToBlob,
   buildTrayPlaceholderValues,
   replaceDocxPlaceholders,
-  type TrayPlaceholderContext
+  type TrayPlaceholderContext,
+  type WordTableDefinition,
+  type DocxImageDefinition
 } from './TrayDetails/trayReportUtils';
 
 const WORD_MIME_TYPE =
@@ -133,6 +141,178 @@ type TrayReportBaseContext = Omit<
   TrayPlaceholderContext,
   'projectFiles' | 'loadCurveImageFileName' | 'bundlesImageFileName'
 >;
+
+const EMUS_PER_PIXEL = 9525;
+const MAX_IMAGE_WIDTH_EMU = 6.5 * 914400;
+const MAX_IMAGE_HEIGHT_EMU = 9 * 914400;
+const FULL_PAGE_IMAGE_WIDTH_EMU = 6.8 * 914400;
+const FULL_PAGE_TARGET_HEIGHT_EMU = 9 * 914400;
+
+type PendingImagePlaceholder = {
+  blob: Blob;
+  fileName: string;
+  description: string;
+  layout?: 'default' | 'full-page';
+};
+
+const readImageDimensions = (blob: Blob): Promise<{
+  width: number;
+  height: number;
+}> =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+    image.onload = () => {
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to read image dimensions'));
+    };
+    image.src = url;
+  });
+
+const computeImageSizeEmu = async (
+  blob: Blob,
+  layout: 'default' | 'full-page'
+) => {
+  const isFullPage = layout === 'full-page';
+  const maxWidth = isFullPage
+    ? FULL_PAGE_IMAGE_WIDTH_EMU
+    : MAX_IMAGE_WIDTH_EMU;
+  const fallbackHeight = Math.round(maxWidth * 0.6);
+
+  try {
+    const { width, height } = await readImageDimensions(blob);
+    if (!width || !height) {
+      return {
+        widthEmu: maxWidth,
+        heightEmu: fallbackHeight
+      };
+    }
+
+    const rawWidthEmu = width * EMUS_PER_PIXEL;
+    const rawHeightEmu = height * EMUS_PER_PIXEL;
+
+    if (isFullPage) {
+      const targetHeight = FULL_PAGE_TARGET_HEIGHT_EMU;
+      let scale = targetHeight / rawHeightEmu;
+      let scaledWidth = rawWidthEmu * scale;
+
+      if (scaledWidth > maxWidth) {
+        scale = maxWidth / rawWidthEmu;
+        scaledWidth = maxWidth;
+      }
+
+      return {
+        widthEmu: Math.round(scaledWidth),
+        heightEmu: Math.round(rawHeightEmu * scale)
+      };
+    }
+
+    const maxHeight = MAX_IMAGE_HEIGHT_EMU;
+    const scale = Math.min(maxWidth / rawWidthEmu, maxHeight / rawHeightEmu, 1);
+
+    return {
+      widthEmu: Math.round(rawWidthEmu * scale),
+      heightEmu: Math.round(rawHeightEmu * scale)
+    };
+  } catch {
+    return {
+      widthEmu: maxWidth,
+      heightEmu: fallbackHeight
+    };
+  }
+};
+
+const prepareImageDefinitions = async (
+  placeholders: Record<string, PendingImagePlaceholder>
+): Promise<Record<string, DocxImageDefinition>> => {
+  const entries = await Promise.all(
+    Object.entries(placeholders).map(async ([placeholder, data]) => {
+      try {
+        const { widthEmu, heightEmu } = await computeImageSizeEmu(
+          data.blob,
+          data.layout ?? 'default'
+        );
+        const buffer = await data.blob.arrayBuffer();
+        const fileStem = data.fileName.replace(/\.[^.]+$/, '');
+
+        const definition: DocxImageDefinition = {
+          data: new Uint8Array(buffer),
+          widthEmu,
+          heightEmu,
+          fileName: fileStem,
+          contentType: data.blob.type || 'image/jpeg',
+          description: data.description
+        };
+
+        return [placeholder, definition] as const;
+      } catch (error) {
+        console.error(
+          `Failed to prepare image for placeholder "${placeholder}"`,
+          error
+        );
+        return null;
+      }
+    })
+  );
+
+  return Object.fromEntries(
+    entries.filter(
+      (entry): entry is [string, DocxImageDefinition] => entry !== null
+    )
+  );
+};
+
+const rotateImageBlob = async (
+  blob: Blob,
+  direction: 'ccw90' | 'cw90'
+): Promise<Blob> => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return blob;
+  }
+
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const image = new Image();
+
+    image.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(blob);
+          return;
+        }
+
+        const angle = direction === 'ccw90' ? -Math.PI / 2 : Math.PI / 2;
+        canvas.width = image.height;
+        canvas.height = image.width;
+
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(angle);
+        ctx.drawImage(image, -image.width / 2, -image.height / 2);
+
+        canvasToBlob(canvas, blob.type || 'image/jpeg', 0.92)
+          .then((rotatedBlob) => {
+            resolve(rotatedBlob);
+          })
+          .catch(() => resolve(blob));
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(blob);
+    };
+
+    image.src = url;
+  });
+};
 
 const useStyles = makeStyles({
   root: {
@@ -274,6 +454,16 @@ export const TrayDetails = () => {
   const { showToast } = useToast();
 
   const isAdmin = Boolean(user?.isAdmin);
+  const currentUserDisplay = useMemo(() => {
+    if (!user) {
+      return '-';
+    }
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+    if (fullName !== '') {
+      return fullName;
+    }
+    return user.email ?? '-';
+  }, [user]);
 
   // Use custom hooks for data management
   const {
@@ -325,10 +515,31 @@ export const TrayDetails = () => {
   }, [tray]);
 
   // Material tray selection
-  const selectedMaterialTray = useMemo(
-    () => findMaterialTrayByType(formValues.type),
-    [findMaterialTrayByType, formValues.type]
-  );
+  const selectedMaterialTray = useMemo(() => {
+    const fromForm = findMaterialTrayByType(formValues.type);
+    if (fromForm) {
+      return fromForm;
+    }
+    if (tray?.type) {
+      return findMaterialTrayByType(tray.type);
+    }
+    return null;
+  }, [findMaterialTrayByType, formValues.type, tray?.type]);
+
+  const materialTrayMetadata = useMemo(() => {
+    if (!selectedMaterialTray) {
+      return null;
+    }
+    return {
+      heightMm: selectedMaterialTray.heightMm ?? null,
+      widthMm: selectedMaterialTray.widthMm ?? null,
+      weightKgPerM: selectedMaterialTray.weightKgPerM ?? null,
+      rungHeightMm: selectedMaterialTray.rungHeightMm ?? null,
+      imageTemplateId: selectedMaterialTray.imageTemplateId ?? null,
+      imageTemplateFileName: selectedMaterialTray.imageTemplateFileName ?? null,
+      imageTemplateContentType: selectedMaterialTray.imageTemplateContentType ?? null
+    };
+  }, [selectedMaterialTray]);
 
   const selectedRungHeightMm = selectedMaterialTray?.rungHeightMm ?? null;
 
@@ -1194,7 +1405,20 @@ export const TrayDetails = () => {
     : materialSupportsError;
 
   const supportTypeDisplay = overrideSupport?.type ?? supportOverride?.supportType ?? null;
-  const supportLengthMm = overrideSupport?.lengthMm ?? null;
+  const rawSupportLengthMm = overrideSupport?.lengthMm ?? null;
+  const supportLengthMm = useMemo(() => {
+    if (rawSupportLengthMm !== null) {
+      return rawSupportLengthMm;
+    }
+    const supportType = supportOverride?.supportType?.trim().toLowerCase();
+    if (!supportType) {
+      return null;
+    }
+    const matchedSupport = Object.values(materialSupportsById).find((support) =>
+      support.type?.trim().toLowerCase() === supportType
+    );
+    return matchedSupport?.lengthMm ?? null;
+  }, [materialSupportsById, rawSupportLengthMm, supportOverride?.supportType]);
 
   const canUseMaterialDropdown = !isLoadingMaterials && materialTrays.length > 0;
   const weightDisplay =
@@ -1321,7 +1545,9 @@ export const TrayDetails = () => {
       selectedLoadCurveName,
       numberFormatter,
       percentageFormatter,
-      dateTimeFormatter
+      dateTimeFormatter,
+      materialTrayMetadata,
+      currentUserDisplay
     };
   }, [
     project,
@@ -1355,7 +1581,9 @@ export const TrayDetails = () => {
     selectedLoadCurveName,
     numberFormatter,
     percentageFormatter,
-    dateTimeFormatter
+    dateTimeFormatter,
+    materialTrayMetadata,
+    currentUserDisplay
   ]);
 
   const canGenerateReport = Boolean(token && trayReportBaseContext);
@@ -1419,10 +1647,85 @@ export const TrayDetails = () => {
         tray.name
       );
 
+      const projectFilesResponse = await fetchProjectFiles(projectId, token);
+      let projectFilesList = [...projectFilesResponse.files];
+
+      const normalizeFileName = (fileName: string): string =>
+        fileName.trim().toLowerCase();
+
+      const findExistingFileIdByName = (fileName: string): string | null => {
+        const normalized = normalizeFileName(fileName);
+        if (!normalized) {
+          return null;
+        }
+        const existing = projectFilesList.find(
+          (file) => normalizeFileName(file.fileName) === normalized
+        );
+        return existing?.id ?? null;
+      };
+
+      const registerProjectFile = (file: ProjectFile) => {
+        projectFilesList = (() => {
+          const index = projectFilesList.findIndex(
+            (existing) => existing.id === file.id
+          );
+          if (index === -1) {
+            return [...projectFilesList, file];
+          }
+          const next = [...projectFilesList];
+          next[index] = file;
+          return next;
+        })();
+      };
+
+      const templateDownloadPromise = downloadProjectFile(
+        token,
+        projectId,
+        templateSelection.fileId
+      );
+
       const [loadCurveBlob, bundlesBlob] = await Promise.all([
         canvasToBlob(loadCurveCanvasRef.current, 'image/jpeg', 0.92),
         canvasToBlob(trayCanvasRef.current, 'image/jpeg', 0.92)
       ]);
+
+      const rotatedBundlesBlob = await rotateImageBlob(bundlesBlob, 'ccw90');
+      const docBundlesBlob = rotatedBundlesBlob ?? bundlesBlob;
+      let trayTemplateImageBlob: Blob | null | undefined;
+
+      const getTrayTemplateImageBlob = async (): Promise<Blob | null> => {
+        if (trayTemplateImageBlob !== undefined) {
+          return trayTemplateImageBlob;
+        }
+
+        const imageMeta = trayReportBaseContext.materialTrayMetadata;
+        if (
+          !imageMeta?.imageTemplateId ||
+          !imageMeta.imageTemplateContentType ||
+          !imageMeta.imageTemplateContentType.startsWith('image/')
+        ) {
+          trayTemplateImageBlob = null;
+          return trayTemplateImageBlob;
+        }
+
+        if (!token) {
+          trayTemplateImageBlob = null;
+          return trayTemplateImageBlob;
+        }
+
+        try {
+          const { blob } = await downloadTemplateFile(
+            token,
+            imageMeta.imageTemplateId
+          );
+          trayTemplateImageBlob = blob;
+        } catch (error) {
+          console.error('Failed to download tray type image template', error);
+          trayTemplateImageBlob = null;
+        }
+
+        return trayTemplateImageBlob;
+      };
 
       const loadCurveFile = new File([loadCurveBlob], loadCurve, {
         type: 'image/jpeg'
@@ -1431,36 +1734,153 @@ export const TrayDetails = () => {
         type: 'image/jpeg'
       });
 
-      await Promise.all([
-        uploadProjectFile(token, projectId, loadCurveFile),
-        uploadProjectFile(token, projectId, bundlesFile)
-      ]);
+      const loadCurveReplaceId = findExistingFileIdByName(loadCurve);
+      const bundlesReplaceId = findExistingFileIdByName(bundles);
 
-      const [{ blob: templateBlob, contentType }, projectFilesResponse] =
+      const [{ file: storedLoadCurve }, { file: storedBundles }] =
         await Promise.all([
-          downloadProjectFile(token, projectId, templateSelection.fileId),
-          fetchProjectFiles(projectId, token)
+          uploadProjectFile(
+            token,
+            projectId,
+            loadCurveFile,
+            loadCurveReplaceId ? { replaceFileId: loadCurveReplaceId } : undefined
+          ),
+          uploadProjectFile(
+            token,
+            projectId,
+            bundlesFile,
+            bundlesReplaceId ? { replaceFileId: bundlesReplaceId } : undefined
+          )
         ]);
 
-      const placeholderValues = buildTrayPlaceholderValues({
+      registerProjectFile(storedLoadCurve);
+      registerProjectFile(storedBundles);
+
+      const { blob: templateBlob, contentType } =
+        await templateDownloadPromise;
+
+      const canonicalPlaceholderProjectId = project?.id ?? projectId ?? null;
+      if (!canonicalPlaceholderProjectId) {
+        showToast({
+          intent: 'error',
+          title: 'Project unavailable',
+          body: 'Project identifier is missing for placeholder resolution.'
+        });
+        return;
+      }
+
+      const placeholderKeyCandidates = [
+        canonicalPlaceholderProjectId,
+        projectId && projectId !== canonicalPlaceholderProjectId ? projectId : null
+      ].filter(
+        (value, index, array): value is string =>
+          Boolean(value) && array.indexOf(value) === index
+      );
+
+      let storedPlaceholders: Record<string, string> = {};
+      let placeholdersSourceKey: string | null = null;
+
+      for (const candidate of placeholderKeyCandidates) {
+        if (!candidate) {
+          continue;
+        }
+        const candidateValues = getProjectPlaceholders(candidate);
+        if (Object.keys(candidateValues).length > 0) {
+          storedPlaceholders = candidateValues;
+          placeholdersSourceKey = candidate;
+          break;
+        }
+      }
+
+      if (Object.keys(storedPlaceholders).length === 0) {
+        showToast({
+          intent: 'error',
+          title: 'No placeholders configured',
+          body: 'Map placeholders in the Variables tab before generating a report.'
+        });
+        return;
+      }
+
+      if (
+        placeholdersSourceKey &&
+        placeholdersSourceKey !== canonicalPlaceholderProjectId
+      ) {
+        setProjectPlaceholders(
+          canonicalPlaceholderProjectId,
+          storedPlaceholders
+        );
+        clearProjectPlaceholders(placeholdersSourceKey);
+      }
+
+      const placeholderBundle = buildTrayPlaceholderValues({
         ...trayReportBaseContext,
-        projectFiles: projectFilesResponse.files,
+        projectFiles: projectFilesList,
         loadCurveImageFileName: loadCurve,
         bundlesImageFileName: bundles
       });
-
-      const storedPlaceholders = getProjectPlaceholders(projectId);
-      const replacements: Record<string, string> = {};
+      const textReplacements: Record<string, string> = {};
+      const tableReplacements: Record<string, WordTableDefinition> = {};
+      const pendingImagePlaceholders: Record<
+        string,
+        PendingImagePlaceholder
+      > = {};
 
       for (const [rowId, placeholder] of Object.entries(storedPlaceholders)) {
         const trimmedPlaceholder = placeholder?.trim();
         if (!trimmedPlaceholder) {
           continue;
         }
-        const resolvedValue = placeholderValues[rowId] ?? '';
+
+        const tableDefinition = placeholderBundle.tables[rowId];
+        if (tableDefinition) {
+          tableReplacements[trimmedPlaceholder] = tableDefinition;
+          continue;
+        }
+
+        const imageSource = placeholderBundle.images[rowId];
+        if (imageSource) {
+          let sourceBlob: Blob | null = null;
+          let fileNameForBlob = loadCurve;
+          let description = '';
+          let layout: 'default' | 'full-page' = 'default';
+
+          if (imageSource === 'loadCurve') {
+            sourceBlob = loadCurveBlob;
+            fileNameForBlob = loadCurve;
+            description = 'Tray load curve visualization';
+            layout = 'default';
+          } else if (imageSource === 'bundles') {
+            sourceBlob = docBundlesBlob;
+            fileNameForBlob = bundles;
+            description = 'Tray laying concept visualization';
+            layout = 'full-page';
+          } else if (imageSource === 'trayTemplate') {
+            const templateBlob = await getTrayTemplateImageBlob();
+            if (templateBlob) {
+              sourceBlob = templateBlob;
+              fileNameForBlob =
+                trayReportBaseContext.materialTrayMetadata
+                  ?.imageTemplateFileName ?? 'TrayTypeImage';
+              description = 'Tray type illustration';
+              layout = 'default';
+            }
+          }
+
+          if (sourceBlob) {
+            pendingImagePlaceholders[trimmedPlaceholder] = {
+              blob: sourceBlob,
+              fileName: fileNameForBlob,
+              description,
+              layout
+            };
+          }
+          continue;
+        }
+
+        const resolvedValue = placeholderBundle.values[rowId] ?? '';
         if (
-          trimmedPlaceholder in replacements &&
-          replacements[trimmedPlaceholder] !== resolvedValue &&
+          trimmedPlaceholder in textReplacements &&
+          textReplacements[trimmedPlaceholder] !== resolvedValue &&
           resolvedValue !== ''
         ) {
           console.warn(
@@ -1468,12 +1888,26 @@ export const TrayDetails = () => {
           );
           continue;
         }
-        replacements[trimmedPlaceholder] = resolvedValue;
+        textReplacements[trimmedPlaceholder] = resolvedValue;
       }
+
+      const resolvedImagePlaceholders = await prepareImageDefinitions(
+        pendingImagePlaceholders
+      );
 
       const updatedDocumentBlob = await replaceDocxPlaceholders(
         templateBlob,
-        replacements
+        textReplacements,
+        {
+          tables:
+            Object.keys(tableReplacements).length > 0
+              ? tableReplacements
+              : undefined,
+          images:
+            Object.keys(resolvedImagePlaceholders).length > 0
+              ? resolvedImagePlaceholders
+              : undefined
+        }
       );
 
       const wordContentType =
@@ -1485,11 +1919,16 @@ export const TrayDetails = () => {
         type: wordContentType
       });
 
+      const reportReplaceId = findExistingFileIdByName(report);
+
       const { file: uploadedReport } = await uploadProjectFile(
         token,
         projectId,
-        reportFile
+        reportFile,
+        reportReplaceId ? { replaceFileId: reportReplaceId } : undefined
       );
+
+      registerProjectFile(uploadedReport);
 
       triggerFileDownload(updatedDocumentBlob, report);
 
