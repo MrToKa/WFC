@@ -934,6 +934,11 @@ export const ProjectDetails = () => {
         value: describeDynamicValue('-')
       },
       {
+        id: 'tray-details:useful-height',
+        name: 'Useful tray height [mm]',
+        value: describeDynamicValue('-')
+      },
+      {
         id: 'tray-details:material-weight-per-meter',
         name: 'Tray weight per meter [kg/m]',
         value: describeDynamicValue('-')

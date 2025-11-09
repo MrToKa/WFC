@@ -254,6 +254,12 @@ export const buildTrayPlaceholderValues = (
   const trayMaterialWeightPerMeterKg = materialTrayMetadata?.weightKgPerM ?? null;
   const trayRungHeightMm = materialTrayMetadata?.rungHeightMm ?? null;
   const trayTypeImageAvailable = Boolean(materialTrayMetadata?.imageTemplateId);
+  
+  // Calculate useful tray height (tray height - rung height)
+  const usefulTrayHeightMm = 
+    trayHeightSourceMm !== null && trayRungHeightMm !== null
+      ? trayHeightSourceMm - trayRungHeightMm
+      : null;
 
   const addValue = (key: string, value: string | null | undefined) => {
     if (value === null || value === undefined) {
@@ -402,6 +408,10 @@ export const buildTrayPlaceholderValues = (
   addValue(
     'tray-details:rung-height',
     formatNumberWithUnit(numberFormatter, trayRungHeightMm, 'mm')
+  );
+  addValue(
+    'tray-details:useful-height',
+    formatNumberWithUnit(numberFormatter, usefulTrayHeightMm, 'mm')
   );
   addValue(
     'tray-details:material-weight-per-meter',

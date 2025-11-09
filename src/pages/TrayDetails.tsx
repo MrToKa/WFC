@@ -1141,6 +1141,22 @@ export const TrayDetails = () => {
     ? 'N/A'
     : `${percentageFormatter.format(freeSpaceMetrics.freeWidthPercent)} %`;
 
+  // Calculate useful tray height (tray height - rung height)
+  const usefulTrayHeightMm = useMemo(() => {
+    const trayHeightMm = tray?.heightMm ?? null;
+    const rungHeightMm = selectedRungHeightMm;
+    
+    if (trayHeightMm === null || rungHeightMm === null) {
+      return null;
+    }
+    
+    return trayHeightMm - rungHeightMm;
+  }, [tray?.heightMm, selectedRungHeightMm]);
+
+  const usefulTrayHeightDisplay = usefulTrayHeightMm === null
+    ? 'N/A'
+    : `${numberFormatter.format(usefulTrayHeightMm)} mm`;
+
   // Form handlers
   const handleFieldChange =
     (field: keyof TrayFormState) =>
@@ -2171,6 +2187,10 @@ export const TrayDetails = () => {
       <div className={styles.section}>
         <Caption1>Free space calculations</Caption1>
         <div className={styles.grid}>
+          <div className={styles.field}>
+            <Caption1>Useful tray height</Caption1>
+            <Body1>{usefulTrayHeightDisplay}</Body1>
+          </div>
           <div className={styles.field}>
             <Caption1>Space occupied by cables</Caption1>
             <Body1>{occupiedWidthDisplay}</Body1>
