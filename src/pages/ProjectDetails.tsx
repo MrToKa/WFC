@@ -860,7 +860,22 @@ export const ProjectDetails = () => {
         ? 'Dynamic per tray during export'
         : `${value} (example)`;
     const calculatedValueNote = 'Calculated per tray during export';
-    const trayDetailsRows: VariablesApiRow[] = [
+    const pushTraySection = (
+      sectionId: string,
+      label: string,
+      rows: VariablesApiRow[]
+    ) => {
+      if (rows.length === 0) {
+        return;
+      }
+      trayTables.push({
+        id: `trays:${sectionId}`,
+        label,
+        rows
+      });
+    };
+
+    pushTraySection('details', 'Tray info', [
       {
         id: 'tray-details:name',
         name: 'Tray name',
@@ -920,6 +935,62 @@ export const ProjectDetails = () => {
         )
       },
       {
+        id: 'tray-details:created-at',
+        name: 'Tray created at',
+        value: describeDynamicValue(formatDateTime(sampleTray?.createdAt ?? null))
+      },
+      {
+        id: 'tray-details:updated-at',
+        name: 'Tray updated at',
+        value: describeDynamicValue(formatDateTime(sampleTray?.updatedAt ?? null))
+      }
+    ]);
+
+    pushTraySection('load-curve', 'Tray load curve', [
+      {
+        id: 'tray-details:load-curve-name',
+        name: 'Assigned load curve',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:safety-factor',
+        name: 'Safety factor [%]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:calculated-span',
+        name: 'Calculated point span [m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:calculated-load',
+        name: 'Calculated point load [kN/m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:limit-highlight',
+        name: 'Limit highlight span [m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:allowable-load',
+        name: 'Allowable load at span [kN/m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:load-curve-status',
+        name: 'Load curve status message',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:load-curve-canvas',
+        name: 'Load curve canvas',
+        value: 'Canvas snapshot for selected tray during export'
+      }
+    ]);
+
+    pushTraySection('own-weight', 'Tray own weight calculations', [
+      {
         id: 'tray-details:weight-load-per-meter',
         name: 'Tray weight load per meter [kg/m]',
         value: calculatedValueNote
@@ -928,7 +999,10 @@ export const ProjectDetails = () => {
         id: 'tray-details:total-own-weight',
         name: 'Tray total own weight [kg]',
         value: calculatedValueNote
-      },
+      }
+    ]);
+
+    pushTraySection('cables-weight', 'Cables on tray weight calculations', [
       {
         id: 'tray-details:cables-weight-load-per-meter',
         name: 'Cables weight load per meter [kg/m]',
@@ -938,7 +1012,17 @@ export const ProjectDetails = () => {
         id: 'tray-details:cables-total-weight',
         name: 'Total weight on the tray [kg]',
         value: calculatedValueNote
-      },
+      }
+    ]);
+    pushTraySection('cables-table', 'Cables laying on the tray table', [
+      {
+        id: 'tray-details:cables-table',
+        name: 'Cables laying on the tray',
+        value: 'Entire table export for selected tray'
+      }
+    ]);
+
+    pushTraySection('total-weight', 'Total weight calculations', [
       {
         id: 'tray-details:total-weight-load-per-meter',
         name: 'Total weight load per meter [kg/m]',
@@ -948,7 +1032,10 @@ export const ProjectDetails = () => {
         id: 'tray-details:total-weight',
         name: 'Total weight [kg]',
         value: calculatedValueNote
-      },
+      }
+    ]);
+
+    pushTraySection('supports', 'Supports weight calculations', [
       {
         id: 'tray-details:support-type',
         name: 'Support type',
@@ -978,34 +1065,16 @@ export const ProjectDetails = () => {
         id: 'tray-details:supports-weight-per-meter',
         name: 'Supports weight load per meter [kg/m]',
         value: calculatedValueNote
-      },
-      {
-        id: 'tray-details:load-curve-canvas',
-        name: 'Load curve canvas',
-        value: 'Canvas snapshot for selected tray during export'
-      },
+      }
+    ]);
+
+    pushTraySection('visualization', 'Tray cables laying concept', [
       {
         id: 'tray-details:concept-canvas',
         name: 'Tray cables laying concept canvas',
         value: 'Canvas snapshot for selected tray during export'
-      },
-      {
-        id: 'tray-details:created-at',
-        name: 'Tray created at',
-        value: describeDynamicValue(formatDateTime(sampleTray?.createdAt ?? null))
-      },
-      {
-        id: 'tray-details:updated-at',
-        name: 'Tray updated at',
-        value: describeDynamicValue(formatDateTime(sampleTray?.updatedAt ?? null))
       }
-    ];
-
-    trayTables.push({
-      id: 'trays:details',
-      label: 'Tray details placeholders',
-      rows: trayDetailsRows
-    });
+    ]);
 
     sections.push({
       id: 'trays',

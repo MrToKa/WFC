@@ -59,6 +59,10 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
           </Body1>
         </div>
         <div className={styles.field}>
+          <Caption1>Distance between supports [m]</Caption1>
+          <Body1>{formatSupportNumber(supportCalculations.distanceMeters)}</Body1>
+        </div>
+        <div className={styles.field}>
           <Caption1>Supports count</Caption1>
           <Body1>{formatSupportNumber(supportCalculations.supportsCount)}</Body1>
         </div>
