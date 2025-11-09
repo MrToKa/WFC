@@ -6,6 +6,8 @@ interface TrayInfoSectionProps {
   tray: Tray;
   weightDisplay: string;
   numberFormatter: Intl.NumberFormat;
+  manufacturer: string | null;
+  rungHeightMm: number | null;
   styles: Record<string, string>;
 }
 
@@ -13,6 +15,8 @@ export const TrayInfoSection: React.FC<TrayInfoSectionProps> = ({
   tray,
   weightDisplay,
   numberFormatter,
+  manufacturer,
+  rungHeightMm,
   styles
 }) => {
   return (
@@ -24,6 +28,10 @@ export const TrayInfoSection: React.FC<TrayInfoSectionProps> = ({
       <div className={styles.field}>
         <Caption1>Type</Caption1>
         <Body1>{tray.type ?? '-'}</Body1>
+      </div>
+      <div className={styles.field}>
+        <Caption1>Manufacturer</Caption1>
+        <Body1>{manufacturer ?? '-'}</Body1>
       </div>
       <div className={styles.field}>
         <Caption1>Purpose</Caption1>
@@ -39,6 +47,12 @@ export const TrayInfoSection: React.FC<TrayInfoSectionProps> = ({
         <Caption1>Height [mm]</Caption1>
         <Body1>
           {tray.heightMm !== null ? numberFormatter.format(tray.heightMm) : '-'}
+        </Body1>
+      </div>
+      <div className={styles.field}>
+        <Caption1>Rung height [mm]</Caption1>
+        <Body1>
+          {rungHeightMm !== null ? numberFormatter.format(rungHeightMm) : '-'}
         </Body1>
       </div>
       <div className={styles.field}>

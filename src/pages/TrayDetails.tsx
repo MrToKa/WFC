@@ -539,6 +539,7 @@ export const TrayDetails = () => {
       return null;
     }
     return {
+      manufacturer: selectedMaterialTray.manufacturer ?? null,
       heightMm: selectedMaterialTray.heightMm ?? null,
       widthMm: selectedMaterialTray.widthMm ?? null,
       weightKgPerM: selectedMaterialTray.weightKgPerM ?? null,
@@ -1192,7 +1193,7 @@ export const TrayDetails = () => {
 
     return `${numberFormatter.format(trayWeightLoadPerMeterKg)} * ${numberFormatter.format(
       trayLengthMeters
-    )} m = ${numberFormatter.format(trayTotalOwnWeightKg)} kg`;
+    )} = ${numberFormatter.format(trayTotalOwnWeightKg)} kg`;
   }, [trayWeightLoadPerMeterKg, trayLengthMeters, trayTotalOwnWeightKg, numberFormatter]);
 
   const cablesWeightPerMeterFormula = useMemo(() => {
@@ -1216,7 +1217,7 @@ export const TrayDetails = () => {
 
     return `${numberFormatter.format(cablesWeightLoadPerMeterKg)} * ${numberFormatter.format(
       trayLengthMeters
-    )} m = ${numberFormatter.format(cablesTotalWeightKg)} kg`;
+    )} = ${numberFormatter.format(cablesTotalWeightKg)} kg`;
   }, [
     cablesWeightLoadPerMeterKg,
     trayLengthMeters,
@@ -1280,6 +1281,26 @@ export const TrayDetails = () => {
   const usefulTrayHeightDisplay = usefulTrayHeightMm === null
     ? 'N/A'
     : `${numberFormatter.format(usefulTrayHeightMm)} mm`;
+
+  const usefulTrayHeightFormula = useMemo(() => {
+    const trayHeight = tray?.heightMm ?? null;
+    const rungHeight = selectedRungHeightMm;
+
+    if (
+      trayHeight === null ||
+      trayHeight === undefined ||
+      Number.isNaN(trayHeight) ||
+      rungHeight === null ||
+      Number.isNaN(rungHeight) ||
+      usefulTrayHeightMm === null
+    ) {
+      return null;
+    }
+
+    return `${numberFormatter.format(trayHeight)} - ${numberFormatter.format(
+      rungHeight
+    )} = ${numberFormatter.format(usefulTrayHeightMm)} mm`;
+  }, [tray?.heightMm, selectedRungHeightMm, usefulTrayHeightMm, numberFormatter]);
 
   // Form handlers
   const handleFieldChange =
@@ -2225,6 +2246,8 @@ export const TrayDetails = () => {
           tray={tray}
           weightDisplay={weightDisplay}
           numberFormatter={numberFormatter}
+          manufacturer={selectedMaterialTray?.manufacturer ?? null}
+          rungHeightMm={selectedRungHeightMm}
           styles={styles}
         />
       )}
@@ -2396,8 +2419,8 @@ export const TrayDetails = () => {
         <Caption1>Free space calculations</Caption1>
         <div className={styles.grid}>
           <div className={styles.field}>
-            <Caption1>Useful tray height</Caption1>
-            <Body1>{usefulTrayHeightDisplay}</Body1>
+            <Caption1>Useful tray height [mm]</Caption1>
+            <Body1>{usefulTrayHeightFormula ?? usefulTrayHeightDisplay}</Body1>
           </div>
           <div className={styles.field}>
             <Caption1>Space occupied by cables</Caption1>
@@ -2433,6 +2456,13 @@ export const TrayDetails = () => {
       <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
         <Button appearance="secondary" onClick={handlePrevTray} disabled={!previousTray}>
           Previous tray
+        </Button>
+        <Button
+          appearance="primary"
+          onClick={() => void handleGenerateReport()}
+          disabled={!canGenerateReport || isGeneratingReport}
+        >
+          {isGeneratingReport ? 'Generating...' : 'Generate report'}
         </Button>
         <Button appearance="secondary" onClick={handleNextTray} disabled={!nextTray}>
           Next tray

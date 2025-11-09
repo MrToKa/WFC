@@ -110,6 +110,7 @@ export type TrayPlaceholderContext = {
   loadCurveImageFileName: string;
   bundlesImageFileName: string;
   materialTrayMetadata: {
+    manufacturer: string | null;
     heightMm: number | null;
     widthMm: number | null;
     weightKgPerM: number | null;
@@ -279,9 +280,18 @@ export const buildTrayPlaceholderValues = (
   const trayTypeImageAvailable = Boolean(materialTrayMetadata?.imageTemplateId);
   
   // Calculate useful tray height (tray height - rung height)
-  const usefulTrayHeightMm = 
+  const usefulTrayHeightMm =
     trayHeightSourceMm !== null && trayRungHeightMm !== null
       ? trayHeightSourceMm - trayRungHeightMm
+      : null;
+
+  const usefulTrayHeightFormula =
+    trayHeightSourceMm !== null &&
+    trayRungHeightMm !== null &&
+    usefulTrayHeightMm !== null
+      ? `${numberFormatter.format(trayHeightSourceMm)} - ${numberFormatter.format(
+          trayRungHeightMm
+        )} = ${numberFormatter.format(usefulTrayHeightMm)} mm`
       : null;
 
   const addValue = (key: string, value: string | null | undefined) => {
@@ -322,7 +332,7 @@ export const buildTrayPlaceholderValues = (
     trayWeightLoadPerMeterKg !== null
       ? `${numberFormatter.format(trayWeightPerMeterKg)} + ${numberFormatter.format(
           supportsWeightPerMeter
-        )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} [kg/m]`
+        )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} kg/m`
       : null;
 
   const trayTotalOwnWeightFormula =
@@ -332,7 +342,7 @@ export const buildTrayPlaceholderValues = (
     trayTotalOwnWeightKg !== null
       ? `${numberFormatter.format(trayWeightLoadPerMeterKg)} * ${numberFormatter.format(
           trayLengthMeters
-        )} m = ${numberFormatter.format(trayTotalOwnWeightKg)} [kg]`
+        )} = ${numberFormatter.format(trayTotalOwnWeightKg)} kg`
       : null;
 
   const cablesWeightPerMeterFormula =
@@ -341,7 +351,7 @@ export const buildTrayPlaceholderValues = (
           .map((value) => numberFormatter.format(value))
           .join(' + ')} = ${numberFormatter.format(
           cablesWeightLoadPerMeterKg
-        )} [kg/m]`
+        )} kg/m`
       : null;
 
   const cablesTotalWeightFormula =
@@ -351,7 +361,7 @@ export const buildTrayPlaceholderValues = (
     cablesTotalWeightKg !== null
       ? `${numberFormatter.format(cablesWeightLoadPerMeterKg)} * ${numberFormatter.format(
           trayLengthMeters
-        )} m = ${numberFormatter.format(cablesTotalWeightKg)} [kg]`
+        )} = ${numberFormatter.format(cablesTotalWeightKg)} kg`
       : null;
 
   const totalWeightLoadPerMeterFormula =
@@ -360,7 +370,7 @@ export const buildTrayPlaceholderValues = (
     totalWeightLoadPerMeterKg !== null
       ? `${numberFormatter.format(trayWeightLoadPerMeterKg)} + ${numberFormatter.format(
           cablesWeightLoadPerMeterKg
-        )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} [kg/m]`
+        )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} kg/m`
       : null;
 
   const totalWeightFormula =
@@ -369,7 +379,7 @@ export const buildTrayPlaceholderValues = (
     totalWeightKg !== null
       ? `${numberFormatter.format(trayTotalOwnWeightKg)} + ${numberFormatter.format(
           cablesTotalWeightKg
-        )} = ${numberFormatter.format(totalWeightKg)} [kg]`
+        )} = ${numberFormatter.format(totalWeightKg)} kg`
       : null;
 
   const supportsTotalWeightFormula =
@@ -378,7 +388,7 @@ export const buildTrayPlaceholderValues = (
     supportsTotalWeight !== null
       ? `${numberFormatter.format(supportsCount)} * ${numberFormatter.format(
           supportsWeightPerPiece
-        )} = ${numberFormatter.format(supportsTotalWeight)} [kg]`
+        )} = ${numberFormatter.format(supportsTotalWeight)} kg`
       : null;
 
   const supportsWeightPerMeterFormula =
@@ -388,7 +398,7 @@ export const buildTrayPlaceholderValues = (
     supportsWeightPerMeter !== null
       ? `${numberFormatter.format(supportsTotalWeight)} / ${numberFormatter.format(
           trayLengthMeters
-        )} m = ${numberFormatter.format(supportsWeightPerMeter)} [kg/m]`
+        )} = ${numberFormatter.format(supportsWeightPerMeter)} kg/m`
       : null;
 
   const supportsCountFormula =
@@ -512,6 +522,7 @@ export const buildTrayPlaceholderValues = (
   // Tray info
   addValue('tray-details:name', fallbackText(tray.name));
   addValue('tray-details:type', fallbackText(tray.type));
+  addValue('tray-details:manufacturer', fallbackText(materialTrayMetadata?.manufacturer));
   addValue('tray-details:purpose', fallbackText(tray.purpose));
   addValue(
     'tray-details:width',
@@ -550,7 +561,8 @@ export const buildTrayPlaceholderValues = (
   );
   addValue(
     'tray-details:useful-height',
-    formatNumberWithUnit(numberFormatter, usefulTrayHeightMm, 'mm')
+    usefulTrayHeightFormula ??
+      formatNumberWithUnit(numberFormatter, usefulTrayHeightMm, 'mm')
   );
   addValue(
     'tray-details:material-weight-per-meter',
@@ -698,8 +710,8 @@ const buildTrayCablesTable = (
     'No.',
     'Cable name',
     'Cable type',
-    'Cable diameter [mm]',
-    'Cable weight [kg/m]'
+    'Cable diameter mm',
+    'Cable weight kg/m'
   ];
 
   if (cables.length === 0) {
