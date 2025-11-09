@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, Project, updateProject } from '@/api/client';
-import { parseNumberInput } from '../../ProjectDetails.utils';
+import {
+  formatDecimalInputValue,
+  limitDecimalInput,
+  parseNumberInput,
+  roundToDecimalPlaces
+} from '../../ProjectDetails.utils';
 
 type ShowToast = (props: {
   intent: 'success' | 'error' | 'warning' | 'info';
@@ -23,6 +28,13 @@ export const NUMERIC_FIELD_LABELS: NumericFieldLabelMap = {
   trayLoadSafetyFactor: 'Tray load safety factor'
 };
 
+const FIELD_DECIMAL_PLACES: Record<UpdatableNumericProjectField, number> = {
+  secondaryTrayLength: 1,
+  supportDistance: 1,
+  supportWeight: 1,
+  trayLoadSafetyFactor: 0
+};
+
 type UseProjectNumericFieldParams = {
   project: Project | null;
   field: UpdatableNumericProjectField;
@@ -36,6 +48,7 @@ export type NumericFieldController = {
   input: string;
   error: string | null;
   saving: boolean;
+  decimals: number;
   onInputChange: (value: string) => void;
   onSave: () => Promise<void>;
 };
@@ -51,25 +64,30 @@ export const useProjectNumericField = ({
   const [input, setInput] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
+  const decimals = FIELD_DECIMAL_PLACES[field] ?? 1;
 
   useEffect(() => {
     if (project) {
       const currentValue = project[field];
       setInput(
         currentValue !== null && currentValue !== undefined
-          ? String(currentValue)
+          ? formatDecimalInputValue(currentValue, decimals)
           : ''
       );
     } else {
       setInput('');
     }
     setError(null);
-  }, [project, field]);
+  }, [project, field, decimals]);
 
-  const onInputChange = useCallback((value: string) => {
-    setInput(value);
-    setError(null);
-  }, []);
+  const onInputChange = useCallback(
+    (value: string) => {
+      const nextValue = limitDecimalInput(value, decimals);
+      setInput(nextValue);
+      setError(null);
+    },
+    [decimals]
+  );
 
   const onSave = useCallback(async () => {
     const label = NUMERIC_FIELD_LABELS[field];
@@ -100,7 +118,7 @@ export const useProjectNumericField = ({
 
     const nextValue =
       parsed.numeric !== null
-        ? Math.round(parsed.numeric * 1000) / 1000
+        ? roundToDecimalPlaces(parsed.numeric, decimals)
         : null;
     const currentValue = project[field];
 
@@ -136,16 +154,17 @@ export const useProjectNumericField = ({
     } finally {
       setSaving(false);
     }
-  }, [field, input, isAdmin, project, reloadProject, showToast, token]);
+  }, [decimals, field, input, isAdmin, project, reloadProject, showToast, token]);
 
   return useMemo(
     () => ({
       input,
       error,
       saving,
+      decimals,
       onInputChange,
       onSave
     }),
-    [error, input, onInputChange, onSave, saving]
+    [decimals, error, input, onInputChange, onSave, saving]
   );
 };

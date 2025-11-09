@@ -30,6 +30,7 @@ type NumericFieldConfig = {
   label: string;
   unit?: string;
   input: string;
+  decimals: number;
   error: string | null;
   saving: boolean;
   onInputChange: (value: string) => void;
@@ -161,9 +162,13 @@ export const DetailsTab = ({
                       value={field.input}
                       onChange={(_, data) => field.onInputChange(data.value)}
                       disabled={field.saving}
-                      inputMode="decimal"
+                      inputMode={field.decimals === 0 ? 'numeric' : 'decimal'}
                       type="number"
-                      step="0.001"
+                      step={
+                        field.decimals === 0
+                          ? 1
+                          : Number((1 / 10 ** field.decimals).toFixed(field.decimals))
+                      }
                       min={0}
                       size="small"
                     />
@@ -254,7 +259,7 @@ export const DetailsTab = ({
                           disabled={override.saving}
                           inputMode="decimal"
                           type="number"
-                          step="0.001"
+                          step="0.1"
                           min={0}
                           size="small"
                         />

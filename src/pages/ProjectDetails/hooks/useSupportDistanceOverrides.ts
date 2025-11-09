@@ -6,7 +6,12 @@ import {
   ProjectSupportOverridePayload,
   updateProject
 } from '@/api/client';
-import { parseNumberInput } from '../../ProjectDetails.utils';
+import {
+  formatDecimalInputValue,
+  limitDecimalInput,
+  parseNumberInput,
+  roundToDecimalPlaces
+} from '../../ProjectDetails.utils';
 
 type ShowToast = (props: {
   intent: 'success' | 'error' | 'warning' | 'info';
@@ -21,6 +26,7 @@ type TrayTypeDetail = {
 };
 
 const SUPPORT_LENGTH_MATCH_TOLERANCE = 15;
+const SUPPORT_DISTANCE_DECIMAL_PLACES = 1;
 
 type UseSupportDistanceOverridesParams = {
   project: Project | null;
@@ -77,10 +83,18 @@ export const useSupportDistanceOverrides = ({
       const next: Record<string, string> = {};
       trayTypeDetails.forEach(({ trayType }) => {
         const override = overrides[trayType];
-        next[trayType] =
-          override && override.distance !== null && override.distance !== undefined
-            ? String(override.distance)
-            : '';
+        if (
+          override &&
+          override.distance !== null &&
+          override.distance !== undefined
+        ) {
+          next[trayType] = formatDecimalInputValue(
+            override.distance,
+            SUPPORT_DISTANCE_DECIMAL_PLACES
+          );
+        } else {
+          next[trayType] = '';
+        }
       });
       return next;
     });
@@ -144,9 +158,10 @@ export const useSupportDistanceOverrides = ({
 
   const handleInputChange = useCallback(
     (trayType: string, value: string) => {
+      const nextValue = limitDecimalInput(value, SUPPORT_DISTANCE_DECIMAL_PLACES);
       setInputs((previous) => ({
         ...previous,
-        [trayType]: value
+        [trayType]: nextValue
       }));
       setErrors((previous) => {
         if (!previous[trayType]) {
@@ -217,7 +232,7 @@ export const useSupportDistanceOverrides = ({
 
       const nextDistance =
         parsed.numeric !== null
-          ? Math.round(parsed.numeric * 1000) / 1000
+          ? roundToDecimalPlaces(parsed.numeric, SUPPORT_DISTANCE_DECIMAL_PLACES)
           : null;
       const selectedSupportId = supportIds[trayType] ?? null;
 

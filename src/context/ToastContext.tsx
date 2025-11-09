@@ -44,7 +44,7 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <Toaster toasterId={toasterId} position="top" />
+      <Toaster toasterId={toasterId} position="top-end" />
     </ToastContext.Provider>
   );
 };

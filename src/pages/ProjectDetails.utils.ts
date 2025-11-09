@@ -39,6 +39,71 @@ export const parseNumberInput = (
   return { numeric: parsed };
 };
 
+export const roundToDecimalPlaces = (value: number, decimals: number): number => {
+  if (decimals <= 0) {
+    return Math.round(value);
+  }
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+};
+
+export const formatDecimalInputValue = (value: number, decimals: number): string => {
+  const rounded = roundToDecimalPlaces(value, decimals);
+  if (decimals <= 0) {
+    return rounded.toFixed(0);
+  }
+
+  const fixed = rounded.toFixed(decimals);
+
+  if (decimals === 1) {
+    return fixed.replace(/\.0$/, '');
+  }
+
+  return fixed.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+};
+
+export const limitDecimalInput = (value: string, decimals: number): string => {
+  if (!value) {
+    return '';
+  }
+
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return '';
+  }
+
+  const normalized = trimmed.replace(',', '.');
+
+  if (normalized === '-' || normalized === '+') {
+    return '';
+  }
+
+  if (normalized === '.') {
+    return decimals > 0 ? '0.' : '';
+  }
+
+  const decimalIndex = normalized.indexOf('.');
+
+  if (decimalIndex === -1) {
+    return normalized;
+  }
+
+  if (decimals <= 0) {
+    return normalized.slice(0, decimalIndex);
+  }
+
+  const decimalsPart = normalized.slice(decimalIndex + 1);
+
+  if (decimalsPart.length <= decimals) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, decimalIndex + 1)}${decimalsPart.slice(
+    0,
+    decimals
+  )}`;
+};
+
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export const formatDisplayDate = (value: string | null | undefined): string => {
