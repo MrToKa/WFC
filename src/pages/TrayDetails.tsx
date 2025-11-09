@@ -1133,6 +1133,122 @@ export const TrayDetails = () => {
     [numberFormatter]
   );
 
+  const trayLengthMeters = supportCalculations.lengthMeters;
+  const supportsWeightPerMeterKg = supportCalculations.weightPerMeterKg;
+
+  const cableWeightComponents = useMemo(() => {
+    const weights: number[] = [];
+
+    for (const cable of nonGroundingCables) {
+      const weight = cable.weightKgPerM;
+      if (weight !== null && !Number.isNaN(weight)) {
+        weights.push(weight);
+      }
+    }
+
+    if (groundingCableWeightKgPerM !== null) {
+      weights.push(groundingCableWeightKgPerM);
+    }
+
+    return weights;
+  }, [nonGroundingCables, groundingCableWeightKgPerM]);
+
+  const trayWeightLoadPerMeterFormula = useMemo(() => {
+    if (
+      trayWeightPerMeterKg === null ||
+      supportsWeightPerMeterKg === null ||
+      trayWeightLoadPerMeterKg === null
+    ) {
+      return null;
+    }
+
+    return `${numberFormatter.format(trayWeightPerMeterKg)} + ${numberFormatter.format(
+      supportsWeightPerMeterKg
+    )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} [kg/m]`;
+  }, [
+    trayWeightPerMeterKg,
+    supportsWeightPerMeterKg,
+    trayWeightLoadPerMeterKg,
+    numberFormatter
+  ]);
+
+  const trayTotalOwnWeightFormula = useMemo(() => {
+    if (
+      trayWeightLoadPerMeterKg === null ||
+      trayLengthMeters === null ||
+      trayLengthMeters <= 0 ||
+      trayTotalOwnWeightKg === null
+    ) {
+      return null;
+    }
+
+    return `${numberFormatter.format(trayWeightLoadPerMeterKg)} * ${numberFormatter.format(
+      trayLengthMeters
+    )} m = ${numberFormatter.format(trayTotalOwnWeightKg)} [kg]`;
+  }, [trayWeightLoadPerMeterKg, trayLengthMeters, trayTotalOwnWeightKg, numberFormatter]);
+
+  const cablesWeightPerMeterFormula = useMemo(() => {
+    if (cablesWeightLoadPerMeterKg === null || cableWeightComponents.length === 0) {
+      return null;
+    }
+
+    const parts = cableWeightComponents.map((value) => numberFormatter.format(value));
+    return `${parts.join(' + ')} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} [kg/m]`;
+  }, [cableWeightComponents, cablesWeightLoadPerMeterKg, numberFormatter]);
+
+  const cablesTotalWeightFormula = useMemo(() => {
+    if (
+      cablesWeightLoadPerMeterKg === null ||
+      trayLengthMeters === null ||
+      trayLengthMeters <= 0 ||
+      cablesTotalWeightKg === null
+    ) {
+      return null;
+    }
+
+    return `${numberFormatter.format(cablesWeightLoadPerMeterKg)} * ${numberFormatter.format(
+      trayLengthMeters
+    )} m = ${numberFormatter.format(cablesTotalWeightKg)} [kg]`;
+  }, [
+    cablesWeightLoadPerMeterKg,
+    trayLengthMeters,
+    cablesTotalWeightKg,
+    numberFormatter
+  ]);
+
+  const totalWeightLoadPerMeterFormula = useMemo(() => {
+    if (
+      trayWeightLoadPerMeterKg === null ||
+      cablesWeightLoadPerMeterKg === null ||
+      totalWeightLoadPerMeterKg === null
+    ) {
+      return null;
+    }
+
+    return `${numberFormatter.format(trayWeightLoadPerMeterKg)} + ${numberFormatter.format(
+      cablesWeightLoadPerMeterKg
+    )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} [kg/m]`;
+  }, [
+    trayWeightLoadPerMeterKg,
+    cablesWeightLoadPerMeterKg,
+    totalWeightLoadPerMeterKg,
+    numberFormatter
+  ]);
+
+  const totalWeightFormula = useMemo(() => {
+    if (
+      trayTotalOwnWeightKg === null ||
+      cablesTotalWeightKg === null ||
+      totalWeightKg === null
+    ) {
+      return null;
+    }
+
+    return `${numberFormatter.format(trayTotalOwnWeightKg)} + ${numberFormatter.format(
+      cablesTotalWeightKg
+    )} = ${numberFormatter.format(totalWeightKg)} [kg]`;
+  }, [trayTotalOwnWeightKg, cablesTotalWeightKg, totalWeightKg, numberFormatter]);
+
   const occupiedWidthDisplay = freeSpaceMetrics.occupiedWidthMm === null
     ? 'N/A'
     : `${numberFormatter.format(freeSpaceMetrics.occupiedWidthMm)} mm`;
@@ -2068,8 +2184,16 @@ export const TrayDetails = () => {
       <WeightCalculationsSection
         title="Tray own weight calculations"
         calculations={[
-          { label: 'Tray weight load per meter [kg/m]', value: trayWeightLoadPerMeterKg },
-          { label: 'Tray total own weight [kg]', value: trayTotalOwnWeightKg }
+          {
+            label: 'Tray weight load per meter [kg/m]',
+            value: trayWeightLoadPerMeterKg,
+            formula: trayWeightLoadPerMeterFormula
+          },
+          {
+            label: 'Tray total own weight [kg]',
+            value: trayTotalOwnWeightKg,
+            formula: trayTotalOwnWeightFormula
+          }
         ]}
         formatNumber={formatSupportNumber}
         styles={styles}
@@ -2100,11 +2224,15 @@ export const TrayDetails = () => {
         <div className={styles.grid}>
           <div className={styles.field}>
             <Caption1>Cables weight load per meter [kg/m]</Caption1>
-            <Body1>{formatSupportNumber(cablesWeightLoadPerMeterKg)}</Body1>
+            <Body1>
+              {cablesWeightPerMeterFormula ?? formatSupportNumber(cablesWeightLoadPerMeterKg)}
+            </Body1>
           </div>
           <div className={styles.field}>
             <Caption1>Total weight on the tray [kg]</Caption1>
-            <Body1>{formatSupportNumber(cablesTotalWeightKg)}</Body1>
+            <Body1>
+              {cablesTotalWeightFormula ?? formatSupportNumber(cablesTotalWeightKg)}
+            </Body1>
           </div>
         </div>
       </div>
@@ -2113,8 +2241,16 @@ export const TrayDetails = () => {
       <WeightCalculationsSection
         title="Total weight calculations"
         calculations={[
-          { label: 'Total weight load per meter [kg/m]', value: totalWeightLoadPerMeterKg },
-          { label: 'Total weight [kg]', value: totalWeightKg }
+          {
+            label: 'Total weight load per meter [kg/m]',
+            value: totalWeightLoadPerMeterKg,
+            formula: totalWeightLoadPerMeterFormula
+          },
+          {
+            label: 'Total weight [kg]',
+            value: totalWeightKg,
+            formula: totalWeightFormula
+          }
         ]}
         formatNumber={formatSupportNumber}
         styles={styles}

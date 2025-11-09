@@ -29,6 +29,31 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
   numberFormatter,
   styles
 }) => {
+  const supportsCount = supportCalculations.supportsCount;
+  const weightPerPiece = supportCalculations.weightPerPieceKg;
+  const supportsTotalWeight = supportCalculations.totalWeightKg;
+  const trayLengthMeters = supportCalculations.lengthMeters;
+  const supportsWeightPerMeter = supportCalculations.weightPerMeterKg;
+
+  const supportsTotalWeightFormula =
+    supportsCount !== null &&
+    weightPerPiece !== null &&
+    supportsTotalWeight !== null
+      ? `${numberFormatter.format(supportsCount)} * ${numberFormatter.format(
+          weightPerPiece
+        )} = ${numberFormatter.format(supportsTotalWeight)} [kg]`
+      : null;
+
+  const supportsWeightPerMeterFormula =
+    supportsTotalWeight !== null &&
+    trayLengthMeters !== null &&
+    trayLengthMeters > 0 &&
+    supportsWeightPerMeter !== null
+      ? `${numberFormatter.format(supportsTotalWeight)} / ${numberFormatter.format(
+          trayLengthMeters
+        )} = ${numberFormatter.format(supportsWeightPerMeter)} [kg/m]`
+      : null;
+
   return (
     <div className={styles.section}>
       <Caption1>Supports weight calculations</Caption1>
@@ -72,11 +97,15 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
         </div>
         <div className={styles.field}>
           <Caption1>Supports total weight [kg]</Caption1>
-          <Body1>{formatSupportNumber(supportCalculations.totalWeightKg)}</Body1>
+          <Body1>
+            {supportsTotalWeightFormula ?? formatSupportNumber(supportCalculations.totalWeightKg)}
+          </Body1>
         </div>
         <div className={styles.field}>
           <Caption1>Supports weight load per meter [kg/m]</Caption1>
-          <Body1>{formatSupportNumber(supportCalculations.weightPerMeterKg)}</Body1>
+          <Body1>
+            {supportsWeightPerMeterFormula ?? formatSupportNumber(supportCalculations.weightPerMeterKg)}
+          </Body1>
         </div>
       </div>
     </div>

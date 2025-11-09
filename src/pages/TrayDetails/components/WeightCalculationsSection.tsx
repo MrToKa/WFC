@@ -6,6 +6,7 @@ interface WeightCalculationsSectionProps {
   calculations: Array<{
     label: string;
     value: number | null;
+    formula?: string | null;
   }>;
   formatNumber: (value: number | null) => string;
   styles: Record<string, string>;
@@ -24,7 +25,7 @@ export const WeightCalculationsSection: React.FC<WeightCalculationsSectionProps>
         {calculations.map((calc, index) => (
           <div key={index} className={styles.field}>
             <Caption1>{calc.label}</Caption1>
-            <Body1>{formatNumber(calc.value)}</Body1>
+            <Body1>{calc.formula ?? formatNumber(calc.value)}</Body1>
           </div>
         ))}
       </div>
