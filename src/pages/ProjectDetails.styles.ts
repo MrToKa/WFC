@@ -234,6 +234,11 @@ export const useProjectDetailsStyles = makeStyles({
   },
   variablesInput: {
     width: '100%'
+  },
+  customVariablesActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginBottom: '0.75rem'
   }
 });
 

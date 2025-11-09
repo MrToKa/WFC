@@ -15,6 +15,11 @@ import {
   getProjectPlaceholders,
   setProjectPlaceholders
 } from '@/utils/projectPlaceholders';
+import {
+  getCustomVariables,
+  setCustomVariables,
+  type CustomVariable
+} from '@/utils/customVariablesStorage';
 
 export type VariablesApiRow = {
   id: string;
@@ -50,9 +55,16 @@ export const VariablesApiTab = ({
   const [placeholders, setPlaceholders] = useState<Record<string, string>>(() =>
     getProjectPlaceholders(projectId)
   );
+  const [customVariables, setCustomVariablesState] = useState<CustomVariable[]>(
+    () => getCustomVariables(projectId)
+  );
 
   useEffect(() => {
     setPlaceholders(getProjectPlaceholders(projectId));
+  }, [projectId]);
+
+  useEffect(() => {
+    setCustomVariablesState(getCustomVariables(projectId));
   }, [projectId]);
 
   useEffect(() => {
@@ -62,6 +74,10 @@ export const VariablesApiTab = ({
       setProjectPlaceholders(projectId, placeholders);
     }
   }, [placeholders, projectId]);
+
+  useEffect(() => {
+    setCustomVariables(projectId, customVariables);
+  }, [customVariables, projectId]);
 
   const handlePlaceholderChange = (rowId: string, value: string) => {
     setPlaceholders((previous) => {
@@ -103,9 +119,43 @@ export const VariablesApiTab = ({
             0
           ),
         0
-      ),
-    [sections]
+      ) + customVariables.length,
+    [sections, customVariables.length]
   );
+
+  const generateCustomVariableId = () =>
+    `custom:${Date.now().toString(36)}:${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+
+  const handleAddCustomVariable = () => {
+    setCustomVariablesState((previous) => [
+      ...previous,
+      { id: generateCustomVariableId(), name: '' }
+    ]);
+  };
+
+  const handleCustomVariableNameChange = (id: string, name: string) => {
+    setCustomVariablesState((previous) =>
+      previous.map((variable) =>
+        variable.id === id ? { ...variable, name } : variable
+      )
+    );
+  };
+
+  const handleDeleteCustomVariable = (id: string) => {
+    setCustomVariablesState((previous) =>
+      previous.filter((variable) => variable.id !== id)
+    );
+    setPlaceholders((previous) => {
+      if (!(id in previous)) {
+        return previous;
+      }
+      const next = { ...previous };
+      delete next[id];
+      return next;
+    });
+  };
 
   if (isLoading && sections.length === 0) {
     return (
@@ -218,6 +268,74 @@ export const VariablesApiTab = ({
           </div>
         </div>
       ))}
+
+      <div className={styles.panel}>
+        <div className={styles.variablesSectionHeader}>
+          <Subtitle2>Custom variables</Subtitle2>
+          <Caption1>{customVariables.length} variables</Caption1>
+        </div>
+        <div className={styles.customVariablesActions}>
+          <Button appearance="primary" onClick={handleAddCustomVariable}>
+            Add custom variable
+          </Button>
+        </div>
+        {customVariables.length === 0 ? (
+          <Body1 className={styles.emptyState}>
+            No custom variables added yet.
+          </Body1>
+        ) : (
+          <div className={styles.tableContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.tableHeadCell}>Variable</th>
+                  <th className={styles.tableHeadCell}>Word placeholder</th>
+                  <th className={styles.tableHeadCell}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customVariables.map((variable) => (
+                  <tr key={variable.id}>
+                    <td className={styles.tableCell}>
+                      <Input
+                        className={styles.variablesInput}
+                        appearance="underline"
+                        placeholder="Describe the value this placeholder should inject"
+                        value={variable.name}
+                        onChange={(_, data) =>
+                          handleCustomVariableNameChange(variable.id, data.value)
+                        }
+                        aria-label="Custom variable description"
+                      />
+                    </td>
+                    <td className={styles.tableCell}>
+                      <Input
+                        className={styles.variablesInput}
+                        appearance="underline"
+                        placeholder="e.g. {{CUSTOM_TOKEN}}"
+                        value={placeholders[variable.id] ?? ''}
+                        onChange={(_, data) =>
+                          handlePlaceholderChange(variable.id, data.value)
+                        }
+                        aria-label="Custom variable placeholder"
+                      />
+                    </td>
+                    <td className={styles.tableCell}>
+                      <Button
+                        appearance="secondary"
+                        size="small"
+                        onClick={() => handleDeleteCustomVariable(variable.id)}
+                      >
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -28,6 +28,12 @@ import {
   setProjectPlaceholders,
   clearProjectPlaceholders
 } from '@/utils/projectPlaceholders';
+import {
+  getCustomVariables,
+  setCustomVariables,
+  clearCustomVariables,
+  type CustomVariable
+} from '@/utils/customVariablesStorage';
 
 // Import refactored modules
 import {
@@ -80,7 +86,8 @@ import {
   replaceDocxPlaceholders,
   type TrayPlaceholderContext,
   type WordTableDefinition,
-  type DocxImageDefinition
+  type DocxImageDefinition,
+  MISSING_VALUE_PLACEHOLDER
 } from './TrayDetails/trayReportUtils';
 
 const WORD_MIME_TYPE =
@@ -478,6 +485,7 @@ export const TrayDetails = () => {
     setTray,
     setTrays
   } = useTrayData(projectId, trayId);
+  const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
     useMaterialData();
@@ -1895,63 +1903,102 @@ export const TrayDetails = () => {
       const { blob: templateBlob, contentType } =
         await templateDownloadPromise;
 
-      const canonicalPlaceholderProjectId = project?.id ?? projectId ?? null;
-      if (!canonicalPlaceholderProjectId) {
-        showToast({
-          intent: 'error',
-          title: 'Project unavailable',
-          body: 'Project identifier is missing for placeholder resolution.'
-        });
-        return;
-      }
+    if (!canonicalProjectId) {
+      showToast({
+        intent: 'error',
+        title: 'Project unavailable',
+        body: 'Project identifier is missing for placeholder resolution.'
+      });
+      return;
+    }
 
-      const placeholderKeyCandidates = [
-        canonicalPlaceholderProjectId,
-        projectId && projectId !== canonicalPlaceholderProjectId ? projectId : null
+    const placeholderKeyCandidates = [
+      canonicalProjectId,
+      projectId && projectId !== canonicalProjectId ? projectId : null
+    ].filter(
+      (value, index, array): value is string =>
+        Boolean(value) && array.indexOf(value) === index
+    );
+
+    let storedPlaceholders: Record<string, string> = {};
+    let placeholdersSourceKey: string | null = null;
+
+    for (const candidate of placeholderKeyCandidates) {
+      if (!candidate) {
+        continue;
+      }
+      const candidateValues = getProjectPlaceholders(candidate);
+      if (Object.keys(candidateValues).length > 0) {
+        storedPlaceholders = candidateValues;
+        placeholdersSourceKey = candidate;
+        break;
+      }
+    }
+
+    if (Object.keys(storedPlaceholders).length === 0) {
+      showToast({
+        intent: 'error',
+        title: 'No placeholders configured',
+        body: 'Map placeholders in the Variables tab before generating a report.'
+      });
+      return;
+    }
+
+    if (
+      placeholdersSourceKey &&
+      placeholdersSourceKey !== canonicalProjectId
+    ) {
+      setProjectPlaceholders(canonicalProjectId, storedPlaceholders);
+      clearProjectPlaceholders(placeholdersSourceKey);
+    }
+
+    const resolveCustomVariables = (): CustomVariable[] => {
+      if (!canonicalProjectId) {
+        return [];
+      }
+      const keyCandidates = [
+        canonicalProjectId,
+        projectId && projectId !== canonicalProjectId ? projectId : null
       ].filter(
         (value, index, array): value is string =>
           Boolean(value) && array.indexOf(value) === index
       );
 
-      let storedPlaceholders: Record<string, string> = {};
-      let placeholdersSourceKey: string | null = null;
+      let variables: CustomVariable[] = [];
+      let sourceKey: string | null = null;
 
-      for (const candidate of placeholderKeyCandidates) {
+      for (const candidate of keyCandidates) {
         if (!candidate) {
           continue;
         }
-        const candidateValues = getProjectPlaceholders(candidate);
-        if (Object.keys(candidateValues).length > 0) {
-          storedPlaceholders = candidateValues;
-          placeholdersSourceKey = candidate;
+        const candidateVariables = getCustomVariables(candidate);
+        if (candidateVariables.length > 0) {
+          variables = candidateVariables;
+          sourceKey = candidate;
           break;
         }
       }
 
-      if (Object.keys(storedPlaceholders).length === 0) {
-        showToast({
-          intent: 'error',
-          title: 'No placeholders configured',
-          body: 'Map placeholders in the Variables tab before generating a report.'
-        });
-        return;
-      }
-
       if (
-        placeholdersSourceKey &&
-        placeholdersSourceKey !== canonicalPlaceholderProjectId
+        sourceKey &&
+        sourceKey !== canonicalProjectId &&
+        variables.length > 0
       ) {
-        setProjectPlaceholders(
-          canonicalPlaceholderProjectId,
-          storedPlaceholders
-        );
-        clearProjectPlaceholders(placeholdersSourceKey);
+        setCustomVariables(canonicalProjectId, variables);
+        clearCustomVariables(sourceKey);
       }
 
-      const placeholderBundle = buildTrayPlaceholderValues({
-        ...trayReportBaseContext,
-        projectFiles: projectFilesList,
-        loadCurveImageFileName: loadCurve,
+      return variables;
+    };
+
+    const customVariables = resolveCustomVariables();
+    const customVariableIds = new Set(customVariables.map((item) => item.id));
+    const customPlaceholderTokens = new Set<string>();
+
+    const placeholderBundle = buildTrayPlaceholderValues({
+      ...trayReportBaseContext,
+      projectFiles: projectFilesList,
+      loadCurveImageFileName: loadCurve,
         bundlesImageFileName: bundles
       });
       const textReplacements: Record<string, string> = {};
@@ -1961,7 +2008,23 @@ export const TrayDetails = () => {
         PendingImagePlaceholder
       > = {};
 
+      for (const variable of customVariables) {
+        const placeholderToken = storedPlaceholders[variable.id];
+        if (!placeholderToken) {
+          continue;
+        }
+        const replacementValue =
+          variable.name.trim() === ''
+            ? MISSING_VALUE_PLACEHOLDER
+            : variable.name.trim();
+        textReplacements[placeholderToken] = replacementValue;
+        customPlaceholderTokens.add(placeholderToken);
+      }
+
       for (const [rowId, placeholder] of Object.entries(storedPlaceholders)) {
+        if (customVariableIds.has(rowId)) {
+          continue;
+        }
         const trimmedPlaceholder = placeholder?.trim();
         if (!trimmedPlaceholder) {
           continue;
@@ -1970,6 +2033,10 @@ export const TrayDetails = () => {
         const tableDefinition = placeholderBundle.tables[rowId];
         if (tableDefinition) {
           tableReplacements[trimmedPlaceholder] = tableDefinition;
+          continue;
+        }
+
+        if (customPlaceholderTokens.has(trimmedPlaceholder)) {
           continue;
         }
 
@@ -2094,7 +2161,8 @@ export const TrayDetails = () => {
     projectId,
     token,
     trayReportBaseContext,
-    showToast
+    showToast,
+    canonicalProjectId
   ]);
 
   // Loading and error states

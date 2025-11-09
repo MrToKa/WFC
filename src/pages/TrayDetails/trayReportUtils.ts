@@ -29,7 +29,7 @@ const WP_NS =
   'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
-const MISSING_VALUE_PLACEHOLDER = '*****';
+export const MISSING_VALUE_PLACEHOLDER = '*****';
 
 export type WordTableDefinition = {
   headers: string[];
