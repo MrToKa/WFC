@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, type MutableRefObject } from 'react';
 import { Caption1, Body1, Spinner } from '@fluentui/react-components';
 import { MaterialLoadCurve, MaterialTray, MaterialLoadCurvePoint } from '../../../api/client';
 import { ChartEvaluation } from '../TrayDetails.types';
@@ -23,6 +23,7 @@ interface LoadCurveSectionProps {
   numberFormatter: Intl.NumberFormat;
   styles: Record<string, string>;
   refreshKey?: string;
+  canvasRef?: MutableRefObject<HTMLCanvasElement | null>;
 }
 
 export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
@@ -43,10 +44,21 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
   chartSummary,
   numberFormatter,
   styles,
-  refreshKey
+  refreshKey,
+  canvasRef: externalCanvasRef
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingServiceRef = useRef<LoadCurveDrawingService | null>(null);
+
+  const handleCanvasRef = useCallback(
+    (node: HTMLCanvasElement | null) => {
+      canvasRef.current = node;
+      if (externalCanvasRef) {
+        externalCanvasRef.current = node;
+      }
+    },
+    [externalCanvasRef]
+  );
 
   const drawLoadCurve = useCallback(() => {
     const canvas = canvasRef.current;
@@ -169,7 +181,7 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
         <>
           <div className={styles.chartWrapper}>
             <canvas 
-              ref={canvasRef} 
+              ref={handleCanvasRef} 
               className={styles.chartCanvas}
               style={{ 
                 display: 'block', 

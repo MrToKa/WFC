@@ -14,10 +14,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   ApiError,
   deleteTray,
-  updateTray
+  updateTray,
+  uploadProjectFile,
+  downloadProjectFile,
+  fetchProjectFiles
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { getProjectPlaceholders } from '@/utils/projectPlaceholders';
 
 // Import refactored modules
 import {
@@ -64,6 +68,71 @@ import {
   type TrayLayoutSummary,
   determineCableDiameterGroup
 } from './TrayDetails/trayDrawingService';
+import {
+  canvasToBlob,
+  buildTrayPlaceholderValues,
+  replaceDocxPlaceholders,
+  type TrayPlaceholderContext
+} from './TrayDetails/trayReportUtils';
+
+const WORD_MIME_TYPE =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+const sanitizeFileComponent = (value: string): string => {
+  if (!value) {
+    return 'value';
+  }
+  return (
+    value
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s-]+/g, '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .slice(0, 60) || 'value'
+  );
+};
+
+const buildReportFileNames = (
+  projectNumber: string,
+  projectName: string,
+  trayName: string
+) => {
+  const projectNumberPart = sanitizeFileComponent(projectNumber);
+  const projectNamePart = sanitizeFileComponent(projectName);
+  const trayNamePart = sanitizeFileComponent(trayName);
+
+  const sharedPrefix =
+    [projectNumberPart, projectNamePart, trayNamePart]
+      .filter((segment) => segment && segment !== '')
+      .join('_') || 'Tray';
+
+  return {
+    loadCurve: `${sharedPrefix}_LoadCurve.jpeg`,
+    bundles: `${sharedPrefix}_Bundles.jpeg`,
+    report: `${projectNumberPart}_${projectNamePart} - Cable tray calculations - ${trayNamePart}.docx`
+  };
+};
+
+const triggerFileDownload = (blob: Blob, fileName: string) => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+type TrayReportBaseContext = Omit<
+  TrayPlaceholderContext,
+  'projectFiles' | 'loadCurveImageFileName' | 'bundlesImageFileName'
+>;
 
 const useStyles = makeStyles({
   root: {
@@ -197,6 +266,7 @@ const useStyles = makeStyles({
 export const TrayDetails = () => {
   const styles = useStyles();
   const trayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const loadCurveCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const trayDrawingServiceRef = useRef<TrayDrawingService | null>(null);
   const navigate = useNavigate();
   const { projectId, trayId } = useParams<{ projectId: string; trayId: string }>();
@@ -211,6 +281,7 @@ export const TrayDetails = () => {
     tray,
     trays,
     trayCables,
+    projectCables,
     cablesError,
     isLoading,
     error,
@@ -242,6 +313,7 @@ export const TrayDetails = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [layoutSummary, setLayoutSummary] = useState<TrayLayoutSummary | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
 
   // Initialize form when tray loads
   useEffect(() => {
@@ -263,6 +335,8 @@ export const TrayDetails = () => {
   const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
   const { selectedLoadCurve, loadCurveLoadingId, loadCurveError } =
     useLoadCurveData(selectedLoadCurveId);
+  const selectedLoadCurveName =
+    selectedMaterialTray?.loadCurveName ?? selectedLoadCurve?.name ?? null;
 
   // Auto-update form fields when material tray changes
   useEffect(() => {
@@ -520,6 +594,15 @@ export const TrayDetails = () => {
     []
   );
 
+  const dateTimeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }),
+    []
+  );
+
   const cableBundles: CableBundleMap = useMemo(() => {
     const bundles: CableBundleMap = {};
 
@@ -767,6 +850,20 @@ export const TrayDetails = () => {
 
     return CABLE_CATEGORY_ORDER.filter((key) => categories.has(key));
   }, [trayCables]);
+
+  const trayTemplatePurposeCount = useMemo(() => {
+    if (trays.length === 0) {
+      return 0;
+    }
+    const purposes = new Set<string>();
+    for (const trayItem of trays) {
+      const trimmed = trayItem.purpose?.trim();
+      if (trimmed) {
+        purposes.add(trimmed);
+      }
+    }
+    return purposes.size;
+  }, [trays]);
 
   const trayBundleDetails = useMemo(
     () =>
@@ -1073,6 +1170,9 @@ export const TrayDetails = () => {
         : undefined,
     [selectedGroundingCableType, formatCableTypeLabel]
   );
+  const groundingCableDisplay =
+    selectedGroundingCableLabel ??
+    (selectedGroundingCableType ? selectedGroundingCableType.name ?? null : null);
 
   const hasGroundingCableWeightData = groundingCableWeightKgPerM !== null;
   const groundingCableMissingWeight =
@@ -1185,6 +1285,243 @@ export const TrayDetails = () => {
     [includeGroundingCable, selectedGroundingCableTypeId, groundingCableWeightKgPerM]
   );
 
+  const trayReportBaseContext = useMemo<TrayReportBaseContext | null>(() => {
+    if (!project || !tray) {
+      return null;
+    }
+    return {
+      project,
+      trays,
+      tray,
+      trayCables,
+      projectCableTypes,
+      projectCables,
+      trayTemplatePurposeCount,
+      trayFreeSpacePercent: freeSpaceMetrics.freeWidthPercent,
+      includeGroundingCable,
+      groundingCableTypeName: groundingCableDisplay ?? null,
+      supportCalculations,
+      supportTypeDisplay,
+      supportLengthMm,
+      trayWeightLoadPerMeterKg,
+      trayTotalOwnWeightKg,
+      cablesWeightLoadPerMeterKg,
+      cablesTotalWeightKg,
+      totalWeightLoadPerMeterKg,
+      totalWeightKg,
+      projectCableSpacingMm,
+      considerBundleSpacingAsFree,
+      minFreeSpacePercent,
+      maxFreeSpacePercent,
+      safetyFactorPercent,
+      safetyFactorStatusMessage,
+      chartSpanMeters,
+      safetyAdjustedLoadKnPerM,
+      chartEvaluation,
+      selectedLoadCurveName,
+      numberFormatter,
+      percentageFormatter,
+      dateTimeFormatter
+    };
+  }, [
+    project,
+    tray,
+    trays,
+    trayCables,
+    projectCableTypes,
+    projectCables,
+    trayTemplatePurposeCount,
+    freeSpaceMetrics.freeWidthPercent,
+    includeGroundingCable,
+    groundingCableDisplay,
+    supportCalculations,
+    supportTypeDisplay,
+    supportLengthMm,
+    trayWeightLoadPerMeterKg,
+    trayTotalOwnWeightKg,
+    cablesWeightLoadPerMeterKg,
+    cablesTotalWeightKg,
+    totalWeightLoadPerMeterKg,
+    totalWeightKg,
+    projectCableSpacingMm,
+    considerBundleSpacingAsFree,
+    minFreeSpacePercent,
+    maxFreeSpacePercent,
+    safetyFactorPercent,
+    safetyFactorStatusMessage,
+    chartSpanMeters,
+    safetyAdjustedLoadKnPerM,
+    chartEvaluation,
+    selectedLoadCurveName,
+    numberFormatter,
+    percentageFormatter,
+    dateTimeFormatter
+  ]);
+
+  const canGenerateReport = Boolean(token && trayReportBaseContext);
+
+  const handleGenerateReport = useCallback(async () => {
+    if (!project || !tray || !projectId || !token || !trayReportBaseContext) {
+      showToast({
+        intent: 'error',
+        title: 'Unable to generate report',
+        body: 'Project data is still loading. Try again in a moment.'
+      });
+      return;
+    }
+
+    if (!tray.purpose || tray.purpose.trim() === '') {
+      showToast({
+        intent: 'error',
+        title: 'Tray purpose required',
+        body: 'Assign a purpose to this tray before generating a report.'
+      });
+      return;
+    }
+
+    const templatePurpose = tray.purpose.trim();
+    const templateSelection =
+      project.trayPurposeTemplates?.[templatePurpose] ?? null;
+
+    if (!templateSelection?.fileId) {
+      showToast({
+        intent: 'error',
+        title: 'Tray template missing',
+        body: 'Assign a report template to this tray purpose in Project details.'
+      });
+      return;
+    }
+
+    if (!loadCurveCanvasRef.current) {
+      showToast({
+        intent: 'error',
+        title: 'Load curve unavailable',
+        body: 'Load curve visualization is not available to export.'
+      });
+      return;
+    }
+
+    if (!trayCanvasRef.current) {
+      showToast({
+        intent: 'error',
+        title: 'Tray visualization unavailable',
+        body: 'Tray layout visualization is not available to export.'
+      });
+      return;
+    }
+
+    setIsGeneratingReport(true);
+
+    try {
+      const { loadCurve, bundles, report } = buildReportFileNames(
+        project.projectNumber,
+        project.name,
+        tray.name
+      );
+
+      const [loadCurveBlob, bundlesBlob] = await Promise.all([
+        canvasToBlob(loadCurveCanvasRef.current, 'image/jpeg', 0.92),
+        canvasToBlob(trayCanvasRef.current, 'image/jpeg', 0.92)
+      ]);
+
+      const loadCurveFile = new File([loadCurveBlob], loadCurve, {
+        type: 'image/jpeg'
+      });
+      const bundlesFile = new File([bundlesBlob], bundles, {
+        type: 'image/jpeg'
+      });
+
+      await Promise.all([
+        uploadProjectFile(token, projectId, loadCurveFile),
+        uploadProjectFile(token, projectId, bundlesFile)
+      ]);
+
+      const [{ blob: templateBlob, contentType }, projectFilesResponse] =
+        await Promise.all([
+          downloadProjectFile(token, projectId, templateSelection.fileId),
+          fetchProjectFiles(projectId, token)
+        ]);
+
+      const placeholderValues = buildTrayPlaceholderValues({
+        ...trayReportBaseContext,
+        projectFiles: projectFilesResponse.files,
+        loadCurveImageFileName: loadCurve,
+        bundlesImageFileName: bundles
+      });
+
+      const storedPlaceholders = getProjectPlaceholders(projectId);
+      const replacements: Record<string, string> = {};
+
+      for (const [rowId, placeholder] of Object.entries(storedPlaceholders)) {
+        const trimmedPlaceholder = placeholder?.trim();
+        if (!trimmedPlaceholder) {
+          continue;
+        }
+        const resolvedValue = placeholderValues[rowId] ?? '';
+        if (
+          trimmedPlaceholder in replacements &&
+          replacements[trimmedPlaceholder] !== resolvedValue &&
+          resolvedValue !== ''
+        ) {
+          console.warn(
+            `Placeholder "${trimmedPlaceholder}" has multiple values; keeping the first one.`
+          );
+          continue;
+        }
+        replacements[trimmedPlaceholder] = resolvedValue;
+      }
+
+      const updatedDocumentBlob = await replaceDocxPlaceholders(
+        templateBlob,
+        replacements
+      );
+
+      const wordContentType =
+        contentType && contentType !== 'application/octet-stream'
+          ? contentType
+          : WORD_MIME_TYPE;
+
+      const reportFile = new File([updatedDocumentBlob], report, {
+        type: wordContentType
+      });
+
+      const { file: uploadedReport } = await uploadProjectFile(
+        token,
+        projectId,
+        reportFile
+      );
+
+      triggerFileDownload(updatedDocumentBlob, report);
+
+      showToast({
+        intent: 'success',
+        title: 'Tray report generated',
+        body: `Saved as "${uploadedReport.fileName}". Check your downloads to store a local copy.`
+      });
+    } catch (error) {
+      console.error('Failed to generate tray report', error);
+      showToast({
+        intent: 'error',
+        title: 'Failed to generate tray report',
+        body:
+          error instanceof ApiError
+            ? error.message
+            : error instanceof Error
+            ? error.message
+            : undefined
+      });
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  }, [
+    project,
+    tray,
+    projectId,
+    token,
+    trayReportBaseContext,
+    showToast
+  ]);
+
   // Loading and error states
   if (isLoading) {
     return (
@@ -1213,8 +1550,11 @@ export const TrayDetails = () => {
         isAdmin={isAdmin}
         isEditing={isEditing}
         isDeleting={isDeleting}
+        canGenerateReport={canGenerateReport}
+        isGeneratingReport={isGeneratingReport}
         onNavigateTray={handleNavigateTray}
         onBack={() => navigate(`/projects/${projectId}?tab=trays`)}
+        onGenerateReport={() => void handleGenerateReport()}
         onEdit={() => setIsEditing(true)}
         onDelete={() => void handleDelete()}
         styles={styles}
@@ -1345,6 +1685,7 @@ export const TrayDetails = () => {
         numberFormatter={numberFormatter}
         styles={styles}
         refreshKey={loadCurveRefreshKey}
+        canvasRef={loadCurveCanvasRef}
       />
 
       <div className={styles.section}>

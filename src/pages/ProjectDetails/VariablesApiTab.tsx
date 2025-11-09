@@ -10,6 +10,11 @@ import {
 } from '@fluentui/react-components';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import {
+  clearProjectPlaceholders,
+  getProjectPlaceholders,
+  setProjectPlaceholders
+} from '@/utils/projectPlaceholders';
 
 export type VariablesApiRow = {
   id: string;
@@ -36,61 +41,27 @@ type VariablesApiTabProps = {
   isLoading: boolean;
 };
 
-const STORAGE_PREFIX = 'wfc:variables-api';
-
-const readStoredPlaceholders = (storageKey: string): Record<string, string> => {
-  if (typeof window === 'undefined') {
-    return {};
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(storageKey);
-    if (!rawValue) {
-      return {};
-    }
-    const parsed = JSON.parse(rawValue);
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch (error) {
-    console.warn('Failed to parse stored Variables API placeholders', error);
-    return {};
-  }
-};
-
 export const VariablesApiTab = ({
   styles,
   projectId,
   sections,
   isLoading
 }: VariablesApiTabProps) => {
-  const storageKey = useMemo(
-    () => `${STORAGE_PREFIX}:${projectId}`,
-    [projectId]
-  );
-
   const [placeholders, setPlaceholders] = useState<Record<string, string>>(() =>
-    readStoredPlaceholders(storageKey)
+    getProjectPlaceholders(projectId)
   );
 
   useEffect(() => {
-    setPlaceholders(readStoredPlaceholders(storageKey));
-  }, [storageKey]);
+    setPlaceholders(getProjectPlaceholders(projectId));
+  }, [projectId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     if (Object.keys(placeholders).length === 0) {
-      window.localStorage.removeItem(storageKey);
-      return;
+      clearProjectPlaceholders(projectId);
+    } else {
+      setProjectPlaceholders(projectId, placeholders);
     }
-
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(placeholders));
-    } catch (error) {
-      console.warn('Failed to store Variables API placeholders', error);
-    }
-  }, [placeholders, storageKey]);
+  }, [placeholders, projectId]);
 
   const handlePlaceholderChange = (rowId: string, value: string) => {
     setPlaceholders((previous) => {
@@ -118,6 +89,7 @@ export const VariablesApiTab = ({
     if (Object.keys(placeholders).length === 0) {
       return;
     }
+    clearProjectPlaceholders(projectId);
     setPlaceholders({});
   };
 

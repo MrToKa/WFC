@@ -366,13 +366,13 @@ export const ProjectFilesTab = ({
                               styles.numericCell
                             )}
                           >
-                            {formatFileSize(version.sizeBytes)}
+                            {formatProjectFileSize(version.sizeBytes)}
                           </td>
                           <td className={styles.tableCell}>
                             {versionUploader}
                           </td>
                           <td className={styles.tableCell}>
-                            {formatDateTime(version.uploadedAt)}
+                            {formatProjectFileTimestamp(version.uploadedAt)}
                           </td>
                           <td
                             className={mergeClasses(

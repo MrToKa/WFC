@@ -8,6 +8,7 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
   const [tray, setTray] = useState<Tray | null>(null);
   const [trays, setTrays] = useState<Tray[]>([]);
   const [trayCables, setTrayCables] = useState<Cable[]>([]);
+  const [projectCables, setProjectCables] = useState<Cable[]>([]);
   const [cablesError, setCablesError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +18,7 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
       if (!projectId || !trayId) {
         setError('Tray not found.');
         setTrayCables([]);
+        setProjectCables([]);
         setTrays([]);
         setIsLoading(false);
         return;
@@ -25,6 +27,7 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
       setIsLoading(true);
       setError(null);
       setTrayCables([]);
+      setProjectCables([]);
       setCablesError(null);
 
       try {
@@ -38,12 +41,14 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
 
         try {
           const cablesResponse = await fetchCables(projectId);
+          setProjectCables(cablesResponse.cables);
           setTrayCables(
             filterCablesByTray(cablesResponse.cables, trayResponse.tray.name)
           );
         } catch (cableError) {
           console.error('Failed to load tray cables', cableError);
           setCablesError('Failed to load cables for this tray.');
+          setProjectCables([]);
         }
       } catch (err) {
         console.error('Failed to load tray details', err);
@@ -53,6 +58,7 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
           setError('Failed to load tray details.');
         }
         setTrayCables([]);
+        setProjectCables([]);
         setTrays([]);
         setIsLoading(false);
         return;
@@ -76,6 +82,7 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
     tray,
     trays,
     trayCables,
+    projectCables,
     cablesError,
     isLoading,
     error,

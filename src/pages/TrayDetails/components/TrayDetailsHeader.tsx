@@ -10,8 +10,11 @@ interface TrayDetailsHeaderProps {
   isAdmin: boolean;
   isEditing: boolean;
   isDeleting: boolean;
+  canGenerateReport: boolean;
+  isGeneratingReport: boolean;
   onNavigateTray: (trayId: string) => void;
   onBack: () => void;
+  onGenerateReport: () => void;
   onEdit: () => void;
   onDelete: () => void;
   styles: Record<string, string>;
@@ -25,8 +28,11 @@ export const TrayDetailsHeader: React.FC<TrayDetailsHeaderProps> = ({
   isAdmin,
   isEditing,
   isDeleting,
+  canGenerateReport,
+  isGeneratingReport,
   onNavigateTray,
   onBack,
+  onGenerateReport,
   onEdit,
   onDelete,
   styles
@@ -61,6 +67,13 @@ export const TrayDetailsHeader: React.FC<TrayDetailsHeaderProps> = ({
         </Button>
         <Button onClick={onBack}>
           Back to project
+        </Button>
+        <Button
+          appearance="primary"
+          onClick={onGenerateReport}
+          disabled={!canGenerateReport || isGeneratingReport}
+        >
+          {isGeneratingReport ? 'Generating...' : 'Generate report'}
         </Button>
         {isAdmin ? (
           <>
