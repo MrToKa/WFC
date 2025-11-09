@@ -688,6 +688,17 @@ export const ProjectDetails = () => {
 
     const sections: VariablesApiSection[] = [];
 
+    const currentUserDisplay = (() => {
+      if (!user) {
+        return '-';
+      }
+      const name = [user.firstName, user.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      return name !== '' ? name : user.email ?? '-';
+    })();
+
     const detailRows: VariablesApiRow[] = [
       {
         id: 'details:project-number',
@@ -713,6 +724,11 @@ export const ProjectDetails = () => {
         id: 'details:description',
         name: 'Description',
         value: fallbackText(project.description)
+      },
+      {
+        id: 'details:current-user',
+        name: 'Current user',
+        value: currentUserDisplay
       },
       {
         id: 'details:created-at',
@@ -1109,6 +1125,7 @@ export const ProjectDetails = () => {
     formattedDates,
     project,
     projectFiles,
+    user,
     trays,
     trayFreeSpaceById,
     trayTemplateRows
