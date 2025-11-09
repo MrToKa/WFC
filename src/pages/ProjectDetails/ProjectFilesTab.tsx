@@ -20,6 +20,15 @@ import {
 import type { ProjectFile, ProjectFileVersion } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import {
+  PROJECT_FILE_ACCEPT_TYPES,
+  PROJECT_FILE_CATEGORIES,
+  PROJECT_FILE_CATEGORY_LABELS,
+  formatProjectFileSize,
+  formatProjectFileTimestamp,
+  getProjectFileCategory,
+  type ProjectFileCategory
+} from './projectFileUtils';
 
 type ProjectFilesTabProps = {
   styles: ProjectDetailsStyles;
@@ -58,90 +67,6 @@ type ProjectFilesTabProps = {
   fileInputRef: RefObject<HTMLInputElement | null>;
 };
 
-type FileCategory = 'word' | 'excel' | 'pdf' | 'images';
-
-const FILE_CATEGORIES: FileCategory[] = ['word', 'excel', 'pdf', 'images'];
-
-const CATEGORY_LABELS: Record<FileCategory, string> = {
-  word: 'Word',
-  excel: 'Excel',
-  pdf: 'PDF',
-  images: 'Pictures'
-};
-
-const CATEGORY_ACCEPT_TYPES: Record<FileCategory, string> = {
-  word: '.doc,.docx',
-  excel: '.xls,.xlsx',
-  pdf: '.pdf',
-  images: '.jpg,.jpeg,.png'
-};
-
-const formatFileSize = (bytes: number): string => {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return '0 B';
-  }
-
-  const units = ['B', 'KB', 'MB', 'GB'];
-  const exponent = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1
-  );
-  const value = bytes / 1024 ** exponent;
-  const decimals = value >= 10 || exponent === 0 ? 0 : 1;
-  return `${value.toFixed(decimals)} ${units[exponent]}`;
-};
-
-const formatDateTime = (value: string): string =>
-  new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(value));
-
-const getFileExtension = (fileName: string): string => {
-  const lastDot = fileName.lastIndexOf('.');
-  if (lastDot === -1) {
-    return '';
-  }
-  return fileName.slice(lastDot).toLowerCase();
-};
-
-const getFileCategory = (file: ProjectFile): FileCategory | 'other' => {
-  const extension = getFileExtension(file.fileName);
-  const contentType = (file.contentType ?? '').toLowerCase();
-
-  if (
-    extension === '.doc' ||
-    extension === '.docx' ||
-    contentType.includes('wordprocessing')
-  ) {
-    return 'word';
-  }
-
-  if (
-    extension === '.xls' ||
-    extension === '.xlsx' ||
-    contentType.includes('spreadsheet') ||
-    contentType.includes('excel')
-  ) {
-    return 'excel';
-  }
-
-  if (extension === '.pdf' || contentType.includes('pdf')) {
-    return 'pdf';
-  }
-
-  if (
-    extension === '.jpg' ||
-    extension === '.jpeg' ||
-    extension === '.png' ||
-    contentType.startsWith('image/')
-  ) {
-    return 'images';
-  }
-
-  return 'other';
-};
-
 export const ProjectFilesTab = ({
   styles,
   files,
@@ -167,7 +92,8 @@ export const ProjectFilesTab = ({
   onReplaceCancel,
   fileInputRef
 }: ProjectFilesTabProps) => {
-  const [selectedCategory, setSelectedCategory] = useState<FileCategory>('word');
+  const [selectedCategory, setSelectedCategory] =
+    useState<ProjectFileCategory>('word');
 
   const {
     open: replaceDialogOpen,
@@ -179,29 +105,32 @@ export const ProjectFilesTab = ({
   const versionsDialogFileName = versionsDialog.file?.fileName ?? '';
 
   const filteredFiles = useMemo(
-    () => files.filter((file) => getFileCategory(file) === selectedCategory),
+    () =>
+      files.filter(
+        (file) => getProjectFileCategory(file) === selectedCategory
+      ),
     [files, selectedCategory]
   );
 
-  const currentAcceptTypes = CATEGORY_ACCEPT_TYPES[selectedCategory];
+  const currentAcceptTypes = PROJECT_FILE_ACCEPT_TYPES[selectedCategory];
 
   const emptyMessage =
     selectedCategory === 'images'
       ? 'No picture files uploaded yet.'
-      : `No ${CATEGORY_LABELS[selectedCategory]} files uploaded yet.`;
+      : `No ${PROJECT_FILE_CATEGORY_LABELS[selectedCategory]} files uploaded yet.`;
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Project files">
       <TabList
         selectedValue={selectedCategory}
         onTabSelect={(_, data: { value: TabValue }) =>
-          setSelectedCategory(data.value as FileCategory)
+          setSelectedCategory(data.value as ProjectFileCategory)
         }
         aria-label="File categories"
       >
-        {FILE_CATEGORIES.map((category) => (
+        {PROJECT_FILE_CATEGORIES.map((category) => (
           <Tab key={category} value={category}>
-            {CATEGORY_LABELS[category]}
+            {PROJECT_FILE_CATEGORY_LABELS[category]}
           </Tab>
         ))}
       </TabList>
@@ -219,7 +148,7 @@ export const ProjectFilesTab = ({
             >
               {isUploading
                 ? 'Uploading...'
-                : `Upload ${CATEGORY_LABELS[selectedCategory]} file`}
+                : `Upload ${PROJECT_FILE_CATEGORY_LABELS[selectedCategory]} file`}
             </Button>
             <input
               ref={fileInputRef}
@@ -234,9 +163,9 @@ export const ProjectFilesTab = ({
 
       {canUpload ? (
         <Caption1>
-          Accepted formats for {CATEGORY_LABELS[selectedCategory]}:{' '}
+          Accepted formats for {PROJECT_FILE_CATEGORY_LABELS[selectedCategory]}:{' '}
           {currentAcceptTypes.replace(/,/g, ', ')} (up to{' '}
-          {formatFileSize(maxFileSizeBytes)}).
+          {formatProjectFileSize(maxFileSizeBytes)}).
         </Caption1>
       ) : null}
 
@@ -249,12 +178,12 @@ export const ProjectFilesTab = ({
           <Caption1>{emptyMessage}</Caption1>
           <Body1>
             {canUpload
-              ? `Use the upload button above to attach ${CATEGORY_LABELS[
-                  selectedCategory
-                ].toLowerCase()} files to this project.`
-              : `There are no ${CATEGORY_LABELS[
-                  selectedCategory
-                ].toLowerCase()} files uploaded for this project.`}
+              ? `Use the upload button above to attach ${
+                  PROJECT_FILE_CATEGORY_LABELS[selectedCategory].toLowerCase()
+                } files to this project.`
+              : `There are no ${
+                  PROJECT_FILE_CATEGORY_LABELS[selectedCategory].toLowerCase()
+                } files uploaded for this project.`}
           </Body1>
         </div>
       ) : (
@@ -293,11 +222,11 @@ export const ProjectFilesTab = ({
                         styles.numericCell
                       )}
                     >
-                      {formatFileSize(file.sizeBytes)}
+                    {formatProjectFileSize(file.sizeBytes)}
                     </td>
                     <td className={styles.tableCell}>{uploader}</td>
                     <td className={styles.tableCell}>
-                      {formatDateTime(file.uploadedAt)}
+                    {formatProjectFileTimestamp(file.uploadedAt)}
                     </td>
                     <td
                       className={mergeClasses(

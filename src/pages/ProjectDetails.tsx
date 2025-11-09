@@ -32,6 +32,12 @@ import { ProgressDialog } from './ProjectDetails/ProgressDialog';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
 import { ProjectFilesTab } from './ProjectDetails/ProjectFilesTab';
+import {
+  VariablesApiTab,
+  type VariablesApiSection,
+  type VariablesApiTable,
+  type VariablesApiRow
+} from './ProjectDetails/VariablesApiTab';
 import { useCableListSection } from './ProjectDetails/hooks/useCableListSection';
 import { useCableTypesSection } from './ProjectDetails/hooks/useCableTypesSection';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
@@ -63,6 +69,11 @@ import {
   type CableBundleMap,
   type CategoryLayoutConfig
 } from './TrayDetails/trayDrawingService';
+import {
+  PROJECT_FILE_CATEGORIES,
+  PROJECT_FILE_CATEGORY_LABELS,
+  getProjectFileCategory
+} from './ProjectDetails/projectFileUtils';
 
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
@@ -70,7 +81,8 @@ const VALID_TABS: ProjectDetailsTab[] = [
   'cable-list',
   'trays',
   'files',
-  'cable-report'
+  'cable-report',
+  'variables-api'
 ];
 
 export const ProjectDetails = () => {
@@ -566,6 +578,476 @@ export const ProjectDetails = () => {
     trays
   ]);
 
+
+  const variablesApiSections = useMemo<VariablesApiSection[]>(() => {
+    if (!project) {
+      return [];
+    }
+
+    const numberFormatter = new Intl.NumberFormat();
+    const percentFormatter = new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short'
+    });
+
+    const fallbackText = (value: string | null | undefined): string => {
+      if (value === null || value === undefined) {
+        return '-';
+      }
+      const trimmed = value.trim();
+      return trimmed === '' ? '-' : trimmed;
+    };
+
+    const formatNumberWithUnit = (
+      value: number | null | undefined,
+      unit?: string
+    ): string => {
+      const formatted = formatNumeric(
+        typeof value === 'number' ? value : value ?? null
+      );
+      return formatted === '-' ? '-' : unit ? `${formatted} ${unit}` : formatted;
+    };
+
+    const yesNo = (value: boolean | null | undefined): string => {
+      if (value === null || value === undefined) {
+        return '-';
+      }
+      return value ? 'Yes' : 'No';
+    };
+
+    const formatPercentValue = (
+      value: number | null | undefined
+    ): string => {
+      if (value === null || value === undefined) {
+        return '-';
+      }
+      return `${percentFormatter.format(value)} %`;
+    };
+
+    const formatRowCount = (count: number): string => {
+      const normalized = count < 0 ? 0 : count;
+      return `${numberFormatter.format(normalized)} ${
+        normalized === 1 ? 'row' : 'rows'
+      }`;
+    };
+
+    const formatDateTime = (value: string | null | undefined): string => {
+      if (!value) {
+        return '-';
+      }
+      return dateTimeFormatter.format(new Date(value));
+    };
+
+    const buildTableVariable = ({
+      sectionId,
+      tableId,
+      label,
+      displayName,
+      recordCount,
+      note
+    }: {
+      sectionId: string;
+      tableId: string;
+      label: string;
+      displayName?: string;
+      recordCount?: number | null;
+      note?: string;
+    }): VariablesApiTable => {
+      const safeCount =
+        typeof recordCount === 'number' && Number.isFinite(recordCount)
+          ? recordCount
+          : null;
+      const summaryParts: string[] = [];
+
+      if (note) {
+        summaryParts.push(note);
+      } else {
+        summaryParts.push('Entire table export');
+      }
+
+      if (safeCount !== null) {
+        summaryParts.push(formatRowCount(safeCount));
+      }
+
+      return {
+        id: `${sectionId}:${tableId}`,
+        label,
+        rows: [
+          {
+            id: `table:${sectionId}:${tableId}`,
+            name: displayName ?? label,
+            value: summaryParts.join(' — ')
+          }
+        ]
+      };
+    };
+
+    const sections: VariablesApiSection[] = [];
+
+    const detailRows: VariablesApiRow[] = [
+      {
+        id: 'details:project-number',
+        name: 'Project number',
+        value: fallbackText(project.projectNumber)
+      },
+      {
+        id: 'details:project-name',
+        name: 'Project name',
+        value: fallbackText(project.name)
+      },
+      {
+        id: 'details:customer',
+        name: 'Customer',
+        value: fallbackText(project.customer)
+      },
+      {
+        id: 'details:manager',
+        name: 'Manager',
+        value: fallbackText(project.manager)
+      },
+      {
+        id: 'details:description',
+        name: 'Description',
+        value: fallbackText(project.description)
+      },
+      {
+        id: 'details:created-at',
+        name: 'Created at',
+        value: formattedDates?.created ?? '-'
+      },
+      {
+        id: 'details:updated-at',
+        name: 'Last updated',
+        value: formattedDates?.updated ?? '-'
+      },
+      {
+        id: 'details:secondary-tray-length',
+        name: 'Secondary tray length',
+        value: formatNumberWithUnit(project.secondaryTrayLength, 'm')
+      },
+      {
+        id: 'details:support-distance',
+        name: 'Support distance',
+        value: formatNumberWithUnit(project.supportDistance, 'm')
+      },
+      {
+        id: 'details:support-weight',
+        name: 'Support weight',
+        value: formatNumberWithUnit(project.supportWeight, 'kg')
+      },
+      {
+        id: 'details:tray-load-safety-factor',
+        name: 'Tray load safety factor',
+        value: formatNumberWithUnit(project.trayLoadSafetyFactor, '%')
+      },
+      {
+        id: 'details:cable-spacing',
+        name: 'Cable spacing',
+        value: formatNumberWithUnit(project.cableLayout?.cableSpacing, 'mm')
+      },
+      {
+        id: 'details:bundle-spacing-free',
+        name: 'Bundle spacing counted as free space',
+        value: yesNo(project.cableLayout?.considerBundleSpacingAsFree)
+      },
+      {
+        id: 'details:min-free-space',
+        name: 'Minimum tray free space',
+        value: formatNumberWithUnit(project.cableLayout?.minFreeSpacePercent, '%')
+      },
+      {
+        id: 'details:max-free-space',
+        name: 'Maximum tray free space',
+        value: formatNumberWithUnit(project.cableLayout?.maxFreeSpacePercent, '%')
+      }
+    ];
+
+    const detailTables: VariablesApiTable[] =
+      detailRows.length > 0
+        ? [
+            {
+              id: 'details:main',
+              label: 'Main table',
+              rows: detailRows
+            }
+          ]
+        : [];
+
+    detailTables.push(
+      buildTableVariable({
+        sectionId: 'details',
+        tableId: 'tray-report-templates',
+        label: 'Tray report templates',
+        displayName: 'Tray report templates table',
+        recordCount: trayTemplateRows.length
+      })
+    );
+
+    sections.push({
+      id: 'details',
+      label: 'Details',
+      tables: detailTables
+    });
+
+    sections.push({
+      id: 'cables',
+      label: 'Cable types',
+      tables: [
+        buildTableVariable({
+          sectionId: 'cables',
+          tableId: 'main',
+          label: 'Main table',
+          displayName: 'Cable types main table',
+          recordCount: cableTypes.length
+        })
+      ]
+    });
+
+    sections.push({
+      id: 'cable-list',
+      label: 'Cables list',
+      tables: [
+        buildTableVariable({
+          sectionId: 'cable-list',
+          tableId: 'main',
+          label: 'Main table',
+          displayName: 'Cables list main table',
+          recordCount: cables.length
+        })
+      ]
+    });
+
+    sections.push({
+      id: 'cable-report',
+      label: 'Cables report',
+      tables: [
+        buildTableVariable({
+          sectionId: 'cable-report',
+          tableId: 'main',
+          label: 'Main table',
+          displayName: 'Cables report main table',
+          recordCount: cables.length
+        })
+      ]
+    });
+
+    const cableTypeNameById = new Map<string, string>();
+    cableTypes.forEach((type) => {
+      cableTypeNameById.set(type.id, type.name ?? type.id);
+    });
+
+    const trayTables: VariablesApiTable[] = [
+      buildTableVariable({
+        sectionId: 'trays',
+        tableId: 'main',
+        label: 'Main table',
+        displayName: 'Trays main table',
+        recordCount: trays.length
+      })
+    ];
+
+    const sampleTray = trays[0] ?? null;
+    const sampleFreeSpace =
+      sampleTray && sampleTray.id in trayFreeSpaceById
+        ? formatPercentValue(trayFreeSpaceById[sampleTray.id])
+        : '-';
+    const describeDynamicValue = (value: string): string =>
+      value === '-'
+        ? 'Dynamic per tray during export'
+        : `${value} (example)`;
+    const calculatedValueNote = 'Calculated per tray during export';
+    const trayDetailsRows: VariablesApiRow[] = [
+      {
+        id: 'tray-details:name',
+        name: 'Tray name',
+        value: describeDynamicValue(fallbackText(sampleTray?.name ?? null))
+      },
+      {
+        id: 'tray-details:type',
+        name: 'Tray type',
+        value: describeDynamicValue(fallbackText(sampleTray?.type ?? null))
+      },
+      {
+        id: 'tray-details:purpose',
+        name: 'Tray purpose',
+        value: describeDynamicValue(fallbackText(sampleTray?.purpose ?? null))
+      },
+      {
+        id: 'tray-details:width',
+        name: 'Tray width [mm]',
+        value: describeDynamicValue(
+          formatNumberWithUnit(sampleTray?.widthMm ?? null, 'mm')
+        )
+      },
+      {
+        id: 'tray-details:height',
+        name: 'Tray height [mm]',
+        value: describeDynamicValue(
+          formatNumberWithUnit(sampleTray?.heightMm ?? null, 'mm')
+        )
+      },
+      {
+        id: 'tray-details:length',
+        name: 'Tray length [mm]',
+        value: describeDynamicValue(
+          formatNumberWithUnit(sampleTray?.lengthMm ?? null, 'mm')
+        )
+      },
+      {
+        id: 'tray-details:free-space',
+        name: 'Tray free space [%]',
+        value: describeDynamicValue(sampleFreeSpace)
+      },
+      {
+        id: 'tray-details:grounding-flag',
+        name: 'Grounding cable included',
+        value: describeDynamicValue(
+          sampleTray ? yesNo(sampleTray.includeGroundingCable) : '-'
+        )
+      },
+      {
+        id: 'tray-details:grounding-type',
+        name: 'Grounding cable type',
+        value: describeDynamicValue(
+          sampleTray?.groundingCableTypeId
+            ? cableTypeNameById.get(sampleTray.groundingCableTypeId) ??
+              sampleTray.groundingCableTypeId
+            : '-'
+        )
+      },
+      {
+        id: 'tray-details:weight-load-per-meter',
+        name: 'Tray weight load per meter [kg/m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:total-own-weight',
+        name: 'Tray total own weight [kg]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:cables-weight-load-per-meter',
+        name: 'Cables weight load per meter [kg/m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:cables-total-weight',
+        name: 'Total weight on the tray [kg]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:total-weight-load-per-meter',
+        name: 'Total weight load per meter [kg/m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:total-weight',
+        name: 'Total weight [kg]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:support-type',
+        name: 'Support type',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:support-length',
+        name: 'Support length [mm]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:supports-count',
+        name: 'Supports count',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:support-weight-per-piece',
+        name: 'Support weight per piece [kg]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:supports-total-weight',
+        name: 'Supports total weight [kg]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:supports-weight-per-meter',
+        name: 'Supports weight load per meter [kg/m]',
+        value: calculatedValueNote
+      },
+      {
+        id: 'tray-details:load-curve-canvas',
+        name: 'Load curve canvas',
+        value: 'Canvas snapshot for selected tray during export'
+      },
+      {
+        id: 'tray-details:concept-canvas',
+        name: 'Tray cables laying concept canvas',
+        value: 'Canvas snapshot for selected tray during export'
+      },
+      {
+        id: 'tray-details:created-at',
+        name: 'Tray created at',
+        value: describeDynamicValue(formatDateTime(sampleTray?.createdAt ?? null))
+      },
+      {
+        id: 'tray-details:updated-at',
+        name: 'Tray updated at',
+        value: describeDynamicValue(formatDateTime(sampleTray?.updatedAt ?? null))
+      }
+    ];
+
+    trayTables.push({
+      id: 'trays:details',
+      label: 'Tray details placeholders',
+      rows: trayDetailsRows
+    });
+
+    sections.push({
+      id: 'trays',
+      label: 'Trays',
+      tables: trayTables
+    });
+
+    const fileTables: VariablesApiTable[] = PROJECT_FILE_CATEGORIES.map(
+      (category) =>
+        buildTableVariable({
+          sectionId: 'files',
+          tableId: `category-${category}`,
+          label: PROJECT_FILE_CATEGORY_LABELS[category],
+          displayName: `${PROJECT_FILE_CATEGORY_LABELS[category]} files`,
+          recordCount: projectFiles.filter(
+            (file) => getProjectFileCategory(file) === category
+          ).length,
+          note: `${PROJECT_FILE_CATEGORY_LABELS[category]} files table`
+        })
+    );
+
+    sections.push({
+      id: 'files',
+      label: 'Files',
+      tables: fileTables
+    });
+
+    return sections;
+  }, [
+    cableTypes,
+    cables,
+    formattedDates,
+    project,
+    projectFiles,
+    trays,
+    trayFreeSpaceById,
+    trayTemplateRows
+  ]);
+
+  const variablesTabLoading =
+    projectFilesLoading || cableTypesLoading || cablesLoading || traysLoading;
+
   useEffect(() => {
     const tabParam = searchParams.get('tab');
     const nextTab =
@@ -765,6 +1247,7 @@ export const ProjectDetails = () => {
         <Tab value="trays">Trays</Tab>
         <Tab value="cable-report">Cables report</Tab>
         <Tab value="files">Files</Tab>
+        <Tab value="variables-api">Variables API</Tab>
       </TabList>
 
       {selectedTab === 'details' ? (
@@ -884,6 +1367,15 @@ export const ProjectDetails = () => {
           onReplaceConfirm={handleProjectFileReplaceConfirm}
           onReplaceCancel={handleProjectFileReplaceCancel}
           fileInputRef={projectFilesInputRef}
+        />
+      ) : null}
+
+      {selectedTab === 'variables-api' ? (
+        <VariablesApiTab
+          styles={styles}
+          projectId={project.id}
+          sections={variablesApiSections}
+          isLoading={variablesTabLoading}
         />
       ) : null}
 

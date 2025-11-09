@@ -24,7 +24,8 @@ export type ProjectDetailsTab =
   | 'cable-list'
   | 'trays'
   | 'files'
-  | 'cable-report';
+  | 'cable-report'
+  | 'variables-api';
 
 export type CableTypeFormState = {
   name: string;

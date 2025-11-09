@@ -183,6 +183,57 @@ export const useProjectDetailsStyles = makeStyles({
     justifyContent: 'center',
     alignItems: 'center',
     flexWrap: 'wrap'
+  },
+  variablesIntro: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem'
+  },
+  variablesIntroRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: '0.75rem',
+    alignItems: 'flex-start'
+  },
+  variablesActions: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '0.25rem'
+  },
+  variablesSectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '0.5rem',
+    flexWrap: 'wrap'
+  },
+  variablesTables: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem'
+  },
+  variablesTableGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem'
+  },
+  variablesTableTitle: {
+    fontWeight: tokens.fontWeightSemibold
+  },
+  variablesValue: {
+    display: 'inline-block',
+    maxWidth: '100%',
+    fontFamily: `'Consolas', 'SFMono-Regular', 'Source Code Pro', monospace`,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusSmall,
+    ...shorthands.padding('0.125rem', '0.375rem'),
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word'
+  },
+  variablesInput: {
+    width: '100%'
   }
 });
 

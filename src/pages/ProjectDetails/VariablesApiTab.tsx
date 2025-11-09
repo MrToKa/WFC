@@ -1,0 +1,251 @@
+import { useEffect, useMemo, useState } from 'react';
+
+import {
+  Body1,
+  Button,
+  Caption1,
+  Input,
+  Spinner,
+  Subtitle2
+} from '@fluentui/react-components';
+
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+
+export type VariablesApiRow = {
+  id: string;
+  name: string;
+  value: string;
+};
+
+export type VariablesApiTable = {
+  id: string;
+  label: string;
+  rows: VariablesApiRow[];
+};
+
+export type VariablesApiSection = {
+  id: string;
+  label: string;
+  tables: VariablesApiTable[];
+};
+
+type VariablesApiTabProps = {
+  styles: ProjectDetailsStyles;
+  projectId: string;
+  sections: VariablesApiSection[];
+  isLoading: boolean;
+};
+
+const STORAGE_PREFIX = 'wfc:variables-api';
+
+const readStoredPlaceholders = (storageKey: string): Record<string, string> => {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(storageKey);
+    if (!rawValue) {
+      return {};
+    }
+    const parsed = JSON.parse(rawValue);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch (error) {
+    console.warn('Failed to parse stored Variables API placeholders', error);
+    return {};
+  }
+};
+
+export const VariablesApiTab = ({
+  styles,
+  projectId,
+  sections,
+  isLoading
+}: VariablesApiTabProps) => {
+  const storageKey = useMemo(
+    () => `${STORAGE_PREFIX}:${projectId}`,
+    [projectId]
+  );
+
+  const [placeholders, setPlaceholders] = useState<Record<string, string>>(() =>
+    readStoredPlaceholders(storageKey)
+  );
+
+  useEffect(() => {
+    setPlaceholders(readStoredPlaceholders(storageKey));
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (Object.keys(placeholders).length === 0) {
+      window.localStorage.removeItem(storageKey);
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(storageKey, JSON.stringify(placeholders));
+    } catch (error) {
+      console.warn('Failed to store Variables API placeholders', error);
+    }
+  }, [placeholders, storageKey]);
+
+  const handlePlaceholderChange = (rowId: string, value: string) => {
+    setPlaceholders((previous) => {
+      if (value.trim() === '') {
+        if (!(rowId in previous)) {
+          return previous;
+        }
+        const next = { ...previous };
+        delete next[rowId];
+        return next;
+      }
+
+      if (previous[rowId] === value) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [rowId]: value
+      };
+    });
+  };
+
+  const handleClearPlaceholders = () => {
+    if (Object.keys(placeholders).length === 0) {
+      return;
+    }
+    setPlaceholders({});
+  };
+
+  const totalVariables = useMemo(
+    () =>
+      sections.reduce(
+        (sectionTotal, section) =>
+          sectionTotal +
+          section.tables.reduce(
+            (tableTotal, table) => tableTotal + table.rows.length,
+            0
+          ),
+        0
+      ),
+    [sections]
+  );
+
+  if (isLoading && sections.length === 0) {
+    return (
+      <div className={styles.tabPanel}>
+        <Spinner label="Preparing variables..." />
+      </div>
+    );
+  }
+
+  if (sections.length === 0) {
+    return (
+      <div className={styles.tabPanel}>
+        <div className={styles.panel}>
+          <Body1>No project data available for constructing variables.</Body1>
+          <Caption1>
+            Ensure cables, trays, files, and templates are loaded to populate
+            this view.
+          </Caption1>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.tabPanel} role="tabpanel" aria-label="Variables API">
+      <div className={styles.panel}>
+        <div className={styles.variablesIntro}>
+          <div className={styles.variablesIntroRow}>
+            <div>
+              <Subtitle2>Placeholder mapping</Subtitle2>
+              <Body1>
+                Enter the keyword that should be replaced inside Word templates.
+              </Body1>
+            </div>
+            <div className={styles.variablesActions}>
+              <Caption1>{totalVariables} variables detected</Caption1>
+              <Button
+                size="small"
+                appearance="secondary"
+                onClick={handleClearPlaceholders}
+                disabled={Object.keys(placeholders).length === 0}
+              >
+                Clear placeholders
+              </Button>
+            </div>
+          </div>
+          <Caption1>
+            Values are stored per project in your browser only. Use consistent
+            tokens such as {'{{PROJECT_NAME}}'} to match the text you will place
+            inside the Word template.
+          </Caption1>
+        </div>
+      </div>
+
+      {sections.map((section) => (
+        <div key={section.id} className={styles.panel}>
+          <div className={styles.variablesSectionHeader}>
+            <Subtitle2>{section.label}</Subtitle2>
+            <Caption1>
+              {section.tables.reduce(
+                (count, table) => count + table.rows.length,
+                0
+              )}{' '}
+              variables
+            </Caption1>
+          </div>
+          <div className={styles.variablesTables}>
+            {section.tables.map((table) => (
+              <div key={table.id} className={styles.variablesTableGroup}>
+                <Caption1 className={styles.variablesTableTitle}>
+                  {table.label}
+                </Caption1>
+                {table.rows.length === 0 ? (
+                  <Body1>No variables found for this table.</Body1>
+                ) : (
+                  <div className={styles.tableContainer}>
+                    <table className={styles.table}>
+                      <thead>
+                        <tr>
+                          <th className={styles.tableHeadCell}>Variable</th>
+                          <th className={styles.tableHeadCell}>
+                            Word placeholder
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {table.rows.map((row) => (
+                          <tr key={row.id}>
+                            <td className={styles.tableCell}>{row.name}</td>
+                            <td className={styles.tableCell}>
+                              <Input
+                                className={styles.variablesInput}
+                                appearance="underline"
+                                placeholder="e.g. {{PROJECT_NAME}}"
+                                value={placeholders[row.id] ?? ''}
+                                onChange={(_, data) =>
+                                  handlePlaceholderChange(row.id, data.value)
+                                }
+                                aria-label={`Placeholder for ${row.name}`}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
