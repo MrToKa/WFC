@@ -68,13 +68,15 @@ export const TrayDetailsHeader: React.FC<TrayDetailsHeaderProps> = ({
         <Button onClick={onBack}>
           Back to project
         </Button>
-        <Button
-          appearance="primary"
-          onClick={onGenerateReport}
-          disabled={!canGenerateReport || isGeneratingReport}
-        >
-          {isGeneratingReport ? 'Generating...' : 'Generate report'}
-        </Button>
+        {isAdmin ? (
+          <Button
+            appearance="primary"
+            onClick={onGenerateReport}
+            disabled={!canGenerateReport || isGeneratingReport}
+          >
+            {isGeneratingReport ? 'Generating...' : 'Generate report'}
+          </Button>
+        ) : null}
         {isAdmin ? (
           <>
             {!isEditing ? (

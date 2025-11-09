@@ -2300,6 +2300,7 @@ export const TrayDetails = () => {
         <GroundingCableControls
           includeGroundingCable={includeGroundingCable}
           groundingPreferenceSaving={groundingPreferenceSaving}
+          isAdmin={isAdmin}
           projectCableTypesLoading={projectCableTypesLoading}
           projectCableTypesError={projectCableTypesError}
           groundingCableTypes={groundingCableTypes}
@@ -2457,13 +2458,15 @@ export const TrayDetails = () => {
         <Button appearance="secondary" onClick={handlePrevTray} disabled={!previousTray}>
           Previous tray
         </Button>
-        <Button
-          appearance="primary"
-          onClick={() => void handleGenerateReport()}
-          disabled={!canGenerateReport || isGeneratingReport}
-        >
-          {isGeneratingReport ? 'Generating...' : 'Generate report'}
-        </Button>
+        {isAdmin ? (
+          <Button
+            appearance="primary"
+            onClick={() => void handleGenerateReport()}
+            disabled={!canGenerateReport || isGeneratingReport}
+          >
+            {isGeneratingReport ? 'Generating...' : 'Generate report'}
+          </Button>
+        ) : null}
         <Button appearance="secondary" onClick={handleNextTray} disabled={!nextTray}>
           Next tray
         </Button>

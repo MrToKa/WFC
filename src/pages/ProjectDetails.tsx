@@ -119,9 +119,11 @@ export const ProjectDetails = () => {
 
   const [selectedTab, setSelectedTab] = useState<ProjectDetailsTab>(() => {
     const tabParam = searchParams.get('tab');
-    return tabParam && VALID_TABS.includes(tabParam as ProjectDetailsTab)
+    const initial = tabParam && VALID_TABS.includes(tabParam as ProjectDetailsTab)
       ? (tabParam as ProjectDetailsTab)
       : 'details';
+    // Prevent non-admin users from landing on Variables API via deep link
+    return initial === 'variables-api' && !isAdmin ? 'details' : initial;
   });
 
   const [progressDialogOpen, setProgressDialogOpen] = useState(false);
@@ -1190,19 +1192,24 @@ export const ProjectDetails = () => {
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    const nextTab =
+    let nextTab =
       tabParam && VALID_TABS.includes(tabParam as ProjectDetailsTab)
         ? (tabParam as ProjectDetailsTab)
         : 'details';
-
+    // Block navigation to Variables API for non-admin users
+    if (nextTab === 'variables-api' && !isAdmin) {
+      nextTab = 'details';
+    }
     if (nextTab !== selectedTab) {
       setSelectedTab(nextTab);
     }
-  }, [searchParams, selectedTab]);
+  }, [searchParams, selectedTab, isAdmin]);
 
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
-      const tab = data.value as ProjectDetailsTab;
+      const requested = data.value as ProjectDetailsTab;
+      // Ignore clicks on Variables API for non-admin users (should not render, but defensive)
+      const tab = requested === 'variables-api' && !isAdmin ? selectedTab : requested;
       setSelectedTab(tab);
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
@@ -1214,7 +1221,7 @@ export const ProjectDetails = () => {
         return next;
       });
     },
-    [setSearchParams]
+    [isAdmin, selectedTab, setSearchParams]
   );
 
   const handleCreateCable = useCallback(() => {
@@ -1387,7 +1394,7 @@ export const ProjectDetails = () => {
         <Tab value="trays">Trays</Tab>
         <Tab value="cable-report">Cables report</Tab>
         <Tab value="files">Files</Tab>
-        <Tab value="variables-api">Variables API</Tab>
+  {isAdmin ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
 
       {selectedTab === 'details' ? (
@@ -1510,7 +1517,7 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {selectedTab === 'variables-api' ? (
+      {selectedTab === 'variables-api' && isAdmin ? (
         <VariablesApiTab
           styles={styles}
           projectId={project.id}

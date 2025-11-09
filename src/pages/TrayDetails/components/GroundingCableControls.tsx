@@ -6,6 +6,7 @@ import { CableType } from '../../../api/client';
 interface GroundingCableControlsProps {
   includeGroundingCable: boolean;
   groundingPreferenceSaving: boolean;
+  isAdmin: boolean;
   projectCableTypesLoading: boolean;
   projectCableTypesError: string | null;
   groundingCableTypes: CableType[];
@@ -21,6 +22,7 @@ interface GroundingCableControlsProps {
 export const GroundingCableControls: React.FC<GroundingCableControlsProps> = ({
   includeGroundingCable,
   groundingPreferenceSaving,
+  isAdmin,
   projectCableTypesLoading,
   projectCableTypesError,
   groundingCableTypes,
@@ -39,7 +41,7 @@ export const GroundingCableControls: React.FC<GroundingCableControlsProps> = ({
           label="Add grounding cable"
           checked={includeGroundingCable}
           onChange={onToggle}
-          disabled={groundingPreferenceSaving}
+          disabled={groundingPreferenceSaving || !isAdmin}
         />
         {includeGroundingCable && projectCableTypesLoading ? (
           <Spinner label="Loading cable types..." />
@@ -77,7 +79,7 @@ export const GroundingCableControls: React.FC<GroundingCableControlsProps> = ({
               }
               value={selectedGroundingCableLabel}
               onOptionSelect={onTypeSelect}
-              disabled={groundingPreferenceSaving}
+              disabled={groundingPreferenceSaving || !isAdmin}
             >
               {groundingCableTypes.map((type) => (
                 <Option key={type.id} value={type.id}>
