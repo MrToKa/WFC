@@ -110,7 +110,7 @@ export const CableTypesTab = ({
             {isExporting ? 'Exporting...' : 'Export to Excel'}
           </Button>
           <Button
-            appearance="subtle"
+            appearance="secondary"
             onClick={onGetTemplate}
             disabled={isGettingTemplate}
           >

@@ -132,7 +132,7 @@ export const CableListTab = ({
                 {isImporting ? 'Importing...' : 'Import from Excel'}
               </Button>
               <Button
-                appearance="subtle"
+                appearance="secondary"
                 onClick={onGetTemplate}
                 disabled={isGettingTemplate}
               >
