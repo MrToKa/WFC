@@ -34,6 +34,7 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
   const supportsTotalWeight = supportCalculations.totalWeightKg;
   const trayLengthMeters = supportCalculations.lengthMeters;
   const supportsWeightPerMeter = supportCalculations.weightPerMeterKg;
+  const supportDistanceMeters = supportCalculations.distanceMeters;
 
   const supportsTotalWeightFormula =
     supportsCount !== null &&
@@ -52,6 +53,19 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
       ? `${numberFormatter.format(supportsTotalWeight)} / ${numberFormatter.format(
           trayLengthMeters
         )} = ${numberFormatter.format(supportsWeightPerMeter)} [kg/m]`
+      : null;
+
+  const supportsCountFormula =
+    trayLengthMeters !== null &&
+    trayLengthMeters > 0 &&
+    supportDistanceMeters !== null &&
+    supportDistanceMeters > 0 &&
+    supportsCount !== null
+      ? `${numberFormatter.format(trayLengthMeters)} / ${numberFormatter.format(
+          supportDistanceMeters
+        )} ≈ ${numberFormatter.format(
+          trayLengthMeters / supportDistanceMeters
+        )} = ${numberFormatter.format(supportsCount)}`
       : null;
 
   return (
@@ -89,7 +103,9 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
         </div>
         <div className={styles.field}>
           <Caption1>Supports count</Caption1>
-          <Body1>{formatSupportNumber(supportCalculations.supportsCount)}</Body1>
+          <Body1>
+            {supportsCountFormula ?? formatSupportNumber(supportsCount)}
+          </Body1>
         </div>
         <div className={styles.field}>
           <Caption1>Weight per piece [kg]</Caption1>

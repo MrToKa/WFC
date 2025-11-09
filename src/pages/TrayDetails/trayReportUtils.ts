@@ -11,6 +11,7 @@ import type {
   SupportCalculationResult,
   ChartEvaluation
 } from './TrayDetails.types';
+import { isGroundingPurpose } from './TrayDetails.utils';
 import {
   PROJECT_FILE_CATEGORIES,
   PROJECT_FILE_CATEGORY_LABELS,
@@ -68,11 +69,13 @@ export type TrayPlaceholderContext = {
   supportTypeDisplay: string | null;
   supportLengthMm: number | null;
   trayWeightLoadPerMeterKg: number | null;
+  trayWeightPerMeterKg: number | null;
   trayTotalOwnWeightKg: number | null;
   cablesWeightLoadPerMeterKg: number | null;
   cablesTotalWeightKg: number | null;
   totalWeightLoadPerMeterKg: number | null;
   totalWeightKg: number | null;
+  groundingCableWeightKgPerM: number | null;
   projectCableSpacingMm: number;
   considerBundleSpacingAsFree: boolean;
   minFreeSpacePercent: number | null;
@@ -222,11 +225,13 @@ export const buildTrayPlaceholderValues = (
     supportTypeDisplay,
     supportLengthMm,
     trayWeightLoadPerMeterKg,
+    trayWeightPerMeterKg,
     trayTotalOwnWeightKg,
     cablesWeightLoadPerMeterKg,
     cablesTotalWeightKg,
     totalWeightLoadPerMeterKg,
     totalWeightKg,
+    groundingCableWeightKgPerM,
     projectCableSpacingMm,
     considerBundleSpacingAsFree,
     minFreeSpacePercent,
@@ -269,6 +274,117 @@ export const buildTrayPlaceholderValues = (
     const normalized = value.trim();
     values[key] = normalized === '' ? MISSING_VALUE_PLACEHOLDER : normalized;
   };
+
+  const trayLengthMeters = supportCalculations.lengthMeters;
+  const supportsTotalWeight = supportCalculations.totalWeightKg;
+  const supportsWeightPerMeter = supportCalculations.weightPerMeterKg;
+  const supportsCount = supportCalculations.supportsCount;
+  const supportsWeightPerPiece = supportCalculations.weightPerPieceKg;
+  const supportDistanceMeters = supportCalculations.distanceMeters;
+
+  const cableWeightComponents: number[] = [];
+  for (const cable of trayCables) {
+    if (isGroundingPurpose(cable.purpose)) {
+      continue;
+    }
+    if (typeof cable.weightKgPerM === 'number' && !Number.isNaN(cable.weightKgPerM)) {
+      cableWeightComponents.push(cable.weightKgPerM);
+    }
+  }
+  if (
+    groundingCableWeightKgPerM !== null &&
+    !Number.isNaN(groundingCableWeightKgPerM)
+  ) {
+    cableWeightComponents.push(groundingCableWeightKgPerM);
+  }
+
+  const trayWeightLoadPerMeterFormula =
+    trayWeightPerMeterKg !== null &&
+    supportsWeightPerMeter !== null &&
+    trayWeightLoadPerMeterKg !== null
+      ? `${numberFormatter.format(trayWeightPerMeterKg)} + ${numberFormatter.format(
+          supportsWeightPerMeter
+        )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} [kg/m]`
+      : null;
+
+  const trayTotalOwnWeightFormula =
+    trayWeightLoadPerMeterKg !== null &&
+    trayLengthMeters !== null &&
+    trayLengthMeters > 0 &&
+    trayTotalOwnWeightKg !== null
+      ? `${numberFormatter.format(trayWeightLoadPerMeterKg)} * ${numberFormatter.format(
+          trayLengthMeters
+        )} m = ${numberFormatter.format(trayTotalOwnWeightKg)} [kg]`
+      : null;
+
+  const cablesWeightPerMeterFormula =
+    cablesWeightLoadPerMeterKg !== null && cableWeightComponents.length > 0
+      ? `${cableWeightComponents
+          .map((value) => numberFormatter.format(value))
+          .join(' + ')} = ${numberFormatter.format(
+          cablesWeightLoadPerMeterKg
+        )} [kg/m]`
+      : null;
+
+  const cablesTotalWeightFormula =
+    cablesWeightLoadPerMeterKg !== null &&
+    trayLengthMeters !== null &&
+    trayLengthMeters > 0 &&
+    cablesTotalWeightKg !== null
+      ? `${numberFormatter.format(cablesWeightLoadPerMeterKg)} * ${numberFormatter.format(
+          trayLengthMeters
+        )} m = ${numberFormatter.format(cablesTotalWeightKg)} [kg]`
+      : null;
+
+  const totalWeightLoadPerMeterFormula =
+    trayWeightLoadPerMeterKg !== null &&
+    cablesWeightLoadPerMeterKg !== null &&
+    totalWeightLoadPerMeterKg !== null
+      ? `${numberFormatter.format(trayWeightLoadPerMeterKg)} + ${numberFormatter.format(
+          cablesWeightLoadPerMeterKg
+        )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} [kg/m]`
+      : null;
+
+  const totalWeightFormula =
+    trayTotalOwnWeightKg !== null &&
+    cablesTotalWeightKg !== null &&
+    totalWeightKg !== null
+      ? `${numberFormatter.format(trayTotalOwnWeightKg)} + ${numberFormatter.format(
+          cablesTotalWeightKg
+        )} = ${numberFormatter.format(totalWeightKg)} [kg]`
+      : null;
+
+  const supportsTotalWeightFormula =
+    supportsCount !== null &&
+    supportsWeightPerPiece !== null &&
+    supportsTotalWeight !== null
+      ? `${numberFormatter.format(supportsCount)} * ${numberFormatter.format(
+          supportsWeightPerPiece
+        )} = ${numberFormatter.format(supportsTotalWeight)} [kg]`
+      : null;
+
+  const supportsWeightPerMeterFormula =
+    supportsTotalWeight !== null &&
+    trayLengthMeters !== null &&
+    trayLengthMeters > 0 &&
+    supportsWeightPerMeter !== null
+      ? `${numberFormatter.format(supportsTotalWeight)} / ${numberFormatter.format(
+          trayLengthMeters
+        )} m = ${numberFormatter.format(supportsWeightPerMeter)} [kg/m]`
+      : null;
+
+  const supportsCountFormula =
+    trayLengthMeters !== null &&
+    trayLengthMeters > 0 &&
+    supportDistanceMeters !== null &&
+    supportDistanceMeters > 0 &&
+    supportsCount !== null
+      ? `${numberFormatter.format(trayLengthMeters)} / ${numberFormatter.format(
+          supportDistanceMeters
+        )} ≈ ${numberFormatter.format(
+          trayLengthMeters / supportDistanceMeters
+        )} = ${numberFormatter.format(supportsCount)}`
+      : null;
 
   // Detail section
   addValue('details:project-number', fallbackText(project.projectNumber));
@@ -471,27 +587,32 @@ export const buildTrayPlaceholderValues = (
   // Weight calculations
   addValue(
     'tray-details:weight-load-per-meter',
-    formatNumber(numberFormatter, trayWeightLoadPerMeterKg)
+    trayWeightLoadPerMeterFormula ??
+      formatNumber(numberFormatter, trayWeightLoadPerMeterKg)
   );
   addValue(
     'tray-details:total-own-weight',
-    formatNumber(numberFormatter, trayTotalOwnWeightKg)
+    trayTotalOwnWeightFormula ??
+      formatNumber(numberFormatter, trayTotalOwnWeightKg)
   );
   addValue(
     'tray-details:cables-weight-load-per-meter',
-    formatNumber(numberFormatter, cablesWeightLoadPerMeterKg)
+    cablesWeightPerMeterFormula ??
+      formatNumber(numberFormatter, cablesWeightLoadPerMeterKg)
   );
   addValue(
     'tray-details:cables-total-weight',
-    formatNumber(numberFormatter, cablesTotalWeightKg)
+    cablesTotalWeightFormula ??
+      formatNumber(numberFormatter, cablesTotalWeightKg)
   );
   addValue(
     'tray-details:total-weight-load-per-meter',
-    formatNumber(numberFormatter, totalWeightLoadPerMeterKg)
+    totalWeightLoadPerMeterFormula ??
+      formatNumber(numberFormatter, totalWeightLoadPerMeterKg)
   );
   addValue(
     'tray-details:total-weight',
-    formatNumber(numberFormatter, totalWeightKg)
+    totalWeightFormula ?? formatNumber(numberFormatter, totalWeightKg)
   );
 
   // Cables listing
@@ -508,7 +629,7 @@ export const buildTrayPlaceholderValues = (
   );
   addValue(
     'tray-details:supports-count',
-    formatNumber(numberFormatter, supportCalculations.supportsCount)
+    supportsCountFormula ?? formatNumber(numberFormatter, supportsCount)
   );
   addValue(
     'tray-details:support-weight-per-piece',
@@ -516,11 +637,13 @@ export const buildTrayPlaceholderValues = (
   );
   addValue(
     'tray-details:supports-total-weight',
-    formatNumber(numberFormatter, supportCalculations.totalWeightKg)
+    supportsTotalWeightFormula ??
+      formatNumber(numberFormatter, supportCalculations.totalWeightKg)
   );
   addValue(
     'tray-details:supports-weight-per-meter',
-    formatNumber(numberFormatter, supportCalculations.weightPerMeterKg)
+    supportsWeightPerMeterFormula ??
+      formatNumber(numberFormatter, supportCalculations.weightPerMeterKg)
   );
 
   // Visualization
