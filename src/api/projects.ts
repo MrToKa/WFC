@@ -2,7 +2,8 @@ import { request } from './http';
 import type {
   Project,
   ProjectCableLayoutInput,
-  ProjectSupportOverridePayload
+  ProjectSupportOverridePayload,
+  ProjectTrayPurposeTemplateSelection
 } from './types';
 
 export async function fetchProjects(): Promise<{ projects: Project[] }> {
@@ -30,6 +31,7 @@ export async function createProject(
     supportWeight?: number | null;
     trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
+    trayPurposeTemplates?: Record<string, ProjectTrayPurposeTemplateSelection>;
     cableLayout?: ProjectCableLayoutInput;
   }
 ): Promise<{ project: Project }> {
@@ -54,6 +56,7 @@ export async function updateProject(
     supportWeight?: number | null;
     trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
+    trayPurposeTemplates?: Record<string, ProjectTrayPurposeTemplateSelection>;
     cableLayout?: ProjectCableLayoutInput;
   }
 ): Promise<{ project: Project }> {

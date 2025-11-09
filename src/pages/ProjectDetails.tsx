@@ -11,12 +11,14 @@ import {
 } from '@fluentui/react-components';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
+import { ApiError, updateProject } from '@/api/client';
+import type { ProjectTrayPurposeTemplate } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
-import { formatNumeric } from './ProjectDetails.utils';
+import { formatNumeric, isWordDocument } from './ProjectDetails.utils';
 import { CableReportTab } from './ProjectDetails/CableReportTab';
 import {
   CableDialog,
@@ -90,6 +92,10 @@ export const ProjectDetails = () => {
   });
 
   const [progressDialogOpen, setProgressDialogOpen] = useState(false);
+  const [trayTemplateSaving, setTrayTemplateSaving] = useState<Record<string, boolean>>({});
+  const [trayTemplateErrors, setTrayTemplateErrors] = useState<Record<string, string | null>>({});
+  const [trayTemplateOverrides, setTrayTemplateOverrides] =
+    useState<Record<string, ProjectTrayPurposeTemplate> | null>(null);
   const openProgress = useCallback(() => setProgressDialogOpen(true), []);
 
   const {
@@ -264,6 +270,62 @@ export const ProjectDetails = () => {
     isAdmin,
     showToast
   });
+
+  const wordFileOptions = useMemo(
+    () =>
+      projectFiles
+        .filter((file) => isWordDocument(file.fileName, file.contentType))
+        .map((file) => ({
+          id: file.id,
+          label: file.fileName
+        })),
+    [projectFiles]
+  );
+
+  const effectiveTrayTemplates: Record<string, ProjectTrayPurposeTemplate> =
+    trayTemplateOverrides ?? project?.trayPurposeTemplates ?? {};
+
+  const trayTemplateRows = useMemo(() => {
+    if (!project) {
+      return [];
+    }
+
+    const purposeMap = new Map<string, string>();
+    trays.forEach((tray) => {
+      if (!tray.purpose) {
+        return;
+      }
+      const trimmed = tray.purpose.trim();
+      if (!trimmed || purposeMap.has(trimmed)) {
+        return;
+      }
+      purposeMap.set(trimmed, trimmed);
+    });
+
+    if (purposeMap.size === 0) {
+      return [];
+    }
+
+    return Array.from(purposeMap.entries())
+      .sort((a, b) =>
+        a[0].localeCompare(b[0], undefined, { sensitivity: 'base' })
+      )
+      .map(([purpose, label]) => {
+        const assignment = effectiveTrayTemplates[purpose] ?? null;
+        const selectedFileId = assignment?.fileId ?? null;
+        const selectedFileAvailable =
+          !selectedFileId ||
+          wordFileOptions.some((option) => option.id === selectedFileId);
+
+        return {
+          purpose,
+          label,
+          selectedFileId,
+          selectedFileName: assignment?.fileName ?? null,
+          selectedFileAvailable
+        };
+      });
+  }, [effectiveTrayTemplates, project, trays, wordFileOptions]);
 
   const secondaryTrayLengthField = useProjectNumericField({
     project,
@@ -558,6 +620,97 @@ export const ProjectDetails = () => {
 
   const isInlineEditable = inlineEditingEnabled && canManageCables;
 
+  useEffect(() => {
+    setTrayTemplateSaving({});
+    setTrayTemplateErrors({});
+    setTrayTemplateOverrides(project?.trayPurposeTemplates ?? null);
+  }, [project?.id, project?.trayPurposeTemplates]);
+
+  const handleTrayTemplateChange = useCallback(
+    async (purpose: string, nextFileId: string | null) => {
+      const normalizedPurpose = purpose.trim();
+
+      if (!project || !token) {
+        showToast({
+          intent: 'error',
+          title: 'Sign-in required',
+          body: 'You must be signed in to update tray report templates.'
+        });
+        return;
+      }
+
+      if (!isAdmin) {
+        showToast({
+          intent: 'error',
+          title: 'Admin access required',
+          body: 'Only administrators can update tray report templates.'
+        });
+        return;
+      }
+
+      if (normalizedPurpose === '') {
+        return;
+      }
+
+      setTrayTemplateSaving((previous) => ({
+        ...previous,
+        [normalizedPurpose]: true
+      }));
+      setTrayTemplateErrors((previous) => ({
+        ...previous,
+        [normalizedPurpose]: null
+      }));
+
+      try {
+        const currentTemplates = trayTemplateOverrides ?? project.trayPurposeTemplates ?? {};
+        const payload = Object.entries(currentTemplates).reduce<
+          Record<string, { fileId: string }>
+        >((acc, [key, value]) => {
+          if (value?.fileId) {
+            acc[key] = { fileId: value.fileId };
+          }
+          return acc;
+        }, {});
+
+        if (nextFileId) {
+          payload[normalizedPurpose] = { fileId: nextFileId };
+        } else {
+          delete payload[normalizedPurpose];
+        }
+
+        const response = await updateProject(token, project.id, {
+          trayPurposeTemplates: payload
+        });
+        setTrayTemplateOverrides(response.project.trayPurposeTemplates ?? {});
+        showToast({
+          intent: 'success',
+          title: 'Tray report template updated'
+        });
+      } catch (error) {
+        console.error('Failed to update tray report template', error);
+        const message =
+          error instanceof ApiError
+            ? error.message
+            : 'Failed to update tray report template.';
+        setTrayTemplateErrors((previous) => ({
+          ...previous,
+          [normalizedPurpose]: message
+        }));
+        showToast({
+          intent: 'error',
+          title: 'Update failed',
+          body: message
+        });
+      } finally {
+        setTrayTemplateSaving((previous) => ({
+          ...previous,
+          [normalizedPurpose]: false
+        }));
+      }
+    },
+    [isAdmin, project, showToast, token, trayTemplateOverrides]
+  );
+
   if (projectLoading) {
     return (
       <section className={styles.root}>
@@ -624,6 +777,12 @@ export const ProjectDetails = () => {
           cableCategoryCards={cableCategoryCards}
           numericFields={numericFields}
           supportDistanceOverrides={supportDistanceOverrideFields}
+          trayTemplateRows={trayTemplateRows}
+          trayTemplateOptions={wordFileOptions}
+          trayTemplateSaving={trayTemplateSaving}
+          trayTemplateErrors={trayTemplateErrors}
+          canEditTrayTemplates={isAdmin && Boolean(token)}
+          onTrayTemplateChange={handleTrayTemplateChange}
         />
       ) : null}
 

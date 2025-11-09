@@ -60,3 +60,25 @@ export const formatDisplayDate = (value: string | null | undefined): string => {
 export const isIsoDateString = (value: string): boolean =>
   ISO_DATE_PATTERN.test(value.trim());
 
+const WORD_EXTENSIONS = ['.doc', '.docx', '.docm', '.dot', '.dotx'];
+
+export const isWordDocument = (
+  fileName: string,
+  contentType: string | null | undefined
+): boolean => {
+  const lowerName = fileName.toLowerCase();
+  if (WORD_EXTENSIONS.some((extension) => lowerName.endsWith(extension))) {
+    return true;
+  }
+
+  if (!contentType) {
+    return false;
+  }
+
+  const lowerType = contentType.toLowerCase();
+  return (
+    lowerType === 'application/msword' ||
+    lowerType.includes('wordprocessingml')
+  );
+};
+

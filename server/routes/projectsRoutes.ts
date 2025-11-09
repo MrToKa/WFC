@@ -16,12 +16,20 @@ import { traysRouter } from './traysRoutes.js';
 import { projectFilesRouter } from './projectFilesRoutes.js';
 
 const projectsRouter = Router();
+const INVALID_TRAY_TEMPLATE_FILE = 'INVALID_TRAY_TEMPLATE_FILE';
 
 type NormalizedSupportOverrides = Record<
   string,
   {
     distance: number | null;
     supportId: string | null;
+  }
+>;
+
+type NormalizedTrayPurposeTemplates = Record<
+  string,
+  {
+    fileId: string;
   }
 >;
 
@@ -77,12 +85,85 @@ const syncSupportDistances = async (
   }
 };
 
+const syncTrayPurposeTemplates = async (
+  projectId: string,
+  templates: NormalizedTrayPurposeTemplates
+): Promise<void> => {
+  const entries = Object.entries(templates)
+    .map(([purpose, value]) => [purpose.trim(), value] as const)
+    .filter(([purpose]) => purpose !== '');
+
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM project_tray_purpose_templates WHERE project_id = $1;`,
+      [projectId]
+    );
+
+    if (entries.length > 0) {
+      const fileIds = Array.from(new Set(entries.map(([, value]) => value.fileId)));
+      if (fileIds.length > 0) {
+        const { rows } = await client.query<{ id: string }>(
+          `
+            SELECT id
+            FROM project_files
+            WHERE project_id = $1
+              AND id = ANY($2::uuid[])
+          `,
+          [projectId, fileIds]
+        );
+        if (rows.length !== fileIds.length) {
+          throw new Error(INVALID_TRAY_TEMPLATE_FILE);
+        }
+      }
+    }
+
+    for (const [purpose, value] of entries) {
+      await client.query(
+        `
+          INSERT INTO project_tray_purpose_templates (
+            project_id,
+            tray_purpose,
+            project_file_id,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, NOW(), NOW())
+          ON CONFLICT (project_id, tray_purpose)
+          DO UPDATE
+          SET
+            project_file_id = EXCLUDED.project_file_id,
+            updated_at = NOW();
+        `,
+        [projectId, purpose, value.fileId]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 type SupportOverrideInput =
   | {
       distance?: unknown;
       supportId?: unknown;
     }
   | number
+  | null
+  | undefined;
+
+type TrayPurposeTemplateInput =
+  | {
+      fileId?: unknown;
+    }
+  | string
   | null
   | undefined;
 
@@ -188,6 +269,45 @@ const normalizeSupportDistances = (
       }
 
       acc[normalizedTrayType] = { distance, supportId };
+      return acc;
+    },
+    {}
+  );
+};
+
+const normalizeTrayPurposeTemplates = (
+  templates: Record<string, TrayPurposeTemplateInput>
+): NormalizedTrayPurposeTemplates => {
+  return Object.entries(templates).reduce<NormalizedTrayPurposeTemplates>(
+    (acc, [purpose, rawValue]) => {
+      const normalizedPurpose = purpose.trim();
+      if (normalizedPurpose === '') {
+        return acc;
+      }
+
+      let fileId: string | null = null;
+
+      if (typeof rawValue === 'string') {
+        const trimmed = rawValue.trim();
+        fileId = trimmed === '' ? null : trimmed;
+      } else if (
+        rawValue !== null &&
+        rawValue !== undefined &&
+        typeof rawValue === 'object' &&
+        !Array.isArray(rawValue) &&
+        'fileId' in rawValue
+      ) {
+        const candidate = (rawValue as { fileId?: unknown }).fileId;
+        if (typeof candidate === 'string') {
+          const trimmed = candidate.trim();
+          fileId = trimmed === '' ? null : trimmed;
+        }
+      }
+
+      if (fileId) {
+        acc[normalizedPurpose] = { fileId };
+      }
+
       return acc;
     },
     {}
@@ -487,12 +607,22 @@ projectsRouter.post(
       }
 
       res.status(201).json({ project: mapProjectRow(projectRow) });
-    } catch (error) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === '23505'
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message === INVALID_TRAY_TEMPLATE_FILE
+        ) {
+          res.status(400).json({
+            error: 'Tray report template must reference a file attached to this project.'
+          });
+          return;
+        }
+
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'code' in error &&
+          (error as { code?: string }).code === '23505'
       ) {
         res.status(409).json({ error: 'Project number already in use' });
         return;
@@ -523,15 +653,16 @@ projectsRouter.patch(
       return;
     }
 
-    const {
-      projectNumber,
-      name,
-      customer,
-      description,
-      manager,
-      supportDistances,
-      cableLayout
-    } = parseResult.data;
+      const {
+        projectNumber,
+        name,
+        customer,
+        description,
+        manager,
+        supportDistances,
+        trayPurposeTemplates,
+        cableLayout
+      } = parseResult.data;
 
     const fields: string[] = [];
     const values: Array<string | number | null | Record<string, unknown>> = [];
@@ -611,9 +742,19 @@ projectsRouter.patch(
         return;
       }
 
-      if (supportDistances !== undefined) {
-        await syncSupportDistances(projectId, normalizeSupportDistances(supportDistances));
-      }
+        if (supportDistances !== undefined) {
+          await syncSupportDistances(
+            projectId,
+            normalizeSupportDistances(supportDistances)
+          );
+        }
+
+        if (trayPurposeTemplates !== undefined) {
+          await syncTrayPurposeTemplates(
+            projectId,
+            normalizeTrayPurposeTemplates(trayPurposeTemplates)
+          );
+        }
 
       const projectRow = await ensureProjectExists(projectId);
 

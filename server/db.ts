@@ -117,6 +117,22 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_tray_purpose_templates (
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      tray_purpose TEXT NOT NULL,
+      project_file_id UUID NOT NULL REFERENCES project_files(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, tray_purpose)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_tray_purpose_templates_file_idx
+      ON project_tray_purpose_templates (project_file_id);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS project_file_versions (
       id UUID PRIMARY KEY,
       project_file_id UUID NOT NULL REFERENCES project_files(id) ON DELETE CASCADE,

@@ -71,6 +71,18 @@ type DetailsTabProps = {
   cableCategoryCards: CableCategoryController[];
   numericFields: NumericFieldConfig[];
   supportDistanceOverrides: SupportDistanceOverrideConfig[];
+  trayTemplateRows: Array<{
+    purpose: string;
+    label: string;
+    selectedFileId: string | null;
+    selectedFileName: string | null;
+    selectedFileAvailable: boolean;
+  }>;
+  trayTemplateOptions: Array<{ id: string; label: string }>;
+  trayTemplateSaving: Record<string, boolean>;
+  trayTemplateErrors: Record<string, string | null>;
+  canEditTrayTemplates: boolean;
+  onTrayTemplateChange: (purpose: string, fileId: string | null) => Promise<void>;
 };
 
 export const DetailsTab = ({
@@ -81,7 +93,13 @@ export const DetailsTab = ({
   cableSpacingField,
   cableCategoryCards,
   numericFields,
-  supportDistanceOverrides
+  supportDistanceOverrides,
+  trayTemplateRows,
+  trayTemplateOptions,
+  trayTemplateSaving,
+  trayTemplateErrors,
+  canEditTrayTemplates,
+  onTrayTemplateChange
 }: DetailsTabProps) => {
   const supportsErrorMessage =
     supportDistanceOverrides.find(
@@ -609,6 +627,110 @@ export const DetailsTab = ({
             );
           })}
         </div>
+      </div>
+
+      <div className={styles.panel}>
+        <Caption1>Tray report templates</Caption1>
+        {trayTemplateRows.length === 0 ? (
+          <Body1>No tray purposes found for this project.</Body1>
+        ) : (
+          <>
+            <Body1>
+              Assign a Word document from the Files tab to each tray purpose.
+            </Body1>
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.tableHeadCell}>Tray purpose</th>
+                    <th className={styles.tableHeadCell}>Tray report template</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trayTemplateRows.map((row) => {
+                    const currentError = trayTemplateErrors[row.purpose] ?? null;
+                    const isSaving = trayTemplateSaving[row.purpose] ?? false;
+                    const selectedOptionValue = row.selectedFileId ?? 'none';
+                    const selectedLabel = row.selectedFileId
+                      ? row.selectedFileName ?? 'Selected file unavailable'
+                      : 'No template selected';
+                    const showMissingOption =
+                      Boolean(row.selectedFileId) &&
+                      !trayTemplateOptions.some(
+                        (option) => option.id === row.selectedFileId
+                      );
+
+                    return (
+                      <tr key={row.purpose}>
+                        <td className={styles.tableCell}>
+                          <Body1>{row.label}</Body1>
+                          {!row.selectedFileAvailable && row.selectedFileId ? (
+                            <Caption1 className={styles.errorText}>
+                              The selected file is no longer attached to this project.
+                            </Caption1>
+                          ) : null}
+                        </td>
+                        <td className={styles.tableCell}>
+                          <Dropdown
+                            aria-label={`Tray report template for ${row.label}`}
+                            placeholder="Select template"
+                            selectedOptions={[selectedOptionValue]}
+                            value={selectedLabel}
+                            disabled={!canEditTrayTemplates || isSaving}
+                            onOptionSelect={(_, data) => {
+                              const optionValue = data.optionValue;
+                              if (!optionValue) {
+                                return;
+                              }
+                              const nextValue =
+                                optionValue === 'none' ? null : optionValue;
+                              if (nextValue === row.selectedFileId) {
+                                return;
+                              }
+                              void onTrayTemplateChange(row.purpose, nextValue);
+                            }}
+                          >
+                            {showMissingOption && row.selectedFileId ? (
+                              <Option
+                                key={`${row.purpose}-missing`}
+                                value={row.selectedFileId}
+                              >
+                                {row.selectedFileName ?? 'Previously selected file'}
+                              </Option>
+                            ) : null}
+                            <Option value="none">No template</Option>
+                            {trayTemplateOptions.map((option) => (
+                              <Option key={option.id} value={option.id}>
+                                {option.label}
+                              </Option>
+                            ))}
+                          </Dropdown>
+                          {isSaving ? (
+                            <Caption1>Saving...</Caption1>
+                          ) : null}
+                          {currentError ? (
+                            <Caption1 className={styles.errorText}>
+                              {currentError}
+                            </Caption1>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!canEditTrayTemplates ? (
+              <Caption1 className={styles.supportOverridesNote}>
+                Only administrators can change tray report templates.
+              </Caption1>
+            ) : trayTemplateOptions.length === 0 ? (
+              <Caption1 className={styles.supportOverridesNote}>
+                Upload a Word document in the Files tab to enable selection.
+              </Caption1>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );

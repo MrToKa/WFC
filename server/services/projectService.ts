@@ -38,6 +38,22 @@ export const ensureProjectExists = async (
           ),
           '{}'::jsonb
         ) AS support_distances,
+        COALESCE(
+          (
+            SELECT jsonb_object_agg(
+              t.tray_purpose,
+              jsonb_build_object(
+                'fileId', t.project_file_id,
+                'fileName', f.file_name,
+                'contentType', f.content_type
+              )
+            )
+            FROM project_tray_purpose_templates t
+            LEFT JOIN project_files f ON f.id = t.project_file_id
+            WHERE t.project_id = p.id
+          ),
+          '{}'::jsonb
+        ) AS tray_purpose_templates,
         p.created_at,
         p.updated_at
       FROM projects p

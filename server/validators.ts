@@ -70,6 +70,16 @@ const supportOverrideValueSchema = z.union([
   traySupportOverrideSchema
 ]);
 
+const trayPurposeTemplateValueSchema = z.union([
+  z.string().trim().uuid(),
+  z
+    .object({
+      fileId: z.string().trim().uuid()
+    })
+    .strict(),
+  z.null()
+]);
+
 const cableBundleSpacingSchema = z.enum(['0', '1D', '2D']);
 
 const cableCategorySettingsSchema = z
@@ -156,14 +166,20 @@ const projectFieldSchema = {
     .max(1_000_000)
     .nullable()
     .optional(),
-  supportDistances: z
-    .record(
-      z.string().trim().min(1).max(200),
-      supportOverrideValueSchema
-    )
-    .optional(),
-  cableLayout: cableLayoutSchema.optional()
-} as const;
+    supportDistances: z
+      .record(
+        z.string().trim().min(1).max(200),
+        supportOverrideValueSchema
+      )
+      .optional(),
+    trayPurposeTemplates: z
+      .record(
+        z.string().trim().min(1).max(200),
+        trayPurposeTemplateValueSchema
+      )
+      .optional(),
+    cableLayout: cableLayoutSchema.optional()
+  } as const;
 
 export const createProjectSchema = z
   .object(projectFieldSchema)
@@ -181,6 +197,7 @@ export const updateProjectSchema = z
     supportWeight: projectFieldSchema.supportWeight,
     trayLoadSafetyFactor: projectFieldSchema.trayLoadSafetyFactor,
     supportDistances: projectFieldSchema.supportDistances,
+    trayPurposeTemplates: projectFieldSchema.trayPurposeTemplates,
     cableLayout: projectFieldSchema.cableLayout
   })
   .strict()
@@ -192,11 +209,12 @@ export const updateProjectSchema = z
       value.manager !== undefined ||
       value.description !== undefined ||
       value.secondaryTrayLength !== undefined ||
-      value.supportDistance !== undefined ||
-      value.supportWeight !== undefined ||
-      value.trayLoadSafetyFactor !== undefined ||
-      value.supportDistances !== undefined ||
-      value.cableLayout !== undefined,
+       value.supportDistance !== undefined ||
+       value.supportWeight !== undefined ||
+       value.trayLoadSafetyFactor !== undefined ||
+       value.supportDistances !== undefined ||
+       value.trayPurposeTemplates !== undefined ||
+       value.cableLayout !== undefined,
     {
       message: 'At least one field must be provided'
     }

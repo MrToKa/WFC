@@ -10,6 +10,7 @@ export type Project = {
   supportWeight: number | null;
   trayLoadSafetyFactor: number | null;
   supportDistanceOverrides: Record<string, ProjectSupportOverride>;
+  trayPurposeTemplates: Record<string, ProjectTrayPurposeTemplate>;
   cableLayout: ProjectCableLayout;
   createdAt: string;
   updatedAt: string;
@@ -20,6 +21,19 @@ export type ProjectSupportOverride = {
   supportId: string | null;
   supportType: string | null;
 };
+
+export type ProjectTrayPurposeTemplate = {
+  fileId: string;
+  fileName: string | null;
+  contentType: string | null;
+};
+
+export type ProjectTrayPurposeTemplateSelection =
+  | {
+      fileId: string;
+    }
+  | string
+  | null;
 
 export type ProjectSupportOverridePayload = {
   distance: number | null;

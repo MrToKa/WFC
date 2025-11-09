@@ -12,6 +12,7 @@ export type ProjectRow = {
   support_weight: string | number | null;
   tray_load_safety_factor: string | number | null;
   support_distances: Record<string, unknown> | null;
+  tray_purpose_templates: Record<string, unknown> | null;
   cable_layout_settings: Record<string, unknown> | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -29,6 +30,7 @@ export type PublicProject = {
   supportWeight: number | null;
   trayLoadSafetyFactor: number | null;
   supportDistanceOverrides: Record<string, PublicTraySupportOverride>;
+  trayPurposeTemplates: Record<string, PublicTrayPurposeTemplate>;
   cableLayout: PublicCableLayout;
   createdAt: string;
   updatedAt: string;
@@ -55,6 +57,12 @@ export type PublicTraySupportOverride = {
   distance: number | null;
   supportId: string | null;
   supportType: string | null;
+};
+
+export type PublicTrayPurposeTemplate = {
+  fileId: string;
+  fileName: string | null;
+  contentType: string | null;
 };
 
 export type CableBundleSpacing = '0' | '1D' | '2D';
@@ -124,6 +132,51 @@ const toSupportDistanceOverrides = (
           };
         }
       }
+
+      return acc;
+    },
+    {}
+  );
+};
+
+const toTrayPurposeTemplates = (
+  value: Record<string, unknown> | null
+): Record<string, PublicTrayPurposeTemplate> => {
+  if (!value) {
+    return {};
+  }
+
+  return Object.entries(value).reduce<Record<string, PublicTrayPurposeTemplate>>(
+    (acc, [purpose, raw]) => {
+      const trimmedPurpose = purpose.trim();
+      if (!trimmedPurpose || !raw || typeof raw !== 'object') {
+        return acc;
+      }
+
+      const record = raw as Record<string, unknown>;
+      const fileId =
+        typeof record.fileId === 'string' && record.fileId.trim() !== ''
+          ? record.fileId.trim()
+          : null;
+
+      if (!fileId) {
+        return acc;
+      }
+
+      const fileName =
+        typeof record.fileName === 'string' && record.fileName.trim() !== ''
+          ? record.fileName.trim()
+          : null;
+      const contentType =
+        typeof record.contentType === 'string' && record.contentType.trim() !== ''
+          ? record.contentType.trim()
+          : null;
+
+      acc[trimmedPurpose] = {
+        fileId,
+        fileName,
+        contentType
+      };
 
       return acc;
     },
@@ -297,6 +350,7 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   supportWeight: toNumberOrNull(row.support_weight),
   trayLoadSafetyFactor: toNumberOrNull(row.tray_load_safety_factor),
   supportDistanceOverrides: toSupportDistanceOverrides(row.support_distances),
+  trayPurposeTemplates: toTrayPurposeTemplates(row.tray_purpose_templates),
   cableLayout: toCableLayoutSettings(row.cable_layout_settings),
   createdAt:
     typeof row.created_at === 'string'
