@@ -42,6 +42,7 @@ const upload = multer({
 
 const TRAY_HEADERS = {
   type: 'Type',
+  manufacturer: 'Manufacturer',
   height: 'Height [mm]',
   rungHeight: 'Rung height [mm]',
   width: 'Width [mm]',
@@ -266,6 +267,7 @@ const selectMaterialTraysQuery = `
   SELECT
     mt.id,
     mt.tray_type,
+    mt.manufacturer,
     mt.height_mm,
     mt.rung_height_mm,
     mt.width_mm,
@@ -462,6 +464,7 @@ materialsRouter.post(
 
     const data = parseResult.data;
     const type = normalizeType(data.type);
+    const manufacturer = normalizeOptionalText(data.manufacturer ?? null);
     const normalizedImageTemplateId = normalizeOptionalUuid(
       data.imageTemplateId ?? null
     );
@@ -487,17 +490,19 @@ materialsRouter.post(
           INSERT INTO material_trays (
             id,
             tray_type,
+            manufacturer,
             height_mm,
             rung_height_mm,
             width_mm,
             weight_kg_per_m,
             load_curve_id,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, NULL, $7);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8);
         `,
         [
           trayId,
           type,
+          manufacturer,
           data.heightMm ?? null,
           data.rungHeightMm ?? null,
           data.widthMm ?? null,
@@ -588,6 +593,12 @@ materialsRouter.patch(
   if (data.type !== undefined) {
       setClauses.push(`tray_type = $${parameterIndex}`);
       values.push(normalizeType(data.type));
+      parameterIndex += 1;
+    }
+
+    if (data.manufacturer !== undefined) {
+      setClauses.push(`manufacturer = $${parameterIndex}`);
+      values.push(normalizeOptionalText(data.manufacturer));
       parameterIndex += 1;
     }
 
@@ -783,6 +794,7 @@ materialsRouter.post(
 
         for (const row of rows) {
           const typeRaw = row[TRAY_HEADERS.type];
+          const manufacturerRaw = row[TRAY_HEADERS.manufacturer];
           const heightRaw = row[TRAY_HEADERS.height];
           const rungRaw = row[TRAY_HEADERS.rungHeight];
           const widthRaw = row[TRAY_HEADERS.width];
@@ -795,6 +807,11 @@ materialsRouter.post(
 
           const parseResult = createMaterialTraySchema.safeParse({
             type: normalizeType(String(typeRaw)),
+            manufacturer: normalizeOptionalText(
+              manufacturerRaw === null || manufacturerRaw === undefined
+                ? null
+                : String(manufacturerRaw)
+            ),
             heightMm: toNullableNumber(heightRaw),
             rungHeightMm: toNullableNumber(rungRaw),
             widthMm: toNullableNumber(widthRaw),
@@ -823,15 +840,17 @@ materialsRouter.post(
                 UPDATE material_trays
                 SET
                   tray_type = $1,
-                  height_mm = $2,
-                  rung_height_mm = $3,
-                  width_mm = $4,
-                  weight_kg_per_m = $5,
+                  manufacturer = $2,
+                  height_mm = $3,
+                  rung_height_mm = $4,
+                  width_mm = $5,
+                  weight_kg_per_m = $6,
                   updated_at = NOW()
-                WHERE id = $6;
+                WHERE id = $7;
               `,
               [
                 data.type,
+                data.manufacturer ?? null,
                 data.heightMm ?? null,
                 data.rungHeightMm ?? null,
                 data.widthMm ?? null,
@@ -846,15 +865,17 @@ materialsRouter.post(
                 INSERT INTO material_trays (
                   id,
                   tray_type,
+                  manufacturer,
                   height_mm,
                   rung_height_mm,
                   width_mm,
                   weight_kg_per_m
-                ) VALUES ($1, $2, $3, $4, $5, $6);
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7);
               `,
               [
                 randomUUID(),
                 data.type,
+                data.manufacturer ?? null,
                 data.heightMm ?? null,
                 data.rungHeightMm ?? null,
                 data.widthMm ?? null,
@@ -914,6 +935,7 @@ materialsRouter.get(
 
       const columns = [
         { name: TRAY_HEADERS.type, key: 'type', width: 30 },
+        { name: TRAY_HEADERS.manufacturer, key: 'manufacturer', width: 26 },
         { name: TRAY_HEADERS.height, key: 'height', width: 18 },
         { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
@@ -922,6 +944,7 @@ materialsRouter.get(
 
       const rows = result.rows.map((row) => [
         row.tray_type,
+        row.manufacturer ?? '',
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',
         row.rung_height_mm !== null && row.rung_height_mm !== '' ? Number(row.rung_height_mm) : '',
         row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
@@ -944,7 +967,7 @@ materialsRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '']]
+        rows: rows.length > 0 ? rows : [['', '', '', '', '', '']]
       });
 
       table.commit();

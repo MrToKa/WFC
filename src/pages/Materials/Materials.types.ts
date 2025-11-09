@@ -2,6 +2,7 @@ export type MaterialsTab = 'trays' | 'supports' | 'loadCurves';
 
 export type TrayFormState = {
   type: string;
+  manufacturer: string;
   heightMm: string;
   rungHeightMm: string;
   widthMm: string;
@@ -29,6 +30,7 @@ export type LoadCurveFormErrors = Partial<Record<keyof LoadCurveFormState, strin
 
 export const initialTrayForm: TrayFormState = {
   type: '',
+  manufacturer: '',
   heightMm: '',
   rungHeightMm: '',
   widthMm: '',

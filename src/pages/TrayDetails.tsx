@@ -1172,7 +1172,7 @@ export const TrayDetails = () => {
 
     return `${numberFormatter.format(trayWeightPerMeterKg)} + ${numberFormatter.format(
       supportsWeightPerMeterKg
-    )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} [kg/m]`;
+    )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} kg/m`;
   }, [
     trayWeightPerMeterKg,
     supportsWeightPerMeterKg,
@@ -1192,7 +1192,7 @@ export const TrayDetails = () => {
 
     return `${numberFormatter.format(trayWeightLoadPerMeterKg)} * ${numberFormatter.format(
       trayLengthMeters
-    )} m = ${numberFormatter.format(trayTotalOwnWeightKg)} [kg]`;
+    )} m = ${numberFormatter.format(trayTotalOwnWeightKg)} kg`;
   }, [trayWeightLoadPerMeterKg, trayLengthMeters, trayTotalOwnWeightKg, numberFormatter]);
 
   const cablesWeightPerMeterFormula = useMemo(() => {
@@ -1201,7 +1201,7 @@ export const TrayDetails = () => {
     }
 
     const parts = cableWeightComponents.map((value) => numberFormatter.format(value));
-    return `${parts.join(' + ')} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} [kg/m]`;
+    return `${parts.join(' + ')} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} kg/m`;
   }, [cableWeightComponents, cablesWeightLoadPerMeterKg, numberFormatter]);
 
   const cablesTotalWeightFormula = useMemo(() => {
@@ -1216,7 +1216,7 @@ export const TrayDetails = () => {
 
     return `${numberFormatter.format(cablesWeightLoadPerMeterKg)} * ${numberFormatter.format(
       trayLengthMeters
-    )} m = ${numberFormatter.format(cablesTotalWeightKg)} [kg]`;
+    )} m = ${numberFormatter.format(cablesTotalWeightKg)} kg`;
   }, [
     cablesWeightLoadPerMeterKg,
     trayLengthMeters,
@@ -1235,7 +1235,7 @@ export const TrayDetails = () => {
 
     return `${numberFormatter.format(trayWeightLoadPerMeterKg)} + ${numberFormatter.format(
       cablesWeightLoadPerMeterKg
-    )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} [kg/m]`;
+    )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} kg/m`;
   }, [
     trayWeightLoadPerMeterKg,
     cablesWeightLoadPerMeterKg,
@@ -1254,7 +1254,7 @@ export const TrayDetails = () => {
 
     return `${numberFormatter.format(trayTotalOwnWeightKg)} + ${numberFormatter.format(
       cablesTotalWeightKg
-    )} = ${numberFormatter.format(totalWeightKg)} [kg]`;
+    )} = ${numberFormatter.format(totalWeightKg)} kg`;
   }, [trayTotalOwnWeightKg, cablesTotalWeightKg, totalWeightKg, numberFormatter]);
 
   const occupiedWidthDisplay = freeSpaceMetrics.occupiedWidthMm === null
@@ -2257,12 +2257,12 @@ export const TrayDetails = () => {
         title="Tray own weight calculations"
         calculations={[
           {
-            label: 'Tray weight load per meter [kg/m]',
+            label: 'Tray weight load per meter kg/m',
             value: trayWeightLoadPerMeterKg,
             formula: trayWeightLoadPerMeterFormula
           },
           {
-            label: 'Tray total own weight [kg]',
+            label: 'Tray total own weight kg',
             value: trayTotalOwnWeightKg,
             formula: trayTotalOwnWeightFormula
           }
@@ -2295,13 +2295,13 @@ export const TrayDetails = () => {
         ) : null}
         <div className={styles.grid}>
           <div className={styles.field}>
-            <Caption1>Cables weight load per meter [kg/m]</Caption1>
+            <Caption1>Cables weight load per meter kg/m</Caption1>
             <Body1>
               {cablesWeightPerMeterFormula ?? formatSupportNumber(cablesWeightLoadPerMeterKg)}
             </Body1>
           </div>
           <div className={styles.field}>
-            <Caption1>Total weight on the tray [kg]</Caption1>
+            <Caption1>Total weight on the tray kg</Caption1>
             <Body1>
               {cablesTotalWeightFormula ?? formatSupportNumber(cablesTotalWeightKg)}
             </Body1>
@@ -2314,12 +2314,12 @@ export const TrayDetails = () => {
         title="Total weight calculations"
         calculations={[
           {
-            label: 'Total weight load per meter [kg/m]',
+            label: 'Total weight load per meter kg/m',
             value: totalWeightLoadPerMeterKg,
             formula: totalWeightLoadPerMeterFormula
           },
           {
-            label: 'Total weight [kg]',
+            label: 'Total weight kg',
             value: totalWeightKg,
             formula: totalWeightFormula
           }

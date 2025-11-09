@@ -1,6 +1,7 @@
 export type MaterialTrayRow = {
   id: string;
   tray_type: string;
+  manufacturer: string | null;
   height_mm: string | number | null;
   rung_height_mm: string | number | null;
   width_mm: string | number | null;
@@ -29,6 +30,7 @@ const toIsoString = (value: Date | string): string =>
 export type PublicMaterialTray = {
   id: string;
   type: string;
+  manufacturer: string | null;
   heightMm: number | null;
   rungHeightMm: number | null;
   widthMm: number | null;
@@ -45,6 +47,7 @@ export type PublicMaterialTray = {
 export const mapMaterialTrayRow = (row: MaterialTrayRow): PublicMaterialTray => ({
   id: row.id,
   type: row.tray_type,
+  manufacturer: row.manufacturer ?? null,
   heightMm: toNumberOrNull(row.height_mm),
   rungHeightMm: toNumberOrNull(row.rung_height_mm),
   widthMm: toNumberOrNull(row.width_mm),

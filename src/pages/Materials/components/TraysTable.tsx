@@ -78,6 +78,7 @@ export const TraysTable = ({
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className={styles.tableHeadCell}>Manufacturer</th>
               <th className={styles.tableHeadCell}>Type</th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Height [mm]
@@ -101,6 +102,7 @@ export const TraysTable = ({
               const isAssigning = loadCurvePendingId === tray.id;
               return (
                 <tr key={tray.id}>
+                  <td className={styles.tableCell}>{tray.manufacturer ?? '-'}</td>
                   <td className={styles.tableCell}>{tray.type}</td>
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(tray.heightMm)}

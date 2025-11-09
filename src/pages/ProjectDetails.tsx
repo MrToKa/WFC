@@ -74,6 +74,7 @@ import {
   PROJECT_FILE_CATEGORY_LABELS,
   getProjectFileCategory
 } from './ProjectDetails/projectFileUtils';
+import { useMaterialData } from './TrayDetails/hooks';
 
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
@@ -92,9 +93,29 @@ export const ProjectDetails = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, token } = useAuth();
   const { showToast } = useToast();
+  const { materialTrays } = useMaterialData();
 
   const isAdmin = Boolean(user?.isAdmin);
   const canManageCables = Boolean(token);
+
+  const findMaterialTrayManufacturer = useCallback(
+    (trayType: string | null | undefined): string | null => {
+      if (!trayType) {
+        return null;
+      }
+      const normalized = trayType.trim().toLowerCase();
+      if (!normalized) {
+        return null;
+      }
+      const match = materialTrays.find(
+        (materialTray) =>
+          materialTray.type.trim().toLowerCase() === normalized
+      );
+      const manufacturer = match?.manufacturer?.trim();
+      return manufacturer ? (manufacturer === '' ? null : manufacturer) : null;
+    },
+    [materialTrays]
+  );
 
   const [selectedTab, setSelectedTab] = useState<ProjectDetailsTab>(() => {
     const tabParam = searchParams.get('tab');
@@ -903,6 +924,13 @@ export const ProjectDetails = () => {
         value: describeDynamicValue(fallbackText(sampleTray?.type ?? null))
       },
       {
+        id: 'tray-details:manufacturer',
+        name: 'Tray manufacturer',
+        value: describeDynamicValue(
+          fallbackText(findMaterialTrayManufacturer(sampleTray?.type ?? null))
+        )
+      },
+      {
         id: 'tray-details:purpose',
         name: 'Tray purpose',
         value: describeDynamicValue(fallbackText(sampleTray?.purpose ?? null))
@@ -1153,7 +1181,8 @@ export const ProjectDetails = () => {
     user,
     trays,
     trayFreeSpaceById,
-    trayTemplateRows
+    trayTemplateRows,
+    findMaterialTrayManufacturer
   ]);
 
   const variablesTabLoading =

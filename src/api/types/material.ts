@@ -1,6 +1,7 @@
 export type MaterialTray = {
   id: string;
   type: string;
+  manufacturer: string | null;
   heightMm: number | null;
   rungHeightMm: number | null;
   widthMm: number | null;
@@ -91,6 +92,7 @@ export type MaterialLoadCurveImportSummary = {
 
 export type MaterialTrayInput = {
   type: string;
+  manufacturer?: string | null;
   heightMm?: number | null;
   rungHeightMm?: number | null;
   widthMm?: number | null;

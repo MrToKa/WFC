@@ -134,6 +134,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     setEditingTray(tray);
     setTrayForm({
       type: tray.type,
+      manufacturer: tray.manufacturer ?? '',
       heightMm: toFormValue(tray.heightMm),
       rungHeightMm: toFormValue(tray.rungHeightMm),
       widthMm: toFormValue(tray.widthMm),
@@ -314,6 +315,9 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         return;
       }
 
+      const manufacturer = trayForm.manufacturer.trim();
+      const nextManufacturer = manufacturer === '' ? null : manufacturer;
+
       setIsTraySubmitting(true);
 
       const imageTemplateId = trayForm.imageTemplateId ?? null;
@@ -322,6 +326,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         if (trayDialogMode === 'create') {
           await createMaterialTray(token, {
             type,
+            manufacturer: nextManufacturer,
             heightMm: heightResult.numeric,
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,
@@ -338,6 +343,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         } else if (editingTray) {
           await updateMaterialTray(token, editingTray.id, {
             type,
+            manufacturer: nextManufacturer,
             heightMm: heightResult.numeric,
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,

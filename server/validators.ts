@@ -453,6 +453,14 @@ const materialNumericField = z
   .nullable()
   .optional();
 
+const materialManufacturerField = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .nullable()
+  .optional();
+
 const materialImageTemplateField = z
   .union([z.string().trim().uuid(), z.null()])
   .optional();
@@ -460,6 +468,7 @@ const materialImageTemplateField = z
 export const createMaterialTraySchema = z
   .object({
     type: z.string().trim().min(1).max(200),
+    manufacturer: materialManufacturerField,
     heightMm: materialNumericField,
     rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
@@ -482,6 +491,7 @@ export const createMaterialSupportSchema = z
 export const updateMaterialTraySchema = z
   .object({
     type: z.string().trim().min(1).max(200).optional(),
+    manufacturer: materialManufacturerField,
     heightMm: materialNumericField,
     rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
@@ -493,6 +503,7 @@ export const updateMaterialTraySchema = z
   .refine(
     (value) =>
       value.type !== undefined ||
+      value.manufacturer !== undefined ||
       value.heightMm !== undefined ||
       value.rungHeightMm !== undefined ||
       value.widthMm !== undefined ||

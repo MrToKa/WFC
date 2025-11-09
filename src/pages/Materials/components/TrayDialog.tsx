@@ -89,6 +89,9 @@ export const TrayDialog = ({
               >
                 <Input value={form.type} onChange={onFieldChange('type')} required />
               </Field>
+              <Field label='Manufacturer'>
+                <Input value={form.manufacturer} onChange={onFieldChange('manufacturer')} />
+              </Field>
               <Field
                 label='Height [mm]'
                 validationState={formErrors.heightMm ? 'error' : undefined}

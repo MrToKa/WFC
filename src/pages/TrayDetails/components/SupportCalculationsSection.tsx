@@ -42,7 +42,7 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
     supportsTotalWeight !== null
       ? `${numberFormatter.format(supportsCount)} * ${numberFormatter.format(
           weightPerPiece
-        )} = ${numberFormatter.format(supportsTotalWeight)} [kg]`
+        )} = ${numberFormatter.format(supportsTotalWeight)} kg`
       : null;
 
   const supportsWeightPerMeterFormula =
@@ -52,7 +52,7 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
     supportsWeightPerMeter !== null
       ? `${numberFormatter.format(supportsTotalWeight)} / ${numberFormatter.format(
           trayLengthMeters
-        )} = ${numberFormatter.format(supportsWeightPerMeter)} [kg/m]`
+        )} = ${numberFormatter.format(supportsWeightPerMeter)} kg/m`
       : null;
 
   const supportsCountFormula =
@@ -92,13 +92,13 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
           <Body1>{supportTypeDisplay ?? '-'}</Body1>
         </div>
         <div className={styles.field}>
-          <Caption1>Support length [mm]</Caption1>
+          <Caption1>Support length mm</Caption1>
           <Body1>
             {supportLengthMm !== null ? numberFormatter.format(supportLengthMm) : '-'}
           </Body1>
         </div>
         <div className={styles.field}>
-          <Caption1>Distance between supports [m]</Caption1>
+          <Caption1>Distance between supports m</Caption1>
           <Body1>{formatSupportNumber(supportCalculations.distanceMeters)}</Body1>
         </div>
         <div className={styles.field}>
@@ -108,17 +108,17 @@ export const SupportCalculationsSection: React.FC<SupportCalculationsSectionProp
           </Body1>
         </div>
         <div className={styles.field}>
-          <Caption1>Weight per piece [kg]</Caption1>
+          <Caption1>Weight per piece kg</Caption1>
           <Body1>{formatSupportNumber(supportCalculations.weightPerPieceKg)}</Body1>
         </div>
         <div className={styles.field}>
-          <Caption1>Supports total weight [kg]</Caption1>
+          <Caption1>Supports total weight kg</Caption1>
           <Body1>
             {supportsTotalWeightFormula ?? formatSupportNumber(supportCalculations.totalWeightKg)}
           </Body1>
         </div>
         <div className={styles.field}>
-          <Caption1>Supports weight load per meter [kg/m]</Caption1>
+          <Caption1>Supports weight load per meter kg/m</Caption1>
           <Body1>
             {supportsWeightPerMeterFormula ?? formatSupportNumber(supportCalculations.weightPerMeterKg)}
           </Body1>
