@@ -971,6 +971,11 @@ export const ProjectDetails = () => {
         )
       },
       {
+        id: 'tray-details:grounding-note',
+        name: 'Grounding cable note',
+        value: calculatedValueNote
+      },
+      {
         id: 'tray-details:created-at',
         name: 'Tray created at',
         value: describeDynamicValue(formatDateTime(sampleTray?.createdAt ?? null))

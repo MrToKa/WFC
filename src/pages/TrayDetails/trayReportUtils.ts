@@ -31,6 +31,24 @@ const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
 export const MISSING_VALUE_PLACEHOLDER = '*****';
 
+export const GROUNDING_CABLE_NOTE_TEXT =
+  '\r\n \tNote: Bare grounding copper cable {cableType} is included in the calculations. The cable itself will be mounted on the outside of the board of the tray and it is not included in the free space calculations.';
+
+const buildGroundingCableNote = (
+  includeGroundingCable: boolean,
+  groundingCableTypeLabel: string | null | undefined
+): string => {
+  if (!includeGroundingCable) {
+    return '';
+  }
+
+  const trimmedLabel = groundingCableTypeLabel?.trim();
+  const resolvedLabel =
+    trimmedLabel && trimmedLabel !== '' ? trimmedLabel : MISSING_VALUE_PLACEHOLDER;
+
+  return GROUNDING_CABLE_NOTE_TEXT.replace('{cableType}', resolvedLabel);
+};
+
 export type WordTableDefinition = {
   headers: string[];
   rows: string[][];
@@ -517,9 +535,14 @@ export const buildTrayPlaceholderValues = (
     'tray-details:grounding-flag',
     formatBoolean(includeGroundingCable)
   );
-  addValue(
-    'tray-details:grounding-type',
-    includeGroundingCable ? fallbackText(groundingCableTypeName) : 'Not included'
+  const groundingCableTypeDisplay = includeGroundingCable
+    ? fallbackText(groundingCableTypeName)
+    : 'Not included';
+
+  addValue('tray-details:grounding-type', groundingCableTypeDisplay);
+  values['tray-details:grounding-note'] = buildGroundingCableNote(
+    includeGroundingCable,
+    includeGroundingCable ? groundingCableTypeDisplay : null
   );
   addValue(
     'tray-details:rung-height',
