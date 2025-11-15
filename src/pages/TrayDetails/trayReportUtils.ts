@@ -81,6 +81,7 @@ export type TrayPlaceholderContext = {
   projectFiles: ProjectFile[];
   trayTemplatePurposeCount: number;
   trayFreeSpacePercent: number | null;
+  trayOccupiedWidthMm: number | null;
   includeGroundingCable: boolean;
   groundingCableTypeName: string | null;
   supportCalculations: SupportCalculationResult;
@@ -238,6 +239,7 @@ export const buildTrayPlaceholderValues = (
     projectFiles,
     trayTemplatePurposeCount,
     trayFreeSpacePercent,
+    trayOccupiedWidthMm,
     includeGroundingCable,
     groundingCableTypeName,
     supportCalculations,
@@ -535,6 +537,10 @@ export const buildTrayPlaceholderValues = (
   addValue(
     'tray-details:length',
     formatNumberWithUnit(numberFormatter, tray.lengthMm, 'mm')
+  );
+  addValue(
+    'tray-details:occupied-space',
+    formatNumberWithUnit(numberFormatter, trayOccupiedWidthMm, 'mm')
   );
   addValue(
     'tray-details:free-space',

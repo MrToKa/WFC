@@ -63,6 +63,7 @@ import {
   isGroundingPurpose,
   matchCableCategory
 } from './TrayDetails/TrayDetails.utils';
+import type { TrayFreeSpaceMetrics } from './TrayDetails/TrayDetails.utils';
 import {
   TrayDrawingService,
   determineCableDiameterGroup,
@@ -515,7 +516,7 @@ export const ProjectDetails = () => {
   const minFreeSpacePercent = project?.cableLayout?.minFreeSpacePercent ?? null;
   const maxFreeSpacePercent = project?.cableLayout?.maxFreeSpacePercent ?? null;
 
-  const trayFreeSpaceById = useMemo<Record<string, number | null>>(() => {
+  const trayFreeSpaceMetricsById = useMemo<Record<string, TrayFreeSpaceMetrics>>(() => {
     if (trays.length === 0) {
       return {};
     }
@@ -524,7 +525,7 @@ export const ProjectDetails = () => {
     const docAvailable = typeof document !== 'undefined';
     const canvas = docAvailable ? document.createElement('canvas') : null;
 
-    return trays.reduce<Record<string, number | null>>((acc, tray) => {
+    return trays.reduce<Record<string, TrayFreeSpaceMetrics>>((acc, tray) => {
       const trayCables = filterCablesByTray(cables, tray.name).filter(
         (cable) => !isGroundingPurpose(cable.purpose)
       );
@@ -584,10 +585,7 @@ export const ProjectDetails = () => {
         layoutSummary: layoutSummary ?? undefined
       });
 
-      acc[tray.id] =
-        metrics.calculationAvailable && metrics.freeWidthPercent !== null
-          ? metrics.freeWidthPercent
-          : null;
+      acc[tray.id] = metrics;
 
       return acc;
     }, {});
@@ -600,6 +598,21 @@ export const ProjectDetails = () => {
     trayDrawingService,
     trays
   ]);
+
+  const trayFreeSpaceById = useMemo<Record<string, number | null>>(
+    () =>
+      Object.entries(trayFreeSpaceMetricsById).reduce(
+        (acc, [trayId, metrics]) => {
+          acc[trayId] =
+            metrics.calculationAvailable && metrics.freeWidthPercent !== null
+              ? metrics.freeWidthPercent
+              : null;
+          return acc;
+        },
+        {} as Record<string, number | null>
+      ),
+    [trayFreeSpaceMetricsById]
+  );
 
 
   const variablesApiSections = useMemo<VariablesApiSection[]>(() => {
@@ -890,10 +903,16 @@ export const ProjectDetails = () => {
     ];
 
     const sampleTray = trays[0] ?? null;
-    const sampleFreeSpace =
-      sampleTray && sampleTray.id in trayFreeSpaceById
-        ? formatPercentValue(trayFreeSpaceById[sampleTray.id])
-        : '-';
+    const sampleMetrics =
+      sampleTray && sampleTray.id in trayFreeSpaceMetricsById
+        ? trayFreeSpaceMetricsById[sampleTray.id]
+        : null;
+    const sampleFreeSpace = sampleTray
+      ? formatPercentValue(sampleMetrics?.freeWidthPercent ?? null)
+      : '-';
+    const sampleOccupiedWidth = sampleTray
+      ? formatNumberWithUnit(sampleMetrics?.occupiedWidthMm ?? null, 'mm')
+      : '-';
     const describeDynamicValue = (value: string): string =>
       value === '-'
         ? 'Dynamic per tray during export'
@@ -977,6 +996,11 @@ export const ProjectDetails = () => {
         id: 'tray-details:tray-type-image',
         name: 'Tray type picture',
         value: 'Tray type template image'
+      },
+      {
+        id: 'tray-details:occupied-space',
+        name: 'Space occupied by cables [mm]',
+        value: describeDynamicValue(sampleOccupiedWidth)
       },
       {
         id: 'tray-details:free-space',
@@ -1182,7 +1206,7 @@ export const ProjectDetails = () => {
     projectFiles,
     user,
     trays,
-    trayFreeSpaceById,
+    trayFreeSpaceMetricsById,
     trayTemplateRows,
     findMaterialTrayManufacturer
   ]);

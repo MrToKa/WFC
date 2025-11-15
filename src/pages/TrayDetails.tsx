@@ -809,7 +809,8 @@ export const TrayDetails = () => {
   const percentageFormatter = useMemo(
     () =>
       new Intl.NumberFormat(undefined, {
-        maximumFractionDigits: 1
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }),
     []
   );
@@ -955,6 +956,7 @@ export const TrayDetails = () => {
   }, [
     freeSpaceMetrics.calculationAvailable,
     freeSpaceMetrics.freeWidthPercent,
+    freeSpaceMetrics.occupiedWidthMm,
     isMvTrayPurpose,
     maxFreeSpacePercent,
     minFreeSpacePercent,
@@ -1683,6 +1685,7 @@ export const TrayDetails = () => {
       projectCables,
       trayTemplatePurposeCount,
       trayFreeSpacePercent: freeSpaceMetrics.freeWidthPercent,
+      trayOccupiedWidthMm: freeSpaceMetrics.occupiedWidthMm,
       includeGroundingCable,
       groundingCableTypeName: groundingCableDisplay ?? null,
       supportCalculations,
