@@ -18,6 +18,7 @@ export type MaterialTray = {
 export type MaterialSupport = {
   id: string;
   type: string;
+  manufacturer: string | null;
   heightMm: number | null;
   widthMm: number | null;
   lengthMm: number | null;
@@ -103,6 +104,7 @@ export type MaterialTrayInput = {
 
 export type MaterialSupportInput = {
   type: string;
+  manufacturer?: string | null;
   heightMm?: number | null;
   widthMm?: number | null;
   lengthMm?: number | null;

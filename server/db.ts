@@ -367,6 +367,7 @@ export async function initializeDatabase(): Promise<void> {
     CREATE TABLE IF NOT EXISTS material_supports (
       id UUID PRIMARY KEY,
       support_type TEXT NOT NULL UNIQUE,
+      manufacturer TEXT,
       height_mm NUMERIC,
       width_mm NUMERIC,
       length_mm NUMERIC,
@@ -478,6 +479,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS material_trays_image_template_id_idx
       ON material_trays (image_template_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_supports
+    ADD COLUMN IF NOT EXISTS manufacturer TEXT;
   `);
 
   await pool.query(`

@@ -144,6 +144,13 @@ export const Materials = () => {
                     accept='.xlsx'
                     onChange={traysHook.handleTrayImportChange}
                   />
+                  <Button
+                    appearance='secondary'
+                    onClick={traysHook.handleGetTrayTemplate}
+                    disabled={traysHook.isGettingTrayTemplate}
+                  >
+                    {traysHook.isGettingTrayTemplate ? 'Getting template...' : 'Get upload template'}
+                  </Button>
                 </>
               ) : null}
               <Button
@@ -201,6 +208,15 @@ export const Materials = () => {
                     accept='.xlsx'
                     onChange={supportsHook.handleSupportImportChange}
                   />
+                  <Button
+                    appearance='secondary'
+                    onClick={supportsHook.handleGetSupportTemplate}
+                    disabled={supportsHook.isGettingSupportTemplate}
+                  >
+                    {supportsHook.isGettingSupportTemplate
+                      ? 'Getting template...'
+                      : 'Get upload template'}
+                  </Button>
                 </>
               ) : null}
               <Button

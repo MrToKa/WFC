@@ -12,6 +12,7 @@ export type TrayFormState = {
 
 export type SupportFormState = {
   type: string;
+  manufacturer: string;
   heightMm: string;
   widthMm: string;
   lengthMm: string;
@@ -40,6 +41,7 @@ export const initialTrayForm: TrayFormState = {
 
 export const initialSupportForm: SupportFormState = {
   type: '',
+  manufacturer: '',
   heightMm: '',
   widthMm: '',
   lengthMm: '',

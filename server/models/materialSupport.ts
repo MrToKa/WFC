@@ -1,6 +1,7 @@
 export type MaterialSupportRow = {
   id: string;
   support_type: string;
+  manufacturer: string | null;
   height_mm: string | number | null;
   width_mm: string | number | null;
   length_mm: string | number | null;
@@ -27,6 +28,7 @@ const toIsoString = (value: Date | string): string =>
 export type PublicMaterialSupport = {
   id: string;
   type: string;
+  manufacturer: string | null;
   heightMm: number | null;
   widthMm: number | null;
   lengthMm: number | null;
@@ -43,6 +45,7 @@ export const mapMaterialSupportRow = (
 ): PublicMaterialSupport => ({
   id: row.id,
   type: row.support_type,
+  manufacturer: row.manufacturer ?? null,
   heightMm: toNumberOrNull(row.height_mm),
   widthMm: toNumberOrNull(row.width_mm),
   lengthMm: toNumberOrNull(row.length_mm),

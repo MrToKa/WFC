@@ -94,6 +94,16 @@ export const SupportDialog = ({
                 />
               </Field>
               <Field
+                label='Manufacturer'
+                validationState={formErrors.manufacturer ? 'error' : undefined}
+                validationMessage={formErrors.manufacturer}
+              >
+                <Input
+                  value={form.manufacturer}
+                  onChange={onFieldChange('manufacturer')}
+                />
+              </Field>
+              <Field
                 label='Height [mm]'
                 validationState={formErrors.heightMm ? 'error' : undefined}
                 validationMessage={formErrors.heightMm}

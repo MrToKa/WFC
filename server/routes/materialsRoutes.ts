@@ -41,15 +41,17 @@ const upload = multer({
 });
 
 const TRAY_HEADERS = {
-  type: 'Type',
   manufacturer: 'Manufacturer',
+  type: 'Type',
   height: 'Height [mm]',
   rungHeight: 'Rung height [mm]',
   width: 'Width [mm]',
-  weight: 'Weight [kg/m]'
+  weight: 'Weight [kg/m]',
+  loadCurve: 'Load curve'
 } as const;
 
 const SUPPORT_HEADERS = {
+  manufacturer: 'Manufacturer',
   type: 'Type',
   height: 'Height [mm]',
   width: 'Width [mm]',
@@ -117,6 +119,9 @@ const normalizeOptionalUuid = (value?: string | null): string | null => {
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
 };
+
+const normalizeLookupKey = (value: string): string =>
+  value.trim().replace(/\s+/g, ' ').toLowerCase();
 
 const IMAGE_TEMPLATE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
 
@@ -288,6 +293,7 @@ const selectMaterialSupportsQuery = `
   SELECT
     ms.id,
     ms.support_type,
+    ms.manufacturer,
     ms.height_mm,
     ms.width_mm,
     ms.length_mm,
@@ -783,6 +789,20 @@ materialsRouter.post(
         return;
       }
 
+      const loadCurveResult = await pool.query<{ id: string; name: string | null }>(`
+        SELECT id, name
+        FROM material_load_curves;
+      `);
+      const loadCurveLookup = new Map<string, string>();
+      for (const loadCurve of loadCurveResult.rows) {
+        if (loadCurve.name) {
+          loadCurveLookup.set(
+            normalizeLookupKey(loadCurve.name),
+            loadCurve.id
+          );
+        }
+      }
+
       const client = await pool.connect();
 
       let created = 0;
@@ -799,23 +819,64 @@ materialsRouter.post(
           const rungRaw = row[TRAY_HEADERS.rungHeight];
           const widthRaw = row[TRAY_HEADERS.width];
           const weightRaw = row[TRAY_HEADERS.weight];
+          const loadCurveRaw = row[TRAY_HEADERS.loadCurve];
 
           if (typeRaw === null || typeRaw === undefined || String(typeRaw).trim() === '') {
             skipped += 1;
             continue;
           }
 
+          const manufacturer = normalizeOptionalText(
+            manufacturerRaw === null || manufacturerRaw === undefined
+              ? null
+              : String(manufacturerRaw)
+          );
+          if (!manufacturer) {
+            skipped += 1;
+            continue;
+          }
+
+          const heightMm = toNullableNumber(heightRaw);
+          if (heightMm === null) {
+            skipped += 1;
+            continue;
+          }
+
+          const rungHeightMm = toNullableNumber(rungRaw);
+          if (rungHeightMm === null) {
+            skipped += 1;
+            continue;
+          }
+
+          const widthMm = toNullableNumber(widthRaw);
+          if (widthMm === null) {
+            skipped += 1;
+            continue;
+          }
+
+          const weightKgPerM = toNullableNumber(weightRaw);
+          if (weightKgPerM === null) {
+            skipped += 1;
+            continue;
+          }
+
+          const loadCurveName = normalizeOptionalText(
+            loadCurveRaw === null || loadCurveRaw === undefined
+              ? null
+              : String(loadCurveRaw)
+          );
+          const loadCurveId =
+            loadCurveName && loadCurveLookup.size > 0
+              ? loadCurveLookup.get(normalizeLookupKey(loadCurveName)) ?? null
+              : null;
+
           const parseResult = createMaterialTraySchema.safeParse({
             type: normalizeType(String(typeRaw)),
-            manufacturer: normalizeOptionalText(
-              manufacturerRaw === null || manufacturerRaw === undefined
-                ? null
-                : String(manufacturerRaw)
-            ),
-            heightMm: toNullableNumber(heightRaw),
-            rungHeightMm: toNullableNumber(rungRaw),
-            widthMm: toNullableNumber(widthRaw),
-            weightKgPerM: toNullableNumber(weightRaw)
+            manufacturer,
+            heightMm,
+            rungHeightMm,
+            widthMm,
+            weightKgPerM
           });
 
           if (!parseResult.success) {
@@ -845,8 +906,9 @@ materialsRouter.post(
                   rung_height_mm = $4,
                   width_mm = $5,
                   weight_kg_per_m = $6,
+                  load_curve_id = $7,
                   updated_at = NOW()
-                WHERE id = $7;
+                WHERE id = $8;
               `,
               [
                 data.type,
@@ -855,6 +917,7 @@ materialsRouter.post(
                 data.rungHeightMm ?? null,
                 data.widthMm ?? null,
                 data.weightKgPerM ?? null,
+                loadCurveId,
                 existing.rows[0].id
               ]
             );
@@ -869,8 +932,9 @@ materialsRouter.post(
                   height_mm,
                   rung_height_mm,
                   width_mm,
-                  weight_kg_per_m
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7);
+                  weight_kg_per_m,
+                  load_curve_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
               `,
               [
                 randomUUID(),
@@ -879,7 +943,8 @@ materialsRouter.post(
                 data.heightMm ?? null,
                 data.rungHeightMm ?? null,
                 data.widthMm ?? null,
-                data.weightKgPerM ?? null
+                data.weightKgPerM ?? null,
+                loadCurveId
               ]
             );
             created += 1;
@@ -934,23 +999,25 @@ materialsRouter.get(
       });
 
       const columns = [
-        { name: TRAY_HEADERS.type, key: 'type', width: 30 },
         { name: TRAY_HEADERS.manufacturer, key: 'manufacturer', width: 26 },
+        { name: TRAY_HEADERS.type, key: 'type', width: 30 },
         { name: TRAY_HEADERS.height, key: 'height', width: 18 },
         { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
-        { name: TRAY_HEADERS.weight, key: 'weight', width: 18 }
+        { name: TRAY_HEADERS.weight, key: 'weight', width: 18 },
+        { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 }
       ] as const;
 
       const rows = result.rows.map((row) => [
-        row.tray_type,
         row.manufacturer ?? '',
+        row.tray_type,
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',
         row.rung_height_mm !== null && row.rung_height_mm !== '' ? Number(row.rung_height_mm) : '',
         row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
         row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
           ? Number(row.weight_kg_per_m)
-          : ''
+          : '',
+        row.load_curve_name ?? ''
       ]);
 
       const table = worksheet.addTable({
@@ -967,14 +1034,17 @@ materialsRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '']]
+        rows:
+          rows.length > 0
+            ? rows
+            : [Array.from({ length: columns.length }, () => '')]
       });
 
       table.commit();
 
       columns.forEach((column, index) => {
         worksheet.getColumn(index + 1).width = column.width;
-        if (column.key === 'height' || column.key === 'width') {
+        if (column.key === 'height' || column.key === 'rungHeight' || column.key === 'width') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
         if (column.key === 'weight') {
@@ -995,6 +1065,72 @@ materialsRouter.get(
     } catch (error) {
       console.error('Export material trays error', error);
       res.status(500).json({ error: 'Failed to export trays' });
+    }
+  }
+);
+
+materialsRouter.get(
+  '/trays/template',
+  authenticate,
+  requireAdmin,
+  async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Trays', {
+        views: [{ state: 'frozen', ySplit: 1 }]
+      });
+
+      const columns = [
+        { name: TRAY_HEADERS.manufacturer, key: 'manufacturer', width: 26 },
+        { name: TRAY_HEADERS.type, key: 'type', width: 30 },
+        { name: TRAY_HEADERS.height, key: 'height', width: 18 },
+        { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
+        { name: TRAY_HEADERS.width, key: 'width', width: 18 },
+        { name: TRAY_HEADERS.weight, key: 'weight', width: 18 },
+        { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 }
+      ] as const;
+
+      const table = worksheet.addTable({
+        name: 'MaterialTrayTemplate',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showRowStripes: true,
+          showColumnStripes: true
+        },
+        columns: columns.map((column) => ({
+          name: column.name,
+          filterButton: true
+        })),
+        rows: [Array.from({ length: columns.length }, () => '')]
+      });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        worksheet.getColumn(index + 1).width = column.width;
+        if (column.key === 'height' || column.key === 'rungHeight' || column.key === 'width') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
+        if (column.key === 'weight') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const filename = `${sanitizeFileSegment('materials-trays-template')}.xlsx`;
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filename)}"`);
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error('Generate material tray template error', error);
+      res.status(500).json({ error: 'Failed to generate template' });
     }
   }
 );
@@ -1044,6 +1180,7 @@ materialsRouter.post(
 
   const data = parseResult.data;
   const type = normalizeType(data.type);
+  const manufacturer = normalizeOptionalText(data.manufacturer ?? null);
 
   const normalizedImageTemplateId = normalizeOptionalUuid(
     data.imageTemplateId ?? null
@@ -1070,16 +1207,18 @@ materialsRouter.post(
           INSERT INTO material_supports (
             id,
             support_type,
+            manufacturer,
             height_mm,
             width_mm,
             length_mm,
             weight_kg,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
         `,
         [
           supportId,
           type,
+          manufacturer,
           data.heightMm ?? null,
           data.widthMm ?? null,
           data.lengthMm ?? null,
@@ -1171,6 +1310,12 @@ materialsRouter.patch(
   if (data.type !== undefined) {
     setClauses.push(`support_type = $${parameterIndex}`);
     values.push(normalizeType(data.type));
+    parameterIndex += 1;
+  }
+
+  if (data.manufacturer !== undefined) {
+    setClauses.push(`manufacturer = $${parameterIndex}`);
+    values.push(normalizeOptionalText(data.manufacturer));
     parameterIndex += 1;
   }
 
@@ -1353,6 +1498,7 @@ materialsRouter.post(
 
         for (const row of rows) {
           const typeRaw = row[SUPPORT_HEADERS.type];
+          const manufacturerRaw = row[SUPPORT_HEADERS.manufacturer];
           const heightRaw = row[SUPPORT_HEADERS.height];
           const widthRaw = row[SUPPORT_HEADERS.width];
           const lengthRaw = row[SUPPORT_HEADERS.length];
@@ -1363,12 +1509,37 @@ materialsRouter.post(
             continue;
           }
 
+          const manufacturerValue =
+            manufacturerRaw === null || manufacturerRaw === undefined
+              ? null
+              : normalizeOptionalText(String(manufacturerRaw));
+          if (!manufacturerValue) {
+            skipped += 1;
+            continue;
+          }
+
+          const heightValue = toNullableNumber(heightRaw);
+          const widthValue = toNullableNumber(widthRaw);
+          const lengthValue = toNullableNumber(lengthRaw);
+          const weightValue = toNullableNumber(weightRaw);
+
+          if (
+            heightValue === null ||
+            widthValue === null ||
+            lengthValue === null ||
+            weightValue === null
+          ) {
+            skipped += 1;
+            continue;
+          }
+
           const parseResult = createMaterialSupportSchema.safeParse({
             type: normalizeType(String(typeRaw)),
-            heightMm: toNullableNumber(heightRaw),
-            widthMm: toNullableNumber(widthRaw),
-            lengthMm: toNullableNumber(lengthRaw),
-            weightKg: toNullableNumber(weightRaw)
+            manufacturer: manufacturerValue,
+            heightMm: heightValue,
+            widthMm: widthValue,
+            lengthMm: lengthValue,
+            weightKg: weightValue
           });
 
           if (!parseResult.success) {
@@ -1393,15 +1564,17 @@ materialsRouter.post(
                 UPDATE material_supports
                 SET
                   support_type = $1,
-                  height_mm = $2,
-                  width_mm = $3,
-                  length_mm = $4,
-                  weight_kg = $5,
+                  manufacturer = $2,
+                  height_mm = $3,
+                  width_mm = $4,
+                  length_mm = $5,
+                  weight_kg = $6,
                   updated_at = NOW()
-                WHERE id = $6;
+                WHERE id = $7;
               `,
               [
                 data.type,
+                data.manufacturer ?? null,
                 data.heightMm ?? null,
                 data.widthMm ?? null,
                 data.lengthMm ?? null,
@@ -1416,15 +1589,17 @@ materialsRouter.post(
                 INSERT INTO material_supports (
                   id,
                   support_type,
+                  manufacturer,
                   height_mm,
                   width_mm,
                   length_mm,
                   weight_kg
-                ) VALUES ($1, $2, $3, $4, $5, $6);
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7);
               `,
               [
                 randomUUID(),
                 data.type,
+                data.manufacturer ?? null,
                 data.heightMm ?? null,
                 data.widthMm ?? null,
                 data.lengthMm ?? null,
@@ -1483,6 +1658,7 @@ materialsRouter.get(
       });
 
       const columns = [
+        { name: SUPPORT_HEADERS.manufacturer, key: 'manufacturer', width: 26 },
         { name: SUPPORT_HEADERS.type, key: 'type', width: 30 },
         { name: SUPPORT_HEADERS.height, key: 'height', width: 18 },
         { name: SUPPORT_HEADERS.width, key: 'width', width: 18 },
@@ -1491,6 +1667,7 @@ materialsRouter.get(
       ] as const;
 
       const rows = result.rows.map((row) => [
+        row.manufacturer ?? '',
         row.support_type,
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',
         row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
@@ -1512,7 +1689,10 @@ materialsRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '']]
+        rows:
+          rows.length > 0
+            ? rows
+            : [Array.from({ length: columns.length }, () => '')]
       });
 
       table.commit();
@@ -1521,7 +1701,11 @@ materialsRouter.get(
         worksheet.getColumn(index + 1).width = column.width;
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
-        } else if (column.key !== 'type') {
+        } else if (
+          column.key === 'height' ||
+          column.key === 'width' ||
+          column.key === 'length'
+        ) {
           worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
       });
@@ -1539,6 +1723,75 @@ materialsRouter.get(
     } catch (error) {
       console.error('Export material supports error', error);
       res.status(500).json({ error: 'Failed to export supports' });
+    }
+  }
+);
+
+materialsRouter.get(
+  '/supports/template',
+  authenticate,
+  requireAdmin,
+  async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Supports', {
+        views: [{ state: 'frozen', ySplit: 1 }]
+      });
+
+      const columns = [
+        { name: SUPPORT_HEADERS.manufacturer, key: 'manufacturer', width: 26 },
+        { name: SUPPORT_HEADERS.type, key: 'type', width: 30 },
+        { name: SUPPORT_HEADERS.height, key: 'height', width: 18 },
+        { name: SUPPORT_HEADERS.width, key: 'width', width: 18 },
+        { name: SUPPORT_HEADERS.length, key: 'length', width: 18 },
+        { name: SUPPORT_HEADERS.weight, key: 'weight', width: 18 }
+      ] as const;
+
+      const table = worksheet.addTable({
+        name: 'MaterialSupportTemplate',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showRowStripes: true,
+          showColumnStripes: true
+        },
+        columns: columns.map((column) => ({
+          name: column.name,
+          filterButton: true
+        })),
+        rows: [Array.from({ length: columns.length }, () => '')]
+      });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        worksheet.getColumn(index + 1).width = column.width;
+        if (
+          column.key === 'height' ||
+          column.key === 'width' ||
+          column.key === 'length'
+        ) {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
+        if (column.key === 'weight') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const filename = `${sanitizeFileSegment('materials-supports-template')}.xlsx`;
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filename)}"`);
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      console.error('Generate material support template error', error);
+      res.status(500).json({ error: 'Failed to generate template' });
     }
   }
 );

@@ -143,6 +143,66 @@ export async function exportMaterialTrays(token?: string): Promise<Blob> {
   return response.blob();
 }
 
+export async function getMaterialTrayTemplate(token: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/trays/template`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse errors to rethrow generic message
+    }
+
+    const message =
+      payload &&
+      typeof payload === 'object' &&
+      'error' in payload &&
+      typeof (payload as { error?: string }).error === 'string'
+        ? (payload as { error?: string }).error
+        : 'Failed to generate template';
+
+    throw new ApiError(response.status, message);
+  }
+
+  return response.blob();
+}
+
+export async function getMaterialSupportTemplate(token: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/supports/template`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse errors and surface generic error
+    }
+
+    const message =
+      payload &&
+      typeof payload === 'object' &&
+      'error' in payload &&
+      typeof (payload as { error?: string }).error === 'string'
+        ? (payload as { error?: string }).error
+        : 'Failed to generate template';
+
+    throw new ApiError(response.status, message);
+  }
+
+  return response.blob();
+}
+
 // Material Supports
 export async function fetchMaterialSupports(options?: {
   page?: number;

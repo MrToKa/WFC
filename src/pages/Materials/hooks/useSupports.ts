@@ -8,6 +8,7 @@ import {
   deleteMaterialSupport,
   exportMaterialSupports,
   fetchMaterialSupports,
+  getMaterialSupportTemplate,
   importMaterialSupports,
   updateMaterialSupport
 } from '@/api/client';
@@ -35,6 +36,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
   const [isRefreshingSupports, setIsRefreshingSupports] = useState<boolean>(false);
   const [isExportingSupports, setIsExportingSupports] = useState<boolean>(false);
   const [isImportingSupports, setIsImportingSupports] = useState<boolean>(false);
+  const [isGettingSupportTemplate, setIsGettingSupportTemplate] = useState<boolean>(false);
   const [supportPendingId, setSupportPendingId] = useState<string | null>(null);
 
   const [isSupportDialogOpen, setIsSupportDialogOpen] = useState<boolean>(false);
@@ -105,6 +107,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     setEditingSupport(support);
     setSupportForm({
       type: support.type,
+      manufacturer: support.manufacturer ?? '',
       heightMm: toFormValue(support.heightMm),
       widthMm: toFormValue(support.widthMm),
       lengthMm: toFormValue(support.lengthMm),
@@ -152,6 +155,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
 
       const errors: SupportFormErrors = {};
       const type = supportForm.type.trim();
+      const manufacturerValue = supportForm.manufacturer.trim();
+      const manufacturer = manufacturerValue === '' ? null : manufacturerValue;
       if (!type) {
         errors.type = 'Type is required';
       }
@@ -189,6 +194,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         if (supportDialogMode === 'create') {
           await createMaterialSupport(token, {
             type,
+            manufacturer,
             heightMm: heightResult.numeric,
             widthMm: widthResult.numeric,
             lengthMm: lengthResult.numeric,
@@ -205,6 +211,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         } else if (editingSupport) {
           await updateMaterialSupport(token, editingSupport.id, {
             type,
+            manufacturer,
             heightMm: heightResult.numeric,
             widthMm: widthResult.numeric,
             lengthMm: lengthResult.numeric,
@@ -340,6 +347,41 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     }
   }, [showToast, token]);
 
+  const handleGetSupportTemplate = useCallback(async () => {
+    if (!isAdmin || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to get the template.'
+      });
+      return;
+    }
+
+    setIsGettingSupportTemplate(true);
+    try {
+      const blob = await getMaterialSupportTemplate(token);
+      downloadBlob(blob, buildTimestampedFileName('materials-supports-template'));
+      showToast({ intent: 'success', title: 'Template downloaded' });
+    } catch (error) {
+      console.error('Get material support template failed', error);
+      if (error instanceof ApiError && error.status === 404) {
+        showToast({
+          intent: 'error',
+          title: 'Template endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
+      } else {
+        showToast({
+          intent: 'error',
+          title: 'Failed to get template',
+          body: error instanceof ApiError ? error.message : undefined
+        });
+      }
+    } finally {
+      setIsGettingSupportTemplate(false);
+    }
+  }, [isAdmin, showToast, token]);
+
   const handleSupportDelete = useCallback(
     async (support: MaterialSupport) => {
       if (!isAdmin || !token) {
@@ -397,6 +439,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     isRefreshingSupports,
     isExportingSupports,
     isImportingSupports,
+    isGettingSupportTemplate,
     supportPendingId,
     supportFileInputRef,
     isSupportDialogOpen,
@@ -415,6 +458,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     handleSupportImportClick,
     handleSupportImportChange,
     handleExportSupports,
+    handleGetSupportTemplate,
     handleSupportDelete
   };
 };

@@ -74,6 +74,7 @@ export const SupportsTable = ({
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className={styles.tableHeadCell}>Manufacturer</th>
               <th className={styles.tableHeadCell}>Type</th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Height [mm]
@@ -95,6 +96,7 @@ export const SupportsTable = ({
               const isBusy = pendingId === support.id;
               return (
                 <tr key={support.id}>
+                  <td className={styles.tableCell}>{support.manufacturer ?? '-'}</td>
                   <td className={styles.tableCell}>{support.type}</td>
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(support.heightMm)}

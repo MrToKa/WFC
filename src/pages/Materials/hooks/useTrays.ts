@@ -12,6 +12,7 @@ import {
   fetchMaterialTrays,
   fetchMaterialLoadCurveSummaries,
   importMaterialTrays,
+  getMaterialTrayTemplate,
   updateMaterialTray
 } from '@/api/client';
 import { TrayFormErrors, TrayFormState, initialTrayForm, PAGE_SIZE } from '../Materials.types';
@@ -38,6 +39,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   const [isRefreshingTrays, setIsRefreshingTrays] = useState<boolean>(false);
   const [isExportingTrays, setIsExportingTrays] = useState<boolean>(false);
   const [isImportingTrays, setIsImportingTrays] = useState<boolean>(false);
+  const [isGettingTrayTemplate, setIsGettingTrayTemplate] = useState<boolean>(false);
   const [trayPendingId, setTrayPendingId] = useState<string | null>(null);
 
   const [isTrayDialogOpen, setIsTrayDialogOpen] = useState<boolean>(false);
@@ -479,6 +481,41 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     }
   }, [showToast, token]);
 
+  const handleGetTrayTemplate = useCallback(async () => {
+    if (!isAdmin || !token) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to get the template.'
+      });
+      return;
+    }
+
+    setIsGettingTrayTemplate(true);
+    try {
+      const blob = await getMaterialTrayTemplate(token);
+      downloadBlob(blob, buildTimestampedFileName('materials-trays-template'));
+      showToast({ intent: 'success', title: 'Template downloaded' });
+    } catch (error) {
+      console.error('Get material tray template failed', error);
+      if (error instanceof ApiError && error.status === 404) {
+        showToast({
+          intent: 'error',
+          title: 'Template endpoint unavailable',
+          body: 'Please restart the API server after updating it.'
+        });
+      } else {
+        showToast({
+          intent: 'error',
+          title: 'Failed to get template',
+          body: error instanceof ApiError ? error.message : undefined
+        });
+      }
+    } finally {
+      setIsGettingTrayTemplate(false);
+    }
+  }, [isAdmin, showToast, token]);
+
   const handleTrayDelete = useCallback(
     async (tray: MaterialTray) => {
       if (!isAdmin || !token) {
@@ -536,6 +573,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     isRefreshingTrays,
     isExportingTrays,
     isImportingTrays,
+    isGettingTrayTemplate,
     trayPendingId,
     trayFileInputRef,
     isTrayDialogOpen,
@@ -567,6 +605,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     handleTrayImportClick,
     handleTrayImportChange,
     handleExportTrays,
+    handleGetTrayTemplate,
     handleTrayDelete
   };
 };
