@@ -60,7 +60,6 @@ import {
 import {
   calculateTrayFreeSpaceMetrics,
   filterCablesByTray,
-  isGroundingPurpose,
   matchCableCategory
 } from './TrayDetails/TrayDetails.utils';
 import type { TrayFreeSpaceMetrics } from './TrayDetails/TrayDetails.utils';
@@ -526,9 +525,7 @@ export const ProjectDetails = () => {
     const canvas = docAvailable ? document.createElement('canvas') : null;
 
     return trays.reduce<Record<string, TrayFreeSpaceMetrics>>((acc, tray) => {
-      const trayCables = filterCablesByTray(cables, tray.name).filter(
-        (cable) => !isGroundingPurpose(cable.purpose)
-      );
+      const trayCables = filterCablesByTray(cables, tray.name);
 
       const cableBundles = trayCables.reduce<CableBundleMap>((bundleAcc, cable) => {
         const category = matchCableCategory(cable.purpose);

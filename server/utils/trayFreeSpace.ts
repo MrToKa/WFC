@@ -106,14 +106,15 @@ const filterCablesByTray = (
 ): TrayCableForFreeSpace[] =>
   cables.filter((cable) => routingContainsTray(cable.routing, trayName));
 
-const isGroundingPurpose = (purpose: string | null | undefined): boolean =>
-  purpose !== null && purpose !== undefined && purpose.trim().toLowerCase() === 'grounding';
-
 const resolveBundleSpacingValue = (
   bundleSpacing: CableBundleSpacing | null | undefined,
   maxDiameter: number,
   spacingBetweenCablesMm: number
 ): number => {
+  if (bundleSpacing === '0') {
+    return 0;
+  }
+
   if (bundleSpacing === '1D') {
     return maxDiameter > 0 ? maxDiameter : spacingBetweenCablesMm;
   }
@@ -143,6 +144,10 @@ const matchCableCategory = (purpose: string | null | undefined): CableCategoryKe
   const normalized = purpose.trim().toLowerCase();
   if (normalized === '') {
     return null;
+  }
+
+  if (normalized.includes('ground')) {
+    return 'mv';
   }
 
   if (normalized.startsWith('mv') || normalized.includes('medium voltage')) {
@@ -337,13 +342,9 @@ export const computeTrayFreeSpacePercent = ({
   cables: TrayCableForFreeSpace[];
   layout: PublicCableLayout | null | undefined;
 }): number | null => {
-  const nonGroundingCables = filterCablesByTray(cables, tray.name).filter(
-    (cable) => !isGroundingPurpose(cable.purpose)
-  );
-
   const metrics = calculateTrayFreeSpaceMetrics({
     tray,
-    cables: nonGroundingCables,
+    cables: filterCablesByTray(cables, tray.name),
     layout,
     spacingBetweenCablesMm: resolveCableSpacing(layout),
     considerBundleSpacingAsFree: Boolean(layout?.considerBundleSpacingAsFree)

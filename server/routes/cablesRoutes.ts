@@ -725,6 +725,11 @@ cablesRouter.post(
     };
 
     type PreparedCableFields = {
+      tag?: string | null;
+      fromLocation?: string | null;
+      toLocation?: string | null;
+      routing?: string | null;
+      designLength?: number | null;
       installLength?: number | null;
       pullDate?: string | null;
       connectedFrom?: string | null;
@@ -736,6 +741,7 @@ cablesRouter.post(
       cableId: string;
       cableKey: string;
       typeName: string;
+      typeKey: string;
       fields: PreparedCableFields;
     };
 
@@ -778,6 +784,11 @@ cablesRouter.post(
 
     // Track worksheet columns so we only touch fields the user supplied.
     const columnAvailability = {
+      tag: hasColumn(INPUT_HEADERS.tag),
+      fromLocation: hasColumn(INPUT_HEADERS.fromLocation),
+      toLocation: hasColumn(INPUT_HEADERS.toLocation),
+      routing: hasColumn(LIST_OUTPUT_HEADERS.routing),
+      designLength: hasColumn(INPUT_HEADERS.designLength),
       installLength: hasColumn(INPUT_HEADERS.installLength),
       pullDate: hasColumn(INPUT_HEADERS.pullDate),
       connectedFrom: hasColumn(INPUT_HEADERS.connectedFrom),
@@ -815,7 +826,47 @@ cablesRouter.post(
         continue;
       }
 
+      const typeKey = typeName.toLowerCase();
+
       const fields: PreparedCableFields = {};
+
+      if (columnAvailability.tag) {
+        fields.tag = normalizeOptionalString(
+          typeof row[INPUT_HEADERS.tag] === 'number'
+            ? String(row[INPUT_HEADERS.tag])
+            : (row[INPUT_HEADERS.tag] as string | null | undefined)
+        );
+      }
+
+      if (columnAvailability.fromLocation) {
+        fields.fromLocation = normalizeOptionalString(
+          typeof row[INPUT_HEADERS.fromLocation] === 'number'
+            ? String(row[INPUT_HEADERS.fromLocation])
+            : (row[INPUT_HEADERS.fromLocation] as string | null | undefined)
+        );
+      }
+
+      if (columnAvailability.toLocation) {
+        fields.toLocation = normalizeOptionalString(
+          typeof row[INPUT_HEADERS.toLocation] === 'number'
+            ? String(row[INPUT_HEADERS.toLocation])
+            : (row[INPUT_HEADERS.toLocation] as string | null | undefined)
+        );
+      }
+
+      if (columnAvailability.routing) {
+        fields.routing = normalizeOptionalString(
+          typeof row[LIST_OUTPUT_HEADERS.routing] === 'number'
+            ? String(row[LIST_OUTPUT_HEADERS.routing])
+            : (row[LIST_OUTPUT_HEADERS.routing] as string | null | undefined)
+        );
+      }
+
+      if (columnAvailability.designLength) {
+        fields.designLength = parseInstallLength(
+          row[INPUT_HEADERS.designLength] as unknown
+        );
+      }
 
       if (columnAvailability.installLength) {
         fields.installLength = parseInstallLength(
@@ -851,6 +902,7 @@ cablesRouter.post(
         cableId,
         cableKey,
         typeName,
+        typeKey,
         fields
       });
 
@@ -887,6 +939,12 @@ cablesRouter.post(
       CableRow,
       | 'id'
       | 'cable_id'
+      | 'cable_type_id'
+      | 'tag'
+      | 'from_location'
+      | 'to_location'
+      | 'routing'
+      | 'design_length'
       | 'install_length'
       | 'pull_date'
       | 'connected_from'
@@ -901,11 +959,40 @@ cablesRouter.post(
     try {
       await client.query('BEGIN');
 
+      const typeKeys = Array.from(new Set(prepared.map((row) => row.typeKey)));
+
+      const typeResult =
+        typeKeys.length > 0
+          ? await client.query<CableTypeRow>(
+              `
+                SELECT
+                  id,
+                  name
+                FROM cable_types
+                WHERE project_id = $1
+                  AND lower(name) = ANY($2::text[]);
+              `,
+              [projectId, typeKeys]
+            )
+          : { rows: [] as CableTypeRow[] };
+
+      const typeMap = new Map<string, CableTypeRow>();
+
+      for (const type of typeResult.rows) {
+        typeMap.set(type.name.toLowerCase(), type);
+      }
+
       const existingResult = await client.query<ExistingCable>(
         `
           SELECT
             c.id,
             c.cable_id,
+            c.cable_type_id,
+            c.tag,
+            c.from_location,
+            c.to_location,
+            c.routing,
+            c.design_length,
             c.install_length,
             c.pull_date,
             c.connected_from,
@@ -927,24 +1014,114 @@ cablesRouter.post(
       }
 
       for (const row of prepared) {
-        const existing = existingMap.get(row.cableKey);
-        if (!existing) {
-          summary.skipped += 1;
-          continue;
-        }
-
-        const existingTypeKey = existing.type_name.trim().toLowerCase();
-        const sheetTypeKey = row.typeName.toLowerCase();
-
-        if (existingTypeKey !== sheetTypeKey) {
-          summary.skipped += 1;
-          continue;
-        }
-
         const { fields } = row;
+        const type = typeMap.get(row.typeKey);
+
+        if (!type) {
+          summary.skipped += 1;
+          continue;
+        }
+
+        const existing = existingMap.get(row.cableKey);
+
+        if (!existing) {
+          await client.query(
+            `
+              INSERT INTO cables (
+                id,
+                project_id,
+                cable_id,
+                tag,
+                cable_type_id,
+                from_location,
+                to_location,
+                routing,
+                design_length,
+                install_length,
+                pull_date,
+                connected_from,
+                connected_to,
+                tested
+              )
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+            `,
+            [
+              randomUUID(),
+              projectId,
+              row.cableId.trim(),
+              fields.tag ?? null,
+              type.id,
+              fields.fromLocation ?? null,
+              fields.toLocation ?? null,
+              fields.routing ?? null,
+              fields.designLength ?? null,
+              fields.installLength ?? null,
+              fields.pullDate ?? null,
+              fields.connectedFrom ?? null,
+              fields.connectedTo ?? null,
+              fields.tested ?? null
+            ]
+          );
+          summary.inserted += 1;
+          continue;
+        }
+
         const updateAssignments: string[] = [];
         const updateValues: Array<string | number | null> = [];
         let parameterIndex = 1;
+
+        if (existing.cable_type_id !== type.id) {
+          updateAssignments.push(`cable_type_id = $${parameterIndex}`);
+          updateValues.push(type.id);
+          parameterIndex += 1;
+        }
+
+        if (columnAvailability.tag && fields.tag !== undefined) {
+          const currentTag = normalizeOptionalString(existing.tag ?? null);
+          if (fields.tag !== currentTag) {
+            updateAssignments.push(`tag = $${parameterIndex}`);
+            updateValues.push(fields.tag ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (columnAvailability.fromLocation && fields.fromLocation !== undefined) {
+          const currentFrom = normalizeOptionalString(
+            existing.from_location ?? null
+          );
+          if (fields.fromLocation !== currentFrom) {
+            updateAssignments.push(`from_location = $${parameterIndex}`);
+            updateValues.push(fields.fromLocation ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (columnAvailability.toLocation && fields.toLocation !== undefined) {
+          const currentTo = normalizeOptionalString(existing.to_location ?? null);
+          if (fields.toLocation !== currentTo) {
+            updateAssignments.push(`to_location = $${parameterIndex}`);
+            updateValues.push(fields.toLocation ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (columnAvailability.routing && fields.routing !== undefined) {
+          const currentRouting = normalizeOptionalString(existing.routing ?? null);
+          if (fields.routing !== currentRouting) {
+            updateAssignments.push(`routing = $${parameterIndex}`);
+            updateValues.push(fields.routing ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (columnAvailability.designLength && fields.designLength !== undefined) {
+          const currentDesignLength = parseInstallLength(existing.design_length);
+          if (fields.designLength !== currentDesignLength) {
+            updateAssignments.push(`design_length = $${parameterIndex}`);
+            updateValues.push(fields.designLength ?? null);
+            parameterIndex += 1;
+          }
+        }
 
         if (columnAvailability.installLength && fields.installLength !== undefined) {
           const currentInstallLength = parseInstallLength(existing.install_length);
@@ -1002,6 +1179,7 @@ cablesRouter.post(
         }
 
         if (updateAssignments.length === 0) {
+          summary.skipped += 1;
           continue;
         }
 

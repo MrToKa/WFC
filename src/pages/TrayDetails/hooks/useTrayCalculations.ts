@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Project, Tray, Cable, MaterialSupport } from '../../../api/client';
 import { SupportCalculationResult } from '../TrayDetails.types';
-import { isGroundingPurpose, KN_PER_KG } from '../TrayDetails.utils';
+import { KN_PER_KG } from '../TrayDetails.utils';
 
 export const useTrayCalculations = (
   project: Project | null,
@@ -104,10 +104,7 @@ export const useTrayCalculations = (
     };
   }, [project, tray, supportOverride, overrideSupport]);
 
-  const nonGroundingCables = useMemo(
-    () => trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)),
-    [trayCables]
-  );
+  const nonGroundingCables = useMemo(() => trayCables, [trayCables]);
 
   const cablesForWeightCalculation = useMemo(() => {
     return nonGroundingCables.filter((cable) => {

@@ -28,6 +28,9 @@ const TrayConstants = {
   }
 } as const;
 
+const isGroundingPurpose = (purpose: string | null | undefined): boolean =>
+  typeof purpose === 'string' && purpose.trim().toLowerCase().includes('ground');
+
 export type CableBundleMap = Record<string, Record<string, Cable[]>>;
 
 type CategoryKey = keyof typeof TrayConstants.cablePurposes;
@@ -426,16 +429,39 @@ class CableBundleDrawer {
     spacingPx: number,
     purpose: 'power' | 'mv' | 'vfd' | 'control' = 'power'
   ): PowerResult {
-    const sortedBundles = Object.entries(bundles)
-      .filter(([, cables]) => cables.length > 0)
-      .sort(([, cablesA], [, cablesB]) => getCableDiameter(cablesB[0]) - getCableDiameter(cablesA[0]));
+    const entries = Object.entries(bundles).filter(([, cables]) => cables.length > 0);
+
+    const leftBundles: Array<[string, Cable[]]> = [];
+    const groundingBundles: Array<[string, Cable[]]> = [];
+
+    if (purpose === 'mv') {
+      for (const [key, cables] of entries) {
+        const grounding = cables.filter((cable) => isGroundingPurpose(cable.purpose));
+        const normal = cables.filter((cable) => !isGroundingPurpose(cable.purpose));
+        if (normal.length > 0) {
+          leftBundles.push([key, normal]);
+        }
+        if (grounding.length > 0) {
+          groundingBundles.push([key, grounding]);
+        }
+      }
+    } else {
+      leftBundles.push(...entries);
+    }
+
+    const sortByDiameterDesc = ([, cablesA]: [string, Cable[]], [, cablesB]: [string, Cable[]]) =>
+      getCableDiameter(cablesB[0]) - getCableDiameter(cablesA[0]);
+
+    leftBundles.sort(sortByDiameterDesc);
+    groundingBundles.sort(sortByDiameterDesc);
+
     const baseBottomY =
       TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
     bottomStartY = baseBottomY;
 
-    const lastBundleKey = sortedBundles.length > 0 ? sortedBundles[sortedBundles.length - 1][0] : null;
+    const lastBundleKey = leftBundles.length > 0 ? leftBundles[leftBundles.length - 1][0] : null;
 
-    for (const [bundleKey, bundleCables] of sortedBundles) {
+    for (const [bundleKey, bundleCables] of leftBundles) {
       // Select the correct layout config based on purpose
       let layoutConfig: ProjectLayoutConfig;
       switch (purpose) {
@@ -694,6 +720,76 @@ class CableBundleDrawer {
       }
     }
 
+    // Draw grounding cables on MV trays from right to left
+    if (purpose === 'mv' && groundingBundles.length > 0) {
+      const trayWidthPx = (data.tray.widthMm ?? 0) * data.canvasScale;
+      let rightStartX = TrayConstants.canvasMargin + trayWidthPx - spacingPx;
+
+      for (let bundleIndex = 0; bundleIndex < groundingBundles.length; bundleIndex += 1) {
+        const [, bundleCables] = groundingBundles[bundleIndex];
+        const layoutConfig = data.layoutConfig.mv;
+        const sortedCables = [...bundleCables].sort(
+          (a, b) => getCableDiameter(b) - getCableDiameter(a)
+        );
+        const referenceLayout = this.calculateRowsAndColumns(
+          data.usableTrayHeightMm,
+          sortedCables,
+          TrayConstants.cablePurposes.mv,
+          layoutConfig
+        );
+        const referenceRows = Math.max(referenceLayout.rows, 1);
+        const referenceColumns = Math.max(referenceLayout.columns, 1);
+        const maxCapacityPerChunk = Math.max(referenceRows * referenceColumns, 1);
+        const maxDiameter = sortedCables.length > 0
+          ? getCableDiameter(sortedCables[0])
+          : TrayConstants.defaultCableDiameterMm;
+        const bundleSpacingPx = this.calculateBundleSpacingPx(
+          maxDiameter,
+          layoutConfig.bundleSpacing,
+          data.canvasScale,
+          data.spacingMm
+        );
+
+        let remainingCables = [...sortedCables];
+        while (remainingCables.length > 0) {
+          const chunkLength = Math.min(maxCapacityPerChunk, remainingCables.length);
+          const chunk = remainingCables.slice(0, chunkLength);
+
+          let rows = referenceRows;
+          let columns = referenceColumns;
+          if (chunkLength < rows * columns) {
+            rows = Math.min(referenceRows, Math.max(chunkLength, 1));
+            columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
+          }
+
+          rightStartX = this.drawVerticalStackingFromRight(
+            ctx,
+            data,
+            chunk,
+            rightStartX,
+            bottomStartY,
+            spacingPx,
+            rows,
+            columns,
+            data.bottomRowPowerCables,
+            TrayConstants.cablePurposes.mv
+          );
+
+          remainingCables = remainingCables.slice(chunk.length);
+          bottomStartY = baseBottomY;
+
+          if (remainingCables.length > 0) {
+            rightStartX -= bundleSpacingPx;
+          }
+        }
+
+        const isLastBundle = bundleIndex === groundingBundles.length - 1;
+        if (!isLastBundle) {
+          rightStartX -= bundleSpacingPx;
+        }
+      }
+    }
+
     // Track the rightmost position of power cables (left side)
     data.leftSideRightEdgePx = Math.max(data.leftSideRightEdgePx, leftStartX);
 
@@ -712,6 +808,7 @@ class CableBundleDrawer {
     const sortedBundles = Object.entries(bundles)
       .filter(([, cables]) => cables.length > 0)
       .sort(([, cablesA], [, cablesB]) => getCableDiameter(cablesB[0]) - getCableDiameter(cablesA[0]));
+    let totalBundleSpacingPx = 0;
 
     for (const [bundleKey, bundleCables] of sortedBundles) {
       const layoutConfig = data.layoutConfig.control;
@@ -788,17 +885,16 @@ class CableBundleDrawer {
         }
       }
 
-      // Add spacing between bundle groups (different diameter ranges)
-      const isLastBundle = sortedBundles[sortedBundles.length - 1][0] === bundleKey;
-      if (!isLastBundle && sortedCables.length > 0) {
-        const biggestCable = sortedCables[0];
-        data.bottomRowControlCables.push(biggestCable, biggestCable);
+      if (sortedBundles[sortedBundles.length - 1][0] !== bundleKey) {
+        totalBundleSpacingPx += bundleSpacingPx;
       }
 
+      const trayWidthPx = (data.tray.widthMm ?? 0) * data.canvasScale;
       rightStartX =
         TrayConstants.canvasMargin +
-        (data.tray.widthMm ?? 0) * data.canvasScale -
+        trayWidthPx -
         spacingPx -
+        totalBundleSpacingPx -
         sumCableWidthsPx(data.bottomRowControlCables, data.canvasScale, data.spacingMm);
       bottomStartY =
         TrayConstants.canvasMargin + data.usableTrayHeightMm * data.canvasScale;
@@ -1703,7 +1799,7 @@ class CableBundleDrawer {
     effectiveSpacingMm: number
   ): number {
     if (bundleSpacing === '0') {
-      return effectiveSpacingMm * scale;
+      return 0;
     } else if (bundleSpacing === '1D') {
       return maxDiameterMm * scale;
     } else if (bundleSpacing === '2D') {

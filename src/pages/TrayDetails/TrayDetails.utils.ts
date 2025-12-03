@@ -128,6 +128,10 @@ const resolveBundleSpacingValue = (
   maxDiameter: number,
   spacingBetweenCablesMm: number
 ): number => {
+  if (bundleSpacing === '0') {
+    return 0;
+  }
+
   if (bundleSpacing === '1D') {
     return maxDiameter > 0 ? maxDiameter : spacingBetweenCablesMm;
   }
@@ -139,7 +143,7 @@ const resolveBundleSpacingValue = (
     return spacingBetweenCablesMm * 2;
   }
 
-  // Treat null or '0' as the base spacing between cables
+  // Treat null/undefined as the base spacing between cables
   return spacingBetweenCablesMm;
 };
 
@@ -158,6 +162,10 @@ export const matchCableCategory = (purpose: string | null): CableCategoryKey | n
   const normalized = purpose.trim().toLowerCase();
   if (normalized === '') {
     return null;
+  }
+
+  if (normalized.includes('ground')) {
+    return 'mv';
   }
 
   if (normalized.startsWith('mv') || normalized.includes('medium voltage')) {
