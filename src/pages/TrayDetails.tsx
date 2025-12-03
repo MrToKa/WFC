@@ -3,7 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Body1,
   Button,
+  Checkbox,
   Caption1,
+  Dropdown,
+  Field,
+  Input,
+  Option,
   Spinner,
   makeStyles,
   shorthands,
@@ -21,6 +26,11 @@ import {
   downloadTemplateFile
 } from '@/api/client';
 import type { ProjectFile } from '@/api/client';
+import type {
+  CableBundleSpacing,
+  ProjectCableCategorySettings,
+  ProjectCableLayout
+} from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import {
@@ -34,6 +44,12 @@ import {
   clearCustomVariables,
   type CustomVariable
 } from '@/utils/customVariablesStorage';
+import {
+  clearTrayBundleOverrides,
+  getTrayBundleOverrides,
+  setTrayBundleOverrides,
+  type TrayBundleOverride
+} from '@/utils/trayBundleOverrides';
 
 // Import refactored modules
 import {
@@ -321,6 +337,97 @@ const rotateImageBlob = async (
   });
 };
 
+const BUNDLE_SPACING_OPTIONS: CableBundleSpacing[] = ['0', '1D', '2D'];
+
+type BundleCategoryFormState = {
+  maxRows: string;
+  maxColumns: string;
+  bundleSpacing: CableBundleSpacing;
+  trefoil: boolean;
+  trefoilSpacing: boolean;
+  phaseRotation: boolean;
+};
+
+type BundleFormState = Record<CableCategoryKey, BundleCategoryFormState>;
+type BundleFormErrors = Record<CableCategoryKey, string | null>;
+
+const createBundleFormErrors = (): BundleFormErrors => ({
+  mv: null,
+  power: null,
+  vfd: null,
+  control: null
+});
+
+const buildBundleFormState = (
+  layout: ProjectCableLayout | null,
+  overrides: Partial<Record<CableCategoryKey, ProjectCableCategorySettings>> | null
+): BundleFormState =>
+  CABLE_CATEGORY_ORDER.reduce((acc, key) => {
+    const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+    const settings = overrides?.[key] ?? layout?.[key] ?? defaults;
+    const maxRows = settings?.maxRows ?? defaults.maxRows;
+    const maxColumns = settings?.maxColumns ?? defaults.maxColumns;
+    const bundleSpacing = settings?.bundleSpacing ?? defaults.bundleSpacing;
+    const validBundleSpacing = BUNDLE_SPACING_OPTIONS.includes(bundleSpacing)
+      ? bundleSpacing
+      : defaults.bundleSpacing;
+
+    const trefoil =
+      settings?.trefoil === null || settings?.trefoil === undefined
+        ? defaults.trefoil
+        : settings.trefoil;
+    const trefoilSpacing =
+      settings?.trefoilSpacingBetweenBundles === null ||
+      settings?.trefoilSpacingBetweenBundles === undefined
+        ? defaults.trefoilSpacingBetweenBundles
+        : settings.trefoilSpacingBetweenBundles;
+    const phaseRotation =
+      settings?.applyPhaseRotation === null ||
+      settings?.applyPhaseRotation === undefined
+        ? defaults.applyPhaseRotation
+        : settings.applyPhaseRotation;
+
+    acc[key] = {
+      maxRows: maxRows !== null && maxRows !== undefined ? String(maxRows) : '',
+      maxColumns:
+        maxColumns !== null && maxColumns !== undefined ? String(maxColumns) : '',
+      bundleSpacing: validBundleSpacing,
+      trefoil: Boolean(trefoil),
+      trefoilSpacing: Boolean(trefoilSpacing),
+      phaseRotation: Boolean(phaseRotation)
+    };
+    return acc;
+  }, {} as BundleFormState);
+
+const parseBundleInteger = (
+  value: string,
+  label: 'rows' | 'columns'
+): { numeric: number | null; error?: string } => {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return { numeric: null };
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return { numeric: null, error: `Enter a whole number for ${label}` };
+  }
+
+  if (!Number.isInteger(parsed)) {
+    return { numeric: null, error: 'Only whole numbers are allowed' };
+  }
+
+  if (parsed < 1) {
+    return { numeric: null, error: 'Value must be at least 1' };
+  }
+
+  if (parsed > 1_000) {
+    return { numeric: null, error: 'Value is too large' };
+  }
+
+  return { numeric: parsed };
+};
+
 const useStyles = makeStyles({
   root: {
     display: 'flex',
@@ -397,6 +504,19 @@ const useStyles = makeStyles({
   },
   fieldTitle: {
     fontWeight: tokens.fontWeightSemibold
+  },
+  bundleCard: {
+    display: 'grid',
+    gap: '0.5rem',
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+    ...shorthands.padding('0.75rem')
+  },
+  bundleSummary: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem'
   },
   emptyState: {
     padding: '0.5rem 0'
@@ -512,6 +632,15 @@ export const TrayDetails = () => {
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [layoutSummary, setLayoutSummary] = useState<TrayLayoutSummary | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
+  const [bundleFormUseCustom, setBundleFormUseCustom] = useState<boolean>(false);
+  const [bundleFormState, setBundleFormState] = useState<BundleFormState>(() =>
+    buildBundleFormState(project?.cableLayout ?? null, null)
+  );
+  const [bundleFormErrors, setBundleFormErrors] = useState<BundleFormErrors>(
+    () => createBundleFormErrors()
+  );
+  const [bundleOverrides, setBundleOverrides] = useState<TrayBundleOverride | null>(null);
+  const [bundleSaving, setBundleSaving] = useState<boolean>(false);
 
   // Initialize form when tray loads
   useEffect(() => {
@@ -521,6 +650,15 @@ export const TrayDetails = () => {
       setFormErrors({});
     }
   }, [tray]);
+
+  useEffect(() => {
+    const stored = getTrayBundleOverrides(canonicalProjectId, tray?.id ?? trayId ?? null);
+    const categories = stored?.categories ?? null;
+    setBundleOverrides(stored);
+    setBundleFormUseCustom(Boolean(stored?.useCustom));
+    setBundleFormState(buildBundleFormState(project?.cableLayout ?? null, categories));
+    setBundleFormErrors(createBundleFormErrors());
+  }, [canonicalProjectId, project?.cableLayout, tray?.id, trayId]);
 
   // Material tray selection
   const selectedMaterialTray = useMemo(() => {
@@ -849,19 +987,50 @@ export const TrayDetails = () => {
     return bundles;
   }, [nonGroundingCables]);
 
+  const isUsingCustomBundles = Boolean(bundleOverrides?.useCustom);
+
+  const activeProjectCableLayout = useMemo<ProjectCableLayout | null>(() => {
+    const base = project?.cableLayout ?? null;
+
+    if (!bundleOverrides?.useCustom) {
+      return base;
+    }
+
+    const mergedCategories = CABLE_CATEGORY_ORDER.reduce<
+      Record<CableCategoryKey, ProjectCableCategorySettings>
+    >((acc, key) => {
+      const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+      const baseSettings = (base?.[key] as ProjectCableCategorySettings | null) ?? defaults;
+      const override = bundleOverrides?.categories?.[key];
+      acc[key] = override ? { ...baseSettings, ...override } : baseSettings;
+      return acc;
+    }, {} as Record<CableCategoryKey, ProjectCableCategorySettings>);
+
+    return {
+      cableSpacing: base?.cableSpacing ?? DEFAULT_CABLE_SPACING,
+      considerBundleSpacingAsFree: base?.considerBundleSpacingAsFree ?? null,
+      minFreeSpacePercent: base?.minFreeSpacePercent ?? null,
+      maxFreeSpacePercent: base?.maxFreeSpacePercent ?? null,
+      mv: mergedCategories.mv ?? DEFAULT_CATEGORY_SETTINGS.mv,
+      power: mergedCategories.power ?? DEFAULT_CATEGORY_SETTINGS.power,
+      vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd,
+      control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control
+    };
+  }, [bundleOverrides, project?.cableLayout]);
+
   const projectCableSpacingMm = useMemo(() => {
-    const spacing = project?.cableLayout?.cableSpacing;
+    const spacing = activeProjectCableLayout?.cableSpacing;
     if (typeof spacing === 'number' && Number.isFinite(spacing) && spacing >= 0) {
       return spacing;
     }
     return DEFAULT_CABLE_SPACING;
-  }, [project?.cableLayout?.cableSpacing]);
+  }, [activeProjectCableLayout?.cableSpacing]);
 
-  const projectLayoutConfig = useMemo<CategoryLayoutConfig>(() => {
+  const effectiveLayoutConfig = useMemo<CategoryLayoutConfig>(() => {
     const categories: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
     return categories.reduce<CategoryLayoutConfig>((acc, category) => {
       const defaults = DEFAULT_CATEGORY_SETTINGS[category];
-      const layout = project?.cableLayout?.[category] ?? null;
+      const layout = activeProjectCableLayout?.[category] ?? null;
       const trefoil =
         CABLE_CATEGORY_CONFIG[category].showTrefoil
           ? layout?.trefoil ?? defaults.trefoil
@@ -885,14 +1054,14 @@ export const TrayDetails = () => {
       };
       return acc;
     }, {} as CategoryLayoutConfig);
-  }, [project?.cableLayout, projectCableSpacingMm]);
+  }, [activeProjectCableLayout, projectCableSpacingMm]);
 
   const considerBundleSpacingAsFree = Boolean(
-    project?.cableLayout?.considerBundleSpacingAsFree
+    activeProjectCableLayout?.considerBundleSpacingAsFree
   );
 
-  const minFreeSpacePercent = project?.cableLayout?.minFreeSpacePercent ?? null;
-  const maxFreeSpacePercent = project?.cableLayout?.maxFreeSpacePercent ?? null;
+  const minFreeSpacePercent = activeProjectCableLayout?.minFreeSpacePercent ?? null;
+  const maxFreeSpacePercent = activeProjectCableLayout?.maxFreeSpacePercent ?? null;
   const trayPurposeNormalized = tray?.purpose
     ? tray.purpose.trim().toLowerCase()
     : '';
@@ -905,16 +1074,16 @@ export const TrayDetails = () => {
       calculateTrayFreeSpaceMetrics({
         tray,
         cables: nonGroundingCables,
-        layout: project?.cableLayout ?? null,
+        layout: activeProjectCableLayout ?? null,
         spacingBetweenCablesMm: projectCableSpacingMm,
         considerBundleSpacingAsFree,
         layoutSummary
       }),
     [
       considerBundleSpacingAsFree,
+      activeProjectCableLayout,
       layoutSummary,
       nonGroundingCables,
-      project?.cableLayout,
       projectCableSpacingMm,
       tray
     ]
@@ -982,7 +1151,7 @@ export const TrayDetails = () => {
         cableBundles,
         6,
         projectCableSpacingMm,
-        projectLayoutConfig,
+        effectiveLayoutConfig,
         { rungHeightMm: selectedRungHeightMm ?? undefined }
       );
       setLayoutSummary(summary ?? null);
@@ -992,7 +1161,14 @@ export const TrayDetails = () => {
       setLayoutSummary(null);
       return false;
     }
-  }, [tray, nonGroundingCables, cableBundles, projectCableSpacingMm, projectLayoutConfig, selectedRungHeightMm]);
+  }, [
+    tray,
+    nonGroundingCables,
+    cableBundles,
+    projectCableSpacingMm,
+    effectiveLayoutConfig,
+    selectedRungHeightMm
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1092,7 +1268,7 @@ export const TrayDetails = () => {
       trayCableCategories.map((key) => {
         const config = CABLE_CATEGORY_CONFIG[key];
         const defaults = DEFAULT_CATEGORY_SETTINGS[key];
-        const layout = project?.cableLayout?.[key] ?? null;
+        const layout = activeProjectCableLayout?.[key] ?? null;
 
         const maxRows = layout?.maxRows ?? defaults.maxRows;
         const maxColumns = layout?.maxColumns ?? defaults.maxColumns;
@@ -1118,7 +1294,7 @@ export const TrayDetails = () => {
           phaseRotation
         };
       }),
-    [project?.cableLayout, trayCableCategories]
+    [activeProjectCableLayout, trayCableCategories]
   );
 
   const formatCableTypeLabel = useCallback(
@@ -1445,6 +1621,183 @@ export const TrayDetails = () => {
     ]
   );
 
+  const handleBundleNumericChange = useCallback(
+    (category: CableCategoryKey, field: 'maxRows' | 'maxColumns') =>
+      (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+        if (!isEditing) {
+          return;
+        }
+        setBundleFormErrors((previous) => ({ ...previous, [category]: null }));
+        setBundleFormState((previous) => ({
+          ...previous,
+          [category]: { ...previous[category], [field]: data.value }
+        }));
+      },
+    [isEditing]
+  );
+
+  const handleBundleSpacingChange = useCallback(
+    (category: CableCategoryKey) =>
+      (_event: unknown, data: { optionValue?: string }) => {
+        if (!isEditing) {
+          return;
+        }
+        const rawValue = data.optionValue as CableBundleSpacing | undefined;
+        const nextValue =
+          rawValue && BUNDLE_SPACING_OPTIONS.includes(rawValue)
+            ? rawValue
+            : DEFAULT_CATEGORY_SETTINGS[category].bundleSpacing;
+
+        setBundleFormErrors((previous) => ({ ...previous, [category]: null }));
+        setBundleFormState((previous) => ({
+          ...previous,
+          [category]: { ...previous[category], bundleSpacing: nextValue }
+        }));
+      },
+    [isEditing]
+  );
+
+  const handleBundleToggle = useCallback(
+    (category: CableCategoryKey, field: 'trefoil' | 'trefoilSpacing' | 'phaseRotation') =>
+      (_event: unknown, data: CheckboxOnChangeData) => {
+        if (!isEditing) {
+          return;
+        }
+        setBundleFormErrors((previous) => ({ ...previous, [category]: null }));
+        setBundleFormState((previous) => ({
+          ...previous,
+          [category]: { ...previous[category], [field]: Boolean(data.checked) }
+        }));
+      },
+    [isEditing]
+  );
+
+  const handleBundleUseCustomChange = useCallback(
+    (_event: unknown, data: CheckboxOnChangeData) => {
+      if (!isEditing) {
+        return;
+      }
+      setBundleFormUseCustom(Boolean(data.checked));
+    },
+    [isEditing]
+  );
+
+  const handleResetBundleForm = useCallback(
+    (overrideState?: TrayBundleOverride | null) => {
+      const source = overrideState ?? bundleOverrides ?? null;
+      setBundleFormUseCustom(Boolean(source?.useCustom));
+      setBundleFormState(
+        buildBundleFormState(project?.cableLayout ?? null, source?.categories ?? null)
+      );
+      setBundleFormErrors(createBundleFormErrors());
+    },
+    [bundleOverrides, project?.cableLayout]
+  );
+
+  const buildBundleOverrideInput = useCallback(() => {
+    const errors = createBundleFormErrors();
+    let hasError = false;
+    const categories: Partial<Record<CableCategoryKey, ProjectCableCategorySettings>> = {};
+
+    for (const key of CABLE_CATEGORY_ORDER) {
+      const input = bundleFormState[key];
+      const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+      const parsedRows = parseBundleInteger(input.maxRows, 'rows');
+      const parsedColumns = parseBundleInteger(input.maxColumns, 'columns');
+      const errorMessage = parsedRows.error ?? parsedColumns.error ?? null;
+      if (errorMessage) {
+        errors[key] = errorMessage;
+        hasError = true;
+      }
+
+      categories[key] = {
+        maxRows: parsedRows.numeric,
+        maxColumns: parsedColumns.numeric,
+        bundleSpacing: input.bundleSpacing ?? defaults.bundleSpacing,
+        trefoil: CABLE_CATEGORY_CONFIG[key].showTrefoil ? input.trefoil : null,
+        trefoilSpacingBetweenBundles: CABLE_CATEGORY_CONFIG[key].allowTrefoilSpacing
+          ? input.trefoilSpacing
+          : null,
+        applyPhaseRotation: CABLE_CATEGORY_CONFIG[key].allowPhaseRotation
+          ? input.phaseRotation
+          : null
+      };
+    }
+
+    return { errors, hasError, categories };
+  }, [bundleFormState]);
+
+  const persistBundleOverride = useCallback(
+    (
+      override: TrayBundleOverride,
+      options: { silent?: boolean } = {}
+    ): boolean => {
+      if (!canonicalProjectId || (!tray?.id && !trayId)) {
+        if (!options.silent) {
+          showToast({
+            intent: 'error',
+            title: 'Tray not available',
+            body: 'Load a tray before saving bundle configuration.'
+          });
+        }
+        return false;
+      }
+
+      setBundleOverrides(override);
+      setTrayBundleOverrides(canonicalProjectId, tray?.id ?? trayId ?? null, override);
+      setBundleFormErrors(createBundleFormErrors());
+
+      if (!options.silent) {
+        showToast({
+          intent: 'success',
+          title: override.useCustom
+            ? 'Custom bundle configuration saved'
+            : 'Using project bundle configuration',
+          body: override.useCustom
+            ? 'Tray-level bundle rules will be used for this tray.'
+            : 'Project bundle rules will be applied to this tray.'
+        });
+      }
+
+      return true;
+    },
+    [canonicalProjectId, showToast, tray?.id, trayId]
+  );
+
+  const handleSaveBundleConfig = useCallback(() => {
+    const { errors, hasError, categories } = buildBundleOverrideInput();
+    if (hasError) {
+      setBundleFormErrors(errors);
+      return;
+    }
+
+    setBundleSaving(true);
+    try {
+      const nextOverride: TrayBundleOverride = {
+        useCustom: bundleFormUseCustom,
+        categories
+      };
+
+      persistBundleOverride(nextOverride);
+      handleResetBundleForm(nextOverride);
+    } catch (error) {
+      console.error('Failed to save bundle configuration', error);
+      showToast({
+        intent: 'error',
+        title: 'Failed to save bundle configuration',
+        body: error instanceof Error ? error.message : undefined
+      });
+    } finally {
+      setBundleSaving(false);
+    }
+  }, [
+    buildBundleOverrideInput,
+    bundleFormUseCustom,
+    handleResetBundleForm,
+    persistBundleOverride,
+    showToast
+  ]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1479,6 +1832,27 @@ export const TrayDetails = () => {
           : [...previous, response.tray];
       });
       setFormValues(toTrayFormState(response.tray));
+
+      const { errors, hasError, categories } = buildBundleOverrideInput();
+      if (hasError) {
+        setBundleFormErrors(errors);
+      } else {
+        const nextOverride: TrayBundleOverride = {
+          useCustom: bundleFormUseCustom,
+          categories
+        };
+        const currentOverride = bundleOverrides ?? {
+          useCustom: false,
+          categories: {}
+        };
+        if (JSON.stringify(nextOverride) !== JSON.stringify(currentOverride)) {
+          persistBundleOverride(nextOverride, { silent: true });
+          handleResetBundleForm(nextOverride);
+        } else {
+          handleResetBundleForm(currentOverride);
+        }
+      }
+
       setIsEditing(false);
       showToast({ intent: 'success', title: 'Tray updated' });
     } catch (err) {
@@ -1489,7 +1863,7 @@ export const TrayDetails = () => {
         body: err instanceof ApiError ? err.message : undefined
       });
     } finally {
-      setIsSubmitting(false);
+    setIsSubmitting(false);
     }
   };
 
@@ -1533,6 +1907,7 @@ export const TrayDetails = () => {
       setFormValues(toTrayFormState(tray));
     }
     setFormErrors({});
+    handleResetBundleForm();
     setIsEditing(false);
   };
 
@@ -2255,6 +2630,157 @@ export const TrayDetails = () => {
         />
       )}
 
+      <div className={styles.section}>
+        <Caption1>Bundle configuration for this tray</Caption1>
+        <Checkbox
+          label="Use custom bundle configuration for this tray"
+          checked={bundleFormUseCustom}
+          onChange={handleBundleUseCustomChange}
+          disabled={!isEditing}
+        />
+        {isEditing && bundleFormUseCustom !== isUsingCustomBundles ? (
+          <Body1 className={styles.emptyState}>
+            Save to {bundleFormUseCustom ? 'apply tray bundle overrides' : 'use project bundle settings'}.
+          </Body1>
+        ) : null}
+        {isEditing && bundleFormUseCustom && trayCableCategories.length === 0 ? (
+          <Body1 className={styles.emptyState}>
+            Add cables to this tray to configure bundle spacing.
+          </Body1>
+        ) : null}
+        {bundleFormUseCustom && isEditing && trayCableCategories.length > 0 ? (
+          <>
+            <Body1>
+              These settings override the project bundle configuration only for this tray.
+            </Body1>
+            <div className={styles.grid}>
+              {trayCableCategories.map((key) => {
+                const form = bundleFormState[key];
+                const error = bundleFormErrors[key];
+                const config = CABLE_CATEGORY_CONFIG[key];
+                return (
+                  <div key={key} className={styles.bundleCard}>
+                    <Caption1 className={styles.fieldTitle}>{config.label}</Caption1>
+                    <Field
+                      label="Max rows"
+                      validationState={error ? 'error' : undefined}
+                      validationMessage={error ?? undefined}
+                    >
+                      <Input
+                        value={form.maxRows}
+                        type="number"
+                        onChange={handleBundleNumericChange(key, 'maxRows')}
+                      />
+                    </Field>
+                    <Field label="Max columns">
+                      <Input
+                        value={form.maxColumns}
+                        type="number"
+                        onChange={handleBundleNumericChange(key, 'maxColumns')}
+                      />
+                    </Field>
+                    <Field label="Space between bundles">
+                      <Dropdown
+                        selectedOptions={[form.bundleSpacing]}
+                        value={form.bundleSpacing}
+                        onOptionSelect={handleBundleSpacingChange(key)}
+                      >
+                        {BUNDLE_SPACING_OPTIONS.map((option) => (
+                          <Option key={option} value={option}>
+                            {option}
+                          </Option>
+                        ))}
+                      </Dropdown>
+                    </Field>
+                    {config.showTrefoil ? (
+                      <Checkbox
+                        label="Trefoil"
+                        checked={form.trefoil}
+                        onChange={handleBundleToggle(key, 'trefoil')}
+                      />
+                    ) : null}
+                    {config.allowTrefoilSpacing ? (
+                      <Checkbox
+                        label="Space between trefoil bundles"
+                        checked={form.trefoilSpacing}
+                        onChange={handleBundleToggle(key, 'trefoilSpacing')}
+                      />
+                    ) : null}
+                    {config.allowPhaseRotation ? (
+                      <Checkbox
+                        label="Apply phase rotation"
+                        checked={form.phaseRotation}
+                        onChange={handleBundleToggle(key, 'phaseRotation')}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
+        {isEditing ? (
+          <div className={styles.actions}>
+            <Button
+              appearance="secondary"
+              onClick={() => handleResetBundleForm()}
+              disabled={bundleSaving}
+            >
+              Reset
+            </Button>
+            <Button
+              appearance="primary"
+              onClick={handleSaveBundleConfig}
+              disabled={bundleSaving}
+            >
+              {bundleSaving ? 'Saving...' : 'Save bundle settings'}
+            </Button>
+          </div>
+        ) : null}
+        <div className={styles.bundleSummary}>
+          <Body1>
+            {isUsingCustomBundles
+              ? 'Custom tray bundle configuration is applied.'
+              : 'Project bundle configuration is applied.'}
+          </Body1>
+          {trayBundleDetails.length === 0 ? (
+            <Body1 className={styles.emptyState}>
+              {trayCables.length === 0
+                ? 'There are no cables on this tray.'
+                : 'Bundles configuration is not defined for the cables on this tray.'}
+            </Body1>
+          ) : (
+            trayBundleDetails.map((detail) => (
+              <Body1 key={detail.key} style={{ marginBottom: '0.25rem', fontWeight: 'normal' }}>
+                {detail.label}<br />
+                Current max rows - {numberFormatter.format(detail.maxRows)}{'    '}<br />
+                Current max columns - {numberFormatter.format(detail.maxColumns)}{'    '}<br />
+                Current space between bundles - {detail.bundleSpacing}{'    '}<br />
+                Trefoil - {
+                  detail.trefoil === null
+                    ? 'Not applicable'
+                    : detail.trefoil
+                    ? 'Enabled'
+                    : 'Disabled'
+                }<br />
+                {detail.trefoilSpacing !== null ? (
+                  <>
+                    Space between trefoil bundles -{' '}
+                    {detail.trefoilSpacing ? 'Enabled' : 'Disabled'}{'    '}<br />
+                  </>
+                ) : null}
+                {detail.phaseRotation !== null ? (
+                  <>
+                    Apply phase rotation -{' '}
+                    {detail.phaseRotation ? 'Enabled' : 'Disabled'}
+                  </>
+                ) : null}
+              </Body1>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Cables Section */}
       <CablesTableSection
         trayCables={nonGroundingCables}
@@ -2377,48 +2903,6 @@ export const TrayDetails = () => {
         refreshKey={loadCurveRefreshKey}
         canvasRef={loadCurveCanvasRef}
       />
-
-      <div className={styles.section}>
-        <Caption1>Bundle configuration for cables on this tray</Caption1>
-        {trayBundleDetails.length === 0 ? (
-          <Body1 className={styles.emptyState}>
-            {trayCables.length === 0
-              ? 'There are no cables on this tray.'
-              : 'Bundles configuration is not defined for the cables on this tray.'}
-          </Body1>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {trayBundleDetails.map((detail) => (
-              <Body1 key={detail.key} style={{ marginBottom: '0.25rem', fontWeight: 'normal' }}>
-                {detail.label}<br />
-                Current max rows - {numberFormatter.format(detail.maxRows)}{'    '}<br />
-                Current max columns - {numberFormatter.format(detail.maxColumns)}{'    '}<br />
-                Current space between bundles - {detail.bundleSpacing}{'    '}<br />
-                Trefoil - {
-                  detail.trefoil === null
-                    ? 'Not applicable'
-                    : detail.trefoil
-                    ? 'Enabled'
-                    : 'Disabled'
-                }<br />
-                {detail.trefoilSpacing !== null ? (
-                  <>
-                    Space between trefoil bundles -{' '}
-                    {detail.trefoilSpacing ? 'Enabled' : 'Disabled'}{'    '}<br />
-                  </>
-                ) : null}
-                {detail.phaseRotation !== null ? (
-                  <>
-                    Apply phase rotation -{' '}
-                    {detail.phaseRotation ? 'Enabled' : 'Disabled'}
-                  </>
-                ) : null}
-              </Body1>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className={styles.section}>
         <Caption1>Free space calculations</Caption1>
         <div className={styles.grid}>
