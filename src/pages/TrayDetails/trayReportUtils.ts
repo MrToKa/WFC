@@ -669,6 +669,10 @@ export const buildTrayPlaceholderValues = (
     formatNumberWithUnit(numberFormatter, supportLengthMm, 'mm')
   );
   addValue(
+    'tray-details:support-distance',
+    formatNumberWithUnit(numberFormatter, supportDistanceMeters, 'm')
+  );
+  addValue(
     'tray-details:supports-count',
     supportsCountFormula ?? formatNumber(numberFormatter, supportsCount)
   );

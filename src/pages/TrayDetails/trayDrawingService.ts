@@ -1798,12 +1798,17 @@ class CableBundleDrawer {
     scale: number,
     effectiveSpacingMm: number
   ): number {
+    const baseSpacingMm = Math.max(
+      Number.isFinite(maxDiameterMm) && maxDiameterMm > 0 ? maxDiameterMm : 0,
+      Math.max(effectiveSpacingMm, 0)
+    );
+
     if (bundleSpacing === '0') {
       return 0;
     } else if (bundleSpacing === '1D') {
-      return maxDiameterMm * scale;
+      return baseSpacingMm * scale;
     } else if (bundleSpacing === '2D') {
-      return maxDiameterMm * 2 * scale;
+      return baseSpacingMm * 2 * scale;
     }
     return 0;
   }

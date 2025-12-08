@@ -1139,6 +1139,11 @@ export const ProjectDetails = () => {
         value: calculatedValueNote
       },
       {
+        id: 'tray-details:support-distance',
+        name: 'Distance between supports [m]',
+        value: calculatedValueNote
+      },
+      {
         id: 'tray-details:supports-count',
         name: 'Supports count',
         value: calculatedValueNote

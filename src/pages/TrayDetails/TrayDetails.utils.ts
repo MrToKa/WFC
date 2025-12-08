@@ -128,23 +128,26 @@ const resolveBundleSpacingValue = (
   maxDiameter: number,
   spacingBetweenCablesMm: number
 ): number => {
+  const normalizedSpacing = Math.max(spacingBetweenCablesMm, 0);
+  const baseSpacing = Math.max(
+    Number.isFinite(maxDiameter) && maxDiameter > 0 ? maxDiameter : 0,
+    normalizedSpacing
+  );
+
   if (bundleSpacing === '0') {
     return 0;
   }
 
   if (bundleSpacing === '1D') {
-    return maxDiameter > 0 ? maxDiameter : spacingBetweenCablesMm;
+    return baseSpacing;
   }
 
   if (bundleSpacing === '2D') {
-    if (maxDiameter > 0) {
-      return maxDiameter * 2;
-    }
-    return spacingBetweenCablesMm * 2;
+    return baseSpacing * 2;
   }
 
   // Treat null/undefined as the base spacing between cables
-  return spacingBetweenCablesMm;
+  return normalizedSpacing;
 };
 
 const ensurePositiveInteger = (value: number | null | undefined, fallback: number): number => {

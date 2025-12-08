@@ -45,7 +45,6 @@ import {
   type CustomVariable
 } from '@/utils/customVariablesStorage';
 import {
-  clearTrayBundleOverrides,
   getTrayBundleOverrides,
   setTrayBundleOverrides,
   type TrayBundleOverride
@@ -166,16 +165,19 @@ type TrayReportBaseContext = Omit<
 >;
 
 const EMUS_PER_PIXEL = 9525;
-const MAX_IMAGE_WIDTH_EMU = 6.5 * 914400;
-const MAX_IMAGE_HEIGHT_EMU = 9 * 914400;
-const FULL_PAGE_IMAGE_WIDTH_EMU = 6.8 * 914400;
-const FULL_PAGE_TARGET_HEIGHT_EMU = 9 * 914400;
+const EMUS_PER_INCH = 914400;
+const MAX_IMAGE_WIDTH_EMU = 6.5 * EMUS_PER_INCH;
+const MAX_IMAGE_HEIGHT_EMU = 9 * EMUS_PER_INCH;
+const FULL_PAGE_IMAGE_WIDTH_EMU = 6.8 * EMUS_PER_INCH;
+const FULL_PAGE_TARGET_HEIGHT_EMU = 9 * EMUS_PER_INCH;
+const TRAY_TEMPLATE_MAX_HEIGHT_EMU = 6 * EMUS_PER_INCH;
 
 type PendingImagePlaceholder = {
   blob: Blob;
   fileName: string;
   description: string;
   layout?: 'default' | 'full-page';
+  maxHeightEmu?: number;
 };
 
 const readImageDimensions = (blob: Blob): Promise<{
@@ -198,13 +200,21 @@ const readImageDimensions = (blob: Blob): Promise<{
 
 const computeImageSizeEmu = async (
   blob: Blob,
-  layout: 'default' | 'full-page'
+  options?: {
+    layout?: 'default' | 'full-page';
+    maxHeightEmu?: number;
+  }
 ) => {
+  const layout = options?.layout ?? 'default';
   const isFullPage = layout === 'full-page';
   const maxWidth = isFullPage
     ? FULL_PAGE_IMAGE_WIDTH_EMU
     : MAX_IMAGE_WIDTH_EMU;
-  const fallbackHeight = Math.round(maxWidth * 0.6);
+  const fallbackMaxHeight = options?.maxHeightEmu ?? MAX_IMAGE_HEIGHT_EMU;
+  const fallbackHeight = Math.min(
+    Math.round(maxWidth * 0.6),
+    fallbackMaxHeight
+  );
 
   try {
     const { width, height } = await readImageDimensions(blob);
@@ -234,7 +244,7 @@ const computeImageSizeEmu = async (
       };
     }
 
-    const maxHeight = MAX_IMAGE_HEIGHT_EMU;
+    const maxHeight = options?.maxHeightEmu ?? MAX_IMAGE_HEIGHT_EMU;
     const scale = Math.min(maxWidth / rawWidthEmu, maxHeight / rawHeightEmu, 1);
 
     return {
@@ -257,7 +267,7 @@ const prepareImageDefinitions = async (
       try {
         const { widthEmu, heightEmu } = await computeImageSizeEmu(
           data.blob,
-          data.layout ?? 'default'
+          { layout: data.layout, maxHeightEmu: data.maxHeightEmu }
         );
         const buffer = await data.blob.arrayBuffer();
         const fileStem = data.fileName.replace(/\.[^.]+$/, '');
@@ -1444,6 +1454,66 @@ export const TrayDetails = () => {
     ? 'N/A'
     : `${percentageFormatter.format(freeSpaceMetrics.freeWidthPercent)} %`;
 
+  const rawTrayWidthMm = tray?.widthMm ?? null;
+  const trayWidthMm =
+    typeof rawTrayWidthMm === 'number' && Number.isFinite(rawTrayWidthMm) && rawTrayWidthMm > 0
+      ? rawTrayWidthMm
+      : null;
+
+  const occupiedWidthFormula = useMemo(() => {
+    const occupiedWidth = freeSpaceMetrics.occupiedWidthMm;
+    if (occupiedWidth === null || Number.isNaN(occupiedWidth)) {
+      return null;
+    }
+
+    if (
+      layoutSummary &&
+      typeof layoutSummary.totalCableWidthMm === 'number' &&
+      Number.isFinite(layoutSummary.totalCableWidthMm)
+    ) {
+      const spacingContribution = Math.max(0, occupiedWidth - layoutSummary.totalCableWidthMm);
+      return `${numberFormatter.format(layoutSummary.totalCableWidthMm)} + ${numberFormatter.format(
+        spacingContribution
+      )} = ${numberFormatter.format(occupiedWidth)} mm`;
+    }
+
+    if (trayWidthMm !== null) {
+      const freeWidthMm = Math.max(0, trayWidthMm - occupiedWidth);
+      return `${numberFormatter.format(trayWidthMm)} - ${numberFormatter.format(
+        freeWidthMm
+      )} = ${numberFormatter.format(occupiedWidth)} mm`;
+    }
+
+    return null;
+  }, [freeSpaceMetrics.occupiedWidthMm, layoutSummary, numberFormatter, trayWidthMm]);
+
+  const trayFreeSpaceFormula = useMemo(() => {
+    const occupiedWidth = freeSpaceMetrics.occupiedWidthMm;
+    const freePercent = freeSpaceMetrics.freeWidthPercent;
+
+    if (
+      trayWidthMm === null ||
+      occupiedWidth === null ||
+      freePercent === null ||
+      Number.isNaN(occupiedWidth) ||
+      Number.isNaN(freePercent)
+    ) {
+      return null;
+    }
+
+    return `((${numberFormatter.format(trayWidthMm)} - ${numberFormatter.format(
+      occupiedWidth
+    )}) / ${numberFormatter.format(trayWidthMm)}) * 100 = ${percentageFormatter.format(
+      freePercent
+    )} %`;
+  }, [
+    freeSpaceMetrics.freeWidthPercent,
+    freeSpaceMetrics.occupiedWidthMm,
+    numberFormatter,
+    percentageFormatter,
+    trayWidthMm
+  ]);
+
   // Calculate useful tray height (tray height - rung height)
   const usefulTrayHeightMm = useMemo(() => {
     const trayHeightMm = tray?.heightMm ?? null;
@@ -2445,6 +2515,7 @@ export const TrayDetails = () => {
           let fileNameForBlob = loadCurve;
           let description = '';
           let layout: 'default' | 'full-page' = 'default';
+          let maxHeightEmu: number | undefined;
 
           if (imageSource === 'loadCurve') {
             sourceBlob = loadCurveBlob;
@@ -2465,6 +2536,7 @@ export const TrayDetails = () => {
                   ?.imageTemplateFileName ?? 'TrayTypeImage';
               description = 'Tray type illustration';
               layout = 'default';
+              maxHeightEmu = TRAY_TEMPLATE_MAX_HEIGHT_EMU;
             }
           }
 
@@ -2473,7 +2545,8 @@ export const TrayDetails = () => {
               blob: sourceBlob,
               fileName: fileNameForBlob,
               description,
-              layout
+              layout,
+              maxHeightEmu
             };
           }
           continue;
@@ -2912,11 +2985,11 @@ export const TrayDetails = () => {
           </div>
           <div className={styles.field}>
             <Caption1>Space occupied by cables</Caption1>
-            <Body1>{occupiedWidthDisplay}</Body1>
+            <Body1>{occupiedWidthFormula ?? occupiedWidthDisplay}</Body1>
           </div>
           <div className={styles.field}>
             <Caption1>Cable tray free space</Caption1>
-            <Body1>{trayFreeSpaceDisplay}</Body1>
+            <Body1>{trayFreeSpaceFormula ?? trayFreeSpaceDisplay}</Body1>
           </div>
         </div>
         {freeSpaceAlert ? (
