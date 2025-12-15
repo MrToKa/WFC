@@ -135,7 +135,7 @@ const resolveBundleSpacingValue = (
   );
 
   if (bundleSpacing === '0') {
-    return 0;
+    return normalizedSpacing;
   }
 
   if (bundleSpacing === '1D') {
