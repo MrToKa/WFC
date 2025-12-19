@@ -1592,6 +1592,21 @@ export const TrayDetails = () => {
     [findMaterialTrayByType]
   );
 
+  const handlePurposeSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      const nextPurpose = data.optionValue ?? '';
+      setFormValues((previous) => ({
+        ...previous,
+        purpose: nextPurpose
+      }));
+      setFormErrors((previous) => ({
+        ...previous,
+        purpose: undefined
+      }));
+    },
+    []
+  );
+
   const handleGroundingCableToggle = useCallback(
     (_event: ChangeEvent<HTMLInputElement>, data: CheckboxOnChangeData) => {
       if (!trayId || groundingPreferenceSaving) {
@@ -2688,6 +2703,7 @@ export const TrayDetails = () => {
           isSubmitting={isSubmitting}
           onFieldChange={handleFieldChange}
           onTypeSelect={handleTypeSelect}
+          onPurposeSelect={handlePurposeSelect}
           onSubmit={handleSubmit}
           onCancel={handleCancelEdit}
           styles={styles}

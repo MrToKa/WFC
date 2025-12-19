@@ -1,7 +1,8 @@
 import React, { ChangeEvent, FormEvent } from 'react';
-import { Body1, Button, Field, Input, Dropdown, Option } from '@fluentui/react-components';
+import { Body1, Button, Field, Input, Dropdown, Option, Combobox } from '@fluentui/react-components';
 import { MaterialTray } from '../../../api/client';
 import { TrayFormState, TrayFormErrors } from '../TrayDetails.types';
+import { TRAY_PURPOSE_OPTIONS } from '@/constants/trayPurposeOptions';
 
 interface TrayEditFormProps {
   formValues: TrayFormState;
@@ -17,6 +18,7 @@ interface TrayEditFormProps {
     data: { value: string }
   ) => void;
   onTypeSelect: (_event: unknown, data: { optionValue?: string }) => void;
+  onPurposeSelect: (_event: unknown, data: { optionValue?: string }) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onCancel: () => void;
   styles: Record<string, string>;
@@ -33,10 +35,15 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
   materialTrays,
   onFieldChange,
   onTypeSelect,
+  onPurposeSelect,
   onSubmit,
   onCancel,
   styles
 }) => {
+  const hasCustomPurposeOption =
+    formValues.purpose.trim() !== '' &&
+    !TRAY_PURPOSE_OPTIONS.some((purpose) => purpose === formValues.purpose);
+
   return (
     <form className={styles.grid} onSubmit={onSubmit}>
       {materialsError ? (
@@ -91,10 +98,24 @@ export const TrayEditForm: React.FC<TrayEditFormProps> = ({
         validationState={formErrors.purpose ? 'error' : undefined}
         validationMessage={formErrors.purpose}
       >
-        <Input
+        <Combobox
+          placeholder="Select purpose"
+          selectedOptions={formValues.purpose ? [formValues.purpose] : []}
           value={formValues.purpose}
-          onChange={onFieldChange('purpose')}
-        />
+          onOptionSelect={onPurposeSelect}
+          freeform={false}
+        >
+          {TRAY_PURPOSE_OPTIONS.map((purpose) => (
+            <Option key={purpose} value={purpose}>
+              {purpose}
+            </Option>
+          ))}
+          {hasCustomPurposeOption ? (
+            <Option key="custom-purpose" value={formValues.purpose}>
+              {formValues.purpose}
+            </Option>
+          ) : null}
+        </Combobox>
       </Field>
       <Field
         label="Width [mm]"

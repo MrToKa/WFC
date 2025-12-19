@@ -19,6 +19,7 @@ import type { MaterialTray } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { TrayFormErrors, TrayFormState } from '../ProjectDetails.forms';
+import { TRAY_PURPOSE_OPTIONS } from '@/constants/trayPurposeOptions';
 
 type TrayDialogProps = {
   styles: ProjectDetailsStyles;
@@ -36,14 +37,6 @@ type TrayDialogProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDismiss: () => void;
 };
-
-const PURPOSE_OPTIONS = [
-  'Medium voltage cable tray',
-  'Low voltage cable tray',
-  'EMC cable tray',
-  'Instrumentation and control cables tray',
-  'LV and I and C cable tray'
-] as const;
 
 export const TrayDialog = ({
   styles,
@@ -130,7 +123,7 @@ export const TrayDialog = ({
                   onOptionSelect={onPurposeSelect}
                   freeform={false}
                 >
-                  {PURPOSE_OPTIONS.map((purpose) => (
+                  {TRAY_PURPOSE_OPTIONS.map((purpose) => (
                     <Option key={purpose} value={purpose}>
                       {purpose}
                     </Option>

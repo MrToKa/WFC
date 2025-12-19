@@ -12,9 +12,15 @@ import {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { ApiError, updateProject } from '@/api/client';
-import type { ProjectTrayPurposeTemplate } from '@/api/types';
+import type {
+  ProjectCableCategorySettings,
+  ProjectCableLayout,
+  ProjectTrayPurposeTemplate
+} from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
+import { getTrayBundleOverrides } from '@/utils/trayBundleOverrides';
+import type { TrayBundleOverride } from '@/utils/trayBundleOverrides';
 
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
@@ -76,6 +82,68 @@ import {
 } from './ProjectDetails/projectFileUtils';
 import { useMaterialData } from './TrayDetails/hooks';
 
+const CATEGORY_KEYS: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
+
+const buildCategoryLayoutConfig = (
+  layout: ProjectCableLayout | null | undefined,
+  spacingBetweenCablesMm: number
+): CategoryLayoutConfig =>
+  CATEGORY_KEYS.reduce<CategoryLayoutConfig>((acc, category) => {
+    const defaults = DEFAULT_CATEGORY_SETTINGS[category];
+    const layoutSettings = layout?.[category] ?? null;
+    const trefoil = CABLE_CATEGORY_CONFIG[category].showTrefoil
+      ? layoutSettings?.trefoil ?? defaults.trefoil
+      : false;
+    const trefoilSpacingBetweenBundles = CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
+      ? layoutSettings?.trefoilSpacingBetweenBundles ??
+        defaults.trefoilSpacingBetweenBundles
+      : defaults.trefoilSpacingBetweenBundles;
+    const applyPhaseRotation = CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
+      ? layoutSettings?.applyPhaseRotation ?? defaults.applyPhaseRotation
+      : defaults.applyPhaseRotation;
+
+    acc[category] = {
+      maxRows: layoutSettings?.maxRows ?? defaults.maxRows,
+      maxColumns: layoutSettings?.maxColumns ?? defaults.maxColumns,
+      bundleSpacing: layoutSettings?.bundleSpacing ?? defaults.bundleSpacing,
+      cableSpacing: spacingBetweenCablesMm,
+      trefoil,
+      trefoilSpacingBetweenBundles,
+      applyPhaseRotation
+    };
+    return acc;
+  }, {} as CategoryLayoutConfig);
+
+const mergeTrayLayoutOverrides = (
+  baseLayout: ProjectCableLayout | null,
+  override: TrayBundleOverride | null
+): ProjectCableLayout | null => {
+  if (!override?.useCustom) {
+    return baseLayout;
+  }
+
+  const mergedCategories = CATEGORY_KEYS.reduce<
+    Record<CableCategoryKey, ProjectCableCategorySettings>
+  >((acc, key) => {
+    const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+    const baseSettings =
+      (baseLayout?.[key] as ProjectCableCategorySettings | null) ?? defaults;
+    const overrideSettings = override.categories?.[key];
+    acc[key] = overrideSettings ? { ...baseSettings, ...overrideSettings } : baseSettings;
+    return acc;
+  }, {} as Record<CableCategoryKey, ProjectCableCategorySettings>);
+
+  return {
+    cableSpacing: baseLayout?.cableSpacing ?? DEFAULT_CABLE_SPACING,
+    considerBundleSpacingAsFree: baseLayout?.considerBundleSpacingAsFree ?? null,
+    minFreeSpacePercent: baseLayout?.minFreeSpacePercent ?? null,
+    maxFreeSpacePercent: baseLayout?.maxFreeSpacePercent ?? null,
+    power: mergedCategories.power ?? DEFAULT_CATEGORY_SETTINGS.power,
+    control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control,
+    mv: mergedCategories.mv ?? DEFAULT_CATEGORY_SETTINGS.mv,
+    vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd
+  };
+};
 const VALID_TABS: ProjectDetailsTab[] = [
   'details',
   'cables',
@@ -140,6 +208,7 @@ export const ProjectDetails = () => {
     formattedDates,
     reloadProject
   } = useProjectDetailsData({ projectId });
+  const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const {
     cables,
@@ -478,37 +547,6 @@ export const ProjectDetails = () => {
     return DEFAULT_CABLE_SPACING;
   }, [project?.cableLayout?.cableSpacing]);
 
-  const projectLayoutConfig = useMemo<CategoryLayoutConfig>(() => {
-    const categories: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
-    return categories.reduce<CategoryLayoutConfig>((acc, category) => {
-      const defaults = DEFAULT_CATEGORY_SETTINGS[category];
-      const layout = project?.cableLayout?.[category] ?? null;
-      const trefoil =
-        CABLE_CATEGORY_CONFIG[category].showTrefoil
-          ? layout?.trefoil ?? defaults.trefoil
-          : false;
-      const trefoilSpacingBetweenBundles =
-        CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
-          ? layout?.trefoilSpacingBetweenBundles ??
-            defaults.trefoilSpacingBetweenBundles
-          : defaults.trefoilSpacingBetweenBundles;
-      const applyPhaseRotation =
-        CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
-          ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
-          : defaults.applyPhaseRotation;
-      acc[category] = {
-        maxRows: layout?.maxRows ?? defaults.maxRows,
-        maxColumns: layout?.maxColumns ?? defaults.maxColumns,
-        bundleSpacing: layout?.bundleSpacing ?? defaults.bundleSpacing,
-        cableSpacing: projectCableSpacingMm,
-        trefoil,
-        trefoilSpacingBetweenBundles,
-        applyPhaseRotation
-      };
-      return acc;
-    }, {} as CategoryLayoutConfig);
-  }, [project?.cableLayout, projectCableSpacingMm]);
-
   const considerBundleSpacingAsFree = Boolean(
     project?.cableLayout?.considerBundleSpacingAsFree
   );
@@ -520,11 +558,27 @@ export const ProjectDetails = () => {
       return {};
     }
 
-    const layout = project?.cableLayout ?? null;
+    const baseLayout = project?.cableLayout ?? null;
     const docAvailable = typeof document !== 'undefined';
     const canvas = docAvailable ? document.createElement('canvas') : null;
 
     return trays.reduce<Record<string, TrayFreeSpaceMetrics>>((acc, tray) => {
+      const trayOverride: TrayBundleOverride | null =
+        canonicalProjectId && tray.id
+          ? getTrayBundleOverrides(canonicalProjectId, tray.id)
+          : null;
+      const effectiveLayout = mergeTrayLayoutOverrides(baseLayout, trayOverride);
+      const spacingBetweenCables =
+        typeof effectiveLayout?.cableSpacing === 'number' &&
+        Number.isFinite(effectiveLayout.cableSpacing) &&
+        effectiveLayout.cableSpacing >= 0
+          ? effectiveLayout.cableSpacing
+          : projectCableSpacingMm;
+      const layoutConfig = buildCategoryLayoutConfig(
+        effectiveLayout,
+        spacingBetweenCables
+      );
+
       const trayCables = filterCablesByTray(cables, tray.name);
 
       const cableBundles = trayCables.reduce<CableBundleMap>((bundleAcc, cable) => {
@@ -562,8 +616,8 @@ export const ProjectDetails = () => {
             trayCables,
             cableBundles,
             6,
-            projectCableSpacingMm,
-            projectLayoutConfig
+            spacingBetweenCables,
+            layoutConfig
           );
         } catch (error) {
           console.error('Failed to build tray layout summary', {
@@ -576,9 +630,9 @@ export const ProjectDetails = () => {
       const metrics = calculateTrayFreeSpaceMetrics({
         tray,
         cables: trayCables,
-        layout,
-        spacingBetweenCablesMm: projectCableSpacingMm,
-        considerBundleSpacingAsFree,
+        layout: effectiveLayout,
+        spacingBetweenCablesMm: spacingBetweenCables,
+        considerBundleSpacingAsFree: Boolean(effectiveLayout?.considerBundleSpacingAsFree),
         layoutSummary: layoutSummary ?? undefined
       });
 
@@ -588,8 +642,7 @@ export const ProjectDetails = () => {
     }, {});
   }, [
     cables,
-    considerBundleSpacingAsFree,
-    projectLayoutConfig,
+    canonicalProjectId,
     project?.cableLayout,
     projectCableSpacingMm,
     trayDrawingService,
