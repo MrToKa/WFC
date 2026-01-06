@@ -280,7 +280,7 @@ export const buildTrayPlaceholderValues = (
   const trayMaterialWeightPerMeterKg = materialTrayMetadata?.weightKgPerM ?? null;
   const trayRungHeightMm = materialTrayMetadata?.rungHeightMm ?? null;
   const trayTypeImageAvailable = Boolean(materialTrayMetadata?.imageTemplateId);
-  
+
   // Calculate useful tray height (tray height - rung height)
   const usefulTrayHeightMm =
     trayHeightSourceMm !== null && trayRungHeightMm !== null
@@ -294,6 +294,20 @@ export const buildTrayPlaceholderValues = (
       ? `${numberFormatter.format(trayHeightSourceMm)} - ${numberFormatter.format(
           trayRungHeightMm
         )} = ${numberFormatter.format(usefulTrayHeightMm)} mm`
+      : null;
+
+  const trayFreeSpaceFormula =
+    trayWidthSourceMm !== null &&
+    !Number.isNaN(trayWidthSourceMm) &&
+    trayOccupiedWidthMm !== null &&
+    !Number.isNaN(trayOccupiedWidthMm) &&
+    trayFreeSpacePercent !== null &&
+    !Number.isNaN(trayFreeSpacePercent)
+      ? `((${numberFormatter.format(trayWidthSourceMm)} - ${numberFormatter.format(
+          trayOccupiedWidthMm
+        )}) / ${numberFormatter.format(trayWidthSourceMm)}) * 100 = ${percentageFormatter.format(
+          trayFreeSpacePercent
+        )} %`
       : null;
 
   const addValue = (key: string, value: string | null | undefined) => {
@@ -544,9 +558,10 @@ export const buildTrayPlaceholderValues = (
   );
   addValue(
     'tray-details:free-space',
-    trayFreeSpacePercent === null
-      ? MISSING_VALUE_PLACEHOLDER
-      : formatPercent(percentageFormatter, trayFreeSpacePercent)
+    trayFreeSpaceFormula ??
+      (trayFreeSpacePercent === null
+        ? MISSING_VALUE_PLACEHOLDER
+        : formatPercent(percentageFormatter, trayFreeSpacePercent))
   );
   addValue(
     'tray-details:grounding-flag',
