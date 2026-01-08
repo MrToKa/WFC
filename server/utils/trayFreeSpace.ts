@@ -1,7 +1,8 @@
 import type { PublicTray } from '../models/tray.js';
 import type {
   CableBundleSpacing,
-  PublicCableLayout
+  PublicCableLayout,
+  CustomBundleRange
 } from '../models/project.js';
 
 export type TrayCableForFreeSpace = {
@@ -79,6 +80,51 @@ const determineCableDiameterGroup = (
   if (diameter <= 45) return BUNDLE_GROUP_LABELS.range40_1_45;
   if (diameter <= 60) return BUNDLE_GROUP_LABELS.range45_1_60;
   return BUNDLE_GROUP_LABELS.range60Plus;
+};
+
+/**
+ * Finds which custom bundle range a diameter falls into.
+ * Returns the range label (e.g., "9.1-14") if found, null otherwise.
+ */
+const findCustomBundleRange = (
+  diameter: number,
+  ranges: CustomBundleRange[] | undefined
+): string | null => {
+  if (!ranges || ranges.length === 0 || !Number.isFinite(diameter) || diameter <= 0) {
+    return null;
+  }
+
+  for (const range of ranges) {
+    if (diameter >= range.min && diameter <= range.max) {
+      return `${range.min}-${range.max}`;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Determines the bundle group for a cable diameter.
+ * Uses custom ranges if provided, otherwise falls back to default ranges.
+ */
+const determineCableDiameterGroupWithCustomRanges = (
+  diameter: number | null | undefined,
+  customRanges: CustomBundleRange[] | undefined
+): string => {
+  if (diameter === null || diameter === undefined || Number.isNaN(diameter) || diameter <= 0) {
+    return BUNDLE_GROUP_LABELS.range0_8;
+  }
+
+  // Try custom ranges first if provided
+  if (customRanges && customRanges.length > 0) {
+    const customLabel = findCustomBundleRange(diameter, customRanges);
+    if (customLabel) {
+      return customLabel;
+    }
+  }
+
+  // Fall back to default bundle types
+  return determineCableDiameterGroup(diameter);
 };
 
 const routingContainsTray = (
@@ -194,6 +240,9 @@ const calculateTrayFreeSpaceMetrics = ({
       ? spacingBetweenCablesMm
       : 0;
 
+  // Get custom bundle ranges from layout
+  const customBundleRanges = layout?.customBundleRanges ?? null;
+
   const categoryGroups = CABLE_CATEGORY_ORDER.reduce<Record<CableCategoryKey, Record<string, number[]>>>(
     (acc, key) => {
       acc[key] = {};
@@ -221,7 +270,9 @@ const calculateTrayFreeSpaceMetrics = ({
       continue;
     }
 
-    const groupKey = determineCableDiameterGroup(diameter);
+    // Use custom bundle ranges for this category if available
+    const categoryCustomRanges = customBundleRanges?.[category];
+    const groupKey = determineCableDiameterGroupWithCustomRanges(diameter, categoryCustomRanges);
     if (!categoryGroups[category][groupKey]) {
       categoryGroups[category][groupKey] = [];
     }

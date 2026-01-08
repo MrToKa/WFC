@@ -135,6 +135,13 @@ const mergeTrayLayoutOverrides = (
     return acc;
   }, {} as Record<CableCategoryKey, ProjectCableCategorySettings>);
 
+  // Merge custom bundle ranges: use tray-level if available, otherwise use project-level
+  const trayCustomRanges = override.customBundleRanges;
+  const hasTrayCustRanges = trayCustomRanges && Object.keys(trayCustomRanges).length > 0;
+  const mergedCustomRanges = hasTrayCustRanges
+    ? trayCustomRanges
+    : baseLayout?.customBundleRanges ?? null;
+
   return {
     cableSpacing: baseLayout?.cableSpacing ?? DEFAULT_CABLE_SPACING,
     considerBundleSpacingAsFree: baseLayout?.considerBundleSpacingAsFree ?? null,
@@ -143,7 +150,8 @@ const mergeTrayLayoutOverrides = (
     power: mergedCategories.power ?? DEFAULT_CATEGORY_SETTINGS.power,
     control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control,
     mv: mergedCategories.mv ?? DEFAULT_CATEGORY_SETTINGS.mv,
-    vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd
+    vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd,
+    customBundleRanges: mergedCustomRanges
   };
 };
 const VALID_TABS: ProjectDetailsTab[] = [
@@ -591,8 +599,8 @@ export const ProjectDetails = () => {
 
       const trayCables = filterCablesByTray(cables, tray.name);
       
-      // Use project-level custom bundle ranges
-      const projectCustomRanges = project?.cableLayout?.customBundleRanges;
+      // Use effective custom bundle ranges (tray-level overrides or project-level)
+      const effectiveCustomRanges = effectiveLayout?.customBundleRanges;
 
       const cableBundles = trayCables.reduce<CableBundleMap>((bundleAcc, cable) => {
         const category = matchCableCategory(cable.purpose);
@@ -605,8 +613,8 @@ export const ProjectDetails = () => {
         }
 
         const bucket = bundleAcc[category];
-        // Use custom bundle ranges for this category if available at project level
-        const categoryCustomRanges = projectCustomRanges?.[category as CableCategoryKey];
+        // Use custom bundle ranges for this category if available
+        const categoryCustomRanges = effectiveCustomRanges?.[category as CableCategoryKey];
         const bundleKey = categoryCustomRanges && categoryCustomRanges.length > 0
           ? determineCableDiameterGroupWithCustomRanges(cable.diameterMm ?? null, categoryCustomRanges)
           : determineCableDiameterGroup(cable.diameterMm ?? null);
