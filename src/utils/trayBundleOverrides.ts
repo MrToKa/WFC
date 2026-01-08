@@ -3,17 +3,107 @@ import type { CableCategoryKey } from '@/pages/ProjectDetails/hooks/cableLayoutD
 
 const STORAGE_KEY = 'wfc:tray-bundle-overrides';
 
+/**
+ * Custom bundle size range for cable diameter grouping.
+ * Used to override the default bundle size ranges per category.
+ */
+export type CustomBundleRange = {
+  id: string;
+  min: number;
+  max: number;
+};
+
+/**
+ * Validates that custom bundle ranges don't overlap and have proper gaps.
+ * Returns an error message if invalid ranges are found, null otherwise.
+ * 
+ * Rules:
+ * - min and max must be positive numbers
+ * - max must be greater than min (e.g., min: 8, max: 8 is invalid)
+ * - Ranges must not overlap (current.max > next.min is an overlap)
+ * - Next range's min should be at least 0.1 greater than previous range's max
+ *   (e.g., if range ends at 8, next should start at 8.1 or higher)
+ */
+export const validateBundleRanges = (
+  ranges: CustomBundleRange[]
+): string | null => {
+  if (ranges.length === 0) {
+    return null;
+  }
+
+  // Check for invalid min/max values
+  for (const range of ranges) {
+    if (range.min < 0 || range.max < 0) {
+      return 'Bundle range values must be positive numbers.';
+    }
+    if (range.min >= range.max) {
+      return `Invalid range: min (${range.min}) must be less than max (${range.max}). Use ${range.min + 0.1} as minimum for the next range.`;
+    }
+  }
+
+  // Sort ranges by min value to check for overlaps
+  const sorted = [...ranges].sort((a, b) => a.min - b.min);
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const current = sorted[i];
+    const next = sorted[i + 1];
+    // Check if current range overlaps with next range
+    // Ranges overlap if current.max >= next.min (they touch or overlap)
+    if (current.max >= next.min) {
+      const suggestedMin = current.max + 0.1;
+      return `Ranges overlap or touch: [${current.min}-${current.max}] and [${next.min}-${next.max}]. Next range should start at ${suggestedMin} or higher.`;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Generates a unique ID for a new bundle range.
+ */
+export const generateBundleRangeId = (): string =>
+  `bundle-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+/**
+ * Converts custom bundle ranges to a label for the bundle key.
+ */
+export const getBundleRangeLabel = (range: CustomBundleRange): string =>
+  `${range.min}-${range.max}`;
+
+/**
+ * Determines which custom bundle range a diameter falls into.
+ * Returns the range label if found, null otherwise.
+ */
+export const findCustomBundleRange = (
+  diameter: number,
+  ranges: CustomBundleRange[]
+): string | null => {
+  if (ranges.length === 0 || !Number.isFinite(diameter) || diameter <= 0) {
+    return null;
+  }
+
+  for (const range of ranges) {
+    if (diameter >= range.min && diameter <= range.max) {
+      return getBundleRangeLabel(range);
+    }
+  }
+
+  return null;
+};
+
 type StoredMap = Record<
   string,
   {
     useCustom: boolean;
     categories: Partial<Record<CableCategoryKey, ProjectCableCategorySettings>>;
+    customBundleRanges?: Partial<Record<CableCategoryKey, CustomBundleRange[]>>;
   }
 >;
 
 export type TrayBundleOverride = {
   useCustom: boolean;
   categories: Partial<Record<CableCategoryKey, ProjectCableCategorySettings>>;
+  customBundleRanges?: Partial<Record<CableCategoryKey, CustomBundleRange[]>>;
 };
 
 const isBrowserEnvironment =
@@ -79,7 +169,8 @@ export const getTrayBundleOverrides = (
 
   return {
     useCustom: Boolean(value.useCustom),
-    categories: value.categories ?? {}
+    categories: value.categories ?? {},
+    customBundleRanges: value.customBundleRanges ?? {}
   };
 };
 
@@ -97,7 +188,8 @@ export const setTrayBundleOverrides = (
 
   map[key] = {
     useCustom: Boolean(override.useCustom),
-    categories: override.categories ?? {}
+    categories: override.categories ?? {},
+    customBundleRanges: override.customBundleRanges ?? {}
   };
 
   persistOverrides(map);

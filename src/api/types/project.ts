@@ -42,6 +42,18 @@ export type ProjectSupportOverridePayload = {
 
 export type CableBundleSpacing = '0' | '1D' | '2D';
 
+/**
+ * Custom bundle size range for cable diameter grouping.
+ * Used to override the default bundle size ranges.
+ */
+export type CustomBundleRange = {
+  id: string;
+  min: number;
+  max: number;
+};
+
+export type CableCategoryKey = 'mv' | 'power' | 'vfd' | 'control';
+
 export type ProjectCableCategorySettings = {
   maxRows: number | null;
   maxColumns: number | null;
@@ -60,6 +72,11 @@ export type ProjectCableLayout = {
   power: ProjectCableCategorySettings | null;
   vfd: ProjectCableCategorySettings | null;
   control: ProjectCableCategorySettings | null;
+  /**
+   * Custom bundle size ranges per cable category.
+   * When defined, cables are grouped by these ranges instead of default ranges.
+   */
+  customBundleRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null;
 };
 
 export type ProjectCableCategorySettingsInput =
@@ -75,4 +92,5 @@ export type ProjectCableLayoutInput = {
   power?: ProjectCableCategorySettingsInput;
   vfd?: ProjectCableCategorySettingsInput;
   control?: ProjectCableCategorySettingsInput;
+  customBundleRanges?: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null;
 } | null;

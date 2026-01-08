@@ -1,4 +1,6 @@
 import type { Tray, Cable } from '@/api/client';
+import type { CustomBundleRange } from '@/utils/trayBundleOverrides';
+import { findCustomBundleRange, getBundleRangeLabel } from '@/utils/trayBundleOverrides';
 
 const TrayConstants = {
   canvasMargin: 50,
@@ -66,6 +68,42 @@ export const determineCableDiameterGroup = (diameter: number | null | undefined)
   return TrayConstants.bundleTypes.range60Plus;
 };
 
+/**
+ * Determines the cable diameter group using custom ranges if provided.
+ * Falls back to default bundle types if no matching custom range is found.
+ */
+export const determineCableDiameterGroupWithCustomRanges = (
+  diameter: number | null | undefined,
+  customRanges?: CustomBundleRange[]
+): string => {
+  if (diameter === null || diameter === undefined || Number.isNaN(diameter) || diameter <= 0) {
+    return TrayConstants.bundleTypes.range0_8;
+  }
+
+  // Try custom ranges first if provided
+  if (customRanges && customRanges.length > 0) {
+    const customLabel = findCustomBundleRange(diameter, customRanges);
+    if (customLabel) {
+      return customLabel;
+    }
+  }
+
+  // Fall back to default bundle types
+  return determineCableDiameterGroup(diameter);
+};
+
+/**
+ * Gets all unique bundle keys from custom ranges.
+ * Useful for iterating over custom bundles.
+ */
+export const getCustomBundleKeys = (customRanges: CustomBundleRange[]): string[] =>
+  customRanges.map(getBundleRangeLabel);
+
+/**
+ * Exports the default bundle types for external use.
+ */
+export const DEFAULT_BUNDLE_TYPES = TrayConstants.bundleTypes;
+
 const getCableDiameter = (cable: Cable): number => {
   if (typeof cable.diameterMm === 'number' && !Number.isNaN(cable.diameterMm) && cable.diameterMm > 0) {
     return cable.diameterMm;
@@ -83,6 +121,60 @@ const logLayoutDebug = (message: string, details: Record<string, unknown>) => {
 
 const sumCableWidthsPx = (cables: Cable[], scale: number, spacingMm: number): number =>
   cables.reduce((total, cable) => total + (getCableDiameter(cable) + spacingMm) * scale, 0);
+
+/**
+ * Redistributes cables that would fit in a single column to multiple columns.
+ * This creates a more compact and visually balanced layout.
+ * 
+ * Rules:
+ * - 2 cables: 1 row, 2 columns (already handled elsewhere)
+ * - 3 cables: 2 rows, 2 columns (2 + 1)
+ * - 4 cables: 2 rows, 2 columns (2 + 2)
+ * - 5 cables: 2 rows, 3 columns (2 + 2 + 1) or 3 rows, 2 columns (3 + 2)
+ * - 6 cables: 2 rows, 3 columns (2 + 2 + 2) or 3 rows, 2 columns (3 + 3)
+ * - 7 cables: 3 rows, 3 columns (2 + 2 + 3) or (3 + 2 + 2)
+ * - etc.
+ * 
+ * The function tries to keep rows at 2 when possible, expanding columns as needed.
+ */
+const redistributeSingleColumnLayout = (
+  cableCount: number,
+  currentRows: number,
+  currentColumns: number,
+  purpose: string
+): { rows: number; columns: number } => {
+  // Only apply if cables would fit in a single column and there are more than 2 cables
+  if (currentColumns !== 1 || cableCount <= 2) {
+    return { rows: currentRows, columns: currentColumns };
+  }
+
+  // Don't apply to MV cables - they have different layout rules
+  if (purpose === TrayConstants.cablePurposes.mv) {
+    return { rows: currentRows, columns: currentColumns };
+  }
+
+  // Calculate optimal distribution preferring 2 rows when possible
+  // For 3-4 cables: 2 columns
+  // For 5-6 cables: 3 columns (or 2 columns with 3 rows)
+  // For 7-9 cables: 3 columns with 3 rows
+  // etc.
+
+  let targetRows = 2;
+  let targetColumns = Math.ceil(cableCount / targetRows);
+
+  // If we'd need more than 3-4 columns with 2 rows, try 3 rows instead
+  if (targetColumns > 4 && cableCount <= 9) {
+    targetRows = 3;
+    targetColumns = Math.ceil(cableCount / targetRows);
+  }
+
+  // Ensure we have at least enough capacity
+  while (targetRows * targetColumns < cableCount) {
+    targetColumns++;
+  }
+
+  return { rows: targetRows, columns: targetColumns };
+};
 
 export type TrayLayoutSummary = {
   spacingMm: number;
@@ -583,12 +675,25 @@ class CableBundleDrawer {
             columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
           }
 
+          // Handle 2 cables specially - draw in 1 row, 2 columns
           if (
             purposeString !== TrayConstants.cablePurposes.mv &&
             chunkLength === 2
           ) {
             rows = 1;
             columns = Math.max(columns, 2);
+          }
+
+          // Redistribute cables that would be stacked in a single column
+          if (columns === 1 && chunkLength > 2) {
+            const redistributed = redistributeSingleColumnLayout(
+              chunkLength,
+              rows,
+              columns,
+              purposeString
+            );
+            rows = redistributed.rows;
+            columns = redistributed.columns;
           }
 
           ({ leftStartX, bottomStartY } = this.drawVerticalStacking(
@@ -664,12 +769,25 @@ class CableBundleDrawer {
               columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
             }
 
+            // Handle 2 cables specially - draw in 1 row, 2 columns
             if (
               purposeString !== TrayConstants.cablePurposes.mv &&
               chunkLength === 2
             ) {
               rows = 1;
               columns = Math.max(columns, 2);
+            }
+
+            // Redistribute cables that would be stacked in a single column
+            if (columns === 1 && chunkLength > 2) {
+              const redistributed = redistributeSingleColumnLayout(
+                chunkLength,
+                rows,
+                columns,
+                purposeString
+              );
+              rows = redistributed.rows;
+              columns = redistributed.columns;
             }
 
             if (
@@ -852,9 +970,22 @@ class CableBundleDrawer {
             columns = Math.max(1, Math.min(referenceColumns, Math.ceil(chunkLength / rows)));
           }
 
+          // Handle 2 cables specially - draw in 1 row, 2 columns
           if (chunkLength === 2) {
             rows = 1;
             columns = Math.max(columns, 2);
+          }
+
+          // Redistribute cables that would be stacked in a single column
+          if (columns === 1 && chunkLength > 2) {
+            const redistributed = redistributeSingleColumnLayout(
+              chunkLength,
+              rows,
+              columns,
+              TrayConstants.cablePurposes.control
+            );
+            rows = redistributed.rows;
+            columns = redistributed.columns;
           }
 
           rightStartX = this.drawVerticalStackingFromRight(

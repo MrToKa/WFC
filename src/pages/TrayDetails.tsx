@@ -47,7 +47,11 @@ import {
 import {
   getTrayBundleOverrides,
   setTrayBundleOverrides,
-  type TrayBundleOverride
+  validateBundleRanges,
+  generateBundleRangeId,
+  getBundleRangeLabel,
+  type TrayBundleOverride,
+  type CustomBundleRange
 } from '@/utils/trayBundleOverrides';
 
 // Import refactored modules
@@ -93,7 +97,8 @@ import {
   type CableBundleMap,
   type CategoryLayoutConfig,
   type TrayLayoutSummary,
-  determineCableDiameterGroup
+  determineCableDiameterGroup,
+  determineCableDiameterGroupWithCustomRanges
 } from './TrayDetails/trayDrawingService';
 import {
   canvasToBlob,
@@ -361,6 +366,84 @@ type BundleCategoryFormState = {
 type BundleFormState = Record<CableCategoryKey, BundleCategoryFormState>;
 type BundleFormErrors = Record<CableCategoryKey, string | null>;
 
+// Custom bundle range form state (min/max as strings for input handling)
+type CustomBundleRangeFormState = {
+  id: string;
+  min: string;
+  max: string;
+};
+
+type CustomBundleRangesFormState = Record<CableCategoryKey, CustomBundleRangeFormState[]>;
+type CustomBundleRangesErrors = Record<CableCategoryKey, string | null>;
+
+const createEmptyCustomBundleRangesFormState = (): CustomBundleRangesFormState => ({
+  mv: [],
+  power: [],
+  vfd: [],
+  control: []
+});
+
+const createEmptyCustomBundleRangesErrors = (): CustomBundleRangesErrors => ({
+  mv: null,
+  power: null,
+  vfd: null,
+  control: null
+});
+
+/**
+ * Builds custom bundle ranges form state from project-level ranges or tray-level overrides.
+ * When initializing for tray edit, we pre-populate from project ranges if tray has no overrides.
+ */
+const buildCustomBundleRangesFormState = (
+  projectRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null | undefined,
+  trayOverrideRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null | undefined
+): CustomBundleRangesFormState => {
+  const result = createEmptyCustomBundleRangesFormState();
+  
+  // Use tray overrides if they exist, otherwise fall back to project ranges
+  const sourceRanges = trayOverrideRanges && Object.keys(trayOverrideRanges).length > 0
+    ? trayOverrideRanges
+    : projectRanges;
+
+  if (!sourceRanges) {
+    return result;
+  }
+
+  for (const key of CABLE_CATEGORY_ORDER) {
+    const ranges = sourceRanges[key];
+    if (ranges && ranges.length > 0) {
+      result[key] = ranges.map((range) => ({
+        id: range.id,
+        min: String(range.min),
+        max: String(range.max)
+      }));
+    }
+  }
+
+  return result;
+};
+
+const parseCustomBundleRangesFormState = (
+  formState: CustomBundleRangesFormState
+): Partial<Record<CableCategoryKey, CustomBundleRange[]>> => {
+  const result: Partial<Record<CableCategoryKey, CustomBundleRange[]>> = {};
+
+  for (const key of CABLE_CATEGORY_ORDER) {
+    const ranges = formState[key];
+    if (ranges.length > 0) {
+      result[key] = ranges
+        .map((range) => ({
+          id: range.id,
+          min: parseFloat(range.min) || 0,
+          max: parseFloat(range.max) || 0
+        }))
+        .filter((range) => range.min >= 0 && range.max > 0);
+    }
+  }
+
+  return result;
+};
+
 const createBundleFormErrors = (): BundleFormErrors => ({
   mv: null,
   power: null,
@@ -577,6 +660,31 @@ const useStyles = makeStyles({
     maxWidth: '100%',
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground1
+  },
+  bundleRangesSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    marginTop: '0.5rem',
+    paddingTop: '0.5rem',
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`
+  },
+  bundleRangeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    flexWrap: 'wrap'
+  },
+  bundleRangeInput: {
+    width: '5rem'
+  },
+  bundleRangeLabel: {
+    minWidth: '2rem',
+    textAlign: 'center' as const
+  },
+  bundleRangeError: {
+    color: tokens.colorStatusDangerForeground1,
+    fontSize: tokens.fontSizeBase200
   }
 });
 
@@ -652,6 +760,12 @@ export const TrayDetails = () => {
   const [bundleOverrides, setBundleOverrides] = useState<TrayBundleOverride | null>(null);
   const [bundleSaving, setBundleSaving] = useState<boolean>(false);
 
+  // Custom bundle ranges form state for tray-level configuration
+  const [customBundleRangesFormState, setCustomBundleRangesFormState] =
+    useState<CustomBundleRangesFormState>(() => createEmptyCustomBundleRangesFormState());
+  const [customBundleRangesErrors, setCustomBundleRangesErrors] =
+    useState<CustomBundleRangesErrors>(() => createEmptyCustomBundleRangesErrors());
+
   // Initialize form when tray loads
   useEffect(() => {
     if (tray) {
@@ -668,6 +782,14 @@ export const TrayDetails = () => {
     setBundleFormUseCustom(Boolean(stored?.useCustom));
     setBundleFormState(buildBundleFormState(project?.cableLayout ?? null, categories));
     setBundleFormErrors(createBundleFormErrors());
+    // Initialize custom bundle ranges from tray overrides or project defaults
+    setCustomBundleRangesFormState(
+      buildCustomBundleRangesFormState(
+        project?.cableLayout?.customBundleRanges,
+        stored?.customBundleRanges
+      )
+    );
+    setCustomBundleRangesErrors(createEmptyCustomBundleRangesErrors());
   }, [canonicalProjectId, project?.cableLayout, tray?.id, trayId]);
 
   // Material tray selection
@@ -974,6 +1096,11 @@ export const TrayDetails = () => {
 
   const cableBundles: CableBundleMap = useMemo(() => {
     const bundles: CableBundleMap = {};
+    
+    // Use tray-level custom ranges if custom config is enabled, otherwise use project-level
+    const customRanges = bundleOverrides?.useCustom && bundleOverrides.customBundleRanges
+      ? bundleOverrides.customBundleRanges
+      : project?.cableLayout?.customBundleRanges;
 
     for (const cable of nonGroundingCables) {
       const category = matchCableCategory(cable.purpose);
@@ -981,7 +1108,11 @@ export const TrayDetails = () => {
         continue;
       }
 
-      const bundleKey = determineCableDiameterGroup(cable.diameterMm ?? null);
+      // Use custom bundle ranges for this category if available
+      const categoryCustomRanges = customRanges?.[category as CableCategoryKey];
+      const bundleKey = categoryCustomRanges && categoryCustomRanges.length > 0
+        ? determineCableDiameterGroupWithCustomRanges(cable.diameterMm ?? null, categoryCustomRanges)
+        : determineCableDiameterGroup(cable.diameterMm ?? null);
 
       if (!bundles[category]) {
         bundles[category] = {};
@@ -995,7 +1126,7 @@ export const TrayDetails = () => {
     }
 
     return bundles;
-  }, [nonGroundingCables]);
+  }, [nonGroundingCables, bundleOverrides?.useCustom, bundleOverrides?.customBundleRanges, project?.cableLayout?.customBundleRanges]);
 
   const isUsingCustomBundles = Boolean(bundleOverrides?.useCustom);
 
@@ -1293,6 +1424,9 @@ export const TrayDetails = () => {
           ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
           : null;
 
+        // Get custom bundle ranges for this category
+        const customRanges = bundleOverrides?.customBundleRanges?.[key] ?? [];
+
         return {
           key,
           label: config.label,
@@ -1301,10 +1435,11 @@ export const TrayDetails = () => {
           bundleSpacing,
           trefoil,
           trefoilSpacing,
-          phaseRotation
+          phaseRotation,
+          customRanges
         };
       }),
-    [activeProjectCableLayout, trayCableCategories]
+    [activeProjectCableLayout, trayCableCategories, bundleOverrides?.customBundleRanges]
   );
 
   const formatCableTypeLabel = useCallback(
@@ -1775,8 +1910,58 @@ export const TrayDetails = () => {
         buildBundleFormState(project?.cableLayout ?? null, source?.categories ?? null)
       );
       setBundleFormErrors(createBundleFormErrors());
+      // Reset custom bundle ranges
+      setCustomBundleRangesFormState(
+        buildCustomBundleRangesFormState(
+          project?.cableLayout?.customBundleRanges,
+          source?.customBundleRanges
+        )
+      );
+      setCustomBundleRangesErrors(createEmptyCustomBundleRangesErrors());
     },
     [bundleOverrides, project?.cableLayout]
+  );
+
+  // Custom bundle range handlers for tray configuration
+  const handleAddBundleRange = useCallback(
+    (category: CableCategoryKey) => {
+      if (!isEditing) return;
+      setCustomBundleRangesErrors((prev) => ({ ...prev, [category]: null }));
+      setCustomBundleRangesFormState((prev) => ({
+        ...prev,
+        [category]: [
+          ...prev[category],
+          { id: generateBundleRangeId(), min: '', max: '' }
+        ]
+      }));
+    },
+    [isEditing]
+  );
+
+  const handleRemoveBundleRange = useCallback(
+    (category: CableCategoryKey, rangeId: string) => {
+      if (!isEditing) return;
+      setCustomBundleRangesErrors((prev) => ({ ...prev, [category]: null }));
+      setCustomBundleRangesFormState((prev) => ({
+        ...prev,
+        [category]: prev[category].filter((r) => r.id !== rangeId)
+      }));
+    },
+    [isEditing]
+  );
+
+  const handleBundleRangeChange = useCallback(
+    (category: CableCategoryKey, rangeId: string, field: 'min' | 'max', value: string) => {
+      if (!isEditing) return;
+      setCustomBundleRangesErrors((prev) => ({ ...prev, [category]: null }));
+      setCustomBundleRangesFormState((prev) => ({
+        ...prev,
+        [category]: prev[category].map((r) =>
+          r.id === rangeId ? { ...r, [field]: value } : r
+        )
+      }));
+    },
+    [isEditing]
   );
 
   const buildBundleOverrideInput = useCallback(() => {
@@ -1856,15 +2041,49 @@ export const TrayDetails = () => {
       return;
     }
 
+    // Validate custom bundle ranges for each category
+    const rangeErrors = createEmptyCustomBundleRangesErrors();
+    let hasRangeErrors = false;
+
+    for (const key of CABLE_CATEGORY_ORDER) {
+      const ranges = customBundleRangesFormState[key];
+      if (ranges.length === 0) continue;
+
+      const parsedRanges: CustomBundleRange[] = ranges.map((r) => ({
+        id: r.id,
+        min: parseFloat(r.min) || 0,
+        max: parseFloat(r.max) || 0
+      }));
+
+      const validationError = validateBundleRanges(parsedRanges);
+      if (validationError) {
+        rangeErrors[key] = validationError;
+        hasRangeErrors = true;
+      }
+    }
+
+    if (hasRangeErrors) {
+      setCustomBundleRangesErrors(rangeErrors);
+      return;
+    }
+
     setBundleSaving(true);
     try {
+      // Parse custom bundle ranges from form state
+      const parsedCustomRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
+      const hasCustomRanges = Object.values(parsedCustomRanges).some(
+        (ranges) => ranges && ranges.length > 0
+      );
+
       const nextOverride: TrayBundleOverride = {
         useCustom: bundleFormUseCustom,
-        categories
+        categories,
+        customBundleRanges: hasCustomRanges ? parsedCustomRanges : undefined
       };
 
       persistBundleOverride(nextOverride);
       handleResetBundleForm(nextOverride);
+      setCustomBundleRangesErrors(createEmptyCustomBundleRangesErrors());
     } catch (error) {
       console.error('Failed to save bundle configuration', error);
       showToast({
@@ -1878,6 +2097,7 @@ export const TrayDetails = () => {
   }, [
     buildBundleOverrideInput,
     bundleFormUseCustom,
+    customBundleRangesFormState,
     handleResetBundleForm,
     persistBundleOverride,
     showToast
@@ -1922,13 +2142,21 @@ export const TrayDetails = () => {
       if (hasError) {
         setBundleFormErrors(errors);
       } else {
+        // Parse custom bundle ranges from form state
+        const parsedCustomRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
+        const hasCustomRanges = Object.values(parsedCustomRanges).some(
+          (ranges) => ranges && ranges.length > 0
+        );
+
         const nextOverride: TrayBundleOverride = {
           useCustom: bundleFormUseCustom,
-          categories
+          categories,
+          customBundleRanges: hasCustomRanges ? parsedCustomRanges : undefined
         };
         const currentOverride = bundleOverrides ?? {
           useCustom: false,
-          categories: {}
+          categories: {},
+          customBundleRanges: undefined
         };
         if (JSON.stringify(nextOverride) !== JSON.stringify(currentOverride)) {
           persistBundleOverride(nextOverride, { silent: true });
@@ -2734,7 +2962,7 @@ export const TrayDetails = () => {
         ) : null}
         {isEditing && bundleFormUseCustom && trayCableCategories.length === 0 ? (
           <Body1 className={styles.emptyState}>
-            Add cables to this tray to configure bundle spacing.
+            No cables with recognized purposes on this tray. Add cables with MV, Power, VFD, or Control purposes to configure bundle settings.
           </Body1>
         ) : null}
         {bundleFormUseCustom && isEditing && trayCableCategories.length > 0 ? (
@@ -2747,9 +2975,13 @@ export const TrayDetails = () => {
                 const form = bundleFormState[key];
                 const error = bundleFormErrors[key];
                 const config = CABLE_CATEGORY_CONFIG[key];
+                const customRanges = customBundleRangesFormState[key];
+                const customRangesError = customBundleRangesErrors[key];
                 return (
                   <div key={key} className={styles.bundleCard}>
-                    <Caption1 className={styles.fieldTitle}>{config.label}</Caption1>
+                    <Caption1 className={styles.fieldTitle}>
+                      {config.label}
+                    </Caption1>
                     <Field
                       label="Max rows"
                       validationState={error ? 'error' : undefined}
@@ -2802,6 +3034,64 @@ export const TrayDetails = () => {
                         onChange={handleBundleToggle(key, 'phaseRotation')}
                       />
                     ) : null}
+
+                    {/* Custom bundle size ranges for this category */}
+                    <div style={{ marginTop: '12px', borderTop: `1px solid ${tokens.colorNeutralStroke1}`, paddingTop: '12px' }}>
+                      <Caption1>Custom bundle size ranges (mm)</Caption1>
+                      {customRangesError ? (
+                        <Body1 style={{ color: tokens.colorPaletteRedForeground1, fontSize: '12px' }}>
+                          {customRangesError}
+                        </Body1>
+                      ) : null}
+                      {customRanges.map((range) => (
+                        <div
+                          key={range.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginTop: '8px'
+                          }}
+                        >
+                          <Input
+                            style={{ width: '70px' }}
+                            type="number"
+                            step="0.1"
+                            placeholder="Min"
+                            value={range.min}
+                            onChange={(e) =>
+                              handleBundleRangeChange(key, range.id, 'min', e.target.value)
+                            }
+                          />
+                          <span>-</span>
+                          <Input
+                            style={{ width: '70px' }}
+                            type="number"
+                            step="0.1"
+                            placeholder="Max"
+                            value={range.max}
+                            onChange={(e) =>
+                              handleBundleRangeChange(key, range.id, 'max', e.target.value)
+                            }
+                          />
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            onClick={() => handleRemoveBundleRange(key, range.id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        style={{ marginTop: '8px' }}
+                        onClick={() => handleAddBundleRange(key)}
+                      >
+                        + Add bundle range
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -2861,7 +3151,18 @@ export const TrayDetails = () => {
                 {detail.phaseRotation !== null ? (
                   <>
                     Apply phase rotation -{' '}
-                    {detail.phaseRotation ? 'Enabled' : 'Disabled'}
+                    {detail.phaseRotation ? 'Enabled' : 'Disabled'}<br />
+                  </>
+                ) : null}
+                {detail.customRanges.length > 0 ? (
+                  <>
+                    Custom bundle ranges:{' '}
+                    {detail.customRanges.map((range, idx) => (
+                      <span key={range.id}>
+                        {idx > 0 ? ', ' : ''}
+                        {range.min}-{range.max} mm
+                      </span>
+                    ))}
                   </>
                 ) : null}
               </Body1>

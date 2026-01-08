@@ -57,6 +57,7 @@ import { useSupportDistanceOverrides } from './ProjectDetails/hooks/useSupportDi
 import { useTrayTypeDetails } from './ProjectDetails/hooks/useTrayTypeDetails';
 import { useProjectFilesSection } from './ProjectDetails/hooks/useProjectFilesSection';
 import { useCableLayoutSettings } from './ProjectDetails/hooks/useCableLayoutSettings';
+import { useCustomBundleRanges } from './ProjectDetails/hooks/useCustomBundleRanges';
 import {
   CABLE_CATEGORY_CONFIG,
   DEFAULT_CABLE_SPACING,
@@ -72,6 +73,7 @@ import type { TrayFreeSpaceMetrics } from './TrayDetails/TrayDetails.utils';
 import {
   TrayDrawingService,
   determineCableDiameterGroup,
+  determineCableDiameterGroupWithCustomRanges,
   type CableBundleMap,
   type CategoryLayoutConfig
 } from './TrayDetails/trayDrawingService';
@@ -530,6 +532,14 @@ export const ProjectDetails = () => {
       reloadProject
     });
 
+  const customBundleRangesController = useCustomBundleRanges({
+    project,
+    token,
+    isAdmin,
+    showToast,
+    reloadProject
+  });
+
   const trayDrawingService = useMemo(
     () => new TrayDrawingService(),
     []
@@ -580,6 +590,9 @@ export const ProjectDetails = () => {
       );
 
       const trayCables = filterCablesByTray(cables, tray.name);
+      
+      // Use project-level custom bundle ranges
+      const projectCustomRanges = project?.cableLayout?.customBundleRanges;
 
       const cableBundles = trayCables.reduce<CableBundleMap>((bundleAcc, cable) => {
         const category = matchCableCategory(cable.purpose);
@@ -592,7 +605,11 @@ export const ProjectDetails = () => {
         }
 
         const bucket = bundleAcc[category];
-        const bundleKey = determineCableDiameterGroup(cable.diameterMm ?? null);
+        // Use custom bundle ranges for this category if available at project level
+        const categoryCustomRanges = projectCustomRanges?.[category as CableCategoryKey];
+        const bundleKey = categoryCustomRanges && categoryCustomRanges.length > 0
+          ? determineCableDiameterGroupWithCustomRanges(cable.diameterMm ?? null, categoryCustomRanges)
+          : determineCableDiameterGroup(cable.diameterMm ?? null);
         if (!bucket[bundleKey]) {
           bucket[bundleKey] = [];
         }
@@ -1484,6 +1501,7 @@ export const ProjectDetails = () => {
           isAdmin={isAdmin}
           cableSpacingField={cableSpacingField}
           cableCategoryCards={cableCategoryCards}
+          customBundleRanges={customBundleRangesController}
           numericFields={numericFields}
           supportDistanceOverrides={supportDistanceOverrideFields}
           trayTemplateRows={trayTemplateRows}

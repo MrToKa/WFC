@@ -6,11 +6,12 @@ import {
   Dropdown,
   Field,
   Input,
-  Option
+  Option,
+  tokens
 } from '@fluentui/react-components';
 
 import type { MaterialSupport, Project } from '@/api/client';
-import type { CableBundleSpacing } from '@/api/types';
+import type { CableBundleSpacing, CableCategoryKey } from '@/api/types';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { formatNumeric } from '../ProjectDetails.utils';
@@ -18,6 +19,8 @@ import type {
   CableCategoryController,
   CableSpacingController
 } from './hooks/useCableLayoutSettings';
+import type { CustomBundleRangesController } from './hooks/useCustomBundleRanges';
+import { CABLE_CATEGORY_CONFIG, CABLE_CATEGORY_ORDER } from './hooks/cableLayoutDefaults';
 
 type NumericFieldName =
   | 'secondaryTrayLength'
@@ -70,6 +73,7 @@ type DetailsTabProps = {
   isAdmin: boolean;
   cableSpacingField: CableSpacingController;
   cableCategoryCards: CableCategoryController[];
+  customBundleRanges: CustomBundleRangesController;
   numericFields: NumericFieldConfig[];
   supportDistanceOverrides: SupportDistanceOverrideConfig[];
   trayTemplateRows: Array<{
@@ -93,6 +97,7 @@ export const DetailsTab = ({
   isAdmin,
   cableSpacingField,
   cableCategoryCards,
+  customBundleRanges,
   numericFields,
   supportDistanceOverrides,
   trayTemplateRows,
@@ -632,6 +637,113 @@ export const DetailsTab = ({
             );
           })}
         </div>
+        
+        {/* Custom Bundle Size Ranges Section */}
+        {isAdmin ? (
+          <div style={{ marginTop: '1.5rem' }}>
+            <Caption1>Custom bundle size ranges</Caption1>
+            <Body1 style={{ marginBottom: '1rem' }}>
+              Define custom cable diameter ranges for grouping cables into bundles.
+              When defined, these ranges replace the default bundle size ranges for all trays in this project.
+            </Body1>
+            <div className={styles.numericFieldsRow}>
+              {CABLE_CATEGORY_ORDER.map((key) => {
+                const config = CABLE_CATEGORY_CONFIG[key];
+                const ranges = customBundleRanges.formState[key];
+                const error = customBundleRanges.errors[key];
+
+                return (
+                  <div key={key} className={styles.numericField}>
+                    <Body1 className={styles.numericFieldLabel}>{config.label}</Body1>
+                    {ranges.length === 0 ? (
+                      <Body1 style={{ fontSize: '0.875rem', color: tokens.colorNeutralForeground3 }}>
+                        No custom ranges. Default diameter ranges will be used.
+                      </Body1>
+                    ) : (
+                      ranges.map((range) => (
+                        <div
+                          key={range.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            marginBottom: '0.5rem'
+                          }}
+                        >
+                          <Input
+                            style={{ width: '80px' }}
+                            value={range.min}
+                            type="number"
+                            placeholder="Min"
+                            min={0}
+                            step={0.1}
+                            disabled={customBundleRanges.saving}
+                            onChange={(_, data) =>
+                              customBundleRanges.onChangeRange(key, range.id, 'min', data.value)
+                            }
+                          />
+                          <span style={{ fontSize: '0.875rem' }}>to</span>
+                          <Input
+                            style={{ width: '80px' }}
+                            value={range.max}
+                            type="number"
+                            placeholder="Max"
+                            min={0}
+                            step={0.1}
+                            disabled={customBundleRanges.saving}
+                            onChange={(_, data) =>
+                              customBundleRanges.onChangeRange(key, range.id, 'max', data.value)
+                            }
+                          />
+                          <span style={{ fontSize: '0.875rem' }}>mm</span>
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            disabled={customBundleRanges.saving}
+                            onClick={() => customBundleRanges.onRemoveRange(key, range.id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                    {error ? (
+                      <Body1 className={styles.errorText} style={{ marginBottom: '0.5rem' }}>
+                        {error}
+                      </Body1>
+                    ) : null}
+                    <Button
+                      appearance="outline"
+                      size="small"
+                      disabled={customBundleRanges.saving}
+                      onClick={() => customBundleRanges.onAddRange(key)}
+                    >
+                      Add bundle
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+            <div className={styles.numericFieldControls} style={{ marginTop: '1rem' }}>
+              <Button
+                appearance="secondary"
+                size="small"
+                disabled={customBundleRanges.saving || !customBundleRanges.hasChanges}
+                onClick={() => customBundleRanges.onReset()}
+              >
+                Reset
+              </Button>
+              <Button
+                appearance="primary"
+                size="small"
+                disabled={customBundleRanges.saving || !customBundleRanges.hasChanges}
+                onClick={() => void customBundleRanges.onSave()}
+              >
+                {customBundleRanges.saving ? 'Saving...' : 'Save bundle ranges'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className={styles.panel}>

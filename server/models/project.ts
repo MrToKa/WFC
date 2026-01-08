@@ -85,6 +85,13 @@ export type PublicCableLayout = {
   power: PublicCableCategorySettings | null;
   vfd: PublicCableCategorySettings | null;
   control: PublicCableCategorySettings | null;
+  customBundleRanges: Record<string, CustomBundleRange[]> | null;
+};
+
+export type CustomBundleRange = {
+  id: string;
+  min: number;
+  max: number;
 };
 
 const toSupportDistanceOverrides = (
@@ -308,6 +315,58 @@ const parseCategorySettings = (
   return parsed;
 };
 
+const parseCustomBundleRange = (value: unknown): CustomBundleRange | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const id = typeof record.id === 'string' && record.id.trim() !== '' ? record.id.trim() : null;
+  const min = parseNumericValue(record.min);
+  const max = parseNumericValue(record.max);
+
+  if (!id || min === null || max === null || min < 0 || max <= 0 || min >= max) {
+    return null;
+  }
+
+  return { id, min, max };
+};
+
+const parseCustomBundleRanges = (
+  value: unknown
+): Record<string, CustomBundleRange[]> | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const validCategories = ['mv', 'power', 'vfd', 'control'];
+  const result: Record<string, CustomBundleRange[]> = {};
+  let hasRanges = false;
+
+  for (const category of validCategories) {
+    const categoryRanges = record[category];
+    if (!Array.isArray(categoryRanges)) {
+      continue;
+    }
+
+    const parsedRanges: CustomBundleRange[] = [];
+    for (const range of categoryRanges) {
+      const parsed = parseCustomBundleRange(range);
+      if (parsed) {
+        parsedRanges.push(parsed);
+      }
+    }
+
+    if (parsedRanges.length > 0) {
+      result[category] = parsedRanges;
+      hasRanges = true;
+    }
+  }
+
+  return hasRanges ? result : null;
+};
+
 const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {
@@ -318,7 +377,8 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
       mv: null,
       power: null,
       vfd: null,
-      control: null
+      control: null,
+      customBundleRanges: null
     };
   }
 
@@ -334,7 +394,8 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
     mv: parseCategorySettings(record.mv),
     power: parseCategorySettings(record.power),
     vfd: parseCategorySettings(record.vfd),
-    control: parseCategorySettings(record.control)
+    control: parseCategorySettings(record.control),
+    customBundleRanges: parseCustomBundleRanges(record.customBundleRanges)
   };
 };
 

@@ -181,6 +181,19 @@ type CableCategorySettingsInput =
   | null
   | undefined;
 
+type CustomBundleRangeInput = {
+  id: string;
+  min: number;
+  max: number;
+};
+
+type CustomBundleRangesInput = {
+  mv?: CustomBundleRangeInput[];
+  power?: CustomBundleRangeInput[];
+  vfd?: CustomBundleRangeInput[];
+  control?: CustomBundleRangeInput[];
+} | null;
+
 type CableLayoutInput =
   | {
       cableSpacing?: number | null;
@@ -191,6 +204,7 @@ type CableLayoutInput =
       power?: CableCategorySettingsInput;
       vfd?: CableCategorySettingsInput;
       control?: CableCategorySettingsInput;
+      customBundleRanges?: CustomBundleRangesInput;
     }
   | null
   | undefined;
@@ -447,6 +461,46 @@ const normalizeCableLayout = (
   }
   if ('control' in layout) {
     assignCategory('control', layout.control);
+  }
+
+  // Handle customBundleRanges
+  if ('customBundleRanges' in layout) {
+    const customRanges = layout.customBundleRanges;
+    if (customRanges === null) {
+      normalized.customBundleRanges = null;
+    } else if (customRanges && typeof customRanges === 'object') {
+      const normalizedRanges: Record<string, Array<{ id: string; min: number; max: number }>> = {};
+      const validCategories = ['mv', 'power', 'vfd', 'control'] as const;
+      let hasRanges = false;
+
+      for (const category of validCategories) {
+        const categoryRanges = customRanges[category];
+        if (Array.isArray(categoryRanges) && categoryRanges.length > 0) {
+          normalizedRanges[category] = categoryRanges
+            .filter(
+              (r): r is CustomBundleRangeInput =>
+                r !== null &&
+                typeof r === 'object' &&
+                typeof r.id === 'string' &&
+                typeof r.min === 'number' &&
+                typeof r.max === 'number' &&
+                r.max > r.min
+            )
+            .map((r) => ({
+              id: r.id,
+              min: Math.round(r.min * 10) / 10,
+              max: Math.round(r.max * 10) / 10
+            }));
+          if (normalizedRanges[category].length > 0) {
+            hasRanges = true;
+          } else {
+            delete normalizedRanges[category];
+          }
+        }
+      }
+
+      normalized.customBundleRanges = hasRanges ? normalizedRanges : null;
+    }
   }
 
   return Object.keys(normalized).length > 0 ? normalized : null;

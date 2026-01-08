@@ -105,6 +105,27 @@ const cableCategorySettingsSchema = z
   })
   .strict();
 
+const customBundleRangeSchema = z
+  .object({
+    id: z.string().min(1),
+    min: z.number().min(0).max(1000),
+    max: z.number().min(0).max(1000)
+  })
+  .strict()
+  .refine((data) => data.max > data.min, {
+    message: 'max must be greater than min'
+  });
+
+const customBundleRangesSchema = z
+  .object({
+    mv: z.array(customBundleRangeSchema).optional(),
+    power: z.array(customBundleRangeSchema).optional(),
+    vfd: z.array(customBundleRangeSchema).optional(),
+    control: z.array(customBundleRangeSchema).optional()
+  })
+  .strict()
+  .nullable();
+
 const cableLayoutSchema = z
   .object({
     cableSpacing: z
@@ -131,7 +152,8 @@ const cableLayoutSchema = z
     mv: cableCategorySettingsSchema.optional(),
     power: cableCategorySettingsSchema.optional(),
     vfd: cableCategorySettingsSchema.optional(),
-    control: cableCategorySettingsSchema.optional()
+    control: cableCategorySettingsSchema.optional(),
+    customBundleRanges: customBundleRangesSchema.optional()
   })
   .strict()
   .nullable();
