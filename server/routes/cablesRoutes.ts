@@ -136,6 +136,31 @@ const normalizeDateForComparison = (
   return null;
 };
 
+const parseCableId = (value: unknown): number | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+      return null;
+    }
+    return value;
+  }
+
+  const trimmed = String(value).trim();
+  if (trimmed === '') {
+    return null;
+  }
+
+  const numeric = Number(trimmed);
+  if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
+    return null;
+  }
+
+  return numeric;
+};
+
 const parseInstallLength = (value: unknown): number | null => {
   if (value === null || value === undefined) {
     return null;
@@ -357,7 +382,7 @@ cablesRouter.post(
         [
           randomUUID(),
           projectId,
-          cableId.trim(),
+          cableId,
           normalizedTag,
           cableTypeId,
           normalizeOptionalString(fromLocation ?? null),
@@ -480,7 +505,7 @@ cablesRouter.patch(
       }
     }
 
-    if (newCableId) {
+    if (newCableId !== undefined) {
       try {
         const duplicate = await pool.query(
           `
@@ -488,9 +513,9 @@ cablesRouter.patch(
             FROM cables
             WHERE project_id = $1
               AND id <> $2
-              AND lower(cable_id) = lower($3);
+              AND cable_id = $3;
           `,
-          [projectId, cableId, newCableId.trim()]
+          [projectId, cableId, newCableId]
         );
 
         if (duplicate.rowCount > 0) {
@@ -512,7 +537,7 @@ cablesRouter.patch(
 
     if (newCableId !== undefined) {
       fields.push(`cable_id = $${index++}`);
-      values.push(newCableId.trim());
+      values.push(newCableId);
     }
 
     if (tag !== undefined) {
@@ -738,8 +763,8 @@ cablesRouter.post(
     };
 
     type PreparedCableRow = {
-      cableId: string;
-      cableKey: string;
+      cableId: number;
+      cableKey: number;
       typeName: string;
       typeKey: string;
       fields: PreparedCableFields;
@@ -747,7 +772,7 @@ cablesRouter.post(
 
     const prepared: PreparedCableRow[] = [];
 
-    const seenCableIds = new Set<string>();
+    const seenCableIds = new Set<number>();
 
     const availableColumns = new Set<string>();
     for (const row of rows) {
@@ -798,17 +823,14 @@ cablesRouter.post(
 
     for (const row of rows) {
       const rawCableId = row[INPUT_HEADERS.cableId] as unknown;
-      const cableId =
-        typeof rawCableId === 'number'
-          ? String(rawCableId)
-          : String(rawCableId ?? '').trim();
+      const cableId = parseCableId(rawCableId);
 
-      if (cableId === '') {
+      if (cableId === null) {
         summary.skipped += 1;
         continue;
       }
 
-      const cableKey = cableId.toLowerCase();
+      const cableKey = cableId;
 
       if (seenCableIds.has(cableKey)) {
         summary.skipped += 1;
@@ -915,8 +937,8 @@ cablesRouter.post(
           `
             ${selectCablesQuery}
             WHERE c.project_id = $1
-            ORDER BY LOWER(COALESCE(c.tag, c.cable_id)) ASC,
-              LOWER(c.cable_id) ASC;
+            ORDER BY LOWER(COALESCE(c.tag, c.cable_id::text)) ASC,
+              c.cable_id ASC;
           `,
           [projectId]
         );
@@ -1002,15 +1024,15 @@ cablesRouter.post(
           FROM cables c
           JOIN cable_types ct ON ct.id = c.cable_type_id
           WHERE c.project_id = $1
-            AND lower(c.cable_id) = ANY($2::text[]);
+            AND c.cable_id = ANY($2::int[]);
         `,
         [projectId, prepared.map((row) => row.cableKey)]
       );
 
-      const existingMap = new Map<string, ExistingCable>();
+      const existingMap = new Map<number, ExistingCable>();
 
       for (const cable of existingResult.rows) {
-        existingMap.set(cable.cable_id.toLowerCase(), cable);
+        existingMap.set(cable.cable_id, cable);
       }
 
       for (const row of prepared) {
@@ -1048,7 +1070,7 @@ cablesRouter.post(
             [
               randomUUID(),
               projectId,
-              row.cableId.trim(),
+              row.cableId,
               fields.tag ?? null,
               type.id,
               fields.fromLocation ?? null,
@@ -1215,8 +1237,8 @@ cablesRouter.post(
         `
           ${selectCablesQuery}
           WHERE c.project_id = $1
-          ORDER BY LOWER(COALESCE(c.tag, c.cable_id)) ASC,
-            LOWER(c.cable_id) ASC;
+          ORDER BY LOWER(COALESCE(c.tag, c.cable_id::text)) ASC,
+            c.cable_id ASC;
         `,
         [projectId]
       );
@@ -1278,7 +1300,7 @@ cablesRouter.get(
         conditions.push(
           `
             (
-              LOWER(c.cable_id) LIKE ${likeParam}
+              LOWER(c.cable_id::text) LIKE ${likeParam}
               OR LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}
               OR LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}
               OR LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}
@@ -1310,7 +1332,7 @@ cablesRouter.get(
           : 'ASC';
 
       const sortExpressionMap: Record<string, string> = {
-        tag: "LOWER(COALESCE(c.tag, c.cable_id))",
+        tag: "LOWER(COALESCE(c.tag, c.cable_id::text))",
         typeName: "LOWER(COALESCE(ct.name, ''))",
         fromLocation: "LOWER(COALESCE(c.from_location, ''))",
         toLocation: "LOWER(COALESCE(c.to_location, ''))",
@@ -1318,7 +1340,7 @@ cablesRouter.get(
       };
 
       const sortExpression =
-        sortExpressionMap[normalizedSortColumn] ?? 'LOWER(c.cable_id)';
+        sortExpressionMap[normalizedSortColumn] ?? 'c.cable_id';
 
       const whereClause = conditions.length
         ? `WHERE ${conditions.join(' AND ')}`
@@ -1328,7 +1350,7 @@ cablesRouter.get(
         `
           ${selectCablesQuery}
           ${whereClause}
-          ORDER BY ${sortExpression} ${normalizedSortDirection}, LOWER(c.cable_id) ASC;
+          ORDER BY ${sortExpression} ${normalizedSortDirection}, c.cable_id ASC;
         `,
         values
       );

@@ -757,7 +757,7 @@ const buildTrayCablesTable = (
         ? '-'
         : numberFormatter.format(cable.weightKgPerM);
 
-    const name = cable.tag?.trim() || cable.cableId || 'Unnamed cable';
+    const name = cable.tag?.trim() || String(cable.cableId) || 'Unnamed cable';
 
     return [
       numberFormatter.format(index + 1),

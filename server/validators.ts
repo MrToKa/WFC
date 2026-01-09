@@ -289,7 +289,7 @@ const cableStringField = z
 
 export const createCableSchema = z
   .object({
-    cableId: z.string().trim().min(1).max(200),
+    cableId: z.number().int().min(0).max(2_147_483_647),
     tag: z.string().trim().max(500).optional(),
     cableTypeId: z.string().trim().uuid(),
     fromLocation: cableStringField,
@@ -346,7 +346,7 @@ export const createCableSchema = z
 
 export const updateCableSchema = z
   .object({
-    cableId: z.string().trim().min(1).max(200).optional(),
+    cableId: z.number().int().min(0).max(2_147_483_647).optional(),
     tag: z.string().trim().max(500).optional(),
     cableTypeId: z.string().trim().uuid().optional(),
     fromLocation: cableStringField,

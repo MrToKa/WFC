@@ -48,7 +48,7 @@ export type CableTypeInput = {
 };
 
 export type CableInput = {
-  cableId: string;
+  cableId: number;
   tag?: string | null;
   cableTypeId: string;
   fromLocation?: string | null;

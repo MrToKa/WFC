@@ -256,7 +256,7 @@ export const emptyCableForm: CableFormState = {
 };
 
 export const toCableFormState = (cable: Cable): CableFormState => ({
-  cableId: cable.cableId,
+  cableId: String(cable.cableId),
   tag: cable.tag ?? '',
   cableTypeId: cable.cableTypeId,
   fromLocation: cable.fromLocation ?? '',
@@ -306,9 +306,22 @@ export const buildCableInput = (
 } => {
   const errors: CableFormErrors = {};
 
-  const cableId = values.cableId.trim();
-  if (cableId === '') {
+  const cableIdValue = values.cableId.trim();
+  let cableId: number | null = null;
+
+  if (cableIdValue === '') {
     errors.cableId = 'Cable ID is required';
+  } else {
+    const parsedCableId = Number(cableIdValue);
+    if (
+      !Number.isFinite(parsedCableId) ||
+      !Number.isInteger(parsedCableId) ||
+      parsedCableId < 0
+    ) {
+      errors.cableId = 'Cable ID must be a non-negative integer';
+    } else {
+      cableId = parsedCableId;
+    }
   }
 
   const tag = values.tag.trim();
@@ -327,7 +340,7 @@ export const buildCableInput = (
   };
 
   const input: CableInput = {
-    cableId,
+    cableId: cableId ?? 0,
     cableTypeId,
     tag,
     fromLocation: normalize(values.fromLocation),

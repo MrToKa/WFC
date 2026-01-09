@@ -193,7 +193,6 @@ export const useCableListSection = ({
       
       if (filterCriteria === 'all') {
         const values = [
-          cable.cableId,
           cable.tag,
           cable.typeName,
           cable.fromLocation,
@@ -210,7 +209,7 @@ export const useCableListSection = ({
       let value = '';
       switch (filterCriteria) {
         case 'tag':
-          value = cable.tag ?? cable.cableId ?? '';
+          value = cable.tag ?? '';
           break;
         case 'typeName':
           value = cable.typeName ?? '';
