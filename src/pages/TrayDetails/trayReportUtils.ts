@@ -746,7 +746,9 @@ const buildTrayCablesTable = (
     };
   }
 
-  const rows = cables.map((cable, index) => {
+  const sortedCables = [...cables].sort((a, b) => a.cableId - b.cableId);
+
+  const rows = sortedCables.map((cable, index) => {
     const diameter =
       cable.diameterMm === null || Number.isNaN(cable.diameterMm)
         ? '-'
