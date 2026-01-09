@@ -38,7 +38,7 @@ export const CablesTableSection: React.FC<CablesTableSectionProps> = ({
               </tr>
             </thead>
             <tbody>
-              {trayCables.map((cable, index) => (
+              {[...trayCables].sort((a, b) => a.cableId - b.cableId).map((cable, index) => (
                 <tr key={cable.id}>
                   <td className={styles.tableCell}>{index + 1}</td>
                   <td className={styles.tableCell}>{cable.tag || '-'}</td>

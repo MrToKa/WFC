@@ -3,7 +3,7 @@ import { toNumberOrNull } from './cableType.js';
 export type CableRow = {
   id: string;
   project_id: string;
-  cable_id: string;
+  cable_id: number;
   tag: string | null;
   cable_type_id: string;
   from_location: string | null;
@@ -29,7 +29,7 @@ export type CableWithTypeRow = CableRow & {
 export type PublicCable = {
   id: string;
   projectId: string;
-  cableId: string;
+  cableId: number;
   tag: string | null;
   cableTypeId: string;
   typeName: string;

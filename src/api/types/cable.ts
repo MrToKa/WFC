@@ -16,7 +16,7 @@ export type CableType = {
 export type Cable = {
   id: string;
   projectId: string;
-  cableId: string;
+  cableId: number;
   tag: string | null;
   cableTypeId: string;
   typeName: string;

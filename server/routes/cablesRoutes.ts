@@ -227,8 +227,8 @@ cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       `
         ${selectCablesQuery}
         WHERE c.project_id = $1
-        ORDER BY LOWER(COALESCE(c.tag, c.cable_id)) ASC,
-          LOWER(c.cable_id) ASC;
+        ORDER BY LOWER(COALESCE(c.tag, c.cable_id::text)) ASC,
+          c.cable_id ASC;
       `,
       [projectId]
     );

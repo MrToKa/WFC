@@ -182,7 +182,7 @@ export async function initializeDatabase(): Promise<void> {
     CREATE TABLE IF NOT EXISTS cables (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      cable_id TEXT NOT NULL,
+      cable_id INTEGER NOT NULL,
       tag TEXT,
       cable_type_id UUID NOT NULL REFERENCES cable_types(id) ON DELETE CASCADE,
       from_location TEXT,
@@ -201,7 +201,7 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS cables_project_cable_id_idx
-      ON cables (project_id, lower(cable_id));
+      ON cables (project_id, cable_id);
   `);
 
   await pool.query(`

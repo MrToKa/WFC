@@ -169,7 +169,7 @@ export const useCableListSection = ({
 
   const sortCables = useCallback((items: Cable[]) => {
     const toSortKey = (cable: Cable): string =>
-      (cable.tag ?? cable.cableId ?? '').toLocaleLowerCase();
+      (cable.tag ?? '').toLocaleLowerCase();
 
     return [...items].sort((a, b) => {
       const tagComparison = toSortKey(a).localeCompare(toSortKey(b), undefined, {
@@ -180,9 +180,7 @@ export const useCableListSection = ({
         return tagComparison;
       }
 
-      return (a.cableId ?? '').localeCompare(b.cableId ?? '', undefined, {
-        sensitivity: 'base'
-      });
+      return a.cableId - b.cableId;
     });
   }, []);
 
