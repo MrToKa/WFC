@@ -111,14 +111,6 @@ const getCableDiameter = (cable: Cable): number => {
   return TrayConstants.defaultCableDiameterMm;
 };
 
-const logLayoutDebug = (message: string, details: Record<string, unknown>) => {
-  if (typeof window !== 'undefined' && window?.console) {
-    window.console.log(message, details);
-  } else {
-    console.log(message, details);
-  }
-};
-
 const sumCableWidthsPx = (cables: Cable[], scale: number, spacingMm: number): number =>
   cables.reduce((total, cable) => total + (getCableDiameter(cable) + spacingMm) * scale, 0);
 
@@ -1114,25 +1106,6 @@ class CableBundleDrawer {
           bottomStartY = result.bottomStartY;
         } else {
           const grouped = this.splitTrefoilGroups(subBundle, layoutConfig.trefoil);
-
-          // Log bundle composition for VFD cables
-          console.log(
-            `[VFD Bundles] Bundle Key: ${bundleKey}, Sub-bundle ${subBundleIdx + 1}:`
-          );
-          grouped.forEach((group, idx) => {
-            if (group.kind === 'trefoil') {
-              console.log(
-                `  Trefoil bundle ${idx + 1}:`,
-                group.cables.map((cable) => `Cable ${data.cablesOnTray.indexOf(cable) + 1}`)
-              );
-            } else {
-              console.log(
-                `  Normal bundle ${idx + 1}:`,
-                group.cables.map((cable) => `Cable ${data.cablesOnTray.indexOf(cable) + 1}`)
-              );
-            }
-          });
-
           // First pass: Draw all trefoil bundles
           for (let groupIdx = 0; groupIdx < grouped.length; groupIdx++) {
             const group = grouped[groupIdx];
@@ -1854,12 +1827,6 @@ class CableBundleDrawer {
     );
 
     if (maxDiameter <= 0 || bundle.length === 0) {
-      logLayoutDebug('[TrayDrawing] rows/columns fallback (no diameter or cables)', {
-        purpose,
-        usableTrayHeightMm,
-        usableHeight,
-        maxDiameter
-      });
       return { rows: 1, columns: bundle.length };
     }
 
@@ -1903,19 +1870,6 @@ class CableBundleDrawer {
       rows = 1;
       columns = Math.max(2, columns);
     }
-
-    logLayoutDebug('[TrayDrawing] rows/columns result', {
-      purpose,
-      usableTrayHeightMm,
-      usableHeight,
-      maxDiameter,
-      bundleCount: bundle.length,
-      physicalMaxRows,
-      maxRows: maxRowsSetting,
-      maxColumns: maxColumnsSetting,
-      rows,
-      columns      
-    });
 
     return { rows, columns };
   }
@@ -2188,12 +2142,9 @@ export class TrayDrawingService {
                          (cables: Cable[]) => cables.length > 0
                        );
 
-    console.log('[TrayDrawing] Cable types present:', { hasMv, hasPower, hasVfd, hasControl });
-
     // Determine drawing strategy based on cable types
     if (hasMv) {
       // When MV cables are present, draw MV on left and everything else on right
-      console.log('[TrayDrawing] MV cables detected, drawing MV on left and others on right');
       
       // Draw MV first (on the left)
       if (data.cableBundles[TrayConstants.cablePurposes.mv]) {
@@ -2294,7 +2245,6 @@ export class TrayDrawingService {
         }
       } else if (hasVfd && hasControl) {
         // VFD on left, Control on right (no Power or MV)
-        console.log('[TrayDrawing] VFD and Control only: VFD on left, Control on right');
         // Draw VFD from left using Power drawing logic but with VFD config
         ({ leftStartX, bottomStartY } = this.bundleDrawer.drawPowerBundles(
           ctx,
@@ -2422,54 +2372,34 @@ export class TrayDrawingService {
       if (hasControl) cableTypes.push('control');
       if (hasMv) cableTypes.push('mv');
 
-      console.log('[TrayDrawing] Cable types on tray', {
-        cableTypes,
-        count: cableTypes.length,
-        hasPower,
-        hasVfd,
-        hasControl,
-        hasMv,
-        powerCount: data.bottomRowPowerCables.length,
-        vfdCount: data.bottomRowVFDCables.length,
-        controlCount: data.bottomRowControlCables.length
-      });
-
       // Handle based on number of cable types
       if (cableTypes.length === 0) {
-        console.log('[TrayDrawing] No cables on tray, skipping separator');
         return;
       }
 
       if (cableTypes.length === 1) {
-        console.log('[TrayDrawing] Only one cable type on tray, no separator needed');
         return;
       }
 
       if (cableTypes.length >= 3) {
-        console.warn('[TrayDrawing] Too many cable types on tray:', cableTypes);
         this.drawWarningMessage(ctx, data, 'Too many cable types on the tray!');
         return;
       }
 
       // Two cable types - determine separator placement
       if (hasMv) {
-        console.log('[TrayDrawing] MV cables present with other type, no separator drawn');
         return;
       }
 
       // No MV cables, so we have 2 types from: power, vfd, control
       if (hasPower && hasVfd) {
-        console.log('[TrayDrawing] Drawing separator between Power (left) and VFD (right)');
         this.drawSeparatorLine(ctx, data, data.bottomRowPowerCables, data.bottomRowVFDCables);
       } else if (hasPower && hasControl) {
-        console.log('[TrayDrawing] Drawing separator between Power (left) and Control (right)');
         this.drawSeparatorLine(ctx, data, data.bottomRowPowerCables, data.bottomRowControlCables);
       } else if (hasVfd && hasControl) {
-        console.log('[TrayDrawing] Drawing separator between VFD (left) and Control (right)');
         this.drawSeparatorLine(ctx, data, data.bottomRowVFDCables, data.bottomRowControlCables);
       }
-    } catch (error) {
-      console.error('[TrayDrawing] Error in drawSeparators:', error);
+    } catch {
       // Don't re-throw separator drawing errors as they're not critical
     }
   }
@@ -2521,19 +2451,7 @@ export class TrayDrawingService {
     leftCables: Cable[],
     rightCables: Cable[]
   ) {
-    console.log('[TrayDrawing] drawSeparatorLine called', {
-      hasWidth: !!data.tray.widthMm,
-      hasHeight: !!data.tray.heightMm,
-      widthMm: data.tray.widthMm,
-      heightMm: data.tray.heightMm,
-      leftCablesCount: leftCables.length,
-      rightCablesCount: rightCables.length,
-      leftSideRightEdgePx: data.leftSideRightEdgePx,
-      rightSideLeftEdgePx: data.rightSideLeftEdgePx
-    });
-
     if (!data.tray.widthMm || !data.tray.heightMm) {
-      console.log('[TrayDrawing] Missing tray dimensions, skipping separator line');
       return;
     }
 
@@ -2543,10 +2461,6 @@ export class TrayDrawingService {
       const rightEdgePx = data.rightSideLeftEdgePx;
 
       if (leftEdgePx <= 0 || rightEdgePx <= 0 || rightEdgePx <= leftEdgePx) {
-        console.log('[TrayDrawing] Invalid edge positions, skipping separator', {
-          leftEdgePx,
-          rightEdgePx
-        });
         return;
       }
 
@@ -2559,17 +2473,6 @@ export class TrayDrawingService {
       const topY =
         TrayConstants.canvasMargin + data.rungHeightMm * data.canvasScale;
 
-      console.log('[TrayDrawing] Drawing separator line', {
-        separatorX,
-        leftEdgePx,
-        rightEdgePx,
-        gapWidth: rightEdgePx - leftEdgePx,
-        bottomY,
-        topY,
-        leftCablesCount: leftCables.length,
-        rightCablesCount: rightCables.length
-      });
-
       // Draw the separator line
       ctx.save();
       ctx.strokeStyle = '#000000';
@@ -2579,8 +2482,7 @@ export class TrayDrawingService {
       ctx.lineTo(separatorX, topY);
       ctx.stroke();
       ctx.restore();
-    } catch (error) {
-      console.error('[TrayDrawing] Error in drawSeparatorLine:', error);
+    } catch {
       // Don't re-throw separator line drawing errors as they're not critical
     }
   }
