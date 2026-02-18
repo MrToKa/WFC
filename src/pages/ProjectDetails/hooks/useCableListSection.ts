@@ -34,8 +34,7 @@ import {
 } from '../../ProjectDetails.forms';
 import {
   isIsoDateString,
-  sanitizeFileSegment,
-  toNullableString
+  sanitizeFileSegment
 } from '../../ProjectDetails.utils';
 
 export type CableSearchCriteria = 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
@@ -183,6 +182,23 @@ export const useCableListSection = ({
       return a.cableId - b.cableId;
     });
   }, []);
+
+  const getNextFreeCableId = useCallback((): number => {
+    const occupiedIds = new Set<number>();
+
+    for (const cable of cables) {
+      if (Number.isInteger(cable.cableId) && cable.cableId >= 0) {
+        occupiedIds.add(cable.cableId);
+      }
+    }
+
+    let nextCableId = 1;
+    while (occupiedIds.has(nextCableId)) {
+      nextCableId += 1;
+    }
+
+    return nextCableId;
+  }, [cables]);
 
   const filteredCables = useMemo(() => {
     const normalizedFilter = filterText.trim().toLowerCase();
@@ -350,16 +366,18 @@ export const useCableListSection = ({
 
   const openCreateCableDialog = useCallback(
     (defaultCableTypeId?: string) => {
+      const nextCableId = getNextFreeCableId();
       setDialogMode('create');
       setDialogErrors({});
       setDialogValues({
         ...emptyCableForm,
+        cableId: String(nextCableId),
         cableTypeId: defaultCableTypeId ?? ''
       });
       setDialogOpen(true);
       setEditingCableId(null);
     },
-    []
+    [getNextFreeCableId]
   );
 
   const openEditCableDialog = useCallback((cable: Cable) => {
@@ -496,8 +514,8 @@ export const useCableListSection = ({
         case 'fromLocation':
         case 'toLocation':
         case 'routing': {
-          const normalized = toNullableString(draft[field]);
-          const current = (cable[field] ?? null) as string | null;
+          const normalized = draft[field].trim();
+          const current = (cable[field] ?? '').trim();
 
           if (normalized === current) {
             return;

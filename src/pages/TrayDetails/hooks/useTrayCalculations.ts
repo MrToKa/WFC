@@ -104,7 +104,11 @@ export const useTrayCalculations = (
     };
   }, [project, tray, supportOverride, overrideSupport]);
 
-  const nonGroundingCables = useMemo(() => trayCables, [trayCables]);
+  // Keep drawing/grouping order aligned with the tray table (# column).
+  const nonGroundingCables = useMemo(
+    () => [...trayCables].sort((a, b) => a.cableId - b.cableId),
+    [trayCables]
+  );
 
   const cablesForWeightCalculation = useMemo(() => {
     return nonGroundingCables.filter((cable) => {

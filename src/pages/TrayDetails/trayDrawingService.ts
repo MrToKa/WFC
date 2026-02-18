@@ -181,6 +181,7 @@ export type TrayLayoutSummary = {
 class TrayDrawingData {
   tray: Tray;
   cablesOnTray: Cable[];
+  cableDisplayNumberById: Map<string, number>;
   cableBundles: CableBundleMap;
   canvasScale: number;
   spacingMm: number;
@@ -216,6 +217,11 @@ class TrayDrawingData {
   ) {
     this.tray = tray;
     this.cablesOnTray = cablesOnTray;
+    this.cableDisplayNumberById = new Map(
+      [...cablesOnTray]
+        .sort((a, b) => a.cableId - b.cableId)
+        .map((cable, index) => [cable.id, index + 1])
+    );
     this.cableBundles = cableBundles ?? {};
     this.canvasScale = canvasScale;
     this.spacingMm = spacingMm;
@@ -1787,8 +1793,11 @@ class CableBundleDrawer {
     x: number,
     y: number
   ) {
-    const cableNumber = data.cablesOnTray.indexOf(cable) + 1;
-    const label = cableNumber > 0 ? cableNumber.toString() : '?';
+    const numberFromSortedOrder = data.cableDisplayNumberById.get(cable.id);
+    const fallbackNumber = data.cablesOnTray.indexOf(cable) + 1;
+    const cableNumber =
+      numberFromSortedOrder ?? (fallbackNumber > 0 ? fallbackNumber : null);
+    const label = cableNumber !== null ? cableNumber.toString() : '?';
 
     ctx.save();
     ctx.font = '20px Arial';

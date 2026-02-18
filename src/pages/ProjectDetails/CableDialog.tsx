@@ -21,7 +21,6 @@ import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { CableFormErrors, CableFormState } from '../ProjectDetails.forms';
 
 export type CableDialogField =
-  | 'cableId'
   | 'tag'
   | 'cableTypeId'
   | 'fromLocation'
@@ -90,34 +89,20 @@ export const CableDialog = ({
               {mode === 'create' ? 'Add cable' : 'Edit cable'}
             </DialogTitle>
             <DialogContent>
-              {isFieldVisible('cableId') ? (
+              {isFieldVisible('tag') ? (
                 <Field
-                  label="Cable ID"
+                  label="Tag"
                   required
-                  validationState={errors.cableId ? 'error' : undefined}
-                  validationMessage={errors.cableId}
+                  validationState={errors.tag ? 'error' : undefined}
+                  validationMessage={errors.tag}
                 >
                   <Input
-                    value={values.cableId}
-                    onChange={onFieldChange('cableId')}
+                    value={values.tag}
+                    onChange={onFieldChange('tag')}
                     required
                   />
                 </Field>
               ) : null}
-                {isFieldVisible('tag') ? (
-                  <Field
-                    label="Tag"
-                    required
-                    validationState={errors.tag ? 'error' : undefined}
-                    validationMessage={errors.tag}
-                  >
-                    <Input
-                      value={values.tag}
-                      onChange={onFieldChange('tag')}
-                      required
-                    />
-                  </Field>
-                ) : null}
               {isFieldVisible('cableTypeId') ? (
                 <Field
                   label="Cable type"
@@ -141,116 +126,116 @@ export const CableDialog = ({
                   </Combobox>
                 </Field>
               ) : null}
-                {isFieldVisible('fromLocation') ? (
-                  <Field label="From location">
-                    <Input
-                      value={values.fromLocation}
-                      onChange={onFieldChange('fromLocation')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('toLocation') ? (
-                  <Field label="To location">
-                    <Input
-                      value={values.toLocation}
-                      onChange={onFieldChange('toLocation')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('routing') ? (
-                  <Field label="Routing">
-                    <Input
-                      value={values.routing}
-                      onChange={onFieldChange('routing')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('designLength') ? (
-                  <Field
-                    label="Design length [m]"
-                    validationState={
-                      errors.designLength ? 'error' : undefined
-                    }
-                    validationMessage={errors.designLength}
-                  >
-                    <Input
-                      type="number"
-                      min={0}
-                      value={values.designLength}
-                      onChange={onFieldChange('designLength')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('installLength') ? (
-                  <Field
-                    label="Install length [m]"
-                    validationState={
-                      errors.installLength ? 'error' : undefined
-                    }
-                    validationMessage={errors.installLength}
-                  >
-                    <Input
-                      type="number"
-                      min={0}
-                      value={values.installLength}
-                      onChange={onFieldChange('installLength')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('pullDate') ? (
-                  <Field
-                    label="Pull date"
-                    validationState={errors.pullDate ? 'error' : undefined}
-                    validationMessage={errors.pullDate}
-                  >
-                    <Input
-                      type="date"
-                      value={values.pullDate}
-                      onChange={onFieldChange('pullDate')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('connectedFrom') ? (
-                  <Field
-                    label="Connected from"
-                    validationState={
-                      errors.connectedFrom ? 'error' : undefined
-                    }
-                    validationMessage={errors.connectedFrom}
-                  >
-                    <Input
-                      type="date"
-                      value={values.connectedFrom}
-                      onChange={onFieldChange('connectedFrom')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('connectedTo') ? (
-                  <Field
-                    label="Connected to"
-                    validationState={errors.connectedTo ? 'error' : undefined}
-                    validationMessage={errors.connectedTo}
-                  >
-                    <Input
-                      type="date"
-                      value={values.connectedTo}
-                      onChange={onFieldChange('connectedTo')}
-                    />
-                  </Field>
-                ) : null}
-                {isFieldVisible('tested') ? (
-                  <Field
-                    label="Tested"
-                    validationState={errors.tested ? 'error' : undefined}
-                    validationMessage={errors.tested}
-                  >
-                    <Input
-                      type="date"
-                      value={values.tested}
-                      onChange={onFieldChange('tested')}
-                    />
-                  </Field>
-                ) : null}
+              {isFieldVisible('fromLocation') ? (
+                <Field label="From location">
+                  <Input
+                    value={values.fromLocation}
+                    onChange={onFieldChange('fromLocation')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('toLocation') ? (
+                <Field label="To location">
+                  <Input
+                    value={values.toLocation}
+                    onChange={onFieldChange('toLocation')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('routing') ? (
+                <Field label="Routing">
+                  <Input
+                    value={values.routing}
+                    onChange={onFieldChange('routing')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('designLength') ? (
+                <Field
+                  label="Design length [m]"
+                  validationState={
+                    errors.designLength ? 'error' : undefined
+                  }
+                  validationMessage={errors.designLength}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={values.designLength}
+                    onChange={onFieldChange('designLength')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('installLength') ? (
+                <Field
+                  label="Install length [m]"
+                  validationState={
+                    errors.installLength ? 'error' : undefined
+                  }
+                  validationMessage={errors.installLength}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    value={values.installLength}
+                    onChange={onFieldChange('installLength')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('pullDate') ? (
+                <Field
+                  label="Pull date"
+                  validationState={errors.pullDate ? 'error' : undefined}
+                  validationMessage={errors.pullDate}
+                >
+                  <Input
+                    type="date"
+                    value={values.pullDate}
+                    onChange={onFieldChange('pullDate')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('connectedFrom') ? (
+                <Field
+                  label="Connected from"
+                  validationState={
+                    errors.connectedFrom ? 'error' : undefined
+                  }
+                  validationMessage={errors.connectedFrom}
+                >
+                  <Input
+                    type="date"
+                    value={values.connectedFrom}
+                    onChange={onFieldChange('connectedFrom')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('connectedTo') ? (
+                <Field
+                  label="Connected to"
+                  validationState={errors.connectedTo ? 'error' : undefined}
+                  validationMessage={errors.connectedTo}
+                >
+                  <Input
+                    type="date"
+                    value={values.connectedTo}
+                    onChange={onFieldChange('connectedTo')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('tested') ? (
+                <Field
+                  label="Tested"
+                  validationState={errors.tested ? 'error' : undefined}
+                  validationMessage={errors.tested}
+                >
+                  <Input
+                    type="date"
+                    value={values.tested}
+                    onChange={onFieldChange('tested')}
+                  />
+                </Field>
+              ) : null}
               {errors.general ? (
                 <Body1 className={styles.errorText}>{errors.general}</Body1>
               ) : null}

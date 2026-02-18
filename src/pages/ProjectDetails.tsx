@@ -270,7 +270,6 @@ export const ProjectDetails = () => {
       return ['tag', 'cableTypeId', 'fromLocation', 'toLocation', 'routing', 'designLength'];
     }
     return [
-      'cableId',
       'tag',
       'cableTypeId',
       'fromLocation',
