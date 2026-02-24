@@ -242,6 +242,17 @@ export const updateProjectSchema = z
     }
   );
 
+export const clearProjectDataSchema = z
+  .object({
+    cableTypes: z.boolean().optional(),
+    cables: z.boolean().optional(),
+    trays: z.boolean().optional()
+  })
+  .strict()
+  .refine((value) => value.cableTypes || value.cables || value.trays, {
+    message: 'At least one dataset must be selected'
+  });
+
 const cableTypeNumericField = z
   .number()
   .min(0)

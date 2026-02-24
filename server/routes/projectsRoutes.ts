@@ -6,6 +6,7 @@ import { mapProjectRow } from '../models/project.js';
 import type { ProjectRow } from '../models/project.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import {
+  clearProjectDataSchema,
   createProjectSchema,
   updateProjectSchema
 } from '../validators.js';
@@ -831,6 +832,101 @@ projectsRouter.patch(
 
       console.error('Update project error', error);
       res.status(500).json({ error: 'Failed to update project' });
+    }
+  }
+);
+
+projectsRouter.post(
+  '/:projectId/clear-data',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId } = req.params;
+
+    if (!projectId) {
+      res.status(400).json({ error: 'Project ID is required' });
+      return;
+    }
+
+    const parseResult = clearProjectDataSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    const {
+      cableTypes = false,
+      cables = false,
+      trays = false
+    } = parseResult.data;
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const projectResult = await client.query<{ id: string }>(
+        `SELECT id FROM projects WHERE id = $1`,
+        [projectId]
+      );
+
+      if (projectResult.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      let deletedCableTypes = 0;
+      let deletedCables = 0;
+      let deletedTrays = 0;
+
+      if (trays) {
+        const traysResult = await client.query(
+          `DELETE FROM trays WHERE project_id = $1`,
+          [projectId]
+        );
+        deletedTrays = traysResult.rowCount ?? 0;
+      }
+
+      if (cableTypes) {
+        const [cablesCountResult, cableTypesCountResult] = await Promise.all([
+          client.query<{ count: number }>(
+            `SELECT COUNT(*)::int AS count FROM cables WHERE project_id = $1`,
+            [projectId]
+          ),
+          client.query<{ count: number }>(
+            `SELECT COUNT(*)::int AS count FROM cable_types WHERE project_id = $1`,
+            [projectId]
+          )
+        ]);
+
+        deletedCables = cablesCountResult.rows[0]?.count ?? 0;
+        deletedCableTypes = cableTypesCountResult.rows[0]?.count ?? 0;
+
+        await client.query(`DELETE FROM cable_types WHERE project_id = $1`, [projectId]);
+      } else if (cables) {
+        const cablesResult = await client.query(
+          `DELETE FROM cables WHERE project_id = $1`,
+          [projectId]
+        );
+        deletedCables = cablesResult.rowCount ?? 0;
+      }
+
+      await client.query('COMMIT');
+      res.json({
+        deleted: {
+          cableTypes: deletedCableTypes,
+          cables: deletedCables,
+          trays: deletedTrays
+        }
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Clear project data error', error);
+      res.status(500).json({ error: 'Failed to clear project data' });
+    } finally {
+      client.release();
     }
   }
 );

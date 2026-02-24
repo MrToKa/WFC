@@ -4,9 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ApiError,
   type Project,
+  clearProjectData,
   createProject,
+  deleteCable,
+  deleteCableType,
   deleteProject,
+  deleteTray,
+  fetchCables,
+  fetchCableTypes,
   fetchProjects,
+  fetchTrays,
   updateProject
 } from '@/api/client';
 
@@ -20,6 +27,18 @@ import {
 
 type UseAdminProjectsSectionParams = {
   token: string | null;
+};
+
+type ProjectClearDataSelection = {
+  cableTypes: boolean;
+  cables: boolean;
+  trays: boolean;
+};
+
+const emptyProjectClearDataSelection: ProjectClearDataSelection = {
+  cableTypes: false,
+  cables: false,
+  trays: false
 };
 
 export type AdminProjectsSectionState = {
@@ -65,7 +84,18 @@ export type AdminProjectsSectionState = {
   ) => void;
   handleSubmitEditProject: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   handleDeleteProject: (projectId: string) => Promise<void>;
+  clearDataProject: Project | null;
+  clearDataSelection: ProjectClearDataSelection;
+  clearDataError: string | null;
+  handleOpenClearDataDialog: (project: Project) => void;
+  handleCloseClearDataDialog: () => void;
+  handleClearDataSelectionChange: (
+    field: keyof ProjectClearDataSelection,
+    checked: boolean
+  ) => void;
+  handleSubmitClearProjectData: () => Promise<void>;
   pendingProjectAction: string | null;
+  pendingProjectClearAction: string | null;
 };
 
 type ProjectSortField =
@@ -113,6 +143,12 @@ export const useAdminProjectsSection = ({
   const [projectSaving, setProjectSaving] = useState<boolean>(false);
   const [pendingProjectAction, setPendingProjectAction] =
     useState<string | null>(null);
+  const [pendingProjectClearAction, setPendingProjectClearAction] =
+    useState<string | null>(null);
+  const [clearDataProjectId, setClearDataProjectId] = useState<string | null>(null);
+  const [clearDataSelection, setClearDataSelection] =
+    useState<ProjectClearDataSelection>(emptyProjectClearDataSelection);
+  const [clearDataError, setClearDataError] = useState<string | null>(null);
 
   const loadProjects = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
@@ -331,6 +367,11 @@ export const useAdminProjectsSection = ({
     () => projects.find((candidate) => candidate.id === editingProjectId) ?? null,
     [projects, editingProjectId]
   );
+  const clearDataProject = useMemo(
+    () =>
+      projects.find((candidate) => candidate.id === clearDataProjectId) ?? null,
+    [projects, clearDataProjectId]
+  );
 
   const handleEditProjectFieldChange =
     (field: keyof ProjectFormState) =>
@@ -427,6 +468,184 @@ export const useAdminProjectsSection = ({
     }
   };
 
+  const handleOpenClearDataDialog = (project: Project) => {
+    setClearDataProjectId(project.id);
+    setClearDataSelection(emptyProjectClearDataSelection);
+    setClearDataError(null);
+    setProjectActionMessage(null);
+    setProjectActionError(null);
+  };
+
+  const handleCloseClearDataDialog = () => {
+    setClearDataProjectId(null);
+    setClearDataSelection(emptyProjectClearDataSelection);
+    setClearDataError(null);
+  };
+
+  const handleClearDataSelectionChange = (
+    field: keyof ProjectClearDataSelection,
+    checked: boolean
+  ) => {
+    setClearDataSelection((previous) => {
+      if (field === 'cableTypes') {
+        return {
+          ...previous,
+          cableTypes: checked,
+          cables: checked ? true : previous.cables
+        };
+      }
+
+      if (field === 'cables' && previous.cableTypes && !checked) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        [field]: checked
+      };
+    });
+    setClearDataError(null);
+  };
+
+  const handleSubmitClearProjectData = async () => {
+    if (!token) {
+      setClearDataError('Authentication token is missing.');
+      return;
+    }
+
+    if (!clearDataProject) {
+      setClearDataError('Project was not found.');
+      return;
+    }
+
+    const hasSelection =
+      clearDataSelection.cableTypes ||
+      clearDataSelection.cables ||
+      clearDataSelection.trays;
+
+    if (!hasSelection) {
+      setClearDataError('Select at least one data group to clear.');
+      return;
+    }
+
+    if (clearDataSelection.cableTypes) {
+      const confirmed = window.confirm(
+        'Deleting cable types also removes cables linked to those types. Continue?'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setPendingProjectClearAction(clearDataProject.id);
+    setProjectActionMessage(null);
+    setProjectActionError(null);
+    setClearDataError(null);
+
+    try {
+      let response: {
+        deleted: {
+          cableTypes: number;
+          cables: number;
+          trays: number;
+        };
+      };
+
+      try {
+        response = await clearProjectData(token, clearDataProject.id, {
+          cableTypes: clearDataSelection.cableTypes,
+          cables: clearDataSelection.cables,
+          trays: clearDataSelection.trays
+        });
+      } catch (error) {
+        const shouldUseFallback =
+          error instanceof ApiError &&
+          ![400, 401, 403].includes(error.status);
+
+        if (!shouldUseFallback) {
+          throw error;
+        }
+
+        let deletedCableTypes = 0;
+        let deletedCables = 0;
+        let deletedTrays = 0;
+
+        if (clearDataSelection.trays) {
+          const traysResponse = await fetchTrays(clearDataProject.id);
+          deletedTrays = traysResponse.trays.length;
+          await Promise.all(
+            traysResponse.trays.map(async (tray) => {
+              await deleteTray(token, clearDataProject.id, tray.id);
+            })
+          );
+        }
+
+        if (clearDataSelection.cableTypes) {
+          const [cableTypesResponse, cablesResponse] = await Promise.all([
+            fetchCableTypes(clearDataProject.id),
+            fetchCables(clearDataProject.id)
+          ]);
+
+          deletedCableTypes = cableTypesResponse.cableTypes.length;
+          deletedCables = cablesResponse.cables.length;
+
+          await Promise.all(
+            cableTypesResponse.cableTypes.map(async (cableType) => {
+              await deleteCableType(token, clearDataProject.id, cableType.id);
+            })
+          );
+        } else if (clearDataSelection.cables) {
+          const cablesResponse = await fetchCables(clearDataProject.id);
+          deletedCables = cablesResponse.cables.length;
+
+          await Promise.all(
+            cablesResponse.cables.map(async (cable) => {
+              await deleteCable(token, clearDataProject.id, cable.id);
+            })
+          );
+        }
+
+        response = {
+          deleted: {
+            cableTypes: deletedCableTypes,
+            cables: deletedCables,
+            trays: deletedTrays
+          }
+        };
+      }
+
+      const formatCount = (count: number, singular: string): string =>
+        `${count} ${count === 1 ? singular : `${singular}s`}`;
+
+      const clearedSegments: string[] = [];
+      if (clearDataSelection.cableTypes) {
+        clearedSegments.push(
+          formatCount(response.deleted.cableTypes, 'cable type')
+        );
+        clearedSegments.push(formatCount(response.deleted.cables, 'cable'));
+      } else if (clearDataSelection.cables) {
+        clearedSegments.push(formatCount(response.deleted.cables, 'cable'));
+      }
+      if (clearDataSelection.trays) {
+        clearedSegments.push(formatCount(response.deleted.trays, 'tray'));
+      }
+
+      setProjectActionMessage(
+        `Cleared ${clearedSegments.join(', ')} from project ${clearDataProject.projectNumber}.`
+      );
+      handleCloseClearDataDialog();
+    } catch (error) {
+      console.error('Failed to clear project data', error);
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Failed to clear project data. Please try again.';
+      setClearDataError(message);
+    } finally {
+      setPendingProjectClearAction(null);
+    }
+  };
+
   const handleDeleteProject = async (projectId: string) => {
     if (!token) {
       return;
@@ -447,6 +666,9 @@ export const useAdminProjectsSection = ({
       );
       if (editingProjectId === projectId) {
         handleCancelEditProject();
+      }
+      if (clearDataProjectId === projectId) {
+        handleCloseClearDataDialog();
       }
       setProjectActionMessage('Project deleted successfully.');
     } catch (error) {
@@ -502,6 +724,14 @@ export const useAdminProjectsSection = ({
     handleEditProjectFieldChange,
     handleSubmitEditProject,
     handleDeleteProject,
-    pendingProjectAction
+    clearDataProject,
+    clearDataSelection,
+    clearDataError,
+    handleOpenClearDataDialog,
+    handleCloseClearDataDialog,
+    handleClearDataSelectionChange,
+    handleSubmitClearProjectData,
+    pendingProjectAction,
+    pendingProjectClearAction
   };
 };

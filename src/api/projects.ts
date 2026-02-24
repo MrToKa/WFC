@@ -76,3 +76,31 @@ export async function deleteProject(
     token
   });
 }
+
+export async function clearProjectData(
+  token: string,
+  projectId: string,
+  data: {
+    cableTypes?: boolean;
+    cables?: boolean;
+    trays?: boolean;
+  }
+): Promise<{
+  deleted: {
+    cableTypes: number;
+    cables: number;
+    trays: number;
+  };
+}> {
+  return request<{
+    deleted: {
+      cableTypes: number;
+      cables: number;
+      trays: number;
+    };
+  }>(`/api/projects/${projectId}/clear-data`, {
+    method: 'POST',
+    token,
+    body: data
+  });
+}

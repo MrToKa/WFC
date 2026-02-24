@@ -1,6 +1,7 @@
 import {
   Body1,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogBody,
@@ -35,6 +36,10 @@ export const ProjectManagementSection = ({
     projectActionMessage,
     projectActionError,
     pendingProjectAction,
+    pendingProjectClearAction,
+    clearDataProject,
+    clearDataSelection,
+    clearDataError,
     projectSearch,
     setProjectSearch,
     projectPage,
@@ -60,8 +65,18 @@ export const ProjectManagementSection = ({
     handleCancelEditProject,
     handleEditProjectFieldChange,
     handleSubmitEditProject,
-    handleDeleteProject
+    handleDeleteProject,
+    handleOpenClearDataDialog,
+    handleCloseClearDataDialog,
+    handleClearDataSelectionChange,
+    handleSubmitClearProjectData
   } = state;
+
+  const hasClearDataSelection =
+    clearDataSelection.cableTypes ||
+    clearDataSelection.cables ||
+    clearDataSelection.trays;
+  const isClearDataInProgress = Boolean(pendingProjectClearAction);
 
   return (
     <section className={styles.section} aria-labelledby="project-management-heading">
@@ -282,8 +297,9 @@ export const ProjectManagementSection = ({
               <tbody>
                 {pagedProjects.map((project) => {
                   const isEditing = editingProjectId === project.id;
-                  const isBusy = pendingProjectAction === project.id;
-                  const disableActions = isBusy || projectSaving;
+                  const isDeleting = pendingProjectAction === project.id;
+                  const isClearing = pendingProjectClearAction === project.id;
+                  const disableActions = isDeleting || isClearing || projectSaving;
 
                   return (
                     <tr key={project.id}>
@@ -304,10 +320,18 @@ export const ProjectManagementSection = ({
                         <Button
                           size="small"
                           appearance="secondary"
+                          onClick={() => handleOpenClearDataDialog(project)}
+                          disabled={disableActions}
+                        >
+                          {isClearing ? 'Clearing...' : 'Clear data'}
+                        </Button>
+                        <Button
+                          size="small"
+                          appearance="secondary"
                           onClick={() => void handleDeleteProject(project.id)}
                           disabled={disableActions}
                         >
-                          {isBusy ? 'Deleting...' : 'Delete'}
+                          {isDeleting ? 'Deleting...' : 'Delete'}
                         </Button>
                       </td>
                     </tr>
@@ -340,6 +364,79 @@ export const ProjectManagementSection = ({
       ) : null}
         </>
       )}
+
+      <Dialog
+        open={Boolean(clearDataProject)}
+        onOpenChange={(_event, data) => {
+          if (!data.open && !isClearDataInProgress) {
+            handleCloseClearDataDialog();
+          }
+        }}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Clear data</DialogTitle>
+            <DialogContent>
+              <div className={styles.form}>
+                <Body1>
+                  Select data to delete for project{' '}
+                  {clearDataProject?.projectNumber ?? '(unknown)'}.
+                </Body1>
+                <Checkbox
+                  label="Cable types"
+                  checked={clearDataSelection.cableTypes}
+                  onChange={(_event, data) =>
+                    handleClearDataSelectionChange('cableTypes', data.checked === true)
+                  }
+                  disabled={isClearDataInProgress}
+                />
+                <Checkbox
+                  label="Cables list"
+                  checked={clearDataSelection.cables}
+                  onChange={(_event, data) =>
+                    handleClearDataSelectionChange('cables', data.checked === true)
+                  }
+                  disabled={isClearDataInProgress || clearDataSelection.cableTypes}
+                />
+                <Checkbox
+                  label="Trays"
+                  checked={clearDataSelection.trays}
+                  onChange={(_event, data) =>
+                    handleClearDataSelectionChange('trays', data.checked === true)
+                  }
+                  disabled={isClearDataInProgress}
+                />
+                {clearDataSelection.cableTypes ? (
+                  <Body1>
+                    Deleting cable types also removes cables linked to those types.
+                  </Body1>
+                ) : null}
+                {clearDataError ? (
+                  <Body1 className={styles.errorText}>{clearDataError}</Body1>
+                ) : null}
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                type="button"
+                onClick={handleCloseClearDataDialog}
+                disabled={isClearDataInProgress}
+              >
+                Cancel
+              </Button>
+              <Button
+                appearance="primary"
+                type="button"
+                onClick={() => void handleSubmitClearProjectData()}
+                disabled={isClearDataInProgress || !hasClearDataSelection}
+              >
+                {isClearDataInProgress ? 'Deleting...' : 'Delete'}
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       <Dialog
         open={Boolean(editingProject)}

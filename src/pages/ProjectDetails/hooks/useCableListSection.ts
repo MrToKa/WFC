@@ -166,22 +166,10 @@ export const useCableListSection = ({
   const [filterText, setFilterText] = useState<string>('');
   const [filterCriteria, setFilterCriteria] = useState<CableSearchCriteria>('all');
 
-  const sortCables = useCallback((items: Cable[]) => {
-    const toSortKey = (cable: Cable): string =>
-      (cable.tag ?? '').toLocaleLowerCase();
-
-    return [...items].sort((a, b) => {
-      const tagComparison = toSortKey(a).localeCompare(toSortKey(b), undefined, {
-        sensitivity: 'base'
-      });
-
-      if (tagComparison !== 0) {
-        return tagComparison;
-      }
-
-      return a.cableId - b.cableId;
-    });
-  }, []);
+  const sortCables = useCallback(
+    (items: Cable[]) => [...items].sort((a, b) => a.cableId - b.cableId),
+    []
+  );
 
   const getNextFreeCableId = useCallback((): number => {
     const occupiedIds = new Set<number>();

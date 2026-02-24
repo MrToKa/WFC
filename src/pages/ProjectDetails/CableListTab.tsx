@@ -218,6 +218,9 @@ export const CableListTab = ({
           <thead>
             <tr>
               <th className={styles.tableHeadCell}>
+                ID
+              </th>
+              <th className={styles.tableHeadCell}>
                 Tag
               </th>
               <th className={styles.tableHeadCell}>
@@ -253,6 +256,7 @@ export const CableListTab = ({
               );
               return (
                 <tr key={cable.id}>
+                  <td className={styles.tableCell}>{cable.cableId}</td>
                   <td className={styles.tableCell}>
                     {isInlineEditable && draft ? (
                       <Input
