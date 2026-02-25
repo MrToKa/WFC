@@ -19,8 +19,14 @@ import type {
 } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { getTrayBundleOverrides } from '@/utils/trayBundleOverrides';
-import type { TrayBundleOverride } from '@/utils/trayBundleOverrides';
+import {
+  getBundleRangeLabel,
+  getTrayBundleOverrides
+} from '@/utils/trayBundleOverrides';
+import type {
+  CustomBundleRange as TrayBundleRange,
+  TrayBundleOverride
+} from '@/utils/trayBundleOverrides';
 
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { ProjectDetailsTab } from './ProjectDetails.forms';
@@ -86,6 +92,47 @@ import { useMaterialData } from './TrayDetails/hooks';
 
 const CATEGORY_KEYS: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
 
+const normalizeCustomBundleRangeMaxRows = (
+  value: number | null | undefined
+): number | null => {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return null;
+  }
+
+  if (value < 1 || value > 1_000) {
+    return null;
+  }
+
+  return value;
+};
+
+const buildBundleMaxRowsByKey = (
+  ranges: TrayBundleRange[] | null | undefined
+): Record<string, number> | undefined => {
+  if (!ranges || ranges.length === 0) {
+    return undefined;
+  }
+
+  const entries = ranges
+    .map((range) => {
+      const maxRows = normalizeCustomBundleRangeMaxRows(range.maxRows ?? null);
+      if (maxRows === null) {
+        return null;
+      }
+      return [getBundleRangeLabel(range), maxRows] as const;
+    })
+    .filter(
+      (entry): entry is readonly [string, number] =>
+        entry !== null
+    );
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(entries);
+};
+
 const buildCategoryLayoutConfig = (
   layout: ProjectCableLayout | null | undefined,
   spacingBetweenCablesMm: number
@@ -103,6 +150,7 @@ const buildCategoryLayoutConfig = (
     const applyPhaseRotation = CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
       ? layoutSettings?.applyPhaseRotation ?? defaults.applyPhaseRotation
       : defaults.applyPhaseRotation;
+    const customRanges = layout?.customBundleRanges?.[category] ?? null;
 
     acc[category] = {
       maxRows: layoutSettings?.maxRows ?? defaults.maxRows,
@@ -111,7 +159,8 @@ const buildCategoryLayoutConfig = (
       cableSpacing: spacingBetweenCablesMm,
       trefoil,
       trefoilSpacingBetweenBundles,
-      applyPhaseRotation
+      applyPhaseRotation,
+      bundleMaxRowsByKey: buildBundleMaxRowsByKey(customRanges)
     };
     return acc;
   }, {} as CategoryLayoutConfig);
@@ -135,13 +184,6 @@ const mergeTrayLayoutOverrides = (
     return acc;
   }, {} as Record<CableCategoryKey, ProjectCableCategorySettings>);
 
-  // Merge custom bundle ranges: use tray-level if available, otherwise use project-level
-  const trayCustomRanges = override.customBundleRanges;
-  const hasTrayCustRanges = trayCustomRanges && Object.keys(trayCustomRanges).length > 0;
-  const mergedCustomRanges = hasTrayCustRanges
-    ? trayCustomRanges
-    : baseLayout?.customBundleRanges ?? null;
-
   return {
     cableSpacing: baseLayout?.cableSpacing ?? DEFAULT_CABLE_SPACING,
     considerBundleSpacingAsFree: baseLayout?.considerBundleSpacingAsFree ?? null,
@@ -151,7 +193,7 @@ const mergeTrayLayoutOverrides = (
     control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control,
     mv: mergedCategories.mv ?? DEFAULT_CATEGORY_SETTINGS.mv,
     vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd,
-    customBundleRanges: mergedCustomRanges
+    customBundleRanges: override.customBundleRanges ?? {}
   };
 };
 const VALID_TABS: ProjectDetailsTab[] = [
@@ -176,8 +218,8 @@ export const ProjectDetails = () => {
   const isAdmin = Boolean(user?.isAdmin);
   const canManageCables = Boolean(token);
 
-  const findMaterialTrayManufacturer = useCallback(
-    (trayType: string | null | undefined): string | null => {
+  const findMaterialTrayByType = useCallback(
+    (trayType: string | null | undefined) => {
       if (!trayType) {
         return null;
       }
@@ -185,14 +227,23 @@ export const ProjectDetails = () => {
       if (!normalized) {
         return null;
       }
-      const match = materialTrays.find(
-        (materialTray) =>
-          materialTray.type.trim().toLowerCase() === normalized
+      return (
+        materialTrays.find(
+          (materialTray) =>
+            materialTray.type.trim().toLowerCase() === normalized
+        ) ?? null
       );
+    },
+    [materialTrays]
+  );
+
+  const findMaterialTrayManufacturer = useCallback(
+    (trayType: string | null | undefined): string | null => {
+      const match = findMaterialTrayByType(trayType);
       const manufacturer = match?.manufacturer?.trim();
       return manufacturer ? (manufacturer === '' ? null : manufacturer) : null;
     },
-    [materialTrays]
+    [findMaterialTrayByType]
   );
 
   const [selectedTab, setSelectedTab] = useState<ProjectDetailsTab>(() => {
@@ -564,9 +615,6 @@ export const ProjectDetails = () => {
     return DEFAULT_CABLE_SPACING;
   }, [project?.cableLayout?.cableSpacing]);
 
-  const considerBundleSpacingAsFree = Boolean(
-    project?.cableLayout?.considerBundleSpacingAsFree
-  );
   const minFreeSpacePercent = project?.cableLayout?.minFreeSpacePercent ?? null;
   const maxFreeSpacePercent = project?.cableLayout?.maxFreeSpacePercent ?? null;
 
@@ -633,6 +681,7 @@ export const ProjectDetails = () => {
         typeof tray.heightMm === 'number' &&
         tray.heightMm > 0
       ) {
+        const rungHeightMm = findMaterialTrayByType(tray.type)?.rungHeightMm ?? null;
         try {
           layoutSummary = trayDrawingService.drawTrayLayout(
             canvas,
@@ -641,7 +690,8 @@ export const ProjectDetails = () => {
             cableBundles,
             6,
             spacingBetweenCables,
-            layoutConfig
+            layoutConfig,
+            { rungHeightMm }
           );
         } catch (error) {
           console.error('Failed to build tray layout summary', {
@@ -667,6 +717,7 @@ export const ProjectDetails = () => {
   }, [
     cables,
     canonicalProjectId,
+    findMaterialTrayByType,
     project?.cableLayout,
     projectCableSpacingMm,
     trayDrawingService,
