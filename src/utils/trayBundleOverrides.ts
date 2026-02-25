@@ -11,6 +11,7 @@ export type CustomBundleRange = {
   id: string;
   min: number;
   max: number;
+  maxRows?: number | null;
 };
 
 /**
@@ -38,6 +39,14 @@ export const validateBundleRanges = (
     }
     if (range.min >= range.max) {
       return `Invalid range: min (${range.min}) must be less than max (${range.max}). Use ${range.min + 0.1} as minimum for the next range.`;
+    }
+    if (range.maxRows !== undefined && range.maxRows !== null) {
+      if (!Number.isInteger(range.maxRows)) {
+        return `Invalid max rows for range ${range.min}-${range.max}: enter a whole number.`;
+      }
+      if (range.maxRows < 1 || range.maxRows > 1_000) {
+        return `Invalid max rows for range ${range.min}-${range.max}: value must be between 1 and 1000.`;
+      }
     }
   }
 

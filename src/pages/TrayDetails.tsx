@@ -366,11 +366,12 @@ type BundleCategoryFormState = {
 type BundleFormState = Record<CableCategoryKey, BundleCategoryFormState>;
 type BundleFormErrors = Record<CableCategoryKey, string | null>;
 
-// Custom bundle range form state (min/max as strings for input handling)
+// Custom bundle range form state (min/max/maxRows as strings for input handling)
 type CustomBundleRangeFormState = {
   id: string;
   min: string;
   max: string;
+  maxRows: string;
 };
 
 type CustomBundleRangesFormState = Record<CableCategoryKey, CustomBundleRangeFormState[]>;
@@ -389,6 +390,57 @@ const createEmptyCustomBundleRangesErrors = (): CustomBundleRangesErrors => ({
   vfd: null,
   control: null
 });
+
+const normalizeCustomBundleRangeMaxRows = (
+  value: number | null | undefined
+): number | null => {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    return null;
+  }
+
+  if (value < 1 || value > 1_000) {
+    return null;
+  }
+
+  return value;
+};
+
+const parseBundleRangeMaxRowsInput = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return normalizeCustomBundleRangeMaxRows(parsed);
+};
+
+const buildBundleMaxRowsByKey = (
+  ranges: CustomBundleRange[] | null | undefined
+): Record<string, number> | undefined => {
+  if (!ranges || ranges.length === 0) {
+    return undefined;
+  }
+
+  const entries = ranges
+    .map((range) => {
+      const maxRows = normalizeCustomBundleRangeMaxRows(range.maxRows ?? null);
+      if (maxRows === null) {
+        return null;
+      }
+      return [getBundleRangeLabel(range), maxRows] as const;
+    })
+    .filter(
+      (entry): entry is readonly [string, number] =>
+        entry !== null
+    );
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(entries);
+};
 
 /**
  * Builds custom bundle ranges form state from project-level ranges or tray-level overrides.
@@ -415,7 +467,11 @@ const buildCustomBundleRangesFormState = (
       result[key] = ranges.map((range) => ({
         id: range.id,
         min: String(range.min),
-        max: String(range.max)
+        max: String(range.max),
+        maxRows:
+          normalizeCustomBundleRangeMaxRows(range.maxRows ?? null) !== null
+            ? String(range.maxRows)
+            : ''
       }));
     }
   }
@@ -432,11 +488,15 @@ const parseCustomBundleRangesFormState = (
     const ranges = formState[key];
     if (ranges.length > 0) {
       result[key] = ranges
-        .map((range) => ({
-          id: range.id,
-          min: parseFloat(range.min) || 0,
-          max: parseFloat(range.max) || 0
-        }))
+        .map((range) => {
+          const parsedMaxRows = parseBundleRangeMaxRowsInput(range.maxRows);
+          return {
+            id: range.id,
+            min: parseFloat(range.min) || 0,
+            max: parseFloat(range.max) || 0,
+            ...(parsedMaxRows !== null ? { maxRows: parsedMaxRows } : {})
+          };
+        })
         .filter((range) => range.min >= 0 && range.max > 0);
     }
   }
@@ -519,6 +579,28 @@ const parseBundleInteger = (
   }
 
   return { numeric: parsed };
+};
+
+const buildBundleCategorySettingsFromFormState = (
+  category: CableCategoryKey,
+  input: BundleCategoryFormState
+): ProjectCableCategorySettings => {
+  const defaults = DEFAULT_CATEGORY_SETTINGS[category];
+  const parsedRows = parseBundleInteger(input.maxRows, 'rows');
+  const parsedColumns = parseBundleInteger(input.maxColumns, 'columns');
+
+  return {
+    maxRows: parsedRows.numeric,
+    maxColumns: parsedColumns.numeric,
+    bundleSpacing: input.bundleSpacing ?? defaults.bundleSpacing,
+    trefoil: CABLE_CATEGORY_CONFIG[category].showTrefoil ? input.trefoil : null,
+    trefoilSpacingBetweenBundles: CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
+      ? input.trefoilSpacing
+      : null,
+    applyPhaseRotation: CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
+      ? input.phaseRotation
+      : null
+  };
 };
 
 const useStyles = makeStyles({
@@ -1094,13 +1176,51 @@ export const TrayDetails = () => {
     []
   );
 
+  const editingCustomBundleRanges = useMemo<
+    Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null
+  >(
+    () => {
+      if (!isEditing || !bundleFormUseCustom) {
+        return null;
+      }
+
+      const parsedRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
+      return CABLE_CATEGORY_ORDER.reduce<
+        Partial<Record<CableCategoryKey, CustomBundleRange[]>>
+      >((acc, key) => {
+        const validRanges = (parsedRanges[key] ?? []).filter(
+          (range) =>
+            Number.isFinite(range.min) &&
+            Number.isFinite(range.max) &&
+            range.max > range.min
+        );
+        if (validRanges.length > 0) {
+          acc[key] = validRanges;
+        }
+        return acc;
+      }, {});
+    },
+    [isEditing, bundleFormUseCustom, customBundleRangesFormState]
+  );
+
+  const activeCustomBundleRanges = useMemo<
+    Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null
+  >(
+    () =>
+      editingCustomBundleRanges ??
+      (bundleOverrides?.useCustom
+        ? bundleOverrides.customBundleRanges ?? {}
+        : project?.cableLayout?.customBundleRanges ?? null),
+    [
+      editingCustomBundleRanges,
+      bundleOverrides?.useCustom,
+      bundleOverrides?.customBundleRanges,
+      project?.cableLayout?.customBundleRanges
+    ]
+  );
+
   const cableBundles: CableBundleMap = useMemo(() => {
     const bundles: CableBundleMap = {};
-    
-    // Use tray-level custom ranges if custom config is enabled, otherwise use project-level
-    const customRanges = bundleOverrides?.useCustom && bundleOverrides.customBundleRanges
-      ? bundleOverrides.customBundleRanges
-      : project?.cableLayout?.customBundleRanges;
 
     for (const cable of nonGroundingCables) {
       const category = matchCableCategory(cable.purpose);
@@ -1109,7 +1229,7 @@ export const TrayDetails = () => {
       }
 
       // Use custom bundle ranges for this category if available
-      const categoryCustomRanges = customRanges?.[category as CableCategoryKey];
+      const categoryCustomRanges = activeCustomBundleRanges?.[category as CableCategoryKey];
       const bundleKey = categoryCustomRanges && categoryCustomRanges.length > 0
         ? determineCableDiameterGroupWithCustomRanges(cable.diameterMm ?? null, categoryCustomRanges)
         : determineCableDiameterGroup(cable.diameterMm ?? null);
@@ -1126,23 +1246,33 @@ export const TrayDetails = () => {
     }
 
     return bundles;
-  }, [nonGroundingCables, bundleOverrides?.useCustom, bundleOverrides?.customBundleRanges, project?.cableLayout?.customBundleRanges]);
+  }, [nonGroundingCables, activeCustomBundleRanges]);
 
   const isUsingCustomBundles = Boolean(bundleOverrides?.useCustom);
 
   const activeProjectCableLayout = useMemo<ProjectCableLayout | null>(() => {
     const base = project?.cableLayout ?? null;
+    const useCustomLayout = isEditing ? bundleFormUseCustom : Boolean(bundleOverrides?.useCustom);
 
-    if (!bundleOverrides?.useCustom) {
+    if (!useCustomLayout) {
       return base;
     }
+
+    const categoriesSource = isEditing
+      ? CABLE_CATEGORY_ORDER.reduce<
+          Partial<Record<CableCategoryKey, ProjectCableCategorySettings>>
+        >((acc, key) => {
+          acc[key] = buildBundleCategorySettingsFromFormState(key, bundleFormState[key]);
+          return acc;
+        }, {})
+      : bundleOverrides?.categories ?? {};
 
     const mergedCategories = CABLE_CATEGORY_ORDER.reduce<
       Record<CableCategoryKey, ProjectCableCategorySettings>
     >((acc, key) => {
       const defaults = DEFAULT_CATEGORY_SETTINGS[key];
       const baseSettings = (base?.[key] as ProjectCableCategorySettings | null) ?? defaults;
-      const override = bundleOverrides?.categories?.[key];
+      const override = categoriesSource[key];
       acc[key] = override ? { ...baseSettings, ...override } : baseSettings;
       return acc;
     }, {} as Record<CableCategoryKey, ProjectCableCategorySettings>);
@@ -1155,9 +1285,17 @@ export const TrayDetails = () => {
       mv: mergedCategories.mv ?? DEFAULT_CATEGORY_SETTINGS.mv,
       power: mergedCategories.power ?? DEFAULT_CATEGORY_SETTINGS.power,
       vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd,
-      control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control
+      control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control,
+      customBundleRanges: activeCustomBundleRanges
     };
-  }, [bundleOverrides, project?.cableLayout]);
+  }, [
+    bundleOverrides,
+    project?.cableLayout,
+    activeCustomBundleRanges,
+    isEditing,
+    bundleFormUseCustom,
+    bundleFormState
+  ]);
 
   const projectCableSpacingMm = useMemo(() => {
     const spacing = activeProjectCableLayout?.cableSpacing;
@@ -1191,11 +1329,14 @@ export const TrayDetails = () => {
         cableSpacing: projectCableSpacingMm,
         trefoil,
         trefoilSpacingBetweenBundles,
-        applyPhaseRotation
+        applyPhaseRotation,
+        bundleMaxRowsByKey: buildBundleMaxRowsByKey(
+          activeCustomBundleRanges?.[category] ?? null
+        )
       };
       return acc;
     }, {} as CategoryLayoutConfig);
-  }, [activeProjectCableLayout, projectCableSpacingMm]);
+  }, [activeProjectCableLayout, projectCableSpacingMm, activeCustomBundleRanges]);
 
   const considerBundleSpacingAsFree = Boolean(
     activeProjectCableLayout?.considerBundleSpacingAsFree
@@ -1425,7 +1566,7 @@ export const TrayDetails = () => {
           : null;
 
         // Get custom bundle ranges for this category
-        const customRanges = bundleOverrides?.customBundleRanges?.[key] ?? [];
+        const customRanges = activeCustomBundleRanges?.[key] ?? [];
 
         return {
           key,
@@ -1439,7 +1580,7 @@ export const TrayDetails = () => {
           customRanges
         };
       }),
-    [activeProjectCableLayout, trayCableCategories, bundleOverrides?.customBundleRanges]
+    [activeProjectCableLayout, trayCableCategories, activeCustomBundleRanges]
   );
 
   const formatCableTypeLabel = useCallback(
@@ -1931,7 +2072,7 @@ export const TrayDetails = () => {
         ...prev,
         [category]: [
           ...prev[category],
-          { id: generateBundleRangeId(), min: '', max: '' }
+          { id: generateBundleRangeId(), min: '', max: '', maxRows: '' }
         ]
       }));
     },
@@ -1951,7 +2092,12 @@ export const TrayDetails = () => {
   );
 
   const handleBundleRangeChange = useCallback(
-    (category: CableCategoryKey, rangeId: string, field: 'min' | 'max', value: string) => {
+    (
+      category: CableCategoryKey,
+      rangeId: string,
+      field: 'min' | 'max' | 'maxRows',
+      value: string
+    ) => {
       if (!isEditing) return;
       setCustomBundleRangesErrors((prev) => ({ ...prev, [category]: null }));
       setCustomBundleRangesFormState((prev) => ({
@@ -2049,11 +2195,31 @@ export const TrayDetails = () => {
       const ranges = customBundleRangesFormState[key];
       if (ranges.length === 0) continue;
 
-      const parsedRanges: CustomBundleRange[] = ranges.map((r) => ({
-        id: r.id,
-        min: parseFloat(r.min) || 0,
-        max: parseFloat(r.max) || 0
-      }));
+      const parsedRanges: CustomBundleRange[] = [];
+      for (const range of ranges) {
+        const parsedRangeMaxRows = parseBundleInteger(range.maxRows, 'rows');
+        if (parsedRangeMaxRows.error) {
+          rangeErrors[key] = `Invalid max rows in custom ranges: ${parsedRangeMaxRows.error}`;
+          hasRangeErrors = true;
+          break;
+        }
+
+        const parsedRange: CustomBundleRange = {
+          id: range.id,
+          min: parseFloat(range.min) || 0,
+          max: parseFloat(range.max) || 0
+        };
+
+        if (parsedRangeMaxRows.numeric !== null) {
+          parsedRange.maxRows = parsedRangeMaxRows.numeric;
+        }
+
+        parsedRanges.push(parsedRange);
+      }
+
+      if (hasRangeErrors) {
+        continue;
+      }
 
       const validationError = validateBundleRanges(parsedRanges);
       if (validationError) {
@@ -3074,6 +3240,17 @@ export const TrayDetails = () => {
                               handleBundleRangeChange(key, range.id, 'max', e.target.value)
                             }
                           />
+                          <Input
+                            style={{ width: '90px' }}
+                            type="number"
+                            step="1"
+                            min={1}
+                            placeholder="Max rows"
+                            value={range.maxRows}
+                            onChange={(e) =>
+                              handleBundleRangeChange(key, range.id, 'maxRows', e.target.value)
+                            }
+                          />
                           <Button
                             appearance="subtle"
                             size="small"
@@ -3161,6 +3338,9 @@ export const TrayDetails = () => {
                       <span key={range.id}>
                         {idx > 0 ? ', ' : ''}
                         {range.min}-{range.max} mm
+                        {normalizeCustomBundleRangeMaxRows(range.maxRows ?? null) !== null
+                          ? ` (max rows: ${range.maxRows})`
+                          : ''}
                       </span>
                     ))}
                   </>

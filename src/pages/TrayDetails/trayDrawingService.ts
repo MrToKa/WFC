@@ -45,6 +45,7 @@ export type ProjectLayoutConfig = {
   trefoil: boolean;
   trefoilSpacingBetweenBundles: boolean;
   applyPhaseRotation: boolean;
+  bundleMaxRowsByKey?: Record<string, number>;
 };
 
 export type CategoryLayoutConfig = Record<CategoryKey, ProjectLayoutConfig>;
@@ -510,6 +511,18 @@ class CableBundleDrawer {
     return startLeftX + geometry.widthPx;
   }
 
+  private resolveBundleMaxRows(
+    layoutConfig: ProjectLayoutConfig,
+    bundleKey: string
+  ): number | null {
+    const perBundleRows = layoutConfig.bundleMaxRowsByKey?.[bundleKey];
+    if (typeof perBundleRows !== 'number' || !Number.isInteger(perBundleRows) || perBundleRows < 1) {
+      return null;
+    }
+
+    return perBundleRows;
+  }
+
   drawPowerBundles(
     ctx: CanvasRenderingContext2D,
     data: TrayDrawingData,
@@ -569,6 +582,7 @@ class CableBundleDrawer {
           layoutConfig = data.layoutConfig.power;
           break;
       }
+      const customBundleMaxRows = this.resolveBundleMaxRows(layoutConfig, bundleKey);
 
       const sortedCables = [...bundleCables].sort(
         (a, b) => getCableDiameter(b) - getCableDiameter(a)
@@ -656,7 +670,8 @@ class CableBundleDrawer {
               data.usableTrayHeightMm,
               group.cables,
               purposeString,
-              layoutConfig
+              layoutConfig,
+              customBundleMaxRows
             );
             const referenceRows = Math.max(referenceLayout.rows, 1);
             const referenceColumns = Math.max(referenceLayout.columns, 1);
@@ -750,7 +765,8 @@ class CableBundleDrawer {
             data.usableTrayHeightMm,
             normalCableQueue,
             purposeString,
-            layoutConfig
+            layoutConfig,
+            customBundleMaxRows
           );
           const referenceRows = Math.max(referenceLayout.rows, 1);
           const referenceColumns = Math.max(referenceLayout.columns, 1);
@@ -842,8 +858,9 @@ class CableBundleDrawer {
       let rightStartX = TrayConstants.canvasMargin + trayWidthPx - spacingPx;
 
       for (let bundleIndex = 0; bundleIndex < groundingBundles.length; bundleIndex += 1) {
-        const [, bundleCables] = groundingBundles[bundleIndex];
+        const [bundleKey, bundleCables] = groundingBundles[bundleIndex];
         const layoutConfig = data.layoutConfig.mv;
+        const customBundleMaxRows = this.resolveBundleMaxRows(layoutConfig, bundleKey);
         const sortedCables = [...bundleCables].sort(
           (a, b) => getCableDiameter(b) - getCableDiameter(a)
         );
@@ -851,7 +868,8 @@ class CableBundleDrawer {
           data.usableTrayHeightMm,
           sortedCables,
           TrayConstants.cablePurposes.mv,
-          layoutConfig
+          layoutConfig,
+          customBundleMaxRows
         );
         const referenceRows = Math.max(referenceLayout.rows, 1);
         const referenceColumns = Math.max(referenceLayout.columns, 1);
@@ -928,6 +946,7 @@ class CableBundleDrawer {
 
     for (const [bundleKey, bundleCables] of sortedBundles) {
       const layoutConfig = data.layoutConfig.control;
+      const customBundleMaxRows = this.resolveBundleMaxRows(layoutConfig, bundleKey);
       const sortedCables = [...bundleCables].sort(
         (a, b) => getCableDiameter(b) - getCableDiameter(a)
       );
@@ -951,7 +970,8 @@ class CableBundleDrawer {
           data.usableTrayHeightMm,
           subBundle,
           TrayConstants.cablePurposes.control,
-          layoutConfig
+          layoutConfig,
+          customBundleMaxRows
         );
         const referenceRows = Math.max(referenceLayout.rows, 1);
         const referenceColumns = Math.max(referenceLayout.columns, 1);
@@ -1072,6 +1092,7 @@ class CableBundleDrawer {
 
     for (const [bundleKey, bundleCables] of sortedBundles) {
       const layoutConfig = data.layoutConfig.vfd;
+      const customBundleMaxRows = this.resolveBundleMaxRows(layoutConfig, bundleKey);
       const sortedCables = [...bundleCables].sort(
         (a, b) => getCableDiameter(b) - getCableDiameter(a)
       );
@@ -1138,7 +1159,8 @@ class CableBundleDrawer {
                 data.usableTrayHeightMm,
                 group.cables,
                 TrayConstants.cablePurposes.vfd,
-                layoutConfig
+                layoutConfig,
+                customBundleMaxRows
               );
               rightStartX = this.drawStandardVfdCables(
                 ctx,
@@ -1186,7 +1208,8 @@ class CableBundleDrawer {
               data.usableTrayHeightMm,
               group.cables,
               TrayConstants.cablePurposes.vfd,
-              layoutConfig
+              layoutConfig,
+              customBundleMaxRows
             );
 
             if (
@@ -1827,7 +1850,8 @@ class CableBundleDrawer {
     usableTrayHeightMm: number,
     bundle: Cable[],
     purpose: string,
-    layoutConfig: ProjectLayoutConfig
+    layoutConfig: ProjectLayoutConfig,
+    maxRowsOverride: number | null = null
   ) {
     const usableHeight = Math.max(usableTrayHeightMm, 1);
     const maxDiameter: number = bundle.reduce(
@@ -1840,7 +1864,11 @@ class CableBundleDrawer {
     }
 
     // Get project settings for max rows and columns
-    const maxRowsSetting = Math.max(layoutConfig.maxRows || 1, 1);
+    const maxRowsInput =
+      Number.isInteger(maxRowsOverride) && maxRowsOverride !== null
+        ? maxRowsOverride
+        : layoutConfig.maxRows;
+    const maxRowsSetting = Math.max(maxRowsInput || 1, 1);
     const maxColumnsSetting = Math.max(layoutConfig.maxColumns || 1, 1);
 
     const spacingMm = Math.max(layoutConfig.cableSpacing ?? TrayConstants.defaultSpacingMm, 0);
