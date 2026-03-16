@@ -1,12 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  Body1,
-  Button,
-  Tab,
-  TabList,
-  TabValue,
-  Title3
-} from '@fluentui/react-components';
+import { Body1, Button, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -15,6 +8,7 @@ import { MaterialsTab } from './Materials/Materials.types';
 import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
 import { useLoadCurves } from './Materials/hooks/useLoadCurves';
+import { useCableTypes } from './Materials/hooks/useCableTypes';
 import { useTemplateImages } from './Materials/hooks/useTemplateImages';
 import { TrayDialog } from './Materials/components/TrayDialog';
 import { TrayLoadCurveDialog } from './Materials/components/TrayLoadCurveDialog';
@@ -23,9 +17,13 @@ import { TraysTable } from './Materials/components/TraysTable';
 import { SupportsTable } from './Materials/components/SupportsTable';
 import { LoadCurvesGrid } from './Materials/components/LoadCurvesGrid';
 import { LoadCurveDialog } from './Materials/components/LoadCurveDialog';
+import { CableTypesTab } from './ProjectDetails/CableTypesTab';
+import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
+import { useProjectDetailsStyles } from './ProjectDetails.styles';
 
 export const Materials = () => {
   const styles = useStyles();
+  const cableTypesStyles = useProjectDetailsStyles();
   const { user, token } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -36,18 +34,18 @@ export const Materials = () => {
   const numberFormatter = useMemo(
     () =>
       new Intl.NumberFormat(undefined, {
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       }),
-    []
+    [],
   );
 
   const weightFormatter = useMemo(
     () =>
       new Intl.NumberFormat(undefined, {
         minimumFractionDigits: 3,
-        maximumFractionDigits: 3
+        maximumFractionDigits: 3,
       }),
-    []
+    [],
   );
 
   const formatNumeric = useCallback(
@@ -57,7 +55,7 @@ export const Materials = () => {
       }
       return numberFormatter.format(value);
     },
-    [numberFormatter]
+    [numberFormatter],
   );
 
   const formatWeight = useCallback(
@@ -67,56 +65,57 @@ export const Materials = () => {
       }
       return weightFormatter.format(value);
     },
-    [weightFormatter]
+    [weightFormatter],
   );
 
   const traysHook = useTrays({ token, isAdmin, showToast });
   const supportsHook = useSupports({ token, isAdmin, showToast });
   const loadCurvesHook = useLoadCurves({ token, isAdmin, showToast });
+  const cableTypesHook = useCableTypes({ token, isAdmin, showToast });
   const templateImagesHook = useTemplateImages({ token, showToast });
 
-  const handleTabSelect = useCallback(
-    (_event: unknown, data: { value: TabValue }) => {
-      setSelectedTab(data.value as MaterialsTab);
-    },
-    []
-  );
+  const handleTabSelect = useCallback((_event: unknown, data: { value: TabValue }) => {
+    setSelectedTab(data.value as MaterialsTab);
+  }, []);
 
   const trayTotalPages = traysHook.trayPagination ? traysHook.trayPagination.totalPages : 1;
-  const supportTotalPages = supportsHook.supportPagination ? supportsHook.supportPagination.totalPages : 1;
+  const supportTotalPages = supportsHook.supportPagination
+    ? supportsHook.supportPagination.totalPages
+    : 1;
   const loadCurveTotalPages = loadCurvesHook.loadCurvePagination
     ? loadCurvesHook.loadCurvePagination.totalPages
     : 1;
+  const selectedTabLabel =
+    selectedTab === 'trays'
+      ? 'Trays'
+      : selectedTab === 'supports'
+        ? 'Supports'
+        : selectedTab === 'loadCurves'
+          ? 'Load curves'
+          : 'Cable types';
 
   return (
-    <section className={styles.root} aria-labelledby='materials-heading'>
+    <section className={styles.root} aria-labelledby="materials-heading">
       <div className={styles.header}>
-        <Title3 id='materials-heading'>Materials</Title3>
+        <Title3 id="materials-heading">Materials</Title3>
         <Body1>
-          Reference trays, supports, and load curves that can be reused across projects.
+          Reference trays, supports, load curves, and cable types that can be reused across
+          projects.
         </Body1>
       </div>
 
       <TabList
         selectedValue={selectedTab}
         onTabSelect={handleTabSelect}
-        aria-label='Materials categories'
+        aria-label="Materials categories"
       >
-        <Tab value='trays'>Trays</Tab>
-        <Tab value='supports'>Supports</Tab>
-        <Tab value='loadCurves'>Load curves</Tab>
+        <Tab value="trays">Trays</Tab>
+        <Tab value="supports">Supports</Tab>
+        <Tab value="loadCurves">Load curves</Tab>
+        <Tab value="cableTypes">Cables types</Tab>
       </TabList>
 
-      <div
-        role='tabpanel'
-        aria-label={
-          selectedTab === 'trays'
-            ? 'Trays'
-            : selectedTab === 'supports'
-            ? 'Supports'
-            : 'Load curves'
-        }
-      >
+      <div role="tabpanel" aria-label={selectedTabLabel}>
         {selectedTab === 'trays' ? (
           <>
             <div className={styles.actionsRow}>
@@ -128,7 +127,7 @@ export const Materials = () => {
               </Button>
               {isAdmin ? (
                 <>
-                  <Button appearance='primary' onClick={traysHook.openTrayCreateDialog}>
+                  <Button appearance="primary" onClick={traysHook.openTrayCreateDialog}>
                     Add tray
                   </Button>
                   <Button
@@ -139,24 +138,23 @@ export const Materials = () => {
                   </Button>
                   <input
                     ref={traysHook.trayFileInputRef}
-                    type='file'
+                    type="file"
                     className={styles.hiddenInput}
-                    accept='.xlsx'
+                    accept=".xlsx"
                     onChange={traysHook.handleTrayImportChange}
                   />
                   <Button
-                    appearance='secondary'
+                    appearance="secondary"
                     onClick={traysHook.handleGetTrayTemplate}
                     disabled={traysHook.isGettingTrayTemplate}
                   >
-                    {traysHook.isGettingTrayTemplate ? 'Getting template...' : 'Get upload template'}
+                    {traysHook.isGettingTrayTemplate
+                      ? 'Getting template...'
+                      : 'Get upload template'}
                   </Button>
                 </>
               ) : null}
-              <Button
-                onClick={traysHook.handleExportTrays}
-                disabled={traysHook.isExportingTrays}
-              >
+              <Button onClick={traysHook.handleExportTrays} disabled={traysHook.isExportingTrays}>
                 {traysHook.isExportingTrays ? 'Exporting...' : 'Export to Excel'}
               </Button>
             </div>
@@ -172,27 +170,29 @@ export const Materials = () => {
               formatNumeric={formatNumeric}
               formatWeight={formatWeight}
               onEdit={traysHook.openTrayEditDialog}
-            onDelete={traysHook.handleTrayDelete}
-            onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
-            token={token}
-            page={traysHook.trayPage}
-            totalPages={trayTotalPages}
-            onSetPage={traysHook.setTrayPage}
-            styles={styles}
-          />
+              onDelete={traysHook.handleTrayDelete}
+              onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
+              token={token}
+              page={traysHook.trayPage}
+              totalPages={trayTotalPages}
+              onSetPage={traysHook.setTrayPage}
+              styles={styles}
+            />
           </>
         ) : selectedTab === 'supports' ? (
           <>
             <div className={styles.actionsRow}>
               <Button
-                onClick={() => supportsHook.loadSupports(supportsHook.supportPage, { silent: true })}
+                onClick={() =>
+                  supportsHook.loadSupports(supportsHook.supportPage, { silent: true })
+                }
                 disabled={supportsHook.isRefreshingSupports}
               >
                 {supportsHook.isRefreshingSupports ? 'Refreshing...' : 'Refresh'}
               </Button>
               {isAdmin ? (
                 <>
-                  <Button appearance='primary' onClick={supportsHook.openSupportCreateDialog}>
+                  <Button appearance="primary" onClick={supportsHook.openSupportCreateDialog}>
                     Add support
                   </Button>
                   <Button
@@ -203,13 +203,13 @@ export const Materials = () => {
                   </Button>
                   <input
                     ref={supportsHook.supportFileInputRef}
-                    type='file'
+                    type="file"
                     className={styles.hiddenInput}
-                    accept='.xlsx'
+                    accept=".xlsx"
                     onChange={supportsHook.handleSupportImportChange}
                   />
                   <Button
-                    appearance='secondary'
+                    appearance="secondary"
                     onClick={supportsHook.handleGetSupportTemplate}
                     disabled={supportsHook.isGettingSupportTemplate}
                   >
@@ -235,17 +235,17 @@ export const Materials = () => {
               pendingId={supportsHook.supportPendingId}
               isSubmitting={supportsHook.isSupportSubmitting}
               formatNumeric={formatNumeric}
-            formatWeight={formatWeight}
-            onEdit={supportsHook.openSupportEditDialog}
-            onDelete={supportsHook.handleSupportDelete}
-            token={token}
-            page={supportsHook.supportPage}
-            totalPages={supportTotalPages}
-            onSetPage={supportsHook.setSupportPage}
-            styles={styles}
-          />
+              formatWeight={formatWeight}
+              onEdit={supportsHook.openSupportEditDialog}
+              onDelete={supportsHook.handleSupportDelete}
+              token={token}
+              page={supportsHook.supportPage}
+              totalPages={supportTotalPages}
+              onSetPage={supportsHook.setSupportPage}
+              styles={styles}
+            />
           </>
-        ) : (
+        ) : selectedTab === 'loadCurves' ? (
           <>
             <div className={styles.actionsRow}>
               <Button
@@ -257,7 +257,7 @@ export const Materials = () => {
                 {loadCurvesHook.isRefreshingLoadCurves ? 'Refreshing...' : 'Refresh'}
               </Button>
               {isAdmin ? (
-                <Button appearance='primary' onClick={loadCurvesHook.openLoadCurveCreateDialog}>
+                <Button appearance="primary" onClick={loadCurvesHook.openLoadCurveCreateDialog}>
                   Add load curve
                 </Button>
               ) : null}
@@ -284,6 +284,48 @@ export const Materials = () => {
               paginationClassName={styles.pagination}
             />
           </>
+        ) : (
+          <CableTypesTab
+            styles={cableTypesStyles}
+            isAdmin={isAdmin}
+            isRefreshing={cableTypesHook.cableTypesRefreshing}
+            onRefresh={() => void cableTypesHook.reloadCableTypes({ showSpinner: false })}
+            onCreate={cableTypesHook.openCreateCableTypeDialog}
+            onImportClick={() => cableTypesHook.fileInputRef.current?.click()}
+            onExport={() => void cableTypesHook.handleExportCableTypes()}
+            onGetTemplate={() => void cableTypesHook.handleGetCableTypesTemplate()}
+            onImportFileChange={cableTypesHook.handleImportCableTypes}
+            isImporting={cableTypesHook.cableTypesImporting}
+            isExporting={cableTypesHook.cableTypesExporting}
+            isGettingTemplate={cableTypesHook.cableTypesGettingTemplate}
+            fileInputRef={cableTypesHook.fileInputRef}
+            searchText={cableTypesHook.searchText}
+            searchCriteria={cableTypesHook.searchCriteria}
+            onSearchTextChange={cableTypesHook.setSearchText}
+            onSearchCriteriaChange={cableTypesHook.setSearchCriteria}
+            error={cableTypesHook.cableTypesError}
+            isLoading={cableTypesHook.cableTypesLoading}
+            items={cableTypesHook.pagedCableTypes}
+            pendingId={cableTypesHook.pendingCableTypeId}
+            onEdit={cableTypesHook.openEditCableTypeDialog}
+            onDelete={(cableType) => void cableTypesHook.handleDeleteCableType(cableType)}
+            formatNumeric={formatNumeric}
+            showPagination={cableTypesHook.showCableTypePagination}
+            page={cableTypesHook.cableTypePage}
+            totalPages={cableTypesHook.totalCableTypePages}
+            paginationHandlers={{
+              onPrevious: cableTypesHook.goToPreviousPage,
+              onNext: cableTypesHook.goToNextPage,
+              onPageSelect: cableTypesHook.goToPage,
+            }}
+            includeTabPanelRole={false}
+            emptyStateTitle="No cable types found"
+            emptyStateBody={
+              isAdmin
+                ? 'Use the buttons above to add or import cable types for materials.'
+                : 'There are no cable types recorded for materials yet.'
+            }
+          />
         )}
       </div>
 
@@ -345,6 +387,19 @@ export const Materials = () => {
         onSubmit={loadCurvesHook.handleLoadCurveSubmit}
         onClose={loadCurvesHook.closeLoadCurveDialog}
         dialogActionsClassName={styles.dialogActions}
+      />
+      <CableTypeDialog
+        styles={cableTypesStyles}
+        open={cableTypesHook.cableTypeDialog.open}
+        mode={cableTypesHook.cableTypeDialog.mode}
+        values={cableTypesHook.cableTypeDialog.values}
+        errors={cableTypesHook.cableTypeDialog.errors}
+        submitting={cableTypesHook.cableTypeDialog.submitting}
+        showMaterialFields
+        onFieldChange={cableTypesHook.cableTypeDialog.handleFieldChange}
+        onPurposeSelect={cableTypesHook.cableTypeDialog.handlePurposeSelect}
+        onSubmit={(event) => void cableTypesHook.cableTypeDialog.handleSubmit(event)}
+        onDismiss={cableTypesHook.cableTypeDialog.reset}
       />
     </section>
   );

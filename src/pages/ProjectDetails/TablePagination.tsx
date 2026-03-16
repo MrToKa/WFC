@@ -1,16 +1,11 @@
 import { useMemo } from 'react';
 
-import {
-  Body1,
-  Button,
-  Dropdown,
-  Option
-} from '@fluentui/react-components';
+import { Body1, Button, Dropdown, Option } from '@fluentui/react-components';
 
-import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import type { FilterableTableSectionStyles } from '../ProjectDetails.styles';
 
 type TablePaginationProps = {
-  styles: ProjectDetailsStyles;
+  styles: FilterableTableSectionStyles;
   page: number;
   totalPages: number;
   onPrevious: () => void;
@@ -28,20 +23,16 @@ export const TablePagination = ({
   onNext,
   onPageSelect,
   dropdownAriaLabel,
-  buttonSize = 'small'
+  buttonSize = 'small',
 }: TablePaginationProps) => {
   const pageOptions = useMemo(
     () => Array.from({ length: totalPages }, (_, index) => index + 1),
-    [totalPages]
+    [totalPages],
   );
 
   return (
     <div className={styles.pagination}>
-      <Button
-        size={buttonSize}
-        onClick={onPrevious}
-        disabled={page === 1}
-      >
+      <Button size={buttonSize} onClick={onPrevious} disabled={page === 1}>
         Previous
       </Button>
       <Dropdown
@@ -58,21 +49,13 @@ export const TablePagination = ({
         }}
       >
         {pageOptions.map((pageOption) => (
-          <Option
-            key={pageOption}
-            value={String(pageOption)}
-            text={`Page ${pageOption}`}
-          >
+          <Option key={pageOption} value={String(pageOption)} text={`Page ${pageOption}`}>
             Page {pageOption}
           </Option>
         ))}
       </Dropdown>
       <Body1>of {totalPages}</Body1>
-      <Button
-        size={buttonSize}
-        onClick={onNext}
-        disabled={page === totalPages}
-      >
+      <Button size={buttonSize} onClick={onNext} disabled={page === totalPages}>
         Next
       </Button>
     </div>

@@ -28,6 +28,7 @@ type CableTypeDialogProps = {
   values: CableTypeFormState;
   errors: CableTypeFormErrors;
   submitting: boolean;
+  showMaterialFields?: boolean;
   onFieldChange: (
     field: keyof CableTypeFormState
   ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
@@ -43,6 +44,7 @@ export const CableTypeDialog = ({
   values,
   errors,
   submitting,
+  showMaterialFields = false,
   onFieldChange,
   onPurposeSelect,
   onSubmit,
@@ -93,6 +95,45 @@ export const CableTypeDialog = ({
                 <Option value="MV">MV</Option>
               </Combobox>
             </Field>
+            {showMaterialFields ? (
+              <>
+                <Field
+                  label="Material"
+                  validationState={errors.material ? 'error' : undefined}
+                  validationMessage={errors.material}
+                >
+                  <Input value={values.material} onChange={onFieldChange('material')} />
+                </Field>
+                <Field
+                  label="Description"
+                  validationState={errors.description ? 'error' : undefined}
+                  validationMessage={errors.description}
+                >
+                  <Input value={values.description} onChange={onFieldChange('description')} />
+                </Field>
+                <Field
+                  label="Manufacturer"
+                  validationState={errors.manufacturer ? 'error' : undefined}
+                  validationMessage={errors.manufacturer}
+                >
+                  <Input value={values.manufacturer} onChange={onFieldChange('manufacturer')} />
+                </Field>
+                <Field
+                  label="Part No."
+                  validationState={errors.partNo ? 'error' : undefined}
+                  validationMessage={errors.partNo}
+                >
+                  <Input value={values.partNo} onChange={onFieldChange('partNo')} />
+                </Field>
+                <Field
+                  label="Remarks (optional)"
+                  validationState={errors.remarks ? 'error' : undefined}
+                  validationMessage={errors.remarks}
+                >
+                  <Input value={values.remarks} onChange={onFieldChange('remarks')} />
+                </Field>
+              </>
+            ) : null}
             <Field
               label="Diameter [mm]"
               validationState={errors.diameterMm ? 'error' : undefined}

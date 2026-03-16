@@ -266,6 +266,13 @@ const cableTypeStringField = z
   .max(500)
   .optional();
 
+const materialCableTypeStringField = z
+  .string()
+  .trim()
+  .max(2000)
+  .nullable()
+  .optional();
+
 export const createCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
@@ -287,6 +294,47 @@ export const updateCableTypeSchema = z
     (value) =>
       value.name !== undefined ||
       value.purpose !== undefined ||
+      value.diameterMm !== undefined ||
+      value.weightKgPerM !== undefined,
+    { message: 'At least one field must be provided' }
+  );
+
+export const createMaterialCableTypeSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    purpose: cableTypeStringField,
+    material: materialCableTypeStringField,
+    description: materialCableTypeStringField,
+    manufacturer: materialCableTypeStringField,
+    partNo: materialCableTypeStringField,
+    remarks: materialCableTypeStringField,
+    diameterMm: cableTypeNumericField,
+    weightKgPerM: cableTypeNumericField
+  })
+  .strict();
+
+export const updateMaterialCableTypeSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    purpose: cableTypeStringField,
+    material: materialCableTypeStringField,
+    description: materialCableTypeStringField,
+    manufacturer: materialCableTypeStringField,
+    partNo: materialCableTypeStringField,
+    remarks: materialCableTypeStringField,
+    diameterMm: cableTypeNumericField,
+    weightKgPerM: cableTypeNumericField
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.name !== undefined ||
+      value.purpose !== undefined ||
+      value.material !== undefined ||
+      value.description !== undefined ||
+      value.manufacturer !== undefined ||
+      value.partNo !== undefined ||
+      value.remarks !== undefined ||
       value.diameterMm !== undefined ||
       value.weightKgPerM !== undefined,
     { message: 'At least one field must be provided' }

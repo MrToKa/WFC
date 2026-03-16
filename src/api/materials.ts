@@ -1,5 +1,8 @@
 import { request, ApiError, getApiBaseUrl } from './http';
 import type {
+  MaterialCableType,
+  MaterialCableTypeImportSummary,
+  MaterialCableTypeInput,
   MaterialTray,
   MaterialSupport,
   MaterialLoadCurve,
@@ -10,8 +13,155 @@ import type {
   MaterialLoadCurveUpdateInput,
   MaterialImportSummary,
   MaterialLoadCurveImportSummary,
-  PaginationMeta
+  PaginationMeta,
 } from './types';
+
+const extractErrorMessage = (payload: unknown, fallback: string): string => {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'error' in payload &&
+    typeof (payload as { error?: string }).error === 'string'
+  ) {
+    return (payload as { error: string }).error;
+  }
+
+  return fallback;
+};
+
+// Material Cable Types
+export async function fetchMaterialCableTypes(): Promise<{
+  cableTypes: MaterialCableType[];
+}> {
+  return request<{ cableTypes: MaterialCableType[] }>('/api/materials/cable-types');
+}
+
+export async function createMaterialCableType(
+  token: string,
+  data: MaterialCableTypeInput,
+): Promise<{ cableType: MaterialCableType }> {
+  return request<{ cableType: MaterialCableType }>('/api/materials/cable-types', {
+    method: 'POST',
+    token,
+    body: data,
+  });
+}
+
+export async function updateMaterialCableType(
+  token: string,
+  cableTypeId: string,
+  data: Partial<MaterialCableTypeInput>,
+): Promise<{ cableType: MaterialCableType }> {
+  return request<{ cableType: MaterialCableType }>(`/api/materials/cable-types/${cableTypeId}`, {
+    method: 'PATCH',
+    token,
+    body: data,
+  });
+}
+
+export async function deleteMaterialCableType(token: string, cableTypeId: string): Promise<void> {
+  await request<void>(`/api/materials/cable-types/${cableTypeId}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function importMaterialCableTypes(
+  token: string,
+  file: File,
+): Promise<{
+  summary: MaterialCableTypeImportSummary;
+  cableTypes: MaterialCableType[];
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/cable-types/import`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import cable types';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    summary: MaterialCableTypeImportSummary;
+    cableTypes: MaterialCableType[];
+  };
+}
+
+export async function exportMaterialCableTypes(token: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/cable-types/export`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export cable types';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function getMaterialCableTypesTemplate(token: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/cable-types/template`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse errors to rethrow generic message
+    }
+
+    throw new ApiError(
+      response.status,
+      extractErrorMessage(payload, 'Failed to generate template'),
+    );
+  }
+
+  return response.blob();
+}
 
 // Material Trays
 export async function fetchMaterialTrays(options?: {
@@ -31,7 +181,7 @@ export async function fetchMaterialTrays(options?: {
   const query = params.toString();
 
   return request<{ trays: MaterialTray[]; pagination: PaginationMeta }>(
-    `/api/materials/trays${query ? `?${query}` : ''}`
+    `/api/materials/trays${query ? `?${query}` : ''}`,
   );
 }
 
@@ -43,40 +193,37 @@ export async function fetchAllMaterialTrays(): Promise<{
 
 export async function createMaterialTray(
   token: string,
-  data: MaterialTrayInput
+  data: MaterialTrayInput,
 ): Promise<{ tray: MaterialTray }> {
   return request<{ tray: MaterialTray }>('/api/materials/trays', {
     method: 'POST',
     token,
-    body: data
+    body: data,
   });
 }
 
 export async function updateMaterialTray(
   token: string,
   trayId: string,
-  data: Partial<MaterialTrayInput>
+  data: Partial<MaterialTrayInput>,
 ): Promise<{ tray: MaterialTray }> {
   return request<{ tray: MaterialTray }>(`/api/materials/trays/${trayId}`, {
     method: 'PATCH',
     token,
-    body: data
+    body: data,
   });
 }
 
-export async function deleteMaterialTray(
-  token: string,
-  trayId: string
-): Promise<void> {
+export async function deleteMaterialTray(token: string, trayId: string): Promise<void> {
   await request<null>(`/api/materials/trays/${trayId}`, {
     method: 'DELETE',
-    token
+    token,
   });
 }
 
 export async function importMaterialTrays(
   token: string,
-  file: File
+  file: File,
 ): Promise<{ summary: MaterialImportSummary; trays: MaterialTray[] }> {
   const formData = new FormData();
   formData.append('file', file);
@@ -84,9 +231,9 @@ export async function importMaterialTrays(
   const response = await fetch(`${getApiBaseUrl()}/api/materials/trays/import`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`
+      Authorization: `Bearer ${token}`,
     },
-    body: formData
+    body: formData,
   });
 
   let payload: unknown = null;
@@ -119,7 +266,7 @@ export async function exportMaterialTrays(token?: string): Promise<Blob> {
 
   const response = await fetch(`${getApiBaseUrl()}/api/materials/trays/export`, {
     method: 'GET',
-    headers
+    headers,
   });
 
   if (!response.ok) {
@@ -147,8 +294,8 @@ export async function getMaterialTrayTemplate(token: string): Promise<Blob> {
   const response = await fetch(`${getApiBaseUrl()}/api/materials/trays/template`, {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {
@@ -159,15 +306,10 @@ export async function getMaterialTrayTemplate(token: string): Promise<Blob> {
       // ignore parse errors to rethrow generic message
     }
 
-    const message =
-      payload &&
-      typeof payload === 'object' &&
-      'error' in payload &&
-      typeof (payload as { error?: string }).error === 'string'
-        ? (payload as { error?: string }).error
-        : 'Failed to generate template';
-
-    throw new ApiError(response.status, message);
+    throw new ApiError(
+      response.status,
+      extractErrorMessage(payload, 'Failed to generate template'),
+    );
   }
 
   return response.blob();
@@ -177,8 +319,8 @@ export async function getMaterialSupportTemplate(token: string): Promise<Blob> {
   const response = await fetch(`${getApiBaseUrl()}/api/materials/supports/template`, {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {
@@ -189,15 +331,10 @@ export async function getMaterialSupportTemplate(token: string): Promise<Blob> {
       // ignore parse errors and surface generic error
     }
 
-    const message =
-      payload &&
-      typeof payload === 'object' &&
-      'error' in payload &&
-      typeof (payload as { error?: string }).error === 'string'
-        ? (payload as { error?: string }).error
-        : 'Failed to generate template';
-
-    throw new ApiError(response.status, message);
+    throw new ApiError(
+      response.status,
+      extractErrorMessage(payload, 'Failed to generate template'),
+    );
   }
 
   return response.blob();
@@ -221,63 +358,54 @@ export async function fetchMaterialSupports(options?: {
   const query = params.toString();
 
   return request<{ supports: MaterialSupport[]; pagination: PaginationMeta }>(
-    `/api/materials/supports${query ? `?${query}` : ''}`
+    `/api/materials/supports${query ? `?${query}` : ''}`,
   );
 }
 
 export async function createMaterialSupport(
   token: string,
-  data: MaterialSupportInput
+  data: MaterialSupportInput,
 ): Promise<{ support: MaterialSupport }> {
   return request<{ support: MaterialSupport }>('/api/materials/supports', {
     method: 'POST',
     token,
-    body: data
+    body: data,
   });
 }
 
 export async function updateMaterialSupport(
   token: string,
   supportId: string,
-  data: Partial<MaterialSupportInput>
+  data: Partial<MaterialSupportInput>,
 ): Promise<{ support: MaterialSupport }> {
-  return request<{ support: MaterialSupport }>(
-    `/api/materials/supports/${supportId}`,
-    {
-      method: 'PATCH',
-      token,
-      body: data
-    }
-  );
+  return request<{ support: MaterialSupport }>(`/api/materials/supports/${supportId}`, {
+    method: 'PATCH',
+    token,
+    body: data,
+  });
 }
 
-export async function deleteMaterialSupport(
-  token: string,
-  supportId: string
-): Promise<void> {
+export async function deleteMaterialSupport(token: string, supportId: string): Promise<void> {
   await request<null>(`/api/materials/supports/${supportId}`, {
     method: 'DELETE',
-    token
+    token,
   });
 }
 
 export async function importMaterialSupports(
   token: string,
-  file: File
+  file: File,
 ): Promise<{ summary: MaterialImportSummary; supports: MaterialSupport[] }> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/materials/supports/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      body: formData
-    }
-  );
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/supports/import`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
 
   let payload: unknown = null;
 
@@ -310,13 +438,10 @@ export async function exportMaterialSupports(token?: string): Promise<Blob> {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/materials/supports/export`,
-    {
-      method: 'GET',
-      headers
-    }
-  );
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/supports/export`, {
+    method: 'GET',
+    headers,
+  });
 
   if (!response.ok) {
     let payload: unknown = null;
@@ -365,62 +490,49 @@ export async function fetchMaterialLoadCurves(options?: {
 export async function fetchMaterialLoadCurveSummaries(): Promise<{
   loadCurves: MaterialLoadCurveSummary[];
 }> {
-  return request<{ loadCurves: MaterialLoadCurveSummary[] }>(
-    '/api/materials/load-curves/summary'
-  );
+  return request<{ loadCurves: MaterialLoadCurveSummary[] }>('/api/materials/load-curves/summary');
 }
 
 export async function fetchMaterialLoadCurve(
-  loadCurveId: string
+  loadCurveId: string,
 ): Promise<{ loadCurve: MaterialLoadCurve }> {
-  return request<{ loadCurve: MaterialLoadCurve }>(
-    `/api/materials/load-curves/${loadCurveId}`
-  );
+  return request<{ loadCurve: MaterialLoadCurve }>(`/api/materials/load-curves/${loadCurveId}`);
 }
 
 export async function createMaterialLoadCurve(
   token: string,
-  data: MaterialLoadCurveInput
+  data: MaterialLoadCurveInput,
 ): Promise<{ loadCurve: MaterialLoadCurve }> {
-  return request<{ loadCurve: MaterialLoadCurve }>(
-    '/api/materials/load-curves',
-    {
-      method: 'POST',
-      token,
-      body: data
-    }
-  );
+  return request<{ loadCurve: MaterialLoadCurve }>('/api/materials/load-curves', {
+    method: 'POST',
+    token,
+    body: data,
+  });
 }
 
 export async function updateMaterialLoadCurve(
   token: string,
   loadCurveId: string,
-  data: MaterialLoadCurveUpdateInput
+  data: MaterialLoadCurveUpdateInput,
 ): Promise<{ loadCurve: MaterialLoadCurve }> {
-  return request<{ loadCurve: MaterialLoadCurve }>(
-    `/api/materials/load-curves/${loadCurveId}`,
-    {
-      method: 'PATCH',
-      token,
-      body: data
-    }
-  );
+  return request<{ loadCurve: MaterialLoadCurve }>(`/api/materials/load-curves/${loadCurveId}`, {
+    method: 'PATCH',
+    token,
+    body: data,
+  });
 }
 
-export async function deleteMaterialLoadCurve(
-  token: string,
-  loadCurveId: string
-): Promise<void> {
+export async function deleteMaterialLoadCurve(token: string, loadCurveId: string): Promise<void> {
   await request<null>(`/api/materials/load-curves/${loadCurveId}`, {
     method: 'DELETE',
-    token
+    token,
   });
 }
 
 export async function importMaterialLoadCurvePoints(
   token: string,
   loadCurveId: string,
-  file: File
+  file: File,
 ): Promise<{
   loadCurve: MaterialLoadCurve;
   summary: MaterialLoadCurveImportSummary;
@@ -433,10 +545,10 @@ export async function importMaterialLoadCurvePoints(
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`
+        Authorization: `Bearer ${token}`,
       },
-      body: formData
-    }
+      body: formData,
+    },
   );
 
   let payload: unknown = null;

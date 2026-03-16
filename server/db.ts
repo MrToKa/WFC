@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { config } from './config.js';
 
 export const pool = new Pool({
-  connectionString: config.databaseUrl
+  connectionString: config.databaseUrl,
 });
 
 export async function initializeDatabase(): Promise<void> {
@@ -179,6 +179,53 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_cable_types (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      purpose TEXT,
+      material TEXT,
+      description TEXT,
+      manufacturer TEXT,
+      part_no TEXT,
+      remarks TEXT,
+      diameter_mm NUMERIC,
+      weight_kg_per_m NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_types
+    ADD COLUMN IF NOT EXISTS material TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_types
+    ADD COLUMN IF NOT EXISTS description TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_types
+    ADD COLUMN IF NOT EXISTS manufacturer TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_types
+    ADD COLUMN IF NOT EXISTS part_no TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_types
+    ADD COLUMN IF NOT EXISTS remarks TEXT;
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS material_cable_types_name_lower_idx
+      ON material_cable_types (LOWER(name));
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cables (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -317,12 +364,12 @@ export async function initializeDatabase(): Promise<void> {
       ON material_trays (LOWER(tray_type));
   `);
 
-    await pool.query(`
+  await pool.query(`
       ALTER TABLE material_trays
       ADD COLUMN IF NOT EXISTS rung_height_mm NUMERIC;
     `);
 
-    await pool.query(`
+  await pool.query(`
       ALTER TABLE material_trays
       ADD COLUMN IF NOT EXISTS manufacturer TEXT;
     `);

@@ -1,4 +1,4 @@
-export type MaterialsTab = 'trays' | 'supports' | 'loadCurves';
+export type MaterialsTab = 'trays' | 'supports' | 'loadCurves' | 'cableTypes';
 
 export type TrayFormState = {
   type: string;
@@ -36,7 +36,7 @@ export const initialTrayForm: TrayFormState = {
   rungHeightMm: '',
   widthMm: '',
   weightKgPerM: '',
-  imageTemplateId: null
+  imageTemplateId: null,
 };
 
 export const initialSupportForm: SupportFormState = {
@@ -46,12 +46,12 @@ export const initialSupportForm: SupportFormState = {
   widthMm: '',
   lengthMm: '',
   weightKg: '',
-  imageTemplateId: null
+  imageTemplateId: null,
 };
 
 export const initialLoadCurveForm: LoadCurveFormState = {
   name: '',
-  description: ''
+  description: '',
 };
 
 export const PAGE_SIZE = 10;

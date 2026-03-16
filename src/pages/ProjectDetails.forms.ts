@@ -31,6 +31,11 @@ export type ProjectDetailsTab =
 export type CableTypeFormState = {
   name: string;
   purpose: string;
+  material: string;
+  description: string;
+  manufacturer: string;
+  partNo: string;
+  remarks: string;
   diameterMm: string;
   weightKgPerM: string;
 };
@@ -44,6 +49,11 @@ export type CableTypeFormErrors = Partial<
 export const emptyCableTypeForm: CableTypeFormState = {
   name: '',
   purpose: '',
+  material: '',
+  description: '',
+  manufacturer: '',
+  partNo: '',
+  remarks: '',
   diameterMm: '',
   weightKgPerM: ''
 };
@@ -53,6 +63,11 @@ export const toCableTypeFormState = (
 ): CableTypeFormState => ({
   name: cableType.name,
   purpose: cableType.purpose ?? '',
+  material: '',
+  description: '',
+  manufacturer: '',
+  partNo: '',
+  remarks: '',
   diameterMm:
     cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
   weightKgPerM:
@@ -117,6 +132,40 @@ export const buildCableTypeInput = (
   };
 
   return { input, errors };
+};
+
+export const buildMaterialCableTypeInput = (
+  values: CableTypeFormState
+): {
+  input: {
+    name: string;
+    purpose: string | null;
+    material: string | null;
+    description: string | null;
+    manufacturer: string | null;
+    partNo: string | null;
+    remarks: string | null;
+    diameterMm: number | null;
+    weightKgPerM: number | null;
+  };
+  errors: CableTypeFormErrors;
+} => {
+  const { input, errors } = buildCableTypeInput(values);
+
+  return {
+    input: {
+      name: input.name,
+      purpose: input.purpose ?? null,
+      material: toNullableString(values.material),
+      description: toNullableString(values.description),
+      manufacturer: toNullableString(values.manufacturer),
+      partNo: toNullableString(values.partNo),
+      remarks: toNullableString(values.remarks),
+      diameterMm: input.diameterMm ?? null,
+      weightKgPerM: input.weightKgPerM ?? null
+    },
+    errors
+  };
 };
 
 export type TrayFormState = {

@@ -15,6 +15,21 @@ export type MaterialTray = {
   updatedAt: string;
 };
 
+export type MaterialCableType = {
+  id: string;
+  name: string;
+  purpose: string | null;
+  material: string | null;
+  description: string | null;
+  manufacturer: string | null;
+  partNo: string | null;
+  remarks: string | null;
+  diameterMm: number | null;
+  weightKgPerM: number | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type MaterialSupport = {
   id: string;
   type: string;
@@ -89,6 +104,24 @@ export type MaterialImportSummary = {
 
 export type MaterialLoadCurveImportSummary = {
   importedPoints: number;
+};
+
+export type MaterialCableTypeImportSummary = {
+  inserted: number;
+  updated: number;
+  skipped: number;
+};
+
+export type MaterialCableTypeInput = {
+  name: string;
+  purpose?: string | null;
+  material?: string | null;
+  description?: string | null;
+  manufacturer?: string | null;
+  partNo?: string | null;
+  remarks?: string | null;
+  diameterMm?: number | null;
+  weightKgPerM?: number | null;
 };
 
 export type MaterialTrayInput = {

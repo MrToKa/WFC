@@ -7,17 +7,17 @@ import {
   Field,
   Input,
   Option,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 
 import type { MaterialSupport, Project } from '@/api/client';
-import type { CableBundleSpacing, CableCategoryKey } from '@/api/types';
+import type { CableBundleSpacing } from '@/api/types';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { formatNumeric } from '../ProjectDetails.utils';
 import type {
   CableCategoryController,
-  CableSpacingController
+  CableSpacingController,
 } from './hooks/useCableLayoutSettings';
 import type { CustomBundleRangesController } from './hooks/useCustomBundleRanges';
 import { CABLE_CATEGORY_CONFIG, CABLE_CATEGORY_ORDER } from './hooks/cableLayoutDefaults';
@@ -105,12 +105,10 @@ export const DetailsTab = ({
   trayTemplateSaving,
   trayTemplateErrors,
   canEditTrayTemplates,
-  onTrayTemplateChange
+  onTrayTemplateChange,
 }: DetailsTabProps) => {
   const supportsErrorMessage =
-    supportDistanceOverrides.find(
-      (override) => override.supportsError
-    )?.supportsError ?? null;
+    supportDistanceOverrides.find((override) => override.supportsError)?.supportsError ?? null;
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Details">
@@ -127,20 +125,13 @@ export const DetailsTab = ({
         </div>
       ) : null}
 
-
       <div className={styles.panel}>
         <Caption1>Description</Caption1>
-        <Body1>
-          {project.description
-            ? project.description
-            : 'No description provided.'}
-        </Body1>
+        <Body1>{project.description ? project.description : 'No description provided.'}</Body1>
       </div>
       <div className={styles.panel}>
         <Caption1>Project manager</Caption1>
-        <Body1>
-          {project.manager ? project.manager : 'No manager specified.'}
-        </Body1>
+        <Body1>{project.manager ? project.manager : 'No manager specified.'}</Body1>
       </div>
       <div className={styles.numericFieldsRow}>
         {numericFields.map((field) => {
@@ -201,10 +192,9 @@ export const DetailsTab = ({
               const distanceDisplay = hasDistanceOverride
                 ? `${formatNumeric(override.currentDistance)} m`
                 : override.defaultValue !== null
-                ? `Default (${formatNumeric(override.defaultValue)} m)`
-                : 'Not specified';
-              const supportDisplay =
-                override.currentSupportType ?? 'Not specified';
+                  ? `Default (${formatNumeric(override.defaultValue)} m)`
+                  : 'Not specified';
+              const supportDisplay = override.currentSupportType ?? 'Not specified';
               const trayWidthDisplay =
                 override.trayWidthMm !== null
                   ? `${override.trayWidthMm.toLocaleString()} mm`
@@ -212,34 +202,27 @@ export const DetailsTab = ({
               const supportPlaceholder = override.supportsLoading
                 ? 'Loading supports...'
                 : override.supportOptions.length > 0
-                ? 'Select support'
-                : override.trayWidthMm !== null && !override.hasWidthConflict
-                ? 'No matching supports'
-                : 'No supports available';
-              const dropdownDisabled =
-                override.saving || override.supportsLoading;
+                  ? 'Select support'
+                  : override.trayWidthMm !== null && !override.hasWidthConflict
+                    ? 'No matching supports'
+                    : 'No supports available';
+              const dropdownDisabled = override.saving || override.supportsLoading;
               const selectedOption = override.selectedSupportId ?? '';
 
               return (
                 <div key={override.trayType} className={styles.numericField}>
-                  <Body1 className={styles.numericFieldLabel}>
-                    {override.trayType}
-                  </Body1>
+                  <Body1 className={styles.numericFieldLabel}>{override.trayType}</Body1>
                   <Caption1>Current distance</Caption1>
                   <Body1>{distanceDisplay}</Body1>
                   <Caption1>Current support</Caption1>
                   <Body1>
                     {supportDisplay}
-                    {override.selectedSupportMissing
-                      ? ' (not in catalogue)'
-                      : ''}
+                    {override.selectedSupportMissing ? ' (not in catalogue)' : ''}
                   </Body1>
                   <Caption1>Tray width</Caption1>
                   <Body1>
                     {trayWidthDisplay}
-                    {override.hasWidthConflict
-                      ? ' (multiple widths detected)'
-                      : ''}
+                    {override.hasWidthConflict ? ' (multiple widths detected)' : ''}
                   </Body1>
                   {override.supportOptions.length === 0 && !override.supportsLoading ? (
                     <Caption1>
@@ -258,9 +241,7 @@ export const DetailsTab = ({
                       >
                         <Input
                           value={override.input}
-                          onChange={(_, data) =>
-                            override.onInputChange(data.value)
-                          }
+                          onChange={(_, data) => override.onInputChange(data.value)}
                           disabled={override.saving}
                           inputMode="decimal"
                           type="number"
@@ -269,23 +250,16 @@ export const DetailsTab = ({
                           size="small"
                         />
                       </Field>
-                      <Field
-                        className={styles.numericFieldInput}
-                        label="Select support"
-                      >
+                      <Field className={styles.numericFieldInput} label="Select support">
                         <Dropdown
                           value={override.selectedSupportLabel}
                           placeholder={supportPlaceholder}
                           selectedOptions={[selectedOption]}
                           onOptionSelect={(_, data) => {
                             const optionValue =
-                              typeof data.optionValue === 'string'
-                                ? data.optionValue
-                                : null;
+                              typeof data.optionValue === 'string' ? data.optionValue : null;
                             override.onSupportChange(
-                              optionValue && optionValue !== ''
-                                ? optionValue
-                                : null
+                              optionValue && optionValue !== '' ? optionValue : null,
                             );
                           }}
                           disabled={dropdownDisabled}
@@ -296,8 +270,7 @@ export const DetailsTab = ({
                           {override.selectedSupportId &&
                           override.selectedSupportId !== '' &&
                           !override.supportOptions.some(
-                            (support) =>
-                              support.id === override.selectedSupportId
+                            (support) => support.id === override.selectedSupportId,
                           ) ? (
                             <Option
                               value={override.selectedSupportId}
@@ -339,19 +312,17 @@ export const DetailsTab = ({
               Leave the distance empty and clear the support selection to use the defaults.
             </Caption1>
           ) : null}
-      {supportsErrorMessage ? (
-        <Body1 className={styles.errorText}>{supportsErrorMessage}</Body1>
+          {supportsErrorMessage ? (
+            <Body1 className={styles.errorText}>{supportsErrorMessage}</Body1>
+          ) : null}
+        </div>
       ) : null}
-    </div>
-  ) : null}
 
       <div className={styles.panel}>
         <Caption1>Bundles configuration</Caption1>
         <div className={styles.numericFieldsRow}>
           <div className={styles.numericField}>
-            <Body1 className={styles.numericFieldLabel}>
-              {cableSpacingField.label}
-            </Body1>
+            <Body1 className={styles.numericFieldLabel}>{cableSpacingField.label}</Body1>
             <Caption1>Current value</Caption1>
             <Body1>{formatNumeric(cableSpacingField.currentValue)}</Body1>
             <Caption1>Current minimum free space</Caption1>
@@ -376,9 +347,7 @@ export const DetailsTab = ({
                 >
                   <Input
                     value={cableSpacingField.input}
-                    onChange={(_, data) =>
-                      cableSpacingField.onInputChange(data.value)
-                    }
+                    onChange={(_, data) => cableSpacingField.onInputChange(data.value)}
                     disabled={cableSpacingField.saving}
                     inputMode="decimal"
                     type="number"
@@ -391,18 +360,12 @@ export const DetailsTab = ({
                 <Field
                   className={styles.numericFieldInput}
                   label="Minimum tray free space (1-100%)"
-                  validationState={
-                    cableSpacingField.minFreeSpaceError ? 'error' : undefined
-                  }
-                  validationMessage={
-                    cableSpacingField.minFreeSpaceError ?? undefined
-                  }
+                  validationState={cableSpacingField.minFreeSpaceError ? 'error' : undefined}
+                  validationMessage={cableSpacingField.minFreeSpaceError ?? undefined}
                 >
                   <Input
                     value={cableSpacingField.minFreeSpaceInput}
-                    onChange={(_, data) =>
-                      cableSpacingField.onMinFreeSpaceChange(data.value)
-                    }
+                    onChange={(_, data) => cableSpacingField.onMinFreeSpaceChange(data.value)}
                     disabled={cableSpacingField.saving}
                     inputMode="numeric"
                     type="number"
@@ -415,18 +378,12 @@ export const DetailsTab = ({
                 <Field
                   className={styles.numericFieldInput}
                   label="Maximum free space (1-100%)"
-                  validationState={
-                    cableSpacingField.maxFreeSpaceError ? 'error' : undefined
-                  }
-                  validationMessage={
-                    cableSpacingField.maxFreeSpaceError ?? undefined
-                  }
+                  validationState={cableSpacingField.maxFreeSpaceError ? 'error' : undefined}
+                  validationMessage={cableSpacingField.maxFreeSpaceError ?? undefined}
                 >
                   <Input
                     value={cableSpacingField.maxFreeSpaceInput}
-                    onChange={(_, data) =>
-                      cableSpacingField.onMaxFreeSpaceChange(data.value)
-                    }
+                    onChange={(_, data) => cableSpacingField.onMaxFreeSpaceChange(data.value)}
                     disabled={cableSpacingField.saving}
                     inputMode="numeric"
                     type="number"
@@ -451,9 +408,7 @@ export const DetailsTab = ({
               checked={cableSpacingField.considerBundleSpacingAsFree}
               onChange={(_, data) => {
                 if (typeof data.checked === 'boolean') {
-                  void cableSpacingField.onToggleConsiderBundleSpacingAsFree(
-                    data.checked
-                  );
+                  void cableSpacingField.onToggleConsiderBundleSpacingAsFree(data.checked);
                 }
               }}
               disabled={!isAdmin || cableSpacingField.saving}
@@ -467,8 +422,8 @@ export const DetailsTab = ({
               ? card.displayTrefoil === null
                 ? 'Not specified'
                 : card.displayTrefoil
-                ? 'Enabled'
-                : 'Disabled'
+                  ? 'Enabled'
+                  : 'Disabled'
               : null;
             const currentTrefoilSpacingDisplay =
               card.allowTrefoilSpacing && card.displayTrefoilSpacing !== null
@@ -499,17 +454,13 @@ export const DetailsTab = ({
                     {card.allowTrefoilSpacing ? (
                       <>
                         <Caption1>Space between trefoil bundles</Caption1>
-                        <Body1>
-                          {currentTrefoilSpacingDisplay ?? 'Not specified'}
-                        </Body1>
+                        <Body1>{currentTrefoilSpacingDisplay ?? 'Not specified'}</Body1>
                       </>
                     ) : null}
                     {card.allowPhaseRotation ? (
                       <>
                         <Caption1>Phase rotation</Caption1>
-                        <Body1>
-                          {currentPhaseRotationDisplay ?? 'Not specified'}
-                        </Body1>
+                        <Body1>{currentPhaseRotationDisplay ?? 'Not specified'}</Body1>
                       </>
                     ) : null}
                   </>
@@ -524,9 +475,7 @@ export const DetailsTab = ({
                     >
                       <Input
                         value={card.inputMaxRows}
-                        onChange={(_, data) =>
-                          card.onMaxRowsChange(data.value)
-                        }
+                        onChange={(_, data) => card.onMaxRowsChange(data.value)}
                         disabled={card.saving}
                         inputMode="numeric"
                         type="number"
@@ -539,16 +488,12 @@ export const DetailsTab = ({
                     <Field
                       className={styles.numericFieldInput}
                       label="Max columns"
-                      validationState={
-                        card.errors.maxColumns ? 'error' : undefined
-                      }
+                      validationState={card.errors.maxColumns ? 'error' : undefined}
                       validationMessage={card.errors.maxColumns}
                     >
                       <Input
                         value={card.inputMaxColumns}
-                        onChange={(_, data) =>
-                          card.onMaxColumnsChange(data.value)
-                        }
+                        onChange={(_, data) => card.onMaxColumnsChange(data.value)}
                         disabled={card.saving}
                         inputMode="numeric"
                         type="number"
@@ -558,22 +503,14 @@ export const DetailsTab = ({
                         size="small"
                       />
                     </Field>
-                    <Field
-                      className={styles.numericFieldInput}
-                      label="Space between bundles"
-                    >
+                    <Field className={styles.numericFieldInput} label="Space between bundles">
                       <Dropdown
                         value={card.inputBundleSpacing ?? ''}
                         placeholder="Not specified"
-                        selectedOptions={
-                          card.inputBundleSpacing
-                            ? [card.inputBundleSpacing]
-                            : []
-                        }
+                        selectedOptions={card.inputBundleSpacing ? [card.inputBundleSpacing] : []}
                         onOptionSelect={(_, data) => {
                           const optionValue =
-                            typeof data.optionValue === 'string' &&
-                            data.optionValue !== ''
+                            typeof data.optionValue === 'string' && data.optionValue !== ''
                               ? (data.optionValue as CableBundleSpacing)
                               : null;
                           card.onBundleSpacingChange(optionValue);
@@ -590,9 +527,7 @@ export const DetailsTab = ({
                       <Checkbox
                         label="Trefoil"
                         checked={card.inputTrefoil}
-                        onChange={(_, data) =>
-                          card.onTrefoilChange(Boolean(data.checked))
-                        }
+                        onChange={(_, data) => card.onTrefoilChange(Boolean(data.checked))}
                         disabled={card.saving}
                       />
                     ) : null}
@@ -600,9 +535,7 @@ export const DetailsTab = ({
                       <Checkbox
                         label="Space between trefoil bundles"
                         checked={card.inputTrefoilSpacing}
-                        onChange={(_, data) =>
-                          card.onTrefoilSpacingChange(Boolean(data.checked))
-                        }
+                        onChange={(_, data) => card.onTrefoilSpacingChange(Boolean(data.checked))}
                         disabled={card.saving}
                       />
                     ) : null}
@@ -610,16 +543,12 @@ export const DetailsTab = ({
                       <Checkbox
                         label="Apply phase rotation"
                         checked={card.inputPhaseRotation}
-                        onChange={(_, data) =>
-                          card.onPhaseRotationChange(Boolean(data.checked))
-                        }
+                        onChange={(_, data) => card.onPhaseRotationChange(Boolean(data.checked))}
                         disabled={card.saving}
                       />
                     ) : null}
                     {card.errors.general ? (
-                      <Body1 className={styles.errorText}>
-                        {card.errors.general}
-                      </Body1>
+                      <Body1 className={styles.errorText}>{card.errors.general}</Body1>
                     ) : null}
                     <div className={styles.numericFieldControls}>
                       <Button
@@ -637,14 +566,14 @@ export const DetailsTab = ({
             );
           })}
         </div>
-        
+
         {/* Custom Bundle Size Ranges Section */}
         {isAdmin ? (
           <div style={{ marginTop: '1.5rem' }}>
             <Caption1>Custom bundle size ranges</Caption1>
             <Body1 style={{ marginBottom: '1rem' }}>
-              Define custom cable diameter ranges for grouping cables into bundles.
-              When defined, these ranges replace the default bundle size ranges for all trays in this project.
+              Define custom cable diameter ranges for grouping cables into bundles. When defined,
+              these ranges replace the default bundle size ranges for all trays in this project.
             </Body1>
             <div className={styles.numericFieldsRow}>
               {CABLE_CATEGORY_ORDER.map((key) => {
@@ -656,7 +585,9 @@ export const DetailsTab = ({
                   <div key={key} className={styles.numericField}>
                     <Body1 className={styles.numericFieldLabel}>{config.label}</Body1>
                     {ranges.length === 0 ? (
-                      <Body1 style={{ fontSize: '0.875rem', color: tokens.colorNeutralForeground3 }}>
+                      <Body1
+                        style={{ fontSize: '0.875rem', color: tokens.colorNeutralForeground3 }}
+                      >
                         No custom ranges. Default diameter ranges will be used.
                       </Body1>
                     ) : (
@@ -667,7 +598,7 @@ export const DetailsTab = ({
                             display: 'flex',
                             alignItems: 'center',
                             gap: '0.5rem',
-                            marginBottom: '0.5rem'
+                            marginBottom: '0.5rem',
                           }}
                         >
                           <Input
@@ -752,9 +683,7 @@ export const DetailsTab = ({
           <Body1>No tray purposes found for this project.</Body1>
         ) : (
           <>
-            <Body1>
-              Assign a Word document from the Files tab to each tray purpose.
-            </Body1>
+            <Body1>Assign a Word document from the Files tab to each tray purpose.</Body1>
             <div className={styles.tableContainer}>
               <table className={styles.table}>
                 <thead>
@@ -769,13 +698,11 @@ export const DetailsTab = ({
                     const isSaving = trayTemplateSaving[row.purpose] ?? false;
                     const selectedOptionValue = row.selectedFileId ?? 'none';
                     const selectedLabel = row.selectedFileId
-                      ? row.selectedFileName ?? 'Selected file unavailable'
+                      ? (row.selectedFileName ?? 'Selected file unavailable')
                       : 'No template selected';
                     const showMissingOption =
                       Boolean(row.selectedFileId) &&
-                      !trayTemplateOptions.some(
-                        (option) => option.id === row.selectedFileId
-                      );
+                      !trayTemplateOptions.some((option) => option.id === row.selectedFileId);
 
                     return (
                       <tr key={row.purpose}>
@@ -799,8 +726,7 @@ export const DetailsTab = ({
                               if (!optionValue) {
                                 return;
                               }
-                              const nextValue =
-                                optionValue === 'none' ? null : optionValue;
+                              const nextValue = optionValue === 'none' ? null : optionValue;
                               if (nextValue === row.selectedFileId) {
                                 return;
                               }
@@ -808,10 +734,7 @@ export const DetailsTab = ({
                             }}
                           >
                             {showMissingOption && row.selectedFileId ? (
-                              <Option
-                                key={`${row.purpose}-missing`}
-                                value={row.selectedFileId}
-                              >
+                              <Option key={`${row.purpose}-missing`} value={row.selectedFileId}>
                                 {row.selectedFileName ?? 'Previously selected file'}
                               </Option>
                             ) : null}
@@ -822,13 +745,9 @@ export const DetailsTab = ({
                               </Option>
                             ))}
                           </Dropdown>
-                          {isSaving ? (
-                            <Caption1>Saving...</Caption1>
-                          ) : null}
+                          {isSaving ? <Caption1>Saving...</Caption1> : null}
                           {currentError ? (
-                            <Caption1 className={styles.errorText}>
-                              {currentError}
-                            </Caption1>
+                            <Caption1 className={styles.errorText}>{currentError}</Caption1>
                           ) : null}
                         </td>
                       </tr>
