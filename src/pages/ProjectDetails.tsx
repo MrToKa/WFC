@@ -292,6 +292,7 @@ export const ProjectDetails = () => {
     reloadCables,
     goToPreviousPage: handleCablesPreviousPage,
     goToNextPage: handleCablesNextPage,
+    goToPage: handleCablesPageSelect,
     openCreateCableDialog,
     openEditCableDialog,
     handleDeleteCable,
@@ -356,6 +357,7 @@ export const ProjectDetails = () => {
     reloadCableTypes,
     goToPreviousPage: handleCableTypesPreviousPage,
     goToNextPage: handleCableTypesNextPage,
+    goToPage: handleCableTypesPageSelect,
     openCreateCableTypeDialog,
     openEditCableTypeDialog,
     handleDeleteCableType,
@@ -392,6 +394,7 @@ export const ProjectDetails = () => {
     reloadTrays,
     goToPreviousPage: handleTraysPreviousPage,
     goToNextPage: handleTraysNextPage,
+    goToPage: handleTraysPageSelect,
     openCreateTrayDialog,
     handleDeleteTray,
     handleImportTrays,
@@ -1602,7 +1605,8 @@ export const ProjectDetails = () => {
           totalPages={totalCableTypePages}
           paginationHandlers={{
             onPrevious: handleCableTypesPreviousPage,
-            onNext: handleCableTypesNextPage
+            onNext: handleCableTypesNextPage,
+            onPageSelect: handleCableTypesPageSelect
           }}
         />
       ) : null}
@@ -1639,6 +1643,7 @@ export const ProjectDetails = () => {
           totalPages={totalTrayPages}
           onPreviousPage={handleTraysPreviousPage}
           onNextPage={handleTraysNextPage}
+          onPageSelect={handleTraysPageSelect}
           minFreeSpacePercent={minFreeSpacePercent}
           maxFreeSpacePercent={maxFreeSpacePercent}
         />
@@ -1725,6 +1730,7 @@ export const ProjectDetails = () => {
           totalPages={totalCablePages}
           onPreviousPage={handleCablesPreviousPage}
           onNextPage={handleCablesNextPage}
+          onPageSelect={handleCablesPageSelect}
         />
       ) : null}
 
@@ -1763,6 +1769,7 @@ export const ProjectDetails = () => {
           totalPages={totalCablePages}
           onPreviousPage={handleCablesPreviousPage}
           onNextPage={handleCablesNextPage}
+          onPageSelect={handleCablesPageSelect}
         />
       ) : null}
 

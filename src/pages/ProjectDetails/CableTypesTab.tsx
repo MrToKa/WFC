@@ -14,12 +14,14 @@ import {
 
 import type { CableType } from '@/api/client';
 import type { CableTypeSearchCriteria } from './hooks/useCableTypesSection';
+import { TablePagination } from './TablePagination';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
 type PaginationHandlers = {
   onPrevious: () => void;
   onNext: () => void;
+  onPageSelect: (page: number) => void;
 };
 
 type CableTypesTabProps = {
@@ -254,25 +256,15 @@ export const CableTypesTab = ({
           </tbody>
         </table>
         {showPagination ? (
-          <div className={styles.pagination}>
-            <Button
-              size="small"
-              onClick={paginationHandlers.onPrevious}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <Body1>
-              Page {page} of {totalPages}
-            </Body1>
-            <Button
-              size="small"
-              onClick={paginationHandlers.onNext}
-              disabled={page === totalPages}
-            >
-              Next
-            </Button>
-          </div>
+          <TablePagination
+            styles={styles}
+            page={page}
+            totalPages={totalPages}
+            onPrevious={paginationHandlers.onPrevious}
+            onNext={paginationHandlers.onNext}
+            onPageSelect={paginationHandlers.onPageSelect}
+            dropdownAriaLabel="Select cable types page"
+          />
         ) : null}
       </div>
     )}

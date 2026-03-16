@@ -92,6 +92,7 @@ type UseTraysSectionResult = {
   reloadTrays: (options?: { showSpinner?: boolean }) => Promise<void>;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
+  goToPage: (page: number) => void;
   openCreateTrayDialog: () => void;
   openEditTrayDialog: (tray: Tray) => void;
   handleDeleteTray: (tray: Tray) => Promise<void>;
@@ -281,6 +282,15 @@ export const useTraysSection = ({
   const goToNextPage = useCallback(() => {
     setPage((previous) => Math.min(totalPages, previous + 1));
   }, [totalPages]);
+
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      setPage(() =>
+        Math.min(Math.max(1, nextPage), totalPages)
+      );
+    },
+    [totalPages]
+  );
 
   const handleSearchTextChange = useCallback((value: string) => {
     setSearchText(value);
@@ -638,6 +648,7 @@ export const useTraysSection = ({
     reloadTrays,
     goToPreviousPage,
     goToNextPage,
+    goToPage,
     openCreateTrayDialog,
     openEditTrayDialog,
     handleDeleteTray,

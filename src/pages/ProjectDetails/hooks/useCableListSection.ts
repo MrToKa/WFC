@@ -95,6 +95,7 @@ type UseCableListSectionResult = {
   reloadCables: (options?: { showSpinner?: boolean }) => Promise<void>;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
+  goToPage: (page: number) => void;
   openCreateCableDialog: (defaultCableTypeId?: string) => void;
   openEditCableDialog: (cable: Cable) => void;
   handleDeleteCable: (cable: Cable) => Promise<void>;
@@ -324,6 +325,15 @@ export const useCableListSection = ({
   const goToNextPage = useCallback(() => {
     setPage((previous) => Math.min(totalPages, previous + 1));
   }, [totalPages]);
+
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      setPage(() =>
+        Math.min(Math.max(1, nextPage), totalPages)
+      );
+    },
+    [totalPages]
+  );
 
   const handleFieldChange =
     (field: keyof CableFormState) =>
@@ -900,6 +910,7 @@ export const useCableListSection = ({
     reloadCables,
     goToPreviousPage,
     goToNextPage,
+    goToPage,
     openCreateCableDialog,
     openEditCableDialog,
     handleDeleteCable,

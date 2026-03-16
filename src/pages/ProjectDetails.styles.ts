@@ -184,6 +184,9 @@ export const useProjectDetailsStyles = makeStyles({
     alignItems: 'center',
     flexWrap: 'wrap'
   },
+  paginationDropdown: {
+    minWidth: '8rem'
+  },
   variablesIntro: {
     display: 'flex',
     flexDirection: 'column',

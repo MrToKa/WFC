@@ -89,6 +89,7 @@ type UseCableTypesSectionResult = {
   reloadCableTypes: (options?: { showSpinner?: boolean }) => Promise<void>;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
+  goToPage: (page: number) => void;
   openCreateCableTypeDialog: () => void;
   openEditCableTypeDialog: (cableType: CableType) => void;
   handleDeleteCableType: (cableType: CableType) => Promise<void>;
@@ -268,6 +269,15 @@ export const useCableTypesSection = ({
   const goToNextPage = useCallback(() => {
     setPage((previous) => Math.min(totalPages, previous + 1));
   }, [totalPages]);
+
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      setPage(() =>
+        Math.min(Math.max(1, nextPage), totalPages)
+      );
+    },
+    [totalPages]
+  );
 
   const handleSearchTextChange = useCallback((value: string) => {
     setSearchText(value);
@@ -626,6 +636,7 @@ export const useCableTypesSection = ({
     reloadCableTypes,
     goToPreviousPage,
     goToNextPage,
+    goToPage,
     openCreateCableTypeDialog,
     openEditCableTypeDialog,
     handleDeleteCableType,

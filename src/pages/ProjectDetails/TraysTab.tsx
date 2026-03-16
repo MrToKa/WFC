@@ -14,6 +14,7 @@ import {
 
 import type { Tray } from '@/api/client';
 import type { TraySearchCriteria } from './hooks/useTraysSection';
+import { TablePagination } from './TablePagination';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
@@ -50,6 +51,7 @@ type TraysTabProps = {
   totalPages: number;
   onPreviousPage: () => void;
   onNextPage: () => void;
+  onPageSelect: (page: number) => void;
 };
 
 export const TraysTab = ({
@@ -84,7 +86,8 @@ export const TraysTab = ({
   page,
   totalPages,
   onPreviousPage,
-  onNextPage
+  onNextPage,
+  onPageSelect
 }: TraysTabProps) => {
   const selectedCriteria = useMemo<string[]>(
     () => [searchCriteria],
@@ -315,25 +318,15 @@ export const TraysTab = ({
           </tbody>
         </table>
         {showPagination ? (
-          <div className={styles.pagination}>
-            <Button
-              size="small"
-              onClick={onPreviousPage}
-              disabled={page === 1}
-            >
-              Previous
-            </Button>
-            <Body1>
-              Page {page} of {totalPages}
-            </Body1>
-            <Button
-              size="small"
-              onClick={onNextPage}
-              disabled={page === totalPages}
-            >
-              Next
-            </Button>
-          </div>
+          <TablePagination
+            styles={styles}
+            page={page}
+            totalPages={totalPages}
+            onPrevious={onPreviousPage}
+            onNext={onNextPage}
+            onPageSelect={onPageSelect}
+            dropdownAriaLabel="Select trays page"
+          />
         ) : null}
       </div>
     )}

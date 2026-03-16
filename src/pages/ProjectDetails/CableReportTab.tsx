@@ -15,6 +15,7 @@ import {
 
 import type { Cable } from '@/api/client';
 import type { CableSearchCriteria } from './hooks/useCableListSection';
+import { TablePagination } from './TablePagination';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import { toCableFormState, type CableFormState } from '../ProjectDetails.forms';
@@ -58,6 +59,7 @@ type CableReportTabProps = {
   totalPages: number;
   onPreviousPage: () => void;
   onNextPage: () => void;
+  onPageSelect: (page: number) => void;
 };
 
 export const CableReportTab = ({
@@ -93,7 +95,8 @@ export const CableReportTab = ({
   page,
   totalPages,
   onPreviousPage,
-  onNextPage
+  onNextPage,
+  onPageSelect
 }: CableReportTabProps) => {
   const selectedCriteria = useMemo<string[]>(
     () => [filterCriteria],
@@ -367,17 +370,16 @@ export const CableReportTab = ({
       )}
 
       {showPagination ? (
-        <div className={styles.pagination}>
-          <Button onClick={onPreviousPage} disabled={page === 1}>
-            Previous
-          </Button>
-          <Body1>
-            Page {page} of {totalPages}
-          </Body1>
-          <Button onClick={onNextPage} disabled={page >= totalPages}>
-            Next
-          </Button>
-        </div>
+        <TablePagination
+          styles={styles}
+          page={page}
+          totalPages={totalPages}
+          onPrevious={onPreviousPage}
+          onNext={onNextPage}
+          onPageSelect={onPageSelect}
+          dropdownAriaLabel="Select cable report page"
+          buttonSize="medium"
+        />
       ) : null}
     </div>
   );
