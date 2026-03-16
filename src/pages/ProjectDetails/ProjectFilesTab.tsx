@@ -1,4 +1,10 @@
-import { useMemo, useState, type ChangeEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type RefObject
+} from 'react';
 
 import {
   Body1,
@@ -10,6 +16,7 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Input,
   Spinner,
   Tab,
   TabList,
@@ -20,6 +27,7 @@ import {
 import type { ProjectFile, ProjectFileVersion } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import { PROJECT_FILES_PER_PAGE } from '../ProjectDetails.forms';
 import {
   PROJECT_FILE_ACCEPT_TYPES,
   PROJECT_FILE_CATEGORIES,
@@ -29,6 +37,7 @@ import {
   getProjectFileCategory,
   type ProjectFileCategory
 } from './projectFileUtils';
+import { TablePagination } from './TablePagination';
 
 type ProjectFilesTabProps = {
   styles: ProjectDetailsStyles;
@@ -94,6 +103,22 @@ export const ProjectFilesTab = ({
 }: ProjectFilesTabProps) => {
   const [selectedCategory, setSelectedCategory] =
     useState<ProjectFileCategory>('word');
+  const [searchTextByCategory, setSearchTextByCategory] = useState<
+    Record<ProjectFileCategory, string>
+  >({
+    word: '',
+    excel: '',
+    pdf: '',
+    images: ''
+  });
+  const [pageByCategory, setPageByCategory] = useState<
+    Record<ProjectFileCategory, number>
+  >({
+    word: 1,
+    excel: 1,
+    pdf: 1,
+    images: 1
+  });
 
   const {
     open: replaceDialogOpen,
@@ -103,19 +128,56 @@ export const ProjectFilesTab = ({
   } = replaceDialog;
 
   const versionsDialogFileName = versionsDialog.file?.fileName ?? '';
+  const searchText = searchTextByCategory[selectedCategory];
+  const normalizedSearchText = searchText.trim().toLowerCase();
+  const categoryLabel = PROJECT_FILE_CATEGORY_LABELS[selectedCategory];
+  const categorySearchLabel =
+    selectedCategory === 'images' ? 'pictures' : `${categoryLabel.toLowerCase()} files`;
+  const hasActiveSearch = normalizedSearchText !== '';
+  const currentPage = pageByCategory[selectedCategory];
 
   const filteredFiles = useMemo(
     () =>
       files.filter(
-        (file) => getProjectFileCategory(file) === selectedCategory
+        (file) =>
+          getProjectFileCategory(file) === selectedCategory &&
+          (
+            normalizedSearchText === '' ||
+            file.fileName.toLowerCase().includes(normalizedSearchText)
+          )
       ),
-    [files, selectedCategory]
+    [files, normalizedSearchText, selectedCategory]
   );
+  const totalPages = useMemo(() => {
+    if (filteredFiles.length === 0) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(filteredFiles.length / PROJECT_FILES_PER_PAGE));
+  }, [filteredFiles.length]);
+  const pagedFiles = useMemo(() => {
+    if (filteredFiles.length === 0) {
+      return [];
+    }
+    const startIndex = (currentPage - 1) * PROJECT_FILES_PER_PAGE;
+    return filteredFiles.slice(startIndex, startIndex + PROJECT_FILES_PER_PAGE);
+  }, [currentPage, filteredFiles]);
+  const showPagination = filteredFiles.length > PROJECT_FILES_PER_PAGE;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setPageByCategory((previous) => ({
+        ...previous,
+        [selectedCategory]: totalPages
+      }));
+    }
+  }, [currentPage, selectedCategory, totalPages]);
 
   const currentAcceptTypes = PROJECT_FILE_ACCEPT_TYPES[selectedCategory];
 
   const emptyMessage =
-    selectedCategory === 'images'
+    hasActiveSearch
+      ? `No matching ${categorySearchLabel}.`
+      : selectedCategory === 'images'
       ? 'No picture files uploaded yet.'
       : `No ${PROJECT_FILE_CATEGORY_LABELS[selectedCategory]} files uploaded yet.`;
 
@@ -161,6 +223,26 @@ export const ProjectFilesTab = ({
         ) : null}
       </div>
 
+      <div className={styles.filtersRow}>
+        <Input
+          value={searchText}
+          placeholder={`Search ${categorySearchLabel} by name`}
+          onChange={(_, data) =>
+            {
+              setSearchTextByCategory((previous) => ({
+                ...previous,
+                [selectedCategory]: data.value
+              }));
+              setPageByCategory((previous) => ({
+                ...previous,
+                [selectedCategory]: 1
+              }));
+            }
+          }
+          aria-label={`Search ${categorySearchLabel}`}
+        />
+      </div>
+
       {canUpload ? (
         <Caption1>
           Accepted formats for {PROJECT_FILE_CATEGORY_LABELS[selectedCategory]}:{' '}
@@ -177,7 +259,9 @@ export const ProjectFilesTab = ({
         <div className={styles.emptyState}>
           <Caption1>{emptyMessage}</Caption1>
           <Body1>
-            {canUpload
+            {hasActiveSearch
+              ? `Try a different file name or clear the search for ${categoryLabel}.`
+              : canUpload
               ? `Use the upload button above to attach ${
                   PROJECT_FILE_CATEGORY_LABELS[selectedCategory].toLowerCase()
                 } files to this project.`
@@ -199,7 +283,7 @@ export const ProjectFilesTab = ({
               </tr>
             </thead>
             <tbody>
-              {filteredFiles.map((file) => {
+              {pagedFiles.map((file) => {
                 const isDeleting = pendingFileId === file.id;
                 const isDownloading = downloadingFileId === file.id;
                 const rawUploaderName = file.uploadedBy
@@ -265,6 +349,35 @@ export const ProjectFilesTab = ({
               })}
             </tbody>
           </table>
+          {showPagination ? (
+            <TablePagination
+              styles={styles}
+              page={currentPage}
+              totalPages={totalPages}
+              onPrevious={() =>
+                setPageByCategory((previous) => ({
+                  ...previous,
+                  [selectedCategory]: Math.max(1, previous[selectedCategory] - 1)
+                }))
+              }
+              onNext={() =>
+                setPageByCategory((previous) => ({
+                  ...previous,
+                  [selectedCategory]: Math.min(
+                    totalPages,
+                    previous[selectedCategory] + 1
+                  )
+                }))
+              }
+              onPageSelect={(page) =>
+                setPageByCategory((previous) => ({
+                  ...previous,
+                  [selectedCategory]: Math.min(Math.max(1, page), totalPages)
+                }))
+              }
+              dropdownAriaLabel={`Select ${categorySearchLabel} page`}
+            />
+          ) : null}
         </div>
       )}
 

@@ -17,6 +17,7 @@ import {
 export const CABLE_TYPES_PER_PAGE = 10;
 export const CABLE_LIST_PER_PAGE = 10;
 export const TRAYS_PER_PAGE = 10;
+export const PROJECT_FILES_PER_PAGE = 10;
 
 export type ProjectDetailsTab =
   | 'details'
