@@ -314,6 +314,10 @@ export const updateCableTypeDefaultMaterialSchema = z
     { message: 'At least one field must be provided' },
   );
 
+export const createCableMaterialSchema = createCableTypeDefaultMaterialSchema;
+
+export const updateCableMaterialSchema = updateCableTypeDefaultMaterialSchema;
+
 const cableStringField = z.string().trim().max(500).optional();
 
 export const createCableSchema = z

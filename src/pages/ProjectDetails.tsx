@@ -1414,6 +1414,16 @@ export const ProjectDetails = () => {
     [navigate, projectId]
   );
 
+  const openCableDetails = useCallback(
+    (cable: { id: string }) => {
+      if (!projectId) {
+        return;
+      }
+      navigate(`/projects/${projectId}/cables/${cable.id}`);
+    },
+    [navigate, projectId]
+  );
+
   const isInlineEditable = inlineEditingEnabled && canManageCables;
 
   useEffect(() => {
@@ -1732,6 +1742,7 @@ export const ProjectDetails = () => {
             void handleInlineCableTypeChange(cable, nextCableTypeId)
           }
           pendingId={pendingCableId}
+          onDetails={openCableDetails}
           onEdit={openEditCableDialog}
           onDelete={(cable) => void handleDeleteCable(cable)}
           error={cablesError}

@@ -5,6 +5,7 @@ import { Account } from '@/pages/Account';
 import { Materials } from '@/pages/Materials';
 import { Templates } from '@/pages/Templates';
 import { AdminPanel } from '@/pages/AdminPanel';
+import { CableDetails } from '@/pages/CableDetails';
 import { CableTypeDetails } from '@/pages/CableTypeDetails';
 import { ProjectDetails } from '@/pages/ProjectDetails';
 import { TrayDetails } from '@/pages/TrayDetails';
@@ -45,6 +46,10 @@ export const routes: RouteObject[] = [
       {
         path: 'projects/:projectId/cable-types/:cableTypeId',
         element: <CableTypeDetails />
+      },
+      {
+        path: 'projects/:projectId/cables/:cableId',
+        element: <CableDetails />
       },
       {
         path: 'projects/:projectId/trays/:trayId',

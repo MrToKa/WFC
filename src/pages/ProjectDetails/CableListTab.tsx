@@ -56,6 +56,7 @@ type CableListTabProps = {
   ) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
   pendingId: string | null;
+  onDetails?: (cable: Cable) => void;
   onEdit: (cable: Cable) => void;
   onDelete: (cable: Cable) => void;
   error: string | null;
@@ -98,6 +99,7 @@ export const CableListTab = ({
   onTextFieldBlur,
   onInlineCableTypeChange,
   pendingId,
+  onDetails,
   onEdit,
   onDelete,
   error,
@@ -113,6 +115,7 @@ export const CableListTab = ({
     () => [filterCriteria],
     [filterCriteria]
   );
+  const showActions = Boolean(onDetails) || canManageCables;
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable list">
@@ -243,7 +246,7 @@ export const CableListTab = ({
               >
                 Design length [m]
               </th>
-              {canManageCables ? (
+              {showActions ? (
                 <th className={styles.tableHeadCell}>Actions</th>
               ) : null}
             </tr>
@@ -375,24 +378,33 @@ export const CableListTab = ({
                       '-'
                     )}
                   </td>
-                  {canManageCables ? (
+                  {showActions ? (
                     <td className={styles.tableCell}>
                       <div className={styles.actionsCell}>
-                        <Button
-                          size="small"
-                          onClick={() => onEdit(cable)}
-                          disabled={disableActions}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="small"
-                          appearance="secondary"
-                          onClick={() => onDelete(cable)}
-                          disabled={disableActions}
-                        >
-                          Delete
-                        </Button>
+                        {onDetails ? (
+                          <Button size="small" onClick={() => onDetails(cable)}>
+                            Details
+                          </Button>
+                        ) : null}
+                        {canManageCables ? (
+                          <>
+                            <Button
+                              size="small"
+                              onClick={() => onEdit(cable)}
+                              disabled={disableActions}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => onDelete(cable)}
+                              disabled={disableActions}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   ) : null}

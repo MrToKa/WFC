@@ -299,6 +299,8 @@ export async function initializeDatabase(): Promise<void> {
       routing TEXT,
       design_length INTEGER,
       install_length INTEGER,
+      materials_initialized BOOLEAN NOT NULL DEFAULT FALSE,
+      materials_customized BOOLEAN NOT NULL DEFAULT FALSE,
       pull_date DATE,
       connected_from DATE,
       connected_to DATE,
@@ -335,6 +337,16 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS materials_initialized BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS materials_customized BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
     ADD COLUMN IF NOT EXISTS pull_date DATE;
   `);
 
@@ -351,6 +363,24 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE cables
     ADD COLUMN IF NOT EXISTS tested DATE;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cable_materials (
+      id UUID PRIMARY KEY,
+      cable_id UUID NOT NULL REFERENCES cables(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      quantity NUMERIC,
+      unit TEXT,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_materials_cable_id_idx
+      ON cable_materials (cable_id);
   `);
 
   await pool.query(`

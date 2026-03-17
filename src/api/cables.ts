@@ -2,6 +2,9 @@ import { request, ApiError, getApiBaseUrl } from './http';
 import type {
   CableType,
   Cable,
+  CableDetails,
+  CableMaterial,
+  CableMaterialInput,
   CableTypeDefaultMaterial,
   CableTypeDefaultMaterialInput,
   CableTypeDetails,
@@ -241,6 +244,15 @@ export async function fetchCables(
   return request<{ cables: Cable[] }>(`/api/projects/${projectId}/cables`);
 }
 
+export async function fetchCableDetails(
+  projectId: string,
+  cableId: string
+): Promise<CableDetails> {
+  return request<CableDetails>(`/api/projects/${projectId}/cables/${cableId}/details`, {
+    method: 'GET'
+  });
+}
+
 export async function createCable(
   token: string,
   projectId: string,
@@ -275,6 +287,51 @@ export async function deleteCable(
   cableId: string
 ): Promise<void> {
   await request<void>(`/api/projects/${projectId}/cables/${cableId}`, {
+    method: 'DELETE',
+    token
+  });
+}
+
+export async function createCableMaterial(
+  token: string,
+  projectId: string,
+  cableId: string,
+  data: CableMaterialInput
+): Promise<{ cableMaterial: CableMaterial }> {
+  return request<{ cableMaterial: CableMaterial }>(
+    `/api/projects/${projectId}/cables/${cableId}/materials`,
+    {
+      method: 'POST',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function updateCableMaterial(
+  token: string,
+  projectId: string,
+  cableId: string,
+  materialId: string,
+  data: Partial<CableMaterialInput>
+): Promise<{ cableMaterial: CableMaterial }> {
+  return request<{ cableMaterial: CableMaterial }>(
+    `/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function deleteCableMaterial(
+  token: string,
+  projectId: string,
+  cableId: string,
+  materialId: string
+): Promise<void> {
+  await request<void>(`/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`, {
     method: 'DELETE',
     token
   });

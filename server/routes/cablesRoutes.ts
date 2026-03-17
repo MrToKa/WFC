@@ -4,6 +4,7 @@ import type { Request as ExpressRequest, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import multer from 'multer';
+import type { PoolClient } from 'pg';
 import * as XLSX from 'xlsx';
 
 // Extend Request type to include params, body, query, and file
@@ -19,11 +20,25 @@ import {
   type CableRow,
   type CableWithTypeRow
 } from '../models/cable.js';
+import {
+  mapCableMaterialRow,
+  type CableMaterialRow
+} from '../models/cableMaterial.js';
+import {
+  mapCableTypeDefaultMaterialRow,
+  type CableTypeDefaultMaterialRow
+} from '../models/cableTypeDefaultMaterial.js';
 import type { CableTypeRow } from '../models/cableType.js';
+import {
+  mapMaterialCableTypeRow,
+  type MaterialCableTypeRow
+} from '../models/materialCableType.js';
 import { authenticate } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   createCableSchema,
+  createCableMaterialSchema,
+  updateCableMaterialSchema,
   updateCableSchema
 } from '../validators.js';
 
@@ -230,6 +245,329 @@ const selectCablesQuery = `
   JOIN cable_types ct ON ct.id = c.cable_type_id
 `;
 
+const selectCableDetailsQuery = `
+  SELECT
+    c.id,
+    c.project_id,
+    c.cable_id,
+    c.tag,
+    c.cable_type_id,
+    c.from_location,
+    c.to_location,
+    c.routing,
+    c.design_length,
+    c.install_length,
+    c.pull_date,
+    c.connected_from,
+    c.connected_to,
+    c.tested,
+    c.materials_initialized,
+    c.materials_customized,
+    c.created_at,
+    c.updated_at,
+    ct.name AS type_name,
+    ct.purpose AS type_purpose,
+    ct.diameter_mm AS type_diameter_mm,
+    ct.weight_kg_per_m AS type_weight_kg_per_m
+  FROM cables c
+  JOIN cable_types ct ON ct.id = c.cable_type_id
+`;
+
+const selectCableTypeDefaultMaterialsQuery = `
+  SELECT
+    id,
+    cable_type_id,
+    name,
+    quantity,
+    unit,
+    remarks,
+    created_at,
+    updated_at
+  FROM cable_type_default_materials
+`;
+
+const selectCableMaterialsQuery = `
+  SELECT
+    id,
+    cable_id,
+    name,
+    quantity,
+    unit,
+    remarks,
+    created_at,
+    updated_at
+  FROM cable_materials
+`;
+
+const selectMaterialCableTypeDetailsQuery = `
+  SELECT
+    id,
+    name,
+    purpose,
+    material,
+    description,
+    manufacturer,
+    part_no,
+    remarks,
+    diameter_mm,
+    weight_kg_per_m,
+    created_at,
+    updated_at
+  FROM material_cable_types
+`;
+
+const selectMaterialCableInstallationMaterialsQuery = `
+  SELECT
+    type
+  FROM material_cable_installation_materials
+`;
+
+type Queryable = Pick<PoolClient, 'query'>;
+
+type MaterialCableInstallationMaterialMatchRow = {
+  type: string;
+};
+
+type CableDetailsRow = CableWithTypeRow & {
+  materials_initialized: boolean;
+  materials_customized: boolean;
+};
+
+const createMaterialCableInstallationMaterialNotFoundPayload = (
+  name: string
+) => ({
+  fieldErrors: {
+    name: [`Cable installation material "${name}" was not found in materials.`]
+  }
+});
+
+const findProjectCableById = async (
+  queryable: Queryable,
+  projectId: string,
+  cableId: string
+): Promise<CableDetailsRow | null> => {
+  const result = await queryable.query<CableDetailsRow>(
+    `
+      ${selectCableDetailsQuery}
+      WHERE c.project_id = $1
+        AND c.id = $2
+      LIMIT 1;
+    `,
+    [projectId, cableId]
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const listCableTypeDefaultMaterials = async (
+  queryable: Queryable,
+  cableTypeId: string
+): Promise<CableTypeDefaultMaterialRow[]> => {
+  const result = await queryable.query<CableTypeDefaultMaterialRow>(
+    `
+      ${selectCableTypeDefaultMaterialsQuery}
+      WHERE cable_type_id = $1
+      ORDER BY LOWER(name) ASC, created_at ASC;
+    `,
+    [cableTypeId]
+  );
+
+  return result.rows;
+};
+
+const listCableMaterials = async (
+  queryable: Queryable,
+  cableId: string
+): Promise<CableMaterialRow[]> => {
+  const result = await queryable.query<CableMaterialRow>(
+    `
+      ${selectCableMaterialsQuery}
+      WHERE cable_id = $1
+      ORDER BY LOWER(name) ASC, created_at ASC;
+    `,
+    [cableId]
+  );
+
+  return result.rows;
+};
+
+const findMaterialCableTypeDetailsByName = async (
+  queryable: Queryable,
+  name: string
+): Promise<MaterialCableTypeRow | null> => {
+  const result = await queryable.query<MaterialCableTypeRow>(
+    `
+      ${selectMaterialCableTypeDetailsQuery}
+      WHERE lower(name) = lower($1)
+      LIMIT 1;
+    `,
+    [name]
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const findMaterialCableInstallationMaterialByType = async (
+  queryable: Queryable,
+  type: string
+): Promise<MaterialCableInstallationMaterialMatchRow | null> => {
+  const result = await queryable.query<MaterialCableInstallationMaterialMatchRow>(
+    `
+      ${selectMaterialCableInstallationMaterialsQuery}
+      WHERE lower(type) = lower($1)
+      LIMIT 1;
+    `,
+    [type]
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const updateCableMaterialState = async (
+  queryable: Queryable,
+  cableId: string,
+  options: {
+    initialized: boolean;
+    customized: boolean;
+  }
+): Promise<void> => {
+  await queryable.query(
+    `
+      UPDATE cables
+      SET
+        materials_initialized = $2,
+        materials_customized = $3,
+        updated_at = NOW()
+      WHERE id = $1;
+    `,
+    [cableId, options.initialized, options.customized]
+  );
+};
+
+const normalizeComparableCableTypeName = (value: string): string =>
+  value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const resolveCableTypeDefaultMaterials = async (
+  queryable: Queryable,
+  projectId: string,
+  cableTypeId: string,
+  cableTypeName: string
+): Promise<CableTypeDefaultMaterialRow[]> => {
+  const exactMaterials = await listCableTypeDefaultMaterials(queryable, cableTypeId);
+
+  if (exactMaterials.length > 0) {
+    return exactMaterials;
+  }
+
+  const normalizedName = normalizeComparableCableTypeName(cableTypeName);
+
+  if (normalizedName === '') {
+    return exactMaterials;
+  }
+
+  const fallbackSourceResult = await queryable.query<{ id: string }>(
+    `
+      SELECT ct.id
+      FROM cable_types ct
+      JOIN cable_type_default_materials dm ON dm.cable_type_id = ct.id
+      WHERE ct.project_id = $1
+        AND regexp_replace(lower(trim(ct.name)), '\s+', ' ', 'g') = $2
+      GROUP BY ct.id
+      ORDER BY COUNT(dm.id) DESC, ct.id ASC
+      LIMIT 1;
+    `,
+    [projectId, normalizedName]
+  );
+
+  const fallbackSource = fallbackSourceResult.rows[0];
+
+  if (!fallbackSource) {
+    return exactMaterials;
+  }
+
+  return listCableTypeDefaultMaterials(queryable, fallbackSource.id);
+};
+
+const resetCableMaterialsToCableTypeDefaults = async (
+  queryable: Queryable,
+  projectId: string,
+  cableId: string,
+  cableTypeId: string,
+  cableTypeName: string
+): Promise<void> => {
+  const defaultMaterials = await resolveCableTypeDefaultMaterials(
+    queryable,
+    projectId,
+    cableTypeId,
+    cableTypeName
+  );
+
+  await queryable.query(
+    `
+      DELETE FROM cable_materials
+      WHERE cable_id = $1;
+    `,
+    [cableId]
+  );
+
+  for (const material of defaultMaterials) {
+    await queryable.query(
+      `
+        INSERT INTO cable_materials (
+          id,
+          cable_id,
+          name,
+          quantity,
+          unit,
+          remarks
+        )
+        VALUES ($1, $2, $3, $4, $5, $6);
+      `,
+      [
+        randomUUID(),
+        cableId,
+        material.name,
+        material.quantity,
+        material.unit,
+        material.remarks
+      ]
+    );
+  }
+
+  await updateCableMaterialState(queryable, cableId, {
+    initialized: true,
+    customized: false
+  });
+};
+
+const ensureCableMaterialsInitialized = async (
+  queryable: Queryable,
+  projectId: string,
+  cableId: string,
+  cableTypeId: string,
+  cableTypeName: string,
+  materialsInitialized: boolean,
+  materialsCustomized: boolean
+): Promise<CableMaterialRow[]> => {
+  const existingMaterials = await listCableMaterials(queryable, cableId);
+  const shouldHydrateFromDefaults =
+    !materialsInitialized || (!materialsCustomized && existingMaterials.length === 0);
+
+  if (shouldHydrateFromDefaults) {
+    await resetCableMaterialsToCableTypeDefaults(
+      queryable,
+      projectId,
+      cableId,
+      cableTypeId,
+      cableTypeName
+    );
+
+    return listCableMaterials(queryable, cableId);
+  }
+
+  return existingMaterials;
+};
+
 const cablesRouter = Router({ mergeParams: true });
 
 cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
@@ -312,8 +650,13 @@ cablesRouter.post(
       tested
     } = parseResult.data;
 
+    let client: PoolClient | null = null;
+
     try {
-      const typeResult = await pool.query<CableTypeRow>(
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const typeResult = await client.query<CableTypeRow>(
         `
           SELECT
             id,
@@ -334,15 +677,17 @@ cablesRouter.post(
       const cableType = typeResult.rows[0];
 
       if (!cableType) {
+        await client.query('ROLLBACK');
         res
           .status(400)
           .json({ error: 'Cable type does not belong to the project' });
         return;
       }
 
+      const insertedCableId = randomUUID();
       const normalizedTag = normalizeOptionalString(tag ?? null);
 
-      const insertResult = await pool.query<CableRow>(
+      const insertResult = await client.query<CableRow>(
         `
           INSERT INTO cables (
             id,
@@ -380,7 +725,7 @@ cablesRouter.post(
             updated_at;
         `,
         [
-          randomUUID(),
+          insertedCableId,
           projectId,
           cableId,
           normalizedTag,
@@ -400,9 +745,19 @@ cablesRouter.post(
       const inserted = insertResult.rows[0];
 
       if (!inserted) {
+        await client.query('ROLLBACK');
         res.status(500).json({ error: 'Failed to create cable' });
         return;
       }
+
+      await resetCableMaterialsToCableTypeDefaults(
+        client,
+        projectId,
+        inserted.id,
+        cableTypeId,
+        cableType.name
+      );
+      await client.query('COMMIT');
 
       const result = await pool.query<CableWithTypeRow>(
         `
@@ -414,6 +769,10 @@ cablesRouter.post(
 
       res.status(201).json({ cable: mapCableRow(result.rows[0]) });
     } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+
       if (
         typeof error === 'object' &&
         error !== null &&
@@ -428,6 +787,8 @@ cablesRouter.post(
 
       console.error('Create cable error', error);
       res.status(500).json({ error: 'Failed to create cable' });
+    } finally {
+      client?.release();
     }
   }
 );
@@ -478,57 +839,6 @@ cablesRouter.patch(
       console.error('Verify project for cable update error', error);
       res.status(500).json({ error: 'Failed to verify project' });
       return;
-    }
-
-    if (cableTypeId) {
-      try {
-        const typeResult = await pool.query(
-          `
-            SELECT id
-            FROM cable_types
-            WHERE id = $1
-              AND project_id = $2;
-          `,
-          [cableTypeId, projectId]
-        );
-
-        if (typeResult.rowCount === 0) {
-          res
-            .status(400)
-            .json({ error: 'Cable type does not belong to the project' });
-          return;
-        }
-      } catch (error) {
-        console.error('Verify cable type for update error', error);
-        res.status(500).json({ error: 'Failed to update cable' });
-        return;
-      }
-    }
-
-    if (newCableId !== undefined) {
-      try {
-        const duplicate = await pool.query(
-          `
-            SELECT id
-            FROM cables
-            WHERE project_id = $1
-              AND id <> $2
-              AND cable_id = $3;
-          `,
-          [projectId, cableId, newCableId]
-        );
-
-        if (duplicate.rowCount > 0) {
-          res
-            .status(409)
-            .json({ error: 'Cable ID already exists for this project' });
-          return;
-        }
-      } catch (error) {
-        console.error('Duplicate cable id check error', error);
-        res.status(500).json({ error: 'Failed to update cable' });
-        return;
-      }
     }
 
     const fields: string[] = [];
@@ -597,8 +907,81 @@ cablesRouter.patch(
 
     fields.push(`updated_at = NOW()`);
 
+    let client: PoolClient | null = null;
+
     try {
-      const updateResult = await pool.query<CableRow>(
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const existingCableResult = await client.query<
+        Pick<CableRow, 'id' | 'cable_type_id'>
+      >(
+        `
+          SELECT id, cable_type_id
+          FROM cables
+          WHERE id = $1
+            AND project_id = $2
+          LIMIT 1;
+        `,
+        [cableId, projectId]
+      );
+
+      const existingCable = existingCableResult.rows[0];
+
+      if (!existingCable) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable not found' });
+        return;
+      }
+
+      let nextCableTypeName: string | null = null;
+
+      if (cableTypeId) {
+        const typeResult = await client.query<Pick<CableTypeRow, 'id' | 'name'>>(
+          `
+            SELECT id, name
+            FROM cable_types
+            WHERE id = $1
+              AND project_id = $2;
+          `,
+          [cableTypeId, projectId]
+        );
+
+        const nextCableType = typeResult.rows[0];
+
+        if (!nextCableType) {
+          await client.query('ROLLBACK');
+          res
+            .status(400)
+            .json({ error: 'Cable type does not belong to the project' });
+          return;
+        }
+
+        nextCableTypeName = nextCableType.name;
+      }
+
+      if (newCableId !== undefined) {
+        const duplicate = await client.query(
+          `
+            SELECT id
+            FROM cables
+            WHERE project_id = $1
+              AND id <> $2
+              AND cable_id = $3;
+          `,
+          [projectId, cableId, newCableId]
+        );
+
+        if (duplicate.rowCount > 0) {
+          await client.query('ROLLBACK');
+          res
+            .status(409)
+            .json({ error: 'Cable ID already exists for this project' });
+          return;
+        }
+      }
+
+      const updateResult = await client.query<CableRow>(
         `
           UPDATE cables
           SET ${fields.join(', ')}
@@ -614,6 +997,11 @@ cablesRouter.patch(
             to_location,
             routing,
             design_length,
+            install_length,
+            pull_date,
+            connected_from,
+            connected_to,
+            tested,
             created_at,
             updated_at;
         `,
@@ -623,9 +1011,25 @@ cablesRouter.patch(
       const updated = updateResult.rows[0];
 
       if (!updated) {
+        await client.query('ROLLBACK');
         res.status(404).json({ error: 'Cable not found' });
         return;
       }
+
+      const shouldResetMaterials =
+        cableTypeId !== undefined && cableTypeId !== existingCable.cable_type_id;
+
+      if (shouldResetMaterials) {
+        await resetCableMaterialsToCableTypeDefaults(
+          client,
+          projectId,
+          updated.id,
+          cableTypeId,
+          nextCableTypeName ?? ''
+        );
+      }
+
+      await client.query('COMMIT');
 
       const result = await pool.query<CableWithTypeRow>(
         `
@@ -637,8 +1041,418 @@ cablesRouter.patch(
 
       res.json({ cable: mapCableRow(result.rows[0]) });
     } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+
       console.error('Update cable error', error);
       res.status(500).json({ error: 'Failed to update cable' });
+    } finally {
+      client?.release();
+    }
+  }
+);
+
+cablesRouter.get(
+  '/:cableId/details',
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableId } = req.params;
+
+    if (!projectId || !cableId) {
+      res.status(400).json({ error: 'Project ID and cable ID are required' });
+      return;
+    }
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+    } catch (error) {
+      console.error('Verify project for cable details error', error);
+      res.status(500).json({ error: 'Failed to verify project' });
+      return;
+    }
+
+    let client: PoolClient | null = null;
+
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const cable = await findProjectCableById(client, projectId, cableId);
+
+      if (!cable) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable not found' });
+        return;
+      }
+
+      const cableMaterials = await ensureCableMaterialsInitialized(
+        client,
+        projectId,
+        cable.id,
+        cable.cable_type_id,
+        cable.type_name,
+        cable.materials_initialized,
+        cable.materials_customized
+      );
+
+      const [materialCableType, cableTypeDefaultMaterials] = await Promise.all([
+        findMaterialCableTypeDetailsByName(client, cable.type_name),
+        resolveCableTypeDefaultMaterials(client, projectId, cable.cable_type_id, cable.type_name)
+      ]);
+
+      await client.query('COMMIT');
+
+      res.json({
+        cable: mapCableRow(cable),
+        materialCableType: materialCableType ? mapMaterialCableTypeRow(materialCableType) : null,
+        cableTypeDefaultMaterials: cableTypeDefaultMaterials.map(mapCableTypeDefaultMaterialRow),
+        cableMaterials: cableMaterials.map(mapCableMaterialRow)
+      });
+    } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+
+      console.error('Fetch cable details error', error);
+      res.status(500).json({ error: 'Failed to fetch cable details' });
+    } finally {
+      client?.release();
+    }
+  }
+);
+
+cablesRouter.post(
+  '/:cableId/materials',
+  authenticate,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableId } = req.params;
+
+    if (!projectId || !cableId) {
+      res.status(400).json({ error: 'Project ID and cable ID are required' });
+      return;
+    }
+
+    const parseResult = createCableMaterialSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    let client: PoolClient | null = null;
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const cable = await findProjectCableById(client, projectId, cableId);
+
+      if (!cable) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable not found' });
+        return;
+      }
+
+      await ensureCableMaterialsInitialized(
+        client,
+        projectId,
+        cable.id,
+        cable.cable_type_id,
+        cable.type_name,
+        cable.materials_initialized,
+        cable.materials_customized
+      );
+
+      const { name, quantity, unit, remarks } = parseResult.data;
+      const materialCableInstallationMaterial =
+        await findMaterialCableInstallationMaterialByType(client, name);
+
+      if (!materialCableInstallationMaterial) {
+        await client.query('ROLLBACK');
+        res.status(400).json({
+          error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim())
+        });
+        return;
+      }
+
+      const result = await client.query<CableMaterialRow>(
+        `
+          INSERT INTO cable_materials (
+            id,
+            cable_id,
+            name,
+            quantity,
+            unit,
+            remarks
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING
+            id,
+            cable_id,
+            name,
+            quantity,
+            unit,
+            remarks,
+            created_at,
+            updated_at;
+        `,
+        [
+          randomUUID(),
+          cable.id,
+          materialCableInstallationMaterial.type,
+          quantity ?? null,
+          normalizeOptionalString(unit ?? null),
+          normalizeOptionalString(remarks ?? null)
+        ]
+      );
+
+      await updateCableMaterialState(client, cable.id, {
+        initialized: true,
+        customized: true
+      });
+      await client.query('COMMIT');
+
+      res.status(201).json({
+        cableMaterial: mapCableMaterialRow(result.rows[0])
+      });
+    } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+
+      console.error('Create cable material error', error);
+      res.status(500).json({ error: 'Failed to create cable material' });
+    } finally {
+      client?.release();
+    }
+  }
+);
+
+cablesRouter.patch(
+  '/:cableId/materials/:materialId',
+  authenticate,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableId, materialId } = req.params;
+
+    if (!projectId || !cableId || !materialId) {
+      res.status(400).json({
+        error: 'Project ID, cable ID, and material ID are required'
+      });
+      return;
+    }
+
+    const parseResult = updateCableMaterialSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    let client: PoolClient | null = null;
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const cable = await findProjectCableById(client, projectId, cableId);
+
+      if (!cable) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable not found' });
+        return;
+      }
+
+      await ensureCableMaterialsInitialized(
+        client,
+        projectId,
+        cable.id,
+        cable.cable_type_id,
+        cable.type_name,
+        cable.materials_initialized,
+        cable.materials_customized
+      );
+
+      const { name, quantity, unit, remarks } = parseResult.data;
+      const fields: string[] = [];
+      const values: Array<string | number | null> = [];
+      let index = 1;
+
+      if (name !== undefined) {
+        const materialCableInstallationMaterial =
+          await findMaterialCableInstallationMaterialByType(client, name);
+
+        if (!materialCableInstallationMaterial) {
+          await client.query('ROLLBACK');
+          res.status(400).json({
+            error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim())
+          });
+          return;
+        }
+
+        fields.push(`name = $${index++}`);
+        values.push(materialCableInstallationMaterial.type);
+      }
+
+      if (quantity !== undefined) {
+        fields.push(`quantity = $${index++}`);
+        values.push(quantity ?? null);
+      }
+
+      if (unit !== undefined) {
+        fields.push(`unit = $${index++}`);
+        values.push(normalizeOptionalString(unit ?? null));
+      }
+
+      if (remarks !== undefined) {
+        fields.push(`remarks = $${index++}`);
+        values.push(normalizeOptionalString(remarks ?? null));
+      }
+
+      fields.push('updated_at = NOW()');
+
+      const result = await client.query<CableMaterialRow>(
+        `
+          UPDATE cable_materials
+          SET ${fields.join(', ')}
+          WHERE id = $${index}
+            AND cable_id = $${index + 1}
+          RETURNING
+            id,
+            cable_id,
+            name,
+            quantity,
+            unit,
+            remarks,
+            created_at,
+            updated_at;
+        `,
+        [...values, materialId, cable.id]
+      );
+
+      const cableMaterial = result.rows[0];
+
+      if (!cableMaterial) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable material not found' });
+        return;
+      }
+
+      await updateCableMaterialState(client, cable.id, {
+        initialized: true,
+        customized: true
+      });
+      await client.query('COMMIT');
+
+      res.json({
+        cableMaterial: mapCableMaterialRow(cableMaterial)
+      });
+    } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+
+      console.error('Update cable material error', error);
+      res.status(500).json({ error: 'Failed to update cable material' });
+    } finally {
+      client?.release();
+    }
+  }
+);
+
+cablesRouter.delete(
+  '/:cableId/materials/:materialId',
+  authenticate,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableId, materialId } = req.params;
+
+    if (!projectId || !cableId || !materialId) {
+      res.status(400).json({
+        error: 'Project ID, cable ID, and material ID are required'
+      });
+      return;
+    }
+
+    let client: PoolClient | null = null;
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const cable = await findProjectCableById(client, projectId, cableId);
+
+      if (!cable) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable not found' });
+        return;
+      }
+
+      await ensureCableMaterialsInitialized(
+        client,
+        projectId,
+        cable.id,
+        cable.cable_type_id,
+        cable.type_name,
+        cable.materials_initialized,
+        cable.materials_customized
+      );
+
+      const result = await client.query(
+        `
+          DELETE FROM cable_materials
+          WHERE id = $1
+            AND cable_id = $2;
+        `,
+        [materialId, cable.id]
+      );
+
+      if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable material not found' });
+        return;
+      }
+
+      await updateCableMaterialState(client, cable.id, {
+        initialized: true,
+        customized: true
+      });
+      await client.query('COMMIT');
+
+      res.status(204).send();
+    } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+
+      console.error('Delete cable material error', error);
+      res.status(500).json({ error: 'Failed to delete cable material' });
+    } finally {
+      client?.release();
     }
   }
 );
@@ -1047,6 +1861,8 @@ cablesRouter.post(
         const existing = existingMap.get(row.cableKey);
 
         if (!existing) {
+          const insertedCableId = randomUUID();
+
           await client.query(
             `
               INSERT INTO cables (
@@ -1068,7 +1884,7 @@ cablesRouter.post(
               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
             `,
             [
-              randomUUID(),
+              insertedCableId,
               projectId,
               row.cableId,
               fields.tag ?? null,
@@ -1083,6 +1899,13 @@ cablesRouter.post(
               fields.connectedTo ?? null,
               fields.tested ?? null
             ]
+          );
+          await resetCableMaterialsToCableTypeDefaults(
+            client,
+            projectId,
+            insertedCableId,
+            type.id,
+            type.name
           );
           summary.inserted += 1;
           continue;
@@ -1200,6 +2023,8 @@ cablesRouter.post(
           }
         }
 
+        const shouldResetMaterials = existing.cable_type_id !== type.id;
+
         if (updateAssignments.length === 0) {
           summary.skipped += 1;
           continue;
@@ -1219,6 +2044,17 @@ cablesRouter.post(
           `,
           [...updateValues, existing.id]
         );
+
+        if (shouldResetMaterials) {
+          await resetCableMaterialsToCableTypeDefaults(
+            client,
+            projectId,
+            existing.id,
+            type.id,
+            type.name
+          );
+        }
+
         summary.updated += 1;
       }
 

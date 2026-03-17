@@ -97,9 +97,34 @@ export type CableTypeDefaultMaterialInput = {
   remarks?: string | null;
 };
 
+export type CableMaterial = {
+  id: string;
+  cableId: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  remarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CableMaterialInput = {
+  name: string;
+  quantity?: number | null;
+  unit?: string | null;
+  remarks?: string | null;
+};
+
 export type CableTypeDetails = {
   cableType: CableType;
   materialCableType: MaterialCableType | null;
   defaultMaterials: CableTypeDefaultMaterial[];
   cableCount: number;
+};
+
+export type CableDetails = {
+  cable: Cable;
+  materialCableType: MaterialCableType | null;
+  cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
+  cableMaterials: CableMaterial[];
 };
