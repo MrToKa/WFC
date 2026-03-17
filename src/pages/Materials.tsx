@@ -29,7 +29,7 @@ export const Materials = () => {
   const navigate = useNavigate();
 
   const isAdmin = Boolean(user?.isAdmin);
-  const [selectedTab, setSelectedTab] = useState<MaterialsTab>('trays');
+  const [selectedTab, setSelectedTab] = useState<MaterialsTab>('cableTypes');
 
   const numberFormatter = useMemo(
     () =>
@@ -109,10 +109,10 @@ export const Materials = () => {
         onTabSelect={handleTabSelect}
         aria-label="Materials categories"
       >
+        <Tab value="cableTypes">Cable types</Tab>
         <Tab value="trays">Trays</Tab>
         <Tab value="supports">Supports</Tab>
         <Tab value="loadCurves">Load curves</Tab>
-        <Tab value="cableTypes">Cables types</Tab>
       </TabList>
 
       <div role="tabpanel" aria-label={selectedTabLabel}>

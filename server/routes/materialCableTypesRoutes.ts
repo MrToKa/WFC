@@ -23,13 +23,25 @@ const upload = multer({
 const MATERIAL_CABLE_EXCEL_HEADERS = {
   name: 'Type',
   purpose: 'Purpose',
+  diameter: 'Diameter [mm]',
   material: 'Material',
+  weight: 'Weight [kg/m]',
   description: 'Description',
   manufacturer: 'Manufacturer',
   partNo: 'Part No.',
   remarks: 'Remarks',
-  diameter: 'Diameter [mm]',
-  weight: 'Weight [kg/m]',
+} as const;
+
+const MATERIAL_CABLE_EXCEL_HEADER_ALIASES = {
+  name: [MATERIAL_CABLE_EXCEL_HEADERS.name, 'Name'],
+  purpose: [MATERIAL_CABLE_EXCEL_HEADERS.purpose],
+  diameter: [MATERIAL_CABLE_EXCEL_HEADERS.diameter],
+  material: [MATERIAL_CABLE_EXCEL_HEADERS.material],
+  weight: [MATERIAL_CABLE_EXCEL_HEADERS.weight],
+  description: [MATERIAL_CABLE_EXCEL_HEADERS.description],
+  manufacturer: [MATERIAL_CABLE_EXCEL_HEADERS.manufacturer],
+  partNo: [MATERIAL_CABLE_EXCEL_HEADERS.partNo, 'Part No'],
+  remarks: [MATERIAL_CABLE_EXCEL_HEADERS.remarks, 'Remarks (optional)'],
 } as const;
 
 const normalizeOptionalString = (value: string | null | undefined): string | null => {
@@ -434,8 +446,21 @@ materialCableTypesRouter.post(
     const readString = (raw: unknown): string | null =>
       raw === undefined || raw === null ? null : normalizeOptionalString(String(raw));
 
+    const readCell = (
+      row: CableImportRow,
+      headers: readonly string[],
+    ): unknown => {
+      for (const header of headers) {
+        if (header in row) {
+          return row[header];
+        }
+      }
+
+      return undefined;
+    };
+
     for (const row of rows) {
-      const rawName = row[MATERIAL_CABLE_EXCEL_HEADERS.name] as unknown;
+      const rawName = readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.name);
       const name = typeof rawName === 'number' ? String(rawName) : String(rawName ?? '').trim();
 
       if (name === '') {
@@ -455,14 +480,14 @@ materialCableTypesRouter.post(
       prepared.push({
         key,
         name,
-        purpose: readString(row[MATERIAL_CABLE_EXCEL_HEADERS.purpose]),
-        material: readString(row[MATERIAL_CABLE_EXCEL_HEADERS.material]),
-        description: readString(row[MATERIAL_CABLE_EXCEL_HEADERS.description]),
-        manufacturer: readString(row[MATERIAL_CABLE_EXCEL_HEADERS.manufacturer]),
-        partNo: readString(row[MATERIAL_CABLE_EXCEL_HEADERS.partNo]),
-        remarks: readString(row[MATERIAL_CABLE_EXCEL_HEADERS.remarks]),
-        diameter: readNumeric(row[MATERIAL_CABLE_EXCEL_HEADERS.diameter]),
-        weight: readNumeric(row[MATERIAL_CABLE_EXCEL_HEADERS.weight]),
+        purpose: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.purpose)),
+        material: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.material)),
+        description: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.description)),
+        manufacturer: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.manufacturer)),
+        partNo: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.partNo)),
+        remarks: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.remarks)),
+        diameter: readNumeric(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.diameter)),
+        weight: readNumeric(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.weight)),
       });
     }
 
@@ -618,15 +643,15 @@ materialCableTypesRouter.get(
       });
 
       const columns = [
-        { name: MATERIAL_CABLE_EXCEL_HEADERS.name, key: 'type', width: 32 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.name, key: 'name', width: 32 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.material, key: 'material', width: 24 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.description, key: 'description', width: 36 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.manufacturer, key: 'manufacturer', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.partNo, key: 'partNo', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.remarks, key: 'remarks', width: 30 },
-        { name: MATERIAL_CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
-        { name: MATERIAL_CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
       ] as const;
 
       const table = worksheet.addTable({
@@ -698,29 +723,29 @@ materialCableTypesRouter.get(
       });
 
       const columns = [
-        { name: MATERIAL_CABLE_EXCEL_HEADERS.name, key: 'type', width: 32 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.name, key: 'name', width: 32 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.material, key: 'material', width: 24 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.description, key: 'description', width: 36 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.manufacturer, key: 'manufacturer', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.partNo, key: 'partNo', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.remarks, key: 'remarks', width: 30 },
-        { name: MATERIAL_CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
-        { name: MATERIAL_CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
       ] as const;
 
       const rows = result.rows.map((row) => [
         row.name ?? '',
         row.purpose ?? '',
+        row.diameter_mm !== null && row.diameter_mm !== '' ? Number(row.diameter_mm) : '',
         row.material ?? '',
+        row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
+          ? Number(row.weight_kg_per_m)
+          : '',
         row.description ?? '',
         row.manufacturer ?? '',
         row.part_no ?? '',
         row.remarks ?? '',
-        row.diameter_mm !== null && row.diameter_mm !== '' ? Number(row.diameter_mm) : '',
-        row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
-          ? Number(row.weight_kg_per_m)
-          : '',
       ]);
 
       const table = worksheet.addTable({
