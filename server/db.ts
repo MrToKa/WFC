@@ -244,6 +244,50 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_cable_installation_materials (
+      id UUID PRIMARY KEY,
+      type TEXT NOT NULL,
+      purpose TEXT,
+      material TEXT,
+      description TEXT,
+      manufacturer TEXT,
+      part_no TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_installation_materials
+    ADD COLUMN IF NOT EXISTS purpose TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_installation_materials
+    ADD COLUMN IF NOT EXISTS material TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_installation_materials
+    ADD COLUMN IF NOT EXISTS description TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_installation_materials
+    ADD COLUMN IF NOT EXISTS manufacturer TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_installation_materials
+    ADD COLUMN IF NOT EXISTS part_no TEXT;
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS material_cable_installation_materials_type_lower_idx
+      ON material_cable_installation_materials (LOWER(type));
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cables (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

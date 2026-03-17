@@ -9,7 +9,10 @@ import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
 import { useLoadCurves } from './Materials/hooks/useLoadCurves';
 import { useCableTypes } from './Materials/hooks/useCableTypes';
+import { useCableInstallationMaterials } from './Materials/hooks/useCableInstallationMaterials';
 import { useTemplateImages } from './Materials/hooks/useTemplateImages';
+import { CableInstallationMaterialDialog } from './Materials/components/CableInstallationMaterialDialog';
+import { CableInstallationMaterialsTab } from './Materials/components/CableInstallationMaterialsTab';
 import { TrayDialog } from './Materials/components/TrayDialog';
 import { TrayLoadCurveDialog } from './Materials/components/TrayLoadCurveDialog';
 import { SupportDialog } from './Materials/components/SupportDialog';
@@ -72,6 +75,11 @@ export const Materials = () => {
   const supportsHook = useSupports({ token, isAdmin, showToast });
   const loadCurvesHook = useLoadCurves({ token, isAdmin, showToast });
   const cableTypesHook = useCableTypes({ token, isAdmin, showToast });
+  const cableInstallationMaterialsHook = useCableInstallationMaterials({
+    token,
+    isAdmin,
+    showToast,
+  });
   const templateImagesHook = useTemplateImages({ token, showToast });
 
   const handleTabSelect = useCallback((_event: unknown, data: { value: TabValue }) => {
@@ -86,21 +94,23 @@ export const Materials = () => {
     ? loadCurvesHook.loadCurvePagination.totalPages
     : 1;
   const selectedTabLabel =
-    selectedTab === 'trays'
-      ? 'Trays'
-      : selectedTab === 'supports'
-        ? 'Supports'
-        : selectedTab === 'loadCurves'
-          ? 'Load curves'
-          : 'Cable types';
+    selectedTab === 'cableInstallationMaterials'
+      ? 'Cable installation materials'
+      : selectedTab === 'trays'
+        ? 'Trays'
+        : selectedTab === 'supports'
+          ? 'Supports'
+          : selectedTab === 'loadCurves'
+            ? 'Load curves'
+            : 'Cable types';
 
   return (
     <section className={styles.root} aria-labelledby="materials-heading">
       <div className={styles.header}>
         <Title3 id="materials-heading">Materials</Title3>
         <Body1>
-          Reference trays, supports, load curves, and cable types that can be reused across
-          projects.
+          Reference cable types, cable installation materials, trays, supports, and load curves that
+          can be reused across projects.
         </Body1>
       </div>
 
@@ -110,13 +120,69 @@ export const Materials = () => {
         aria-label="Materials categories"
       >
         <Tab value="cableTypes">Cable types</Tab>
+        <Tab value="cableInstallationMaterials">Cable installation materials</Tab>
         <Tab value="trays">Trays</Tab>
         <Tab value="supports">Supports</Tab>
         <Tab value="loadCurves">Load curves</Tab>
       </TabList>
 
       <div role="tabpanel" aria-label={selectedTabLabel}>
-        {selectedTab === 'trays' ? (
+        {selectedTab === 'cableInstallationMaterials' ? (
+          <CableInstallationMaterialsTab
+            styles={cableTypesStyles}
+            isAdmin={isAdmin}
+            isRefreshing={cableInstallationMaterialsHook.cableInstallationMaterialsRefreshing}
+            onRefresh={() =>
+              void cableInstallationMaterialsHook.reloadCableInstallationMaterials({
+                showSpinner: false,
+              })
+            }
+            onCreate={cableInstallationMaterialsHook.openCreateCableInstallationMaterialDialog}
+            onImportClick={() => cableInstallationMaterialsHook.fileInputRef.current?.click()}
+            onExport={() =>
+              void cableInstallationMaterialsHook.handleExportCableInstallationMaterials()
+            }
+            onGetTemplate={() =>
+              void cableInstallationMaterialsHook.handleGetCableInstallationMaterialsTemplate()
+            }
+            onImportFileChange={
+              cableInstallationMaterialsHook.handleImportCableInstallationMaterials
+            }
+            isImporting={cableInstallationMaterialsHook.cableInstallationMaterialsImporting}
+            isExporting={cableInstallationMaterialsHook.cableInstallationMaterialsExporting}
+            isGettingTemplate={
+              cableInstallationMaterialsHook.cableInstallationMaterialsGettingTemplate
+            }
+            fileInputRef={cableInstallationMaterialsHook.fileInputRef}
+            searchText={cableInstallationMaterialsHook.searchText}
+            searchCriteria={cableInstallationMaterialsHook.searchCriteria}
+            onSearchTextChange={cableInstallationMaterialsHook.setSearchText}
+            onSearchCriteriaChange={cableInstallationMaterialsHook.setSearchCriteria}
+            error={cableInstallationMaterialsHook.cableInstallationMaterialsError}
+            isLoading={cableInstallationMaterialsHook.cableInstallationMaterialsLoading}
+            items={cableInstallationMaterialsHook.pagedCableInstallationMaterials}
+            pendingId={cableInstallationMaterialsHook.pendingCableInstallationMaterialId}
+            onEdit={cableInstallationMaterialsHook.openEditCableInstallationMaterialDialog}
+            onDelete={(item) =>
+              void cableInstallationMaterialsHook.handleDeleteCableInstallationMaterial(item)
+            }
+            showPagination={cableInstallationMaterialsHook.showCableInstallationMaterialPagination}
+            page={cableInstallationMaterialsHook.cableInstallationMaterialPage}
+            totalPages={cableInstallationMaterialsHook.totalCableInstallationMaterialPages}
+            paginationHandlers={{
+              onPrevious: cableInstallationMaterialsHook.goToPreviousPage,
+              onNext: cableInstallationMaterialsHook.goToNextPage,
+              onPageSelect: cableInstallationMaterialsHook.goToPage,
+            }}
+            includeTabPanelRole={false}
+            emptyStateTitle="No cable installation materials found"
+            emptyStateBody={
+              isAdmin
+                ? 'Use the buttons above to add or import cable installation materials.'
+                : 'There are no cable installation materials recorded for materials yet.'
+            }
+          />
+        ) : selectedTab === 'trays' ? (
           <>
             <div className={styles.actionsRow}>
               <Button
@@ -400,6 +466,24 @@ export const Materials = () => {
         onPurposeSelect={cableTypesHook.cableTypeDialog.handlePurposeSelect}
         onSubmit={(event) => void cableTypesHook.cableTypeDialog.handleSubmit(event)}
         onDismiss={cableTypesHook.cableTypeDialog.reset}
+      />
+      <CableInstallationMaterialDialog
+        styles={cableTypesStyles}
+        open={cableInstallationMaterialsHook.cableInstallationMaterialDialog.open}
+        mode={cableInstallationMaterialsHook.cableInstallationMaterialDialog.mode}
+        values={cableInstallationMaterialsHook.cableInstallationMaterialDialog.values}
+        errors={cableInstallationMaterialsHook.cableInstallationMaterialDialog.errors}
+        submitting={cableInstallationMaterialsHook.cableInstallationMaterialDialog.submitting}
+        onFieldChange={
+          cableInstallationMaterialsHook.cableInstallationMaterialDialog.handleFieldChange
+        }
+        onPurposeSelect={
+          cableInstallationMaterialsHook.cableInstallationMaterialDialog.handlePurposeSelect
+        }
+        onSubmit={(event) =>
+          void cableInstallationMaterialsHook.cableInstallationMaterialDialog.handleSubmit(event)
+        }
+        onDismiss={cableInstallationMaterialsHook.cableInstallationMaterialDialog.reset}
       />
     </section>
   );

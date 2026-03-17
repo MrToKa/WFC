@@ -1,4 +1,9 @@
-export type MaterialsTab = 'trays' | 'supports' | 'loadCurves' | 'cableTypes';
+export type MaterialsTab =
+  | 'trays'
+  | 'supports'
+  | 'loadCurves'
+  | 'cableTypes'
+  | 'cableInstallationMaterials';
 
 export type TrayFormState = {
   type: string;

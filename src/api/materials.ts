@@ -1,5 +1,8 @@
 import { request, ApiError, getApiBaseUrl } from './http';
 import type {
+  MaterialCableInstallationMaterial,
+  MaterialCableInstallationMaterialImportSummary,
+  MaterialCableInstallationMaterialInput,
   MaterialCableType,
   MaterialCableTypeImportSummary,
   MaterialCableTypeInput,
@@ -145,6 +148,163 @@ export async function getMaterialCableTypesTemplate(token: string): Promise<Blob
       Authorization: `Bearer ${token}`,
     },
   });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse errors to rethrow generic message
+    }
+
+    throw new ApiError(
+      response.status,
+      extractErrorMessage(payload, 'Failed to generate template'),
+    );
+  }
+
+  return response.blob();
+}
+
+// Material Cable Installation Materials
+export async function fetchMaterialCableInstallationMaterials(): Promise<{
+  cableInstallationMaterials: MaterialCableInstallationMaterial[];
+}> {
+  return request<{
+    cableInstallationMaterials: MaterialCableInstallationMaterial[];
+  }>('/api/materials/cable-installation-materials');
+}
+
+export async function createMaterialCableInstallationMaterial(
+  token: string,
+  data: MaterialCableInstallationMaterialInput,
+): Promise<{ cableInstallationMaterial: MaterialCableInstallationMaterial }> {
+  return request<{ cableInstallationMaterial: MaterialCableInstallationMaterial }>(
+    '/api/materials/cable-installation-materials',
+    {
+      method: 'POST',
+      token,
+      body: data,
+    },
+  );
+}
+
+export async function updateMaterialCableInstallationMaterial(
+  token: string,
+  cableInstallationMaterialId: string,
+  data: Partial<MaterialCableInstallationMaterialInput>,
+): Promise<{ cableInstallationMaterial: MaterialCableInstallationMaterial }> {
+  return request<{ cableInstallationMaterial: MaterialCableInstallationMaterial }>(
+    `/api/materials/cable-installation-materials/${cableInstallationMaterialId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data,
+    },
+  );
+}
+
+export async function deleteMaterialCableInstallationMaterial(
+  token: string,
+  cableInstallationMaterialId: string,
+): Promise<void> {
+  await request<void>(
+    `/api/materials/cable-installation-materials/${cableInstallationMaterialId}`,
+    {
+      method: 'DELETE',
+      token,
+    },
+  );
+}
+
+export async function importMaterialCableInstallationMaterials(
+  token: string,
+  file: File,
+): Promise<{
+  summary: MaterialCableInstallationMaterialImportSummary;
+  cableInstallationMaterials: MaterialCableInstallationMaterial[];
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/cable-installation-materials/import`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    },
+  );
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import cable installation materials';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    summary: MaterialCableInstallationMaterialImportSummary;
+    cableInstallationMaterials: MaterialCableInstallationMaterial[];
+  };
+}
+
+export async function exportMaterialCableInstallationMaterials(token: string): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/cable-installation-materials/export`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export cable installation materials';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function getMaterialCableInstallationMaterialsTemplate(token: string): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/cable-installation-materials/template`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
 
   if (!response.ok) {
     let payload: unknown = null;

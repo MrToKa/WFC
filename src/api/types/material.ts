@@ -30,6 +30,18 @@ export type MaterialCableType = {
   updatedAt: string;
 };
 
+export type MaterialCableInstallationMaterial = {
+  id: string;
+  type: string;
+  purpose: string | null;
+  material: string | null;
+  description: string | null;
+  manufacturer: string | null;
+  partNo: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type MaterialSupport = {
   id: string;
   type: string;
@@ -112,6 +124,12 @@ export type MaterialCableTypeImportSummary = {
   skipped: number;
 };
 
+export type MaterialCableInstallationMaterialImportSummary = {
+  inserted: number;
+  updated: number;
+  skipped: number;
+};
+
 export type MaterialCableTypeInput = {
   name: string;
   purpose?: string | null;
@@ -122,6 +140,15 @@ export type MaterialCableTypeInput = {
   remarks?: string | null;
   diameterMm?: number | null;
   weightKgPerM?: number | null;
+};
+
+export type MaterialCableInstallationMaterialInput = {
+  type: string;
+  purpose?: string | null;
+  material?: string | null;
+  description?: string | null;
+  manufacturer?: string | null;
+  partNo?: string | null;
 };
 
 export type MaterialTrayInput = {
