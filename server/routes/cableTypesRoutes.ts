@@ -4,9 +4,10 @@ import type { Request, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import multer from 'multer';
+import type { PoolClient } from 'pg';
 import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
-import { mapCableTypeRow } from '../models/cableType.js';
+import { mapCableTypeRow, toNumberOrNull } from '../models/cableType.js';
 import type { CableTypeRow } from '../models/cableType.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
@@ -58,6 +59,81 @@ const selectCableTypesQuery = `
     updated_at
   FROM cable_types
 `;
+
+type MaterialCableTypeMatchRow = {
+  name: string;
+  purpose: string | null;
+  diameter_mm: string | number | null;
+  weight_kg_per_m: string | number | null;
+};
+
+type ProjectCableTypeNameRow = {
+  id: string;
+  name: string;
+};
+
+type Queryable = Pick<PoolClient, 'query'>;
+
+const selectMaterialCableTypesForProjectQuery = `
+  SELECT
+    name,
+    purpose,
+    diameter_mm,
+    weight_kg_per_m
+  FROM material_cable_types
+`;
+
+const createMaterialCableTypeNotFoundPayload = (name: string) => ({
+  fieldErrors: {
+    name: [`Cable type "${name}" was not found in materials.`]
+  }
+});
+
+const formatMissingMaterialCableTypesError = (names: string[]): string => {
+  const label = names.length === 1 ? 'Cable type' : 'Cable types';
+  return `${label} not found in materials: ${names.join(', ')}.`;
+};
+
+const findMaterialCableTypeByName = async (
+  queryable: Queryable,
+  name: string
+): Promise<MaterialCableTypeMatchRow | null> => {
+  const result = await queryable.query<MaterialCableTypeMatchRow>(
+    `
+      ${selectMaterialCableTypesForProjectQuery}
+      WHERE lower(name) = lower($1)
+      LIMIT 1;
+    `,
+    [name]
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const findMaterialCableTypesByKeys = async (
+  queryable: Queryable,
+  keys: string[]
+): Promise<Map<string, MaterialCableTypeMatchRow>> => {
+  if (keys.length === 0) {
+    return new Map<string, MaterialCableTypeMatchRow>();
+  }
+
+  const result = await queryable.query<MaterialCableTypeMatchRow>(
+    `
+      ${selectMaterialCableTypesForProjectQuery}
+      WHERE lower(name) = ANY($1::text[]);
+    `,
+    [keys]
+  );
+
+  const materialCableTypes = new Map<string, MaterialCableTypeMatchRow>();
+
+  for (const materialCableType of result.rows) {
+    materialCableTypes.set(materialCableType.name.toLowerCase(), materialCableType);
+  }
+
+  return materialCableTypes;
+};
 
 const cableTypesRouter = Router({ mergeParams: true });
 
@@ -128,13 +204,18 @@ cableTypesRouter.post(
       return;
     }
 
-    const { name, purpose, diameterMm, weightKgPerM } = parseResult.data;
-
-    const normalizedPurpose = normalizeOptionalString(purpose ?? null);
-    const normalizedDiameter = diameterMm ?? null;
-    const normalizedWeight = weightKgPerM ?? null;
+    const { name } = parseResult.data;
 
     try {
+      const materialCableType = await findMaterialCableTypeByName(pool, name);
+
+      if (!materialCableType) {
+        res.status(400).json({
+          error: createMaterialCableTypeNotFoundPayload(name.trim())
+        });
+        return;
+      }
+
       const duplicateResult = await pool.query<{ id: string }>(
         `
           SELECT id
@@ -177,10 +258,10 @@ cableTypesRouter.post(
         [
           randomUUID(),
           projectId,
-          name.trim(),
-          normalizedPurpose,
-          normalizedDiameter,
-          normalizedWeight
+          materialCableType.name,
+          normalizeOptionalString(materialCableType.purpose ?? null),
+          toNumberOrNull(materialCableType.diameter_mm),
+          toNumberOrNull(materialCableType.weight_kg_per_m)
         ]
       );
 
@@ -226,67 +307,70 @@ cableTypesRouter.patch(
       return;
     }
 
-    const { name, purpose, diameterMm, weightKgPerM } = parseResult.data;
+    const { name } = parseResult.data;
 
-    const updates: string[] = [];
-    const values: Array<string | number | null> = [];
-    let index = 1;
+    try {
+      const existingCableTypeResult = await pool.query<ProjectCableTypeNameRow>(
+        `
+          SELECT id, name
+          FROM cable_types
+          WHERE id = $1
+            AND project_id = $2
+          LIMIT 1;
+        `,
+        [cableTypeId, projectId]
+      );
 
-    if (name !== undefined) {
-      try {
-        const duplicateResult = await pool.query<{ id: string }>(
-          `
-            SELECT id
-            FROM cable_types
-            WHERE project_id = $1
-              AND lower(name) = lower($2)
-              AND id <> $3
-            LIMIT 1;
-          `,
-          [projectId, name, cableTypeId]
-        );
+      const existingCableType = existingCableTypeResult.rows[0];
 
-        if (duplicateResult.rowCount > 0) {
-          res.status(409).json({
-            error:
-              'A cable type with this name already exists for the project'
-          });
-          return;
-        }
-      } catch (error) {
-        console.error('Duplicate cable type check error', error);
-        res.status(500).json({ error: 'Failed to update cable type' });
+      if (!existingCableType) {
+        res.status(404).json({ error: 'Cable type not found' });
         return;
       }
 
-      updates.push(`name = $${index++}`);
-      values.push(name.trim());
-    }
+      const materialCableTypeName = name?.trim() || existingCableType.name;
+      const materialCableType = await findMaterialCableTypeByName(
+        pool,
+        materialCableTypeName
+      );
 
-    if (purpose !== undefined) {
-      updates.push(`purpose = $${index++}`);
-      values.push(normalizeOptionalString(purpose ?? null));
-    }
+      if (!materialCableType) {
+        res.status(400).json({
+          error: createMaterialCableTypeNotFoundPayload(materialCableTypeName)
+        });
+        return;
+      }
 
-    if (diameterMm !== undefined) {
-      updates.push(`diameter_mm = $${index++}`);
-      values.push(diameterMm ?? null);
-    }
+      const duplicateResult = await pool.query<{ id: string }>(
+        `
+          SELECT id
+          FROM cable_types
+          WHERE project_id = $1
+            AND lower(name) = lower($2)
+            AND id <> $3
+          LIMIT 1;
+        `,
+        [projectId, materialCableType.name, cableTypeId]
+      );
 
-    if (weightKgPerM !== undefined) {
-      updates.push(`weight_kg_per_m = $${index++}`);
-      values.push(weightKgPerM ?? null);
-    }
+      if (duplicateResult.rowCount > 0) {
+        res.status(409).json({
+          error: 'A cable type with this name already exists for the project'
+        });
+        return;
+      }
 
-    updates.push(`updated_at = NOW()`);
-
-    try {
       const result = await pool.query<CableTypeRow>(
         `
           UPDATE cable_types
-          SET ${updates.join(', ')}
-          WHERE id = $${index}
-            AND project_id = $${index + 1}
+          SET
+            name = $1,
+            purpose = $2,
+            diameter_mm = $3,
+            weight_kg_per_m = $4,
+            updated_at = NOW()
+          WHERE id = $5
+            AND project_id = $6
           RETURNING
             id,
             project_id,
@@ -297,7 +381,14 @@ cableTypesRouter.patch(
             created_at,
             updated_at;
         `,
-        [...values, cableTypeId, projectId]
+        [
+          materialCableType.name,
+          normalizeOptionalString(materialCableType.purpose ?? null),
+          toNumberOrNull(materialCableType.diameter_mm),
+          toNumberOrNull(materialCableType.weight_kg_per_m),
+          cableTypeId,
+          projectId
+        ]
       );
 
       const cableType = result.rows[0];
@@ -439,37 +530,9 @@ cableTypesRouter.post(
     const prepared: Array<{
       key: string;
       name: string;
-      purpose: string | null;
-      diameter: number | null;
-      weight: number | null;
     }> = [];
 
     const seenKeys = new Set<string>();
-
-    const readNumeric = (raw: unknown): number | null => {
-      if (raw === undefined || raw === null) {
-        return null;
-      }
-
-      if (typeof raw === 'number') {
-        return Number.isFinite(raw) ? raw : null;
-      }
-
-      const text = String(raw).trim();
-
-      if (text === '') {
-        return null;
-      }
-
-      const normalised = text.replace(',', '.');
-      const parsed = Number(normalised);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
-
-    const readString = (raw: unknown): string | null =>
-      raw === undefined || raw === null
-        ? null
-        : normalizeOptionalString(String(raw));
 
     for (const row of rows) {
       const rawName = row[CABLE_EXCEL_HEADERS.name] as unknown;
@@ -494,10 +557,7 @@ cableTypesRouter.post(
 
       prepared.push({
         key,
-        name,
-        purpose: readString(row[CABLE_EXCEL_HEADERS.purpose]),
-        diameter: readNumeric(row[CABLE_EXCEL_HEADERS.diameter]),
-        weight: readNumeric(row[CABLE_EXCEL_HEADERS.weight])
+        name
       });
     }
 
@@ -531,6 +591,23 @@ cableTypesRouter.post(
     try {
       await client.query('BEGIN');
 
+      const materialCableTypes = await findMaterialCableTypesByKeys(
+        client,
+        prepared.map((row) => row.key)
+      );
+
+      const missingMaterialCableTypes = prepared
+        .filter((row) => !materialCableTypes.has(row.key))
+        .map((row) => row.name);
+
+      if (missingMaterialCableTypes.length > 0) {
+        await client.query('ROLLBACK');
+        res.status(400).json({
+          error: formatMissingMaterialCableTypesError(missingMaterialCableTypes)
+        });
+        return;
+      }
+
       const existingResult =
         prepared.length > 0
           ? await client.query<CableTypeRow>(
@@ -551,6 +628,11 @@ cableTypesRouter.post(
 
       for (const row of prepared) {
         const existing = existingMap.get(row.key);
+        const materialCableType = materialCableTypes.get(row.key);
+
+        if (!materialCableType) {
+          continue;
+        }
 
         if (existing) {
           await client.query(
@@ -563,7 +645,12 @@ cableTypesRouter.post(
                 updated_at = NOW()
               WHERE id = $4;
             `,
-            [row.purpose, row.diameter, row.weight, existing.id]
+            [
+              normalizeOptionalString(materialCableType.purpose ?? null),
+              toNumberOrNull(materialCableType.diameter_mm),
+              toNumberOrNull(materialCableType.weight_kg_per_m),
+              existing.id
+            ]
           );
           summary.updated += 1;
         } else {
@@ -582,10 +669,10 @@ cableTypesRouter.post(
             [
               randomUUID(),
               projectId,
-              row.name,
-              row.purpose,
-              row.diameter,
-              row.weight
+              materialCableType.name,
+              normalizeOptionalString(materialCableType.purpose ?? null),
+              toNumberOrNull(materialCableType.diameter_mm),
+              toNumberOrNull(materialCableType.weight_kg_per_m)
             ]
           );
           summary.inserted += 1;

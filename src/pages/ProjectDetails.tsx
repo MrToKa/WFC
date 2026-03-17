@@ -1799,7 +1799,12 @@ export const ProjectDetails = () => {
         values={cableTypeDialog.values}
         errors={cableTypeDialog.errors}
         submitting={cableTypeDialog.submitting}
+        nameOptions={cableTypeDialog.materialCableTypeNames}
+        namePlaceholder="Select a cable type from Materials"
+        helperText="Purpose, diameter, and weight are loaded from Materials."
+        lockResolvedFields
         onFieldChange={cableTypeDialog.handleFieldChange}
+        onNameSelect={cableTypeDialog.handleNameSelect}
         onPurposeSelect={cableTypeDialog.handlePurposeSelect}
         onSubmit={(event) => void cableTypeDialog.handleSubmit(event)}
         onDismiss={cableTypeDialog.reset}
