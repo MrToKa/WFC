@@ -2,6 +2,7 @@ import { request, ApiError, getApiBaseUrl } from './http';
 import type {
   CableType,
   Cable,
+  CableReportSummary,
   CableDetails,
   CableMaterial,
   CableMaterialInput,
@@ -242,6 +243,34 @@ export async function fetchCables(
   projectId: string
 ): Promise<{ cables: Cable[] }> {
   return request<{ cables: Cable[] }>(`/api/projects/${projectId}/cables`);
+}
+
+export async function fetchCableReportSummary(
+  projectId: string,
+  options?: {
+    filterText?: string;
+    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+  }
+): Promise<{ summary: CableReportSummary }> {
+  const params = new URLSearchParams();
+  const trimmedFilter = options?.filterText?.trim();
+
+  if (trimmedFilter) {
+    params.set('filter', trimmedFilter);
+  }
+
+  if (options?.criteria) {
+    params.set('criteria', options.criteria);
+  }
+
+  const query = params.toString();
+
+  return request<{ summary: CableReportSummary }>(
+    `/api/projects/${projectId}/cables/report-summary${query ? `?${query}` : ''}`,
+    {
+      method: 'GET'
+    }
+  );
 }
 
 export async function fetchCableDetails(

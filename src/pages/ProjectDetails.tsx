@@ -51,6 +51,7 @@ import {
   type VariablesApiRow
 } from './ProjectDetails/VariablesApiTab';
 import { useCableListSection } from './ProjectDetails/hooks/useCableListSection';
+import { useCableReportSummary } from './ProjectDetails/hooks/useCableReportSummary';
 import { useCableTypesSection } from './ProjectDetails/hooks/useCableTypesSection';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
 import { useTraysSection } from './ProjectDetails/hooks/useTraysSection';
@@ -312,6 +313,18 @@ export const ProjectDetails = () => {
     project,
     token,
     showToast
+  });
+
+  const {
+    summary: cableReportSummary,
+    isLoading: cableReportSummaryLoading,
+    error: cableReportSummaryError,
+    reload: reloadCableReportSummary
+  } = useCableReportSummary({
+    projectId,
+    filterText,
+    filterCriteria,
+    enabled: selectedTab === 'cable-report'
   });
 
   const cableDialogVisibleFields: CableDialogField[] = (() => {
@@ -1426,6 +1439,11 @@ export const ProjectDetails = () => {
 
   const isInlineEditable = inlineEditingEnabled && canManageCables;
 
+  const handleCableReportRefresh = useCallback(() => {
+    void reloadCables({ showSpinner: false });
+    reloadCableReportSummary();
+  }, [reloadCableReportSummary, reloadCables]);
+
   useEffect(() => {
     setTrayTemplateSaving({});
     setTrayTemplateErrors({});
@@ -1763,10 +1781,13 @@ export const ProjectDetails = () => {
           isAdmin={isAdmin}
           onOpenProgress={openProgress}
           isRefreshing={cablesRefreshing}
-          onRefresh={() => void reloadCables({ showSpinner: false })}
+          onRefresh={handleCableReportRefresh}
           onImportClick={() => cablesFileInputRef.current?.click()}
           onExport={() => void handleExportCables('report')}
-          onImportFileChange={handleImportCables}
+          onImportFileChange={async (event) => {
+            await handleImportCables(event);
+            reloadCableReportSummary();
+          }}
           isImporting={cablesImporting}
           isExporting={cablesExporting}
           fileInputRef={cablesFileInputRef}
@@ -1774,24 +1795,9 @@ export const ProjectDetails = () => {
           onFilterTextChange={setCableFilterText}
           filterCriteria={filterCriteria}
           onFilterCriteriaChange={setCableFilterCriteria}
-          inlineEditingEnabled={inlineEditingEnabled}
-          onInlineEditingToggle={setInlineEditingEnabled}
-          inlineUpdatingIds={inlineUpdatingIds}
-          isInlineEditable={isInlineEditable}
-          items={pagedCables}
-          drafts={cableDrafts}
-          onDraftChange={handleCableDraftChange}
-          onFieldBlur={(cable, field) => void handleCableTextFieldBlur(cable, field)}
-          pendingId={pendingCableId}
-          onEdit={openEditCableDialog}
-          error={cablesError}
-          isLoading={cablesLoading}
-          showPagination={showCablePagination}
-          page={cablesPage}
-          totalPages={totalCablePages}
-          onPreviousPage={handleCablesPreviousPage}
-          onNextPage={handleCablesNextPage}
-          onPageSelect={handleCablesPageSelect}
+          summary={cableReportSummary}
+          summaryError={cableReportSummaryError}
+          summaryLoading={cableReportSummaryLoading}
         />
       ) : null}
 

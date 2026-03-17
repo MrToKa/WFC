@@ -9,17 +9,15 @@ import {
   Input,
   Option,
   Spinner,
-  Switch,
+  Title3,
   mergeClasses
 } from '@fluentui/react-components';
 
-import type { Cable } from '@/api/client';
+import type { CableReportSummary } from '@/api/client';
 import type { CableSearchCriteria } from './hooks/useCableListSection';
-import { TablePagination } from './TablePagination';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
-import { toCableFormState, type CableFormState } from '../ProjectDetails.forms';
-import { formatDisplayDate, formatNumeric } from '../ProjectDetails.utils';
+import { formatNumeric } from '../ProjectDetails.utils';
 
 type CableReportTabProps = {
   styles: ProjectDetailsStyles;
@@ -38,29 +36,16 @@ type CableReportTabProps = {
   onFilterTextChange: (value: string) => void;
   filterCriteria: CableSearchCriteria;
   onFilterCriteriaChange: (value: CableSearchCriteria) => void;
-  inlineEditingEnabled: boolean;
-  onInlineEditingToggle: (checked: boolean) => void;
-  inlineUpdatingIds: Set<string>;
-  isInlineEditable: boolean;
-  items: Cable[];
-  drafts: Record<string, CableFormState>;
-  onDraftChange: (
-    cableId: string,
-    field: keyof CableFormState,
-    value: string
-  ) => void;
-  onFieldBlur: (cable: Cable, field: keyof CableFormState) => void;
-  pendingId: string | null;
-  onEdit: (cable: Cable) => void;
-  error: string | null;
-  isLoading: boolean;
-  showPagination: boolean;
-  page: number;
-  totalPages: number;
-  onPreviousPage: () => void;
-  onNextPage: () => void;
-  onPageSelect: (page: number) => void;
+  summary: CableReportSummary | null;
+  summaryError: string | null;
+  summaryLoading: boolean;
 };
+
+const formatCountLabel = (
+  count: number,
+  singular: string,
+  plural: string
+): string => `${count} ${count === 1 ? singular : plural}`;
 
 export const CableReportTab = ({
   styles,
@@ -79,33 +64,63 @@ export const CableReportTab = ({
   onFilterTextChange,
   filterCriteria,
   onFilterCriteriaChange,
-  inlineEditingEnabled,
-  onInlineEditingToggle,
-  inlineUpdatingIds,
-  isInlineEditable,
-  items,
-  drafts,
-  onDraftChange,
-  onFieldBlur,
-  pendingId,
-  onEdit,
-  error,
-  isLoading,
-  showPagination,
-  page,
-  totalPages,
-  onPreviousPage,
-  onNextPage,
-  onPageSelect
+  summary,
+  summaryError,
+  summaryLoading
 }: CableReportTabProps) => {
   const selectedCriteria = useMemo<string[]>(
     () => [filterCriteria],
     [filterCriteria]
   );
 
+  const materialRows = useMemo(
+    () =>
+      summary?.cableTypeSummaries.flatMap((cableTypeSummary) =>
+        cableTypeSummary.materials.map((material) => ({
+          cableTypeId: cableTypeSummary.cableTypeId,
+          typeName: cableTypeSummary.typeName,
+          ...material
+        }))
+      ) ?? [],
+    [summary]
+  );
+
+  const summaryNotes = useMemo(() => {
+    if (!summary) {
+      return [];
+    }
+
+    const notes = [
+      'Totals use the current cable filter and the materials assigned to each cable.'
+    ];
+
+    if (summary.omittedMaterialCount > 0) {
+      notes.push(
+        `${formatCountLabel(
+          summary.omittedMaterialCount,
+          'material row without quantity or unit is excluded from totals',
+          'material rows without quantity or unit are excluded from totals'
+        )}.`
+      );
+    }
+
+    if (summary.missingDesignLengthMaterialCount > 0) {
+      notes.push(
+        `${formatCountLabel(
+          summary.missingDesignLengthMaterialCount,
+          'pcs/m material row could not be converted because the cable has no design length',
+          'pcs/m material rows could not be converted because the cable has no design length'
+        )}.`
+      );
+    }
+
+    notes.push('Materials with unit pcs/m are converted to pcs using cable design length.');
+
+    return notes;
+  }, [summary]);
+
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable report">
-
       <div className={styles.actionsRow}>
         <Button onClick={onRefresh} disabled={isRefreshing}>
           {isRefreshing ? 'Refreshing' : 'Refresh'}
@@ -132,12 +147,6 @@ export const CableReportTab = ({
             <Button onClick={onExport} disabled={isExporting}>
               {isExporting ? 'Exporting' : 'Export to Excel'}
             </Button>
-            <Switch
-              checked={inlineEditingEnabled}
-              label="Inline edit"
-              onChange={(_, data) => onInlineEditingToggle(Boolean(data.checked))}
-              disabled={inlineUpdatingIds.size > 0}
-            />
           </>
         ) : null}
       </div>
@@ -152,12 +161,17 @@ export const CableReportTab = ({
         <Dropdown
           selectedOptions={selectedCriteria}
           value={
-            filterCriteria === 'all' ? 'All fields' :
-            filterCriteria === 'tag' ? 'Tag' :
-            filterCriteria === 'typeName' ? 'Type' :
-            filterCriteria === 'fromLocation' ? 'From location' :
-            filterCriteria === 'toLocation' ? 'To location' :
-            'Routing'
+            filterCriteria === 'all'
+              ? 'All fields'
+              : filterCriteria === 'tag'
+                ? 'Tag'
+                : filterCriteria === 'typeName'
+                  ? 'Type'
+                  : filterCriteria === 'fromLocation'
+                    ? 'From location'
+                    : filterCriteria === 'toLocation'
+                      ? 'To location'
+                      : 'Routing'
           }
           onOptionSelect={(_, data) =>
             onFilterCriteriaChange(data.optionValue as CableSearchCriteria)
@@ -173,218 +187,143 @@ export const CableReportTab = ({
         </Dropdown>
       </div>
 
-      {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
-
-      {isLoading ? (
-        <Spinner label="Loading cables" />
-      ) : items.length === 0 ? (
-        <div className={styles.emptyState}>
-          <Caption1>No cables found</Caption1>
-          <Body1>
-            {canManageCables
-              ? 'Use the actions above to import cables for this project.'
-              : 'There are no cables recorded for this project yet.'}
-          </Body1>
+      <div className={styles.panel}>
+        <div className={styles.header}>
+          <Title3>Materials summary</Title3>
+          <Caption1>
+            Cable type totals and rolled-up material quantities for the currently filtered cables.
+          </Caption1>
         </div>
-      ) : (
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.tableHeadCell}>Tag</th>
-                <th className={styles.tableHeadCell}>Type</th>
-                <th className={styles.tableHeadCell}>From location</th>
-                <th className={styles.tableHeadCell}>To location</th>
-                <th
-                  className={mergeClasses(
-                    styles.tableHeadCell,
-                    styles.numericCell
-                  )}
-                >
-                  Design length [m]
-                </th>
-                <th
-                  className={mergeClasses(
-                    styles.tableHeadCell,
-                    styles.numericCell
-                  )}
-                >
-                  Install length [m]
-                </th>
-                <th className={styles.tableHeadCell}>Pull date</th>
-                <th className={styles.tableHeadCell}>Connected from</th>
-                <th className={styles.tableHeadCell}>Connected to</th>
-                <th className={styles.tableHeadCell}>Tested</th>
-                {canManageCables ? (
-                  <th className={styles.tableHeadCell}>Actions</th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((cable) => {
-                const draft = drafts[cable.id] ?? toCableFormState(cable);
-                const isBusy = inlineUpdatingIds.has(cable.id);
 
-                return (
-                  <tr key={cable.id}>
-                    <td className={styles.tableCell}>{cable.tag ?? '-'}</td>
-                    <td className={styles.tableCell}>{cable.typeName ?? '-'}</td>
-                    <td className={styles.tableCell}>
-                      {cable.fromLocation ?? '-'}
-                    </td>
-                    <td className={styles.tableCell}>
-                      {cable.toLocation ?? '-'}
-                    </td>
-                    <td
-                      className={mergeClasses(
-                        styles.tableCell,
-                        styles.numericCell
-                      )}
-                    >
-                      {formatNumeric(cable.designLength)}
-                    </td>
-                    <td
-                      className={mergeClasses(
-                        styles.tableCell,
-                        styles.numericCell
-                      )}
-                    >
-                      {isInlineEditable ? (
-                        <Input
-                          type="number"
-                          min={0}
-                          value={draft.installLength}
-                          onChange={(_, data) =>
-                            onDraftChange(
-                              cable.id,
-                              'installLength',
-                              data.value
-                            )
-                          }
-                          onBlur={() =>
-                            onFieldBlur(cable, 'installLength')
-                          }
-                          disabled={!canManageCables || isBusy}
-                        />
-                      ) : cable.installLength !== null ? (
-                        formatNumeric(cable.installLength)
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                    <td className={styles.tableCell}>
-                      {isInlineEditable ? (
-                        <Input
-                          type="date"
-                          value={draft.pullDate}
-                          onChange={(_, data) =>
-                            onDraftChange(cable.id, 'pullDate', data.value)
-                          }
-                          onBlur={() => onFieldBlur(cable, 'pullDate')}
-                          disabled={!canManageCables || isBusy}
-                        />
-                      ) : cable.pullDate ? (
-                        formatDisplayDate(cable.pullDate)
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td className={styles.tableCell}>
-                      {isInlineEditable ? (
-                        <Input
-                          type="date"
-                          value={draft.connectedFrom}
-                          onChange={(_, data) =>
-                            onDraftChange(
-                              cable.id,
-                              'connectedFrom',
-                              data.value
-                            )
-                          }
-                          onBlur={() => onFieldBlur(cable, 'connectedFrom')}
-                          disabled={!canManageCables || isBusy}
-                        />
-                      ) : cable.connectedFrom ? (
-                        formatDisplayDate(cable.connectedFrom)
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td className={styles.tableCell}>
-                      {isInlineEditable ? (
-                        <Input
-                          type="date"
-                          value={draft.connectedTo}
-                          onChange={(_, data) =>
-                            onDraftChange(
-                              cable.id,
-                              'connectedTo',
-                              data.value
-                            )
-                          }
-                          onBlur={() => onFieldBlur(cable, 'connectedTo')}
-                          disabled={!canManageCables || isBusy}
-                        />
-                      ) : cable.connectedTo ? (
-                        formatDisplayDate(cable.connectedTo)
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td className={styles.tableCell}>
-                      {isInlineEditable ? (
-                        <Input
-                          type="date"
-                          value={draft.tested}
-                          onChange={(_, data) =>
-                            onDraftChange(cable.id, 'tested', data.value)
-                          }
-                          onBlur={() => onFieldBlur(cable, 'tested')}
-                          disabled={!canManageCables || isBusy}
-                        />
-                      ) : cable.tested ? (
-                        formatDisplayDate(cable.tested)
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    {canManageCables ? (
-                      <td className={styles.tableCell}>
-                        <div className={styles.actionsCell}>
-                          <Button
-                            size="small"
-                            onClick={() => onEdit(cable)}
-                            disabled={pendingId === cable.id || isBusy}
-                          >
-                            Edit
-                          </Button>
-                        </div>
-                      </td>
-                    ) : null}
+        {summaryLoading ? (
+          <Spinner label="Loading cable report summary..." />
+        ) : summaryError ? (
+          <Body1 className={styles.errorText}>{summaryError}</Body1>
+        ) : !summary || summary.cableCount === 0 ? (
+          <div className={styles.emptyState}>
+            <Caption1>No summary data available</Caption1>
+            <Body1>Adjust the filter or add cables with design and material data.</Body1>
+          </div>
+        ) : (
+          <>
+            <div className={styles.metadata}>
+              <div className={styles.numericField}>
+                <Caption1>Filtered cables</Caption1>
+                <Body1 className={styles.numericFieldLabel}>{summary.cableCount}</Body1>
+              </div>
+              <div className={styles.numericField}>
+                <Caption1>Cable types</Caption1>
+                <Body1 className={styles.numericFieldLabel}>{summary.cableTypeCount}</Body1>
+              </div>
+              <div className={styles.numericField}>
+                <Caption1>Total design length [m]</Caption1>
+                <Body1 className={styles.numericFieldLabel}>
+                  {formatNumeric(summary.totalDesignLength)}
+                </Body1>
+              </div>
+            </div>
+
+            {summaryNotes.map((note) => (
+              <Caption1 key={note}>{note}</Caption1>
+            ))}
+
+            <div className={styles.header}>
+              <Title3>Cable type totals</Title3>
+            </div>
+            <div className={styles.tableContainer}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th className={styles.tableHeadCell}>Cable type</th>
+                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                      Cables
+                    </th>
+                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                      Design length [m]
+                    </th>
+                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                      Materials
+                    </th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {summary.cableTypeSummaries.map((cableTypeSummary) => (
+                    <tr key={cableTypeSummary.cableTypeId}>
+                      <td className={styles.tableCell}>{cableTypeSummary.typeName}</td>
+                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                        {formatNumeric(cableTypeSummary.cableCount)}
+                      </td>
+                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                        {formatNumeric(cableTypeSummary.totalDesignLength)}
+                      </td>
+                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                        {formatNumeric(cableTypeSummary.materials.length)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-      {showPagination ? (
-        <TablePagination
-          styles={styles}
-          page={page}
-          totalPages={totalPages}
-          onPrevious={onPreviousPage}
-          onNext={onNextPage}
-          onPageSelect={onPageSelect}
-          dropdownAriaLabel="Select cable report page"
-          buttonSize="medium"
-        />
-      ) : null}
+            <div className={styles.header}>
+              <Title3>Material totals</Title3>
+            </div>
+            {materialRows.length === 0 ? (
+              <div className={styles.emptyState}>
+                <Caption1>No summable materials found</Caption1>
+                <Body1>
+                  Add material quantities and units to cables or cable type defaults to see totals.
+                </Body1>
+              </div>
+            ) : (
+              <div className={styles.tableContainer}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th className={styles.tableHeadCell}>Cable type</th>
+                      <th className={styles.tableHeadCell}>Material</th>
+                      <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                        Total quantity
+                      </th>
+                      <th className={styles.tableHeadCell}>Unit</th>
+                      <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                        Cables
+                      </th>
+                      <th className={styles.tableHeadCell}>Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materialRows.map((material) => (
+                      <tr
+                        key={`${material.cableTypeId}:${material.name}:${material.unit}`}
+                      >
+                        <td className={styles.tableCell}>{material.typeName}</td>
+                        <td className={styles.tableCell}>{material.name}</td>
+                        <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                          {formatNumeric(material.totalQuantity)}
+                        </td>
+                        <td className={styles.tableCell}>{material.unit}</td>
+                        <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                          {formatNumeric(material.cableCount)}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {material.missingDesignLengthCount > 0
+                            ? `Skipped ${formatCountLabel(
+                                material.missingDesignLengthCount,
+                                'cable',
+                                'cables'
+                              )} without design length`
+                            : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
-
-
-
-

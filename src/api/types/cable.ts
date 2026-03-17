@@ -128,3 +128,28 @@ export type CableDetails = {
   cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
   cableMaterials: CableMaterial[];
 };
+
+export type CableReportMaterialSummary = {
+  name: string;
+  unit: string;
+  totalQuantity: number;
+  cableCount: number;
+  missingDesignLengthCount: number;
+};
+
+export type CableReportCableTypeSummary = {
+  cableTypeId: string;
+  typeName: string;
+  cableCount: number;
+  totalDesignLength: number;
+  materials: CableReportMaterialSummary[];
+};
+
+export type CableReportSummary = {
+  cableCount: number;
+  cableTypeCount: number;
+  totalDesignLength: number;
+  omittedMaterialCount: number;
+  missingDesignLengthMaterialCount: number;
+  cableTypeSummaries: CableReportCableTypeSummary[];
+};
