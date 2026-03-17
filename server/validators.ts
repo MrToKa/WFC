@@ -187,6 +187,7 @@ const materialCableTypeStringField = z.string().trim().max(2000).nullable().opti
 const cableTypeDefaultMaterialNameField = z.string().trim().min(1).max(200);
 const cableTypeDefaultMaterialTextField = z.string().trim().max(500).nullable().optional();
 const cableTypeDefaultMaterialRemarksField = z.string().trim().max(2000).nullable().optional();
+const cableTypeDefaultMaterialUnitField = z.enum(['pcs', 'meters', 'pcs/m']).nullable().optional();
 
 export const createCableTypeSchema = z
   .object({
@@ -291,7 +292,7 @@ export const createCableTypeDefaultMaterialSchema = z
   .object({
     name: cableTypeDefaultMaterialNameField,
     quantity: cableTypeNumericField,
-    unit: cableTypeDefaultMaterialTextField,
+    unit: cableTypeDefaultMaterialUnitField,
     remarks: cableTypeDefaultMaterialRemarksField,
   })
   .strict();
@@ -300,7 +301,7 @@ export const updateCableTypeDefaultMaterialSchema = z
   .object({
     name: cableTypeDefaultMaterialNameField.optional(),
     quantity: cableTypeNumericField,
-    unit: cableTypeDefaultMaterialTextField,
+    unit: cableTypeDefaultMaterialUnitField,
     remarks: cableTypeDefaultMaterialRemarksField,
   })
   .strict()

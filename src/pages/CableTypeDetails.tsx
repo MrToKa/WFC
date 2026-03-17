@@ -7,6 +7,7 @@ import {
   Button,
   Caption1,
   Card,
+  Combobox,
   Dialog,
   DialogActions,
   DialogBody,
@@ -15,6 +16,7 @@ import {
   DialogTitle,
   Field,
   Input,
+  Option,
   Spinner,
   Textarea,
   Title2,
@@ -22,7 +24,7 @@ import {
   makeStyles,
   mergeClasses,
   shorthands,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 
 import {
@@ -30,9 +32,11 @@ import {
   createCableTypeDefaultMaterial,
   deleteCableTypeDefaultMaterial,
   fetchCableTypeDetails,
+  fetchMaterialCableInstallationMaterials,
   type CableTypeDefaultMaterial,
   type CableTypeDetails as CableTypeDetailsData,
-  updateCableTypeDefaultMaterial
+  type MaterialCableInstallationMaterial,
+  updateCableTypeDefaultMaterial,
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -57,20 +61,54 @@ const emptyDefaultMaterialForm: DefaultMaterialFormState = {
   name: '',
   quantity: '',
   unit: '',
-  remarks: ''
+  remarks: '',
+};
+
+const DEFAULT_MATERIAL_UNITS = ['pcs', 'meters', 'pcs/m'] as const;
+
+const normalizeDefaultMaterialUnit = (value: string | null | undefined): string => {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized === 'm' || normalized === 'meter' || normalized === 'meters') {
+    return 'meters';
+  }
+
+  if (
+    normalized === 'pc' ||
+    normalized === 'pcs' ||
+    normalized === 'piece' ||
+    normalized === 'pieces'
+  ) {
+    return 'pcs';
+  }
+
+  if (
+    normalized === 'pcs/m' ||
+    normalized === 'pc/m' ||
+    normalized === 'pcs per meter' ||
+    normalized === 'pieces per meter'
+  ) {
+    return 'pcs/m';
+  }
+
+  return normalized;
 };
 
 const toDefaultMaterialFormState = (
-  material: CableTypeDefaultMaterial
+  material: CableTypeDefaultMaterial,
 ): DefaultMaterialFormState => ({
   name: material.name,
   quantity: material.quantity !== null ? String(material.quantity) : '',
-  unit: material.unit ?? '',
-  remarks: material.remarks ?? ''
+  unit: normalizeDefaultMaterialUnit(material.unit),
+  remarks: material.remarks ?? '',
 });
 
 const buildDefaultMaterialInput = (
-  values: DefaultMaterialFormState
+  values: DefaultMaterialFormState,
 ): {
   input: {
     name: string;
@@ -93,21 +131,31 @@ const buildDefaultMaterialInput = (
     errors.quantity = quantityResult.error;
   }
 
+  const unit = toNullableString(values.unit);
+
+  if (quantityResult.numeric !== null && unit === null) {
+    errors.unit = 'Unit is required when quantity is set';
+  }
+
+  if (quantityResult.numeric === null && unit !== null) {
+    errors.quantity = 'Quantity is required when a unit is selected';
+  }
+
   return {
     input: {
       name,
       quantity: quantityResult.numeric,
-      unit: toNullableString(values.unit),
-      remarks: toNullableString(values.remarks)
+      unit,
+      remarks: toNullableString(values.remarks),
     },
-    errors
+    errors,
   };
 };
 
 const sortDefaultMaterials = (items: CableTypeDefaultMaterial[]): CableTypeDefaultMaterial[] =>
   [...items].sort((a, b) => {
     const nameCompare = a.name.localeCompare(b.name, undefined, {
-      sensitivity: 'base'
+      sensitivity: 'base',
     });
 
     if (nameCompare !== 0) {
@@ -127,114 +175,114 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
-  minute: '2-digit'
+  minute: '2-digit',
 });
 
 const useStyles = makeStyles({
   root: {
     display: 'grid',
     gap: '1.5rem',
-    ...shorthands.padding('2rem', '1.5rem', '4rem')
+    ...shorthands.padding('2rem', '1.5rem', '4rem'),
   },
   header: {
     display: 'grid',
-    gap: '0.75rem'
+    gap: '0.75rem',
   },
   headerActions: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '0.75rem',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   layout: {
     display: 'grid',
     gap: '1rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))'
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
   },
   card: {
     display: 'grid',
     gap: '0.75rem',
-    alignContent: 'start'
+    alignContent: 'start',
   },
   cardGrid: {
     display: 'grid',
     gap: '0.75rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))'
+    gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
   },
   field: {
     display: 'grid',
-    gap: '0.25rem'
+    gap: '0.25rem',
   },
   label: {
-    color: tokens.colorNeutralForeground3
+    color: tokens.colorNeutralForeground3,
   },
   fullWidthCard: {
     display: 'grid',
-    gap: '1rem'
+    gap: '1rem',
   },
   sectionHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: '0.75rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   sectionActions: {
     display: 'flex',
     gap: '0.75rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   tableContainer: {
     width: '100%',
-    overflowX: 'auto'
+    overflowX: 'auto',
   },
   table: {
     width: '100%',
-    borderCollapse: 'collapse'
+    borderCollapse: 'collapse',
   },
   tableHeadCell: {
     textAlign: 'left',
     padding: '0.75rem 1rem',
     backgroundColor: tokens.colorNeutralBackground2,
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
   },
   tableCell: {
     padding: '0.75rem 1rem',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     verticalAlign: 'top',
-    wordBreak: 'break-word'
+    wordBreak: 'break-word',
   },
   numericCell: {
-    textAlign: 'right'
+    textAlign: 'right',
   },
   actionsCell: {
     display: 'flex',
     gap: '0.5rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   emptyState: {
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
-    ...shorthands.padding('1rem')
+    ...shorthands.padding('1rem'),
   },
   errorText: {
-    color: tokens.colorStatusDangerForeground1
+    color: tokens.colorStatusDangerForeground1,
   },
   readOnlyNotice: {
-    color: tokens.colorNeutralForeground3
+    color: tokens.colorNeutralForeground3,
   },
   dialogForm: {
     display: 'grid',
-    gap: '0.75rem'
+    gap: '0.75rem',
   },
   dialogActions: {
     display: 'flex',
     justifyContent: 'flex-end',
     gap: '0.5rem',
-    flexWrap: 'wrap'
-  }
+    flexWrap: 'wrap',
+  },
 });
 
 export const CableTypeDetails = () => {
@@ -253,6 +301,14 @@ export const CableTypeDetails = () => {
   const [details, setDetails] = useState<CableTypeDetailsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [availableDefaultMaterials, setAvailableDefaultMaterials] = useState<
+    MaterialCableInstallationMaterial[]
+  >([]);
+  const [availableDefaultMaterialsLoading, setAvailableDefaultMaterialsLoading] =
+    useState<boolean>(true);
+  const [availableDefaultMaterialsError, setAvailableDefaultMaterialsError] = useState<
+    string | null
+  >(null);
 
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [dialogMode, setDialogMode] = useState<DefaultMaterialDialogMode>('create');
@@ -277,7 +333,7 @@ export const CableTypeDetails = () => {
       const response = await fetchCableTypeDetails(projectId, cableTypeId);
       setDetails({
         ...response,
-        defaultMaterials: sortDefaultMaterials(response.defaultMaterials)
+        defaultMaterials: sortDefaultMaterials(response.defaultMaterials),
       });
     } catch (err) {
       console.error('Failed to load cable type details', err);
@@ -296,15 +352,79 @@ export const CableTypeDetails = () => {
     void loadDetails();
   }, [loadDetails]);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadAvailableDefaultMaterials = async () => {
+      setAvailableDefaultMaterialsLoading(true);
+      setAvailableDefaultMaterialsError(null);
+
+      try {
+        const response = await fetchMaterialCableInstallationMaterials();
+
+        if (!active) {
+          return;
+        }
+
+        setAvailableDefaultMaterials(response.cableInstallationMaterials);
+      } catch (err) {
+        console.error('Failed to load cable installation materials for default materials', err);
+
+        if (!active) {
+          return;
+        }
+
+        setAvailableDefaultMaterials([]);
+        setAvailableDefaultMaterialsError(
+          err instanceof ApiError ? err.message : 'Failed to load cable installation materials.',
+        );
+      } finally {
+        if (active) {
+          setAvailableDefaultMaterialsLoading(false);
+        }
+      }
+    };
+
+    void loadAvailableDefaultMaterials();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleDialogFieldChange =
     (field: keyof DefaultMaterialFormState) =>
-    (
-      _event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-      data: { value: string }
-    ) => {
+    (_event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => {
       setDialogValues((previous) => ({ ...previous, [field]: data.value }));
       setDialogErrors((previous) => ({ ...previous, [field]: undefined, general: undefined }));
     };
+
+  const handleDefaultMaterialNameSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setDialogValues((previous) => ({
+        ...previous,
+        name: data.optionValue ?? '',
+      }));
+      setDialogErrors((previous) => ({ ...previous, name: undefined, general: undefined }));
+    },
+    [],
+  );
+
+  const handleDefaultMaterialUnitSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setDialogValues((previous) => ({
+        ...previous,
+        unit: data.optionValue ?? '',
+      }));
+      setDialogErrors((previous) => ({
+        ...previous,
+        quantity: undefined,
+        unit: undefined,
+        general: undefined,
+      }));
+    },
+    [],
+  );
 
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
@@ -316,12 +436,28 @@ export const CableTypeDetails = () => {
   }, []);
 
   const openCreateDialog = useCallback(() => {
+    if (!availableDefaultMaterialsLoading && availableDefaultMaterials.length === 0) {
+      showToast({
+        intent: 'error',
+        title: 'No cable installation materials available',
+        body:
+          availableDefaultMaterialsError ??
+          'Add cable installation materials in Materials before assigning them here.',
+      });
+      return;
+    }
+
     setDialogMode('create');
     setDialogValues(emptyDefaultMaterialForm);
     setDialogErrors({});
     setDialogOpen(true);
     setEditingDefaultMaterialId(null);
-  }, []);
+  }, [
+    availableDefaultMaterials.length,
+    availableDefaultMaterialsError,
+    availableDefaultMaterialsLoading,
+    showToast,
+  ]);
 
   const openEditDialog = useCallback((material: CableTypeDefaultMaterial) => {
     setDialogMode('edit');
@@ -336,7 +472,7 @@ export const CableTypeDetails = () => {
 
     if (!projectId || !cableTypeId || !token || !isAdmin) {
       setDialogErrors({
-        general: 'You need to be signed in as an admin to manage default materials.'
+        general: 'You need to be signed in as an admin to manage default materials.',
       });
       return;
     }
@@ -353,12 +489,7 @@ export const CableTypeDetails = () => {
 
     try {
       if (dialogMode === 'create') {
-        const response = await createCableTypeDefaultMaterial(
-          token,
-          projectId,
-          cableTypeId,
-          input
-        );
+        const response = await createCableTypeDefaultMaterial(token, projectId, cableTypeId, input);
 
         setDetails((previous) =>
           previous
@@ -366,10 +497,10 @@ export const CableTypeDetails = () => {
                 ...previous,
                 defaultMaterials: sortDefaultMaterials([
                   ...previous.defaultMaterials,
-                  response.defaultMaterial
-                ])
+                  response.defaultMaterial,
+                ]),
               }
-            : previous
+            : previous,
         );
         showToast({ intent: 'success', title: 'Default material added' });
       } else if (editingDefaultMaterialId) {
@@ -378,7 +509,7 @@ export const CableTypeDetails = () => {
           projectId,
           cableTypeId,
           editingDefaultMaterialId,
-          input
+          input,
         );
 
         setDetails((previous) =>
@@ -387,11 +518,11 @@ export const CableTypeDetails = () => {
                 ...previous,
                 defaultMaterials: sortDefaultMaterials(
                   previous.defaultMaterials.map((item) =>
-                    item.id === editingDefaultMaterialId ? response.defaultMaterial : item
-                  )
-                )
+                    item.id === editingDefaultMaterialId ? response.defaultMaterial : item,
+                  ),
+                ),
               }
-            : previous
+            : previous,
         );
         showToast({ intent: 'success', title: 'Default material updated' });
       }
@@ -408,13 +539,13 @@ export const CableTypeDetails = () => {
             quantity: err.payload.fieldErrors?.quantity?.[0],
             unit: err.payload.fieldErrors?.unit?.[0],
             remarks: err.payload.fieldErrors?.remarks?.[0],
-            general: err.payload.formErrors?.[0]
+            general: err.payload.formErrors?.[0],
           });
         }
         showToast({
           intent: 'error',
           title: 'Failed to save default material',
-          body: err.message
+          body: err.message,
         });
       } else {
         const message = 'Failed to save default material. Please try again.';
@@ -422,7 +553,7 @@ export const CableTypeDetails = () => {
         showToast({
           intent: 'error',
           title: 'Failed to save default material',
-          body: message
+          body: message,
         });
       }
     } finally {
@@ -436,13 +567,13 @@ export const CableTypeDetails = () => {
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete default materials.'
+          body: 'You need to be signed in as an admin to delete default materials.',
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete default material "${material.name}"? This action cannot be undone.`
+        `Delete default material "${material.name}"? This action cannot be undone.`,
       );
 
       if (!confirmed) {
@@ -458,10 +589,10 @@ export const CableTypeDetails = () => {
             ? {
                 ...previous,
                 defaultMaterials: previous.defaultMaterials.filter(
-                  (item) => item.id !== material.id
-                )
+                  (item) => item.id !== material.id,
+                ),
               }
-            : previous
+            : previous,
         );
         showToast({ intent: 'success', title: 'Default material deleted' });
       } catch (err) {
@@ -469,13 +600,13 @@ export const CableTypeDetails = () => {
         showToast({
           intent: 'error',
           title: 'Failed to delete default material',
-          body: err instanceof ApiError ? err.message : undefined
+          body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {
         setPendingDefaultMaterialId(null);
       }
     },
-    [cableTypeId, isAdmin, projectId, showToast, token]
+    [cableTypeId, isAdmin, projectId, showToast, token],
   );
 
   const pageTitle = details ? `Cable type - ${details.cableType.name}` : 'Cable type details';
@@ -488,25 +619,42 @@ export const CableTypeDetails = () => {
     return `Last updated ${dateFormatter.format(new Date(details.cableType.updatedAt))}`;
   }, [details]);
 
+  const availableDefaultMaterialNames = useMemo(
+    () => availableDefaultMaterials.map((material) => material.type),
+    [availableDefaultMaterials],
+  );
+
+  const resolvedDefaultMaterialNames = useMemo(() => {
+    if (!dialogValues.name) {
+      return availableDefaultMaterialNames;
+    }
+
+    return availableDefaultMaterialNames.includes(dialogValues.name)
+      ? availableDefaultMaterialNames
+      : [dialogValues.name, ...availableDefaultMaterialNames];
+  }, [availableDefaultMaterialNames, dialogValues.name]);
+
   const sourceMaterialDetails = details?.materialCableType;
 
   if (projectLoading || isLoading) {
     return (
-      <section className={styles.root} aria-labelledby='cable-type-details-heading'>
-        <Spinner label='Loading cable type...' />
+      <section className={styles.root} aria-labelledby="cable-type-details-heading">
+        <Spinner label="Loading cable type..." />
       </section>
     );
   }
 
   if (projectError || error || !details || !projectId) {
     return (
-      <section className={styles.root} aria-labelledby='cable-type-details-heading'>
+      <section className={styles.root} aria-labelledby="cable-type-details-heading">
         <div className={styles.header}>
-          <Title2 id='cable-type-details-heading'>Cable type details</Title2>
-          <Body1 className={styles.errorText}>{projectError ?? error ?? 'Cable type not available.'}</Body1>
+          <Title2 id="cable-type-details-heading">Cable type details</Title2>
+          <Body1 className={styles.errorText}>
+            {projectError ?? error ?? 'Cable type not available.'}
+          </Body1>
           <div className={styles.headerActions}>
             <Button
-              appearance='primary'
+              appearance="primary"
               onClick={() => navigate(projectId ? `/projects/${projectId}?tab=cables` : '/')}
             >
               Back to project
@@ -519,18 +667,18 @@ export const CableTypeDetails = () => {
   }
 
   return (
-    <section className={styles.root} aria-labelledby='cable-type-details-heading'>
+    <section className={styles.root} aria-labelledby="cable-type-details-heading">
       <div className={styles.header}>
         <div className={styles.headerActions}>
           <Button
-            appearance='secondary'
+            appearance="secondary"
             onClick={() => navigate(`/projects/${projectId}?tab=cables`)}
           >
             Back to project
           </Button>
           <Button onClick={() => void loadDetails()}>Refresh</Button>
         </div>
-        <Title2 id='cable-type-details-heading'>{pageTitle}</Title2>
+        <Title2 id="cable-type-details-heading">{pageTitle}</Title2>
         {project ? (
           <Body1>
             Project: {project.projectNumber} - {project.name}
@@ -540,7 +688,7 @@ export const CableTypeDetails = () => {
       </div>
 
       <div className={styles.layout}>
-        <Card appearance='outline' className={styles.card}>
+        <Card appearance="outline" className={styles.card}>
           <Title3>Project cable type</Title3>
           <Caption1 className={styles.readOnlyNotice}>
             Used by {details.cableCount} {details.cableCount === 1 ? 'cable' : 'cables'} in this
@@ -569,7 +717,7 @@ export const CableTypeDetails = () => {
           </Body2>
         </Card>
 
-        <Card appearance='outline' className={styles.card}>
+        <Card appearance="outline" className={styles.card}>
           <Title3>Materials source</Title3>
           {sourceMaterialDetails ? (
             <div className={styles.cardGrid}>
@@ -602,17 +750,22 @@ export const CableTypeDetails = () => {
         </Card>
       </div>
 
-      <Card appearance='outline' className={styles.fullWidthCard}>
+      <Card appearance="outline" className={styles.fullWidthCard}>
         <div className={styles.sectionHeader}>
           <div>
             <Title3>Additional default materials</Title3>
             <Caption1 className={styles.readOnlyNotice}>
-              Add reusable materials that should be associated with this cable type.
+              Add reusable materials from Cable installation materials that should be associated
+              with this cable type.
             </Caption1>
           </div>
           <div className={styles.sectionActions}>
             {isAdmin ? (
-              <Button appearance='primary' onClick={openCreateDialog}>
+              <Button
+                appearance="primary"
+                onClick={openCreateDialog}
+                disabled={availableDefaultMaterialsLoading}
+              >
                 Add default material
               </Button>
             ) : null}
@@ -651,16 +804,22 @@ export const CableTypeDetails = () => {
                       <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                         {formatNumeric(material.quantity)}
                       </td>
-                      <td className={styles.tableCell}>{formatOptionalText(material.unit)}</td>
+                      <td className={styles.tableCell}>
+                        {formatOptionalText(normalizeDefaultMaterialUnit(material.unit))}
+                      </td>
                       <td className={styles.tableCell}>{formatOptionalText(material.remarks)}</td>
                       {isAdmin ? (
                         <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                          <Button size='small' onClick={() => openEditDialog(material)} disabled={isBusy}>
+                          <Button
+                            size="small"
+                            onClick={() => openEditDialog(material)}
+                            disabled={isBusy}
+                          >
                             Edit
                           </Button>
                           <Button
-                            size='small'
-                            appearance='secondary'
+                            size="small"
+                            appearance="secondary"
                             onClick={() => void handleDeleteDefaultMaterial(material)}
                             disabled={isBusy}
                           >
@@ -693,37 +852,62 @@ export const CableTypeDetails = () => {
               </DialogTitle>
               <DialogContent>
                 <Field
-                  label='Material'
+                  label="Material"
                   required
                   validationState={dialogErrors.name ? 'error' : undefined}
                   validationMessage={dialogErrors.name}
                 >
-                  <Input
-                    value={dialogValues.name}
-                    onChange={handleDialogFieldChange('name')}
-                    required
-                  />
+                  <Combobox
+                    placeholder={
+                      resolvedDefaultMaterialNames.length > 0
+                        ? 'Select cable installation material'
+                        : 'No cable installation materials available'
+                    }
+                    selectedOptions={dialogValues.name ? [dialogValues.name] : []}
+                    value={dialogValues.name || undefined}
+                    onOptionSelect={handleDefaultMaterialNameSelect}
+                    freeform={false}
+                    disabled={resolvedDefaultMaterialNames.length === 0}
+                  >
+                    {resolvedDefaultMaterialNames.map((materialName) => (
+                      <Option key={materialName} value={materialName}>
+                        {materialName}
+                      </Option>
+                    ))}
+                  </Combobox>
                 </Field>
                 <Field
-                  label='Quantity'
+                  label="Quantity"
                   validationState={dialogErrors.quantity ? 'error' : undefined}
                   validationMessage={dialogErrors.quantity}
                 >
                   <Input
                     value={dialogValues.quantity}
                     onChange={handleDialogFieldChange('quantity')}
-                    inputMode='decimal'
+                    inputMode="decimal"
                   />
                 </Field>
                 <Field
-                  label='Unit'
+                  label="Unit"
                   validationState={dialogErrors.unit ? 'error' : undefined}
                   validationMessage={dialogErrors.unit}
                 >
-                  <Input value={dialogValues.unit} onChange={handleDialogFieldChange('unit')} />
+                  <Combobox
+                    placeholder="Select unit"
+                    selectedOptions={dialogValues.unit ? [dialogValues.unit] : []}
+                    value={dialogValues.unit || undefined}
+                    onOptionSelect={handleDefaultMaterialUnitSelect}
+                    freeform={false}
+                  >
+                    {DEFAULT_MATERIAL_UNITS.map((unitOption) => (
+                      <Option key={unitOption} value={unitOption}>
+                        {unitOption}
+                      </Option>
+                    ))}
+                  </Combobox>
                 </Field>
                 <Field
-                  label='Remarks'
+                  label="Remarks"
                   validationState={dialogErrors.remarks ? 'error' : undefined}
                   validationMessage={dialogErrors.remarks}
                 >
@@ -738,15 +922,15 @@ export const CableTypeDetails = () => {
                 ) : null}
               </DialogContent>
               <DialogActions className={styles.dialogActions}>
-                <Button type='button' onClick={resetDialog} disabled={dialogSubmitting}>
+                <Button type="button" onClick={resetDialog} disabled={dialogSubmitting}>
                   Cancel
                 </Button>
-                <Button type='submit' appearance='primary' disabled={dialogSubmitting}>
+                <Button type="submit" appearance="primary" disabled={dialogSubmitting}>
                   {dialogSubmitting
                     ? 'Saving...'
                     : dialogMode === 'create'
-                    ? 'Add material'
-                    : 'Save changes'}
+                      ? 'Add material'
+                      : 'Save changes'}
                 </Button>
               </DialogActions>
             </DialogBody>

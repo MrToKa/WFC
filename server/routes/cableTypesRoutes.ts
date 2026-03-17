@@ -9,40 +9,35 @@ import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
 import {
   mapCableTypeDefaultMaterialRow,
-  type CableTypeDefaultMaterialRow
+  type CableTypeDefaultMaterialRow,
 } from '../models/cableTypeDefaultMaterial.js';
 import { mapCableTypeRow, toNumberOrNull } from '../models/cableType.js';
 import type { CableTypeRow } from '../models/cableType.js';
-import {
-  mapMaterialCableTypeRow,
-  type MaterialCableTypeRow
-} from '../models/materialCableType.js';
+import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   createCableTypeDefaultMaterialSchema,
   createCableTypeSchema,
   updateCableTypeDefaultMaterialSchema,
-  updateCableTypeSchema
+  updateCableTypeSchema,
 } from '../validators.js';
 
 const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE }
+  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
 });
 
 const CABLE_EXCEL_HEADERS = {
   name: 'Type',
   purpose: 'Purpose',
   diameter: 'Diameter [mm]',
-  weight: 'Weight [kg/m]'
+  weight: 'Weight [kg/m]',
 } as const;
 
-const normalizeOptionalString = (
-  value: string | null | undefined
-): string | null => {
+const normalizeOptionalString = (value: string | null | undefined): string | null => {
   if (value === undefined || value === null) {
     return null;
   }
@@ -90,6 +85,10 @@ type MaterialCableTypeMatchRow = {
   weight_kg_per_m: string | number | null;
 };
 
+type MaterialCableInstallationMaterialMatchRow = {
+  type: string;
+};
+
 type ProjectCableTypeNameRow = {
   id: string;
   name: string;
@@ -123,10 +122,22 @@ const selectMaterialCableTypeDetailsForProjectQuery = `
   FROM material_cable_types
 `;
 
+const selectMaterialCableInstallationMaterialsForProjectQuery = `
+  SELECT
+    type
+  FROM material_cable_installation_materials
+`;
+
 const createMaterialCableTypeNotFoundPayload = (name: string) => ({
   fieldErrors: {
-    name: [`Cable type "${name}" was not found in materials.`]
-  }
+    name: [`Cable type "${name}" was not found in materials.`],
+  },
+});
+
+const createMaterialCableInstallationMaterialNotFoundPayload = (name: string) => ({
+  fieldErrors: {
+    name: [`Cable installation material "${name}" was not found in materials.`],
+  },
 });
 
 const formatMissingMaterialCableTypesError = (names: string[]): string => {
@@ -136,7 +147,7 @@ const formatMissingMaterialCableTypesError = (names: string[]): string => {
 
 const findMaterialCableTypeByName = async (
   queryable: Queryable,
-  name: string
+  name: string,
 ): Promise<MaterialCableTypeMatchRow | null> => {
   const result = await queryable.query<MaterialCableTypeMatchRow>(
     `
@@ -144,7 +155,23 @@ const findMaterialCableTypeByName = async (
       WHERE lower(name) = lower($1)
       LIMIT 1;
     `,
-    [name]
+    [name],
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const findMaterialCableInstallationMaterialByType = async (
+  queryable: Queryable,
+  type: string,
+): Promise<MaterialCableInstallationMaterialMatchRow | null> => {
+  const result = await queryable.query<MaterialCableInstallationMaterialMatchRow>(
+    `
+      ${selectMaterialCableInstallationMaterialsForProjectQuery}
+      WHERE lower(type) = lower($1)
+      LIMIT 1;
+    `,
+    [type],
   );
 
   return result.rows[0] ?? null;
@@ -152,7 +179,7 @@ const findMaterialCableTypeByName = async (
 
 const findMaterialCableTypesByKeys = async (
   queryable: Queryable,
-  keys: string[]
+  keys: string[],
 ): Promise<Map<string, MaterialCableTypeMatchRow>> => {
   if (keys.length === 0) {
     return new Map<string, MaterialCableTypeMatchRow>();
@@ -163,7 +190,7 @@ const findMaterialCableTypesByKeys = async (
       ${selectMaterialCableTypesForProjectQuery}
       WHERE lower(name) = ANY($1::text[]);
     `,
-    [keys]
+    [keys],
   );
 
   const materialCableTypes = new Map<string, MaterialCableTypeMatchRow>();
@@ -178,7 +205,7 @@ const findMaterialCableTypesByKeys = async (
 const findProjectCableTypeById = async (
   queryable: Queryable,
   projectId: string,
-  cableTypeId: string
+  cableTypeId: string,
 ): Promise<CableTypeRow | null> => {
   const result = await queryable.query<CableTypeRow>(
     `
@@ -187,7 +214,7 @@ const findProjectCableTypeById = async (
         AND id = $2
       LIMIT 1;
     `,
-    [projectId, cableTypeId]
+    [projectId, cableTypeId],
   );
 
   return result.rows[0] ?? null;
@@ -195,7 +222,7 @@ const findProjectCableTypeById = async (
 
 const findMaterialCableTypeDetailsByName = async (
   queryable: Queryable,
-  name: string
+  name: string,
 ): Promise<MaterialCableTypeRow | null> => {
   const result = await queryable.query<MaterialCableTypeRow>(
     `
@@ -203,7 +230,7 @@ const findMaterialCableTypeDetailsByName = async (
       WHERE lower(name) = lower($1)
       LIMIT 1;
     `,
-    [name]
+    [name],
   );
 
   return result.rows[0] ?? null;
@@ -211,7 +238,7 @@ const findMaterialCableTypeDetailsByName = async (
 
 const listCableTypeDefaultMaterials = async (
   queryable: Queryable,
-  cableTypeId: string
+  cableTypeId: string,
 ): Promise<CableTypeDefaultMaterialRow[]> => {
   const result = await queryable.query<CableTypeDefaultMaterialRow>(
     `
@@ -219,7 +246,7 @@ const listCableTypeDefaultMaterials = async (
       WHERE cable_type_id = $1
       ORDER BY lower(name) ASC, created_at ASC;
     `,
-    [cableTypeId]
+    [cableTypeId],
   );
 
   return result.rows;
@@ -227,40 +254,37 @@ const listCableTypeDefaultMaterials = async (
 
 const cableTypesRouter = Router({ mergeParams: true });
 
-cableTypesRouter.get(
-  '/',
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId } = req.params;
+cableTypesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
+  const { projectId } = req.params;
 
-    if (!projectId) {
-      res.status(400).json({ error: 'Project ID is required' });
+  if (!projectId) {
+    res.status(400).json({ error: 'Project ID is required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
       return;
     }
 
-    try {
-      const project = await ensureProjectExists(projectId);
-
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      const result = await pool.query<CableTypeRow>(
-        `
+    const result = await pool.query<CableTypeRow>(
+      `
           ${selectCableTypesQuery}
           WHERE project_id = $1
           ORDER BY name ASC;
         `,
-        [projectId]
-      );
+      [projectId],
+    );
 
-      res.json({ cableTypes: result.rows.map(mapCableTypeRow) });
-    } catch (error) {
-      console.error('List cable types error', error);
-      res.status(500).json({ error: 'Failed to fetch cable types' });
-    }
+    res.json({ cableTypes: result.rows.map(mapCableTypeRow) });
+  } catch (error) {
+    console.error('List cable types error', error);
+    res.status(500).json({ error: 'Failed to fetch cable types' });
   }
-);
+});
 
 cableTypesRouter.post(
   '/',
@@ -301,7 +325,7 @@ cableTypesRouter.post(
 
       if (!materialCableType) {
         res.status(400).json({
-          error: createMaterialCableTypeNotFoundPayload(name.trim())
+          error: createMaterialCableTypeNotFoundPayload(name.trim()),
         });
         return;
       }
@@ -314,12 +338,12 @@ cableTypesRouter.post(
             AND lower(name) = lower($2)
           LIMIT 1;
         `,
-        [projectId, name]
+        [projectId, name],
       );
 
       if (duplicateResult.rowCount > 0) {
         res.status(409).json({
-          error: 'A cable type with this name already exists for the project'
+          error: 'A cable type with this name already exists for the project',
         });
         return;
       }
@@ -351,8 +375,8 @@ cableTypesRouter.post(
           materialCableType.name,
           normalizeOptionalString(materialCableType.purpose ?? null),
           toNumberOrNull(materialCableType.diameter_mm),
-          toNumberOrNull(materialCableType.weight_kg_per_m)
-        ]
+          toNumberOrNull(materialCableType.weight_kg_per_m),
+        ],
       );
 
       res.status(201).json({ cableType: mapCableTypeRow(result.rows[0]) });
@@ -360,7 +384,7 @@ cableTypesRouter.post(
       console.error('Create cable type error', error);
       res.status(500).json({ error: 'Failed to create cable type' });
     }
-  }
+  },
 );
 
 cableTypesRouter.patch(
@@ -371,9 +395,7 @@ cableTypesRouter.patch(
     const { projectId, cableTypeId } = req.params;
 
     if (!projectId || !cableTypeId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and cable type ID are required' });
+      res.status(400).json({ error: 'Project ID and cable type ID are required' });
       return;
     }
 
@@ -408,7 +430,7 @@ cableTypesRouter.patch(
             AND project_id = $2
           LIMIT 1;
         `,
-        [cableTypeId, projectId]
+        [cableTypeId, projectId],
       );
 
       const existingCableType = existingCableTypeResult.rows[0];
@@ -419,14 +441,11 @@ cableTypesRouter.patch(
       }
 
       const materialCableTypeName = name?.trim() || existingCableType.name;
-      const materialCableType = await findMaterialCableTypeByName(
-        pool,
-        materialCableTypeName
-      );
+      const materialCableType = await findMaterialCableTypeByName(pool, materialCableTypeName);
 
       if (!materialCableType) {
         res.status(400).json({
-          error: createMaterialCableTypeNotFoundPayload(materialCableTypeName)
+          error: createMaterialCableTypeNotFoundPayload(materialCableTypeName),
         });
         return;
       }
@@ -440,12 +459,12 @@ cableTypesRouter.patch(
             AND id <> $3
           LIMIT 1;
         `,
-        [projectId, materialCableType.name, cableTypeId]
+        [projectId, materialCableType.name, cableTypeId],
       );
 
       if (duplicateResult.rowCount > 0) {
         res.status(409).json({
-          error: 'A cable type with this name already exists for the project'
+          error: 'A cable type with this name already exists for the project',
         });
         return;
       }
@@ -477,8 +496,8 @@ cableTypesRouter.patch(
           toNumberOrNull(materialCableType.diameter_mm),
           toNumberOrNull(materialCableType.weight_kg_per_m),
           cableTypeId,
-          projectId
-        ]
+          projectId,
+        ],
       );
 
       const cableType = result.rows[0];
@@ -493,7 +512,7 @@ cableTypesRouter.patch(
       console.error('Update cable type error', error);
       res.status(500).json({ error: 'Failed to update cable type' });
     }
-  }
+  },
 );
 
 cableTypesRouter.delete(
@@ -504,9 +523,7 @@ cableTypesRouter.delete(
     const { projectId, cableTypeId } = req.params;
 
     if (!projectId || !cableTypeId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and cable type ID are required' });
+      res.status(400).json({ error: 'Project ID and cable type ID are required' });
       return;
     }
 
@@ -530,7 +547,7 @@ cableTypesRouter.delete(
           WHERE id = $1
             AND project_id = $2;
         `,
-        [cableTypeId, projectId]
+        [cableTypeId, projectId],
       );
 
       if (result.rowCount === 0) {
@@ -543,7 +560,7 @@ cableTypesRouter.delete(
       console.error('Delete cable type error', error);
       res.status(500).json({ error: 'Failed to delete cable type' });
     }
-  }
+  },
 );
 
 cableTypesRouter.post(
@@ -591,9 +608,7 @@ cableTypesRouter.post(
       const sheetName = workbook.SheetNames[0];
 
       if (!sheetName) {
-        res
-          .status(400)
-          .json({ error: 'The workbook does not contain any sheets' });
+        res.status(400).json({ error: 'The workbook does not contain any sheets' });
         return;
       }
 
@@ -608,13 +623,13 @@ cableTypesRouter.post(
 
     const rows = XLSX.utils.sheet_to_json<CableImportRow>(worksheet, {
       defval: '',
-      raw: false
+      raw: false,
     });
 
     const summary = {
       inserted: 0,
       updated: 0,
-      skipped: 0
+      skipped: 0,
     };
 
     const prepared: Array<{
@@ -626,10 +641,7 @@ cableTypesRouter.post(
 
     for (const row of rows) {
       const rawName = row[CABLE_EXCEL_HEADERS.name] as unknown;
-      const name =
-        typeof rawName === 'number'
-          ? String(rawName)
-          : String(rawName ?? '').trim();
+      const name = typeof rawName === 'number' ? String(rawName) : String(rawName ?? '').trim();
 
       if (name === '') {
         summary.skipped += 1;
@@ -647,7 +659,7 @@ cableTypesRouter.post(
 
       prepared.push({
         key,
-        name
+        name,
       });
     }
 
@@ -659,18 +671,18 @@ cableTypesRouter.post(
             WHERE project_id = $1
             ORDER BY name ASC;
           `,
-          [projectId]
+          [projectId],
         );
 
         res.json({
           summary,
-          cableTypes: existing.rows.map(mapCableTypeRow)
+          cableTypes: existing.rows.map(mapCableTypeRow),
         });
       } catch (error) {
         console.error('Fetch cable types after empty import error', error);
         res.status(500).json({
           error: 'No rows imported and failed to fetch existing cable types',
-          summary
+          summary,
         });
       }
       return;
@@ -683,7 +695,7 @@ cableTypesRouter.post(
 
       const materialCableTypes = await findMaterialCableTypesByKeys(
         client,
-        prepared.map((row) => row.key)
+        prepared.map((row) => row.key),
       );
 
       const missingMaterialCableTypes = prepared
@@ -693,7 +705,7 @@ cableTypesRouter.post(
       if (missingMaterialCableTypes.length > 0) {
         await client.query('ROLLBACK');
         res.status(400).json({
-          error: formatMissingMaterialCableTypesError(missingMaterialCableTypes)
+          error: formatMissingMaterialCableTypesError(missingMaterialCableTypes),
         });
         return;
       }
@@ -706,7 +718,7 @@ cableTypesRouter.post(
                 WHERE project_id = $1
                   AND lower(name) = ANY($2::text[]);
               `,
-              [projectId, prepared.map((row) => row.key)]
+              [projectId, prepared.map((row) => row.key)],
             )
           : { rows: [] as CableTypeRow[] };
 
@@ -739,8 +751,8 @@ cableTypesRouter.post(
               normalizeOptionalString(materialCableType.purpose ?? null),
               toNumberOrNull(materialCableType.diameter_mm),
               toNumberOrNull(materialCableType.weight_kg_per_m),
-              existing.id
-            ]
+              existing.id,
+            ],
           );
           summary.updated += 1;
         } else {
@@ -762,8 +774,8 @@ cableTypesRouter.post(
               materialCableType.name,
               normalizeOptionalString(materialCableType.purpose ?? null),
               toNumberOrNull(materialCableType.diameter_mm),
-              toNumberOrNull(materialCableType.weight_kg_per_m)
-            ]
+              toNumberOrNull(materialCableType.weight_kg_per_m),
+            ],
           );
           summary.inserted += 1;
         }
@@ -786,21 +798,21 @@ cableTypesRouter.post(
           WHERE project_id = $1
           ORDER BY name ASC;
         `,
-        [projectId]
+        [projectId],
       );
 
       res.json({
         summary,
-        cableTypes: refreshed.rows.map(mapCableTypeRow)
+        cableTypes: refreshed.rows.map(mapCableTypeRow),
       });
     } catch (error) {
       console.error('Fetch cable types after import error', error);
       res.status(500).json({
         error: 'Cable types imported but failed to refresh list',
-        summary
+        summary,
       });
     }
-  }
+  },
 );
 
 cableTypesRouter.get(
@@ -809,9 +821,7 @@ cableTypesRouter.get(
     const { projectId, cableTypeId } = req.params;
 
     if (!projectId || !cableTypeId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and cable type ID are required' });
+      res.status(400).json({ error: 'Project ID and cable type ID are required' });
       return;
     }
 
@@ -840,23 +850,21 @@ cableTypesRouter.get(
             WHERE project_id = $1
               AND cable_type_id = $2;
           `,
-          [projectId, cableTypeId]
-        )
+          [projectId, cableTypeId],
+        ),
       ]);
 
       res.json({
         cableType: mapCableTypeRow(cableType),
-        materialCableType: materialCableType
-          ? mapMaterialCableTypeRow(materialCableType)
-          : null,
+        materialCableType: materialCableType ? mapMaterialCableTypeRow(materialCableType) : null,
         defaultMaterials: defaultMaterials.map(mapCableTypeDefaultMaterialRow),
-        cableCount: cableCountResult.rows[0]?.count ?? 0
+        cableCount: cableCountResult.rows[0]?.count ?? 0,
       });
     } catch (error) {
       console.error('Fetch cable type details error', error);
       res.status(500).json({ error: 'Failed to fetch cable type details' });
     }
-  }
+  },
 );
 
 cableTypesRouter.post(
@@ -867,9 +875,7 @@ cableTypesRouter.post(
     const { projectId, cableTypeId } = req.params;
 
     if (!projectId || !cableTypeId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and cable type ID are required' });
+      res.status(400).json({ error: 'Project ID and cable type ID are required' });
       return;
     }
 
@@ -896,6 +902,17 @@ cableTypesRouter.post(
       }
 
       const { name, quantity, unit, remarks } = parseResult.data;
+      const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
+        pool,
+        name,
+      );
+
+      if (!materialCableInstallationMaterial) {
+        res.status(400).json({
+          error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim()),
+        });
+        return;
+      }
 
       const result = await pool.query<CableTypeDefaultMaterialRow>(
         `
@@ -921,21 +938,21 @@ cableTypesRouter.post(
         [
           randomUUID(),
           cableTypeId,
-          name.trim(),
+          materialCableInstallationMaterial.type,
           quantity ?? null,
           normalizeOptionalString(unit ?? null),
-          normalizeOptionalString(remarks ?? null)
-        ]
+          normalizeOptionalString(remarks ?? null),
+        ],
       );
 
       res.status(201).json({
-        defaultMaterial: mapCableTypeDefaultMaterialRow(result.rows[0])
+        defaultMaterial: mapCableTypeDefaultMaterialRow(result.rows[0]),
       });
     } catch (error) {
       console.error('Create cable type default material error', error);
       res.status(500).json({ error: 'Failed to create default material' });
     }
-  }
+  },
 );
 
 cableTypesRouter.patch(
@@ -947,7 +964,7 @@ cableTypesRouter.patch(
 
     if (!projectId || !cableTypeId || !defaultMaterialId) {
       res.status(400).json({
-        error: 'Project ID, cable type ID, and default material ID are required'
+        error: 'Project ID, cable type ID, and default material ID are required',
       });
       return;
     }
@@ -974,20 +991,27 @@ cableTypesRouter.patch(
         return;
       }
 
-      const {
-        name,
-        quantity,
-        unit,
-        remarks
-      } = parseResult.data;
+      const { name, quantity, unit, remarks } = parseResult.data;
 
       const fields: string[] = [];
       const values: Array<string | number | null> = [];
       let index = 1;
 
       if (name !== undefined) {
+        const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
+          pool,
+          name,
+        );
+
+        if (!materialCableInstallationMaterial) {
+          res.status(400).json({
+            error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim()),
+          });
+          return;
+        }
+
         fields.push(`name = $${index++}`);
-        values.push(name.trim());
+        values.push(materialCableInstallationMaterial.type);
       }
 
       if (quantity !== undefined) {
@@ -1023,7 +1047,7 @@ cableTypesRouter.patch(
             created_at,
             updated_at;
         `,
-        [...values, defaultMaterialId, cableTypeId]
+        [...values, defaultMaterialId, cableTypeId],
       );
 
       const defaultMaterial = result.rows[0];
@@ -1034,13 +1058,13 @@ cableTypesRouter.patch(
       }
 
       res.json({
-        defaultMaterial: mapCableTypeDefaultMaterialRow(defaultMaterial)
+        defaultMaterial: mapCableTypeDefaultMaterialRow(defaultMaterial),
       });
     } catch (error) {
       console.error('Update cable type default material error', error);
       res.status(500).json({ error: 'Failed to update default material' });
     }
-  }
+  },
 );
 
 cableTypesRouter.delete(
@@ -1052,7 +1076,7 @@ cableTypesRouter.delete(
 
     if (!projectId || !cableTypeId || !defaultMaterialId) {
       res.status(400).json({
-        error: 'Project ID, cable type ID, and default material ID are required'
+        error: 'Project ID, cable type ID, and default material ID are required',
       });
       return;
     }
@@ -1078,7 +1102,7 @@ cableTypesRouter.delete(
           WHERE id = $1
             AND cable_type_id = $2;
         `,
-        [defaultMaterialId, cableTypeId]
+        [defaultMaterialId, cableTypeId],
       );
 
       if (result.rowCount === 0) {
@@ -1091,7 +1115,7 @@ cableTypesRouter.delete(
       console.error('Delete cable type default material error', error);
       res.status(500).json({ error: 'Failed to delete default material' });
     }
-  }
+  },
 );
 
 cableTypesRouter.get(
@@ -1102,14 +1126,14 @@ cableTypesRouter.get(
     try {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Cable Types', {
-        views: [{ state: 'frozen', ySplit: 1 }]
+        views: [{ state: 'frozen', ySplit: 1 }],
       });
 
       const columns = [
         { name: CABLE_EXCEL_HEADERS.name, key: 'type', width: 32 },
         { name: CABLE_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
         { name: CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
-        { name: CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 }
+        { name: CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
       ] as const;
 
       const table = worksheet.addTable({
@@ -1122,13 +1146,13 @@ cableTypesRouter.get(
           showFirstColumn: false,
           showLastColumn: false,
           showRowStripes: true,
-          showColumnStripes: true
+          showColumnStripes: true,
         },
         columns: columns.map((column) => ({
           name: column.name,
-          filterButton: true
+          filterButton: true,
         })),
-        rows: [['', '', '', '']]
+        rows: [['', '', '', '']],
       });
 
       table.commit();
@@ -1149,19 +1173,16 @@ cableTypesRouter.get(
 
       res.setHeader(
         'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`
-      );
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
       res.send(Buffer.from(buffer));
     } catch (error) {
       console.error('Generate cable types template error', error);
       res.status(500).json({ error: 'Failed to generate template' });
     }
-  }
+  },
 );
 
 cableTypesRouter.get(
@@ -1190,30 +1211,28 @@ cableTypesRouter.get(
           WHERE project_id = $1
           ORDER BY name ASC;
         `,
-        [projectId]
+        [projectId],
       );
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Cable Types', {
-        views: [{ state: 'frozen', ySplit: 1 }]
+        views: [{ state: 'frozen', ySplit: 1 }],
       });
 
       const columns = [
         { name: CABLE_EXCEL_HEADERS.name, key: 'type', width: 32 },
         { name: CABLE_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
         { name: CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
-        { name: CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 }
+        { name: CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
       ] as const;
 
       const rows = result.rows.map((row: CableTypeRow) => [
         row.name ?? '',
         row.purpose ?? '',
-        row.diameter_mm !== null && row.diameter_mm !== ''
-          ? Number(row.diameter_mm)
-          : '',
+        row.diameter_mm !== null && row.diameter_mm !== '' ? Number(row.diameter_mm) : '',
         row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
           ? Number(row.weight_kg_per_m)
-          : ''
+          : '',
       ]);
 
       const table = worksheet.addTable({
@@ -1226,13 +1245,13 @@ cableTypesRouter.get(
           showFirstColumn: false,
           showLastColumn: false,
           showRowStripes: true,
-          showColumnStripes: true
+          showColumnStripes: true,
         },
         columns: columns.map((column) => ({
           name: column.name,
-          filterButton: true
+          filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '']]
+        rows: rows.length > 0 ? rows : [['', '', '', '']],
       });
 
       table.commit();
@@ -1254,19 +1273,16 @@ cableTypesRouter.get(
 
       res.setHeader(
         'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`
-      );
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
       res.send(Buffer.from(buffer));
     } catch (error) {
       console.error('Export cable types error', error);
       res.status(500).json({ error: 'Failed to export cable types' });
     }
-  }
+  },
 );
 
 export { cableTypesRouter };
