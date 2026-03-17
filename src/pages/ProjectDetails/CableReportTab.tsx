@@ -74,14 +74,63 @@ export const CableReportTab = ({
   );
 
   const materialRows = useMemo(
-    () =>
-      summary?.cableTypeSummaries.flatMap((cableTypeSummary) =>
-        cableTypeSummary.materials.map((material) => ({
-          cableTypeId: cableTypeSummary.cableTypeId,
-          typeName: cableTypeSummary.typeName,
-          ...material
+    () => {
+      if (!summary) {
+        return [];
+      }
+
+      const grouped = new Map<
+        string,
+        {
+          name: string;
+          unit: string;
+          totalQuantity: number;
+          cableCount: number;
+          missingDesignLengthCount: number;
+        }
+      >();
+
+      for (const cableTypeSummary of summary.cableTypeSummaries) {
+        for (const material of cableTypeSummary.materials) {
+          const key = `${material.name.toLowerCase()}::${material.unit}`;
+          const existing = grouped.get(key);
+
+          if (existing) {
+            existing.totalQuantity += material.totalQuantity;
+            existing.cableCount += material.cableCount;
+            existing.missingDesignLengthCount += material.missingDesignLengthCount;
+            continue;
+          }
+
+          grouped.set(key, {
+            name: material.name,
+            unit: material.unit,
+            totalQuantity: material.totalQuantity,
+            cableCount: material.cableCount,
+            missingDesignLengthCount: material.missingDesignLengthCount
+          });
+        }
+      }
+
+      return Array.from(grouped.values())
+        .map((material) => ({
+          ...material,
+          totalQuantity: Math.round(material.totalQuantity * 1000) / 1000
         }))
-      ) ?? [],
+        .sort((a, b) => {
+          const nameCompare = a.name.localeCompare(b.name, undefined, {
+            sensitivity: 'base'
+          });
+
+          if (nameCompare !== 0) {
+            return nameCompare;
+          }
+
+          return a.unit.localeCompare(b.unit, undefined, {
+            sensitivity: 'base'
+          });
+        });
+    },
     [summary]
   );
 
@@ -280,7 +329,6 @@ export const CableReportTab = ({
                 <table className={styles.table}>
                   <thead>
                     <tr>
-                      <th className={styles.tableHeadCell}>Cable type</th>
                       <th className={styles.tableHeadCell}>Material</th>
                       <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                         Total quantity
@@ -294,10 +342,7 @@ export const CableReportTab = ({
                   </thead>
                   <tbody>
                     {materialRows.map((material) => (
-                      <tr
-                        key={`${material.cableTypeId}:${material.name}:${material.unit}`}
-                      >
-                        <td className={styles.tableCell}>{material.typeName}</td>
+                      <tr key={`${material.name}:${material.unit}`}>
                         <td className={styles.tableCell}>{material.name}</td>
                         <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                           {formatNumeric(material.totalQuantity)}
