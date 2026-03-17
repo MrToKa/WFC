@@ -179,6 +179,24 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS cable_type_default_materials (
+      id UUID PRIMARY KEY,
+      cable_type_id UUID NOT NULL REFERENCES cable_types(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      quantity NUMERIC,
+      unit TEXT,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_type_default_materials_cable_type_id_idx
+      ON cable_type_default_materials (cable_type_id);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS material_cable_types (
       id UUID PRIMARY KEY,
       name TEXT NOT NULL,

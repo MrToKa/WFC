@@ -2,6 +2,9 @@ import { request, ApiError, getApiBaseUrl } from './http';
 import type {
   CableType,
   Cable,
+  CableTypeDefaultMaterial,
+  CableTypeDefaultMaterialInput,
+  CableTypeDetails,
   CableTypeInput,
   CableInput,
   CableImportSummary,
@@ -172,6 +175,64 @@ export async function getCableTypesTemplate(
   }
 
   return response.blob();
+}
+
+export async function fetchCableTypeDetails(
+  projectId: string,
+  cableTypeId: string
+): Promise<CableTypeDetails> {
+  return request<CableTypeDetails>(
+    `/api/projects/${projectId}/cable-types/${cableTypeId}/details`,
+    { method: 'GET' }
+  );
+}
+
+export async function createCableTypeDefaultMaterial(
+  token: string,
+  projectId: string,
+  cableTypeId: string,
+  data: CableTypeDefaultMaterialInput
+): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
+  return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
+    `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials`,
+    {
+      method: 'POST',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function updateCableTypeDefaultMaterial(
+  token: string,
+  projectId: string,
+  cableTypeId: string,
+  defaultMaterialId: string,
+  data: Partial<CableTypeDefaultMaterialInput>
+): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
+  return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
+    `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data
+    }
+  );
+}
+
+export async function deleteCableTypeDefaultMaterial(
+  token: string,
+  projectId: string,
+  cableTypeId: string,
+  defaultMaterialId: string
+): Promise<void> {
+  await request<void>(
+    `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
+    {
+      method: 'DELETE',
+      token
+    }
+  );
 }
 
 export async function fetchCables(

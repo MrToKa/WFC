@@ -1404,6 +1404,16 @@ export const ProjectDetails = () => {
     [navigate, projectId]
   );
 
+  const openCableTypeDetails = useCallback(
+    (cableType: { id: string }) => {
+      if (!projectId) {
+        return;
+      }
+      navigate(`/projects/${projectId}/cable-types/${cableType.id}`);
+    },
+    [navigate, projectId]
+  );
+
   const isInlineEditable = inlineEditingEnabled && canManageCables;
 
   useEffect(() => {
@@ -1597,6 +1607,7 @@ export const ProjectDetails = () => {
           isLoading={cableTypesLoading}
           items={pagedCableTypes}
           pendingId={pendingCableTypeId}
+          onDetails={openCableTypeDetails}
           onEdit={openEditCableTypeDialog}
           onDelete={(cableType) => void handleDeleteCableType(cableType)}
           formatNumeric={formatNumeric}

@@ -7,12 +7,22 @@ import multer from 'multer';
 import type { PoolClient } from 'pg';
 import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
+import {
+  mapCableTypeDefaultMaterialRow,
+  type CableTypeDefaultMaterialRow
+} from '../models/cableTypeDefaultMaterial.js';
 import { mapCableTypeRow, toNumberOrNull } from '../models/cableType.js';
 import type { CableTypeRow } from '../models/cableType.js';
+import {
+  mapMaterialCableTypeRow,
+  type MaterialCableTypeRow
+} from '../models/materialCableType.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
+  createCableTypeDefaultMaterialSchema,
   createCableTypeSchema,
+  updateCableTypeDefaultMaterialSchema,
   updateCableTypeSchema
 } from '../validators.js';
 
@@ -60,6 +70,19 @@ const selectCableTypesQuery = `
   FROM cable_types
 `;
 
+const selectCableTypeDefaultMaterialsQuery = `
+  SELECT
+    id,
+    cable_type_id,
+    name,
+    quantity,
+    unit,
+    remarks,
+    created_at,
+    updated_at
+  FROM cable_type_default_materials
+`;
+
 type MaterialCableTypeMatchRow = {
   name: string;
   purpose: string | null;
@@ -80,6 +103,23 @@ const selectMaterialCableTypesForProjectQuery = `
     purpose,
     diameter_mm,
     weight_kg_per_m
+  FROM material_cable_types
+`;
+
+const selectMaterialCableTypeDetailsForProjectQuery = `
+  SELECT
+    id,
+    name,
+    purpose,
+    material,
+    description,
+    manufacturer,
+    part_no,
+    remarks,
+    diameter_mm,
+    weight_kg_per_m,
+    created_at,
+    updated_at
   FROM material_cable_types
 `;
 
@@ -133,6 +173,56 @@ const findMaterialCableTypesByKeys = async (
   }
 
   return materialCableTypes;
+};
+
+const findProjectCableTypeById = async (
+  queryable: Queryable,
+  projectId: string,
+  cableTypeId: string
+): Promise<CableTypeRow | null> => {
+  const result = await queryable.query<CableTypeRow>(
+    `
+      ${selectCableTypesQuery}
+      WHERE project_id = $1
+        AND id = $2
+      LIMIT 1;
+    `,
+    [projectId, cableTypeId]
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const findMaterialCableTypeDetailsByName = async (
+  queryable: Queryable,
+  name: string
+): Promise<MaterialCableTypeRow | null> => {
+  const result = await queryable.query<MaterialCableTypeRow>(
+    `
+      ${selectMaterialCableTypeDetailsForProjectQuery}
+      WHERE lower(name) = lower($1)
+      LIMIT 1;
+    `,
+    [name]
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const listCableTypeDefaultMaterials = async (
+  queryable: Queryable,
+  cableTypeId: string
+): Promise<CableTypeDefaultMaterialRow[]> => {
+  const result = await queryable.query<CableTypeDefaultMaterialRow>(
+    `
+      ${selectCableTypeDefaultMaterialsQuery}
+      WHERE cable_type_id = $1
+      ORDER BY lower(name) ASC, created_at ASC;
+    `,
+    [cableTypeId]
+  );
+
+  return result.rows;
 };
 
 const cableTypesRouter = Router({ mergeParams: true });
@@ -714,6 +804,297 @@ cableTypesRouter.post(
 );
 
 cableTypesRouter.get(
+  '/:cableTypeId/details',
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableTypeId } = req.params;
+
+    if (!projectId || !cableTypeId) {
+      res
+        .status(400)
+        .json({ error: 'Project ID and cable type ID are required' });
+      return;
+    }
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
+
+      if (!cableType) {
+        res.status(404).json({ error: 'Cable type not found' });
+        return;
+      }
+
+      const [materialCableType, defaultMaterials, cableCountResult] = await Promise.all([
+        findMaterialCableTypeDetailsByName(pool, cableType.name),
+        listCableTypeDefaultMaterials(pool, cableTypeId),
+        pool.query<{ count: number }>(
+          `
+            SELECT COUNT(*)::int AS count
+            FROM cables
+            WHERE project_id = $1
+              AND cable_type_id = $2;
+          `,
+          [projectId, cableTypeId]
+        )
+      ]);
+
+      res.json({
+        cableType: mapCableTypeRow(cableType),
+        materialCableType: materialCableType
+          ? mapMaterialCableTypeRow(materialCableType)
+          : null,
+        defaultMaterials: defaultMaterials.map(mapCableTypeDefaultMaterialRow),
+        cableCount: cableCountResult.rows[0]?.count ?? 0
+      });
+    } catch (error) {
+      console.error('Fetch cable type details error', error);
+      res.status(500).json({ error: 'Failed to fetch cable type details' });
+    }
+  }
+);
+
+cableTypesRouter.post(
+  '/:cableTypeId/default-materials',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableTypeId } = req.params;
+
+    if (!projectId || !cableTypeId) {
+      res
+        .status(400)
+        .json({ error: 'Project ID and cable type ID are required' });
+      return;
+    }
+
+    const parseResult = createCableTypeDefaultMaterialSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
+
+      if (!cableType) {
+        res.status(404).json({ error: 'Cable type not found' });
+        return;
+      }
+
+      const { name, quantity, unit, remarks } = parseResult.data;
+
+      const result = await pool.query<CableTypeDefaultMaterialRow>(
+        `
+          INSERT INTO cable_type_default_materials (
+            id,
+            cable_type_id,
+            name,
+            quantity,
+            unit,
+            remarks
+          )
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING
+            id,
+            cable_type_id,
+            name,
+            quantity,
+            unit,
+            remarks,
+            created_at,
+            updated_at;
+        `,
+        [
+          randomUUID(),
+          cableTypeId,
+          name.trim(),
+          quantity ?? null,
+          normalizeOptionalString(unit ?? null),
+          normalizeOptionalString(remarks ?? null)
+        ]
+      );
+
+      res.status(201).json({
+        defaultMaterial: mapCableTypeDefaultMaterialRow(result.rows[0])
+      });
+    } catch (error) {
+      console.error('Create cable type default material error', error);
+      res.status(500).json({ error: 'Failed to create default material' });
+    }
+  }
+);
+
+cableTypesRouter.patch(
+  '/:cableTypeId/default-materials/:defaultMaterialId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableTypeId, defaultMaterialId } = req.params;
+
+    if (!projectId || !cableTypeId || !defaultMaterialId) {
+      res.status(400).json({
+        error: 'Project ID, cable type ID, and default material ID are required'
+      });
+      return;
+    }
+
+    const parseResult = updateCableTypeDefaultMaterialSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      res.status(400).json({ error: parseResult.error.flatten() });
+      return;
+    }
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
+
+      if (!cableType) {
+        res.status(404).json({ error: 'Cable type not found' });
+        return;
+      }
+
+      const {
+        name,
+        quantity,
+        unit,
+        remarks
+      } = parseResult.data;
+
+      const fields: string[] = [];
+      const values: Array<string | number | null> = [];
+      let index = 1;
+
+      if (name !== undefined) {
+        fields.push(`name = $${index++}`);
+        values.push(name.trim());
+      }
+
+      if (quantity !== undefined) {
+        fields.push(`quantity = $${index++}`);
+        values.push(quantity ?? null);
+      }
+
+      if (unit !== undefined) {
+        fields.push(`unit = $${index++}`);
+        values.push(normalizeOptionalString(unit ?? null));
+      }
+
+      if (remarks !== undefined) {
+        fields.push(`remarks = $${index++}`);
+        values.push(normalizeOptionalString(remarks ?? null));
+      }
+
+      fields.push('updated_at = NOW()');
+
+      const result = await pool.query<CableTypeDefaultMaterialRow>(
+        `
+          UPDATE cable_type_default_materials
+          SET ${fields.join(', ')}
+          WHERE id = $${index}
+            AND cable_type_id = $${index + 1}
+          RETURNING
+            id,
+            cable_type_id,
+            name,
+            quantity,
+            unit,
+            remarks,
+            created_at,
+            updated_at;
+        `,
+        [...values, defaultMaterialId, cableTypeId]
+      );
+
+      const defaultMaterial = result.rows[0];
+
+      if (!defaultMaterial) {
+        res.status(404).json({ error: 'Default material not found' });
+        return;
+      }
+
+      res.json({
+        defaultMaterial: mapCableTypeDefaultMaterialRow(defaultMaterial)
+      });
+    } catch (error) {
+      console.error('Update cable type default material error', error);
+      res.status(500).json({ error: 'Failed to update default material' });
+    }
+  }
+);
+
+cableTypesRouter.delete(
+  '/:cableTypeId/default-materials/:defaultMaterialId',
+  authenticate,
+  requireAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableTypeId, defaultMaterialId } = req.params;
+
+    if (!projectId || !cableTypeId || !defaultMaterialId) {
+      res.status(400).json({
+        error: 'Project ID, cable type ID, and default material ID are required'
+      });
+      return;
+    }
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
+
+      if (!cableType) {
+        res.status(404).json({ error: 'Cable type not found' });
+        return;
+      }
+
+      const result = await pool.query(
+        `
+          DELETE FROM cable_type_default_materials
+          WHERE id = $1
+            AND cable_type_id = $2;
+        `,
+        [defaultMaterialId, cableTypeId]
+      );
+
+      if (result.rowCount === 0) {
+        res.status(404).json({ error: 'Default material not found' });
+        return;
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error('Delete cable type default material error', error);
+      res.status(500).json({ error: 'Failed to delete default material' });
+    }
+  }
+);
+
+cableTypesRouter.get(
   '/template',
   authenticate,
   requireAdmin,
@@ -824,7 +1205,7 @@ cableTypesRouter.get(
         { name: CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 }
       ] as const;
 
-      const rows = result.rows.map((row) => [
+      const rows = result.rows.map((row: CableTypeRow) => [
         row.name ?? '',
         row.purpose ?? '',
         row.diameter_mm !== null && row.diameter_mm !== ''

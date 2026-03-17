@@ -48,6 +48,7 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
   isLoading: boolean;
   items: T[];
   pendingId: string | null;
+  onDetails?: (cableType: T) => void;
   onEdit: (cableType: T) => void;
   onDelete: (cableType: T) => void;
   formatNumeric: (value: number | null) => string;
@@ -86,6 +87,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
   isLoading,
   items,
   pendingId,
+  onDetails,
   onEdit,
   onDelete,
   formatNumeric,
@@ -102,6 +104,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
   disableGetTemplateAction = false,
 }: CableTypesTabProps<T>) => {
   const selectedCriteria = useMemo<string[]>(() => [searchCriteria], [searchCriteria]);
+  const showActions = Boolean(onDetails) || isAdmin;
 
   const resolvedEmptyStateBody =
     emptyStateBody ??
@@ -210,7 +213,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                 <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                   Weight [kg/m]
                 </th>
-                {isAdmin ? <th className={styles.tableHeadCell}>Actions</th> : null}
+                {showActions ? <th className={styles.tableHeadCell}>Actions</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -226,19 +229,28 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                     <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                       {formatNumeric(cableType.weightKgPerM)}
                     </td>
-                    {isAdmin ? (
+                    {showActions ? (
                       <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                        <Button size="small" onClick={() => onEdit(cableType)} disabled={isBusy}>
-                          Edit
-                        </Button>
-                        <Button
-                          size="small"
-                          appearance="secondary"
-                          onClick={() => onDelete(cableType)}
-                          disabled={isBusy}
-                        >
-                          Delete
-                        </Button>
+                        {onDetails ? (
+                          <Button size="small" onClick={() => onDetails(cableType)}>
+                            Details
+                          </Button>
+                        ) : null}
+                        {isAdmin ? (
+                          <>
+                            <Button size="small" onClick={() => onEdit(cableType)} disabled={isBusy}>
+                              Edit
+                            </Button>
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => onDelete(cableType)}
+                              disabled={isBusy}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        ) : null}
                       </td>
                     ) : null}
                   </tr>

@@ -1,3 +1,5 @@
+import type { MaterialCableType } from './material';
+
 export type CableType = {
   id: string;
   projectId: string;
@@ -76,3 +78,28 @@ export type CableSortColumn =
   | 'routing';
 
 export type CableSortDirection = 'asc' | 'desc';
+
+export type CableTypeDefaultMaterial = {
+  id: string;
+  cableTypeId: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  remarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CableTypeDefaultMaterialInput = {
+  name: string;
+  quantity?: number | null;
+  unit?: string | null;
+  remarks?: string | null;
+};
+
+export type CableTypeDetails = {
+  cableType: CableType;
+  materialCableType: MaterialCableType | null;
+  defaultMaterials: CableTypeDefaultMaterial[];
+  cableCount: number;
+};
