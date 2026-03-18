@@ -30,8 +30,10 @@ import {
   ApiError,
   createCableMaterial,
   deleteCableMaterial,
+  fetchCables,
   fetchCableDetails,
   fetchMaterialCableInstallationMaterials,
+  type Cable,
   type CableDetails as CableDetailsData,
   type CableMaterial,
   type MaterialCableInstallationMaterial,
@@ -307,6 +309,7 @@ export const CableDetails = () => {
   const [details, setDetails] = useState<CableDetailsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [projectCables, setProjectCables] = useState<Cable[]>([]);
   const [availableMaterials, setAvailableMaterials] = useState<
     MaterialCableInstallationMaterial[]
   >([]);
@@ -354,6 +357,41 @@ export const CableDetails = () => {
   useEffect(() => {
     void loadDetails();
   }, [loadDetails]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectCables([]);
+      return;
+    }
+
+    let active = true;
+
+    const loadProjectCables = async () => {
+      try {
+        const response = await fetchCables(projectId);
+
+        if (!active) {
+          return;
+        }
+
+        setProjectCables([...response.cables].sort((a, b) => a.cableId - b.cableId));
+      } catch (err) {
+        console.error('Failed to load cable navigation list', err);
+
+        if (!active) {
+          return;
+        }
+
+        setProjectCables([]);
+      }
+    };
+
+    void loadProjectCables();
+
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
 
   useEffect(() => {
     let active = true;
@@ -638,6 +676,16 @@ export const CableDetails = () => {
   }, [availableMaterialNames, dialogValues.name]);
 
   const sourceMaterialDetails = details?.materialCableType;
+  const currentCableIndex = useMemo(
+    () => (details ? projectCables.findIndex((cable) => cable.id === details.cable.id) : -1),
+    [details, projectCables]
+  );
+  const previousCable =
+    currentCableIndex > 0 ? projectCables[currentCableIndex - 1] : null;
+  const nextCable =
+    currentCableIndex >= 0 && currentCableIndex < projectCables.length - 1
+      ? projectCables[currentCableIndex + 1]
+      : null;
 
   if (projectLoading || isLoading) {
     return (
@@ -678,6 +726,26 @@ export const CableDetails = () => {
             onClick={() => navigate(`/projects/${projectId}?tab=cable-list`)}
           >
             Back to project
+          </Button>
+          <Button
+            appearance="secondary"
+            disabled={!previousCable}
+            onClick={() =>
+              previousCable
+                ? navigate(`/projects/${projectId}/cables/${previousCable.id}`)
+                : undefined
+            }
+          >
+            Previous
+          </Button>
+          <Button
+            appearance="secondary"
+            disabled={!nextCable}
+            onClick={() =>
+              nextCable ? navigate(`/projects/${projectId}/cables/${nextCable.id}`) : undefined
+            }
+          >
+            Next
           </Button>
           <Button
             appearance="secondary"
