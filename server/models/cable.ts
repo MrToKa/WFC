@@ -22,6 +22,11 @@ export type CableRow = {
 export type CableWithTypeRow = CableRow & {
   type_name: string;
   type_purpose: string | null;
+  type_material?: string | null;
+  type_description?: string | null;
+  type_manufacturer?: string | null;
+  type_part_no?: string | null;
+  type_remarks?: string | null;
   type_diameter_mm: string | number | null;
   type_weight_kg_per_m: string | number | null;
 };

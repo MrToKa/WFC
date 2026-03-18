@@ -179,6 +179,44 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE cable_types
+    ADD COLUMN IF NOT EXISTS material TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_types
+    ADD COLUMN IF NOT EXISTS description TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_types
+    ADD COLUMN IF NOT EXISTS manufacturer TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_types
+    ADD COLUMN IF NOT EXISTS part_no TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_types
+    ADD COLUMN IF NOT EXISTS remarks TEXT;
+  `);
+
+  await pool.query(`
+    UPDATE cable_types AS ct
+    SET
+      material = COALESCE(ct.material, m.material),
+      description = COALESCE(ct.description, m.description),
+      manufacturer = COALESCE(ct.manufacturer, m.manufacturer),
+      part_no = COALESCE(ct.part_no, m.part_no),
+      remarks = COALESCE(ct.remarks, m.remarks)
+    FROM material_cable_types AS m
+    WHERE regexp_replace(lower(trim(ct.name)), '\\s+', ' ', 'g') =
+        regexp_replace(lower(trim(m.name)), '\\s+', ' ', 'g');
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cable_type_default_materials (
       id UUID PRIMARY KEY,
       cable_type_id UUID NOT NULL REFERENCES cable_types(id) ON DELETE CASCADE,

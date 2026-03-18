@@ -16,6 +16,7 @@ import type { CableTypeRow } from '../models/cableType.js';
 import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import { buildNamedCatalogLookup, findNamedCatalogMatch } from '../utils/catalogNameMatching.js';
 import {
   createCableTypeDefaultMaterialSchema,
   createCableTypeSchema,
@@ -81,6 +82,11 @@ const selectCableTypeDefaultMaterialsQuery = `
 type MaterialCableTypeMatchRow = {
   name: string;
   purpose: string | null;
+  material: string | null;
+  description: string | null;
+  manufacturer: string | null;
+  part_no: string | null;
+  remarks: string | null;
   diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
 };
@@ -100,6 +106,11 @@ const selectMaterialCableTypesForProjectQuery = `
   SELECT
     name,
     purpose,
+    material,
+    description,
+    manufacturer,
+    part_no,
+    remarks,
     diameter_mm,
     weight_kg_per_m
   FROM material_cable_types
@@ -152,13 +163,14 @@ const findMaterialCableTypeByName = async (
   const result = await queryable.query<MaterialCableTypeMatchRow>(
     `
       ${selectMaterialCableTypesForProjectQuery}
-      WHERE lower(name) = lower($1)
-      LIMIT 1;
+      ORDER BY name ASC;
     `,
-    [name],
   );
 
-  return result.rows[0] ?? null;
+  return findNamedCatalogMatch(
+    buildNamedCatalogLookup<MaterialCableTypeMatchRow>(result.rows),
+    name,
+  );
 };
 
 const findMaterialCableInstallationMaterialByType = async (
@@ -188,15 +200,19 @@ const findMaterialCableTypesByKeys = async (
   const result = await queryable.query<MaterialCableTypeMatchRow>(
     `
       ${selectMaterialCableTypesForProjectQuery}
-      WHERE lower(name) = ANY($1::text[]);
+      ORDER BY name ASC;
     `,
-    [keys],
   );
 
+  const materialCableTypeLookup = buildNamedCatalogLookup<MaterialCableTypeMatchRow>(result.rows);
   const materialCableTypes = new Map<string, MaterialCableTypeMatchRow>();
 
-  for (const materialCableType of result.rows) {
-    materialCableTypes.set(materialCableType.name.toLowerCase(), materialCableType);
+  for (const key of keys) {
+    const materialCableType = findNamedCatalogMatch(materialCableTypeLookup, key);
+
+    if (materialCableType) {
+      materialCableTypes.set(key, materialCableType);
+    }
   }
 
   return materialCableTypes;
@@ -227,13 +243,11 @@ const findMaterialCableTypeDetailsByName = async (
   const result = await queryable.query<MaterialCableTypeRow>(
     `
       ${selectMaterialCableTypeDetailsForProjectQuery}
-      WHERE lower(name) = lower($1)
-      LIMIT 1;
+      ORDER BY created_at ASC;
     `,
-    [name],
   );
 
-  return result.rows[0] ?? null;
+  return findNamedCatalogMatch(buildNamedCatalogLookup<MaterialCableTypeRow>(result.rows), name);
 };
 
 const listCableTypeDefaultMaterials = async (
@@ -355,15 +369,25 @@ cableTypesRouter.post(
             project_id,
             name,
             purpose,
+            material,
+            description,
+            manufacturer,
+            part_no,
+            remarks,
             diameter_mm,
             weight_kg_per_m
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           RETURNING
             id,
             project_id,
             name,
             purpose,
+            material,
+            description,
+            manufacturer,
+            part_no,
+            remarks,
             diameter_mm,
             weight_kg_per_m,
             created_at,
@@ -374,6 +398,11 @@ cableTypesRouter.post(
           projectId,
           materialCableType.name,
           normalizeOptionalString(materialCableType.purpose ?? null),
+          normalizeOptionalString(materialCableType.material ?? null),
+          normalizeOptionalString(materialCableType.description ?? null),
+          normalizeOptionalString(materialCableType.manufacturer ?? null),
+          normalizeOptionalString(materialCableType.part_no ?? null),
+          normalizeOptionalString(materialCableType.remarks ?? null),
           toNumberOrNull(materialCableType.diameter_mm),
           toNumberOrNull(materialCableType.weight_kg_per_m),
         ],
@@ -475,16 +504,26 @@ cableTypesRouter.patch(
           SET
             name = $1,
             purpose = $2,
-            diameter_mm = $3,
-            weight_kg_per_m = $4,
+            material = $3,
+            description = $4,
+            manufacturer = $5,
+            part_no = $6,
+            remarks = $7,
+            diameter_mm = $8,
+            weight_kg_per_m = $9,
             updated_at = NOW()
-          WHERE id = $5
-            AND project_id = $6
+          WHERE id = $10
+            AND project_id = $11
           RETURNING
             id,
             project_id,
             name,
             purpose,
+            material,
+            description,
+            manufacturer,
+            part_no,
+            remarks,
             diameter_mm,
             weight_kg_per_m,
             created_at,
@@ -493,6 +532,11 @@ cableTypesRouter.patch(
         [
           materialCableType.name,
           normalizeOptionalString(materialCableType.purpose ?? null),
+          normalizeOptionalString(materialCableType.material ?? null),
+          normalizeOptionalString(materialCableType.description ?? null),
+          normalizeOptionalString(materialCableType.manufacturer ?? null),
+          normalizeOptionalString(materialCableType.part_no ?? null),
+          normalizeOptionalString(materialCableType.remarks ?? null),
           toNumberOrNull(materialCableType.diameter_mm),
           toNumberOrNull(materialCableType.weight_kg_per_m),
           cableTypeId,
@@ -742,13 +786,23 @@ cableTypesRouter.post(
               UPDATE cable_types
               SET
                 purpose = $1,
-                diameter_mm = $2,
-                weight_kg_per_m = $3,
+                material = $2,
+                description = $3,
+                manufacturer = $4,
+                part_no = $5,
+                remarks = $6,
+                diameter_mm = $7,
+                weight_kg_per_m = $8,
                 updated_at = NOW()
-              WHERE id = $4;
+              WHERE id = $9;
             `,
             [
               normalizeOptionalString(materialCableType.purpose ?? null),
+              normalizeOptionalString(materialCableType.material ?? null),
+              normalizeOptionalString(materialCableType.description ?? null),
+              normalizeOptionalString(materialCableType.manufacturer ?? null),
+              normalizeOptionalString(materialCableType.part_no ?? null),
+              normalizeOptionalString(materialCableType.remarks ?? null),
               toNumberOrNull(materialCableType.diameter_mm),
               toNumberOrNull(materialCableType.weight_kg_per_m),
               existing.id,
@@ -763,16 +817,26 @@ cableTypesRouter.post(
                 project_id,
                 name,
                 purpose,
+                material,
+                description,
+                manufacturer,
+                part_no,
+                remarks,
                 diameter_mm,
                 weight_kg_per_m
               )
-              VALUES ($1, $2, $3, $4, $5, $6);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
             `,
             [
               randomUUID(),
               projectId,
               materialCableType.name,
               normalizeOptionalString(materialCableType.purpose ?? null),
+              normalizeOptionalString(materialCableType.material ?? null),
+              normalizeOptionalString(materialCableType.description ?? null),
+              normalizeOptionalString(materialCableType.manufacturer ?? null),
+              normalizeOptionalString(materialCableType.part_no ?? null),
+              normalizeOptionalString(materialCableType.remarks ?? null),
               toNumberOrNull(materialCableType.diameter_mm),
               toNumberOrNull(materialCableType.weight_kg_per_m),
             ],

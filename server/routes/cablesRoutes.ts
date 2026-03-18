@@ -15,38 +15,35 @@ interface Request extends ExpressRequest {
   file?: Express.Multer.File;
 }
 import { pool } from '../db.js';
-import {
-  mapCableRow,
-  type CableRow,
-  type CableWithTypeRow
-} from '../models/cable.js';
-import {
-  mapCableMaterialRow,
-  type CableMaterialRow
-} from '../models/cableMaterial.js';
+import { mapCableRow, type CableRow, type CableWithTypeRow } from '../models/cable.js';
+import { mapCableMaterialRow, type CableMaterialRow } from '../models/cableMaterial.js';
 import {
   mapCableTypeDefaultMaterialRow,
-  type CableTypeDefaultMaterialRow
+  type CableTypeDefaultMaterialRow,
 } from '../models/cableTypeDefaultMaterial.js';
+import type { MaterialCableInstallationMaterialRow } from '../models/materialCableInstallationMaterial.js';
 import type { CableTypeRow } from '../models/cableType.js';
-import {
-  mapMaterialCableTypeRow,
-  type MaterialCableTypeRow
-} from '../models/materialCableType.js';
+import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
 import { authenticate } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import {
+  buildNamedCatalogLookup,
+  findNamedCatalogMatch,
+  normalizeComparableCatalogName,
+  normalizeFlexibleCatalogName,
+} from '../utils/catalogNameMatching.js';
 import {
   createCableSchema,
   createCableMaterialSchema,
   updateCableMaterialSchema,
-  updateCableSchema
+  updateCableSchema,
 } from '../validators.js';
 
 const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE }
+  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
 });
 
 const INPUT_HEADERS = {
@@ -60,7 +57,7 @@ const INPUT_HEADERS = {
   pullDate: 'Pull Date',
   connectedFrom: 'Connected From',
   connectedTo: 'Connected To',
-  tested: 'Tested'
+  tested: 'Tested',
 } as const;
 
 const LIST_OUTPUT_HEADERS = {
@@ -73,26 +70,41 @@ const LIST_OUTPUT_HEADERS = {
   fromLocation: 'From Location',
   toLocation: 'To Location',
   routing: 'Routing',
-  designLength: 'Design Length'
+  designLength: 'Design Length',
 } as const;
 
 const REPORT_OUTPUT_HEADERS = {
   cableId: 'Cable Id',
   tag: 'Tag',
   type: 'Type',
-  fromLocation: 'From Location',
-  toLocation: 'To Location',
-  designLength: 'Design Length [m]',
-  installLength: 'Install Length [m]',
-  pullDate: 'Pull Date',
-  connectedFrom: 'Connected From',
-  connectedTo: 'Connected To',
-  tested: 'Tested'
+  purpose: 'Purpose',
+  diameter: 'Diameter [mm]',
+  material: 'Material',
+  weight: 'Weight [kg/m]',
+  description: 'Description',
+  manufacturer: 'Manufacturer',
+  partNo: 'Part No.',
+  remarks: 'Remarks',
 } as const;
 
-const normalizeOptionalString = (
-  value: string | null | undefined
-): string | null => {
+const REPORT_TOTALS_OUTPUT_HEADERS = {
+  cableCount: 'Cables',
+  totalDesignLength: 'Total Design Length [m]',
+} as const;
+
+const REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS = {
+  type: 'Type',
+  purpose: 'Purpose',
+  material: 'Material',
+  description: 'Description',
+  manufacturer: 'Manufacturer',
+  partNo: 'Part No.',
+  totalQuantity: 'Total quantity',
+  unit: 'Unit',
+  cableCount: 'Cables',
+} as const;
+
+const normalizeOptionalString = (value: string | null | undefined): string | null => {
   if (value === undefined || value === null) {
     return null;
   }
@@ -101,15 +113,27 @@ const normalizeOptionalString = (
   return trimmed === '' ? null : trimmed;
 };
 
+const pickFirstNonEmptyString = (...values: Array<string | null | undefined>): string => {
+  for (const value of values) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+
+    if (value.trim() !== '') {
+      return value;
+    }
+  }
+
+  return '';
+};
+
 const sanitizeFileSegment = (value: string): string =>
   value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'project';
 
-const normalizeDateValue = (
-  value: string | null | undefined
-): string | null => {
+const normalizeDateValue = (value: string | null | undefined): string | null => {
   if (value === undefined || value === null) {
     return null;
   }
@@ -134,9 +158,7 @@ const normalizeDateValue = (
   return `${year}-${month}-${day}`;
 };
 
-const normalizeDateForComparison = (
-  value: string | Date | null | undefined
-): string | null => {
+const normalizeDateForComparison = (value: string | Date | null | undefined): string | null => {
   if (value instanceof Date) {
     const year = value.getFullYear();
     const month = String(value.getMonth() + 1).padStart(2, '0');
@@ -212,9 +234,7 @@ const parseNumericValue = (value: unknown): number | null => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
-const normalizeCableMaterialUnit = (
-  value: string | null | undefined
-): string | null => {
+const normalizeCableMaterialUnit = (value: string | null | undefined): string | null => {
   const normalized = value?.trim().toLowerCase();
 
   if (!normalized) {
@@ -246,9 +266,7 @@ const normalizeCableMaterialUnit = (
   return normalized;
 };
 
-const formatDateCell = (
-  value: Date | string | null | undefined
-): string => {
+const formatDateCell = (value: Date | string | null | undefined): string => {
   if (value === undefined || value === null) {
     return '';
   }
@@ -291,6 +309,11 @@ const selectCablesQuery = `
     c.updated_at,
     ct.name AS type_name,
     ct.purpose AS type_purpose,
+    ct.material AS type_material,
+    ct.description AS type_description,
+    ct.manufacturer AS type_manufacturer,
+    ct.part_no AS type_part_no,
+    ct.remarks AS type_remarks,
     ct.diameter_mm AS type_diameter_mm,
     ct.weight_kg_per_m AS type_weight_kg_per_m
   FROM cables c
@@ -319,6 +342,11 @@ const selectCableDetailsQuery = `
     c.updated_at,
     ct.name AS type_name,
     ct.purpose AS type_purpose,
+    ct.material AS type_material,
+    ct.description AS type_description,
+    ct.manufacturer AS type_manufacturer,
+    ct.part_no AS type_part_no,
+    ct.remarks AS type_remarks,
     ct.diameter_mm AS type_diameter_mm,
     ct.weight_kg_per_m AS type_weight_kg_per_m
   FROM cables c
@@ -374,6 +402,20 @@ const selectMaterialCableInstallationMaterialsQuery = `
   FROM material_cable_installation_materials
 `;
 
+const selectMaterialCableInstallationMaterialDetailsQuery = `
+  SELECT
+    id,
+    type,
+    purpose,
+    material,
+    description,
+    manufacturer,
+    part_no,
+    created_at,
+    updated_at
+  FROM material_cable_installation_materials
+`;
+
 type Queryable = Pick<PoolClient, 'query'>;
 
 type MaterialCableInstallationMaterialMatchRow = {
@@ -424,28 +466,26 @@ const VALID_CABLE_REPORT_FILTER_CRITERIA = new Set<CableReportFilterCriteria>([
   'typeName',
   'fromLocation',
   'toLocation',
-  'routing'
+  'routing',
 ]);
 
 const normalizeCableReportFilterCriteria = (
-  value: string | undefined
+  value: string | undefined,
 ): CableReportFilterCriteria =>
   value && VALID_CABLE_REPORT_FILTER_CRITERIA.has(value as CableReportFilterCriteria)
     ? (value as CableReportFilterCriteria)
     : 'all';
 
-const createMaterialCableInstallationMaterialNotFoundPayload = (
-  name: string
-) => ({
+const createMaterialCableInstallationMaterialNotFoundPayload = (name: string) => ({
   fieldErrors: {
-    name: [`Cable installation material "${name}" was not found in materials.`]
-  }
+    name: [`Cable installation material "${name}" was not found in materials.`],
+  },
 });
 
 const findProjectCableById = async (
   queryable: Queryable,
   projectId: string,
-  cableId: string
+  cableId: string,
 ): Promise<CableDetailsRow | null> => {
   const result = await queryable.query<CableDetailsRow>(
     `
@@ -454,7 +494,7 @@ const findProjectCableById = async (
         AND c.id = $2
       LIMIT 1;
     `,
-    [projectId, cableId]
+    [projectId, cableId],
   );
 
   return result.rows[0] ?? null;
@@ -462,7 +502,7 @@ const findProjectCableById = async (
 
 const listCableTypeDefaultMaterials = async (
   queryable: Queryable,
-  cableTypeId: string
+  cableTypeId: string,
 ): Promise<CableTypeDefaultMaterialRow[]> => {
   const result = await queryable.query<CableTypeDefaultMaterialRow>(
     `
@@ -470,7 +510,7 @@ const listCableTypeDefaultMaterials = async (
       WHERE cable_type_id = $1
       ORDER BY LOWER(name) ASC, created_at ASC;
     `,
-    [cableTypeId]
+    [cableTypeId],
   );
 
   return result.rows;
@@ -478,7 +518,7 @@ const listCableTypeDefaultMaterials = async (
 
 const listCableMaterials = async (
   queryable: Queryable,
-  cableId: string
+  cableId: string,
 ): Promise<CableMaterialRow[]> => {
   const result = await queryable.query<CableMaterialRow>(
     `
@@ -486,7 +526,7 @@ const listCableMaterials = async (
       WHERE cable_id = $1
       ORDER BY LOWER(name) ASC, created_at ASC;
     `,
-    [cableId]
+    [cableId],
   );
 
   return result.rows;
@@ -494,23 +534,63 @@ const listCableMaterials = async (
 
 const findMaterialCableTypeDetailsByName = async (
   queryable: Queryable,
-  name: string
+  name: string,
 ): Promise<MaterialCableTypeRow | null> => {
   const result = await queryable.query<MaterialCableTypeRow>(
     `
       ${selectMaterialCableTypeDetailsQuery}
-      WHERE lower(name) = lower($1)
-      LIMIT 1;
+      ORDER BY created_at ASC;
     `,
-    [name]
   );
 
-  return result.rows[0] ?? null;
+  return findNamedCatalogMatch(buildNamedCatalogLookup<MaterialCableTypeRow>(result.rows), name);
+};
+
+const listMaterialCableTypeDetailsByNames = async (
+  queryable: Queryable,
+  names: string[],
+): Promise<Map<string, MaterialCableTypeRow>> => {
+  const normalizedNames = Array.from(
+    new Set(
+      names.map((name) => normalizeComparableCableTypeName(name)).filter((name) => name !== ''),
+    ),
+  );
+
+  const detailsByName = new Map<string, MaterialCableTypeRow>();
+
+  if (normalizedNames.length === 0) {
+    return detailsByName;
+  }
+
+  const result = await queryable.query<MaterialCableTypeRow>(
+    `
+      ${selectMaterialCableTypeDetailsQuery}
+      ORDER BY created_at ASC;
+    `,
+  );
+
+  const materialCableTypeLookup = buildNamedCatalogLookup<MaterialCableTypeRow>(result.rows);
+
+  for (const name of names) {
+    const normalizedName = normalizeComparableCableTypeName(name);
+
+    if (normalizedName === '' || detailsByName.has(normalizedName)) {
+      continue;
+    }
+
+    const matchedDetails = findNamedCatalogMatch(materialCableTypeLookup, name);
+
+    if (matchedDetails) {
+      detailsByName.set(normalizedName, matchedDetails);
+    }
+  }
+
+  return detailsByName;
 };
 
 const findMaterialCableInstallationMaterialByType = async (
   queryable: Queryable,
-  type: string
+  type: string,
 ): Promise<MaterialCableInstallationMaterialMatchRow | null> => {
   const result = await queryable.query<MaterialCableInstallationMaterialMatchRow>(
     `
@@ -518,10 +598,71 @@ const findMaterialCableInstallationMaterialByType = async (
       WHERE lower(type) = lower($1)
       LIMIT 1;
     `,
-    [type]
+    [type],
   );
 
   return result.rows[0] ?? null;
+};
+
+const listMaterialCableInstallationMaterialDetailsByTypes = async (
+  queryable: Queryable,
+  types: string[],
+): Promise<Map<string, MaterialCableInstallationMaterialRow>> => {
+  const normalizedTypes = Array.from(
+    new Set(
+      types
+        .map((type) => type.trim().replace(/\s+/g, ' ').toLowerCase())
+        .filter((type) => type !== ''),
+    ),
+  );
+
+  const detailsByType = new Map<string, MaterialCableInstallationMaterialRow>();
+
+  if (normalizedTypes.length === 0) {
+    return detailsByType;
+  }
+
+  const result = await queryable.query<MaterialCableInstallationMaterialRow>(
+    `
+      ${selectMaterialCableInstallationMaterialDetailsQuery}
+      ORDER BY created_at ASC;
+    `,
+  );
+
+  const detailsByComparableType = new Map<string, MaterialCableInstallationMaterialRow>();
+  const detailsByFlexibleType = new Map<string, MaterialCableInstallationMaterialRow>();
+
+  for (const row of result.rows) {
+    const comparableType = normalizeComparableCatalogName(row.type);
+
+    if (comparableType !== '' && !detailsByComparableType.has(comparableType)) {
+      detailsByComparableType.set(comparableType, row);
+    }
+
+    const flexibleType = normalizeFlexibleCatalogName(row.type);
+
+    if (flexibleType !== '' && !detailsByFlexibleType.has(flexibleType)) {
+      detailsByFlexibleType.set(flexibleType, row);
+    }
+  }
+
+  for (const type of types) {
+    const normalizedType = normalizeComparableCableTypeName(type);
+
+    if (normalizedType === '' || detailsByType.has(normalizedType)) {
+      continue;
+    }
+
+    const matchedDetails =
+      detailsByComparableType.get(normalizedType) ??
+      detailsByFlexibleType.get(normalizeFlexibleCatalogName(type));
+
+    if (matchedDetails) {
+      detailsByType.set(normalizedType, matchedDetails);
+    }
+  }
+
+  return detailsByType;
 };
 
 const updateCableMaterialState = async (
@@ -530,7 +671,7 @@ const updateCableMaterialState = async (
   options: {
     initialized: boolean;
     customized: boolean;
-  }
+  },
 ): Promise<void> => {
   await queryable.query(
     `
@@ -541,18 +682,18 @@ const updateCableMaterialState = async (
         updated_at = NOW()
       WHERE id = $1;
     `,
-    [cableId, options.initialized, options.customized]
+    [cableId, options.initialized, options.customized],
   );
 };
 
 const normalizeComparableCableTypeName = (value: string): string =>
-  value.trim().replace(/\s+/g, ' ').toLowerCase();
+  normalizeComparableCatalogName(value);
 
 const resolveCableTypeDefaultMaterials = async (
   queryable: Queryable,
   projectId: string,
   cableTypeId: string,
-  cableTypeName: string
+  cableTypeName: string,
 ): Promise<CableTypeDefaultMaterialRow[]> => {
   const exactMaterials = await listCableTypeDefaultMaterials(queryable, cableTypeId);
 
@@ -577,7 +718,7 @@ const resolveCableTypeDefaultMaterials = async (
       ORDER BY COUNT(dm.id) DESC, ct.id ASC
       LIMIT 1;
     `,
-    [projectId, normalizedName]
+    [projectId, normalizedName],
   );
 
   const fallbackSource = fallbackSourceResult.rows[0];
@@ -594,13 +735,13 @@ const resetCableMaterialsToCableTypeDefaults = async (
   projectId: string,
   cableId: string,
   cableTypeId: string,
-  cableTypeName: string
+  cableTypeName: string,
 ): Promise<void> => {
   const defaultMaterials = await resolveCableTypeDefaultMaterials(
     queryable,
     projectId,
     cableTypeId,
-    cableTypeName
+    cableTypeName,
   );
 
   await queryable.query(
@@ -608,7 +749,7 @@ const resetCableMaterialsToCableTypeDefaults = async (
       DELETE FROM cable_materials
       WHERE cable_id = $1;
     `,
-    [cableId]
+    [cableId],
   );
 
   for (const material of defaultMaterials) {
@@ -624,20 +765,13 @@ const resetCableMaterialsToCableTypeDefaults = async (
         )
         VALUES ($1, $2, $3, $4, $5, $6);
       `,
-      [
-        randomUUID(),
-        cableId,
-        material.name,
-        material.quantity,
-        material.unit,
-        material.remarks
-      ]
+      [randomUUID(), cableId, material.name, material.quantity, material.unit, material.remarks],
     );
   }
 
   await updateCableMaterialState(queryable, cableId, {
     initialized: true,
-    customized: false
+    customized: false,
   });
 };
 
@@ -648,7 +782,7 @@ const ensureCableMaterialsInitialized = async (
   cableTypeId: string,
   cableTypeName: string,
   materialsInitialized: boolean,
-  materialsCustomized: boolean
+  materialsCustomized: boolean,
 ): Promise<CableMaterialRow[]> => {
   const existingMaterials = await listCableMaterials(queryable, cableId);
   const shouldHydrateFromDefaults =
@@ -660,7 +794,7 @@ const ensureCableMaterialsInitialized = async (
       projectId,
       cableId,
       cableTypeId,
-      cableTypeName
+      cableTypeName,
     );
 
     return listCableMaterials(queryable, cableId);
@@ -671,7 +805,7 @@ const ensureCableMaterialsInitialized = async (
 
 const listCableMaterialsByCableIds = async (
   queryable: Queryable,
-  cableIds: string[]
+  cableIds: string[],
 ): Promise<Map<string, CableMaterialRow[]>> => {
   const grouped = new Map<string, CableMaterialRow[]>();
 
@@ -685,7 +819,7 @@ const listCableMaterialsByCableIds = async (
       WHERE cable_id = ANY($1::uuid[])
       ORDER BY cable_id ASC, LOWER(name) ASC, created_at ASC;
     `,
-    [cableIds]
+    [cableIds],
   );
 
   for (const row of result.rows) {
@@ -702,17 +836,16 @@ const listCableMaterialsByCableIds = async (
   return grouped;
 };
 
-const roundReportQuantity = (value: number): number =>
-  Math.round(value * 1000) / 1000;
+const roundReportQuantity = (value: number): number => Math.round(value * 1000) / 1000;
 
 const buildCableReportSummary = async (
   queryable: Queryable,
   projectId: string,
-  cables: CableDetailsRow[]
+  cables: CableDetailsRow[],
 ): Promise<CableReportSummary> => {
   const cableMaterialsByCableId = await listCableMaterialsByCableIds(
     queryable,
-    cables.map((cable) => cable.id)
+    cables.map((cable) => cable.id),
   );
 
   const defaultMaterialsCache = new Map<string, Promise<CableTypeDefaultMaterialRow[]>>();
@@ -740,12 +873,8 @@ const buildCableReportSummary = async (
   let omittedMaterialCount = 0;
   let missingDesignLengthMaterialCount = 0;
 
-  const getDefaultMaterials = (
-    cable: CableDetailsRow
-  ): Promise<CableTypeDefaultMaterialRow[]> => {
-    const cacheKey = `${cable.cable_type_id}:${normalizeComparableCableTypeName(
-      cable.type_name
-    )}`;
+  const getDefaultMaterials = (cable: CableDetailsRow): Promise<CableTypeDefaultMaterialRow[]> => {
+    const cacheKey = `${cable.cable_type_id}:${normalizeComparableCableTypeName(cable.type_name)}`;
     const cached = defaultMaterialsCache.get(cacheKey);
 
     if (cached) {
@@ -756,7 +885,7 @@ const buildCableReportSummary = async (
       queryable,
       projectId,
       cable.cable_type_id,
-      cable.type_name
+      cable.type_name,
     );
     defaultMaterialsCache.set(cacheKey, next);
     return next;
@@ -783,7 +912,7 @@ const buildCableReportSummary = async (
               cableCount: number;
               missingDesignLengthCount: number;
             }
-          >()
+          >(),
         };
         cableTypeSummaries.set(cableTypeKey, next);
         return next;
@@ -840,7 +969,7 @@ const buildCableReportSummary = async (
             unit: outputUnit,
             totalQuantity: 0,
             cableCount: 0,
-            missingDesignLengthCount: 0
+            missingDesignLengthCount: 0,
           };
           cableTypeSummary.materials.set(materialKey, next);
           return next;
@@ -854,15 +983,13 @@ const buildCableReportSummary = async (
       }
 
       materialSummary.totalQuantity = roundReportQuantity(
-        materialSummary.totalQuantity + totalQuantity
+        materialSummary.totalQuantity + totalQuantity,
       );
     }
   }
 
   const sortedCableTypeSummaries = Array.from(cableTypeSummaries.values())
-    .sort((a, b) =>
-      a.typeName.localeCompare(b.typeName, undefined, { sensitivity: 'base' })
-    )
+    .sort((a, b) => a.typeName.localeCompare(b.typeName, undefined, { sensitivity: 'base' }))
     .map<CableReportCableTypeSummary>((summary) => ({
       cableTypeId: summary.cableTypeId,
       typeName: summary.typeName,
@@ -871,7 +998,7 @@ const buildCableReportSummary = async (
       materials: Array.from(summary.materials.values())
         .sort((a, b) => {
           const nameCompare = a.name.localeCompare(b.name, undefined, {
-            sensitivity: 'base'
+            sensitivity: 'base',
           });
 
           if (nameCompare !== 0) {
@@ -879,7 +1006,7 @@ const buildCableReportSummary = async (
           }
 
           return a.unit.localeCompare(b.unit, undefined, {
-            sensitivity: 'base'
+            sensitivity: 'base',
           });
         })
         .map((material) => ({
@@ -887,8 +1014,8 @@ const buildCableReportSummary = async (
           unit: material.unit,
           totalQuantity: roundReportQuantity(material.totalQuantity),
           cableCount: material.cableCount,
-          missingDesignLengthCount: material.missingDesignLengthCount
-        }))
+          missingDesignLengthCount: material.missingDesignLengthCount,
+        })),
     }));
 
   return {
@@ -897,8 +1024,78 @@ const buildCableReportSummary = async (
     totalDesignLength,
     omittedMaterialCount,
     missingDesignLengthMaterialCount,
-    cableTypeSummaries: sortedCableTypeSummaries
+    cableTypeSummaries: sortedCableTypeSummaries,
   };
+};
+
+const buildCableReportMaterialTotals = (
+  summary: CableReportSummary,
+): Array<{
+  name: string;
+  unit: string;
+  totalQuantity: number;
+  cableCount: number;
+  note: string;
+}> => {
+  const grouped = new Map<
+    string,
+    {
+      name: string;
+      unit: string;
+      totalQuantity: number;
+      cableCount: number;
+      missingDesignLengthCount: number;
+    }
+  >();
+
+  for (const cableTypeSummary of summary.cableTypeSummaries) {
+    for (const material of cableTypeSummary.materials) {
+      const key = `${material.name.toLowerCase()}::${material.unit}`;
+      const existing = grouped.get(key);
+
+      if (existing) {
+        existing.totalQuantity += material.totalQuantity;
+        existing.cableCount += material.cableCount;
+        existing.missingDesignLengthCount += material.missingDesignLengthCount;
+        continue;
+      }
+
+      grouped.set(key, {
+        name: material.name,
+        unit: material.unit,
+        totalQuantity: material.totalQuantity,
+        cableCount: material.cableCount,
+        missingDesignLengthCount: material.missingDesignLengthCount,
+      });
+    }
+  }
+
+  return Array.from(grouped.values())
+    .map((material) => ({
+      name: material.name,
+      unit: material.unit,
+      totalQuantity: roundReportQuantity(material.totalQuantity),
+      cableCount: material.cableCount,
+      note:
+        material.missingDesignLengthCount > 0
+          ? `Skipped ${material.missingDesignLengthCount} cable${
+              material.missingDesignLengthCount === 1 ? '' : 's'
+            } without design length`
+          : '',
+    }))
+    .sort((a, b) => {
+      const nameCompare = a.name.localeCompare(b.name, undefined, {
+        sensitivity: 'base',
+      });
+
+      if (nameCompare !== 0) {
+        return nameCompare;
+      }
+
+      return a.unit.localeCompare(b.unit, undefined, {
+        sensitivity: 'base',
+      });
+    });
 };
 
 const cablesRouter = Router({ mergeParams: true });
@@ -926,7 +1123,7 @@ cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         ORDER BY LOWER(COALESCE(c.tag, c.cable_id::text)) ASC,
           c.cable_id ASC;
       `,
-      [projectId]
+      [projectId],
     );
 
     res.json({ cables: result.rows.map(mapCableRow) });
@@ -936,61 +1133,57 @@ cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-cablesRouter.post(
-  '/',
-  authenticate,
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId } = req.params;
+cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promise<void> => {
+  const { projectId } = req.params;
 
-    if (!projectId) {
-      res.status(400).json({ error: 'Project ID is required' });
+  if (!projectId) {
+    res.status(400).json({ error: 'Project ID is required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
       return;
     }
+  } catch (error) {
+    console.error('Verify project for cable create error', error);
+    res.status(500).json({ error: 'Failed to verify project' });
+    return;
+  }
 
-    try {
-      const project = await ensureProjectExists(projectId);
+  const parseResult = createCableSchema.safeParse(req.body);
 
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
+  if (!parseResult.success) {
+    res.status(400).json({ error: parseResult.error.flatten() });
+    return;
+  }
 
-    } catch (error) {
-      console.error('Verify project for cable create error', error);
-      res.status(500).json({ error: 'Failed to verify project' });
-      return;
-    }
+  const {
+    cableId,
+    tag,
+    cableTypeId,
+    fromLocation,
+    toLocation,
+    routing,
+    designLength,
+    installLength,
+    pullDate,
+    connectedFrom,
+    connectedTo,
+    tested,
+  } = parseResult.data;
 
-    const parseResult = createCableSchema.safeParse(req.body);
+  let client: PoolClient | null = null;
 
-    if (!parseResult.success) {
-      res.status(400).json({ error: parseResult.error.flatten() });
-      return;
-    }
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
 
-    const {
-      cableId,
-      tag,
-      cableTypeId,
-      fromLocation,
-      toLocation,
-      routing,
-      designLength,
-      installLength,
-      pullDate,
-      connectedFrom,
-      connectedTo,
-      tested
-    } = parseResult.data;
-
-    let client: PoolClient | null = null;
-
-    try {
-      client = await pool.connect();
-      await client.query('BEGIN');
-
-      const typeResult = await client.query<CableTypeRow>(
-        `
+    const typeResult = await client.query<CableTypeRow>(
+      `
           SELECT
             id,
             project_id,
@@ -1004,24 +1197,22 @@ cablesRouter.post(
           WHERE id = $1
             AND project_id = $2;
         `,
-        [cableTypeId, projectId]
-      );
+      [cableTypeId, projectId],
+    );
 
-      const cableType = typeResult.rows[0];
+    const cableType = typeResult.rows[0];
 
-      if (!cableType) {
-        await client.query('ROLLBACK');
-        res
-          .status(400)
-          .json({ error: 'Cable type does not belong to the project' });
-        return;
-      }
+    if (!cableType) {
+      await client.query('ROLLBACK');
+      res.status(400).json({ error: 'Cable type does not belong to the project' });
+      return;
+    }
 
-      const insertedCableId = randomUUID();
-      const normalizedTag = normalizeOptionalString(tag ?? null);
+    const insertedCableId = randomUUID();
+    const normalizedTag = normalizeOptionalString(tag ?? null);
 
-      const insertResult = await client.query<CableRow>(
-        `
+    const insertResult = await client.query<CableRow>(
+      `
           INSERT INTO cables (
             id,
             project_id,
@@ -1057,74 +1248,71 @@ cablesRouter.post(
             created_at,
             updated_at;
         `,
-        [
-          insertedCableId,
-          projectId,
-          cableId,
-          normalizedTag,
-          cableTypeId,
-          normalizeOptionalString(fromLocation ?? null),
-          normalizeOptionalString(toLocation ?? null),
-          normalizeOptionalString(routing ?? null),
-          designLength ?? null,
-          installLength ?? null,
-          normalizeDateValue(pullDate ?? null),
-          normalizeDateValue(connectedFrom ?? null),
-          normalizeDateValue(connectedTo ?? null),
-          normalizeDateValue(tested ?? null)
-        ]
-      );
-
-      const inserted = insertResult.rows[0];
-
-      if (!inserted) {
-        await client.query('ROLLBACK');
-        res.status(500).json({ error: 'Failed to create cable' });
-        return;
-      }
-
-      await resetCableMaterialsToCableTypeDefaults(
-        client,
+      [
+        insertedCableId,
         projectId,
-        inserted.id,
+        cableId,
+        normalizedTag,
         cableTypeId,
-        cableType.name
-      );
-      await client.query('COMMIT');
+        normalizeOptionalString(fromLocation ?? null),
+        normalizeOptionalString(toLocation ?? null),
+        normalizeOptionalString(routing ?? null),
+        designLength ?? null,
+        installLength ?? null,
+        normalizeDateValue(pullDate ?? null),
+        normalizeDateValue(connectedFrom ?? null),
+        normalizeDateValue(connectedTo ?? null),
+        normalizeDateValue(tested ?? null),
+      ],
+    );
 
-      const result = await pool.query<CableWithTypeRow>(
-        `
+    const inserted = insertResult.rows[0];
+
+    if (!inserted) {
+      await client.query('ROLLBACK');
+      res.status(500).json({ error: 'Failed to create cable' });
+      return;
+    }
+
+    await resetCableMaterialsToCableTypeDefaults(
+      client,
+      projectId,
+      inserted.id,
+      cableTypeId,
+      cableType.name,
+    );
+    await client.query('COMMIT');
+
+    const result = await pool.query<CableWithTypeRow>(
+      `
           ${selectCablesQuery}
           WHERE c.id = $1;
         `,
-        [inserted.id]
-      );
+      [inserted.id],
+    );
 
-      res.status(201).json({ cable: mapCableRow(result.rows[0]) });
-    } catch (error) {
-      if (client) {
-        await client.query('ROLLBACK').catch(() => undefined);
-      }
-
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === '23505'
-      ) {
-        res
-          .status(409)
-          .json({ error: 'Cable ID already exists for this project' });
-        return;
-      }
-
-      console.error('Create cable error', error);
-      res.status(500).json({ error: 'Failed to create cable' });
-    } finally {
-      client?.release();
+    res.status(201).json({ cable: mapCableRow(result.rows[0]) });
+  } catch (error) {
+    if (client) {
+      await client.query('ROLLBACK').catch(() => undefined);
     }
+
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === '23505'
+    ) {
+      res.status(409).json({ error: 'Cable ID already exists for this project' });
+      return;
+    }
+
+    console.error('Create cable error', error);
+    res.status(500).json({ error: 'Failed to create cable' });
+  } finally {
+    client?.release();
   }
-);
+});
 
 cablesRouter.patch(
   '/:cableId',
@@ -1133,9 +1321,7 @@ cablesRouter.patch(
     const { projectId, cableId } = req.params;
 
     if (!projectId || !cableId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and cable ID are required' });
+      res.status(400).json({ error: 'Project ID and cable ID are required' });
       return;
     }
 
@@ -1158,7 +1344,7 @@ cablesRouter.patch(
       pullDate,
       connectedFrom,
       connectedTo,
-      tested
+      tested,
     } = parseResult.data;
 
     try {
@@ -1246,9 +1432,7 @@ cablesRouter.patch(
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const existingCableResult = await client.query<
-        Pick<CableRow, 'id' | 'cable_type_id'>
-      >(
+      const existingCableResult = await client.query<Pick<CableRow, 'id' | 'cable_type_id'>>(
         `
           SELECT id, cable_type_id
           FROM cables
@@ -1256,7 +1440,7 @@ cablesRouter.patch(
             AND project_id = $2
           LIMIT 1;
         `,
-        [cableId, projectId]
+        [cableId, projectId],
       );
 
       const existingCable = existingCableResult.rows[0];
@@ -1277,16 +1461,14 @@ cablesRouter.patch(
             WHERE id = $1
               AND project_id = $2;
           `,
-          [cableTypeId, projectId]
+          [cableTypeId, projectId],
         );
 
         const nextCableType = typeResult.rows[0];
 
         if (!nextCableType) {
           await client.query('ROLLBACK');
-          res
-            .status(400)
-            .json({ error: 'Cable type does not belong to the project' });
+          res.status(400).json({ error: 'Cable type does not belong to the project' });
           return;
         }
 
@@ -1302,14 +1484,12 @@ cablesRouter.patch(
               AND id <> $2
               AND cable_id = $3;
           `,
-          [projectId, cableId, newCableId]
+          [projectId, cableId, newCableId],
         );
 
         if (duplicate.rowCount > 0) {
           await client.query('ROLLBACK');
-          res
-            .status(409)
-            .json({ error: 'Cable ID already exists for this project' });
+          res.status(409).json({ error: 'Cable ID already exists for this project' });
           return;
         }
       }
@@ -1338,7 +1518,7 @@ cablesRouter.patch(
             created_at,
             updated_at;
         `,
-        [...values, cableId, projectId]
+        [...values, cableId, projectId],
       );
 
       const updated = updateResult.rows[0];
@@ -1358,7 +1538,7 @@ cablesRouter.patch(
           projectId,
           updated.id,
           cableTypeId,
-          nextCableTypeName ?? ''
+          nextCableTypeName ?? '',
         );
       }
 
@@ -1369,7 +1549,7 @@ cablesRouter.patch(
           ${selectCablesQuery}
           WHERE c.id = $1;
         `,
-        [updated.id]
+        [updated.id],
       );
 
       res.json({ cable: mapCableRow(result.rows[0]) });
@@ -1383,81 +1563,78 @@ cablesRouter.patch(
     } finally {
       client?.release();
     }
-  }
+  },
 );
 
-cablesRouter.get(
-  '/:cableId/details',
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId, cableId } = req.params;
+cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promise<void> => {
+  const { projectId, cableId } = req.params;
 
-    if (!projectId || !cableId) {
-      res.status(400).json({ error: 'Project ID and cable ID are required' });
+  if (!projectId || !cableId) {
+    res.status(400).json({ error: 'Project ID and cable ID are required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+  } catch (error) {
+    console.error('Verify project for cable details error', error);
+    res.status(500).json({ error: 'Failed to verify project' });
+    return;
+  }
+
+  let client: PoolClient | null = null;
+
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    const cable = await findProjectCableById(client, projectId, cableId);
+
+    if (!cable) {
+      await client.query('ROLLBACK');
+      res.status(404).json({ error: 'Cable not found' });
       return;
     }
 
-    try {
-      const project = await ensureProjectExists(projectId);
+    const cableMaterials = await ensureCableMaterialsInitialized(
+      client,
+      projectId,
+      cable.id,
+      cable.cable_type_id,
+      cable.type_name,
+      cable.materials_initialized,
+      cable.materials_customized,
+    );
 
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-    } catch (error) {
-      console.error('Verify project for cable details error', error);
-      res.status(500).json({ error: 'Failed to verify project' });
-      return;
+    const [materialCableType, cableTypeDefaultMaterials] = await Promise.all([
+      findMaterialCableTypeDetailsByName(client, cable.type_name),
+      resolveCableTypeDefaultMaterials(client, projectId, cable.cable_type_id, cable.type_name),
+    ]);
+
+    await client.query('COMMIT');
+
+    res.json({
+      cable: mapCableRow(cable),
+      materialCableType: materialCableType ? mapMaterialCableTypeRow(materialCableType) : null,
+      cableTypeDefaultMaterials: cableTypeDefaultMaterials.map(mapCableTypeDefaultMaterialRow),
+      cableMaterials: cableMaterials.map(mapCableMaterialRow),
+    });
+  } catch (error) {
+    if (client) {
+      await client.query('ROLLBACK').catch(() => undefined);
     }
 
-    let client: PoolClient | null = null;
-
-    try {
-      client = await pool.connect();
-      await client.query('BEGIN');
-
-      const cable = await findProjectCableById(client, projectId, cableId);
-
-      if (!cable) {
-        await client.query('ROLLBACK');
-        res.status(404).json({ error: 'Cable not found' });
-        return;
-      }
-
-      const cableMaterials = await ensureCableMaterialsInitialized(
-        client,
-        projectId,
-        cable.id,
-        cable.cable_type_id,
-        cable.type_name,
-        cable.materials_initialized,
-        cable.materials_customized
-      );
-
-      const [materialCableType, cableTypeDefaultMaterials] = await Promise.all([
-        findMaterialCableTypeDetailsByName(client, cable.type_name),
-        resolveCableTypeDefaultMaterials(client, projectId, cable.cable_type_id, cable.type_name)
-      ]);
-
-      await client.query('COMMIT');
-
-      res.json({
-        cable: mapCableRow(cable),
-        materialCableType: materialCableType ? mapMaterialCableTypeRow(materialCableType) : null,
-        cableTypeDefaultMaterials: cableTypeDefaultMaterials.map(mapCableTypeDefaultMaterialRow),
-        cableMaterials: cableMaterials.map(mapCableMaterialRow)
-      });
-    } catch (error) {
-      if (client) {
-        await client.query('ROLLBACK').catch(() => undefined);
-      }
-
-      console.error('Fetch cable details error', error);
-      res.status(500).json({ error: 'Failed to fetch cable details' });
-    } finally {
-      client?.release();
-    }
+    console.error('Fetch cable details error', error);
+    res.status(500).json({ error: 'Failed to fetch cable details' });
+  } finally {
+    client?.release();
   }
-);
+});
 
 cablesRouter.post(
   '/:cableId/materials',
@@ -1505,17 +1682,19 @@ cablesRouter.post(
         cable.cable_type_id,
         cable.type_name,
         cable.materials_initialized,
-        cable.materials_customized
+        cable.materials_customized,
       );
 
       const { name, quantity, unit, remarks } = parseResult.data;
-      const materialCableInstallationMaterial =
-        await findMaterialCableInstallationMaterialByType(client, name);
+      const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
+        client,
+        name,
+      );
 
       if (!materialCableInstallationMaterial) {
         await client.query('ROLLBACK');
         res.status(400).json({
-          error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim())
+          error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim()),
         });
         return;
       }
@@ -1547,18 +1726,18 @@ cablesRouter.post(
           materialCableInstallationMaterial.type,
           quantity ?? null,
           normalizeOptionalString(unit ?? null),
-          normalizeOptionalString(remarks ?? null)
-        ]
+          normalizeOptionalString(remarks ?? null),
+        ],
       );
 
       await updateCableMaterialState(client, cable.id, {
         initialized: true,
-        customized: true
+        customized: true,
       });
       await client.query('COMMIT');
 
       res.status(201).json({
-        cableMaterial: mapCableMaterialRow(result.rows[0])
+        cableMaterial: mapCableMaterialRow(result.rows[0]),
       });
     } catch (error) {
       if (client) {
@@ -1570,7 +1749,7 @@ cablesRouter.post(
     } finally {
       client?.release();
     }
-  }
+  },
 );
 
 cablesRouter.patch(
@@ -1581,7 +1760,7 @@ cablesRouter.patch(
 
     if (!projectId || !cableId || !materialId) {
       res.status(400).json({
-        error: 'Project ID, cable ID, and material ID are required'
+        error: 'Project ID, cable ID, and material ID are required',
       });
       return;
     }
@@ -1621,7 +1800,7 @@ cablesRouter.patch(
         cable.cable_type_id,
         cable.type_name,
         cable.materials_initialized,
-        cable.materials_customized
+        cable.materials_customized,
       );
 
       const { name, quantity, unit, remarks } = parseResult.data;
@@ -1630,13 +1809,15 @@ cablesRouter.patch(
       let index = 1;
 
       if (name !== undefined) {
-        const materialCableInstallationMaterial =
-          await findMaterialCableInstallationMaterialByType(client, name);
+        const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
+          client,
+          name,
+        );
 
         if (!materialCableInstallationMaterial) {
           await client.query('ROLLBACK');
           res.status(400).json({
-            error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim())
+            error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim()),
           });
           return;
         }
@@ -1678,7 +1859,7 @@ cablesRouter.patch(
             created_at,
             updated_at;
         `,
-        [...values, materialId, cable.id]
+        [...values, materialId, cable.id],
       );
 
       const cableMaterial = result.rows[0];
@@ -1691,12 +1872,12 @@ cablesRouter.patch(
 
       await updateCableMaterialState(client, cable.id, {
         initialized: true,
-        customized: true
+        customized: true,
       });
       await client.query('COMMIT');
 
       res.json({
-        cableMaterial: mapCableMaterialRow(cableMaterial)
+        cableMaterial: mapCableMaterialRow(cableMaterial),
       });
     } catch (error) {
       if (client) {
@@ -1708,7 +1889,7 @@ cablesRouter.patch(
     } finally {
       client?.release();
     }
-  }
+  },
 );
 
 cablesRouter.delete(
@@ -1719,7 +1900,7 @@ cablesRouter.delete(
 
     if (!projectId || !cableId || !materialId) {
       res.status(400).json({
-        error: 'Project ID, cable ID, and material ID are required'
+        error: 'Project ID, cable ID, and material ID are required',
       });
       return;
     }
@@ -1752,7 +1933,7 @@ cablesRouter.delete(
         cable.cable_type_id,
         cable.type_name,
         cable.materials_initialized,
-        cable.materials_customized
+        cable.materials_customized,
       );
 
       const result = await client.query(
@@ -1761,7 +1942,7 @@ cablesRouter.delete(
           WHERE id = $1
             AND cable_id = $2;
         `,
-        [materialId, cable.id]
+        [materialId, cable.id],
       );
 
       if (result.rowCount === 0) {
@@ -1772,7 +1953,7 @@ cablesRouter.delete(
 
       await updateCableMaterialState(client, cable.id, {
         initialized: true,
-        customized: true
+        customized: true,
       });
       await client.query('COMMIT');
 
@@ -1787,7 +1968,7 @@ cablesRouter.delete(
     } finally {
       client?.release();
     }
-  }
+  },
 );
 
 cablesRouter.delete(
@@ -1797,9 +1978,7 @@ cablesRouter.delete(
     const { projectId, cableId } = req.params;
 
     if (!projectId || !cableId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and cable ID are required' });
+      res.status(400).json({ error: 'Project ID and cable ID are required' });
       return;
     }
 
@@ -1810,7 +1989,7 @@ cablesRouter.delete(
           WHERE id = $1
             AND project_id = $2;
         `,
-        [cableId, projectId]
+        [cableId, projectId],
       );
 
       if (result.rowCount === 0) {
@@ -1823,7 +2002,7 @@ cablesRouter.delete(
       console.error('Delete cable error', error);
       res.status(500).json({ error: 'Failed to delete cable' });
     }
-  }
+  },
 );
 
 cablesRouter.post(
@@ -1870,9 +2049,7 @@ cablesRouter.post(
       const sheetName = workbook.SheetNames[0];
 
       if (!sheetName) {
-        res
-          .status(400)
-          .json({ error: 'The workbook does not contain any sheets' });
+        res.status(400).json({ error: 'The workbook does not contain any sheets' });
         return;
       }
 
@@ -1887,13 +2064,13 @@ cablesRouter.post(
 
     const rows = XLSX.utils.sheet_to_json<CableImportRow>(worksheet, {
       defval: '',
-      raw: false
+      raw: false,
     });
 
     const summary = {
       inserted: 0,
       updated: 0,
-      skipped: 0
+      skipped: 0,
     };
 
     type PreparedCableFields = {
@@ -1939,7 +2116,7 @@ cablesRouter.post(
       INPUT_HEADERS.type,
       INPUT_HEADERS.fromLocation,
       INPUT_HEADERS.toLocation,
-      INPUT_HEADERS.designLength
+      INPUT_HEADERS.designLength,
     ];
 
     const missingColumns = requiredColumns.filter((header) => !hasColumn(header));
@@ -1949,7 +2126,7 @@ cablesRouter.post(
       res.status(400).json({
         error: `Import cancelled. Missing required column${
           missingColumns.length === 1 ? '' : 's'
-        }: ${columnList}.`
+        }: ${columnList}.`,
       });
       return;
     }
@@ -1965,7 +2142,7 @@ cablesRouter.post(
       pullDate: hasColumn(INPUT_HEADERS.pullDate),
       connectedFrom: hasColumn(INPUT_HEADERS.connectedFrom),
       connectedTo: hasColumn(INPUT_HEADERS.connectedTo),
-      tested: hasColumn(INPUT_HEADERS.tested)
+      tested: hasColumn(INPUT_HEADERS.tested),
     };
 
     for (const row of rows) {
@@ -1985,10 +2162,7 @@ cablesRouter.post(
       }
 
       const rawType = row[INPUT_HEADERS.type] as unknown;
-      const typeName =
-        typeof rawType === 'number'
-          ? String(rawType)
-          : String(rawType ?? '').trim();
+      const typeName = typeof rawType === 'number' ? String(rawType) : String(rawType ?? '').trim();
 
       if (typeName === '') {
         summary.skipped += 1;
@@ -2003,7 +2177,7 @@ cablesRouter.post(
         fields.tag = normalizeOptionalString(
           typeof row[INPUT_HEADERS.tag] === 'number'
             ? String(row[INPUT_HEADERS.tag])
-            : (row[INPUT_HEADERS.tag] as string | null | undefined)
+            : (row[INPUT_HEADERS.tag] as string | null | undefined),
         );
       }
 
@@ -2011,7 +2185,7 @@ cablesRouter.post(
         fields.fromLocation = normalizeOptionalString(
           typeof row[INPUT_HEADERS.fromLocation] === 'number'
             ? String(row[INPUT_HEADERS.fromLocation])
-            : (row[INPUT_HEADERS.fromLocation] as string | null | undefined)
+            : (row[INPUT_HEADERS.fromLocation] as string | null | undefined),
         );
       }
 
@@ -2019,7 +2193,7 @@ cablesRouter.post(
         fields.toLocation = normalizeOptionalString(
           typeof row[INPUT_HEADERS.toLocation] === 'number'
             ? String(row[INPUT_HEADERS.toLocation])
-            : (row[INPUT_HEADERS.toLocation] as string | null | undefined)
+            : (row[INPUT_HEADERS.toLocation] as string | null | undefined),
         );
       }
 
@@ -2027,44 +2201,38 @@ cablesRouter.post(
         fields.routing = normalizeOptionalString(
           typeof row[LIST_OUTPUT_HEADERS.routing] === 'number'
             ? String(row[LIST_OUTPUT_HEADERS.routing])
-            : (row[LIST_OUTPUT_HEADERS.routing] as string | null | undefined)
+            : (row[LIST_OUTPUT_HEADERS.routing] as string | null | undefined),
         );
       }
 
       if (columnAvailability.designLength) {
-        fields.designLength = parseInstallLength(
-          row[INPUT_HEADERS.designLength] as unknown
-        );
+        fields.designLength = parseInstallLength(row[INPUT_HEADERS.designLength] as unknown);
       }
 
       if (columnAvailability.installLength) {
-        fields.installLength = parseInstallLength(
-          row[INPUT_HEADERS.installLength] as unknown
-        );
+        fields.installLength = parseInstallLength(row[INPUT_HEADERS.installLength] as unknown);
       }
 
       if (columnAvailability.pullDate) {
         fields.pullDate = normalizeDateValue(
-          row[INPUT_HEADERS.pullDate] as string | null | undefined
+          row[INPUT_HEADERS.pullDate] as string | null | undefined,
         );
       }
 
       if (columnAvailability.connectedFrom) {
         fields.connectedFrom = normalizeDateValue(
-          row[INPUT_HEADERS.connectedFrom] as string | null | undefined
+          row[INPUT_HEADERS.connectedFrom] as string | null | undefined,
         );
       }
 
       if (columnAvailability.connectedTo) {
         fields.connectedTo = normalizeDateValue(
-          row[INPUT_HEADERS.connectedTo] as string | null | undefined
+          row[INPUT_HEADERS.connectedTo] as string | null | undefined,
         );
       }
 
       if (columnAvailability.tested) {
-        fields.tested = normalizeDateValue(
-          row[INPUT_HEADERS.tested] as string | null | undefined
-        );
+        fields.tested = normalizeDateValue(row[INPUT_HEADERS.tested] as string | null | undefined);
       }
 
       prepared.push({
@@ -2072,7 +2240,7 @@ cablesRouter.post(
         cableKey,
         typeName,
         typeKey,
-        fields
+        fields,
       });
 
       seenCableIds.add(cableKey);
@@ -2087,18 +2255,18 @@ cablesRouter.post(
             ORDER BY LOWER(COALESCE(c.tag, c.cable_id::text)) ASC,
               c.cable_id ASC;
           `,
-          [projectId]
+          [projectId],
         );
 
         res.json({
           summary,
-          cables: existing.rows.map(mapCableRow)
+          cables: existing.rows.map(mapCableRow),
         });
       } catch (error) {
         console.error('Fetch cables after empty import error', error);
         res.status(500).json({
           error: 'No rows imported and failed to fetch existing cables',
-          summary
+          summary,
         });
       }
       return;
@@ -2141,7 +2309,7 @@ cablesRouter.post(
                 WHERE project_id = $1
                   AND lower(name) = ANY($2::text[]);
               `,
-              [projectId, typeKeys]
+              [projectId, typeKeys],
             )
           : { rows: [] as CableTypeRow[] };
 
@@ -2173,7 +2341,7 @@ cablesRouter.post(
           WHERE c.project_id = $1
             AND c.cable_id = ANY($2::int[]);
         `,
-        [projectId, prepared.map((row) => row.cableKey)]
+        [projectId, prepared.map((row) => row.cableKey)],
       );
 
       const existingMap = new Map<number, ExistingCable>();
@@ -2230,15 +2398,15 @@ cablesRouter.post(
               fields.pullDate ?? null,
               fields.connectedFrom ?? null,
               fields.connectedTo ?? null,
-              fields.tested ?? null
-            ]
+              fields.tested ?? null,
+            ],
           );
           await resetCableMaterialsToCableTypeDefaults(
             client,
             projectId,
             insertedCableId,
             type.id,
-            type.name
+            type.name,
           );
           summary.inserted += 1;
           continue;
@@ -2264,9 +2432,7 @@ cablesRouter.post(
         }
 
         if (columnAvailability.fromLocation && fields.fromLocation !== undefined) {
-          const currentFrom = normalizeOptionalString(
-            existing.from_location ?? null
-          );
+          const currentFrom = normalizeOptionalString(existing.from_location ?? null);
           if (fields.fromLocation !== currentFrom) {
             updateAssignments.push(`from_location = $${parameterIndex}`);
             updateValues.push(fields.fromLocation ?? null);
@@ -2319,13 +2485,8 @@ cablesRouter.post(
           }
         }
 
-        if (
-          columnAvailability.connectedFrom &&
-          fields.connectedFrom !== undefined
-        ) {
-          const currentConnectedFrom = normalizeDateForComparison(
-            existing.connected_from
-          );
+        if (columnAvailability.connectedFrom && fields.connectedFrom !== undefined) {
+          const currentConnectedFrom = normalizeDateForComparison(existing.connected_from);
           if (fields.connectedFrom !== currentConnectedFrom) {
             updateAssignments.push(`connected_from = $${parameterIndex}`);
             updateValues.push(fields.connectedFrom ?? null);
@@ -2333,13 +2494,8 @@ cablesRouter.post(
           }
         }
 
-        if (
-          columnAvailability.connectedTo &&
-          fields.connectedTo !== undefined
-        ) {
-          const currentConnectedTo = normalizeDateForComparison(
-            existing.connected_to
-          );
+        if (columnAvailability.connectedTo && fields.connectedTo !== undefined) {
+          const currentConnectedTo = normalizeDateForComparison(existing.connected_to);
           if (fields.connectedTo !== currentConnectedTo) {
             updateAssignments.push(`connected_to = $${parameterIndex}`);
             updateValues.push(fields.connectedTo ?? null);
@@ -2375,7 +2531,7 @@ cablesRouter.post(
               ${assignments}
             WHERE id = $${idParameterIndex};
           `,
-          [...updateValues, existing.id]
+          [...updateValues, existing.id],
         );
 
         if (shouldResetMaterials) {
@@ -2384,7 +2540,7 @@ cablesRouter.post(
             projectId,
             existing.id,
             type.id,
-            type.name
+            type.name,
           );
         }
 
@@ -2409,145 +2565,136 @@ cablesRouter.post(
           ORDER BY LOWER(COALESCE(c.tag, c.cable_id::text)) ASC,
             c.cable_id ASC;
         `,
-        [projectId]
+        [projectId],
       );
 
       res.json({
         summary,
-        cables: refreshed.rows.map(mapCableRow)
+        cables: refreshed.rows.map(mapCableRow),
       });
     } catch (error) {
       console.error('Fetch cables after import error', error);
       res.status(500).json({
         error: 'Cables imported but failed to refresh list',
-        summary
+        summary,
       });
     }
-  }
+  },
 );
 
-cablesRouter.get(
-  '/report-summary',
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId } = req.params;
-    const filterQuery =
-      typeof req.query.filter === 'string' ? req.query.filter : undefined;
-    const filterCriteria = normalizeCableReportFilterCriteria(
-      typeof req.query.criteria === 'string' ? req.query.criteria : undefined
-    );
+cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise<void> => {
+  const { projectId } = req.params;
+  const filterQuery = typeof req.query.filter === 'string' ? req.query.filter : undefined;
+  const filterCriteria = normalizeCableReportFilterCriteria(
+    typeof req.query.criteria === 'string' ? req.query.criteria : undefined,
+  );
 
-    if (!projectId) {
-      res.status(400).json({ error: 'Project ID is required' });
+  if (!projectId) {
+    res.status(400).json({ error: 'Project ID is required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
       return;
     }
 
-    try {
-      const project = await ensureProjectExists(projectId);
+    const conditions: string[] = ['c.project_id = $1'];
+    const values: string[] = [projectId];
+    let parameterIndex = 2;
 
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
+    const normalizedFilter = filterQuery?.trim().toLowerCase() ?? '';
 
-      const conditions: string[] = ['c.project_id = $1'];
-      const values: string[] = [projectId];
-      let parameterIndex = 2;
+    if (normalizedFilter) {
+      const likeParam = `$${parameterIndex}`;
+      const filterExpressions =
+        filterCriteria === 'tag'
+          ? [`LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`]
+          : filterCriteria === 'typeName'
+            ? [`LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`]
+            : filterCriteria === 'fromLocation'
+              ? [`LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`]
+              : filterCriteria === 'toLocation'
+                ? [`LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`]
+                : filterCriteria === 'routing'
+                  ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
+                  : [
+                      `LOWER(c.cable_id::text) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.design_length::text, '')) LIKE ${likeParam}`,
+                    ];
 
-      const normalizedFilter = filterQuery?.trim().toLowerCase() ?? '';
+      conditions.push(`(${filterExpressions.join(' OR ')})`);
+      values.push(`%${normalizedFilter}%`);
+      parameterIndex += 1;
+    }
 
-      if (normalizedFilter) {
-        const likeParam = `$${parameterIndex}`;
-        const filterExpressions =
-          filterCriteria === 'tag'
-            ? [`LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`]
-            : filterCriteria === 'typeName'
-              ? [`LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`]
-              : filterCriteria === 'fromLocation'
-                ? [`LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`]
-                : filterCriteria === 'toLocation'
-                  ? [`LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`]
-                  : filterCriteria === 'routing'
-                    ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
-                    : [
-                        `LOWER(c.cable_id::text) LIKE ${likeParam}`,
-                        `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
-                        `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
-                        `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
-                        `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
-                        `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
-                        `LOWER(COALESCE(c.design_length::text, '')) LIKE ${likeParam}`
-                      ];
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        conditions.push(`(${filterExpressions.join(' OR ')})`);
-        values.push(`%${normalizedFilter}%`);
-        parameterIndex += 1;
-      }
-
-      const whereClause = conditions.length
-        ? `WHERE ${conditions.join(' AND ')}`
-        : '';
-
-      const result = await pool.query<CableDetailsRow>(
-        `
+    const result = await pool.query<CableDetailsRow>(
+      `
           ${selectCableDetailsQuery}
           ${whereClause}
           ORDER BY LOWER(COALESCE(ct.name, '')) ASC, c.cable_id ASC;
         `,
-        values
-      );
+      values,
+    );
 
-      const summary = await buildCableReportSummary(pool, projectId, result.rows);
+    const summary = await buildCableReportSummary(pool, projectId, result.rows);
 
-      res.json({ summary });
-    } catch (error) {
-      console.error('Fetch cable report summary error', error);
-      res.status(500).json({ error: 'Failed to fetch cable report summary' });
-    }
+    res.json({ summary });
+  } catch (error) {
+    console.error('Fetch cable report summary error', error);
+    res.status(500).json({ error: 'Failed to fetch cable report summary' });
   }
-);
+});
 
-cablesRouter.get(
-  '/export',
-  authenticate,
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId } = req.params;
-    const {
-      filter: filterQuery,
-      cableTypeId: cableTypeIdQuery,
-      sortColumn: sortColumnQuery,
-      sortDirection: sortDirectionQuery
-    } = req.query as Record<string, string | undefined>;
+cablesRouter.get('/export', authenticate, async (req: Request, res: Response): Promise<void> => {
+  const { projectId } = req.params;
+  const {
+    filter: filterQuery,
+    cableTypeId: cableTypeIdQuery,
+    sortColumn: sortColumnQuery,
+    sortDirection: sortDirectionQuery,
+  } = req.query as Record<string, string | undefined>;
 
-    if (!projectId) {
-      res.status(400).json({ error: 'Project ID is required' });
+  if (!projectId) {
+    res.status(400).json({ error: 'Project ID is required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
       return;
     }
 
-    try {
-      const project = await ensureProjectExists(projectId);
+    const conditions: string[] = ['c.project_id = $1'];
+    const values: Array<string> = [projectId];
+    let parameterIndex = 2;
 
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
+    if (cableTypeIdQuery) {
+      conditions.push(`c.cable_type_id = $${parameterIndex}`);
+      values.push(cableTypeIdQuery);
+      parameterIndex += 1;
+    }
 
-      const conditions: string[] = ['c.project_id = $1'];
-      const values: Array<string> = [projectId];
-      let parameterIndex = 2;
+    const normalizedFilter =
+      typeof filterQuery === 'string' ? filterQuery.trim().toLowerCase() : '';
 
-      if (cableTypeIdQuery) {
-        conditions.push(`c.cable_type_id = $${parameterIndex}`);
-        values.push(cableTypeIdQuery);
-        parameterIndex += 1;
-      }
-
-      const normalizedFilter =
-        typeof filterQuery === 'string' ? filterQuery.trim().toLowerCase() : '';
-
-      if (normalizedFilter) {
-        const likeParam = `$${parameterIndex}`;
-        conditions.push(
-          `
+    if (normalizedFilter) {
+      const likeParam = `$${parameterIndex}`;
+      conditions.push(
+        `
             (
               LOWER(c.cable_id::text) LIKE ${likeParam}
               OR LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}
@@ -2556,188 +2703,146 @@ cablesRouter.get(
               OR LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}
               OR LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}
             )
-          `
+          `,
+      );
+      values.push(`%${normalizedFilter}%`);
+      parameterIndex += 1;
+    }
+
+    const allowedSortColumns = new Set([
+      'tag',
+      'typeName',
+      'fromLocation',
+      'toLocation',
+      'routing',
+    ]);
+
+    const normalizedSortColumn =
+      sortColumnQuery && allowedSortColumns.has(sortColumnQuery) ? sortColumnQuery : 'tag';
+
+    const normalizedSortDirection =
+      sortDirectionQuery && sortDirectionQuery.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+
+    const sortExpressionMap: Record<string, string> = {
+      tag: 'LOWER(COALESCE(c.tag, c.cable_id::text))',
+      typeName: "LOWER(COALESCE(ct.name, ''))",
+      fromLocation: "LOWER(COALESCE(c.from_location, ''))",
+      toLocation: "LOWER(COALESCE(c.to_location, ''))",
+      routing: "LOWER(COALESCE(c.routing, ''))",
+    };
+
+    const sortExpression = sortExpressionMap[normalizedSortColumn] ?? 'c.cable_id';
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const viewParam = typeof req.query.view === 'string' ? req.query.view.toLowerCase() : undefined;
+    const exportView = viewParam === 'report' ? 'report' : 'list';
+    const workbook = new ExcelJS.Workbook();
+    if (exportView === 'report') {
+      const reportResult = await pool.query<CableDetailsRow>(
+        `
+            ${selectCableDetailsQuery}
+            ${whereClause}
+            ORDER BY ${sortExpression} ${normalizedSortDirection}, c.cable_id ASC;
+          `,
+        values,
+      );
+
+      const reportRows = reportResult.rows;
+      const materialCableTypeDetailsByName = await listMaterialCableTypeDetailsByNames(
+        pool,
+        reportRows.map((row: CableDetailsRow) => row.type_name ?? ''),
+      );
+      const summary = await buildCableReportSummary(pool, projectId, reportRows);
+      const materialTotals = buildCableReportMaterialTotals(summary);
+      const materialInstallationDetailsByType =
+        await listMaterialCableInstallationMaterialDetailsByTypes(
+          pool,
+          materialTotals.map((material) => material.name),
         );
-        values.push(`%${normalizedFilter}%`);
-        parameterIndex += 1;
+      const cableTypeMetadataById = new Map<string, CableDetailsRow>();
+
+      for (const row of reportRows) {
+        if (!cableTypeMetadataById.has(row.cable_type_id)) {
+          cableTypeMetadataById.set(row.cable_type_id, row);
+        }
       }
 
-      const allowedSortColumns = new Set([
-        'tag',
-        'typeName',
-        'fromLocation',
-        'toLocation',
-        'routing'
-      ]);
+      const summaryWorksheet = workbook.addWorksheet('Cables report', {
+        views: [{ state: 'frozen', ySplit: 1 }],
+      });
 
-      const normalizedSortColumn =
-        sortColumnQuery && allowedSortColumns.has(sortColumnQuery)
-          ? sortColumnQuery
-          : 'tag';
-
-      const normalizedSortDirection =
-        sortDirectionQuery && sortDirectionQuery.toLowerCase() === 'desc'
-          ? 'DESC'
-          : 'ASC';
-
-      const sortExpressionMap: Record<string, string> = {
-        tag: "LOWER(COALESCE(c.tag, c.cable_id::text))",
-        typeName: "LOWER(COALESCE(ct.name, ''))",
-        fromLocation: "LOWER(COALESCE(c.from_location, ''))",
-        toLocation: "LOWER(COALESCE(c.to_location, ''))",
-        routing: "LOWER(COALESCE(c.routing, ''))"
-      };
-
-      const sortExpression =
-        sortExpressionMap[normalizedSortColumn] ?? 'c.cable_id';
-
-      const whereClause = conditions.length
-        ? `WHERE ${conditions.join(' AND ')}`
-        : '';
-
-      const result = await pool.query<CableWithTypeRow>(
-        `
-          ${selectCablesQuery}
-          ${whereClause}
-          ORDER BY ${sortExpression} ${normalizedSortDirection}, c.cable_id ASC;
-        `,
-        values
-      );
-
-      const viewParam =
-        typeof req.query.view === 'string'
-          ? req.query.view.toLowerCase()
-          : undefined;
-      const exportView = viewParam === 'report' ? 'report' : 'list';
-
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet(
-        exportView === 'report' ? 'Cables report' : 'Cables',
+      const cableTypeColumns = [
+        { name: REPORT_OUTPUT_HEADERS.type, key: 'type', width: 26 },
+        { name: REPORT_OUTPUT_HEADERS.purpose, key: 'purpose', width: 22 },
+        { name: REPORT_OUTPUT_HEADERS.diameter, key: 'diameter', width: 18 },
+        { name: REPORT_OUTPUT_HEADERS.material, key: 'material', width: 22 },
+        { name: REPORT_OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
         {
-          views: [{ state: 'frozen', ySplit: 1 }]
-        }
-      );
+          name: REPORT_OUTPUT_HEADERS.description,
+          key: 'description',
+          width: 28,
+        },
+        {
+          name: REPORT_OUTPUT_HEADERS.manufacturer,
+          key: 'manufacturer',
+          width: 22,
+        },
+        { name: REPORT_OUTPUT_HEADERS.partNo, key: 'partNo', width: 20 },
+        { name: REPORT_OUTPUT_HEADERS.remarks, key: 'remarks', width: 24 },
+        {
+          name: REPORT_TOTALS_OUTPUT_HEADERS.cableCount,
+          key: 'cableCount',
+          width: 14,
+        },
+        {
+          name: REPORT_TOTALS_OUTPUT_HEADERS.totalDesignLength,
+          key: 'totalDesignLength',
+          width: 22,
+        },
+      ] as const;
 
-      const columns =
-        exportView === 'report'
-          ? [
-              {
-                name: REPORT_OUTPUT_HEADERS.cableId,
-                key: 'cableId',
-                width: 18
-              },
-              { name: REPORT_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
-              { name: REPORT_OUTPUT_HEADERS.type, key: 'type', width: 26 },
-              {
-                name: REPORT_OUTPUT_HEADERS.fromLocation,
-                key: 'fromLocation',
-                width: 26
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.toLocation,
-                key: 'toLocation',
-                width: 26
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.designLength,
-                key: 'designLength',
-                width: 18
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.installLength,
-                key: 'installLength',
-                width: 18
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.pullDate,
-                key: 'pullDate',
-                width: 20
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.connectedFrom,
-                key: 'connectedFrom',
-                width: 20
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.connectedTo,
-                key: 'connectedTo',
-                width: 20
-              },
-              { name: REPORT_OUTPUT_HEADERS.tested, key: 'tested', width: 18 }
-            ] as const
-          : [
-              { name: LIST_OUTPUT_HEADERS.cableId, key: 'cableId', width: 18 },
-              { name: LIST_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
-              { name: LIST_OUTPUT_HEADERS.type, key: 'type', width: 28 },
-              { name: LIST_OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
-              {
-                name: LIST_OUTPUT_HEADERS.diameter,
-                key: 'diameter',
-                width: 18
-              },
-              { name: LIST_OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
-              {
-                name: LIST_OUTPUT_HEADERS.fromLocation,
-                key: 'fromLocation',
-                width: 26
-              },
-              {
-                name: LIST_OUTPUT_HEADERS.toLocation,
-                key: 'toLocation',
-                width: 26
-              },
-              {
-                name: LIST_OUTPUT_HEADERS.routing,
-                key: 'routing',
-                width: 30
-              },
-              {
-                name: LIST_OUTPUT_HEADERS.designLength,
-                key: 'designLength',
-                width: 18
-              }
-            ] as const;
+      const cableTypeRows = summary.cableTypeSummaries.map((cableTypeSummary) => {
+        const metadata = cableTypeMetadataById.get(cableTypeSummary.cableTypeId);
+        const materialDetails = metadata
+          ? materialCableTypeDetailsByName.get(
+              normalizeComparableCableTypeName(metadata.type_name ?? ''),
+            )
+          : null;
 
-      const rows =
-        exportView === 'report'
-          ? result.rows.map((row: CableWithTypeRow) => [
-              row.cable_id ?? '',
-              row.tag ?? '',
-              row.type_name ?? '',
-              row.from_location ?? '',
-              row.to_location ?? '',
-              row.design_length !== null && row.design_length !== ''
-                ? Number(row.design_length)
-                : '',
-              row.install_length !== null && row.install_length !== ''
-                ? Number(row.install_length)
-                : '',
-              formatDateCell(row.pull_date),
-              formatDateCell(row.connected_from),
-              formatDateCell(row.connected_to),
-              formatDateCell(row.tested)
-            ])
-          : result.rows.map((row: CableWithTypeRow) => [
-              row.cable_id ?? '',
-              row.tag ?? '',
-              row.type_name ?? '',
-              row.type_purpose ?? '',
-              row.type_diameter_mm !== null && row.type_diameter_mm !== ''
-                ? Number(row.type_diameter_mm)
-                : '',
-              row.type_weight_kg_per_m !== null && row.type_weight_kg_per_m !== ''
-                ? Number(row.type_weight_kg_per_m)
-                : '',
-              row.from_location ?? '',
-              row.to_location ?? '',
-              row.routing ?? '',
-              row.design_length !== null && row.design_length !== ''
-                ? Number(row.design_length)
-                : ''
-            ]);
+        return [
+          cableTypeSummary.typeName,
+          pickFirstNonEmptyString(metadata?.type_purpose, materialDetails?.purpose),
+          metadata?.type_diameter_mm !== null &&
+          metadata?.type_diameter_mm !== undefined &&
+          metadata.type_diameter_mm !== ''
+            ? Number(metadata.type_diameter_mm)
+            : materialDetails?.diameter_mm !== null &&
+                materialDetails?.diameter_mm !== undefined &&
+                materialDetails.diameter_mm !== ''
+              ? Number(materialDetails.diameter_mm)
+              : '',
+          pickFirstNonEmptyString(metadata?.type_material, materialDetails?.material),
+          metadata?.type_weight_kg_per_m !== null &&
+          metadata?.type_weight_kg_per_m !== undefined &&
+          metadata.type_weight_kg_per_m !== ''
+            ? Number(metadata.type_weight_kg_per_m)
+            : materialDetails?.weight_kg_per_m !== null &&
+                materialDetails?.weight_kg_per_m !== undefined &&
+                materialDetails.weight_kg_per_m !== ''
+              ? Number(materialDetails.weight_kg_per_m)
+              : '',
+          pickFirstNonEmptyString(metadata?.type_description, materialDetails?.description),
+          pickFirstNonEmptyString(metadata?.type_manufacturer, materialDetails?.manufacturer),
+          pickFirstNonEmptyString(metadata?.type_part_no, materialDetails?.part_no),
+          pickFirstNonEmptyString(metadata?.type_remarks, materialDetails?.remarks),
+          cableTypeSummary.cableCount,
+          cableTypeSummary.totalDesignLength,
+        ];
+      });
 
-      const table = worksheet.addTable({
-        name: exportView === 'report' ? 'CablesReport' : 'Cables',
+      const cableTypeTable = summaryWorksheet.addTable({
+        name: 'CableTypeTotals',
         ref: 'A1',
         headerRow: true,
         totalsRow: false,
@@ -2746,13 +2851,214 @@ cablesRouter.get(
           showFirstColumn: false,
           showLastColumn: false,
           showRowStripes: true,
-          showColumnStripes: true
+          showColumnStripes: true,
+        },
+        columns: cableTypeColumns.map((column) => ({
+          name: column.name,
+          filterButton: true,
+        })),
+        rows: cableTypeRows.length > 0 ? cableTypeRows : [Array(cableTypeColumns.length).fill('')],
+      });
+
+      cableTypeTable.commit();
+
+      cableTypeColumns.forEach((column, index) => {
+        const worksheetColumn = summaryWorksheet.getColumn(index + 1);
+        worksheetColumn.width = column.width;
+
+        if (column.key === 'diameter') {
+          worksheetColumn.numFmt = '#,##0.00';
+        }
+
+        if (column.key === 'weight') {
+          worksheetColumn.numFmt = '#,##0.000';
+        }
+
+        if (column.key === 'cableCount' || column.key === 'totalDesignLength') {
+          worksheetColumn.numFmt = '#,##0.###';
+        }
+      });
+
+      const materialWorksheet = workbook.addWorksheet('Material totals', {
+        views: [{ state: 'frozen', ySplit: 1 }],
+      });
+
+      const materialColumns = [
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.type,
+          key: 'type',
+          width: 24,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.purpose,
+          key: 'purpose',
+          width: 22,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.material,
+          key: 'material',
+          width: 24,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.description,
+          key: 'description',
+          width: 32,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.manufacturer,
+          key: 'manufacturer',
+          width: 22,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.partNo,
+          key: 'partNo',
+          width: 20,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.totalQuantity,
+          key: 'totalQuantity',
+          width: 18,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.unit,
+          key: 'unit',
+          width: 12,
+        },
+        {
+          name: REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS.cableCount,
+          key: 'cableCount',
+          width: 14,
+        },
+      ] as const;
+
+      const materialRows = materialTotals.map((material) => {
+        const metadata = materialInstallationDetailsByType.get(
+          normalizeComparableCableTypeName(material.name),
+        );
+
+        return [
+          pickFirstNonEmptyString(metadata?.type, material.name),
+          pickFirstNonEmptyString(metadata?.purpose),
+          pickFirstNonEmptyString(metadata?.material),
+          pickFirstNonEmptyString(metadata?.description),
+          pickFirstNonEmptyString(metadata?.manufacturer),
+          pickFirstNonEmptyString(metadata?.part_no),
+          material.totalQuantity,
+          material.unit,
+          material.cableCount,
+        ];
+      });
+
+      const materialTable = materialWorksheet.addTable({
+        name: 'CableMaterialTotals',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: true,
+        },
+        columns: materialColumns.map((column) => ({
+          name: column.name,
+          filterButton: true,
+        })),
+        rows: materialRows.length > 0 ? materialRows : [Array(materialColumns.length).fill('')],
+      });
+
+      materialTable.commit();
+
+      materialColumns.forEach((column, index) => {
+        const worksheetColumn = materialWorksheet.getColumn(index + 1);
+        worksheetColumn.width = column.width;
+
+        if (column.key === 'totalQuantity' || column.key === 'cableCount') {
+          worksheetColumn.numFmt = '#,##0.###';
+        }
+      });
+    } else {
+      const result = await pool.query<CableWithTypeRow>(
+        `
+            ${selectCablesQuery}
+            ${whereClause}
+            ORDER BY ${sortExpression} ${normalizedSortDirection}, c.cable_id ASC;
+          `,
+        values,
+      );
+
+      const worksheet = workbook.addWorksheet('Cables', {
+        views: [{ state: 'frozen', ySplit: 1 }],
+      });
+
+      const columns = [
+        { name: LIST_OUTPUT_HEADERS.cableId, key: 'cableId', width: 18 },
+        { name: LIST_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
+        { name: LIST_OUTPUT_HEADERS.type, key: 'type', width: 28 },
+        { name: LIST_OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
+        {
+          name: LIST_OUTPUT_HEADERS.diameter,
+          key: 'diameter',
+          width: 18,
+        },
+        { name: LIST_OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
+        {
+          name: LIST_OUTPUT_HEADERS.fromLocation,
+          key: 'fromLocation',
+          width: 26,
+        },
+        {
+          name: LIST_OUTPUT_HEADERS.toLocation,
+          key: 'toLocation',
+          width: 26,
+        },
+        {
+          name: LIST_OUTPUT_HEADERS.routing,
+          key: 'routing',
+          width: 30,
+        },
+        {
+          name: LIST_OUTPUT_HEADERS.designLength,
+          key: 'designLength',
+          width: 18,
+        },
+      ] as const;
+
+      const rows = result.rows.map((row: CableWithTypeRow) => [
+        row.cable_id ?? '',
+        row.tag ?? '',
+        row.type_name ?? '',
+        row.type_purpose ?? '',
+        row.type_diameter_mm !== null && row.type_diameter_mm !== ''
+          ? Number(row.type_diameter_mm)
+          : '',
+        row.type_weight_kg_per_m !== null && row.type_weight_kg_per_m !== ''
+          ? Number(row.type_weight_kg_per_m)
+          : '',
+        row.from_location ?? '',
+        row.to_location ?? '',
+        row.routing ?? '',
+        row.design_length !== null && row.design_length !== '' ? Number(row.design_length) : '',
+      ]);
+
+      const table = worksheet.addTable({
+        name: 'Cables',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: true,
         },
         columns: columns.map((column) => ({
           name: column.name,
-          filterButton: true
+          filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [Array(columns.length).fill('')]
+        rows: rows.length > 0 ? rows : [Array(columns.length).fill('')],
       });
 
       table.commit();
@@ -2769,177 +3075,134 @@ cablesRouter.get(
           worksheet.getColumn(index + 1).numFmt = '#,##0';
         }
       });
-
-      const buffer = await workbook.xlsx.writeBuffer();
-
-      const projectSegment = sanitizeFileSegment(project.project_number);
-      const fileSuffix = exportView === 'report' ? 'cables-report' : 'cable-list';
-      const fileName = `${projectSegment}-${fileSuffix}.xlsx`;
-
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`
-      );
-
-      res.send(Buffer.from(buffer));
-    } catch (error) {
-      console.error('Export cables error', error);
-      res.status(500).json({ error: 'Failed to export cables' });
     }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const projectSegment = sanitizeFileSegment(project.project_number);
+    const fileSuffix = exportView === 'report' ? 'cables-report' : 'cable-list';
+    const fileName = `${projectSegment}-${fileSuffix}.xlsx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    console.error('Export cables error', error);
+    res.status(500).json({ error: 'Failed to export cables' });
   }
-);
+});
 
-cablesRouter.get(
-  '/template',
-  authenticate,
-  async (req: Request, res: Response): Promise<void> => {
-    const viewParam =
-      typeof req.query.view === 'string'
-        ? req.query.view.toLowerCase()
-        : undefined;
-    const exportView = viewParam === 'report' ? 'report' : 'list';
+cablesRouter.get('/template', authenticate, async (req: Request, res: Response): Promise<void> => {
+  const viewParam = typeof req.query.view === 'string' ? req.query.view.toLowerCase() : undefined;
+  const exportView = viewParam === 'report' ? 'report' : 'list';
 
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet(
-        exportView === 'report' ? 'Cables report' : 'Cables',
-        {
-          views: [{ state: 'frozen', ySplit: 1 }]
-        }
-      );
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(exportView === 'report' ? 'Cables report' : 'Cables', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
 
-      const columns =
-        exportView === 'report'
-          ? [
-              {
-                name: REPORT_OUTPUT_HEADERS.cableId,
-                key: 'cableId',
-                width: 18
-              },
-              { name: REPORT_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
-              { name: REPORT_OUTPUT_HEADERS.type, key: 'type', width: 26 },
-              {
-                name: REPORT_OUTPUT_HEADERS.fromLocation,
-                key: 'fromLocation',
-                width: 26
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.toLocation,
-                key: 'toLocation',
-                width: 26
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.designLength,
-                key: 'designLength',
-                width: 18
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.installLength,
-                key: 'installLength',
-                width: 18
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.pullDate,
-                key: 'pullDate',
-                width: 20
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.connectedFrom,
-                key: 'connectedFrom',
-                width: 20
-              },
-              {
-                name: REPORT_OUTPUT_HEADERS.connectedTo,
-                key: 'connectedTo',
-                width: 20
-              },
-              { name: REPORT_OUTPUT_HEADERS.tested, key: 'tested', width: 18 }
-            ] as const
-          : [
-              { name: INPUT_HEADERS.cableId, key: 'cableId', width: 18 },
-              { name: INPUT_HEADERS.tag, key: 'tag', width: 20 },
-              { name: INPUT_HEADERS.type, key: 'type', width: 28 },
-              {
-                name: INPUT_HEADERS.fromLocation,
-                key: 'fromLocation',
-                width: 26
-              },
-              {
-                name: INPUT_HEADERS.toLocation,
-                key: 'toLocation',
-                width: 26
-              },
-              {
-                name: LIST_OUTPUT_HEADERS.routing,
-                key: 'routing',
-                width: 24
-              },
-              {
-                name: INPUT_HEADERS.designLength,
-                key: 'designLength',
-                width: 18
-              }
-            ] as const;
+    const columns =
+      exportView === 'report'
+        ? ([
+            {
+              name: REPORT_OUTPUT_HEADERS.cableId,
+              key: 'cableId',
+              width: 18,
+            },
+            { name: REPORT_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
+            { name: REPORT_OUTPUT_HEADERS.type, key: 'type', width: 26 },
+            { name: REPORT_OUTPUT_HEADERS.purpose, key: 'purpose', width: 22 },
+            { name: REPORT_OUTPUT_HEADERS.diameter, key: 'diameter', width: 18 },
+            { name: REPORT_OUTPUT_HEADERS.material, key: 'material', width: 22 },
+            { name: REPORT_OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
+            {
+              name: REPORT_OUTPUT_HEADERS.description,
+              key: 'description',
+              width: 28,
+            },
+            {
+              name: REPORT_OUTPUT_HEADERS.manufacturer,
+              key: 'manufacturer',
+              width: 22,
+            },
+            { name: REPORT_OUTPUT_HEADERS.partNo, key: 'partNo', width: 20 },
+            { name: REPORT_OUTPUT_HEADERS.remarks, key: 'remarks', width: 24 },
+          ] as const)
+        : ([
+            { name: INPUT_HEADERS.cableId, key: 'cableId', width: 18 },
+            { name: INPUT_HEADERS.tag, key: 'tag', width: 20 },
+            { name: INPUT_HEADERS.type, key: 'type', width: 28 },
+            {
+              name: INPUT_HEADERS.fromLocation,
+              key: 'fromLocation',
+              width: 26,
+            },
+            {
+              name: INPUT_HEADERS.toLocation,
+              key: 'toLocation',
+              width: 26,
+            },
+            {
+              name: LIST_OUTPUT_HEADERS.routing,
+              key: 'routing',
+              width: 24,
+            },
+            {
+              name: INPUT_HEADERS.designLength,
+              key: 'designLength',
+              width: 18,
+            },
+          ] as const);
 
-      const table = worksheet.addTable({
-        name: exportView === 'report' ? 'CablesReport' : 'Cables',
-        ref: 'A1',
-        headerRow: true,
-        totalsRow: false,
-        style: {
-          theme: 'TableStyleLight8',
-          showFirstColumn: false,
-          showLastColumn: false,
-          showRowStripes: true,
-          showColumnStripes: true
-        },
-        columns: columns.map((column) => ({
-          name: column.name,
-          filterButton: true
-        })),
-        rows: [Array(columns.length).fill('')]
-      });
+    const table = worksheet.addTable({
+      name: exportView === 'report' ? 'CablesReport' : 'Cables',
+      ref: 'A1',
+      headerRow: true,
+      totalsRow: false,
+      style: {
+        theme: 'TableStyleLight8',
+        showFirstColumn: false,
+        showLastColumn: false,
+        showRowStripes: true,
+        showColumnStripes: true,
+      },
+      columns: columns.map((column) => ({
+        name: column.name,
+        filterButton: true,
+      })),
+      rows: [Array(columns.length).fill('')],
+    });
 
-      table.commit();
+    table.commit();
 
-      columns.forEach((column, index) => {
-        worksheet.getColumn(index + 1).width = column.width;
-        if (column.key === 'designLength' || column.key === 'installLength') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0';
-        }
-      });
+    columns.forEach((column, index) => {
+      worksheet.getColumn(index + 1).width = column.width;
+      if (column.key === 'designLength') {
+        worksheet.getColumn(index + 1).numFmt = '#,##0';
+      }
+    });
 
-      const buffer = await workbook.xlsx.writeBuffer();
+    const buffer = await workbook.xlsx.writeBuffer();
 
-      const fileSuffix = exportView === 'report' ? 'cables-report' : 'cable-list';
-      const fileName = `${fileSuffix}-template.xlsx`;
+    const fileSuffix = exportView === 'report' ? 'cables-report' : 'cable-list';
+    const fileName = `${fileSuffix}-template.xlsx`;
 
-      res.setHeader(
-        'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`
-      );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
-      res.send(Buffer.from(buffer));
-    } catch (error) {
-      console.error('Generate cables template error', error);
-      res.status(500).json({ error: 'Failed to generate template' });
-    }
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    console.error('Generate cables template error', error);
+    res.status(500).json({ error: 'Failed to generate template' });
   }
-);
+});
 
 export { cablesRouter };
-
-
-
-
-
-
-

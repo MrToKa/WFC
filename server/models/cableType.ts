@@ -14,6 +14,11 @@ export type CableTypeRow = {
   project_id: string;
   name: string;
   purpose: string | null;
+  material?: string | null;
+  description?: string | null;
+  manufacturer?: string | null;
+  part_no?: string | null;
+  remarks?: string | null;
   diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
   created_at: Date | string;
