@@ -255,23 +255,6 @@ export const CableReportTab = ({
           </div>
         ) : (
           <>
-            <div className={styles.metadata}>
-              <div className={styles.numericField}>
-                <Caption1>Filtered cables</Caption1>
-                <Body1 className={styles.numericFieldLabel}>{summary.cableCount}</Body1>
-              </div>
-              <div className={styles.numericField}>
-                <Caption1>Cable types</Caption1>
-                <Body1 className={styles.numericFieldLabel}>{summary.cableTypeCount}</Body1>
-              </div>
-              <div className={styles.numericField}>
-                <Caption1>Total design length [m]</Caption1>
-                <Body1 className={styles.numericFieldLabel}>
-                  {formatNumeric(summary.totalDesignLength)}
-                </Body1>
-              </div>
-            </div>
-
             {summaryNotes.map((note) => (
               <Caption1 key={note}>{note}</Caption1>
             ))}
@@ -290,9 +273,6 @@ export const CableReportTab = ({
                     <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                       Design length [m]
                     </th>
-                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                      Materials
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -304,9 +284,6 @@ export const CableReportTab = ({
                       </td>
                       <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                         {formatNumeric(cableTypeSummary.totalDesignLength)}
-                      </td>
-                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                        {formatNumeric(cableTypeSummary.materials.length)}
                       </td>
                     </tr>
                   ))}
@@ -334,10 +311,6 @@ export const CableReportTab = ({
                         Total quantity
                       </th>
                       <th className={styles.tableHeadCell}>Unit</th>
-                      <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                        Cables
-                      </th>
-                      <th className={styles.tableHeadCell}>Notes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -348,18 +321,6 @@ export const CableReportTab = ({
                           {formatNumeric(material.totalQuantity)}
                         </td>
                         <td className={styles.tableCell}>{material.unit}</td>
-                        <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                          {formatNumeric(material.cableCount)}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {material.missingDesignLengthCount > 0
-                            ? `Skipped ${formatCountLabel(
-                                material.missingDesignLengthCount,
-                                'cable',
-                                'cables'
-                              )} without design length`
-                            : '-'}
-                        </td>
                       </tr>
                     ))}
                   </tbody>
