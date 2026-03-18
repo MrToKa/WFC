@@ -328,25 +328,7 @@ export const ProjectDetails = () => {
   });
 
   const cableDialogVisibleFields: CableDialogField[] = (() => {
-    if (cableDialog.mode === 'edit') {
-      if (selectedTab === 'cable-report') {
-        return ['installLength', 'pullDate', 'connectedFrom', 'connectedTo', 'tested'];
-      }
-      return ['tag', 'cableTypeId', 'fromLocation', 'toLocation', 'routing', 'designLength'];
-    }
-    return [
-      'tag',
-      'cableTypeId',
-      'fromLocation',
-      'toLocation',
-      'routing',
-      'designLength',
-      'installLength',
-      'pullDate',
-      'connectedFrom',
-      'connectedTo',
-      'tested'
-    ];
+    return ['tag', 'cableTypeId', 'fromLocation', 'toLocation', 'routing', 'designLength'];
   })();
 
   const {
