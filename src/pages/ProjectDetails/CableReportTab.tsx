@@ -1,4 +1,3 @@
-import type { ChangeEvent, RefObject } from 'react';
 import { useMemo } from 'react';
 
 import {
@@ -22,16 +21,10 @@ import { formatNumeric } from '../ProjectDetails.utils';
 type CableReportTabProps = {
   styles: ProjectDetailsStyles;
   canManageCables: boolean;
-  isAdmin: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
-  onImportClick: () => void;
   onExport: () => void;
-  onOpenProgress?: () => void;
-  onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  isImporting: boolean;
   isExporting: boolean;
-  fileInputRef: RefObject<HTMLInputElement | null>;
   filterText: string;
   onFilterTextChange: (value: string) => void;
   filterCriteria: CableSearchCriteria;
@@ -50,16 +43,10 @@ const formatCountLabel = (
 export const CableReportTab = ({
   styles,
   canManageCables,
-  isAdmin,
   isRefreshing,
   onRefresh,
-  onImportClick,
   onExport,
-  onOpenProgress,
-  onImportFileChange,
-  isImporting,
   isExporting,
-  fileInputRef,
   filterText,
   onFilterTextChange,
   filterCriteria,
@@ -176,23 +163,6 @@ export const CableReportTab = ({
         </Button>
         {canManageCables ? (
           <>
-            {isAdmin ? (
-              <>
-                <Button onClick={onImportClick} disabled={isImporting}>
-                  {isImporting ? 'Importing' : 'Import from Excel'}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  className={styles.hiddenInput}
-                  type="file"
-                  accept=".xlsx"
-                  onChange={onImportFileChange}
-                />
-              </>
-            ) : null}
-            <Button appearance="primary" onClick={onOpenProgress}>
-              Progress
-            </Button>
             <Button onClick={onExport} disabled={isExporting}>
               {isExporting ? 'Exporting' : 'Export to Excel'}
             </Button>

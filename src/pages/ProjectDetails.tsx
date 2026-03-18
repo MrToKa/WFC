@@ -40,7 +40,6 @@ import { CableListTab } from './ProjectDetails/CableListTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
-import { ProgressDialog } from './ProjectDetails/ProgressDialog';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
 import { ProjectFilesTab } from './ProjectDetails/ProjectFilesTab';
@@ -256,12 +255,10 @@ export const ProjectDetails = () => {
     return initial === 'variables-api' && !isAdmin ? 'details' : initial;
   });
 
-  const [progressDialogOpen, setProgressDialogOpen] = useState(false);
   const [trayTemplateSaving, setTrayTemplateSaving] = useState<Record<string, boolean>>({});
   const [trayTemplateErrors, setTrayTemplateErrors] = useState<Record<string, string | null>>({});
   const [trayTemplateOverrides, setTrayTemplateOverrides] =
     useState<Record<string, ProjectTrayPurposeTemplate> | null>(null);
-  const openProgress = useCallback(() => setProgressDialogOpen(true), []);
 
   const {
     project,
@@ -1554,8 +1551,7 @@ export const ProjectDetails = () => {
           <Title3 id="project-details-heading">
             {project.projectNumber} &mdash; {project.name}
           </Title3>
-          {/* Progress button moved into tab action rows */}
-          </div>
+        </div>
         <Body1>Customer: {project.customer}</Body1>
       </div>
 
@@ -1760,19 +1756,10 @@ export const ProjectDetails = () => {
         <CableReportTab
           styles={styles}
           canManageCables={canManageCables}
-          isAdmin={isAdmin}
-          onOpenProgress={openProgress}
           isRefreshing={cablesRefreshing}
           onRefresh={handleCableReportRefresh}
-          onImportClick={() => cablesFileInputRef.current?.click()}
           onExport={() => void handleExportCables('report')}
-          onImportFileChange={async (event) => {
-            await handleImportCables(event);
-            reloadCableReportSummary();
-          }}
-          isImporting={cablesImporting}
           isExporting={cablesExporting}
-          fileInputRef={cablesFileInputRef}
           filterText={filterText}
           onFilterTextChange={setCableFilterText}
           filterCriteria={filterCriteria}
@@ -1833,12 +1820,6 @@ export const ProjectDetails = () => {
         onSubmit={(event) => void cableDialog.handleSubmit(event)}
         onDismiss={cableDialog.reset}
         visibleFields={cableDialogVisibleFields}
-      />
-
-      <ProgressDialog
-        open={progressDialogOpen}
-        cables={cables}
-        onDismiss={() => setProgressDialogOpen(false)}
       />
     </section>
   );
