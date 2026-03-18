@@ -70,12 +70,7 @@ export type CableImportSummary = {
   skipped: number;
 };
 
-export type CableSortColumn =
-  | 'tag'
-  | 'typeName'
-  | 'fromLocation'
-  | 'toLocation'
-  | 'routing';
+export type CableSortColumn = 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
 
 export type CableSortDirection = 'asc' | 'desc';
 
@@ -97,6 +92,8 @@ export type CableTypeDefaultMaterialInput = {
   remarks?: string | null;
 };
 
+export type CableMaterialSource = 'default' | 'manual';
+
 export type CableMaterial = {
   id: string;
   cableId: string;
@@ -104,6 +101,8 @@ export type CableMaterial = {
   quantity: number | null;
   unit: string | null;
   remarks: string | null;
+  source: CableMaterialSource | null;
+  cableTypeDefaultMaterialId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -127,6 +126,13 @@ export type CableDetails = {
   materialCableType: MaterialCableType | null;
   cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
   cableMaterials: CableMaterial[];
+};
+
+export type CableMaterialSyncSummary = {
+  added: number;
+  updated: number;
+  removed: number;
+  hasChanges: boolean;
 };
 
 export type CableReportMaterialSummary = {

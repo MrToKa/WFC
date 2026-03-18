@@ -411,14 +411,128 @@ export async function initializeDatabase(): Promise<void> {
       quantity NUMERIC,
       unit TEXT,
       remarks TEXT,
+      source TEXT,
+      cable_type_default_material_id UUID,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
 
   await pool.query(`
+    ALTER TABLE cable_materials
+    ADD COLUMN IF NOT EXISTS source TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_materials
+    ADD COLUMN IF NOT EXISTS cable_type_default_material_id UUID;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_materials_source_check'
+          AND table_name = 'cable_materials'
+      ) THEN
+        ALTER TABLE cable_materials
+          ADD CONSTRAINT cable_materials_source_check
+          CHECK (source IS NULL OR source IN ('default', 'manual'));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_materials_cable_type_default_material_id_fkey'
+          AND table_name = 'cable_materials'
+      ) THEN
+        ALTER TABLE cable_materials
+          ADD CONSTRAINT cable_materials_cable_type_default_material_id_fkey
+          FOREIGN KEY (cable_type_default_material_id)
+          REFERENCES cable_type_default_materials(id)
+          ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS cable_materials_cable_id_idx
       ON cable_materials (cable_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_materials_cable_type_default_material_id_idx
+      ON cable_materials (cable_type_default_material_id);
+  `);
+
+  await pool.query(`
+    WITH default_materials_ranked AS (
+      SELECT
+        c.id AS cable_id,
+        dm.id AS default_material_id,
+        lower(trim(dm.name)) AS material_name_key,
+        dm.quantity,
+        coalesce(lower(trim(dm.unit)), '') AS unit_key,
+        coalesce(lower(trim(dm.remarks)), '') AS remarks_key,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            c.id,
+            lower(trim(dm.name)),
+            dm.quantity,
+            coalesce(lower(trim(dm.unit)), ''),
+            coalesce(lower(trim(dm.remarks)), '')
+          ORDER BY dm.created_at ASC, dm.id ASC
+        ) AS row_rank
+      FROM cables c
+      JOIN cable_type_default_materials dm ON dm.cable_type_id = c.cable_type_id
+    ),
+    cable_materials_ranked AS (
+      SELECT
+        cm.id AS cable_material_id,
+        cm.cable_id,
+        lower(trim(cm.name)) AS material_name_key,
+        cm.quantity,
+        coalesce(lower(trim(cm.unit)), '') AS unit_key,
+        coalesce(lower(trim(cm.remarks)), '') AS remarks_key,
+        ROW_NUMBER() OVER (
+          PARTITION BY
+            cm.cable_id,
+            lower(trim(cm.name)),
+            cm.quantity,
+            coalesce(lower(trim(cm.unit)), ''),
+            coalesce(lower(trim(cm.remarks)), '')
+          ORDER BY cm.created_at ASC, cm.id ASC
+        ) AS row_rank
+      FROM cable_materials cm
+      WHERE cm.source IS NULL
+        AND cm.cable_type_default_material_id IS NULL
+    ),
+    matches AS (
+      SELECT
+        cmr.cable_material_id,
+        dmr.default_material_id
+      FROM cable_materials_ranked cmr
+      JOIN default_materials_ranked dmr
+        ON dmr.cable_id = cmr.cable_id
+       AND dmr.material_name_key = cmr.material_name_key
+       AND dmr.quantity IS NOT DISTINCT FROM cmr.quantity
+       AND dmr.unit_key = cmr.unit_key
+       AND dmr.remarks_key = cmr.remarks_key
+       AND dmr.row_rank = cmr.row_rank
+    )
+    UPDATE cable_materials cm
+    SET
+      source = 'default',
+      cable_type_default_material_id = matches.default_material_id
+    FROM matches
+    WHERE cm.id = matches.cable_material_id;
   `);
 
   await pool.query(`

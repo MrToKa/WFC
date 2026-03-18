@@ -6,6 +6,7 @@ import type {
   CableDetails,
   CableMaterial,
   CableMaterialInput,
+  CableMaterialSyncSummary,
   CableTypeDefaultMaterial,
   CableTypeDefaultMaterialInput,
   CableTypeDetails,
@@ -13,81 +14,69 @@ import type {
   CableInput,
   CableImportSummary,
   CableSortColumn,
-  CableSortDirection
+  CableSortDirection,
 } from './types';
 
-export async function fetchCableTypes(
-  projectId: string
-): Promise<{ cableTypes: CableType[] }> {
-  return request<{ cableTypes: CableType[] }>(
-    `/api/projects/${projectId}/cable-types`,
-    { method: 'GET' }
-  );
+export async function fetchCableTypes(projectId: string): Promise<{ cableTypes: CableType[] }> {
+  return request<{ cableTypes: CableType[] }>(`/api/projects/${projectId}/cable-types`, {
+    method: 'GET',
+  });
 }
 
 export async function createCableType(
   token: string,
   projectId: string,
-  data: CableTypeInput
+  data: CableTypeInput,
 ): Promise<{ cableType: CableType }> {
-  return request<{ cableType: CableType }>(
-    `/api/projects/${projectId}/cable-types`,
-    {
-      method: 'POST',
-      token,
-      body: data
-    }
-  );
+  return request<{ cableType: CableType }>(`/api/projects/${projectId}/cable-types`, {
+    method: 'POST',
+    token,
+    body: data,
+  });
 }
 
 export async function updateCableType(
   token: string,
   projectId: string,
   cableTypeId: string,
-  data: Partial<CableTypeInput>
+  data: Partial<CableTypeInput>,
 ): Promise<{ cableType: CableType }> {
   return request<{ cableType: CableType }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}`,
     {
       method: 'PATCH',
       token,
-      body: data
-    }
+      body: data,
+    },
   );
 }
 
 export async function deleteCableType(
   token: string,
   projectId: string,
-  cableTypeId: string
+  cableTypeId: string,
 ): Promise<void> {
-  await request<void>(
-    `/api/projects/${projectId}/cable-types/${cableTypeId}`,
-    {
-      method: 'DELETE',
-      token
-    }
-  );
+  await request<void>(`/api/projects/${projectId}/cable-types/${cableTypeId}`, {
+    method: 'DELETE',
+    token,
+  });
 }
 
 export async function importCableTypes(
   token: string,
   projectId: string,
-  file: File
+  file: File,
 ): Promise<{ summary: CableImportSummary; cableTypes: CableType[] }> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/cable-types/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      body: formData
-    }
-  );
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/cable-types/import`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
 
   let payload: unknown = null;
 
@@ -111,19 +100,13 @@ export async function importCableTypes(
   return payload as { summary: CableImportSummary; cableTypes: CableType[] };
 }
 
-export async function exportCableTypes(
-  token: string,
-  projectId: string
-): Promise<Blob> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/cable-types/export`,
-    {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
+export async function exportCableTypes(token: string, projectId: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/cable-types/export`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
   if (!response.ok) {
     let payload: unknown = null;
@@ -146,18 +129,15 @@ export async function exportCableTypes(
   return response.blob();
 }
 
-export async function getCableTypesTemplate(
-  token: string,
-  projectId: string
-): Promise<Blob> {
+export async function getCableTypesTemplate(token: string, projectId: string): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/projects/${projectId}/cable-types/template`,
     {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
+        Authorization: `Bearer ${token}`,
+      },
+    },
   );
 
   if (!response.ok) {
@@ -183,11 +163,11 @@ export async function getCableTypesTemplate(
 
 export async function fetchCableTypeDetails(
   projectId: string,
-  cableTypeId: string
+  cableTypeId: string,
 ): Promise<CableTypeDetails> {
   return request<CableTypeDetails>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/details`,
-    { method: 'GET' }
+    { method: 'GET' },
   );
 }
 
@@ -195,15 +175,15 @@ export async function createCableTypeDefaultMaterial(
   token: string,
   projectId: string,
   cableTypeId: string,
-  data: CableTypeDefaultMaterialInput
+  data: CableTypeDefaultMaterialInput,
 ): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
   return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials`,
     {
       method: 'POST',
       token,
-      body: data
-    }
+      body: data,
+    },
   );
 }
 
@@ -212,15 +192,15 @@ export async function updateCableTypeDefaultMaterial(
   projectId: string,
   cableTypeId: string,
   defaultMaterialId: string,
-  data: Partial<CableTypeDefaultMaterialInput>
+  data: Partial<CableTypeDefaultMaterialInput>,
 ): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
   return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
     {
       method: 'PATCH',
       token,
-      body: data
-    }
+      body: data,
+    },
   );
 }
 
@@ -228,20 +208,18 @@ export async function deleteCableTypeDefaultMaterial(
   token: string,
   projectId: string,
   cableTypeId: string,
-  defaultMaterialId: string
+  defaultMaterialId: string,
 ): Promise<void> {
   await request<void>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
     {
       method: 'DELETE',
-      token
-    }
+      token,
+    },
   );
 }
 
-export async function fetchCables(
-  projectId: string
-): Promise<{ cables: Cable[] }> {
+export async function fetchCables(projectId: string): Promise<{ cables: Cable[] }> {
   return request<{ cables: Cable[] }>(`/api/projects/${projectId}/cables`);
 }
 
@@ -250,7 +228,7 @@ export async function fetchCableReportSummary(
   options?: {
     filterText?: string;
     criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
-  }
+  },
 ): Promise<{ summary: CableReportSummary }> {
   const params = new URLSearchParams();
   const trimmedFilter = options?.filterText?.trim();
@@ -268,29 +246,26 @@ export async function fetchCableReportSummary(
   return request<{ summary: CableReportSummary }>(
     `/api/projects/${projectId}/cables/report-summary${query ? `?${query}` : ''}`,
     {
-      method: 'GET'
-    }
+      method: 'GET',
+    },
   );
 }
 
-export async function fetchCableDetails(
-  projectId: string,
-  cableId: string
-): Promise<CableDetails> {
+export async function fetchCableDetails(projectId: string, cableId: string): Promise<CableDetails> {
   return request<CableDetails>(`/api/projects/${projectId}/cables/${cableId}/details`, {
-    method: 'GET'
+    method: 'GET',
   });
 }
 
 export async function createCable(
   token: string,
   projectId: string,
-  data: CableInput
+  data: CableInput,
 ): Promise<{ cable: Cable }> {
   return request<{ cable: Cable }>(`/api/projects/${projectId}/cables`, {
     method: 'POST',
     token,
-    body: data
+    body: data,
   });
 }
 
@@ -298,26 +273,23 @@ export async function updateCable(
   token: string,
   projectId: string,
   cableId: string,
-  data: Partial<CableInput>
+  data: Partial<CableInput>,
 ): Promise<{ cable: Cable }> {
-  return request<{ cable: Cable }>(
-    `/api/projects/${projectId}/cables/${cableId}`,
-    {
-      method: 'PATCH',
-      token,
-      body: data
-    }
-  );
+  return request<{ cable: Cable }>(`/api/projects/${projectId}/cables/${cableId}`, {
+    method: 'PATCH',
+    token,
+    body: data,
+  });
 }
 
 export async function deleteCable(
   token: string,
   projectId: string,
-  cableId: string
+  cableId: string,
 ): Promise<void> {
   await request<void>(`/api/projects/${projectId}/cables/${cableId}`, {
     method: 'DELETE',
-    token
+    token,
   });
 }
 
@@ -325,15 +297,15 @@ export async function createCableMaterial(
   token: string,
   projectId: string,
   cableId: string,
-  data: CableMaterialInput
+  data: CableMaterialInput,
 ): Promise<{ cableMaterial: CableMaterial }> {
   return request<{ cableMaterial: CableMaterial }>(
     `/api/projects/${projectId}/cables/${cableId}/materials`,
     {
       method: 'POST',
       token,
-      body: data
-    }
+      body: data,
+    },
   );
 }
 
@@ -342,15 +314,15 @@ export async function updateCableMaterial(
   projectId: string,
   cableId: string,
   materialId: string,
-  data: Partial<CableMaterialInput>
+  data: Partial<CableMaterialInput>,
 ): Promise<{ cableMaterial: CableMaterial }> {
   return request<{ cableMaterial: CableMaterial }>(
     `/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`,
     {
       method: 'PATCH',
       token,
-      body: data
-    }
+      body: data,
+    },
   );
 }
 
@@ -358,32 +330,48 @@ export async function deleteCableMaterial(
   token: string,
   projectId: string,
   cableId: string,
-  materialId: string
+  materialId: string,
 ): Promise<void> {
   await request<void>(`/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`, {
     method: 'DELETE',
-    token
+    token,
+  });
+}
+
+export async function syncCableBaseMaterials(
+  token: string,
+  projectId: string,
+  cableId: string,
+): Promise<{
+  cableMaterials: CableMaterial[];
+  cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
+  summary: CableMaterialSyncSummary;
+}> {
+  return request<{
+    cableMaterials: CableMaterial[];
+    cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
+    summary: CableMaterialSyncSummary;
+  }>(`/api/projects/${projectId}/cables/${cableId}/materials/sync-defaults`, {
+    method: 'POST',
+    token,
   });
 }
 
 export async function importCables(
   token: string,
   projectId: string,
-  file: File
+  file: File,
 ): Promise<{ summary: CableImportSummary; cables: Cable[] }> {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/cables/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      body: formData
-    }
-  );
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/cables/import`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
 
   let payload: unknown = null;
 
@@ -416,7 +404,7 @@ export async function exportCables(
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;
     view?: 'list' | 'report';
-  }
+  },
 ): Promise<Blob> {
   const params = new URLSearchParams();
 
@@ -450,8 +438,8 @@ export async function exportCables(
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {
@@ -478,7 +466,7 @@ export async function exportCables(
 export async function getCablesTemplate(
   token: string,
   projectId: string,
-  view?: 'list' | 'report'
+  view?: 'list' | 'report',
 ): Promise<Blob> {
   const params = new URLSearchParams();
 
@@ -494,8 +482,8 @@ export async function getCablesTemplate(
   const response = await fetch(url, {
     method: 'GET',
     headers: {
-      Authorization: `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {

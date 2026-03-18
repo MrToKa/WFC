@@ -374,6 +374,8 @@ const selectCableMaterialsQuery = `
     quantity,
     unit,
     remarks,
+    source,
+    cable_type_default_material_id,
     created_at,
     updated_at
   FROM cable_materials
@@ -459,6 +461,22 @@ type CableReportSummary = {
   missingDesignLengthMaterialCount: number;
   cableTypeSummaries: CableReportCableTypeSummary[];
 };
+
+type CableMaterialSyncSummary = {
+  added: number;
+  updated: number;
+  removed: number;
+  hasChanges: boolean;
+};
+
+type SyncCableMaterialsResult = {
+  cableMaterials: CableMaterialRow[];
+  cableTypeDefaultMaterials: CableTypeDefaultMaterialRow[];
+  summary: CableMaterialSyncSummary;
+};
+
+const CABLE_MATERIAL_SOURCE_DEFAULT = 'default' as const;
+const CABLE_MATERIAL_SOURCE_MANUAL = 'manual' as const;
 
 const VALID_CABLE_REPORT_FILTER_CRITERIA = new Set<CableReportFilterCriteria>([
   'all',
@@ -689,6 +707,32 @@ const updateCableMaterialState = async (
 const normalizeComparableCableTypeName = (value: string): string =>
   normalizeComparableCatalogName(value);
 
+const normalizeCableMaterialComparableText = (value: string | null | undefined): string =>
+  value?.trim().replace(/\s+/g, ' ').toLowerCase() ?? '';
+
+const buildCableMaterialComparisonKey = (
+  material: Pick<
+    CableTypeDefaultMaterialRow | CableMaterialRow,
+    'name' | 'quantity' | 'unit' | 'remarks'
+  >,
+): string => {
+  const quantity = parseNumericValue(material.quantity);
+
+  return [
+    normalizeCableMaterialComparableText(material.name),
+    quantity === null ? '' : String(quantity),
+    normalizeCableMaterialComparableText(material.unit),
+    normalizeCableMaterialComparableText(material.remarks),
+  ].join('||');
+};
+
+const cableMaterialMatchesDefaultMaterial = (
+  cableMaterial: Pick<CableMaterialRow, 'name' | 'quantity' | 'unit' | 'remarks'>,
+  defaultMaterial: Pick<CableTypeDefaultMaterialRow, 'name' | 'quantity' | 'unit' | 'remarks'>,
+): boolean =>
+  buildCableMaterialComparisonKey(cableMaterial) ===
+  buildCableMaterialComparisonKey(defaultMaterial);
+
 const resolveCableTypeDefaultMaterials = async (
   queryable: Queryable,
   projectId: string,
@@ -761,11 +805,22 @@ const resetCableMaterialsToCableTypeDefaults = async (
           name,
           quantity,
           unit,
-          remarks
+          remarks,
+          source,
+          cable_type_default_material_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6);
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
       `,
-      [randomUUID(), cableId, material.name, material.quantity, material.unit, material.remarks],
+      [
+        randomUUID(),
+        cableId,
+        material.name,
+        material.quantity,
+        material.unit,
+        material.remarks,
+        CABLE_MATERIAL_SOURCE_DEFAULT,
+        material.id,
+      ],
     );
   }
 
@@ -801,6 +856,252 @@ const ensureCableMaterialsInitialized = async (
   }
 
   return existingMaterials;
+};
+
+const syncCableMaterialsToCableTypeDefaults = async (
+  queryable: Queryable,
+  projectId: string,
+  cableId: string,
+  cableTypeId: string,
+  cableTypeName: string,
+  existingMaterials: CableMaterialRow[],
+  materialsCustomized: boolean,
+): Promise<SyncCableMaterialsResult> => {
+  const cableTypeDefaultMaterials = await resolveCableTypeDefaultMaterials(
+    queryable,
+    projectId,
+    cableTypeId,
+    cableTypeName,
+  );
+
+  const summary: CableMaterialSyncSummary = {
+    added: 0,
+    updated: 0,
+    removed: 0,
+    hasChanges: false,
+  };
+
+  const explicitManualMaterials: CableMaterialRow[] = [];
+  const explicitDefaultMaterials: CableMaterialRow[] = [];
+  const unlinkedDefaultMaterials: CableMaterialRow[] = [];
+  const legacyMaterials: CableMaterialRow[] = [];
+
+  for (const material of existingMaterials) {
+    if (material.source === CABLE_MATERIAL_SOURCE_MANUAL) {
+      explicitManualMaterials.push(material);
+      continue;
+    }
+
+    if (material.source === CABLE_MATERIAL_SOURCE_DEFAULT) {
+      if (material.cable_type_default_material_id) {
+        explicitDefaultMaterials.push(material);
+      } else {
+        unlinkedDefaultMaterials.push(material);
+      }
+      continue;
+    }
+
+    legacyMaterials.push(material);
+  }
+
+  const hasExplicitTracking =
+    explicitManualMaterials.length > 0 ||
+    explicitDefaultMaterials.length > 0 ||
+    unlinkedDefaultMaterials.length > 0;
+
+  if (!hasExplicitTracking && legacyMaterials.length > 0 && !materialsCustomized) {
+    summary.removed = legacyMaterials.length;
+    await resetCableMaterialsToCableTypeDefaults(
+      queryable,
+      projectId,
+      cableId,
+      cableTypeId,
+      cableTypeName,
+    );
+
+    const cableMaterials = await listCableMaterials(queryable, cableId);
+    summary.added = cableMaterials.length;
+    summary.hasChanges = summary.added > 0 || summary.removed > 0;
+
+    return {
+      cableMaterials,
+      cableTypeDefaultMaterials,
+      summary,
+    };
+  }
+
+  const explicitDefaultMaterialsById = new Map<string, CableMaterialRow[]>();
+
+  for (const material of explicitDefaultMaterials) {
+    const defaultMaterialId = material.cable_type_default_material_id;
+
+    if (!defaultMaterialId) {
+      continue;
+    }
+
+    const existing = explicitDefaultMaterialsById.get(defaultMaterialId);
+
+    if (existing) {
+      existing.push(material);
+      continue;
+    }
+
+    explicitDefaultMaterialsById.set(defaultMaterialId, [material]);
+  }
+
+  const signatureCandidateMaterials = new Map<string, CableMaterialRow[]>();
+
+  for (const material of [...unlinkedDefaultMaterials, ...legacyMaterials]) {
+    const key = buildCableMaterialComparisonKey(material);
+    const existing = signatureCandidateMaterials.get(key);
+
+    if (existing) {
+      existing.push(material);
+      continue;
+    }
+
+    signatureCandidateMaterials.set(key, [material]);
+  }
+
+  const usedMaterialIds = new Set<string>();
+
+  for (const defaultMaterial of cableTypeDefaultMaterials) {
+    const linkedMaterials = explicitDefaultMaterialsById.get(defaultMaterial.id);
+    let materialToUse = linkedMaterials?.shift();
+
+    if (!materialToUse) {
+      const candidateMaterials = signatureCandidateMaterials.get(
+        buildCableMaterialComparisonKey(defaultMaterial),
+      );
+
+      while (candidateMaterials && candidateMaterials.length > 0) {
+        const candidate = candidateMaterials.shift();
+
+        if (!candidate || usedMaterialIds.has(candidate.id)) {
+          continue;
+        }
+
+        materialToUse = candidate;
+        break;
+      }
+    }
+
+    if (!materialToUse) {
+      await queryable.query(
+        `
+          INSERT INTO cable_materials (
+            id,
+            cable_id,
+            name,
+            quantity,
+            unit,
+            remarks,
+            source,
+            cable_type_default_material_id
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+        `,
+        [
+          randomUUID(),
+          cableId,
+          defaultMaterial.name,
+          defaultMaterial.quantity,
+          defaultMaterial.unit,
+          defaultMaterial.remarks,
+          CABLE_MATERIAL_SOURCE_DEFAULT,
+          defaultMaterial.id,
+        ],
+      );
+      summary.added += 1;
+      continue;
+    }
+
+    usedMaterialIds.add(materialToUse.id);
+
+    const needsAlignment =
+      !cableMaterialMatchesDefaultMaterial(materialToUse, defaultMaterial) ||
+      materialToUse.source !== CABLE_MATERIAL_SOURCE_DEFAULT ||
+      materialToUse.cable_type_default_material_id !== defaultMaterial.id;
+
+    if (!needsAlignment) {
+      continue;
+    }
+
+    await queryable.query(
+      `
+        UPDATE cable_materials
+        SET
+          name = $2,
+          quantity = $3,
+          unit = $4,
+          remarks = $5,
+          source = $6,
+          cable_type_default_material_id = $7,
+          updated_at = NOW()
+        WHERE id = $1;
+      `,
+      [
+        materialToUse.id,
+        defaultMaterial.name,
+        defaultMaterial.quantity,
+        defaultMaterial.unit,
+        defaultMaterial.remarks,
+        CABLE_MATERIAL_SOURCE_DEFAULT,
+        defaultMaterial.id,
+      ],
+    );
+
+    if (!cableMaterialMatchesDefaultMaterial(materialToUse, defaultMaterial)) {
+      summary.updated += 1;
+    }
+  }
+
+  const defaultMaterialIdsToRemove = [...explicitDefaultMaterials, ...unlinkedDefaultMaterials]
+    .filter((material) => !usedMaterialIds.has(material.id))
+    .map((material) => material.id);
+
+  if (defaultMaterialIdsToRemove.length > 0) {
+    await queryable.query(
+      `
+        DELETE FROM cable_materials
+        WHERE id = ANY($1::uuid[]);
+      `,
+      [defaultMaterialIdsToRemove],
+    );
+    summary.removed += defaultMaterialIdsToRemove.length;
+  }
+
+  const legacyMaterialIdsToMarkManual = legacyMaterials
+    .filter((material) => !usedMaterialIds.has(material.id))
+    .map((material) => material.id);
+
+  if (legacyMaterialIdsToMarkManual.length > 0) {
+    await queryable.query(
+      `
+        UPDATE cable_materials
+        SET
+          source = $2,
+          cable_type_default_material_id = NULL,
+          updated_at = NOW()
+        WHERE id = ANY($1::uuid[]);
+      `,
+      [legacyMaterialIdsToMarkManual, CABLE_MATERIAL_SOURCE_MANUAL],
+    );
+  }
+
+  await updateCableMaterialState(queryable, cableId, {
+    initialized: true,
+    customized: explicitManualMaterials.length + legacyMaterialIdsToMarkManual.length > 0,
+  });
+
+  const cableMaterials = await listCableMaterials(queryable, cableId);
+  summary.hasChanges = summary.added > 0 || summary.updated > 0 || summary.removed > 0;
+
+  return {
+    cableMaterials,
+    cableTypeDefaultMaterials,
+    summary,
+  };
 };
 
 const listCableMaterialsByCableIds = async (
@@ -1637,6 +1938,80 @@ cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promi
 });
 
 cablesRouter.post(
+  '/:cableId/materials/sync-defaults',
+  authenticate,
+  async (req: Request, res: Response): Promise<void> => {
+    const { projectId, cableId } = req.params;
+
+    if (!projectId || !cableId) {
+      res.status(400).json({ error: 'Project ID and cable ID are required' });
+      return;
+    }
+
+    let client: PoolClient | null = null;
+
+    try {
+      const project = await ensureProjectExists(projectId);
+
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      client = await pool.connect();
+      await client.query('BEGIN');
+
+      const cable = await findProjectCableById(client, projectId, cableId);
+
+      if (!cable) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable not found' });
+        return;
+      }
+
+      const existingMaterials = await ensureCableMaterialsInitialized(
+        client,
+        projectId,
+        cable.id,
+        cable.cable_type_id,
+        cable.type_name,
+        cable.materials_initialized,
+        cable.materials_customized,
+      );
+
+      const syncResult = await syncCableMaterialsToCableTypeDefaults(
+        client,
+        projectId,
+        cable.id,
+        cable.cable_type_id,
+        cable.type_name,
+        existingMaterials,
+        cable.materials_customized,
+      );
+
+      await client.query('COMMIT');
+
+      res.json({
+        cableMaterials: syncResult.cableMaterials.map(mapCableMaterialRow),
+        cableTypeDefaultMaterials: syncResult.cableTypeDefaultMaterials.map(
+          mapCableTypeDefaultMaterialRow,
+        ),
+        summary: syncResult.summary,
+      });
+    } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+
+      console.error('Sync cable base materials error', error);
+      res.status(500).json({ error: 'Failed to sync cable base materials' });
+    } finally {
+      client?.release();
+    }
+  },
+);
+
+cablesRouter.post(
   '/:cableId/materials',
   authenticate,
   async (req: Request, res: Response): Promise<void> => {
@@ -1707,9 +2082,11 @@ cablesRouter.post(
             name,
             quantity,
             unit,
-            remarks
+            remarks,
+            source,
+            cable_type_default_material_id
           )
-          VALUES ($1, $2, $3, $4, $5, $6)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           RETURNING
             id,
             cable_id,
@@ -1717,6 +2094,8 @@ cablesRouter.post(
             quantity,
             unit,
             remarks,
+            source,
+            cable_type_default_material_id,
             created_at,
             updated_at;
         `,
@@ -1727,6 +2106,8 @@ cablesRouter.post(
           quantity ?? null,
           normalizeOptionalString(unit ?? null),
           normalizeOptionalString(remarks ?? null),
+          CABLE_MATERIAL_SOURCE_MANUAL,
+          null,
         ],
       );
 
@@ -1856,6 +2237,8 @@ cablesRouter.patch(
             quantity,
             unit,
             remarks,
+            source,
+            cable_type_default_material_id,
             created_at,
             updated_at;
         `,
