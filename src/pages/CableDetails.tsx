@@ -685,7 +685,7 @@ export const CableDetails = () => {
       showToast({
         intent: 'error',
         title: 'Sign-in required',
-        body: 'You need to be signed in to update base materials.',
+        body: 'You need to be signed in to reload base materials.',
       });
       return;
     }
@@ -708,7 +708,7 @@ export const CableDetails = () => {
       if (response.summary.hasChanges) {
         showToast({
           intent: 'success',
-          title: 'Base materials updated',
+          title: 'Base materials reloaded',
           body: formatCableMaterialSyncSummary(response.summary),
         });
       } else {
@@ -721,7 +721,7 @@ export const CableDetails = () => {
       console.error('Failed to sync cable base materials', err);
       showToast({
         intent: 'error',
-        title: 'Failed to update base materials',
+        title: 'Failed to reload base materials',
         body: err instanceof ApiError ? err.message : undefined,
       });
     } finally {
@@ -1010,7 +1010,7 @@ export const CableDetails = () => {
             <Title3>Cable materials</Title3>
             <Caption1 className={styles.readOnlyNotice}>
               Base materials come from the cable type&apos;s additional default materials. Use
-              Update base materials to refresh default rows from the cable type while keeping manual
+              Reload base materials to refresh default rows from the cable type while keeping manual
               rows on this cable.
             </Caption1>
           </div>
@@ -1021,7 +1021,7 @@ export const CableDetails = () => {
                 onClick={() => void handleUpdateBaseMaterials()}
                 disabled={syncingBaseMaterials}
               >
-                {syncingBaseMaterials ? 'Updating...' : 'Update base materials'}
+                {syncingBaseMaterials ? 'Reloading...' : 'Reload base materials'}
               </Button>
             ) : null}
             {canManageMaterials ? (

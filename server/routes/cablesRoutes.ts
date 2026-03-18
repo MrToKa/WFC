@@ -70,7 +70,7 @@ const LIST_OUTPUT_HEADERS = {
   fromLocation: 'From Location',
   toLocation: 'To Location',
   routing: 'Routing',
-  designLength: 'Design Length',
+  designLength: 'Design Length [m]',
 } as const;
 
 const REPORT_OUTPUT_HEADERS = {
