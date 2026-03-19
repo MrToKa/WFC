@@ -100,6 +100,10 @@ export type CableTypeDefaultMaterialInput = {
   remarks?: string | null;
 };
 
+export type CableTypeDefaultMaterialImportSummary = {
+  imported: number;
+};
+
 export type CableMaterialSource = 'default' | 'manual';
 
 export type CableMaterial = {

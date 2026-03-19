@@ -9,6 +9,7 @@ import type {
   CableMaterialInput,
   CableMaterialSyncSummary,
   CableTypeDefaultMaterial,
+  CableTypeDefaultMaterialImportSummary,
   CableTypeDefaultMaterialInput,
   CableTypeDetails,
   CableTypeInput,
@@ -218,6 +219,90 @@ export async function deleteCableTypeDefaultMaterial(
       token,
     },
   );
+}
+
+export async function importCableTypeDefaultMaterials(
+  token: string,
+  projectId: string,
+  cableTypeId: string,
+  file: File,
+): Promise<{
+  summary: CableTypeDefaultMaterialImportSummary;
+  defaultMaterials: CableTypeDefaultMaterial[];
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/import`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    },
+  );
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import default materials';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    summary: CableTypeDefaultMaterialImportSummary;
+    defaultMaterials: CableTypeDefaultMaterial[];
+  };
+}
+
+export async function exportCableTypeDefaultMaterials(
+  token: string,
+  projectId: string,
+  cableTypeId: string,
+): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/export`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export default materials';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
 }
 
 export async function fetchCables(projectId: string): Promise<{ cables: Cable[] }> {

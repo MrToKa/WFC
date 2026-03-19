@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Body1,
@@ -31,8 +31,10 @@ import {
   ApiError,
   createCableTypeDefaultMaterial,
   deleteCableTypeDefaultMaterial,
+  exportCableTypeDefaultMaterials,
   fetchCableTypeDetails,
   fetchMaterialCableInstallationMaterials,
+  importCableTypeDefaultMaterials,
   type CableTypeDefaultMaterial,
   type CableTypeDetails as CableTypeDetailsData,
   type MaterialCableInstallationMaterial,
@@ -43,6 +45,7 @@ import { useToast } from '@/context/ToastContext';
 
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
 import { formatNumeric, parseNumberInput, toNullableString } from './ProjectDetails.utils';
+import { downloadBlob } from './Materials/Materials.utils';
 
 type DefaultMaterialDialogMode = 'create' | 'edit';
 
@@ -232,6 +235,9 @@ const useStyles = makeStyles({
     gap: '0.75rem',
     flexWrap: 'wrap',
   },
+  hiddenInput: {
+    display: 'none',
+  },
   tableContainer: {
     width: '100%',
     overflowX: 'auto',
@@ -294,6 +300,7 @@ export const CableTypeDetails = () => {
   }>();
   const { user, token } = useAuth();
   const { showToast } = useToast();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = Boolean(user?.isAdmin);
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
@@ -318,6 +325,8 @@ export const CableTypeDetails = () => {
   const [dialogSubmitting, setDialogSubmitting] = useState<boolean>(false);
   const [editingDefaultMaterialId, setEditingDefaultMaterialId] = useState<string | null>(null);
   const [pendingDefaultMaterialId, setPendingDefaultMaterialId] = useState<string | null>(null);
+  const [isImportingDefaultMaterials, setIsImportingDefaultMaterials] = useState<boolean>(false);
+  const [isExportingDefaultMaterials, setIsExportingDefaultMaterials] = useState<boolean>(false);
 
   const loadDetails = useCallback(async () => {
     if (!projectId || !cableTypeId) {
@@ -609,6 +618,121 @@ export const CableTypeDetails = () => {
     [cableTypeId, isAdmin, projectId, showToast, token],
   );
 
+  const handleImportClick = useCallback(() => {
+    if (!projectId || !cableTypeId || !token || !isAdmin) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to import default materials.',
+      });
+      return;
+    }
+
+    importInputRef.current?.click();
+  }, [cableTypeId, isAdmin, projectId, showToast, token]);
+
+  const handleImportFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+
+      event.target.value = '';
+
+      if (!file) {
+        return;
+      }
+
+      if (!projectId || !cableTypeId || !token || !isAdmin) {
+        showToast({
+          intent: 'error',
+          title: 'Admin access required',
+          body: 'You need to be signed in as an admin to import default materials.',
+        });
+        return;
+      }
+
+      setIsImportingDefaultMaterials(true);
+
+      try {
+        const response = await importCableTypeDefaultMaterials(token, projectId, cableTypeId, file);
+
+        setDetails((previous) =>
+          previous
+            ? {
+                ...previous,
+                defaultMaterials: sortDefaultMaterials(response.defaultMaterials),
+              }
+            : previous,
+        );
+
+        showToast({
+          intent: 'success',
+          title: 'Default materials imported',
+          body: `Imported ${response.summary.imported} ${
+            response.summary.imported === 1 ? 'material' : 'materials'
+          }.`,
+        });
+      } catch (err) {
+        console.error('Failed to import default materials', err);
+
+        if (err instanceof ApiError && err.status === 404) {
+          showToast({
+            intent: 'error',
+            title: 'Import endpoint unavailable',
+            body: 'Please restart the API server after updating it.',
+          });
+        } else {
+          showToast({
+            intent: 'error',
+            title: 'Failed to import default materials',
+            body: err instanceof ApiError ? err.message : undefined,
+          });
+        }
+      } finally {
+        setIsImportingDefaultMaterials(false);
+      }
+    },
+    [cableTypeId, isAdmin, projectId, showToast, token],
+  );
+
+  const handleExportDefaultMaterials = useCallback(async () => {
+    if (!details || !projectId || !cableTypeId || !token || !isAdmin) {
+      showToast({
+        intent: 'error',
+        title: 'Admin access required',
+        body: 'You need to be signed in as an admin to export default materials.',
+      });
+      return;
+    }
+
+    setIsExportingDefaultMaterials(true);
+
+    try {
+      const blob = await exportCableTypeDefaultMaterials(token, projectId, cableTypeId);
+
+      downloadBlob(blob, 'CablesAdditionalDefaultMaterials.xlsx');
+
+      showToast({ intent: 'success', title: 'Default materials exported' });
+    } catch (err) {
+      console.error('Failed to export default materials', err);
+
+      if (err instanceof ApiError && err.status === 404) {
+        showToast({
+          intent: 'error',
+          title: 'Export endpoint unavailable',
+          body: 'Please restart the API server after updating it.',
+        });
+      } else {
+        showToast({
+          intent: 'error',
+          title: 'Failed to export default materials',
+          body: err instanceof ApiError ? err.message : undefined,
+        });
+      }
+    } finally {
+      setIsExportingDefaultMaterials(false);
+    }
+  }, [cableTypeId, details, isAdmin, projectId, showToast, token]);
+
   const pageTitle = details ? `Cable type - ${details.cableType.name}` : 'Cable type details';
 
   const updatedAt = useMemo(() => {
@@ -756,19 +880,44 @@ export const CableTypeDetails = () => {
             <Title3>Additional default materials</Title3>
             <Caption1 className={styles.readOnlyNotice}>
               Add reusable materials from Cable installation materials that should be associated
-              with this cable type.
+              with this cable type. Import from Excel replaces the current list for this cable
+              type, and Remarks cells are optional.
             </Caption1>
           </div>
           <div className={styles.sectionActions}>
             {isAdmin ? (
               <Button
+                onClick={handleImportClick}
+                disabled={isImportingDefaultMaterials || isExportingDefaultMaterials}
+              >
+                {isImportingDefaultMaterials ? 'Importing...' : 'Import from Excel'}
+              </Button>
+            ) : null}
+            {isAdmin ? (
+              <Button
+                appearance="secondary"
+                onClick={() => void handleExportDefaultMaterials()}
+                disabled={isExportingDefaultMaterials || isImportingDefaultMaterials}
+              >
+                {isExportingDefaultMaterials ? 'Exporting...' : 'Export to Excel'}
+              </Button>
+            ) : null}
+            {isAdmin ? (
+              <Button
                 appearance="primary"
                 onClick={openCreateDialog}
-                disabled={availableDefaultMaterialsLoading}
+                disabled={availableDefaultMaterialsLoading || isImportingDefaultMaterials}
               >
                 Add default material
               </Button>
             ) : null}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xlsx"
+              className={styles.hiddenInput}
+              onChange={handleImportFileChange}
+            />
           </div>
         </div>
 
@@ -813,7 +962,7 @@ export const CableTypeDetails = () => {
                           <Button
                             size="small"
                             onClick={() => openEditDialog(material)}
-                            disabled={isBusy}
+                            disabled={isBusy || isImportingDefaultMaterials}
                           >
                             Edit
                           </Button>
@@ -821,7 +970,7 @@ export const CableTypeDetails = () => {
                             size="small"
                             appearance="secondary"
                             onClick={() => void handleDeleteDefaultMaterial(material)}
-                            disabled={isBusy}
+                            disabled={isBusy || isImportingDefaultMaterials}
                           >
                             Delete
                           </Button>
