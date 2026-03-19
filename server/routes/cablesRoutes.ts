@@ -48,6 +48,7 @@ const upload = multer({
 
 const INPUT_HEADERS = {
   cableId: 'Cable Id',
+  revision: 'Revision',
   tag: 'Tag',
   type: 'Type',
   fromLocation: 'From Location',
@@ -62,6 +63,7 @@ const INPUT_HEADERS = {
 
 const LIST_OUTPUT_HEADERS = {
   cableId: 'Cable Id',
+  revision: 'Revision',
   tag: 'Tag',
   type: 'Type',
   purpose: 'Purpose',
@@ -72,6 +74,8 @@ const LIST_OUTPUT_HEADERS = {
   routing: 'Routing',
   designLength: 'Design Length [m]',
 } as const;
+
+const REVISION_INPUT_HEADERS = [INPUT_HEADERS.revision, 'Rev.'] as const;
 
 const REPORT_OUTPUT_HEADERS = {
   cableId: 'Cable Id',
@@ -294,6 +298,7 @@ const selectCablesQuery = `
     c.id,
     c.project_id,
     c.cable_id,
+    c.revision,
     c.tag,
     c.cable_type_id,
     c.from_location,
@@ -325,6 +330,7 @@ const selectCableDetailsQuery = `
     c.id,
     c.project_id,
     c.cable_id,
+    c.revision,
     c.tag,
     c.cable_type_id,
     c.from_location,
@@ -1464,6 +1470,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
 
   const {
     cableId,
+    revision,
     tag,
     cableTypeId,
     fromLocation,
@@ -1510,6 +1517,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
     }
 
     const insertedCableId = randomUUID();
+    const normalizedRevision = normalizeOptionalString(revision ?? null);
     const normalizedTag = normalizeOptionalString(tag ?? null);
 
     const insertResult = await client.query<CableRow>(
@@ -1518,6 +1526,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             id,
             project_id,
             cable_id,
+            revision,
             tag,
             cable_type_id,
             from_location,
@@ -1530,11 +1539,12 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             connected_to,
             tested
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           RETURNING
             id,
             project_id,
             cable_id,
+            revision,
             tag,
             cable_type_id,
             from_location,
@@ -1553,6 +1563,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
         insertedCableId,
         projectId,
         cableId,
+        normalizedRevision,
         normalizedTag,
         cableTypeId,
         normalizeOptionalString(fromLocation ?? null),
@@ -1635,6 +1646,7 @@ cablesRouter.patch(
 
     const {
       cableId: newCableId,
+      revision,
       tag,
       cableTypeId,
       fromLocation,
@@ -1668,6 +1680,11 @@ cablesRouter.patch(
     if (newCableId !== undefined) {
       fields.push(`cable_id = $${index++}`);
       values.push(newCableId);
+    }
+
+    if (revision !== undefined) {
+      fields.push(`revision = $${index++}`);
+      values.push(normalizeOptionalString(revision));
     }
 
     if (tag !== undefined) {
@@ -1805,6 +1822,7 @@ cablesRouter.patch(
             id,
             project_id,
             cable_id,
+            revision,
             tag,
             cable_type_id,
             from_location,
@@ -2457,6 +2475,7 @@ cablesRouter.post(
     };
 
     type PreparedCableFields = {
+      revision?: string | null;
       tag?: string | null;
       fromLocation?: string | null;
       toLocation?: string | null;
@@ -2492,6 +2511,16 @@ cablesRouter.post(
 
     const hasColumn = (header: string): boolean =>
       rows.length === 0 || availableColumns.has(header);
+    const hasAnyColumn = (headers: readonly string[]): boolean => headers.some(hasColumn);
+    const getCellValue = (row: CableImportRow, headers: readonly string[]): unknown => {
+      for (const header of headers) {
+        if (Object.prototype.hasOwnProperty.call(row, header)) {
+          return row[header];
+        }
+      }
+
+      return undefined;
+    };
 
     const requiredColumns = [
       INPUT_HEADERS.cableId,
@@ -2516,6 +2545,7 @@ cablesRouter.post(
 
     // Track worksheet columns so we only touch fields the user supplied.
     const columnAvailability = {
+      revision: hasAnyColumn(REVISION_INPUT_HEADERS),
       tag: hasColumn(INPUT_HEADERS.tag),
       fromLocation: hasColumn(INPUT_HEADERS.fromLocation),
       toLocation: hasColumn(INPUT_HEADERS.toLocation),
@@ -2555,6 +2585,15 @@ cablesRouter.post(
       const typeKey = typeName.toLowerCase();
 
       const fields: PreparedCableFields = {};
+
+      if (columnAvailability.revision) {
+        const rawRevision = getCellValue(row, REVISION_INPUT_HEADERS);
+        fields.revision = normalizeOptionalString(
+          typeof rawRevision === 'number'
+            ? String(rawRevision)
+            : (rawRevision as string | null | undefined),
+        );
+      }
 
       if (columnAvailability.tag) {
         fields.tag = normalizeOptionalString(
@@ -2659,6 +2698,7 @@ cablesRouter.post(
       CableRow,
       | 'id'
       | 'cable_id'
+      | 'revision'
       | 'cable_type_id'
       | 'tag'
       | 'from_location'
@@ -2707,6 +2747,7 @@ cablesRouter.post(
           SELECT
             c.id,
             c.cable_id,
+            c.revision,
             c.cable_type_id,
             c.tag,
             c.from_location,
@@ -2753,6 +2794,7 @@ cablesRouter.post(
                 id,
                 project_id,
                 cable_id,
+                revision,
                 tag,
                 cable_type_id,
                 from_location,
@@ -2765,12 +2807,13 @@ cablesRouter.post(
                 connected_to,
                 tested
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);
             `,
             [
               insertedCableId,
               projectId,
               row.cableId,
+              fields.revision ?? null,
               fields.tag ?? null,
               type.id,
               fields.fromLocation ?? null,
@@ -2803,6 +2846,15 @@ cablesRouter.post(
           updateAssignments.push(`cable_type_id = $${parameterIndex}`);
           updateValues.push(type.id);
           parameterIndex += 1;
+        }
+
+        if (columnAvailability.revision && fields.revision !== undefined) {
+          const currentRevision = normalizeOptionalString(existing.revision ?? null);
+          if (fields.revision !== currentRevision) {
+            updateAssignments.push(`revision = $${parameterIndex}`);
+            updateValues.push(fields.revision ?? null);
+            parameterIndex += 1;
+          }
         }
 
         if (columnAvailability.tag && fields.tag !== undefined) {
@@ -3006,6 +3058,7 @@ cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise
                   ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
                   : [
                       `LOWER(c.cable_id::text) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
@@ -3080,6 +3133,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         `
             (
               LOWER(c.cable_id::text) LIKE ${likeParam}
+              OR LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}
               OR LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}
               OR LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}
               OR LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}
@@ -3377,6 +3431,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
 
       const columns = [
         { name: LIST_OUTPUT_HEADERS.cableId, key: 'cableId', width: 18 },
+        { name: LIST_OUTPUT_HEADERS.revision, key: 'revision', width: 14 },
         { name: LIST_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
         { name: LIST_OUTPUT_HEADERS.type, key: 'type', width: 28 },
         { name: LIST_OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
@@ -3410,6 +3465,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
 
       const rows = result.rows.map((row: CableWithTypeRow) => [
         row.cable_id ?? '',
+        row.revision ?? '',
         row.tag ?? '',
         row.type_name ?? '',
         row.type_purpose ?? '',
@@ -3518,6 +3574,7 @@ cablesRouter.get('/template', authenticate, async (req: Request, res: Response):
           ] as const)
         : ([
             { name: INPUT_HEADERS.cableId, key: 'cableId', width: 18 },
+            { name: INPUT_HEADERS.revision, key: 'revision', width: 14 },
             { name: INPUT_HEADERS.tag, key: 'tag', width: 20 },
             { name: INPUT_HEADERS.type, key: 'type', width: 28 },
             {

@@ -52,7 +52,7 @@ type CableListTabProps = {
   ) => void;
   onTextFieldBlur: (
     cable: Cable,
-    field: 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'designLength'
+    field: 'revision' | 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'designLength'
   ) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
   pendingId: string | null;
@@ -227,6 +227,9 @@ export const CableListTab = ({
                 ID
               </th>
               <th className={styles.tableHeadCell}>
+                Rev.
+              </th>
+              <th className={styles.tableHeadCell}>
                 Tag
               </th>
               <th className={styles.tableHeadCell}>
@@ -263,6 +266,22 @@ export const CableListTab = ({
               return (
                 <tr key={cable.id}>
                   <td className={styles.tableCell}>{cable.cableId}</td>
+                  <td className={styles.tableCell}>
+                    {isInlineEditable && draft ? (
+                      <Input
+                        size="small"
+                        value={draft.revision}
+                        onChange={(_, data) =>
+                          onDraftChange(cable.id, 'revision', data.value)
+                        }
+                        onBlur={() => onTextFieldBlur(cable, 'revision')}
+                        disabled={isRowUpdating}
+                        aria-label="Cable revision"
+                      />
+                    ) : (
+                      cable.revision ?? '-'
+                    )}
+                  </td>
                   <td className={styles.tableCell}>
                     {isInlineEditable && draft ? (
                       <Input

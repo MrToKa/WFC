@@ -273,6 +273,7 @@ export const buildTrayInput = (
 
 export type CableFormState = {
   cableId: string;
+  revision: string;
   tag: string;
   cableTypeId: string;
   fromLocation: string;
@@ -292,6 +293,7 @@ export type CableFormErrors = Partial<Record<keyof CableFormState, string>> & {
 
 export const emptyCableForm: CableFormState = {
   cableId: '',
+  revision: '',
   tag: '',
   cableTypeId: '',
   fromLocation: '',
@@ -307,6 +309,7 @@ export const emptyCableForm: CableFormState = {
 
 export const toCableFormState = (cable: Cable): CableFormState => ({
   cableId: String(cable.cableId),
+  revision: cable.revision ?? '',
   tag: cable.tag ?? '',
   cableTypeId: cable.cableTypeId,
   fromLocation: cable.fromLocation ?? '',
@@ -391,6 +394,7 @@ export const buildCableInput = (
 
   const input: CableInput = {
     cableId: cableId ?? 0,
+    revision: normalize(values.revision),
     cableTypeId,
     tag,
     fromLocation: normalize(values.fromLocation),

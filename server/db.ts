@@ -330,6 +330,7 @@ export async function initializeDatabase(): Promise<void> {
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       cable_id INTEGER NOT NULL,
+      revision TEXT,
       tag TEXT,
       cable_type_id UUID NOT NULL REFERENCES cable_types(id) ON DELETE CASCADE,
       from_location TEXT,
@@ -361,6 +362,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS cables_cable_type_id_idx
       ON cables (cable_type_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS revision TEXT;
   `);
 
   await pool.query(`

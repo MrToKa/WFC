@@ -4,6 +4,7 @@ export type CableRow = {
   id: string;
   project_id: string;
   cable_id: number;
+  revision: string | null;
   tag: string | null;
   cable_type_id: string;
   from_location: string | null;
@@ -35,6 +36,7 @@ export type PublicCable = {
   id: string;
   projectId: string;
   cableId: number;
+  revision: string | null;
   tag: string | null;
   cableTypeId: string;
   typeName: string;
@@ -82,6 +84,7 @@ export const mapCableRow = (row: CableWithTypeRow): PublicCable => ({
   id: row.id,
   projectId: row.project_id,
   cableId: row.cable_id,
+  revision: row.revision ?? null,
   tag: row.tag ?? null,
   cableTypeId: row.cable_type_id,
   typeName: row.type_name,

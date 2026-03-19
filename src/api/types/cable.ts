@@ -19,6 +19,7 @@ export type Cable = {
   id: string;
   projectId: string;
   cableId: number;
+  revision: string | null;
   tag: string | null;
   cableTypeId: string;
   typeName: string;
@@ -51,6 +52,7 @@ export type CableTypeInput = {
 
 export type CableInput = {
   cableId: number;
+  revision?: string | null;
   tag?: string | null;
   cableTypeId: string;
   fromLocation?: string | null;

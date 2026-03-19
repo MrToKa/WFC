@@ -913,6 +913,10 @@ export const CableDetails = () => {
               <Body1>{details.cable.cableId}</Body1>
             </div>
             <div className={styles.field}>
+              <Caption1 className={styles.label}>Revision</Caption1>
+              <Body1>{formatOptionalText(details.cable.revision)}</Body1>
+            </div>
+            <div className={styles.field}>
               <Caption1 className={styles.label}>Tag</Caption1>
               <Body1>{formatOptionalText(details.cable.tag)}</Body1>
             </div>

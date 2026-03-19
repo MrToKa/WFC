@@ -21,6 +21,7 @@ import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { CableFormErrors, CableFormState } from '../ProjectDetails.forms';
 
 export type CableDialogField =
+  | 'revision'
   | 'tag'
   | 'cableTypeId'
   | 'fromLocation'
@@ -84,6 +85,14 @@ export const CableDialog = ({
               {mode === 'create' ? 'Add cable' : 'Edit cable'}
             </DialogTitle>
             <DialogContent>
+              {isFieldVisible('revision') ? (
+                <Field label="Revision">
+                  <Input
+                    value={values.revision}
+                    onChange={onFieldChange('revision')}
+                  />
+                </Field>
+              ) : null}
               {isFieldVisible('tag') ? (
                 <Field
                   label="Tag"

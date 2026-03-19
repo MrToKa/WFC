@@ -198,6 +198,7 @@ export const useCableListSection = ({
       
       if (filterCriteria === 'all') {
         const values = [
+          cable.revision,
           cable.tag,
           cable.typeName,
           cable.fromLocation,
@@ -508,6 +509,7 @@ export const useCableListSection = ({
       let changes: Partial<CableInput> | null = null;
 
       switch (field) {
+        case 'revision':
         case 'tag':
         case 'fromLocation':
         case 'toLocation':
