@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppShell } from '@/app/AppShell';
 import { RedirectIfAuthenticated, RequireAdmin, RequireAuth } from '@/components/AuthGuards';
 import { Account } from '@/pages/Account';
+import { Assemblies } from '@/pages/Assemblies';
 import { Materials } from '@/pages/Materials';
 import { Templates } from '@/pages/Templates';
 import { AdminPanel } from '@/pages/AdminPanel';
@@ -32,6 +33,14 @@ export const routes: RouteObject[] = [
         element: (
           <RequireAuth>
             <Templates />
+          </RequireAuth>
+        )
+      },
+      {
+        path: 'assemblies',
+        element: (
+          <RequireAuth>
+            <Assemblies />
           </RequireAuth>
         )
       },
