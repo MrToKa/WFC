@@ -2,6 +2,7 @@ import { request, ApiError, getApiBaseUrl } from './http';
 import type {
   CableType,
   Cable,
+  CableMtoOption,
   CableReportSummary,
   CableDetails,
   CableMaterial,
@@ -228,6 +229,7 @@ export async function fetchCableReportSummary(
   options?: {
     filterText?: string;
     criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+    mto?: CableMtoOption | null;
   },
 ): Promise<{ summary: CableReportSummary }> {
   const params = new URLSearchParams();
@@ -239,6 +241,10 @@ export async function fetchCableReportSummary(
 
   if (options?.criteria) {
     params.set('criteria', options.criteria);
+  }
+
+  if (options?.mto) {
+    params.set('mto', options.mto);
   }
 
   const query = params.toString();
@@ -401,6 +407,8 @@ export async function exportCables(
   options?: {
     filterText?: string;
     cableTypeId?: string;
+    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+    mto?: CableMtoOption | null;
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;
     view?: 'list' | 'report';
@@ -416,6 +424,14 @@ export async function exportCables(
 
   if (options?.cableTypeId) {
     params.set('cableTypeId', options.cableTypeId);
+  }
+
+  if (options?.mto) {
+    params.set('mto', options.mto);
+  }
+
+  if (options?.criteria) {
+    params.set('criteria', options.criteria);
   }
 
   if (options?.sortColumn) {

@@ -14,6 +14,7 @@ import {
   Cable,
   CableImportSummary,
   CableInput,
+  type CableMtoOption,
   createCable,
   deleteCable,
   exportCables,
@@ -70,6 +71,10 @@ type CableDialogController = {
     event: unknown,
     data: { optionValue?: string }
   ) => void;
+  handleMtoSelect: (
+    event: unknown,
+    data: { optionValue?: string }
+  ) => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   reset: () => void;
 };
@@ -100,7 +105,10 @@ type UseCableListSectionResult = {
   openEditCableDialog: (cable: Cable) => void;
   handleDeleteCable: (cable: Cable) => Promise<void>;
   handleImportCables: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
-  handleExportCables: (view?: 'list' | 'report') => Promise<void>;
+  handleExportCables: (
+    view?: 'list' | 'report',
+    mto?: CableMtoOption | null
+  ) => Promise<void>;
   handleGetCablesTemplate: (view?: 'list' | 'report') => Promise<void>;
   handleCableDraftChange: (
     cableId: string,
@@ -110,6 +118,10 @@ type UseCableListSectionResult = {
   handleCableTextFieldBlur: (
     cable: Cable,
     field: keyof CableFormState
+  ) => Promise<void>;
+  handleInlineMtoChange: (
+    cable: Cable,
+    nextMto: string
   ) => Promise<void>;
   handleInlineCableTypeChange: (
     cable: Cable,
@@ -199,6 +211,7 @@ export const useCableListSection = ({
       if (filterCriteria === 'all') {
         const values = [
           cable.revision,
+          cable.mto,
           cable.tag,
           cable.typeName,
           cable.fromLocation,
@@ -355,6 +368,16 @@ export const useCableListSection = ({
     }));
   };
 
+  const handleMtoSelect = (
+    _event: unknown,
+    data: { optionValue?: string }
+  ) => {
+    setDialogValues((previous: CableFormState) => ({
+      ...previous,
+      mto: data.optionValue ?? ''
+    }));
+  };
+
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
     setDialogErrors({ });
@@ -495,6 +518,25 @@ export const useCableListSection = ({
         return;
       }
       await updateCableInline(cable, { cableTypeId: nextCableTypeId });
+    },
+    [updateCableInline]
+  );
+
+  const handleInlineMtoChange = useCallback(
+    async (cable: Cable, nextMto: string) => {
+      const normalizedMto = nextMto.trim();
+      const currentMto = cable.mto ?? '';
+
+      if (normalizedMto === currentMto) {
+        return;
+      }
+
+      await updateCableInline(cable, {
+        mto:
+          normalizedMto === ''
+            ? null
+            : (normalizedMto as NonNullable<CableInput['mto']>)
+      });
     },
     [updateCableInline]
   );
@@ -790,7 +832,7 @@ export const useCableListSection = ({
   );
 
   const handleExportCables = useCallback(
-    async (view: 'list' | 'report' = 'list') => {
+    async (view: 'list' | 'report' = 'list', mto: CableMtoOption | null = null) => {
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
@@ -805,11 +847,18 @@ export const useCableListSection = ({
       try {
         const blob = await exportCables(token, projectSnapshot.id, {
           filterText,
-          view
+          criteria: filterCriteria,
+          view,
+          mto
         });
         const link = document.createElement('a');
         const url = window.URL.createObjectURL(blob);
-        const suffix = view === 'report' ? 'cables-report' : 'cable-list';
+        const suffix =
+          view === 'report'
+            ? mto
+              ? `cables-report-${sanitizeFileSegment(mto)}`
+              : 'cables-report'
+            : 'cable-list';
         const fileName = `${sanitizeFileSegment(
           projectSnapshot.projectNumber
         )}-${suffix}.xlsx`;
@@ -841,12 +890,7 @@ export const useCableListSection = ({
         setIsExporting(false);
       }
     },
-    [
-      filterText,
-      projectSnapshot,
-      showToast,
-      token
-    ]
+    [filterCriteria, filterText, projectSnapshot, showToast, token]
   );
 
   const handleGetCablesTemplate = useCallback(
@@ -921,6 +965,7 @@ export const useCableListSection = ({
     handleGetCablesTemplate,
     handleCableDraftChange,
     handleCableTextFieldBlur,
+    handleInlineMtoChange,
     handleInlineCableTypeChange,
     filterText,
     filterCriteria,
@@ -934,6 +979,7 @@ export const useCableListSection = ({
       submitting: dialogSubmitting,
       handleFieldChange,
       handleCableTypeSelect,
+      handleMtoSelect,
       handleSubmit,
       reset: resetDialog
     }

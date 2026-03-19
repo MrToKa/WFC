@@ -1,11 +1,12 @@
-import type {
-  ApiErrorPayload,
-  Cable,
-  CableInput,
-  CableType,
-  CableTypeInput,
-  Tray,
-  TrayInput
+import {
+  CABLE_MTO_OPTIONS,
+  type ApiErrorPayload,
+  type Cable,
+  type CableInput,
+  type CableType,
+  type CableTypeInput,
+  type Tray,
+  type TrayInput
 } from '@/api/client';
 
 import {
@@ -274,6 +275,7 @@ export const buildTrayInput = (
 export type CableFormState = {
   cableId: string;
   revision: string;
+  mto: string;
   tag: string;
   cableTypeId: string;
   fromLocation: string;
@@ -294,6 +296,7 @@ export type CableFormErrors = Partial<Record<keyof CableFormState, string>> & {
 export const emptyCableForm: CableFormState = {
   cableId: '',
   revision: '',
+  mto: '',
   tag: '',
   cableTypeId: '',
   fromLocation: '',
@@ -310,6 +313,7 @@ export const emptyCableForm: CableFormState = {
 export const toCableFormState = (cable: Cable): CableFormState => ({
   cableId: String(cable.cableId),
   revision: cable.revision ?? '',
+  mto: cable.mto ?? '',
   tag: cable.tag ?? '',
   cableTypeId: cable.cableTypeId,
   fromLocation: cable.fromLocation ?? '',
@@ -395,12 +399,26 @@ export const buildCableInput = (
   const input: CableInput = {
     cableId: cableId ?? 0,
     revision: normalize(values.revision),
+    mto: null,
     cableTypeId,
     tag,
     fromLocation: normalize(values.fromLocation),
     toLocation: normalize(values.toLocation),
     routing: normalize(values.routing)
   };
+
+  const normalizedMto = values.mto.trim();
+  if (normalizedMto === '') {
+    input.mto = null;
+  } else if (
+    CABLE_MTO_OPTIONS.includes(
+      normalizedMto as (typeof CABLE_MTO_OPTIONS)[number]
+    )
+  ) {
+    input.mto = normalizedMto as (typeof CABLE_MTO_OPTIONS)[number];
+  } else {
+    errors.mto = 'Select a valid MTO';
+  }
 
   const designLengthValue = values.designLength.trim();
   if (designLengthValue !== '') {

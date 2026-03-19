@@ -10,18 +10,20 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Dropdown,
   Field,
   Input,
   Option
 } from '@fluentui/react-components';
 
-import type { CableType } from '@/api/client';
+import { CABLE_MTO_OPTIONS, type CableType } from '@/api/client';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { CableFormErrors, CableFormState } from '../ProjectDetails.forms';
 
 export type CableDialogField =
   | 'revision'
+  | 'mto'
   | 'tag'
   | 'cableTypeId'
   | 'fromLocation'
@@ -45,6 +47,10 @@ type CableDialogProps = {
     event: unknown,
     data: { optionValue?: string }
   ) => void;
+  onMtoSelect: (
+    event: unknown,
+    data: { optionValue?: string }
+  ) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onDismiss: () => void;
 };
@@ -60,6 +66,7 @@ export const CableDialog = ({
   visibleFields,
   onFieldChange,
   onCableTypeSelect,
+  onMtoSelect,
   onSubmit,
   onDismiss
 }: CableDialogProps) => {
@@ -91,6 +98,27 @@ export const CableDialog = ({
                     value={values.revision}
                     onChange={onFieldChange('revision')}
                   />
+                </Field>
+              ) : null}
+              {isFieldVisible('mto') ? (
+                <Field
+                  label="MTO"
+                  validationState={errors.mto ? 'error' : undefined}
+                  validationMessage={errors.mto}
+                >
+                  <Dropdown
+                    placeholder="Select MTO"
+                    selectedOptions={values.mto ? [values.mto] : []}
+                    value={values.mto || undefined}
+                    onOptionSelect={onMtoSelect}
+                    clearable
+                  >
+                    {CABLE_MTO_OPTIONS.map((option) => (
+                      <Option key={option} value={option}>
+                        {option}
+                      </Option>
+                    ))}
+                  </Dropdown>
                 </Field>
               ) : null}
               {isFieldVisible('tag') ? (

@@ -12,7 +12,7 @@ import {
   Switch
 } from '@fluentui/react-components';
 
-import type { Cable, CableType } from '@/api/client';
+import { CABLE_MTO_OPTIONS, type Cable, type CableType } from '@/api/client';
 import type { CableSearchCriteria } from './hooks/useCableListSection';
 import { TablePagination } from './TablePagination';
 
@@ -54,6 +54,7 @@ type CableListTabProps = {
     cable: Cable,
     field: 'revision' | 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'designLength'
   ) => void;
+  onInlineMtoChange: (cable: Cable, nextMto: string) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
   pendingId: string | null;
   onDetails?: (cable: Cable) => void;
@@ -97,6 +98,7 @@ export const CableListTab = ({
   drafts,
   onDraftChange,
   onTextFieldBlur,
+  onInlineMtoChange,
   onInlineCableTypeChange,
   pendingId,
   onDetails,
@@ -230,6 +232,9 @@ export const CableListTab = ({
                 Rev.
               </th>
               <th className={styles.tableHeadCell}>
+                MTO
+              </th>
+              <th className={styles.tableHeadCell}>
                 Tag
               </th>
               <th className={styles.tableHeadCell}>
@@ -280,6 +285,32 @@ export const CableListTab = ({
                       />
                     ) : (
                       cable.revision ?? '-'
+                    )}
+                  </td>
+                  <td className={styles.tableCell}>
+                    {isInlineEditable && draft ? (
+                      <Dropdown
+                        size="small"
+                        placeholder="Select MTO"
+                        selectedOptions={draft.mto ? [draft.mto] : []}
+                        value={draft.mto || undefined}
+                        onOptionSelect={(_, data) => {
+                          const nextMto = data.optionValue ?? '';
+                          onDraftChange(cable.id, 'mto', nextMto);
+                          onInlineMtoChange(cable, nextMto);
+                        }}
+                        clearable
+                        disabled={isRowUpdating}
+                        aria-label="Cable MTO"
+                      >
+                        {CABLE_MTO_OPTIONS.map((option) => (
+                          <Option key={option} value={option}>
+                            {option}
+                          </Option>
+                        ))}
+                      </Dropdown>
+                    ) : (
+                      cable.mto ?? '-'
                     )}
                   </td>
                   <td className={styles.tableCell}>

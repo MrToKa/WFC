@@ -15,7 +15,13 @@ interface Request extends ExpressRequest {
   file?: Express.Multer.File;
 }
 import { pool } from '../db.js';
-import { mapCableRow, type CableRow, type CableWithTypeRow } from '../models/cable.js';
+import {
+  CABLE_MTO_VALUES,
+  mapCableRow,
+  type CableMtoValue,
+  type CableRow,
+  type CableWithTypeRow,
+} from '../models/cable.js';
 import { mapCableMaterialRow, type CableMaterialRow } from '../models/cableMaterial.js';
 import {
   mapCableTypeDefaultMaterialRow,
@@ -49,6 +55,7 @@ const upload = multer({
 const INPUT_HEADERS = {
   cableId: 'Cable Id',
   revision: 'Revision',
+  mto: 'MTO',
   tag: 'Tag',
   type: 'Type',
   fromLocation: 'From Location',
@@ -64,6 +71,7 @@ const INPUT_HEADERS = {
 const LIST_OUTPUT_HEADERS = {
   cableId: 'Cable Id',
   revision: 'Revision',
+  mto: 'MTO',
   tag: 'Tag',
   type: 'Type',
   purpose: 'Purpose',
@@ -115,6 +123,20 @@ const normalizeOptionalString = (value: string | null | undefined): string | nul
 
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+};
+
+const cableMtoLookup = new Map<string, CableMtoValue>(
+  CABLE_MTO_VALUES.map((value) => [value.toLowerCase(), value]),
+);
+
+const normalizeCableMtoValue = (value: string | null | undefined): CableMtoValue | null => {
+  const normalized = value?.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return cableMtoLookup.get(normalized.toLowerCase()) ?? null;
 };
 
 const pickFirstNonEmptyString = (...values: Array<string | null | undefined>): string => {
@@ -299,6 +321,7 @@ const selectCablesQuery = `
     c.project_id,
     c.cable_id,
     c.revision,
+    c.mto,
     c.tag,
     c.cable_type_id,
     c.from_location,
@@ -331,6 +354,7 @@ const selectCableDetailsQuery = `
     c.project_id,
     c.cable_id,
     c.revision,
+    c.mto,
     c.tag,
     c.cable_type_id,
     c.from_location,
@@ -1471,6 +1495,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
   const {
     cableId,
     revision,
+    mto,
     tag,
     cableTypeId,
     fromLocation,
@@ -1527,6 +1552,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             project_id,
             cable_id,
             revision,
+            mto,
             tag,
             cable_type_id,
             from_location,
@@ -1539,12 +1565,13 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             connected_to,
             tested
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
           RETURNING
             id,
             project_id,
             cable_id,
             revision,
+            mto,
             tag,
             cable_type_id,
             from_location,
@@ -1564,6 +1591,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
         projectId,
         cableId,
         normalizedRevision,
+        mto ?? null,
         normalizedTag,
         cableTypeId,
         normalizeOptionalString(fromLocation ?? null),
@@ -1647,6 +1675,7 @@ cablesRouter.patch(
     const {
       cableId: newCableId,
       revision,
+      mto,
       tag,
       cableTypeId,
       fromLocation,
@@ -1685,6 +1714,11 @@ cablesRouter.patch(
     if (revision !== undefined) {
       fields.push(`revision = $${index++}`);
       values.push(normalizeOptionalString(revision));
+    }
+
+    if (mto !== undefined) {
+      fields.push(`mto = $${index++}`);
+      values.push(mto ?? null);
     }
 
     if (tag !== undefined) {
@@ -1823,6 +1857,7 @@ cablesRouter.patch(
             project_id,
             cable_id,
             revision,
+            mto,
             tag,
             cable_type_id,
             from_location,
@@ -2476,6 +2511,7 @@ cablesRouter.post(
 
     type PreparedCableFields = {
       revision?: string | null;
+      mto?: CableMtoValue | null;
       tag?: string | null;
       fromLocation?: string | null;
       toLocation?: string | null;
@@ -2546,6 +2582,7 @@ cablesRouter.post(
     // Track worksheet columns so we only touch fields the user supplied.
     const columnAvailability = {
       revision: hasAnyColumn(REVISION_INPUT_HEADERS),
+      mto: hasColumn(INPUT_HEADERS.mto),
       tag: hasColumn(INPUT_HEADERS.tag),
       fromLocation: hasColumn(INPUT_HEADERS.fromLocation),
       toLocation: hasColumn(INPUT_HEADERS.toLocation),
@@ -2593,6 +2630,23 @@ cablesRouter.post(
             ? String(rawRevision)
             : (rawRevision as string | null | undefined),
         );
+      }
+
+      if (columnAvailability.mto) {
+        const rawMtoCell = row[INPUT_HEADERS.mto];
+        const rawMto =
+          typeof rawMtoCell === 'number'
+            ? String(rawMtoCell)
+            : (rawMtoCell as string | null | undefined);
+        const normalizedRawMto = rawMto?.trim() ?? '';
+        const normalizedMto = normalizeCableMtoValue(rawMto ?? null);
+
+        if (normalizedRawMto !== '' && normalizedMto === null) {
+          summary.skipped += 1;
+          continue;
+        }
+
+        fields.mto = normalizedMto;
       }
 
       if (columnAvailability.tag) {
@@ -2699,6 +2753,7 @@ cablesRouter.post(
       | 'id'
       | 'cable_id'
       | 'revision'
+      | 'mto'
       | 'cable_type_id'
       | 'tag'
       | 'from_location'
@@ -2748,6 +2803,7 @@ cablesRouter.post(
             c.id,
             c.cable_id,
             c.revision,
+            c.mto,
             c.cable_type_id,
             c.tag,
             c.from_location,
@@ -2795,6 +2851,7 @@ cablesRouter.post(
                 project_id,
                 cable_id,
                 revision,
+                mto,
                 tag,
                 cable_type_id,
                 from_location,
@@ -2807,13 +2864,14 @@ cablesRouter.post(
                 connected_to,
                 tested
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);
             `,
             [
               insertedCableId,
               projectId,
               row.cableId,
               fields.revision ?? null,
+              fields.mto ?? null,
               fields.tag ?? null,
               type.id,
               fields.fromLocation ?? null,
@@ -2853,6 +2911,15 @@ cablesRouter.post(
           if (fields.revision !== currentRevision) {
             updateAssignments.push(`revision = $${parameterIndex}`);
             updateValues.push(fields.revision ?? null);
+            parameterIndex += 1;
+          }
+        }
+
+        if (columnAvailability.mto && fields.mto !== undefined) {
+          const currentMto = normalizeCableMtoValue(existing.mto ?? null);
+          if (fields.mto !== currentMto) {
+            updateAssignments.push(`mto = $${parameterIndex}`);
+            updateValues.push(fields.mto ?? null);
             parameterIndex += 1;
           }
         }
@@ -3020,6 +3087,7 @@ cablesRouter.post(
 cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise<void> => {
   const { projectId } = req.params;
   const filterQuery = typeof req.query.filter === 'string' ? req.query.filter : undefined;
+  const rawMtoFilter = typeof req.query.mto === 'string' ? req.query.mto.trim() : '';
   const filterCriteria = normalizeCableReportFilterCriteria(
     typeof req.query.criteria === 'string' ? req.query.criteria : undefined,
   );
@@ -3040,6 +3108,12 @@ cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise
     const conditions: string[] = ['c.project_id = $1'];
     const values: string[] = [projectId];
     let parameterIndex = 2;
+    const requestedMto = rawMtoFilter === '' ? null : normalizeCableMtoValue(rawMtoFilter);
+
+    if (rawMtoFilter !== '' && requestedMto === null) {
+      res.status(400).json({ error: 'Invalid MTO filter' });
+      return;
+    }
 
     const normalizedFilter = filterQuery?.trim().toLowerCase() ?? '';
 
@@ -3059,6 +3133,7 @@ cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise
                   : [
                       `LOWER(c.cable_id::text) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.mto, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
@@ -3069,6 +3144,12 @@ cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise
 
       conditions.push(`(${filterExpressions.join(' OR ')})`);
       values.push(`%${normalizedFilter}%`);
+      parameterIndex += 1;
+    }
+
+    if (requestedMto) {
+      conditions.push(`c.mto = $${parameterIndex}`);
+      values.push(requestedMto);
       parameterIndex += 1;
     }
 
@@ -3097,6 +3178,8 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
   const {
     filter: filterQuery,
     cableTypeId: cableTypeIdQuery,
+    criteria: criteriaQuery,
+    mto: mtoQuery,
     sortColumn: sortColumnQuery,
     sortDirection: sortDirectionQuery,
   } = req.query as Record<string, string | undefined>;
@@ -3117,6 +3200,14 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
     const conditions: string[] = ['c.project_id = $1'];
     const values: Array<string> = [projectId];
     let parameterIndex = 2;
+    const filterCriteria = normalizeCableReportFilterCriteria(criteriaQuery);
+    const rawMtoFilter = typeof mtoQuery === 'string' ? mtoQuery.trim() : '';
+    const requestedMto = rawMtoFilter === '' ? null : normalizeCableMtoValue(rawMtoFilter);
+
+    if (rawMtoFilter !== '' && requestedMto === null) {
+      res.status(400).json({ error: 'Invalid MTO filter' });
+      return;
+    }
 
     if (cableTypeIdQuery) {
       conditions.push(`c.cable_type_id = $${parameterIndex}`);
@@ -3129,20 +3220,36 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
 
     if (normalizedFilter) {
       const likeParam = `$${parameterIndex}`;
-      conditions.push(
-        `
-            (
-              LOWER(c.cable_id::text) LIKE ${likeParam}
-              OR LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}
-              OR LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}
-              OR LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}
-              OR LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}
-              OR LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}
-              OR LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}
-            )
-          `,
-      );
+      const filterExpressions =
+        filterCriteria === 'tag'
+          ? [`LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`]
+          : filterCriteria === 'typeName'
+            ? [`LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`]
+            : filterCriteria === 'fromLocation'
+              ? [`LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`]
+              : filterCriteria === 'toLocation'
+                ? [`LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`]
+                : filterCriteria === 'routing'
+                  ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
+                  : [
+                      `LOWER(c.cable_id::text) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.mto, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
+                    ];
+
+      conditions.push(`(${filterExpressions.join(' OR ')})`);
       values.push(`%${normalizedFilter}%`);
+      parameterIndex += 1;
+    }
+
+    if (requestedMto) {
+      conditions.push(`c.mto = $${parameterIndex}`);
+      values.push(requestedMto);
       parameterIndex += 1;
     }
 
@@ -3432,6 +3539,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       const columns = [
         { name: LIST_OUTPUT_HEADERS.cableId, key: 'cableId', width: 18 },
         { name: LIST_OUTPUT_HEADERS.revision, key: 'revision', width: 14 },
+        { name: LIST_OUTPUT_HEADERS.mto, key: 'mto', width: 20 },
         { name: LIST_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
         { name: LIST_OUTPUT_HEADERS.type, key: 'type', width: 28 },
         { name: LIST_OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
@@ -3466,6 +3574,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       const rows = result.rows.map((row: CableWithTypeRow) => [
         row.cable_id ?? '',
         row.revision ?? '',
+        row.mto ?? '',
         row.tag ?? '',
         row.type_name ?? '',
         row.type_purpose ?? '',
@@ -3519,7 +3628,12 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
     const buffer = await workbook.xlsx.writeBuffer();
 
     const projectSegment = sanitizeFileSegment(project.project_number);
-    const fileSuffix = exportView === 'report' ? 'cables-report' : 'cable-list';
+    const fileSuffix =
+      exportView === 'report'
+        ? requestedMto
+          ? `cables-report-${sanitizeFileSegment(requestedMto)}`
+          : 'cables-report'
+        : 'cable-list';
     const fileName = `${projectSegment}-${fileSuffix}.xlsx`;
 
     res.setHeader(
@@ -3575,6 +3689,7 @@ cablesRouter.get('/template', authenticate, async (req: Request, res: Response):
         : ([
             { name: INPUT_HEADERS.cableId, key: 'cableId', width: 18 },
             { name: INPUT_HEADERS.revision, key: 'revision', width: 14 },
+            { name: INPUT_HEADERS.mto, key: 'mto', width: 20 },
             { name: INPUT_HEADERS.tag, key: 'tag', width: 20 },
             { name: INPUT_HEADERS.type, key: 'type', width: 28 },
             {

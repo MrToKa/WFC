@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CABLE_MTO_VALUES } from './models/cable.js';
 
 export const registerSchema = z
   .object({
@@ -319,11 +320,13 @@ export const createCableMaterialSchema = createCableTypeDefaultMaterialSchema;
 export const updateCableMaterialSchema = updateCableTypeDefaultMaterialSchema;
 
 const cableStringField = z.string().trim().max(500).optional();
+const cableMtoField = z.enum(CABLE_MTO_VALUES).nullable().optional();
 
 export const createCableSchema = z
   .object({
     cableId: z.number().int().min(0).max(2_147_483_647),
     revision: z.string().trim().max(500).optional(),
+    mto: cableMtoField,
     tag: z.string().trim().max(500).optional(),
     cableTypeId: z.string().trim().uuid(),
     fromLocation: cableStringField,
@@ -370,6 +373,7 @@ export const updateCableSchema = z
   .object({
     cableId: z.number().int().min(0).max(2_147_483_647).optional(),
     revision: z.string().trim().max(500).optional(),
+    mto: cableMtoField,
     tag: z.string().trim().max(500).optional(),
     cableTypeId: z.string().trim().uuid().optional(),
     fromLocation: cableStringField,
@@ -415,6 +419,7 @@ export const updateCableSchema = z
     (value) =>
       value.cableId !== undefined ||
       value.revision !== undefined ||
+      value.mto !== undefined ||
       value.tag !== undefined ||
       value.cableTypeId !== undefined ||
       value.fromLocation !== undefined ||

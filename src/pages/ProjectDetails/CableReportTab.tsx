@@ -8,11 +8,18 @@ import {
   Input,
   Option,
   Spinner,
+  Tab,
+  TabList,
+  type TabValue,
   Title3,
   mergeClasses
 } from '@fluentui/react-components';
 
-import type { CableReportSummary } from '@/api/client';
+import {
+  CABLE_MTO_OPTIONS,
+  type CableMtoOption,
+  type CableReportSummary
+} from '@/api/client';
 import type { CableSearchCriteria } from './hooks/useCableListSection';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
@@ -23,16 +30,27 @@ type CableReportTabProps = {
   canManageCables: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
-  onExport: () => void;
+  onExport: (mto: CableMtoOption | null) => void;
   isExporting: boolean;
   filterText: string;
   onFilterTextChange: (value: string) => void;
   filterCriteria: CableSearchCriteria;
   onFilterCriteriaChange: (value: CableSearchCriteria) => void;
+  selectedMto: CableMtoOption | null;
+  onSelectedMtoChange: (value: CableMtoOption | null) => void;
   summary: CableReportSummary | null;
   summaryError: string | null;
   summaryLoading: boolean;
 };
+
+const REPORT_SCOPE_OPTIONS = [
+  { value: 'total', label: 'Total', mto: null },
+  ...CABLE_MTO_OPTIONS.map((option) => ({
+    value: option,
+    label: option,
+    mto: option
+  }))
+] as const;
 
 const formatCountLabel = (
   count: number,
@@ -51,10 +69,14 @@ export const CableReportTab = ({
   onFilterTextChange,
   filterCriteria,
   onFilterCriteriaChange,
+  selectedMto,
+  onSelectedMtoChange,
   summary,
   summaryError,
   summaryLoading
 }: CableReportTabProps) => {
+  const selectedReportTab = (selectedMto ?? 'total') as TabValue;
+  const reportLabel = selectedMto ?? 'Total';
   const selectedCriteria = useMemo<string[]>(
     () => [filterCriteria],
     [filterCriteria]
@@ -127,7 +149,9 @@ export const CableReportTab = ({
     }
 
     const notes = [
-      'Totals use the current cable filter and the materials assigned to each cable.'
+      selectedMto
+        ? `Totals use the current cable filter and the materials assigned to ${selectedMto} cables.`
+        : 'Totals use the current cable filter and the materials assigned to each cable.'
     ];
 
     if (summary.omittedMaterialCount > 0) {
@@ -153,7 +177,7 @@ export const CableReportTab = ({
     notes.push('Materials with unit pcs/m are converted to pcs using cable design length.');
 
     return notes;
-  }, [summary]);
+  }, [selectedMto, summary]);
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable report">
@@ -163,7 +187,7 @@ export const CableReportTab = ({
         </Button>
         {canManageCables ? (
           <>
-            <Button onClick={onExport} disabled={isExporting}>
+            <Button onClick={() => onExport(selectedMto)} disabled={isExporting}>
               {isExporting ? 'Exporting' : 'Export to Excel'}
             </Button>
           </>
@@ -206,11 +230,34 @@ export const CableReportTab = ({
         </Dropdown>
       </div>
 
+      <TabList
+        selectedValue={selectedReportTab}
+        onTabSelect={(_, data) => {
+          if (data.value === 'total') {
+            onSelectedMtoChange(null);
+            return;
+          }
+
+          if (typeof data.value === 'string') {
+            onSelectedMtoChange(data.value as CableMtoOption);
+          }
+        }}
+      >
+        {REPORT_SCOPE_OPTIONS.map((scope) => (
+          <Tab key={scope.value} value={scope.value}>
+            {scope.label}
+          </Tab>
+        ))}
+      </TabList>
+
       <div className={styles.panel}>
         <div className={styles.header}>
-          <Title3>Materials summary</Title3>
+          <Title3>{reportLabel} Materials Summary</Title3>
           <Caption1>
-            Cable type totals and rolled-up material quantities for the currently filtered cables.
+            Cable type totals and rolled-up material quantities for{' '}
+            {selectedMto
+              ? `${selectedMto} cables matching the current filter.`
+              : 'the currently filtered cables.'}
           </Caption1>
         </div>
 
@@ -221,7 +268,10 @@ export const CableReportTab = ({
         ) : !summary || summary.cableCount === 0 ? (
           <div className={styles.emptyState}>
             <Caption1>No summary data available</Caption1>
-            <Body1>Adjust the filter or add cables with design and material data.</Body1>
+            <Body1>
+              Adjust the filter or add cables with design and material data for the selected
+              report.
+            </Body1>
           </div>
         ) : (
           <>

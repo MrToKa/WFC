@@ -1,9 +1,12 @@
 import { Pool } from 'pg';
 import { config } from './config.js';
+import { CABLE_MTO_VALUES } from './models/cable.js';
 
 export const pool = new Pool({
   connectionString: config.databaseUrl,
 });
+
+const cableMtoConstraintValues = CABLE_MTO_VALUES.map((value) => `'${value}'`).join(', ');
 
 export async function initializeDatabase(): Promise<void> {
   await pool.query(`
@@ -331,6 +334,7 @@ export async function initializeDatabase(): Promise<void> {
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       cable_id INTEGER NOT NULL,
       revision TEXT,
+      mto TEXT,
       tag TEXT,
       cable_type_id UUID NOT NULL REFERENCES cable_types(id) ON DELETE CASCADE,
       from_location TEXT,
@@ -371,6 +375,11 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS mto TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
     ADD COLUMN IF NOT EXISTS design_length INTEGER;
   `);
 
@@ -397,6 +406,22 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE cables
     ADD COLUMN IF NOT EXISTS connected_from DATE;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'cables_mto_check'
+          AND table_name = 'cables'
+      ) THEN
+        ALTER TABLE cables
+          ADD CONSTRAINT cables_mto_check
+          CHECK (mto IS NULL OR mto IN (${cableMtoConstraintValues}));
+      END IF;
+    END $$;
   `);
 
   await pool.query(`

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ApiError,
   fetchCableReportSummary,
+  type CableMtoOption,
   type CableReportSummary
 } from '@/api/client';
 
@@ -12,6 +13,7 @@ type UseCableReportSummaryParams = {
   projectId?: string;
   filterText: string;
   filterCriteria: CableSearchCriteria;
+  mto: CableMtoOption | null;
   enabled: boolean;
 };
 
@@ -26,6 +28,7 @@ export const useCableReportSummary = ({
   projectId,
   filterText,
   filterCriteria,
+  mto,
   enabled
 }: UseCableReportSummaryParams): UseCableReportSummaryResult => {
   const [summary, setSummary] = useState<CableReportSummary | null>(null);
@@ -54,7 +57,8 @@ export const useCableReportSummary = ({
       try {
         const response = await fetchCableReportSummary(projectId, {
           filterText,
-          criteria: filterCriteria
+          criteria: filterCriteria,
+          mto
         });
 
         if (!active) {
@@ -87,7 +91,7 @@ export const useCableReportSummary = ({
     return () => {
       active = false;
     };
-  }, [enabled, filterCriteria, filterText, projectId, reloadToken]);
+  }, [enabled, filterCriteria, filterText, mto, projectId, reloadToken]);
 
   return {
     summary,

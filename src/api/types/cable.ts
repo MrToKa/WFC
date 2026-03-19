@@ -1,5 +1,9 @@
 import type { MaterialCableType } from './material';
 
+export const CABLE_MTO_OPTIONS = ['MV', 'LV', 'Instrumentation', 'Control'] as const;
+
+export type CableMtoOption = (typeof CABLE_MTO_OPTIONS)[number];
+
 export type CableType = {
   id: string;
   projectId: string;
@@ -20,6 +24,7 @@ export type Cable = {
   projectId: string;
   cableId: number;
   revision: string | null;
+  mto: CableMtoOption | null;
   tag: string | null;
   cableTypeId: string;
   typeName: string;
@@ -53,6 +58,7 @@ export type CableTypeInput = {
 export type CableInput = {
   cableId: number;
   revision?: string | null;
+  mto?: CableMtoOption | null;
   tag?: string | null;
   cableTypeId: string;
   fromLocation?: string | null;

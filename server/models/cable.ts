@@ -1,10 +1,15 @@
 import { toNumberOrNull } from './cableType.js';
 
+export const CABLE_MTO_VALUES = ['MV', 'LV', 'Instrumentation', 'Control'] as const;
+
+export type CableMtoValue = (typeof CABLE_MTO_VALUES)[number];
+
 export type CableRow = {
   id: string;
   project_id: string;
   cable_id: number;
   revision: string | null;
+  mto: CableMtoValue | null;
   tag: string | null;
   cable_type_id: string;
   from_location: string | null;
@@ -37,6 +42,7 @@ export type PublicCable = {
   projectId: string;
   cableId: number;
   revision: string | null;
+  mto: CableMtoValue | null;
   tag: string | null;
   cableTypeId: string;
   typeName: string;
@@ -85,6 +91,7 @@ export const mapCableRow = (row: CableWithTypeRow): PublicCable => ({
   projectId: row.project_id,
   cableId: row.cable_id,
   revision: row.revision ?? null,
+  mto: row.mto ?? null,
   tag: row.tag ?? null,
   cableTypeId: row.cable_type_id,
   typeName: row.type_name,

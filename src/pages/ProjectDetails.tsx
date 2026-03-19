@@ -11,7 +11,7 @@ import {
 } from '@fluentui/react-components';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { ApiError, updateProject } from '@/api/client';
+import { ApiError, updateProject, type CableMtoOption } from '@/api/client';
 import type {
   ProjectCableCategorySettings,
   ProjectCableLayout,
@@ -254,6 +254,9 @@ export const ProjectDetails = () => {
     // Prevent non-admin users from landing on Variables API via deep link
     return initial === 'variables-api' && !isAdmin ? 'details' : initial;
   });
+  const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(
+    null
+  );
 
   const [trayTemplateSaving, setTrayTemplateSaving] = useState<Record<string, boolean>>({});
   const [trayTemplateErrors, setTrayTemplateErrors] = useState<Record<string, string | null>>({});
@@ -299,6 +302,7 @@ export const ProjectDetails = () => {
     handleGetCablesTemplate,
     handleCableDraftChange,
     handleCableTextFieldBlur,
+    handleInlineMtoChange,
     handleInlineCableTypeChange,
     filterText,
     filterCriteria,
@@ -321,11 +325,12 @@ export const ProjectDetails = () => {
     projectId,
     filterText,
     filterCriteria,
+    mto: selectedCableReportMto,
     enabled: selectedTab === 'cable-report'
   });
 
   const cableDialogVisibleFields: CableDialogField[] = (() => {
-    return ['revision', 'tag', 'cableTypeId', 'fromLocation', 'toLocation', 'routing', 'designLength'];
+    return ['revision', 'mto', 'tag', 'cableTypeId', 'fromLocation', 'toLocation', 'routing', 'designLength'];
   })();
 
   const {
@@ -1734,6 +1739,9 @@ export const ProjectDetails = () => {
           onTextFieldBlur={(cable, field) =>
             void handleCableTextFieldBlur(cable, field)
           }
+          onInlineMtoChange={(cable, nextMto) =>
+            void handleInlineMtoChange(cable, nextMto)
+          }
           onInlineCableTypeChange={(cable, nextCableTypeId) =>
             void handleInlineCableTypeChange(cable, nextCableTypeId)
           }
@@ -1758,7 +1766,9 @@ export const ProjectDetails = () => {
           canManageCables={canManageCables}
           isRefreshing={cablesRefreshing}
           onRefresh={handleCableReportRefresh}
-          onExport={() => void handleExportCables('report')}
+          selectedMto={selectedCableReportMto}
+          onSelectedMtoChange={setSelectedCableReportMto}
+          onExport={(mto) => void handleExportCables('report', mto)}
           isExporting={cablesExporting}
           filterText={filterText}
           onFilterTextChange={setCableFilterText}
@@ -1817,6 +1827,7 @@ export const ProjectDetails = () => {
         cableTypes={cableTypes}
         onFieldChange={cableDialog.handleFieldChange}
         onCableTypeSelect={cableDialog.handleCableTypeSelect}
+        onMtoSelect={cableDialog.handleMtoSelect}
         onSubmit={(event) => void cableDialog.handleSubmit(event)}
         onDismiss={cableDialog.reset}
         visibleFields={cableDialogVisibleFields}
