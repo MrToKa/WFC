@@ -216,8 +216,6 @@ const formatOptionalText = (value: string | null | undefined): string => {
   return trimmed ? trimmed : '-';
 };
 
-const formatOptionalDate = (value: string | null | undefined): string => (value ? value : '-');
-
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',
@@ -955,26 +953,6 @@ export const CableDetails = () => {
             <div className={styles.field}>
               <Caption1 className={styles.label}>Design length [m]</Caption1>
               <Body1>{formatNumeric(details.cable.designLength)}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1 className={styles.label}>Install length [m]</Caption1>
-              <Body1>{formatNumeric(details.cable.installLength)}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1 className={styles.label}>Pull date</Caption1>
-              <Body1>{formatOptionalDate(details.cable.pullDate)}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1 className={styles.label}>Connected from</Caption1>
-              <Body1>{formatOptionalDate(details.cable.connectedFrom)}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1 className={styles.label}>Connected to</Caption1>
-              <Body1>{formatOptionalDate(details.cable.connectedTo)}</Body1>
-            </div>
-            <div className={styles.field}>
-              <Caption1 className={styles.label}>Tested</Caption1>
-              <Body1>{formatOptionalDate(details.cable.tested)}</Body1>
             </div>
           </div>
         </Card>

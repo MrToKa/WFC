@@ -61,11 +61,6 @@ const INPUT_HEADERS = {
   fromLocation: 'From Location',
   toLocation: 'To Location',
   designLength: 'Design Length [m]',
-  installLength: 'Install Length [m]',
-  pullDate: 'Pull Date',
-  connectedFrom: 'Connected From',
-  connectedTo: 'Connected To',
-  tested: 'Tested',
 } as const;
 
 const LIST_OUTPUT_HEADERS = {
@@ -2517,11 +2512,6 @@ cablesRouter.post(
       toLocation?: string | null;
       routing?: string | null;
       designLength?: number | null;
-      installLength?: number | null;
-      pullDate?: string | null;
-      connectedFrom?: string | null;
-      connectedTo?: string | null;
-      tested?: string | null;
     };
 
     type PreparedCableRow = {
@@ -2588,11 +2578,6 @@ cablesRouter.post(
       toLocation: hasColumn(INPUT_HEADERS.toLocation),
       routing: hasColumn(LIST_OUTPUT_HEADERS.routing),
       designLength: hasColumn(INPUT_HEADERS.designLength),
-      installLength: hasColumn(INPUT_HEADERS.installLength),
-      pullDate: hasColumn(INPUT_HEADERS.pullDate),
-      connectedFrom: hasColumn(INPUT_HEADERS.connectedFrom),
-      connectedTo: hasColumn(INPUT_HEADERS.connectedTo),
-      tested: hasColumn(INPUT_HEADERS.tested),
     };
 
     for (const row of rows) {
@@ -2685,32 +2670,6 @@ cablesRouter.post(
         fields.designLength = parseInstallLength(row[INPUT_HEADERS.designLength] as unknown);
       }
 
-      if (columnAvailability.installLength) {
-        fields.installLength = parseInstallLength(row[INPUT_HEADERS.installLength] as unknown);
-      }
-
-      if (columnAvailability.pullDate) {
-        fields.pullDate = normalizeDateValue(
-          row[INPUT_HEADERS.pullDate] as string | null | undefined,
-        );
-      }
-
-      if (columnAvailability.connectedFrom) {
-        fields.connectedFrom = normalizeDateValue(
-          row[INPUT_HEADERS.connectedFrom] as string | null | undefined,
-        );
-      }
-
-      if (columnAvailability.connectedTo) {
-        fields.connectedTo = normalizeDateValue(
-          row[INPUT_HEADERS.connectedTo] as string | null | undefined,
-        );
-      }
-
-      if (columnAvailability.tested) {
-        fields.tested = normalizeDateValue(row[INPUT_HEADERS.tested] as string | null | undefined);
-      }
-
       prepared.push({
         cableId,
         cableKey,
@@ -2760,11 +2719,6 @@ cablesRouter.post(
       | 'to_location'
       | 'routing'
       | 'design_length'
-      | 'install_length'
-      | 'pull_date'
-      | 'connected_from'
-      | 'connected_to'
-      | 'tested'
     > & {
       type_name: string;
     };
@@ -2878,11 +2832,11 @@ cablesRouter.post(
               fields.toLocation ?? null,
               fields.routing ?? null,
               fields.designLength ?? null,
-              fields.installLength ?? null,
-              fields.pullDate ?? null,
-              fields.connectedFrom ?? null,
-              fields.connectedTo ?? null,
-              fields.tested ?? null,
+              null,
+              null,
+              null,
+              null,
+              null,
             ],
           );
           await resetCableMaterialsToCableTypeDefaults(
@@ -2965,51 +2919,6 @@ cablesRouter.post(
           if (fields.designLength !== currentDesignLength) {
             updateAssignments.push(`design_length = $${parameterIndex}`);
             updateValues.push(fields.designLength ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.installLength && fields.installLength !== undefined) {
-          const currentInstallLength = parseInstallLength(existing.install_length);
-          if (fields.installLength !== currentInstallLength) {
-            updateAssignments.push(`install_length = $${parameterIndex}`);
-            updateValues.push(fields.installLength ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.pullDate && fields.pullDate !== undefined) {
-          const currentPullDate = normalizeDateForComparison(existing.pull_date);
-          if (fields.pullDate !== currentPullDate) {
-            updateAssignments.push(`pull_date = $${parameterIndex}`);
-            updateValues.push(fields.pullDate ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.connectedFrom && fields.connectedFrom !== undefined) {
-          const currentConnectedFrom = normalizeDateForComparison(existing.connected_from);
-          if (fields.connectedFrom !== currentConnectedFrom) {
-            updateAssignments.push(`connected_from = $${parameterIndex}`);
-            updateValues.push(fields.connectedFrom ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.connectedTo && fields.connectedTo !== undefined) {
-          const currentConnectedTo = normalizeDateForComparison(existing.connected_to);
-          if (fields.connectedTo !== currentConnectedTo) {
-            updateAssignments.push(`connected_to = $${parameterIndex}`);
-            updateValues.push(fields.connectedTo ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.tested && fields.tested !== undefined) {
-          const currentTested = normalizeDateForComparison(existing.tested);
-          if (fields.tested !== currentTested) {
-            updateAssignments.push(`tested = $${parameterIndex}`);
-            updateValues.push(fields.tested ?? null);
             parameterIndex += 1;
           }
         }

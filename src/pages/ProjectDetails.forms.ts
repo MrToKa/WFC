@@ -10,7 +10,6 @@ import {
 } from '@/api/client';
 
 import {
-  isIsoDateString,
   parseNumberInput,
   toNullableString
 } from './ProjectDetails.utils';
@@ -282,11 +281,6 @@ export type CableFormState = {
   toLocation: string;
   routing: string;
   designLength: string;
-  installLength: string;
-  pullDate: string;
-  connectedFrom: string;
-  connectedTo: string;
-  tested: string;
 };
 
 export type CableFormErrors = Partial<Record<keyof CableFormState, string>> & {
@@ -302,12 +296,7 @@ export const emptyCableForm: CableFormState = {
   fromLocation: '',
   toLocation: '',
   routing: '',
-  designLength: '',
-  installLength: '',
-  pullDate: '',
-  connectedFrom: '',
-  connectedTo: '',
-  tested: ''
+  designLength: ''
 };
 
 export const toCableFormState = (cable: Cable): CableFormState => ({
@@ -320,13 +309,7 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   toLocation: cable.toLocation ?? '',
   routing: cable.routing ?? '',
   designLength:
-    cable.designLength !== null ? String(cable.designLength) : '',
-  installLength:
-    cable.installLength !== null ? String(cable.installLength) : '',
-  pullDate: cable.pullDate ?? '',
-  connectedFrom: cable.connectedFrom ?? '',
-  connectedTo: cable.connectedTo ?? '',
-  tested: cable.tested ?? ''
+    cable.designLength !== null ? String(cable.designLength) : ''
 });
 
 export const parseCableFormErrors = (
@@ -431,39 +414,6 @@ export const buildCableInput = (
   } else {
     input.designLength = null;
   }
-
-  const installLengthValue = values.installLength.trim();
-  if (installLengthValue !== '') {
-    const parsed = Number(installLengthValue);
-    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
-      errors.installLength = 'Install length must be a non-negative integer';
-    } else {
-      input.installLength = parsed;
-    }
-  } else {
-    input.installLength = null;
-  }
-
-  const parseDate = (value: string, field: keyof CableFormState) => {
-    const trimmed = value.trim();
-    if (trimmed === '') {
-      return null;
-    }
-
-    const normalized = trimmed.slice(0, 10);
-
-    if (!isIsoDateString(normalized)) {
-      errors[field] = 'Enter a valid date (YYYY-MM-DD)';
-      return null;
-    }
-
-    return normalized;
-  };
-
-  input.connectedFrom = parseDate(values.connectedFrom, 'connectedFrom');
-  input.connectedTo = parseDate(values.connectedTo, 'connectedTo');
-  input.pullDate = parseDate(values.pullDate, 'pullDate');
-  input.tested = parseDate(values.tested, 'tested');
 
   return { input, errors };
 };

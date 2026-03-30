@@ -34,7 +34,6 @@ import {
   toCableFormState
 } from '../../ProjectDetails.forms';
 import {
-  isIsoDateString,
   sanitizeFileSegment
 } from '../../ProjectDetails.utils';
 
@@ -566,8 +565,7 @@ export const useCableListSection = ({
           changes = { [field]: normalized } as Partial<CableInput>;
           break;
         }
-        case 'designLength':
-        case 'installLength': {
+        case 'designLength': {
           const trimmed = draft[field].trim();
           const current = (cable[field] ?? null) as number | null;
 
@@ -583,8 +581,7 @@ export const useCableListSection = ({
               !Number.isInteger(parsed) ||
               parsed < 0
             ) {
-              const label =
-                field === 'designLength' ? 'Design length' : 'Install length';
+              const label = 'Design length';
               showToast({
                 intent: 'error',
                 title: `Invalid ${label.toLowerCase()}`,
@@ -598,38 +595,6 @@ export const useCableListSection = ({
             }
 
             changes = { [field]: parsed } as Partial<CableInput>;
-          }
-          break;
-        }
-        case 'pullDate':
-        case 'connectedFrom':
-        case 'connectedTo':
-        case 'tested': {
-          const value = draft[field].trim();
-          const current = cable[field] ?? null;
-
-          if (value === '') {
-            if (current === null) {
-              return;
-            }
-            changes = { [field]: null } as Partial<CableInput>;
-          } else {
-            const normalized = value.slice(0, 10);
-
-            if (!isIsoDateString(normalized)) {
-              showToast({
-                intent: 'error',
-                title: 'Invalid date',
-                body: 'Use the YYYY-MM-DD format for dates.'
-              });
-              return;
-            }
-
-            if (normalized === current) {
-              return;
-            }
-
-            changes = { [field]: normalized } as Partial<CableInput>;
           }
           break;
         }
