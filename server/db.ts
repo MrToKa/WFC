@@ -7,6 +7,8 @@ export const pool = new Pool({
 });
 
 const cableMtoConstraintValues = CABLE_MTO_VALUES.map((value) => `'${value}'`).join(', ');
+const cableVersionChangeTypeConstraintValues = ["'create'", "'update'"].join(', ');
+const cableVersionChangeSourceConstraintValues = ["'manual'", "'import'"].join(', ');
 
 export async function initializeDatabase(): Promise<void> {
   await pool.query(`
@@ -432,6 +434,96 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE cables
     ADD COLUMN IF NOT EXISTS tested DATE;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS cable_versions (
+      id UUID PRIMARY KEY,
+      cable_id UUID NOT NULL REFERENCES cables(id) ON DELETE CASCADE,
+      version_number INTEGER NOT NULL,
+      change_type TEXT NOT NULL,
+      change_source TEXT NOT NULL,
+      cable_number INTEGER NOT NULL,
+      revision TEXT,
+      mto TEXT,
+      tag TEXT,
+      cable_type_id UUID NOT NULL,
+      cable_type_name TEXT NOT NULL,
+      from_location TEXT,
+      to_location TEXT,
+      routing TEXT,
+      design_length INTEGER,
+      install_length INTEGER,
+      pull_date DATE,
+      connected_from DATE,
+      connected_to DATE,
+      tested DATE,
+      changed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS cable_versions_cable_version_idx
+      ON cable_versions (cable_id, version_number);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_versions_cable_id_idx
+      ON cable_versions (cable_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_versions_changed_by_idx
+      ON cable_versions (changed_by);
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_versions_change_type_check'
+          AND table_name = 'cable_versions'
+      ) THEN
+        ALTER TABLE cable_versions
+          ADD CONSTRAINT cable_versions_change_type_check
+          CHECK (change_type IN (${cableVersionChangeTypeConstraintValues}));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_versions_change_source_check'
+          AND table_name = 'cable_versions'
+      ) THEN
+        ALTER TABLE cable_versions
+          ADD CONSTRAINT cable_versions_change_source_check
+          CHECK (change_source IN (${cableVersionChangeSourceConstraintValues}));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_versions_mto_check'
+          AND table_name = 'cable_versions'
+      ) THEN
+        ALTER TABLE cable_versions
+          ADD CONSTRAINT cable_versions_mto_check
+          CHECK (mto IS NULL OR mto IN (${cableMtoConstraintValues}));
+      END IF;
+    END $$;
   `);
 
   await pool.query(`

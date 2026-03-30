@@ -304,6 +304,9 @@ export const ProjectDetails = () => {
     handleCableTextFieldBlur,
     handleInlineMtoChange,
     handleInlineCableTypeChange,
+    openCableVersionsDialog,
+    closeCableVersionsDialog,
+    cableVersionsDialog,
     filterText,
     filterCriteria,
     setFilterText: setCableFilterText,
@@ -1745,6 +1748,9 @@ export const ProjectDetails = () => {
           onInlineCableTypeChange={(cable, nextCableTypeId) =>
             void handleInlineCableTypeChange(cable, nextCableTypeId)
           }
+          onOpenVersions={openCableVersionsDialog}
+          onCloseVersions={closeCableVersionsDialog}
+          versionsDialog={cableVersionsDialog}
           pendingId={pendingCableId}
           onDetails={openCableDetails}
           onEdit={openEditCableDialog}

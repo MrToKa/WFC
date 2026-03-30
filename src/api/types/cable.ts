@@ -1,4 +1,5 @@
 import type { MaterialCableType } from './material';
+import type { FileUploader } from './user';
 
 export const CABLE_MTO_OPTIONS = ['MV', 'LV', 'Instrumentation', 'Control'] as const;
 
@@ -42,6 +43,35 @@ export type Cable = {
   tested: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type CableVersionChangeType = 'create' | 'update';
+
+export type CableVersionChangeSource = 'manual' | 'import';
+
+export type CableVersion = {
+  id: string;
+  cableRecordId: string;
+  versionNumber: number;
+  changeType: CableVersionChangeType;
+  changeSource: CableVersionChangeSource;
+  cableId: number;
+  revision: string | null;
+  mto: CableMtoOption | null;
+  tag: string | null;
+  cableTypeId: string;
+  typeName: string;
+  fromLocation: string | null;
+  toLocation: string | null;
+  routing: string | null;
+  designLength: number | null;
+  installLength: number | null;
+  pullDate: string | null;
+  connectedFrom: string | null;
+  connectedTo: string | null;
+  tested: string | null;
+  changedAt: string;
+  changedBy: FileUploader | null;
 };
 
 export type CableTypeInput = {

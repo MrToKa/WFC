@@ -4,6 +4,7 @@ import type {
   Cable,
   CableMtoOption,
   CableReportSummary,
+  CableVersion,
   CableDetails,
   CableMaterial,
   CableMaterialInput,
@@ -346,6 +347,18 @@ export async function fetchCableDetails(projectId: string, cableId: string): Pro
   return request<CableDetails>(`/api/projects/${projectId}/cables/${cableId}/details`, {
     method: 'GET',
   });
+}
+
+export async function fetchCableVersions(
+  projectId: string,
+  cableId: string,
+): Promise<{ versions: CableVersion[] }> {
+  return request<{ versions: CableVersion[] }>(
+    `/api/projects/${projectId}/cables/${cableId}/versions`,
+    {
+      method: 'GET',
+    },
+  );
 }
 
 export async function createCable(

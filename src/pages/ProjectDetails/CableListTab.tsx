@@ -5,6 +5,12 @@ import {
   Body1,
   Button,
   Caption1,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Dropdown,
   Input,
   Option,
@@ -12,8 +18,18 @@ import {
   Switch
 } from '@fluentui/react-components';
 
-import { CABLE_MTO_OPTIONS, type Cable, type CableType } from '@/api/client';
+import {
+  CABLE_MTO_OPTIONS,
+  type Cable,
+  type CableType,
+  type CableVersion
+} from '@/api/client';
 import type { CableSearchCriteria } from './hooks/useCableListSection';
+import {
+  diffCableVersions,
+  formatCableVersionTimestamp,
+  formatCableVersionUser
+} from './cableVersionUtils';
 import { TablePagination } from './TablePagination';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
@@ -56,6 +72,15 @@ type CableListTabProps = {
   ) => void;
   onInlineMtoChange: (cable: Cable, nextMto: string) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
+  onOpenVersions: (cable: Cable) => void;
+  onCloseVersions: () => void;
+  versionsDialog: {
+    open: boolean;
+    cable: Cable | null;
+    versions: CableVersion[];
+    loading: boolean;
+    error: string | null;
+  };
   pendingId: string | null;
   onDetails?: (cable: Cable) => void;
   onEdit: (cable: Cable) => void;
@@ -100,6 +125,9 @@ export const CableListTab = ({
   onTextFieldBlur,
   onInlineMtoChange,
   onInlineCableTypeChange,
+  onOpenVersions,
+  onCloseVersions,
+  versionsDialog,
   pendingId,
   onDetails,
   onEdit,
@@ -118,6 +146,9 @@ export const CableListTab = ({
     [filterCriteria]
   );
   const showActions = Boolean(onDetails) || canManageCables;
+  const versionsDialogLabel =
+    versionsDialog.cable?.tag?.trim() ||
+    (versionsDialog.cable ? `Cable ${versionsDialog.cable.cableId}` : '');
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable list">
@@ -436,6 +467,14 @@ export const CableListTab = ({
                             Details
                           </Button>
                         ) : null}
+                        <Button
+                          size="small"
+                          appearance="secondary"
+                          onClick={() => onOpenVersions(cable)}
+                          disabled={disableActions}
+                        >
+                          Revisions
+                        </Button>
                         {canManageCables ? (
                           <>
                             <Button
@@ -476,6 +515,95 @@ export const CableListTab = ({
         ) : null}
       </div>
     )}
+
+    <Dialog
+      open={versionsDialog.open}
+      onOpenChange={(_, data) => {
+        if (!data.open) {
+          onCloseVersions();
+        }
+      }}
+    >
+      <DialogSurface className={styles.versionsDialogSurface}>
+        <DialogBody>
+          <DialogTitle>Cable revisions - {versionsDialogLabel}</DialogTitle>
+          <DialogContent className={styles.versionsDialogContent}>
+            {versionsDialog.loading ? (
+              <Spinner label="Loading revisions..." />
+            ) : versionsDialog.error ? (
+              <Body1 className={styles.errorText}>{versionsDialog.error}</Body1>
+            ) : versionsDialog.versions.length === 0 ? (
+              <Caption1>
+                No saved revisions yet. New cable changes will appear here.
+              </Caption1>
+            ) : (
+              <table className={styles.versionsDialogTable}>
+                <thead>
+                  <tr>
+                    <th className={styles.tableHeadCell}>Version</th>
+                    <th className={styles.tableHeadCell}>Revision</th>
+                    <th className={styles.tableHeadCell}>Change</th>
+                    <th className={styles.tableHeadCell}>Changed by</th>
+                    <th className={styles.tableHeadCell}>Changed at</th>
+                    <th className={styles.tableHeadCell}>Field changes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {versionsDialog.versions.map((version, index) => {
+                    const previousVersion =
+                      versionsDialog.versions[index + 1] ?? null;
+                    const changes = diffCableVersions(version, previousVersion);
+                    const changeLabel =
+                      version.changeType === 'create' ? 'Created' : 'Updated';
+                    const sourceLabel =
+                      version.changeSource === 'import'
+                        ? 'import'
+                        : 'manual save';
+
+                    return (
+                      <tr key={version.id}>
+                        <td className={styles.tableCell}>
+                          v{version.versionNumber}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {version.revision ?? '-'}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {changeLabel} via {sourceLabel}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {formatCableVersionUser(version)}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {formatCableVersionTimestamp(version.changedAt)}
+                        </td>
+                        <td className={styles.tableCell}>
+                          {previousVersion === null ? (
+                            <Caption1>Initial snapshot</Caption1>
+                          ) : changes.length === 0 ? (
+                            <Caption1>No tracked field changes</Caption1>
+                          ) : (
+                            changes.map((change) => (
+                              <div key={change.label}>
+                                <strong>{change.label}:</strong>{' '}
+                                {change.previousValue} to {change.nextValue}
+                              </div>
+                            ))
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={onCloseVersions}>Close</Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   </div>
   );
 };

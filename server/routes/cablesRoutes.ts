@@ -24,6 +24,12 @@ import {
 } from '../models/cable.js';
 import { mapCableMaterialRow, type CableMaterialRow } from '../models/cableMaterial.js';
 import {
+  mapCableVersionRow,
+  type CableVersionChangeSource,
+  type CableVersionChangeType,
+  type CableVersionRow,
+} from '../models/cableVersion.js';
+import {
   mapCableTypeDefaultMaterialRow,
   type CableTypeDefaultMaterialRow,
 } from '../models/cableTypeDefaultMaterial.js';
@@ -378,6 +384,28 @@ const selectCableDetailsQuery = `
   JOIN cable_types ct ON ct.id = c.cable_type_id
 `;
 
+const selectCableVersionSourceQuery = `
+  SELECT
+    c.id,
+    c.cable_id,
+    c.revision,
+    c.mto,
+    c.tag,
+    c.cable_type_id,
+    c.from_location,
+    c.to_location,
+    c.routing,
+    c.design_length,
+    c.install_length,
+    c.pull_date,
+    c.connected_from,
+    c.connected_to,
+    c.tested,
+    ct.name AS type_name
+  FROM cables c
+  JOIN cable_types ct ON ct.id = c.cable_type_id
+`;
+
 const selectCableTypeDefaultMaterialsQuery = `
   SELECT
     id,
@@ -452,6 +480,45 @@ type MaterialCableInstallationMaterialMatchRow = {
 type CableDetailsRow = CableWithTypeRow & {
   materials_initialized: boolean;
   materials_customized: boolean;
+};
+
+type CableVersionSourceRow = Pick<
+  CableRow,
+  | 'id'
+  | 'cable_id'
+  | 'revision'
+  | 'mto'
+  | 'tag'
+  | 'cable_type_id'
+  | 'from_location'
+  | 'to_location'
+  | 'routing'
+  | 'design_length'
+  | 'install_length'
+  | 'pull_date'
+  | 'connected_from'
+  | 'connected_to'
+  | 'tested'
+> & {
+  type_name: string;
+};
+
+type CableVersionSnapshot = {
+  cableId: number;
+  revision: string | null;
+  mto: CableMtoValue | null;
+  tag: string | null;
+  cableTypeId: string;
+  typeName: string;
+  fromLocation: string | null;
+  toLocation: string | null;
+  routing: string | null;
+  designLength: number | null;
+  installLength: number | null;
+  pullDate: string | null;
+  connectedFrom: string | null;
+  connectedTo: string | null;
+  tested: string | null;
 };
 
 type CableReportFilterCriteria =
@@ -541,6 +608,196 @@ const findProjectCableById = async (
   );
 
   return result.rows[0] ?? null;
+};
+
+const findProjectCableVersionSourceById = async (
+  queryable: Queryable,
+  projectId: string,
+  cableId: string,
+): Promise<CableVersionSourceRow | null> => {
+  const result = await queryable.query<CableVersionSourceRow>(
+    `
+      ${selectCableVersionSourceQuery}
+      WHERE c.project_id = $1
+        AND c.id = $2
+      LIMIT 1;
+    `,
+    [projectId, cableId],
+  );
+
+  return result.rows[0] ?? null;
+};
+
+const buildCableVersionSnapshot = (
+  cable: CableVersionSourceRow,
+): CableVersionSnapshot => ({
+  cableId: cable.cable_id,
+  revision: normalizeOptionalString(cable.revision ?? null),
+  mto: normalizeCableMtoValue(cable.mto ?? null),
+  tag: normalizeOptionalString(cable.tag ?? null),
+  cableTypeId: cable.cable_type_id,
+  typeName: cable.type_name,
+  fromLocation: normalizeOptionalString(cable.from_location ?? null),
+  toLocation: normalizeOptionalString(cable.to_location ?? null),
+  routing: normalizeOptionalString(cable.routing ?? null),
+  designLength: parseInstallLength(cable.design_length),
+  installLength: parseInstallLength(cable.install_length),
+  pullDate: normalizeDateForComparison(cable.pull_date),
+  connectedFrom: normalizeDateForComparison(cable.connected_from),
+  connectedTo: normalizeDateForComparison(cable.connected_to),
+  tested: normalizeDateForComparison(cable.tested),
+});
+
+const buildCableUpdateAssignments = (
+  current: CableVersionSnapshot,
+  next: CableVersionSnapshot,
+): {
+  assignments: string[];
+  values: Array<string | number | null>;
+} => {
+  const assignments: string[] = [];
+  const values: Array<string | number | null> = [];
+  let parameterIndex = 1;
+
+  const pushAssignment = (column: string, value: string | number | null): void => {
+    assignments.push(`${column} = $${parameterIndex}`);
+    values.push(value);
+    parameterIndex += 1;
+  };
+
+  if (current.cableId !== next.cableId) {
+    pushAssignment('cable_id', next.cableId);
+  }
+
+  if (current.revision !== next.revision) {
+    pushAssignment('revision', next.revision);
+  }
+
+  if (current.mto !== next.mto) {
+    pushAssignment('mto', next.mto);
+  }
+
+  if (current.tag !== next.tag) {
+    pushAssignment('tag', next.tag);
+  }
+
+  if (current.cableTypeId !== next.cableTypeId) {
+    pushAssignment('cable_type_id', next.cableTypeId);
+  }
+
+  if (current.fromLocation !== next.fromLocation) {
+    pushAssignment('from_location', next.fromLocation);
+  }
+
+  if (current.toLocation !== next.toLocation) {
+    pushAssignment('to_location', next.toLocation);
+  }
+
+  if (current.routing !== next.routing) {
+    pushAssignment('routing', next.routing);
+  }
+
+  if (current.designLength !== next.designLength) {
+    pushAssignment('design_length', next.designLength);
+  }
+
+  if (current.installLength !== next.installLength) {
+    pushAssignment('install_length', next.installLength);
+  }
+
+  if (current.pullDate !== next.pullDate) {
+    pushAssignment('pull_date', next.pullDate);
+  }
+
+  if (current.connectedFrom !== next.connectedFrom) {
+    pushAssignment('connected_from', next.connectedFrom);
+  }
+
+  if (current.connectedTo !== next.connectedTo) {
+    pushAssignment('connected_to', next.connectedTo);
+  }
+
+  if (current.tested !== next.tested) {
+    pushAssignment('tested', next.tested);
+  }
+
+  return { assignments, values };
+};
+
+const insertCableVersion = async (
+  queryable: Queryable,
+  options: {
+    cableRecordId: string;
+    snapshot: CableVersionSnapshot;
+    changeType: CableVersionChangeType;
+    changeSource: CableVersionChangeSource;
+    changedBy: string | null;
+  },
+): Promise<void> => {
+  const versionResult = await queryable.query<{ version: number }>(
+    `
+      SELECT COALESCE(MAX(version_number), 0) AS version
+      FROM cable_versions
+      WHERE cable_id = $1;
+    `,
+    [options.cableRecordId],
+  );
+
+  const nextVersionNumber = Number(versionResult.rows[0]?.version ?? 0) + 1;
+
+  await queryable.query(
+    `
+      INSERT INTO cable_versions (
+        id,
+        cable_id,
+        version_number,
+        change_type,
+        change_source,
+        cable_number,
+        revision,
+        mto,
+        tag,
+        cable_type_id,
+        cable_type_name,
+        from_location,
+        to_location,
+        routing,
+        design_length,
+        install_length,
+        pull_date,
+        connected_from,
+        connected_to,
+        tested,
+        changed_by
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+      );
+    `,
+    [
+      randomUUID(),
+      options.cableRecordId,
+      nextVersionNumber,
+      options.changeType,
+      options.changeSource,
+      options.snapshot.cableId,
+      options.snapshot.revision,
+      options.snapshot.mto,
+      options.snapshot.tag,
+      options.snapshot.cableTypeId,
+      options.snapshot.typeName,
+      options.snapshot.fromLocation,
+      options.snapshot.toLocation,
+      options.snapshot.routing,
+      options.snapshot.designLength,
+      options.snapshot.installLength,
+      options.snapshot.pullDate,
+      options.snapshot.connectedFrom,
+      options.snapshot.connectedTo,
+      options.snapshot.tested,
+      options.changedBy,
+    ],
+  );
 };
 
 const listCableTypeDefaultMaterials = async (
@@ -1616,6 +1873,16 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
       cableTypeId,
       cableType.name,
     );
+    await insertCableVersion(client, {
+      cableRecordId: inserted.id,
+      snapshot: buildCableVersionSnapshot({
+        ...inserted,
+        type_name: cableType.name,
+      }),
+      changeType: 'create',
+      changeSource: 'manual',
+      changedBy: req.userId ?? null,
+    });
     await client.query('COMMIT');
 
     const result = await pool.query<CableWithTypeRow>(
@@ -1697,100 +1964,13 @@ cablesRouter.patch(
       return;
     }
 
-    const fields: string[] = [];
-    const values: Array<string | number | null> = [];
-    let index = 1;
-
-    if (newCableId !== undefined) {
-      fields.push(`cable_id = $${index++}`);
-      values.push(newCableId);
-    }
-
-    if (revision !== undefined) {
-      fields.push(`revision = $${index++}`);
-      values.push(normalizeOptionalString(revision));
-    }
-
-    if (mto !== undefined) {
-      fields.push(`mto = $${index++}`);
-      values.push(mto ?? null);
-    }
-
-    if (tag !== undefined) {
-      fields.push(`tag = $${index++}`);
-      values.push(normalizeOptionalString(tag) ?? null);
-    }
-
-    if (cableTypeId !== undefined) {
-      fields.push(`cable_type_id = $${index++}`);
-      values.push(cableTypeId);
-    }
-
-    if (fromLocation !== undefined) {
-      fields.push(`from_location = $${index++}`);
-      values.push(normalizeOptionalString(fromLocation));
-    }
-
-    if (toLocation !== undefined) {
-      fields.push(`to_location = $${index++}`);
-      values.push(normalizeOptionalString(toLocation));
-    }
-
-    if (routing !== undefined) {
-      fields.push(`routing = $${index++}`);
-      values.push(normalizeOptionalString(routing));
-    }
-
-    if (designLength !== undefined) {
-      fields.push(`design_length = $${index++}`);
-      values.push(designLength ?? null);
-    }
-
-    if (installLength !== undefined) {
-      fields.push(`install_length = $${index++}`);
-      values.push(installLength ?? null);
-    }
-
-    if (pullDate !== undefined) {
-      fields.push(`pull_date = $${index++}`);
-      values.push(normalizeDateValue(pullDate));
-    }
-
-    if (connectedFrom !== undefined) {
-      fields.push(`connected_from = $${index++}`);
-      values.push(normalizeDateValue(connectedFrom));
-    }
-
-    if (connectedTo !== undefined) {
-      fields.push(`connected_to = $${index++}`);
-      values.push(normalizeDateValue(connectedTo));
-    }
-
-    if (tested !== undefined) {
-      fields.push(`tested = $${index++}`);
-      values.push(normalizeDateValue(tested));
-    }
-
-    fields.push(`updated_at = NOW()`);
-
     let client: PoolClient | null = null;
 
     try {
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const existingCableResult = await client.query<Pick<CableRow, 'id' | 'cable_type_id'>>(
-        `
-          SELECT id, cable_type_id
-          FROM cables
-          WHERE id = $1
-            AND project_id = $2
-          LIMIT 1;
-        `,
-        [cableId, projectId],
-      );
-
-      const existingCable = existingCableResult.rows[0];
+      const existingCable = await findProjectCableVersionSourceById(client, projectId, cableId);
 
       if (!existingCable) {
         await client.query('ROLLBACK');
@@ -1798,9 +1978,10 @@ cablesRouter.patch(
         return;
       }
 
-      let nextCableTypeName: string | null = null;
+      let nextCableTypeId = existingCable.cable_type_id;
+      let nextCableTypeName = existingCable.type_name;
 
-      if (cableTypeId) {
+      if (cableTypeId && cableTypeId !== existingCable.cable_type_id) {
         const typeResult = await client.query<Pick<CableTypeRow, 'id' | 'name'>>(
           `
             SELECT id, name
@@ -1819,10 +2000,43 @@ cablesRouter.patch(
           return;
         }
 
+        nextCableTypeId = nextCableType.id;
         nextCableTypeName = nextCableType.name;
       }
 
-      if (newCableId !== undefined) {
+      const currentSnapshot = buildCableVersionSnapshot(existingCable);
+      const nextSnapshot: CableVersionSnapshot = {
+        cableId: newCableId ?? currentSnapshot.cableId,
+        revision:
+          revision !== undefined ? normalizeOptionalString(revision) : currentSnapshot.revision,
+        mto: mto !== undefined ? mto ?? null : currentSnapshot.mto,
+        tag: tag !== undefined ? normalizeOptionalString(tag) : currentSnapshot.tag,
+        cableTypeId: nextCableTypeId,
+        typeName: nextCableTypeName,
+        fromLocation:
+          fromLocation !== undefined
+            ? normalizeOptionalString(fromLocation)
+            : currentSnapshot.fromLocation,
+        toLocation:
+          toLocation !== undefined ? normalizeOptionalString(toLocation) : currentSnapshot.toLocation,
+        routing: routing !== undefined ? normalizeOptionalString(routing) : currentSnapshot.routing,
+        designLength:
+          designLength !== undefined ? designLength ?? null : currentSnapshot.designLength,
+        installLength:
+          installLength !== undefined ? installLength ?? null : currentSnapshot.installLength,
+        pullDate: pullDate !== undefined ? normalizeDateValue(pullDate) : currentSnapshot.pullDate,
+        connectedFrom:
+          connectedFrom !== undefined
+            ? normalizeDateValue(connectedFrom)
+            : currentSnapshot.connectedFrom,
+        connectedTo:
+          connectedTo !== undefined
+            ? normalizeDateValue(connectedTo)
+            : currentSnapshot.connectedTo,
+        tested: tested !== undefined ? normalizeDateValue(tested) : currentSnapshot.tested,
+      };
+
+      if (newCableId !== undefined && newCableId !== currentSnapshot.cableId) {
         const duplicate = await client.query(
           `
             SELECT id
@@ -1841,12 +2055,33 @@ cablesRouter.patch(
         }
       }
 
+      const { assignments, values } = buildCableUpdateAssignments(currentSnapshot, nextSnapshot);
+
+      if (assignments.length === 0) {
+        await client.query('COMMIT');
+
+        const unchangedResult = await pool.query<CableWithTypeRow>(
+          `
+            ${selectCablesQuery}
+            WHERE c.id = $1;
+          `,
+          [cableId],
+        );
+
+        res.json({ cable: mapCableRow(unchangedResult.rows[0]) });
+        return;
+      }
+
+      assignments.push('updated_at = NOW()');
+      const idParameterIndex = values.length + 1;
+      const projectParameterIndex = values.length + 2;
+
       const updateResult = await client.query<CableRow>(
         `
           UPDATE cables
-          SET ${fields.join(', ')}
-          WHERE id = $${index}
-            AND project_id = $${index + 1}
+          SET ${assignments.join(', ')}
+          WHERE id = $${idParameterIndex}
+            AND project_id = $${projectParameterIndex}
           RETURNING
             id,
             project_id,
@@ -1878,18 +2113,25 @@ cablesRouter.patch(
         return;
       }
 
-      const shouldResetMaterials =
-        cableTypeId !== undefined && cableTypeId !== existingCable.cable_type_id;
+      const shouldResetMaterials = currentSnapshot.cableTypeId !== nextSnapshot.cableTypeId;
 
       if (shouldResetMaterials) {
         await resetCableMaterialsToCableTypeDefaults(
           client,
           projectId,
           updated.id,
-          cableTypeId,
-          nextCableTypeName ?? '',
+          nextSnapshot.cableTypeId,
+          nextSnapshot.typeName,
         );
       }
+
+      await insertCableVersion(client, {
+        cableRecordId: updated.id,
+        snapshot: nextSnapshot,
+        changeType: 'update',
+        changeSource: 'manual',
+        changedBy: req.userId ?? null,
+      });
 
       await client.query('COMMIT');
 
@@ -1914,6 +2156,78 @@ cablesRouter.patch(
     }
   },
 );
+
+cablesRouter.get('/:cableId/versions', async (req: Request, res: Response): Promise<void> => {
+  const { projectId, cableId } = req.params;
+
+  if (!projectId || !cableId) {
+    res.status(400).json({ error: 'Project ID and cable ID are required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+  } catch (error) {
+    console.error('Verify project for cable versions error', error);
+    res.status(500).json({ error: 'Failed to verify project' });
+    return;
+  }
+
+  try {
+    const cable = await findProjectCableVersionSourceById(pool, projectId, cableId);
+
+    if (!cable) {
+      res.status(404).json({ error: 'Cable not found' });
+      return;
+    }
+
+    const result = await pool.query<CableVersionRow>(
+      `
+        SELECT
+          v.id,
+          v.cable_id,
+          v.version_number,
+          v.change_type,
+          v.change_source,
+          v.cable_number,
+          v.revision,
+          v.mto,
+          v.tag,
+          v.cable_type_id,
+          v.cable_type_name,
+          v.from_location,
+          v.to_location,
+          v.routing,
+          v.design_length,
+          v.install_length,
+          v.pull_date,
+          v.connected_from,
+          v.connected_to,
+          v.tested,
+          v.changed_by,
+          v.created_at,
+          u.first_name AS changed_by_first_name,
+          u.last_name AS changed_by_last_name,
+          u.email AS changed_by_email
+        FROM cable_versions v
+        LEFT JOIN users u ON u.id = v.changed_by
+        WHERE v.cable_id = $1
+        ORDER BY v.version_number DESC;
+      `,
+      [cableId],
+    );
+
+    res.json({ versions: result.rows.map(mapCableVersionRow) });
+  } catch (error) {
+    console.error('List cable versions error', error);
+    res.status(500).json({ error: 'Failed to load cable revisions' });
+  }
+});
 
 cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promise<void> => {
   const { projectId, cableId } = req.params;
@@ -2707,21 +3021,7 @@ cablesRouter.post(
       return;
     }
 
-    type ExistingCable = Pick<
-      CableRow,
-      | 'id'
-      | 'cable_id'
-      | 'revision'
-      | 'mto'
-      | 'cable_type_id'
-      | 'tag'
-      | 'from_location'
-      | 'to_location'
-      | 'routing'
-      | 'design_length'
-    > & {
-      type_name: string;
-    };
+    type ExistingCable = CableVersionSourceRow;
 
     const client = await pool.connect();
 
@@ -2797,6 +3097,23 @@ cablesRouter.post(
 
         if (!existing) {
           const insertedCableId = randomUUID();
+          const insertedSnapshot: CableVersionSnapshot = {
+            cableId: row.cableId,
+            revision: fields.revision ?? null,
+            mto: fields.mto ?? null,
+            tag: fields.tag ?? null,
+            cableTypeId: type.id,
+            typeName: type.name,
+            fromLocation: fields.fromLocation ?? null,
+            toLocation: fields.toLocation ?? null,
+            routing: fields.routing ?? null,
+            designLength: fields.designLength ?? null,
+            installLength: null,
+            pullDate: null,
+            connectedFrom: null,
+            connectedTo: null,
+            tested: null,
+          };
 
           await client.query(
             `
@@ -2823,15 +3140,15 @@ cablesRouter.post(
             [
               insertedCableId,
               projectId,
-              row.cableId,
-              fields.revision ?? null,
-              fields.mto ?? null,
-              fields.tag ?? null,
-              type.id,
-              fields.fromLocation ?? null,
-              fields.toLocation ?? null,
-              fields.routing ?? null,
-              fields.designLength ?? null,
+              insertedSnapshot.cableId,
+              insertedSnapshot.revision,
+              insertedSnapshot.mto,
+              insertedSnapshot.tag,
+              insertedSnapshot.cableTypeId,
+              insertedSnapshot.fromLocation,
+              insertedSnapshot.toLocation,
+              insertedSnapshot.routing,
+              insertedSnapshot.designLength,
               null,
               null,
               null,
@@ -2846,91 +3163,67 @@ cablesRouter.post(
             type.id,
             type.name,
           );
+          await insertCableVersion(client, {
+            cableRecordId: insertedCableId,
+            snapshot: insertedSnapshot,
+            changeType: 'create',
+            changeSource: 'import',
+            changedBy: req.userId ?? null,
+          });
           summary.inserted += 1;
           continue;
         }
 
-        const updateAssignments: string[] = [];
-        const updateValues: Array<string | number | null> = [];
-        let parameterIndex = 1;
+        const currentSnapshot = buildCableVersionSnapshot(existing);
+        const nextSnapshot: CableVersionSnapshot = {
+          cableId: currentSnapshot.cableId,
+          revision:
+            columnAvailability.revision && fields.revision !== undefined
+              ? fields.revision ?? null
+              : currentSnapshot.revision,
+          mto:
+            columnAvailability.mto && fields.mto !== undefined
+              ? fields.mto ?? null
+              : currentSnapshot.mto,
+          tag:
+            columnAvailability.tag && fields.tag !== undefined
+              ? fields.tag ?? null
+              : currentSnapshot.tag,
+          cableTypeId: type.id,
+          typeName: type.name,
+          fromLocation:
+            columnAvailability.fromLocation && fields.fromLocation !== undefined
+              ? fields.fromLocation ?? null
+              : currentSnapshot.fromLocation,
+          toLocation:
+            columnAvailability.toLocation && fields.toLocation !== undefined
+              ? fields.toLocation ?? null
+              : currentSnapshot.toLocation,
+          routing:
+            columnAvailability.routing && fields.routing !== undefined
+              ? fields.routing ?? null
+              : currentSnapshot.routing,
+          designLength:
+            columnAvailability.designLength && fields.designLength !== undefined
+              ? fields.designLength ?? null
+              : currentSnapshot.designLength,
+          installLength: currentSnapshot.installLength,
+          pullDate: currentSnapshot.pullDate,
+          connectedFrom: currentSnapshot.connectedFrom,
+          connectedTo: currentSnapshot.connectedTo,
+          tested: currentSnapshot.tested,
+        };
 
-        if (existing.cable_type_id !== type.id) {
-          updateAssignments.push(`cable_type_id = $${parameterIndex}`);
-          updateValues.push(type.id);
-          parameterIndex += 1;
-        }
-
-        if (columnAvailability.revision && fields.revision !== undefined) {
-          const currentRevision = normalizeOptionalString(existing.revision ?? null);
-          if (fields.revision !== currentRevision) {
-            updateAssignments.push(`revision = $${parameterIndex}`);
-            updateValues.push(fields.revision ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.mto && fields.mto !== undefined) {
-          const currentMto = normalizeCableMtoValue(existing.mto ?? null);
-          if (fields.mto !== currentMto) {
-            updateAssignments.push(`mto = $${parameterIndex}`);
-            updateValues.push(fields.mto ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.tag && fields.tag !== undefined) {
-          const currentTag = normalizeOptionalString(existing.tag ?? null);
-          if (fields.tag !== currentTag) {
-            updateAssignments.push(`tag = $${parameterIndex}`);
-            updateValues.push(fields.tag ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.fromLocation && fields.fromLocation !== undefined) {
-          const currentFrom = normalizeOptionalString(existing.from_location ?? null);
-          if (fields.fromLocation !== currentFrom) {
-            updateAssignments.push(`from_location = $${parameterIndex}`);
-            updateValues.push(fields.fromLocation ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.toLocation && fields.toLocation !== undefined) {
-          const currentTo = normalizeOptionalString(existing.to_location ?? null);
-          if (fields.toLocation !== currentTo) {
-            updateAssignments.push(`to_location = $${parameterIndex}`);
-            updateValues.push(fields.toLocation ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.routing && fields.routing !== undefined) {
-          const currentRouting = normalizeOptionalString(existing.routing ?? null);
-          if (fields.routing !== currentRouting) {
-            updateAssignments.push(`routing = $${parameterIndex}`);
-            updateValues.push(fields.routing ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        if (columnAvailability.designLength && fields.designLength !== undefined) {
-          const currentDesignLength = parseInstallLength(existing.design_length);
-          if (fields.designLength !== currentDesignLength) {
-            updateAssignments.push(`design_length = $${parameterIndex}`);
-            updateValues.push(fields.designLength ?? null);
-            parameterIndex += 1;
-          }
-        }
-
-        const shouldResetMaterials = existing.cable_type_id !== type.id;
+        const shouldResetMaterials = currentSnapshot.cableTypeId !== nextSnapshot.cableTypeId;
+        const { assignments: updateAssignments, values: updateValues } =
+          buildCableUpdateAssignments(currentSnapshot, nextSnapshot);
 
         if (updateAssignments.length === 0) {
           summary.skipped += 1;
           continue;
         }
 
-        const idParameterIndex = parameterIndex;
+        const idParameterIndex = updateValues.length + 1;
         updateAssignments.push('updated_at = NOW()');
 
         const assignments = updateAssignments.join(',\n                ');
@@ -2950,10 +3243,18 @@ cablesRouter.post(
             client,
             projectId,
             existing.id,
-            type.id,
-            type.name,
+            nextSnapshot.cableTypeId,
+            nextSnapshot.typeName,
           );
         }
+
+        await insertCableVersion(client, {
+          cableRecordId: existing.id,
+          snapshot: nextSnapshot,
+          changeType: 'update',
+          changeSource: 'import',
+          changedBy: req.userId ?? null,
+        });
 
         summary.updated += 1;
       }

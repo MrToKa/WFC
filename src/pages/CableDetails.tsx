@@ -2,6 +2,10 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Button,
   Caption1,
@@ -32,11 +36,13 @@ import {
   deleteCableMaterial,
   fetchCables,
   fetchCableDetails,
+  fetchCableVersions,
   fetchMaterialCableInstallationMaterials,
   syncCableBaseMaterials,
   type Cable,
   type CableDetails as CableDetailsData,
   type CableMaterial,
+  type CableVersion,
   type CableTypeDefaultMaterial,
   type MaterialCableInstallationMaterial,
   updateCableMaterial,
@@ -45,6 +51,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
+import {
+  diffCableVersions,
+  formatCableVersionTimestamp,
+  formatCableVersionUser,
+} from './ProjectDetails/cableVersionUtils';
 import { formatNumeric, parseNumberInput, toNullableString } from './ProjectDetails.utils';
 
 type CableMaterialDialogMode = 'create' | 'edit';
@@ -216,6 +227,18 @@ const formatOptionalText = (value: string | null | undefined): string => {
   return trimmed ? trimmed : '-';
 };
 
+const formatCableVersionOption = (version: CableVersion): string => {
+  const revisionPart = version.revision?.trim() ? ` - ${version.revision.trim()}` : '';
+  return `v${version.versionNumber}${revisionPart} (${formatCableVersionTimestamp(
+    version.changedAt,
+  )})`;
+};
+
+const formatCableVersionChange = (version: CableVersion): string =>
+  `${version.changeType === 'create' ? 'Created' : 'Updated'} via ${
+    version.changeSource === 'import' ? 'import' : 'manual save'
+  }`;
+
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',
@@ -266,6 +289,11 @@ const useStyles = makeStyles({
     display: 'grid',
     gap: '1rem',
   },
+  accordionPanelContent: {
+    display: 'grid',
+    gap: '1rem',
+    ...shorthands.padding('0.25rem', 0, 0),
+  },
   sectionHeader: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -277,6 +305,15 @@ const useStyles = makeStyles({
     display: 'flex',
     gap: '0.75rem',
     flexWrap: 'wrap',
+  },
+  compareControls: {
+    display: 'grid',
+    gap: '0.75rem',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))',
+  },
+  compareSummary: {
+    display: 'grid',
+    gap: '0.75rem',
   },
   tableContainer: {
     width: '100%',
@@ -347,6 +384,11 @@ export const CableDetails = () => {
   const [details, setDetails] = useState<CableDetailsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [cableVersions, setCableVersions] = useState<CableVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState<boolean>(true);
+  const [versionsError, setVersionsError] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [comparedVersionId, setComparedVersionId] = useState<string | null>(null);
   const [projectCables, setProjectCables] = useState<Cable[]>([]);
   const [availableMaterials, setAvailableMaterials] = useState<MaterialCableInstallationMaterial[]>(
     [],
@@ -395,6 +437,36 @@ export const CableDetails = () => {
   useEffect(() => {
     void loadDetails();
   }, [loadDetails]);
+
+  const loadVersions = useCallback(async () => {
+    if (!projectId || !cableId) {
+      setVersionsError('Cable identifier is missing.');
+      setVersionsLoading(false);
+      return;
+    }
+
+    setVersionsLoading(true);
+    setVersionsError(null);
+
+    try {
+      const response = await fetchCableVersions(projectId, cableId);
+      setCableVersions(response.versions);
+    } catch (err) {
+      console.error('Failed to load cable revisions', err);
+      if (err instanceof ApiError && err.status === 404) {
+        setVersionsError('Cable revisions are not available.');
+      } else {
+        setVersionsError('Failed to load cable revisions.');
+      }
+      setCableVersions([]);
+    } finally {
+      setVersionsLoading(false);
+    }
+  }, [cableId, projectId]);
+
+  useEffect(() => {
+    void loadVersions();
+  }, [loadVersions]);
 
   useEffect(() => {
     if (!projectId) {
@@ -470,6 +542,86 @@ export const CableDetails = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (cableVersions.length === 0) {
+      setSelectedVersionId(null);
+      setComparedVersionId(null);
+      return;
+    }
+
+    setSelectedVersionId((previous) =>
+      previous && cableVersions.some((version) => version.id === previous)
+        ? previous
+        : cableVersions[0].id,
+    );
+  }, [cableVersions]);
+
+  useEffect(() => {
+    if (cableVersions.length === 0) {
+      setComparedVersionId(null);
+      return;
+    }
+
+    const selectedId = selectedVersionId ?? cableVersions[0]?.id ?? null;
+
+    setComparedVersionId((previous) => {
+      if (
+        previous &&
+        previous !== selectedId &&
+        cableVersions.some((version) => version.id === previous)
+      ) {
+        return previous;
+      }
+
+      return cableVersions.find((version) => version.id !== selectedId)?.id ?? null;
+    });
+  }, [cableVersions, selectedVersionId]);
+
+  const selectedVersion = useMemo(
+    () =>
+      selectedVersionId
+        ? cableVersions.find((version) => version.id === selectedVersionId) ?? null
+        : null,
+    [cableVersions, selectedVersionId],
+  );
+
+  const comparedVersion = useMemo(
+    () =>
+      comparedVersionId && comparedVersionId !== selectedVersionId
+        ? cableVersions.find((version) => version.id === comparedVersionId) ?? null
+        : null,
+    [cableVersions, comparedVersionId, selectedVersionId],
+  );
+
+  const comparedVersionDiffs = useMemo(
+    () => (selectedVersion ? diffCableVersions(selectedVersion, comparedVersion) : []),
+    [comparedVersion, selectedVersion],
+  );
+
+  const handleSelectedVersionChange = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      const nextVersionId = data.optionValue ?? null;
+      setSelectedVersionId(nextVersionId);
+
+      if (!nextVersionId || comparedVersionId !== nextVersionId) {
+        return;
+      }
+
+      const fallbackVersionId =
+        cableVersions.find((version) => version.id !== nextVersionId)?.id ?? null;
+      setComparedVersionId(fallbackVersionId);
+    },
+    [cableVersions, comparedVersionId],
+  );
+
+  const handleComparedVersionChange = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      const nextVersionId = data.optionValue ?? null;
+      setComparedVersionId(nextVersionId);
+    },
+    [],
+  );
 
   const handleDialogFieldChange =
     (field: keyof CableMaterialFormState) =>
@@ -727,6 +879,11 @@ export const CableDetails = () => {
     }
   }, [cableId, projectId, showToast, token]);
 
+  const handleRefresh = useCallback(() => {
+    void loadDetails();
+    void loadVersions();
+  }, [loadDetails, loadVersions]);
+
   const pageTitle = details
     ? `Cable ${details.cable.cableId}${details.cable.tag ? ` - ${details.cable.tag}` : ''}`
     : 'Cable details';
@@ -846,7 +1003,7 @@ export const CableDetails = () => {
             >
               Back to project
             </Button>
-            <Button onClick={() => void loadDetails()}>Retry</Button>
+            <Button onClick={handleRefresh}>Retry</Button>
           </div>
         </div>
       </section>
@@ -891,7 +1048,7 @@ export const CableDetails = () => {
           >
             Open cable type
           </Button>
-          <Button onClick={() => void loadDetails()}>Refresh</Button>
+          <Button onClick={handleRefresh}>Refresh</Button>
         </div>
         <Title2 id="cable-details-heading">{pageTitle}</Title2>
         {project ? (
@@ -1089,6 +1246,208 @@ export const CableDetails = () => {
             </table>
           </div>
         )}
+      </Card>
+
+      <Card appearance="outline" className={styles.fullWidthCard}>
+        <Accordion collapsible>
+          <AccordionItem value="revisions">
+            <AccordionHeader>Revisions</AccordionHeader>
+            <AccordionPanel>
+              <div className={styles.accordionPanelContent}>
+                <div className={styles.sectionHeader}>
+                  <Caption1 className={styles.readOnlyNotice}>
+                    Compare saved cable field snapshots across revisions.
+                  </Caption1>
+                  <div className={styles.sectionActions}>
+                    <Button
+                      appearance="secondary"
+                      onClick={() => void loadVersions()}
+                      disabled={versionsLoading}
+                    >
+                      {versionsLoading ? 'Loading...' : 'Reload revisions'}
+                    </Button>
+                  </div>
+                </div>
+
+                {versionsLoading ? (
+                  <Spinner label="Loading cable revisions..." />
+                ) : versionsError ? (
+                  <Body1 className={styles.errorText}>{versionsError}</Body1>
+                ) : cableVersions.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    <Body1>No saved revisions for this cable yet.</Body1>
+                  </div>
+                ) : (
+                  <>
+                    <div className={styles.compareControls}>
+                      <Field label="Selected revision">
+                        <Combobox
+                          selectedOptions={selectedVersion ? [selectedVersion.id] : []}
+                          value={selectedVersion ? formatCableVersionOption(selectedVersion) : undefined}
+                          onOptionSelect={handleSelectedVersionChange}
+                          freeform={false}
+                        >
+                          {cableVersions.map((version) => (
+                            <Option key={version.id} value={version.id}>
+                              {formatCableVersionOption(version)}
+                            </Option>
+                          ))}
+                        </Combobox>
+                      </Field>
+                      <Field label="Compare against">
+                        <Combobox
+                          placeholder="Select a revision to compare"
+                          selectedOptions={comparedVersion ? [comparedVersion.id] : []}
+                          value={comparedVersion ? formatCableVersionOption(comparedVersion) : undefined}
+                          onOptionSelect={handleComparedVersionChange}
+                          freeform={false}
+                        >
+                          {cableVersions.map((version) => (
+                            <Option key={version.id} value={version.id}>
+                              {formatCableVersionOption(version)}
+                            </Option>
+                          ))}
+                        </Combobox>
+                      </Field>
+                    </div>
+
+                    {selectedVersion ? (
+                      <div className={styles.compareSummary}>
+                        <div className={styles.cardGrid}>
+                          <div className={styles.field}>
+                            <Caption1 className={styles.label}>Selected</Caption1>
+                            <Body1>
+                              v{selectedVersion.versionNumber}
+                              {selectedVersion.revision ? ` - ${selectedVersion.revision}` : ''}
+                            </Body1>
+                          </div>
+                          <div className={styles.field}>
+                            <Caption1 className={styles.label}>Selected change</Caption1>
+                            <Body1>{formatCableVersionChange(selectedVersion)}</Body1>
+                          </div>
+                          <div className={styles.field}>
+                            <Caption1 className={styles.label}>Selected changed by</Caption1>
+                            <Body1>{formatCableVersionUser(selectedVersion)}</Body1>
+                          </div>
+                          <div className={styles.field}>
+                            <Caption1 className={styles.label}>Selected changed at</Caption1>
+                            <Body1>{formatCableVersionTimestamp(selectedVersion.changedAt)}</Body1>
+                          </div>
+                          <div className={styles.field}>
+                            <Caption1 className={styles.label}>Compared</Caption1>
+                            <Body1>
+                              {comparedVersion
+                                ? `v${comparedVersion.versionNumber}${
+                                    comparedVersion.revision ? ` - ${comparedVersion.revision}` : ''
+                                  }`
+                                : '-'}
+                            </Body1>
+                          </div>
+                          <div className={styles.field}>
+                            <Caption1 className={styles.label}>Compared changed by</Caption1>
+                            <Body1>
+                              {comparedVersion ? formatCableVersionUser(comparedVersion) : '-'}
+                            </Body1>
+                          </div>
+                          <div className={styles.field}>
+                            <Caption1 className={styles.label}>Compared changed at</Caption1>
+                            <Body1>
+                              {comparedVersion
+                                ? formatCableVersionTimestamp(comparedVersion.changedAt)
+                                : '-'}
+                            </Body1>
+                          </div>
+                        </div>
+
+                        {!comparedVersion ? (
+                          <Caption1 className={styles.readOnlyNotice}>
+                            Select another revision to compare against the selected one.
+                          </Caption1>
+                        ) : comparedVersionDiffs.length === 0 ? (
+                          <Caption1 className={styles.readOnlyNotice}>
+                            No tracked field differences between these revisions.
+                          </Caption1>
+                        ) : (
+                          <div className={styles.tableContainer}>
+                            <table className={styles.table}>
+                              <thead>
+                                <tr>
+                                  <th className={styles.tableHeadCell}>Field</th>
+                                  <th className={styles.tableHeadCell}>
+                                    v{selectedVersion.versionNumber}
+                                  </th>
+                                  <th className={styles.tableHeadCell}>
+                                    v{comparedVersion.versionNumber}
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {comparedVersionDiffs.map((change) => (
+                                  <tr key={change.label}>
+                                    <td className={styles.tableCell}>{change.label}</td>
+                                    <td className={styles.tableCell}>{change.nextValue}</td>
+                                    <td className={styles.tableCell}>{change.previousValue}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+
+                    <div className={styles.tableContainer}>
+                      <table className={styles.table}>
+                        <thead>
+                          <tr>
+                            <th className={styles.tableHeadCell}>Version</th>
+                            <th className={styles.tableHeadCell}>Revision</th>
+                            <th className={styles.tableHeadCell}>Change</th>
+                            <th className={styles.tableHeadCell}>Changed by</th>
+                            <th className={styles.tableHeadCell}>Changed at</th>
+                            <th className={styles.tableHeadCell}>Field changes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cableVersions.map((version, index) => {
+                            const previousVersion = cableVersions[index + 1] ?? null;
+                            const fieldChanges = diffCableVersions(version, previousVersion);
+
+                            return (
+                              <tr key={version.id}>
+                                <td className={styles.tableCell}>v{version.versionNumber}</td>
+                                <td className={styles.tableCell}>{version.revision ?? '-'}</td>
+                                <td className={styles.tableCell}>{formatCableVersionChange(version)}</td>
+                                <td className={styles.tableCell}>{formatCableVersionUser(version)}</td>
+                                <td className={styles.tableCell}>
+                                  {formatCableVersionTimestamp(version.changedAt)}
+                                </td>
+                                <td className={styles.tableCell}>
+                                  {previousVersion === null ? (
+                                    <Caption1>Initial snapshot</Caption1>
+                                  ) : fieldChanges.length === 0 ? (
+                                    <Caption1>No tracked field changes</Caption1>
+                                  ) : (
+                                    fieldChanges.map((change) => (
+                                      <div key={change.label}>
+                                        <strong>{change.label}:</strong> {change.previousValue} to{' '}
+                                        {change.nextValue}
+                                      </div>
+                                    ))
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            </AccordionPanel>
+          </AccordionItem>
+        </Accordion>
       </Card>
 
       <Dialog
