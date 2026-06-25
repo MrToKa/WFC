@@ -34,6 +34,7 @@ import {
   ApiError,
   createCableMaterial,
   deleteCableMaterial,
+  fetchCableTypes,
   fetchCables,
   fetchCableDetails,
   fetchCableVersions,
@@ -42,20 +43,31 @@ import {
   type Cable,
   type CableDetails as CableDetailsData,
   type CableMaterial,
+  type CableType,
   type CableVersion,
   type CableTypeDefaultMaterial,
   type MaterialCableInstallationMaterial,
+  updateCable,
   updateCableMaterial,
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
+import { CableDialog, type CableDialogField } from './ProjectDetails/CableDialog';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
 import {
   diffCableVersions,
   formatCableVersionTimestamp,
   formatCableVersionUser,
 } from './ProjectDetails/cableVersionUtils';
+import {
+  buildCableInput,
+  emptyCableForm,
+  parseCableFormErrors,
+  toCableFormState,
+  type CableFormErrors,
+  type CableFormState,
+} from './ProjectDetails.forms';
 import { formatNumeric, parseNumberInput, toNullableString } from './ProjectDetails.utils';
 
 type CableMaterialDialogMode = 'create' | 'edit';
@@ -86,6 +98,18 @@ const emptyCableMaterialForm: CableMaterialFormState = {
 };
 
 const MATERIAL_UNITS = ['pcs', 'meters', 'pcs/m'] as const;
+
+const CABLE_DETAILS_DIALOG_VISIBLE_FIELDS: CableDialogField[] = [
+  'revision',
+  'mto',
+  'tag',
+  'cableTypeId',
+  'fromLocation',
+  'toLocation',
+  'routing',
+  'delivery',
+  'designLength',
+];
 
 const normalizeMaterialUnit = (value: string | null | undefined): string => {
   const normalized = value?.trim().toLowerCase();
@@ -396,6 +420,7 @@ export const CableDetails = () => {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [comparedVersionId, setComparedVersionId] = useState<string | null>(null);
   const [projectCables, setProjectCables] = useState<Cable[]>([]);
+  const [cableTypes, setCableTypes] = useState<CableType[]>([]);
   const [availableMaterials, setAvailableMaterials] = useState<MaterialCableInstallationMaterial[]>(
     [],
   );
@@ -410,6 +435,11 @@ export const CableDetails = () => {
   const [editingCableMaterialId, setEditingCableMaterialId] = useState<string | null>(null);
   const [pendingCableMaterialId, setPendingCableMaterialId] = useState<string | null>(null);
   const [syncingBaseMaterials, setSyncingBaseMaterials] = useState<boolean>(false);
+  const [cableEditDialogOpen, setCableEditDialogOpen] = useState<boolean>(false);
+  const [cableEditDialogValues, setCableEditDialogValues] =
+    useState<CableFormState>(emptyCableForm);
+  const [cableEditDialogErrors, setCableEditDialogErrors] = useState<CableFormErrors>({});
+  const [cableEditDialogSubmitting, setCableEditDialogSubmitting] = useState<boolean>(false);
 
   const loadDetails = useCallback(async () => {
     if (!projectId || !cableId) {
@@ -503,6 +533,45 @@ export const CableDetails = () => {
     };
 
     void loadProjectCables();
+
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setCableTypes([]);
+      return;
+    }
+
+    let active = true;
+
+    const loadCableTypes = async () => {
+      try {
+        const response = await fetchCableTypes(projectId);
+
+        if (!active) {
+          return;
+        }
+
+        setCableTypes(
+          [...response.cableTypes].sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+          ),
+        );
+      } catch (err) {
+        console.error('Failed to load cable types for cable edit dialog', err);
+
+        if (!active) {
+          return;
+        }
+
+        setCableTypes([]);
+      }
+    };
+
+    void loadCableTypes();
 
     return () => {
       active = false;
@@ -663,6 +732,44 @@ export const CableDetails = () => {
     [],
   );
 
+  const handleCableEditFieldChange =
+    (field: keyof CableFormState) =>
+    (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
+      setCableEditDialogValues((previous) => ({ ...previous, [field]: data.value }));
+      setCableEditDialogErrors((previous) => ({
+        ...previous,
+        [field]: undefined,
+        general: undefined,
+      }));
+    };
+
+  const handleCableEditCableTypeSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setCableEditDialogValues((previous) => ({
+        ...previous,
+        cableTypeId: data.optionValue ?? previous.cableTypeId,
+      }));
+      setCableEditDialogErrors((previous) => ({
+        ...previous,
+        cableTypeId: undefined,
+        general: undefined,
+      }));
+    },
+    [],
+  );
+
+  const handleCableEditMtoSelect = useCallback((_event: unknown, data: { optionValue?: string }) => {
+    setCableEditDialogValues((previous) => ({
+      ...previous,
+      mto: data.optionValue ?? '',
+    }));
+    setCableEditDialogErrors((previous) => ({
+      ...previous,
+      mto: undefined,
+      general: undefined,
+    }));
+  }, []);
+
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
     setDialogMode('create');
@@ -671,6 +778,23 @@ export const CableDetails = () => {
     setDialogSubmitting(false);
     setEditingCableMaterialId(null);
   }, []);
+
+  const resetCableEditDialog = useCallback(() => {
+    setCableEditDialogOpen(false);
+    setCableEditDialogValues(emptyCableForm);
+    setCableEditDialogErrors({});
+    setCableEditDialogSubmitting(false);
+  }, []);
+
+  const openCableEditDialog = useCallback(() => {
+    if (!details) {
+      return;
+    }
+
+    setCableEditDialogValues(toCableFormState(details.cable));
+    setCableEditDialogErrors({});
+    setCableEditDialogOpen(true);
+  }, [details]);
 
   const openCreateDialog = useCallback(() => {
     if (!availableMaterialsLoading && availableMaterials.length === 0) {
@@ -787,6 +911,82 @@ export const CableDetails = () => {
       }
     } finally {
       setDialogSubmitting(false);
+    }
+  };
+
+  const handleCableEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!projectId || !details || !token) {
+      setCableEditDialogErrors({
+        general: 'You need to be signed in to edit this cable.',
+      });
+      return;
+    }
+
+    const { input, errors } = buildCableInput(cableEditDialogValues);
+
+    if (Object.keys(errors).length > 0) {
+      setCableEditDialogErrors(errors);
+      return;
+    }
+
+    setCableEditDialogSubmitting(true);
+    setCableEditDialogErrors({});
+
+    try {
+      const response = await updateCable(token, projectId, details.cable.id, input);
+
+      setDetails((previous) => (previous ? { ...previous, cable: response.cable } : previous));
+      setProjectCables((previous) => {
+        const hasCable = previous.some((item) => item.id === response.cable.id);
+        const next = hasCable
+          ? previous.map((item) => (item.id === response.cable.id ? response.cable : item))
+          : [...previous, response.cable];
+
+        return [...next].sort((a, b) => a.cableId - b.cableId);
+      });
+
+      resetCableEditDialog();
+      showToast({ intent: 'success', title: 'Cable updated' });
+
+      try {
+        const refreshedDetails = await fetchCableDetails(projectId, response.cable.id);
+        setDetails({
+          ...refreshedDetails,
+          cableMaterials: sortMaterials(refreshedDetails.cableMaterials),
+        });
+      } catch (refreshErr) {
+        console.error('Failed to refresh cable details after update', refreshErr);
+        showToast({
+          intent: 'error',
+          title: 'Cable updated, refresh failed',
+          body: 'Use Refresh to load the latest material source details.',
+        });
+      }
+
+      void loadVersions();
+    } catch (err) {
+      console.error('Save cable failed', err);
+
+      if (err instanceof ApiError) {
+        setCableEditDialogErrors(parseCableFormErrors(err.payload));
+        showToast({
+          intent: 'error',
+          title: 'Failed to save cable',
+          body: err.message,
+        });
+      } else {
+        const message = 'Failed to save cable. Please try again.';
+        setCableEditDialogErrors({ general: message });
+        showToast({
+          intent: 'error',
+          title: 'Failed to save cable',
+          body: message,
+        });
+      }
+    } finally {
+      setCableEditDialogSubmitting(false);
     }
   };
 
@@ -918,6 +1118,25 @@ export const CableDetails = () => {
   }, [availableMaterialNames, dialogValues.name]);
 
   const sourceMaterialDetails = details?.materialCableType;
+  const cableTypesForDialog = useMemo(() => {
+    if (!details) {
+      return cableTypes;
+    }
+
+    const hasCurrentCableType = cableTypes.some((type) => type.id === details.cable.cableTypeId);
+
+    if (hasCurrentCableType) {
+      return cableTypes;
+    }
+
+    return [
+      {
+        id: details.cable.cableTypeId,
+        name: details.cable.typeName,
+      },
+      ...cableTypes,
+    ];
+  }, [cableTypes, details]);
   const resolvedCableMaterialSources = useMemo(() => {
     const sourceById = new Map<string, 'default' | 'manual'>();
 
@@ -1054,6 +1273,15 @@ export const CableDetails = () => {
           >
             Open cable type
           </Button>
+          {canManageMaterials ? (
+            <Button
+              appearance="primary"
+              onClick={openCableEditDialog}
+              disabled={cableEditDialogSubmitting}
+            >
+              Edit
+            </Button>
+          ) : null}
           <Button onClick={handleRefresh}>Refresh</Button>
         </div>
         <Title2 id="cable-details-heading">{pageTitle}</Title2>
@@ -1460,6 +1688,22 @@ export const CableDetails = () => {
           </AccordionItem>
         </Accordion>
       </Card>
+
+      <CableDialog
+        styles={styles}
+        open={cableEditDialogOpen}
+        mode="edit"
+        values={cableEditDialogValues}
+        errors={cableEditDialogErrors}
+        submitting={cableEditDialogSubmitting}
+        cableTypes={cableTypesForDialog}
+        onFieldChange={handleCableEditFieldChange}
+        onCableTypeSelect={handleCableEditCableTypeSelect}
+        onMtoSelect={handleCableEditMtoSelect}
+        onSubmit={(event) => void handleCableEditSubmit(event)}
+        onDismiss={resetCableEditDialog}
+        visibleFields={CABLE_DETAILS_DIALOG_VISIBLE_FIELDS}
+      />
 
       <Dialog
         open={dialogOpen}

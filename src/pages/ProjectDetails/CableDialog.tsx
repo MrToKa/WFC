@@ -33,13 +33,13 @@ export type CableDialogField =
   | 'designLength';
 
 type CableDialogProps = {
-  styles: ProjectDetailsStyles;
+  styles: Pick<ProjectDetailsStyles, 'dialogForm' | 'dialogActions' | 'errorText'>;
   open: boolean;
   mode: 'create' | 'edit';
   values: CableFormState;
   errors: CableFormErrors;
   submitting: boolean;
-  cableTypes: CableType[];
+  cableTypes: Pick<CableType, 'id' | 'name'>[];
   visibleFields: CableDialogField[];
   onFieldChange: (
     field: keyof CableFormState
