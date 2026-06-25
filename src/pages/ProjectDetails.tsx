@@ -333,7 +333,17 @@ export const ProjectDetails = () => {
   });
 
   const cableDialogVisibleFields: CableDialogField[] = (() => {
-    return ['revision', 'mto', 'tag', 'cableTypeId', 'fromLocation', 'toLocation', 'routing', 'designLength'];
+    return [
+      'revision',
+      'mto',
+      'tag',
+      'cableTypeId',
+      'fromLocation',
+      'toLocation',
+      'routing',
+      'delivery',
+      'designLength'
+    ];
   })();
 
   const {

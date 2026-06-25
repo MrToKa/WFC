@@ -280,6 +280,7 @@ export type CableFormState = {
   fromLocation: string;
   toLocation: string;
   routing: string;
+  delivery: string;
   designLength: string;
 };
 
@@ -296,6 +297,7 @@ export const emptyCableForm: CableFormState = {
   fromLocation: '',
   toLocation: '',
   routing: '',
+  delivery: '',
   designLength: ''
 };
 
@@ -308,6 +310,7 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   fromLocation: cable.fromLocation ?? '',
   toLocation: cable.toLocation ?? '',
   routing: cable.routing ?? '',
+  delivery: cable.delivery ?? '',
   designLength:
     cable.designLength !== null ? String(cable.designLength) : ''
 });
@@ -387,7 +390,8 @@ export const buildCableInput = (
     tag,
     fromLocation: normalize(values.fromLocation),
     toLocation: normalize(values.toLocation),
-    routing: normalize(values.routing)
+    routing: normalize(values.routing),
+    delivery: normalize(values.delivery)
   };
 
   const normalizedMto = values.mto.trim();

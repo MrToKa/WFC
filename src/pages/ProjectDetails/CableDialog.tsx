@@ -29,6 +29,7 @@ export type CableDialogField =
   | 'fromLocation'
   | 'toLocation'
   | 'routing'
+  | 'delivery'
   | 'designLength';
 
 type CableDialogProps = {
@@ -179,6 +180,14 @@ export const CableDialog = ({
                   <Input
                     value={values.routing}
                     onChange={onFieldChange('routing')}
+                  />
+                </Field>
+              ) : null}
+              {isFieldVisible('delivery') ? (
+                <Field label="Delivery">
+                  <Input
+                    value={values.delivery}
+                    onChange={onFieldChange('delivery')}
                   />
                 </Field>
               ) : null}

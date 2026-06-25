@@ -68,7 +68,13 @@ type CableListTabProps = {
   ) => void;
   onTextFieldBlur: (
     cable: Cable,
-    field: 'revision' | 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'designLength'
+    field:
+      | 'revision'
+      | 'tag'
+      | 'fromLocation'
+      | 'toLocation'
+      | 'routing'
+      | 'designLength'
   ) => void;
   onInlineMtoChange: (cable: Cable, nextMto: string) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
@@ -220,7 +226,8 @@ export const CableListTab = ({
           filterCriteria === 'typeName' ? 'Type' :
           filterCriteria === 'fromLocation' ? 'From location' :
           filterCriteria === 'toLocation' ? 'To location' :
-          'Routing'
+          filterCriteria === 'routing' ? 'Routing' :
+          'Delivery'
         }
         onOptionSelect={(_, data) =>
           onFilterCriteriaChange(data.optionValue as CableSearchCriteria)
@@ -233,6 +240,7 @@ export const CableListTab = ({
         <Option value="fromLocation">From location</Option>
         <Option value="toLocation">To location</Option>
         <Option value="routing">Routing</Option>
+        <Option value="delivery">Delivery</Option>
       </Dropdown>
     </div>
 

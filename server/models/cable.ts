@@ -15,6 +15,7 @@ export type CableRow = {
   from_location: string | null;
   to_location: string | null;
   routing: string | null;
+  delivery: string | null;
   design_length: number | string | null;
   install_length: number | string | null;
   pull_date: Date | string | null;
@@ -52,6 +53,7 @@ export type PublicCable = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  delivery: string | null;
   designLength: number | null;
   installLength: number | null;
   pullDate: string | null;
@@ -101,6 +103,7 @@ export const mapCableRow = (row: CableWithTypeRow): PublicCable => ({
   fromLocation: row.from_location ?? null,
   toLocation: row.to_location ?? null,
   routing: row.routing ?? null,
+  delivery: row.delivery ?? null,
   designLength: toIntegerOrNull(row.design_length),
   installLength: toIntegerOrNull(row.install_length),
   pullDate: row.pull_date ? toDateOnlyString(row.pull_date) : null,

@@ -314,7 +314,14 @@ export async function fetchCableReportSummary(
   projectId: string,
   options?: {
     filterText?: string;
-    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+    criteria?:
+      | 'all'
+      | 'tag'
+      | 'typeName'
+      | 'fromLocation'
+      | 'toLocation'
+      | 'routing'
+      | 'delivery';
     mto?: CableMtoOption | null;
   },
 ): Promise<{ summary: CableReportSummary }> {
@@ -505,7 +512,14 @@ export async function exportCables(
   options?: {
     filterText?: string;
     cableTypeId?: string;
-    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+    criteria?:
+      | 'all'
+      | 'tag'
+      | 'typeName'
+      | 'fromLocation'
+      | 'toLocation'
+      | 'routing'
+      | 'delivery';
     mto?: CableMtoOption | null;
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;

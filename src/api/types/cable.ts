@@ -35,6 +35,7 @@ export type Cable = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  delivery: string | null;
   designLength: number | null;
   installLength: number | null;
   pullDate: string | null;
@@ -64,6 +65,7 @@ export type CableVersion = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  delivery: string | null;
   designLength: number | null;
   installLength: number | null;
   pullDate: string | null;
@@ -94,6 +96,7 @@ export type CableInput = {
   fromLocation?: string | null;
   toLocation?: string | null;
   routing?: string | null;
+  delivery?: string | null;
   designLength?: number | null;
   installLength?: number | null;
   pullDate?: string | null;
@@ -108,7 +111,13 @@ export type CableImportSummary = {
   skipped: number;
 };
 
-export type CableSortColumn = 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+export type CableSortColumn =
+  | 'tag'
+  | 'typeName'
+  | 'fromLocation'
+  | 'toLocation'
+  | 'routing'
+  | 'delivery';
 
 export type CableSortDirection = 'asc' | 'desc';
 

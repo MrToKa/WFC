@@ -86,6 +86,11 @@ export const diffCableVersions = (
       previousValue: previous.routing
     },
     {
+      label: 'Delivery',
+      currentValue: current.delivery,
+      previousValue: previous.delivery
+    },
+    {
       label: 'Design length [m]',
       currentValue: current.designLength,
       previousValue: previous.designLength

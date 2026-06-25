@@ -66,6 +66,7 @@ const INPUT_HEADERS = {
   type: 'Type',
   fromLocation: 'From Location',
   toLocation: 'To Location',
+  delivery: 'Delivery',
   designLength: 'Design Length [m]',
 } as const;
 
@@ -80,6 +81,7 @@ const LIST_OUTPUT_HEADERS = {
   weight: 'Weight [kg/m]',
   fromLocation: 'From Location',
   toLocation: 'To Location',
+  delivery: 'Delivery',
   routing: 'Routing',
   designLength: 'Design Length [m]',
 } as const;
@@ -328,6 +330,7 @@ const selectCablesQuery = `
     c.from_location,
     c.to_location,
     c.routing,
+    c.delivery,
     c.design_length,
     c.install_length,
     c.pull_date,
@@ -361,6 +364,7 @@ const selectCableDetailsQuery = `
     c.from_location,
     c.to_location,
     c.routing,
+    c.delivery,
     c.design_length,
     c.install_length,
     c.pull_date,
@@ -395,6 +399,7 @@ const selectCableVersionSourceQuery = `
     c.from_location,
     c.to_location,
     c.routing,
+    c.delivery,
     c.design_length,
     c.install_length,
     c.pull_date,
@@ -493,6 +498,7 @@ type CableVersionSourceRow = Pick<
   | 'from_location'
   | 'to_location'
   | 'routing'
+  | 'delivery'
   | 'design_length'
   | 'install_length'
   | 'pull_date'
@@ -513,6 +519,7 @@ type CableVersionSnapshot = {
   fromLocation: string | null;
   toLocation: string | null;
   routing: string | null;
+  delivery: string | null;
   designLength: number | null;
   installLength: number | null;
   pullDate: string | null;
@@ -527,7 +534,8 @@ type CableReportFilterCriteria =
   | 'typeName'
   | 'fromLocation'
   | 'toLocation'
-  | 'routing';
+  | 'routing'
+  | 'delivery';
 
 type CableReportMaterialSummary = {
   name: string;
@@ -577,6 +585,7 @@ const VALID_CABLE_REPORT_FILTER_CRITERIA = new Set<CableReportFilterCriteria>([
   'fromLocation',
   'toLocation',
   'routing',
+  'delivery',
 ]);
 
 const normalizeCableReportFilterCriteria = (
@@ -640,6 +649,7 @@ const buildCableVersionSnapshot = (
   fromLocation: normalizeOptionalString(cable.from_location ?? null),
   toLocation: normalizeOptionalString(cable.to_location ?? null),
   routing: normalizeOptionalString(cable.routing ?? null),
+  delivery: normalizeOptionalString(cable.delivery ?? null),
   designLength: parseInstallLength(cable.design_length),
   installLength: parseInstallLength(cable.install_length),
   pullDate: normalizeDateForComparison(cable.pull_date),
@@ -695,6 +705,10 @@ const buildCableUpdateAssignments = (
 
   if (current.routing !== next.routing) {
     pushAssignment('routing', next.routing);
+  }
+
+  if (current.delivery !== next.delivery) {
+    pushAssignment('delivery', next.delivery);
   }
 
   if (current.designLength !== next.designLength) {
@@ -762,6 +776,7 @@ const insertCableVersion = async (
         from_location,
         to_location,
         routing,
+        delivery,
         design_length,
         install_length,
         pull_date,
@@ -771,7 +786,7 @@ const insertCableVersion = async (
         changed_by
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
       );
     `,
     [
@@ -789,6 +804,7 @@ const insertCableVersion = async (
       options.snapshot.fromLocation,
       options.snapshot.toLocation,
       options.snapshot.routing,
+      options.snapshot.delivery,
       options.snapshot.designLength,
       options.snapshot.installLength,
       options.snapshot.pullDate,
@@ -1753,6 +1769,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
     fromLocation,
     toLocation,
     routing,
+    delivery,
     designLength,
     installLength,
     pullDate,
@@ -1810,6 +1827,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             from_location,
             to_location,
             routing,
+            delivery,
             design_length,
             install_length,
             pull_date,
@@ -1817,7 +1835,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             connected_to,
             tested
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           RETURNING
             id,
             project_id,
@@ -1829,6 +1847,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
             from_location,
             to_location,
             routing,
+            delivery,
             design_length,
             install_length,
             pull_date,
@@ -1849,6 +1868,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
         normalizeOptionalString(fromLocation ?? null),
         normalizeOptionalString(toLocation ?? null),
         normalizeOptionalString(routing ?? null),
+        normalizeOptionalString(delivery ?? null),
         designLength ?? null,
         installLength ?? null,
         normalizeDateValue(pullDate ?? null),
@@ -1943,6 +1963,7 @@ cablesRouter.patch(
       fromLocation,
       toLocation,
       routing,
+      delivery,
       designLength,
       installLength,
       pullDate,
@@ -2020,6 +2041,8 @@ cablesRouter.patch(
         toLocation:
           toLocation !== undefined ? normalizeOptionalString(toLocation) : currentSnapshot.toLocation,
         routing: routing !== undefined ? normalizeOptionalString(routing) : currentSnapshot.routing,
+        delivery:
+          delivery !== undefined ? normalizeOptionalString(delivery) : currentSnapshot.delivery,
         designLength:
           designLength !== undefined ? designLength ?? null : currentSnapshot.designLength,
         installLength:
@@ -2093,6 +2116,7 @@ cablesRouter.patch(
             from_location,
             to_location,
             routing,
+            delivery,
             design_length,
             install_length,
             pull_date,
@@ -2203,6 +2227,7 @@ cablesRouter.get('/:cableId/versions', async (req: Request, res: Response): Prom
           v.from_location,
           v.to_location,
           v.routing,
+          v.delivery,
           v.design_length,
           v.install_length,
           v.pull_date,
@@ -2825,6 +2850,7 @@ cablesRouter.post(
       fromLocation?: string | null;
       toLocation?: string | null;
       routing?: string | null;
+      delivery?: string | null;
       designLength?: number | null;
     };
 
@@ -2891,6 +2917,7 @@ cablesRouter.post(
       fromLocation: hasColumn(INPUT_HEADERS.fromLocation),
       toLocation: hasColumn(INPUT_HEADERS.toLocation),
       routing: hasColumn(LIST_OUTPUT_HEADERS.routing),
+      delivery: hasColumn(INPUT_HEADERS.delivery),
       designLength: hasColumn(INPUT_HEADERS.designLength),
     };
 
@@ -2980,6 +3007,14 @@ cablesRouter.post(
         );
       }
 
+      if (columnAvailability.delivery) {
+        fields.delivery = normalizeOptionalString(
+          typeof row[INPUT_HEADERS.delivery] === 'number'
+            ? String(row[INPUT_HEADERS.delivery])
+            : (row[INPUT_HEADERS.delivery] as string | null | undefined),
+        );
+      }
+
       if (columnAvailability.designLength) {
         fields.designLength = parseInstallLength(row[INPUT_HEADERS.designLength] as unknown);
       }
@@ -3063,6 +3098,7 @@ cablesRouter.post(
             c.from_location,
             c.to_location,
             c.routing,
+            c.delivery,
             c.design_length,
             c.install_length,
             c.pull_date,
@@ -3107,6 +3143,7 @@ cablesRouter.post(
             fromLocation: fields.fromLocation ?? null,
             toLocation: fields.toLocation ?? null,
             routing: fields.routing ?? null,
+            delivery: fields.delivery ?? null,
             designLength: fields.designLength ?? null,
             installLength: null,
             pullDate: null,
@@ -3128,6 +3165,7 @@ cablesRouter.post(
                 from_location,
                 to_location,
                 routing,
+                delivery,
                 design_length,
                 install_length,
                 pull_date,
@@ -3135,7 +3173,7 @@ cablesRouter.post(
                 connected_to,
                 tested
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17);
             `,
             [
               insertedCableId,
@@ -3148,6 +3186,7 @@ cablesRouter.post(
               insertedSnapshot.fromLocation,
               insertedSnapshot.toLocation,
               insertedSnapshot.routing,
+              insertedSnapshot.delivery,
               insertedSnapshot.designLength,
               null,
               null,
@@ -3203,6 +3242,10 @@ cablesRouter.post(
             columnAvailability.routing && fields.routing !== undefined
               ? fields.routing ?? null
               : currentSnapshot.routing,
+          delivery:
+            columnAvailability.delivery && fields.delivery !== undefined
+              ? fields.delivery ?? null
+              : currentSnapshot.delivery,
           designLength:
             columnAvailability.designLength && fields.designLength !== undefined
               ? fields.designLength ?? null
@@ -3340,6 +3383,8 @@ cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise
                 ? [`LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`]
                 : filterCriteria === 'routing'
                   ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
+                  : filterCriteria === 'delivery'
+                    ? [`LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`]
                   : [
                       `LOWER(c.cable_id::text) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
@@ -3349,6 +3394,7 @@ cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise
                       `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.design_length::text, '')) LIKE ${likeParam}`,
                     ];
 
@@ -3441,6 +3487,8 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
                 ? [`LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`]
                 : filterCriteria === 'routing'
                   ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
+                  : filterCriteria === 'delivery'
+                    ? [`LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`]
                   : [
                       `LOWER(c.cable_id::text) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
@@ -3450,6 +3498,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
                       `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
                       `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
+                      `LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`,
                     ];
 
       conditions.push(`(${filterExpressions.join(' OR ')})`);
@@ -3469,6 +3518,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       'fromLocation',
       'toLocation',
       'routing',
+      'delivery',
     ]);
 
     const normalizedSortColumn =
@@ -3483,6 +3533,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       fromLocation: "LOWER(COALESCE(c.from_location, ''))",
       toLocation: "LOWER(COALESCE(c.to_location, ''))",
       routing: "LOWER(COALESCE(c.routing, ''))",
+      delivery: "LOWER(COALESCE(c.delivery, ''))",
     };
 
     const sortExpression = sortExpressionMap[normalizedSortColumn] ?? 'c.cable_id';
@@ -3770,6 +3821,11 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
           width: 26,
         },
         {
+          name: LIST_OUTPUT_HEADERS.delivery,
+          key: 'delivery',
+          width: 24,
+        },
+        {
           name: LIST_OUTPUT_HEADERS.routing,
           key: 'routing',
           width: 30,
@@ -3796,6 +3852,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
           : '',
         row.from_location ?? '',
         row.to_location ?? '',
+        row.delivery ?? '',
         row.routing ?? '',
         row.design_length !== null && row.design_length !== '' ? Number(row.design_length) : '',
       ]);
@@ -3911,6 +3968,11 @@ cablesRouter.get('/template', authenticate, async (req: Request, res: Response):
               name: INPUT_HEADERS.toLocation,
               key: 'toLocation',
               width: 26,
+            },
+            {
+              name: INPUT_HEADERS.delivery,
+              key: 'delivery',
+              width: 24,
             },
             {
               name: LIST_OUTPUT_HEADERS.routing,

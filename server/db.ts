@@ -342,6 +342,7 @@ export async function initializeDatabase(): Promise<void> {
       from_location TEXT,
       to_location TEXT,
       routing TEXT,
+      delivery TEXT,
       design_length INTEGER,
       install_length INTEGER,
       materials_initialized BOOLEAN NOT NULL DEFAULT FALSE,
@@ -378,6 +379,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE cables
     ADD COLUMN IF NOT EXISTS mto TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE cables
+    ADD COLUMN IF NOT EXISTS delivery TEXT;
   `);
 
   await pool.query(`
@@ -452,6 +458,7 @@ export async function initializeDatabase(): Promise<void> {
       from_location TEXT,
       to_location TEXT,
       routing TEXT,
+      delivery TEXT,
       design_length INTEGER,
       install_length INTEGER,
       pull_date DATE,
@@ -476,6 +483,11 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS cable_versions_changed_by_idx
       ON cable_versions (changed_by);
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_versions
+    ADD COLUMN IF NOT EXISTS delivery TEXT;
   `);
 
   await pool.query(`

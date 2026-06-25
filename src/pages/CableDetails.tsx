@@ -1108,6 +1108,10 @@ export const CableDetails = () => {
               <Body1>{formatOptionalText(details.cable.routing)}</Body1>
             </div>
             <div className={styles.field}>
+              <Caption1 className={styles.label}>Delivery</Caption1>
+              <Body1>{formatOptionalText(details.cable.delivery)}</Body1>
+            </div>
+            <div className={styles.field}>
               <Caption1 className={styles.label}>Design length [m]</Caption1>
               <Body1>{formatNumeric(details.cable.designLength)}</Body1>
             </div>

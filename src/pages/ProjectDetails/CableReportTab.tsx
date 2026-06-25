@@ -214,7 +214,9 @@ export const CableReportTab = ({
                     ? 'From location'
                     : filterCriteria === 'toLocation'
                       ? 'To location'
-                      : 'Routing'
+                      : filterCriteria === 'routing'
+                        ? 'Routing'
+                        : 'Delivery'
           }
           onOptionSelect={(_, data) =>
             onFilterCriteriaChange(data.optionValue as CableSearchCriteria)
@@ -227,6 +229,7 @@ export const CableReportTab = ({
           <Option value="fromLocation">From location</Option>
           <Option value="toLocation">To location</Option>
           <Option value="routing">Routing</Option>
+          <Option value="delivery">Delivery</Option>
         </Dropdown>
       </div>
 

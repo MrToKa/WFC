@@ -332,6 +332,7 @@ export const createCableSchema = z
     fromLocation: cableStringField,
     toLocation: cableStringField,
     routing: cableStringField,
+    delivery: cableStringField,
     designLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     installLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     pullDate: z
@@ -379,6 +380,7 @@ export const updateCableSchema = z
     fromLocation: cableStringField,
     toLocation: cableStringField,
     routing: cableStringField,
+    delivery: cableStringField,
     designLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     installLength: z.number().int().min(0).max(1_000_000).nullable().optional(),
     pullDate: z
@@ -425,6 +427,7 @@ export const updateCableSchema = z
       value.fromLocation !== undefined ||
       value.toLocation !== undefined ||
       value.routing !== undefined ||
+      value.delivery !== undefined ||
       value.designLength !== undefined ||
       value.installLength !== undefined ||
       value.pullDate !== undefined ||

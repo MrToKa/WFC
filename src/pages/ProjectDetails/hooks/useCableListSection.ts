@@ -39,7 +39,14 @@ import {
   sanitizeFileSegment
 } from '../../ProjectDetails.utils';
 
-export type CableSearchCriteria = 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing';
+export type CableSearchCriteria =
+  | 'all'
+  | 'tag'
+  | 'typeName'
+  | 'fromLocation'
+  | 'toLocation'
+  | 'routing'
+  | 'delivery';
 
 type ShowToast = (options: {
   title: string;
@@ -249,6 +256,7 @@ export const useCableListSection = ({
           cable.fromLocation,
           cable.toLocation,
           cable.routing,
+          cable.delivery,
           cable.designLength !== null ? String(cable.designLength) : ''
         ];
         return values.some((value) =>
@@ -273,6 +281,9 @@ export const useCableListSection = ({
           break;
         case 'routing':
           value = cable.routing ?? '';
+          break;
+        case 'delivery':
+          value = cable.delivery ?? '';
           break;
       }
       return value.toLowerCase().includes(normalizedFilter);
@@ -681,7 +692,8 @@ export const useCableListSection = ({
         case 'tag':
         case 'fromLocation':
         case 'toLocation':
-        case 'routing': {
+        case 'routing':
+        case 'delivery': {
           const normalized = draft[field].trim();
           const current = (cable[field] ?? '').trim();
 
