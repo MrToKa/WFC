@@ -356,6 +356,12 @@ const useStyles = makeStyles({
   readOnlyNotice: {
     color: tokens.colorNeutralForeground3,
   },
+  routingText: {
+    maxWidth: '100%',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+  },
   dialogForm: {
     display: 'grid',
     gap: '0.75rem',
@@ -1104,10 +1110,6 @@ export const CableDetails = () => {
               <Body1>{formatOptionalText(details.cable.toLocation)}</Body1>
             </div>
             <div className={styles.field}>
-              <Caption1 className={styles.label}>Routing</Caption1>
-              <Body1>{formatOptionalText(details.cable.routing)}</Body1>
-            </div>
-            <div className={styles.field}>
               <Caption1 className={styles.label}>Delivery</Caption1>
               <Body1>{formatOptionalText(details.cable.delivery)}</Body1>
             </div>
@@ -1150,6 +1152,11 @@ export const CableDetails = () => {
           )}
         </Card>
       </div>
+
+      <Card appearance="outline" className={styles.fullWidthCard}>
+        <Title3>Cable routing</Title3>
+        <Body1 className={styles.routingText}>{formatOptionalText(details.cable.routing)}</Body1>
+      </Card>
 
       <Card appearance="outline" className={styles.fullWidthCard}>
         <div className={styles.sectionHeader}>
