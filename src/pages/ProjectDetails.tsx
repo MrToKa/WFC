@@ -43,6 +43,7 @@ import { DetailsTab } from './ProjectDetails/DetailsTab';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
 import { ProjectFilesTab } from './ProjectDetails/ProjectFilesTab';
+import { RoxtecTab } from './ProjectDetails/RoxtecTab';
 import {
   VariablesApiTab,
   type VariablesApiSection,
@@ -201,6 +202,7 @@ const VALID_TABS: ProjectDetailsTab[] = [
   'cables',
   'cable-list',
   'trays',
+  'roxtec',
   'files',
   'cable-report',
   'variables-api'
@@ -1584,6 +1586,7 @@ export const ProjectDetails = () => {
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="trays">Trays</Tab>
         <Tab value="cable-report">Cables report</Tab>
+        <Tab value="roxtec">Roxtec</Tab>
         <Tab value="files">Files</Tab>
   {isAdmin ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
@@ -1795,6 +1798,8 @@ export const ProjectDetails = () => {
           summaryLoading={cableReportSummaryLoading}
         />
       ) : null}
+
+      {selectedTab === 'roxtec' ? <RoxtecTab styles={styles} projectId={project.id} /> : null}
 
       <Button appearance="secondary" onClick={() => navigate(-1)}>
         Back

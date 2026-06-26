@@ -9,6 +9,7 @@ import { AdminPanel } from '@/pages/AdminPanel';
 import { CableDetails } from '@/pages/CableDetails';
 import { CableTypeDetails } from '@/pages/CableTypeDetails';
 import { ProjectDetails } from '@/pages/ProjectDetails';
+import { RoxtecDetails } from '@/pages/RoxtecDetails';
 import { TrayDetails } from '@/pages/TrayDetails';
 import { Projects } from '@/pages/Projects';
 import { Login } from '@/pages/Login';
@@ -51,6 +52,10 @@ export const routes: RouteObject[] = [
       {
         path: 'projects/:projectId',
         element: <ProjectDetails />
+      },
+      {
+        path: 'projects/:projectId/roxtec/:roxtecId',
+        element: <RoxtecDetails />
       },
       {
         path: 'projects/:projectId/cable-types/:cableTypeId',

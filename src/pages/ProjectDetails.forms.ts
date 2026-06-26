@@ -24,6 +24,7 @@ export type ProjectDetailsTab =
   | 'cables'
   | 'cable-list'
   | 'trays'
+  | 'roxtec'
   | 'files'
   | 'cable-report'
   | 'variables-api';
