@@ -62,6 +62,8 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   const [filterText, setFilterText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<RoxtecEntry | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const canManageRoxtec = Boolean(token);
 
@@ -196,25 +198,41 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   }, [dialogMode, draft, editingEntryId, loadEntries, projectId, token]);
 
   const handleDeleteEntry = useCallback(
-    async (entryId: number) => {
-      if (!projectId || !token) {
+    async () => {
+      if (!projectId || !token || !deleteTarget) {
         return;
       }
 
       setIsSaving(true);
+      setDeleteError(null);
 
       try {
-        await deleteRoxtecEntry(token, projectId, entryId);
+        await deleteRoxtecEntry(token, projectId, deleteTarget.id);
         await loadEntries();
+        setDeleteTarget(null);
       } catch (deleteError) {
         console.error('Failed to delete Roxtec entry', deleteError);
-        setError('Failed to delete Roxtec entry.');
+        setDeleteError('Failed to delete Roxtec entry.');
       } finally {
         setIsSaving(false);
       }
     },
-    [loadEntries, projectId, token]
+    [deleteTarget, loadEntries, projectId, token]
   );
+
+  const openDeleteDialog = useCallback((entry: RoxtecEntry) => {
+    setDeleteTarget(entry);
+    setDeleteError(null);
+  }, []);
+
+  const closeDeleteDialog = useCallback(() => {
+    if (isSaving) {
+      return;
+    }
+
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }, [isSaving]);
 
   const handleOpenDetails = useCallback(
     (entryId: number) => {
@@ -350,6 +368,49 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
           </DialogSurface>
         </Dialog>
 
+        <Dialog
+          open={deleteTarget !== null}
+          onOpenChange={(_, data) => {
+            if (!data.open) {
+              closeDeleteDialog();
+            }
+          }}
+        >
+          <DialogSurface>
+            <DialogBody>
+              <DialogTitle>Delete Roxtec</DialogTitle>
+              <DialogContent>
+                <Body1>
+                  Delete Roxtec entry {deleteTarget?.id}
+                  {deleteTarget?.tag ? ` (${deleteTarget.tag})` : ''}?
+                </Body1>
+                <Caption1>This action cannot be undone.</Caption1>
+                {deleteError ? (
+                  <Body1 className={styles.errorText}>{deleteError}</Body1>
+                ) : null}
+              </DialogContent>
+              <DialogActions className={styles.dialogActions}>
+                <Button
+                  type="button"
+                  appearance="secondary"
+                  onClick={closeDeleteDialog}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  appearance="primary"
+                  onClick={() => void handleDeleteEntry()}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Deleting...' : 'Delete'}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </DialogSurface>
+        </Dialog>
+
         <div className={styles.tableContainer}>
           <table className={styles.table}>
             <thead>
@@ -401,7 +462,8 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
                             </Button>
                             <Button
                               appearance="subtle"
-                              onClick={() => void handleDeleteEntry(entry.id)}
+                              onClick={() => openDeleteDialog(entry)}
+                              disabled={isSaving}
                             >
                               Delete
                             </Button>

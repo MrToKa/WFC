@@ -4,8 +4,16 @@ import {
   Body1,
   Button,
   Caption1,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Field,
   Input,
   Spinner,
+  Textarea,
   Title3,
   makeStyles,
   shorthands,
@@ -14,8 +22,9 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { fetchCables } from '@/api/cables';
-import { fetchRoxtecEntry } from '@/api/roxtec';
+import { fetchRoxtecEntry, updateRoxtecEntry } from '@/api/roxtec';
 import type { Cable, RoxtecEntry } from '@/api/types';
+import { useAuth } from '@/context/AuthContext';
 import { getRoxtecRoutings, setRoxtecRoutings } from '@/utils/roxtecRoutings';
 import { sanitizeFileSegment } from './ProjectDetails.utils';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
@@ -118,8 +127,32 @@ const useStyles = makeStyles({
   },
   errorText: {
     color: tokens.colorStatusDangerForeground1
+  },
+  dialogForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem'
+  },
+  dialogActions: {
+    justifyContent: 'flex-end'
   }
 });
+
+type RoxtecEditDraft = {
+  id: number;
+  revision: string;
+  tag: string;
+  type: string;
+  description: string;
+};
+
+const emptyEditDraft: RoxtecEditDraft = {
+  id: 0,
+  revision: '',
+  tag: '',
+  type: '',
+  description: ''
+};
 
 const normalizeRouting = (value: string) => value.trim();
 const routingMatches = (cableRouting: string | null, filters: string[]) => {
@@ -162,6 +195,7 @@ const downloadBlob = (blob: Blob, fileName: string): void => {
 export const RoxtecDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
+  const { token } = useAuth();
   const { projectId, roxtecId } = useParams<{ projectId: string; roxtecId: string }>();
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
   const [entry, setEntry] = useState<RoxtecEntry | null>(null);
@@ -174,6 +208,12 @@ export const RoxtecDetails = () => {
   const [cablesError, setCablesError] = useState<string | null>(null);
   const [isExportingMatchingCables, setIsExportingMatchingCables] =
     useState(false);
+  const [editDraft, setEditDraft] = useState<RoxtecEditDraft>(emptyEditDraft);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSavingEntry, setIsSavingEntry] = useState(false);
+
+  const canManageRoxtec = Boolean(token);
 
   useEffect(() => {
     const id = Number(roxtecId);
@@ -298,6 +338,81 @@ export const RoxtecDetails = () => {
 
   const removeRouting = (routingToRemove: string) => {
     saveRoutings(routings.filter((routing) => routing !== routingToRemove));
+  };
+
+  const openEditDialog = () => {
+    if (!entry) {
+      return;
+    }
+
+    setEditDraft({
+      id: entry.id,
+      revision: entry.revision,
+      tag: entry.tag,
+      type: entry.type,
+      description: entry.description ?? ''
+    });
+    setEditError(null);
+    setIsEditDialogOpen(true);
+  };
+
+  const closeEditDialog = () => {
+    setIsEditDialogOpen(false);
+    setEditError(null);
+  };
+
+  const updateEditDraft = (
+    field: keyof Omit<RoxtecEditDraft, 'id'>,
+    value: string
+  ) => {
+    setEditDraft((previous) => ({
+      ...previous,
+      [field]: value
+    }));
+    if (editError) {
+      setEditError(null);
+    }
+  };
+
+  const saveEntry = async () => {
+    if (!projectId || !entry) {
+      return;
+    }
+
+    if (!token) {
+      setEditError('Sign-in required.');
+      return;
+    }
+
+    const nextRevision = editDraft.revision.trim();
+    const nextTag = editDraft.tag.trim();
+    const nextType = editDraft.type.trim();
+    const nextDescription = editDraft.description.trim();
+
+    if (!nextRevision || !nextTag || !nextType) {
+      setEditError('Rev., Tag, and Type are required.');
+      return;
+    }
+
+    setIsSavingEntry(true);
+
+    try {
+      const response = await updateRoxtecEntry(token, projectId, entry.id, {
+        revision: nextRevision,
+        tag: nextTag,
+        type: nextType,
+        description: nextDescription || null
+      });
+
+      setEntry(response.entry);
+      setEditError(null);
+      setIsEditDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to update Roxtec entry', error);
+      setEditError('Failed to update Roxtec entry.');
+    } finally {
+      setIsSavingEntry(false);
+    }
   };
 
   const exportMatchingCables = async () => {
@@ -449,6 +564,15 @@ export const RoxtecDetails = () => {
         <Button appearance="secondary" onClick={backToRoxtec}>
           Back to Roxtec
         </Button>
+        {canManageRoxtec ? (
+          <Button
+            appearance="primary"
+            onClick={openEditDialog}
+            disabled={isSavingEntry}
+          >
+            Edit Roxtec
+          </Button>
+        ) : null}
       </div>
 
       <div className={styles.header}>
@@ -581,6 +705,77 @@ export const RoxtecDetails = () => {
         )}
       </div>
 
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            closeEditDialog();
+          }
+        }}
+      >
+        <DialogSurface>
+          <form
+            className={styles.dialogForm}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveEntry();
+            }}
+          >
+            <DialogBody>
+              <DialogTitle>Edit Roxtec</DialogTitle>
+              <DialogContent>
+                <Field label="ID">
+                  <Input value={String(editDraft.id)} readOnly />
+                </Field>
+                <Field label="Rev." required>
+                  <Input
+                    value={editDraft.revision}
+                    onChange={(_, data) => updateEditDraft('revision', data.value)}
+                  />
+                </Field>
+                <Field label="Tag" required>
+                  <Input
+                    value={editDraft.tag}
+                    onChange={(_, data) => updateEditDraft('tag', data.value)}
+                  />
+                </Field>
+                <Field label="Type" required>
+                  <Input
+                    value={editDraft.type}
+                    onChange={(_, data) => updateEditDraft('type', data.value)}
+                  />
+                </Field>
+                <Field label="Description">
+                  <Textarea
+                    value={editDraft.description}
+                    onChange={(_, data) =>
+                      updateEditDraft('description', data.value)
+                    }
+                    resize="vertical"
+                    rows={3}
+                  />
+                </Field>
+                {editError ? (
+                  <Body1 className={styles.errorText}>{editError}</Body1>
+                ) : null}
+              </DialogContent>
+              <DialogActions className={styles.dialogActions}>
+                <Button
+                  type="button"
+                  appearance="secondary"
+                  onClick={closeEditDialog}
+                  disabled={isSavingEntry}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" appearance="primary" disabled={isSavingEntry}>
+                  {isSavingEntry ? 'Saving...' : 'Save changes'}
+                </Button>
+              </DialogActions>
+            </DialogBody>
+          </form>
+        </DialogSurface>
+      </Dialog>
     </section>
   );
 };
