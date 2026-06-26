@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   Body1,
@@ -12,8 +12,9 @@ import {
 } from '@fluentui/react-components';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { fetchRoxtecEntry } from '@/api/roxtec';
+import type { RoxtecEntry } from '@/api/types';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
-import { getRoxtecEntryById } from '@/utils/roxtecEntries';
 
 const useStyles = makeStyles({
   root: {
@@ -54,13 +55,48 @@ export const RoxtecDetails = () => {
   const navigate = useNavigate();
   const { projectId, roxtecId } = useParams<{ projectId: string; roxtecId: string }>();
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
+  const [entry, setEntry] = useState<RoxtecEntry | null>(null);
+  const [entryLoading, setEntryLoading] = useState(true);
+  const [entryError, setEntryError] = useState<string | null>(null);
 
-  const entry = useMemo(() => {
+  useEffect(() => {
     const id = Number(roxtecId);
-    if (!projectId || !Number.isInteger(id)) {
-      return null;
+
+    if (!projectId || !Number.isInteger(id) || id < 1) {
+      setEntry(null);
+      setEntryError('Roxtec entry not found.');
+      setEntryLoading(false);
+      return;
     }
-    return getRoxtecEntryById(projectId, id);
+
+    let active = true;
+    setEntryLoading(true);
+    setEntryError(null);
+
+    void (async () => {
+      try {
+        const response = await fetchRoxtecEntry(projectId, id);
+        if (!active) {
+          return;
+        }
+        setEntry(response.entry);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        console.error('Failed to load Roxtec entry', error);
+        setEntry(null);
+        setEntryError('Roxtec entry not found.');
+      } finally {
+        if (active) {
+          setEntryLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [projectId, roxtecId]);
 
   const backToRoxtec = () => {
@@ -68,10 +104,11 @@ export const RoxtecDetails = () => {
       navigate('/');
       return;
     }
+
     navigate(`/projects/${projectId}?tab=roxtec`);
   };
 
-  if (projectLoading) {
+  if (projectLoading || entryLoading) {
     return (
       <section className={styles.root}>
         <Spinner label="Loading Roxtec details..." />
@@ -91,7 +128,7 @@ export const RoxtecDetails = () => {
   if (!project || !entry) {
     return (
       <section className={styles.root}>
-        <Body1>Roxtec entry not found.</Body1>
+        <Body1>{entryError ?? 'Roxtec entry not found.'}</Body1>
         <Button onClick={backToRoxtec}>Back to Roxtec</Button>
       </section>
     );
@@ -101,7 +138,7 @@ export const RoxtecDetails = () => {
     <section className={styles.root} aria-labelledby="roxtec-details-heading">
       <div className={styles.header}>
         <Title3 id="roxtec-details-heading">
-          {project.projectNumber} &mdash; {project.name}
+          {project.projectNumber} - {project.name}
         </Title3>
         <Body1>Roxtec entry {entry.id}</Body1>
       </div>

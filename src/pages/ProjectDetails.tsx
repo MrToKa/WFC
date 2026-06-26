@@ -1799,7 +1799,9 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {selectedTab === 'roxtec' ? <RoxtecTab styles={styles} projectId={project.id} /> : null}
+      {selectedTab === 'roxtec' ? (
+        <RoxtecTab styles={styles} projectId={project.id} token={token} />
+      ) : null}
 
       <Button appearance="secondary" onClick={() => navigate(-1)}>
         Back

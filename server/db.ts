@@ -157,6 +157,25 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_roxtec_entries (
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      id INTEGER NOT NULL,
+      revision TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      type TEXT NOT NULL,
+      description TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (project_id, id)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_roxtec_entries_project_id_idx
+      ON project_roxtec_entries (project_id);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cable_types (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

@@ -5,4 +5,5 @@ export * from './cable';
 export * from './tray';
 export * from './file';
 export * from './material';
+export * from './roxtec';
 export * from './common';

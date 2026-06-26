@@ -12,15 +12,23 @@ import {
   DialogTitle,
   Field,
   Input,
+  Spinner,
   Subtitle2,
   Textarea
 } from '@fluentui/react-components';
 import { useNavigate } from 'react-router-dom';
 
-import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
-import { getRoxtecEntries, setRoxtecEntries, type RoxtecEntry } from '@/utils/roxtecEntries';
+import {
+  createRoxtecEntry,
+  deleteRoxtecEntry,
+  fetchRoxtecEntries,
+  updateRoxtecEntry
+} from '@/api/roxtec';
+import type { RoxtecEntry } from '@/api/types';
 
-type RoxtecDraft = Omit<RoxtecEntry, 'rowId'>;
+import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+
+type RoxtecDraft = Omit<RoxtecEntry, 'projectId' | 'createdAt' | 'updatedAt'>;
 
 type RoxtecDialogMode = 'create' | 'edit';
 
@@ -35,34 +43,47 @@ const emptyDraft: RoxtecDraft = {
 type RoxtecTabProps = {
   styles: ProjectDetailsStyles;
   projectId: string | undefined;
+  token: string | null;
 };
 
-export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
+export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<RoxtecEntry[]>([]);
   const [draft, setDraft] = useState<RoxtecDraft>(emptyDraft);
   const [error, setError] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<RoxtecDialogMode>('create');
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [filterText, setFilterText] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
+  const canManageRoxtec = Boolean(token);
+
+  const loadEntries = useCallback(async () => {
     if (!projectId) {
       setEntries([]);
+      setIsLoading(false);
       return;
     }
 
-    setEntries(getRoxtecEntries(projectId));
+    setIsLoading(true);
+
+    try {
+      const response = await fetchRoxtecEntries(projectId);
+      setEntries(response.entries);
+    } catch (loadError) {
+      console.error('Failed to load Roxtec entries', loadError);
+      setError('Failed to load Roxtec entries.');
+      setEntries([]);
+    } finally {
+      setIsLoading(false);
+    }
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId) {
-      return;
-    }
-
-    setRoxtecEntries(projectId, entries);
-  }, [entries, projectId]);
+    void loadEntries();
+  }, [loadEntries]);
 
   const nextRoxtecId = useMemo(() => {
     const maxId = entries.reduce((max, entry) => Math.max(max, entry.id), 0);
@@ -75,7 +96,7 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
       id: nextRoxtecId
     });
     setDialogMode('create');
-    setEditingRowId(null);
+    setEditingEntryId(null);
     setError(null);
     setIsDialogOpen(true);
   }, [nextRoxtecId]);
@@ -86,10 +107,10 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
       revision: entry.revision,
       tag: entry.tag,
       type: entry.type,
-      description: entry.description
+      description: entry.description ?? ''
     });
     setDialogMode('edit');
-    setEditingRowId(entry.rowId);
+    setEditingEntryId(entry.id);
     setError(null);
     setIsDialogOpen(true);
   }, []);
@@ -97,7 +118,7 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
   const closeDialog = useCallback(() => {
     setIsDialogOpen(false);
     setError(null);
-    setEditingRowId(null);
+    setEditingEntryId(null);
     setDialogMode('create');
   }, []);
 
@@ -114,7 +135,17 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
     [error]
   );
 
-  const handleSaveEntry = useCallback(() => {
+  const handleSaveEntry = useCallback(async () => {
+    if (!projectId) {
+      setError('Project ID is missing.');
+      return;
+    }
+
+    if (!token) {
+      setError('Sign-in required.');
+      return;
+    }
+
     const nextId = draft.id;
     const nextRevision = draft.revision.trim();
     const nextTag = draft.tag.trim();
@@ -126,56 +157,59 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
       return;
     }
 
-    const duplicate = entries.some(
-      (entry) =>
-        entry.id === nextId && entry.rowId !== editingRowId
-    );
-    if (duplicate) {
-      setError('An entry with this ID already exists.');
-      return;
-    }
+    setIsSaving(true);
 
-    setEntries((previous) => {
-      if (dialogMode === 'edit' && editingRowId) {
-        return previous.map((entry) =>
-          entry.rowId === editingRowId
-            ? {
-                ...entry,
-                id: nextId,
-                revision: nextRevision,
-                tag: nextTag,
-                type: nextType,
-                description: nextDescription
-              }
-            : entry
-        );
-      }
-
-      return [
-        ...previous,
-        {
-          rowId:
-            typeof crypto !== 'undefined' && 'randomUUID' in crypto
-              ? crypto.randomUUID()
-              : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          id: nextId,
+    try {
+      if (dialogMode === 'edit' && editingEntryId !== null) {
+        await updateRoxtecEntry(token, projectId, editingEntryId, {
           revision: nextRevision,
           tag: nextTag,
           type: nextType,
-          description: nextDescription
-        }
-      ];
-    });
-    setDraft(emptyDraft);
-    setError(null);
-    setIsDialogOpen(false);
-    setEditingRowId(null);
-    setDialogMode('create');
-  }, [dialogMode, draft, editingRowId, entries]);
+          description: nextDescription || null
+        });
+      } else {
+        await createRoxtecEntry(token, projectId, {
+          revision: nextRevision,
+          tag: nextTag,
+          type: nextType,
+          description: nextDescription || null
+        });
+      }
 
-  const handleDeleteEntry = useCallback((rowId: string) => {
-    setEntries((previous) => previous.filter((entry) => entry.rowId !== rowId));
-  }, []);
+      await loadEntries();
+      setDraft(emptyDraft);
+      setError(null);
+      setIsDialogOpen(false);
+      setEditingEntryId(null);
+      setDialogMode('create');
+    } catch (saveError) {
+      console.error('Failed to save Roxtec entry', saveError);
+      setError('Failed to save Roxtec entry.');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [dialogMode, draft, editingEntryId, loadEntries, projectId, token]);
+
+  const handleDeleteEntry = useCallback(
+    async (entryId: number) => {
+      if (!projectId || !token) {
+        return;
+      }
+
+      setIsSaving(true);
+
+      try {
+        await deleteRoxtecEntry(token, projectId, entryId);
+        await loadEntries();
+      } catch (deleteError) {
+        console.error('Failed to delete Roxtec entry', deleteError);
+        setError('Failed to delete Roxtec entry.');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [loadEntries, projectId, token]
+  );
 
   const handleOpenDetails = useCallback(
     (entryId: number) => {
@@ -201,7 +235,7 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
         entry.revision,
         entry.tag,
         entry.type,
-        entry.description
+        entry.description ?? ''
       ]
         .join(' ')
         .toLowerCase();
@@ -218,9 +252,14 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
             <Subtitle2>Roxtec</Subtitle2>
             <Body1>Add Roxtec entries to build the table.</Body1>
           </div>
-          <Button appearance="primary" onClick={openCreateDialog}>
-            Add Roxtec
+          <Button onClick={() => void loadEntries()} disabled={isLoading || isSaving}>
+            {isLoading ? 'Refreshing...' : 'Refresh'}
           </Button>
+          {canManageRoxtec ? (
+            <Button appearance="primary" onClick={openCreateDialog} disabled={isSaving}>
+              Add Roxtec
+            </Button>
+          ) : null}
         </div>
 
         <div className={styles.filtersRow}>
@@ -245,10 +284,13 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
           }}
         >
           <DialogSurface>
-            <form className={styles.dialogForm} onSubmit={(event) => {
-              event.preventDefault();
-              handleSaveEntry();
-            }}>
+            <form
+              className={styles.dialogForm}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleSaveEntry();
+              }}
+            >
               <DialogBody>
                 <DialogTitle>
                   {dialogMode === 'create' ? 'Add Roxtec' : 'Edit Roxtec'}
@@ -286,10 +328,15 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
                   {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
                 </DialogContent>
                 <DialogActions className={styles.dialogActions}>
-                  <Button type="button" appearance="secondary" onClick={closeDialog}>
+                  <Button
+                    type="button"
+                    appearance="secondary"
+                    onClick={closeDialog}
+                    disabled={isSaving}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" appearance="primary">
+                  <Button type="submit" appearance="primary" disabled={isSaving}>
                     {dialogMode === 'create' ? 'Add Roxtec' : 'Save changes'}
                   </Button>
                 </DialogActions>
@@ -311,7 +358,13 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
               </tr>
             </thead>
             <tbody>
-              {entries.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td className={styles.tableCell} colSpan={6}>
+                    <Spinner label="Loading Roxtec entries..." />
+                  </td>
+                </tr>
+              ) : entries.length === 0 ? (
                 <tr>
                   <td className={styles.tableCell} colSpan={6}>
                     <Body1>No Roxtec entries yet.</Body1>
@@ -325,27 +378,31 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
                 </tr>
               ) : (
                 filteredEntries.map((entry) => (
-                  <tr key={entry.rowId}>
+                  <tr key={entry.id}>
                     <td className={styles.tableCell}>{entry.id}</td>
                     <td className={styles.tableCell}>{entry.revision}</td>
                     <td className={styles.tableCell}>{entry.tag}</td>
                     <td className={styles.tableCell}>{entry.type}</td>
                     <td className={styles.tableCell}>{entry.description || '-'}</td>
-                      <td className={styles.tableCell}>
-                        <div className={styles.actionsCell}>
+                    <td className={styles.tableCell}>
+                      <div className={styles.actionsCell}>
                         <Button appearance="secondary" onClick={() => handleOpenDetails(entry.id)}>
                           Details
                         </Button>
-                        <Button appearance="secondary" onClick={() => openEditDialog(entry)}>
-                          Edit
-                        </Button>
-                        <Button
-                          appearance="subtle"
-                          onClick={() => handleDeleteEntry(entry.rowId)}
-                        >
-                          Delete
-                        </Button>
-                        </div>
+                        {canManageRoxtec ? (
+                          <>
+                            <Button appearance="secondary" onClick={() => openEditDialog(entry)}>
+                              Edit
+                            </Button>
+                            <Button
+                              appearance="subtle"
+                              onClick={() => void handleDeleteEntry(entry.id)}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))
