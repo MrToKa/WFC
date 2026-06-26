@@ -28,7 +28,12 @@ import type { RoxtecEntry } from '@/api/types';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
-type RoxtecDraft = Omit<RoxtecEntry, 'projectId' | 'createdAt' | 'updatedAt'>;
+type RoxtecDraft = Omit<
+  RoxtecEntry,
+  'projectId' | 'createdAt' | 'updatedAt' | 'description'
+> & {
+  description: string;
+};
 
 type RoxtecDialogMode = 'create' | 'edit';
 
@@ -322,7 +327,7 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
                       value={draft.description}
                       onChange={(_, data) => updateDraft('description', data.value)}
                       resize="vertical"
-                      minRows={3}
+                      rows={3}
                     />
                   </Field>
                   {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
