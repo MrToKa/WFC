@@ -280,7 +280,7 @@ export const RoxtecTab = ({ styles, projectId }: RoxtecTabProps) => {
                       value={draft.description}
                       onChange={(_, data) => updateDraft('description', data.value)}
                       resize="vertical"
-                      minRows={3}
+                      rows={3}
                     />
                   </Field>
                   {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}

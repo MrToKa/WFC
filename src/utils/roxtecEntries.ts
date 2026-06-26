@@ -1,4 +1,5 @@
 const STORAGE_PREFIX = 'wfc:roxtec-entries';
+const ROUTINGS_STORAGE_PREFIX = 'wfc:roxtec-routings';
 
 const isBrowserEnvironment =
   typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -14,6 +15,9 @@ export type RoxtecEntry = {
 
 const buildStorageKey = (projectId: string): string =>
   `${STORAGE_PREFIX}:${projectId}`;
+
+const buildRoutingsStorageKey = (projectId: string, roxtecRowId: string): string =>
+  `${ROUTINGS_STORAGE_PREFIX}:${projectId}:${roxtecRowId}`;
 
 export const getRoxtecEntries = (projectId: string): RoxtecEntry[] => {
   if (!isBrowserEnvironment) {
@@ -83,4 +87,60 @@ export const getRoxtecEntryById = (
 ): RoxtecEntry | null => {
   const entries = getRoxtecEntries(projectId);
   return entries.find((entry) => entry.id === id) ?? null;
+};
+
+export const getRoxtecRoutings = (
+  projectId: string,
+  roxtecRowId: string
+): string[] => {
+  if (!isBrowserEnvironment) {
+    return [];
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(
+      buildRoutingsStorageKey(projectId, roxtecRowId)
+    );
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter((routing): routing is string => {
+      return typeof routing === 'string' && routing.trim().length > 0;
+    });
+  } catch (error) {
+    console.warn('Failed to parse stored Roxtec routings', error);
+    return [];
+  }
+};
+
+export const setRoxtecRoutings = (
+  projectId: string,
+  roxtecRowId: string,
+  routings: string[]
+): void => {
+  if (!isBrowserEnvironment) {
+    return;
+  }
+
+  const normalizedRoutings = routings
+    .map((routing) => routing.trim())
+    .filter((routing) => routing.length > 0);
+
+  try {
+    const storageKey = buildRoutingsStorageKey(projectId, roxtecRowId);
+    if (normalizedRoutings.length === 0) {
+      window.localStorage.removeItem(storageKey);
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(normalizedRoutings));
+  } catch (error) {
+    console.warn('Failed to store Roxtec routings', error);
+  }
 };
