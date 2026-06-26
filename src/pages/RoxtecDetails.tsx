@@ -17,6 +17,7 @@ import { fetchCables } from '@/api/cables';
 import { fetchRoxtecEntry } from '@/api/roxtec';
 import type { Cable, RoxtecEntry } from '@/api/types';
 import { getRoxtecRoutings, setRoxtecRoutings } from '@/utils/roxtecRoutings';
+import { sanitizeFileSegment } from './ProjectDetails.utils';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
 
 const useStyles = makeStyles({
@@ -37,6 +38,14 @@ const useStyles = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.padding('1rem')
+  },
+  panelHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: '0.75rem',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginBottom: '1rem'
   },
   fieldList: {
     display: 'grid',
@@ -120,6 +129,36 @@ const routingMatches = (cableRouting: string | null, filters: string[]) => {
   );
 };
 
+const MATCHING_CABLE_EXPORT_HEADERS = [
+  'Cable Id',
+  'Revision',
+  'MTO',
+  'Tag',
+  'Type',
+  'Purpose',
+  'Diameter [mm]',
+  'Weight [kg/m]',
+  'From Location',
+  'To Location',
+  'Delivery',
+  'Routing',
+  'Design Length [m]'
+] as const;
+
+const toExportText = (value: string | null | undefined): string =>
+  value?.trim() ?? '';
+
+const downloadBlob = (blob: Blob, fileName: string): void => {
+  const link = document.createElement('a');
+  const url = window.URL.createObjectURL(blob);
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
 export const RoxtecDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
@@ -133,6 +172,8 @@ export const RoxtecDetails = () => {
   const [cables, setCables] = useState<Cable[]>([]);
   const [cablesLoading, setCablesLoading] = useState(false);
   const [cablesError, setCablesError] = useState<string | null>(null);
+  const [isExportingMatchingCables, setIsExportingMatchingCables] =
+    useState(false);
 
   useEffect(() => {
     const id = Number(roxtecId);
@@ -259,6 +300,114 @@ export const RoxtecDetails = () => {
     saveRoutings(routings.filter((routing) => routing !== routingToRemove));
   };
 
+  const exportMatchingCables = async () => {
+    if (!project || !entry || matchingCables.length === 0) {
+      return;
+    }
+
+    setIsExportingMatchingCables(true);
+
+    try {
+      const { default: ExcelJS } = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Cables', {
+        views: [{ state: 'frozen', ySplit: 1 }]
+      });
+
+      const columns = [
+        { name: MATCHING_CABLE_EXPORT_HEADERS[0], key: 'cableId', width: 18 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[1], key: 'revision', width: 14 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[2], key: 'mto', width: 20 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[3], key: 'tag', width: 20 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[4], key: 'type', width: 28 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[5], key: 'purpose', width: 30 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[6], key: 'diameter', width: 18 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[7], key: 'weight', width: 18 },
+        {
+          name: MATCHING_CABLE_EXPORT_HEADERS[8],
+          key: 'fromLocation',
+          width: 26
+        },
+        {
+          name: MATCHING_CABLE_EXPORT_HEADERS[9],
+          key: 'toLocation',
+          width: 26
+        },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[10], key: 'delivery', width: 24 },
+        { name: MATCHING_CABLE_EXPORT_HEADERS[11], key: 'routing', width: 30 },
+        {
+          name: MATCHING_CABLE_EXPORT_HEADERS[12],
+          key: 'designLength',
+          width: 18
+        }
+      ] as const;
+
+      const rows = matchingCables.map((cable) => [
+        cable.cableId,
+        toExportText(cable.revision),
+        toExportText(cable.mto),
+        toExportText(cable.tag),
+        cable.typeName,
+        toExportText(cable.purpose),
+        cable.diameterMm ?? '',
+        cable.weightKgPerM ?? '',
+        toExportText(cable.fromLocation),
+        toExportText(cable.toLocation),
+        toExportText(cable.delivery),
+        toExportText(cable.routing),
+        cable.designLength ?? ''
+      ]);
+
+      const table = worksheet.addTable({
+        name: 'Cables',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: true
+        },
+        columns: columns.map((column) => ({
+          name: column.name,
+          filterButton: true
+        })),
+        rows: rows.length > 0 ? rows : [Array(columns.length).fill('')]
+      });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        const worksheetColumn = worksheet.getColumn(index + 1);
+        worksheetColumn.width = column.width;
+        if (column.key === 'diameter') {
+          worksheetColumn.numFmt = '#,##0.00';
+        }
+        if (column.key === 'weight') {
+          worksheetColumn.numFmt = '#,##0.000';
+        }
+        if (column.key === 'designLength') {
+          worksheetColumn.numFmt = '#,##0';
+        }
+      });
+
+      const fileName = `${sanitizeFileSegment(
+        project.projectNumber
+      )}-roxtec-${entry.id}-matching-cables.xlsx`;
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer as BlobPart], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      downloadBlob(blob, fileName);
+    } catch (error) {
+      console.error('Failed to export matching cables', error);
+    } finally {
+      setIsExportingMatchingCables(false);
+    }
+  };
+
   const backToRoxtec = () => {
     if (!projectId) {
       navigate('/');
@@ -296,6 +445,12 @@ export const RoxtecDetails = () => {
 
   return (
     <section className={styles.root} aria-labelledby="roxtec-details-heading">
+      <div className={styles.actionsRow}>
+        <Button appearance="secondary" onClick={backToRoxtec}>
+          Back to Roxtec
+        </Button>
+      </div>
+
       <div className={styles.header}>
         <Title3 id="roxtec-details-heading">
           {project.projectNumber} - {project.name}
@@ -360,7 +515,19 @@ export const RoxtecDetails = () => {
       </div>
 
       <div className={styles.panel}>
-        <Title3>Matching cables</Title3>
+        <div className={styles.panelHeader}>
+          <Title3>Matching cables</Title3>
+          <Button
+            onClick={() => void exportMatchingCables()}
+            disabled={
+              isExportingMatchingCables ||
+              cablesLoading ||
+              matchingCables.length === 0
+            }
+          >
+            {isExportingMatchingCables ? 'Exporting...' : 'Export to Excel'}
+          </Button>
+        </div>
         {cablesError ? <Body1 className={styles.errorText}>{cablesError}</Body1> : null}
         {cablesLoading ? (
           <Spinner label="Loading cables..." />
@@ -414,11 +581,6 @@ export const RoxtecDetails = () => {
         )}
       </div>
 
-      <div className={styles.actionsRow}>
-        <Button appearance="secondary" onClick={backToRoxtec}>
-          Back to Roxtec
-        </Button>
-      </div>
     </section>
   );
 };
