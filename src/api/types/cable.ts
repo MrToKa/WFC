@@ -202,11 +202,20 @@ export type CableReportCableTypeSummary = {
   materials: CableReportMaterialSummary[];
 };
 
-export type CableReportSummary = {
+export type CableReportSummaryCore = {
   cableCount: number;
   cableTypeCount: number;
   totalDesignLength: number;
   omittedMaterialCount: number;
   missingDesignLengthMaterialCount: number;
   cableTypeSummaries: CableReportCableTypeSummary[];
+};
+
+export type CableReportDeliverySummary = CableReportSummaryCore & {
+  delivery: string | null;
+  deliveryName: string;
+};
+
+export type CableReportSummary = CableReportSummaryCore & {
+  deliverySummaries: CableReportDeliverySummary[];
 };

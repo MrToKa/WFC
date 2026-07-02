@@ -12,13 +12,14 @@ import {
   TabList,
   type TabValue,
   Title3,
-  mergeClasses
+  mergeClasses,
 } from '@fluentui/react-components';
 
 import {
   CABLE_MTO_OPTIONS,
   type CableMtoOption,
-  type CableReportSummary
+  type CableReportCableTypeSummary,
+  type CableReportSummary,
 } from '@/api/client';
 import type { CableSearchCriteria } from './hooks/useCableListSection';
 
@@ -48,15 +49,67 @@ const REPORT_SCOPE_OPTIONS = [
   ...CABLE_MTO_OPTIONS.map((option) => ({
     value: option,
     label: option,
-    mto: option
-  }))
+    mto: option,
+  })),
 ] as const;
 
-const formatCountLabel = (
-  count: number,
-  singular: string,
-  plural: string
-): string => `${count} ${count === 1 ? singular : plural}`;
+const formatCountLabel = (count: number, singular: string, plural: string): string =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+type CableReportMaterialRow = {
+  name: string;
+  unit: string;
+  totalQuantity: number;
+  cableCount: number;
+  missingDesignLengthCount: number;
+};
+
+const buildMaterialRows = (
+  cableTypeSummaries: CableReportCableTypeSummary[],
+): CableReportMaterialRow[] => {
+  const grouped = new Map<string, CableReportMaterialRow>();
+
+  for (const cableTypeSummary of cableTypeSummaries) {
+    for (const material of cableTypeSummary.materials) {
+      const key = `${material.name.toLowerCase()}::${material.unit}`;
+      const existing = grouped.get(key);
+
+      if (existing) {
+        existing.totalQuantity += material.totalQuantity;
+        existing.cableCount += material.cableCount;
+        existing.missingDesignLengthCount += material.missingDesignLengthCount;
+        continue;
+      }
+
+      grouped.set(key, {
+        name: material.name,
+        unit: material.unit,
+        totalQuantity: material.totalQuantity,
+        cableCount: material.cableCount,
+        missingDesignLengthCount: material.missingDesignLengthCount,
+      });
+    }
+  }
+
+  return Array.from(grouped.values())
+    .map((material) => ({
+      ...material,
+      totalQuantity: Math.round(material.totalQuantity * 1000) / 1000,
+    }))
+    .sort((a, b) => {
+      const nameCompare = a.name.localeCompare(b.name, undefined, {
+        sensitivity: 'base',
+      });
+
+      if (nameCompare !== 0) {
+        return nameCompare;
+      }
+
+      return a.unit.localeCompare(b.unit, undefined, {
+        sensitivity: 'base',
+      });
+    });
+};
 
 export const CableReportTab = ({
   styles,
@@ -73,74 +126,21 @@ export const CableReportTab = ({
   onSelectedMtoChange,
   summary,
   summaryError,
-  summaryLoading
+  summaryLoading,
 }: CableReportTabProps) => {
   const selectedReportTab = (selectedMto ?? 'total') as TabValue;
   const reportLabel = selectedMto ?? 'Total';
-  const selectedCriteria = useMemo<string[]>(
-    () => [filterCriteria],
-    [filterCriteria]
-  );
+  const selectedCriteria = useMemo<string[]>(() => [filterCriteria], [filterCriteria]);
 
-  const materialRows = useMemo(
-    () => {
-      if (!summary) {
-        return [];
-      }
-
-      const grouped = new Map<
-        string,
-        {
-          name: string;
-          unit: string;
-          totalQuantity: number;
-          cableCount: number;
-          missingDesignLengthCount: number;
-        }
-      >();
-
-      for (const cableTypeSummary of summary.cableTypeSummaries) {
-        for (const material of cableTypeSummary.materials) {
-          const key = `${material.name.toLowerCase()}::${material.unit}`;
-          const existing = grouped.get(key);
-
-          if (existing) {
-            existing.totalQuantity += material.totalQuantity;
-            existing.cableCount += material.cableCount;
-            existing.missingDesignLengthCount += material.missingDesignLengthCount;
-            continue;
-          }
-
-          grouped.set(key, {
-            name: material.name,
-            unit: material.unit,
-            totalQuantity: material.totalQuantity,
-            cableCount: material.cableCount,
-            missingDesignLengthCount: material.missingDesignLengthCount
-          });
-        }
-      }
-
-      return Array.from(grouped.values())
-        .map((material) => ({
-          ...material,
-          totalQuantity: Math.round(material.totalQuantity * 1000) / 1000
-        }))
-        .sort((a, b) => {
-          const nameCompare = a.name.localeCompare(b.name, undefined, {
-            sensitivity: 'base'
-          });
-
-          if (nameCompare !== 0) {
-            return nameCompare;
-          }
-
-          return a.unit.localeCompare(b.unit, undefined, {
-            sensitivity: 'base'
-          });
-        });
-    },
-    [summary]
+  const deliverySections = useMemo(
+    () =>
+      summary
+        ? summary.deliverySummaries.map((deliverySummary) => ({
+            ...deliverySummary,
+            materialRows: buildMaterialRows(deliverySummary.cableTypeSummaries),
+          }))
+        : [],
+    [summary],
   );
 
   const summaryNotes = useMemo(() => {
@@ -151,16 +151,18 @@ export const CableReportTab = ({
     const notes = [
       selectedMto
         ? `Totals use the current cable filter and the materials assigned to ${selectedMto} cables.`
-        : 'Totals use the current cable filter and the materials assigned to each cable.'
+        : 'Totals use the current cable filter and the materials assigned to each cable.',
     ];
+
+    notes.push('Cable type and material totals are split by Delivery.');
 
     if (summary.omittedMaterialCount > 0) {
       notes.push(
         `${formatCountLabel(
           summary.omittedMaterialCount,
           'material row without quantity or unit is excluded from totals',
-          'material rows without quantity or unit are excluded from totals'
-        )}.`
+          'material rows without quantity or unit are excluded from totals',
+        )}.`,
       );
     }
 
@@ -169,8 +171,8 @@ export const CableReportTab = ({
         `${formatCountLabel(
           summary.missingDesignLengthMaterialCount,
           'pcs/m material row could not be converted because the cable has no design length',
-          'pcs/m material rows could not be converted because the cable has no design length'
-        )}.`
+          'pcs/m material rows could not be converted because the cable has no design length',
+        )}.`,
       );
     }
 
@@ -272,8 +274,7 @@ export const CableReportTab = ({
           <div className={styles.emptyState}>
             <Caption1>No summary data available</Caption1>
             <Body1>
-              Adjust the filter or add cables with design and material data for the selected
-              report.
+              Adjust the filter or add cables with design and material data for the selected report.
             </Body1>
           </div>
         ) : (
@@ -282,74 +283,86 @@ export const CableReportTab = ({
               <Caption1 key={note}>{note}</Caption1>
             ))}
 
-            <div className={styles.header}>
-              <Title3>Cable type totals</Title3>
-            </div>
-            <div className={styles.tableContainer}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th className={styles.tableHeadCell}>Cable type</th>
-                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                      Cables
-                    </th>
-                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                      Design length [m]
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.cableTypeSummaries.map((cableTypeSummary) => (
-                    <tr key={cableTypeSummary.cableTypeId}>
-                      <td className={styles.tableCell}>{cableTypeSummary.typeName}</td>
-                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                        {formatNumeric(cableTypeSummary.cableCount)}
-                      </td>
-                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                        {formatNumeric(cableTypeSummary.totalDesignLength)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {deliverySections.map((deliverySummary) => (
+              <section key={deliverySummary.delivery ?? '__no_delivery__'}>
+                <div className={styles.header}>
+                  <Title3>{deliverySummary.deliveryName}</Title3>
+                  <Caption1>
+                    {formatCountLabel(deliverySummary.cableCount, 'cable', 'cables')},{' '}
+                    {formatNumeric(deliverySummary.totalDesignLength)} m design length
+                  </Caption1>
+                </div>
 
-            <div className={styles.header}>
-              <Title3>Material totals</Title3>
-            </div>
-            {materialRows.length === 0 ? (
-              <div className={styles.emptyState}>
-                <Caption1>No summable materials found</Caption1>
-                <Body1>
-                  Add material quantities and units to cables or cable type defaults to see totals.
-                </Body1>
-              </div>
-            ) : (
-              <div className={styles.tableContainer}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th className={styles.tableHeadCell}>Material</th>
-                      <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                        Total quantity
-                      </th>
-                      <th className={styles.tableHeadCell}>Unit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {materialRows.map((material) => (
-                      <tr key={`${material.name}:${material.unit}`}>
-                        <td className={styles.tableCell}>{material.name}</td>
-                        <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                          {formatNumeric(material.totalQuantity)}
-                        </td>
-                        <td className={styles.tableCell}>{material.unit}</td>
+                <Caption1>Cable type totals</Caption1>
+                <div className={styles.tableContainer}>
+                  <table className={styles.table} aria-label={deliverySummary.deliveryName}>
+                    <thead>
+                      <tr>
+                        <th className={styles.tableHeadCell}>Cable type</th>
+                        <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                          Cables
+                        </th>
+                        <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                          Design length [m]
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody>
+                      {deliverySummary.cableTypeSummaries.map((cableTypeSummary) => (
+                        <tr key={cableTypeSummary.cableTypeId}>
+                          <td className={styles.tableCell}>{cableTypeSummary.typeName}</td>
+                          <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                            {formatNumeric(cableTypeSummary.cableCount)}
+                          </td>
+                          <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                            {formatNumeric(cableTypeSummary.totalDesignLength)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <Caption1>Material totals</Caption1>
+                {deliverySummary.materialRows.length === 0 ? (
+                  <div className={styles.emptyState}>
+                    <Caption1>No summable materials found</Caption1>
+                    <Body1>
+                      Add material quantities and units to cables or cable type defaults to see
+                      totals.
+                    </Body1>
+                  </div>
+                ) : (
+                  <div className={styles.tableContainer}>
+                    <table
+                      className={styles.table}
+                      aria-label={`${deliverySummary.deliveryName} material totals`}
+                    >
+                      <thead>
+                        <tr>
+                          <th className={styles.tableHeadCell}>Material</th>
+                          <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                            Total quantity
+                          </th>
+                          <th className={styles.tableHeadCell}>Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deliverySummary.materialRows.map((material) => (
+                          <tr key={`${material.name}:${material.unit}`}>
+                            <td className={styles.tableCell}>{material.name}</td>
+                            <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                              {formatNumeric(material.totalQuantity)}
+                            </td>
+                            <td className={styles.tableCell}>{material.unit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            ))}
           </>
         )}
       </div>

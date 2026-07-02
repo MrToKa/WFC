@@ -553,13 +553,22 @@ type CableReportCableTypeSummary = {
   materials: CableReportMaterialSummary[];
 };
 
-type CableReportSummary = {
+type CableReportSummaryCore = {
   cableCount: number;
   cableTypeCount: number;
   totalDesignLength: number;
   omittedMaterialCount: number;
   missingDesignLengthMaterialCount: number;
   cableTypeSummaries: CableReportCableTypeSummary[];
+};
+
+type CableReportDeliverySummary = CableReportSummaryCore & {
+  delivery: string | null;
+  deliveryName: string;
+};
+
+type CableReportSummary = CableReportSummaryCore & {
+  deliverySummaries: CableReportDeliverySummary[];
 };
 
 type CableMaterialSyncSummary = {
@@ -577,6 +586,7 @@ type SyncCableMaterialsResult = {
 
 const CABLE_MATERIAL_SOURCE_DEFAULT = 'default' as const;
 const CABLE_MATERIAL_SOURCE_MANUAL = 'manual' as const;
+const CABLE_REPORT_NO_DELIVERY_LABEL = 'No delivery';
 
 const VALID_CABLE_REPORT_FILTER_CRITERIA = new Set<CableReportFilterCriteria>([
   'all',
@@ -637,9 +647,7 @@ const findProjectCableVersionSourceById = async (
   return result.rows[0] ?? null;
 };
 
-const buildCableVersionSnapshot = (
-  cable: CableVersionSourceRow,
-): CableVersionSnapshot => ({
+const buildCableVersionSnapshot = (cable: CableVersionSourceRow): CableVersionSnapshot => ({
   cableId: cable.cable_id,
   revision: normalizeOptionalString(cable.revision ?? null),
   mto: normalizeCableMtoValue(cable.mto ?? null),
@@ -1437,157 +1445,148 @@ const listCableMaterialsByCableIds = async (
 
 const roundReportQuantity = (value: number): number => Math.round(value * 1000) / 1000;
 
-const buildCableReportSummary = async (
-  queryable: Queryable,
-  projectId: string,
-  cables: CableDetailsRow[],
-): Promise<CableReportSummary> => {
-  const cableMaterialsByCableId = await listCableMaterialsByCableIds(
-    queryable,
-    cables.map((cable) => cable.id),
-  );
+type CableReportMaterialSummaryAccumulator = {
+  name: string;
+  unit: string;
+  totalQuantity: number;
+  cableCount: number;
+  missingDesignLengthCount: number;
+};
 
-  const defaultMaterialsCache = new Map<string, Promise<CableTypeDefaultMaterialRow[]>>();
-  const cableTypeSummaries = new Map<
-    string,
-    {
-      cableTypeId: string;
-      typeName: string;
-      cableCount: number;
-      totalDesignLength: number;
-      materials: Map<
-        string,
-        {
-          name: string;
-          unit: string;
-          totalQuantity: number;
-          cableCount: number;
-          missingDesignLengthCount: number;
-        }
-      >;
-    }
-  >();
+type CableReportCableTypeSummaryAccumulator = {
+  cableTypeId: string;
+  typeName: string;
+  cableCount: number;
+  totalDesignLength: number;
+  materials: Map<string, CableReportMaterialSummaryAccumulator>;
+};
 
-  let totalDesignLength = 0;
-  let omittedMaterialCount = 0;
-  let missingDesignLengthMaterialCount = 0;
+type CableReportAccumulator = {
+  cableCount: number;
+  totalDesignLength: number;
+  omittedMaterialCount: number;
+  missingDesignLengthMaterialCount: number;
+  cableTypeSummaries: Map<string, CableReportCableTypeSummaryAccumulator>;
+};
 
-  const getDefaultMaterials = (cable: CableDetailsRow): Promise<CableTypeDefaultMaterialRow[]> => {
-    const cacheKey = `${cable.cable_type_id}:${normalizeComparableCableTypeName(cable.type_name)}`;
-    const cached = defaultMaterialsCache.get(cacheKey);
+type CableReportDeliveryAccumulator = {
+  delivery: string | null;
+  deliveryName: string;
+  accumulator: CableReportAccumulator;
+};
 
-    if (cached) {
-      return cached;
-    }
+const createCableReportAccumulator = (): CableReportAccumulator => ({
+  cableCount: 0,
+  totalDesignLength: 0,
+  omittedMaterialCount: 0,
+  missingDesignLengthMaterialCount: 0,
+  cableTypeSummaries: new Map<string, CableReportCableTypeSummaryAccumulator>(),
+});
 
-    const next = resolveCableTypeDefaultMaterials(
-      queryable,
-      projectId,
-      cable.cable_type_id,
-      cable.type_name,
-    );
-    defaultMaterialsCache.set(cacheKey, next);
-    return next;
+const getCableReportDeliveryName = (delivery: string | null): string =>
+  delivery ?? CABLE_REPORT_NO_DELIVERY_LABEL;
+
+const getCableReportDeliveryKey = (delivery: string | null): string =>
+  delivery ? delivery.toLowerCase() : '__no_delivery__';
+
+const getOrCreateCableTypeReportSummary = (
+  accumulator: CableReportAccumulator,
+  cable: CableDetailsRow,
+): CableReportCableTypeSummaryAccumulator => {
+  const cableTypeKey = cable.cable_type_id;
+  const existingSummary = accumulator.cableTypeSummaries.get(cableTypeKey);
+
+  if (existingSummary) {
+    return existingSummary;
+  }
+
+  const next = {
+    cableTypeId: cable.cable_type_id,
+    typeName: cable.type_name,
+    cableCount: 0,
+    totalDesignLength: 0,
+    materials: new Map<string, CableReportMaterialSummaryAccumulator>(),
   };
 
-  for (const cable of cables) {
-    const designLength = parseInstallLength(cable.design_length);
-    const cableTypeKey = cable.cable_type_id;
-    const existingSummary = cableTypeSummaries.get(cableTypeKey);
-    const cableTypeSummary =
-      existingSummary ??
+  accumulator.cableTypeSummaries.set(cableTypeKey, next);
+  return next;
+};
+
+const addCableToReportAccumulator = (
+  accumulator: CableReportAccumulator,
+  cable: CableDetailsRow,
+  designLength: number | null,
+  materials: CableMaterialRow[] | CableTypeDefaultMaterialRow[],
+): void => {
+  accumulator.cableCount += 1;
+
+  const cableTypeSummary = getOrCreateCableTypeReportSummary(accumulator, cable);
+  cableTypeSummary.cableCount += 1;
+
+  if (designLength !== null) {
+    cableTypeSummary.totalDesignLength += designLength;
+    accumulator.totalDesignLength += designLength;
+  }
+
+  for (const material of materials) {
+    const materialName = material.name?.trim();
+    const unit = normalizeCableMaterialUnit(material.unit);
+    const quantity = parseNumericValue(material.quantity);
+
+    if (!materialName || !unit || quantity === null) {
+      accumulator.omittedMaterialCount += 1;
+      continue;
+    }
+
+    let outputUnit = unit;
+    let totalQuantity = quantity;
+    let missingDesignLength = false;
+
+    if (unit === 'pcs/m') {
+      outputUnit = 'pcs';
+
+      if (designLength === null) {
+        missingDesignLength = true;
+        accumulator.missingDesignLengthMaterialCount += 1;
+        totalQuantity = 0;
+      } else {
+        totalQuantity = quantity * designLength;
+      }
+    }
+
+    const materialKey = `${materialName.toLowerCase()}::${outputUnit}`;
+    const existingMaterialSummary = cableTypeSummary.materials.get(materialKey);
+    const materialSummary =
+      existingMaterialSummary ??
       (() => {
         const next = {
-          cableTypeId: cable.cable_type_id,
-          typeName: cable.type_name,
+          name: materialName,
+          unit: outputUnit,
+          totalQuantity: 0,
           cableCount: 0,
-          totalDesignLength: 0,
-          materials: new Map<
-            string,
-            {
-              name: string;
-              unit: string;
-              totalQuantity: number;
-              cableCount: number;
-              missingDesignLengthCount: number;
-            }
-          >(),
+          missingDesignLengthCount: 0,
         };
-        cableTypeSummaries.set(cableTypeKey, next);
+        cableTypeSummary.materials.set(materialKey, next);
         return next;
       })();
 
-    cableTypeSummary.cableCount += 1;
+    materialSummary.cableCount += 1;
 
-    if (designLength !== null) {
-      cableTypeSummary.totalDesignLength += designLength;
-      totalDesignLength += designLength;
+    if (missingDesignLength) {
+      materialSummary.missingDesignLengthCount += 1;
+      continue;
     }
 
-    const existingMaterials = cableMaterialsByCableId.get(cable.id) ?? [];
-    const shouldUseDefaultMaterials =
-      !cable.materials_initialized ||
-      (!cable.materials_customized && existingMaterials.length === 0);
-    const materials = shouldUseDefaultMaterials
-      ? await getDefaultMaterials(cable)
-      : existingMaterials;
-
-    for (const material of materials) {
-      const materialName = material.name?.trim();
-      const unit = normalizeCableMaterialUnit(material.unit);
-      const quantity = parseNumericValue(material.quantity);
-
-      if (!materialName || !unit || quantity === null) {
-        omittedMaterialCount += 1;
-        continue;
-      }
-
-      let outputUnit = unit;
-      let totalQuantity = quantity;
-      let missingDesignLength = false;
-
-      if (unit === 'pcs/m') {
-        outputUnit = 'pcs';
-
-        if (designLength === null) {
-          missingDesignLength = true;
-          missingDesignLengthMaterialCount += 1;
-          totalQuantity = 0;
-        } else {
-          totalQuantity = quantity * designLength;
-        }
-      }
-
-      const materialKey = `${materialName.toLowerCase()}::${outputUnit}`;
-      const existingMaterialSummary = cableTypeSummary.materials.get(materialKey);
-      const materialSummary =
-        existingMaterialSummary ??
-        (() => {
-          const next = {
-            name: materialName,
-            unit: outputUnit,
-            totalQuantity: 0,
-            cableCount: 0,
-            missingDesignLengthCount: 0,
-          };
-          cableTypeSummary.materials.set(materialKey, next);
-          return next;
-        })();
-
-      materialSummary.cableCount += 1;
-
-      if (missingDesignLength) {
-        materialSummary.missingDesignLengthCount += 1;
-        continue;
-      }
-
-      materialSummary.totalQuantity = roundReportQuantity(
-        materialSummary.totalQuantity + totalQuantity,
-      );
-    }
+    materialSummary.totalQuantity = roundReportQuantity(
+      materialSummary.totalQuantity + totalQuantity,
+    );
   }
+};
 
-  const sortedCableTypeSummaries = Array.from(cableTypeSummaries.values())
+const finalizeCableReportAccumulator = (
+  accumulator: CableReportAccumulator,
+): CableReportSummaryCore => {
+  const sortedCableTypeSummaries = Array.from(accumulator.cableTypeSummaries.values())
     .sort((a, b) => a.typeName.localeCompare(b.typeName, undefined, { sensitivity: 'base' }))
     .map<CableReportCableTypeSummary>((summary) => ({
       cableTypeId: summary.cableTypeId,
@@ -1618,17 +1617,104 @@ const buildCableReportSummary = async (
     }));
 
   return {
-    cableCount: cables.length,
+    cableCount: accumulator.cableCount,
     cableTypeCount: sortedCableTypeSummaries.length,
-    totalDesignLength,
-    omittedMaterialCount,
-    missingDesignLengthMaterialCount,
+    totalDesignLength: accumulator.totalDesignLength,
+    omittedMaterialCount: accumulator.omittedMaterialCount,
+    missingDesignLengthMaterialCount: accumulator.missingDesignLengthMaterialCount,
     cableTypeSummaries: sortedCableTypeSummaries,
   };
 };
 
+const buildCableReportSummary = async (
+  queryable: Queryable,
+  projectId: string,
+  cables: CableDetailsRow[],
+): Promise<CableReportSummary> => {
+  const cableMaterialsByCableId = await listCableMaterialsByCableIds(
+    queryable,
+    cables.map((cable) => cable.id),
+  );
+
+  const defaultMaterialsCache = new Map<string, Promise<CableTypeDefaultMaterialRow[]>>();
+  const totalAccumulator = createCableReportAccumulator();
+  const deliveryAccumulators = new Map<string, CableReportDeliveryAccumulator>();
+
+  const getDefaultMaterials = (cable: CableDetailsRow): Promise<CableTypeDefaultMaterialRow[]> => {
+    const cacheKey = `${cable.cable_type_id}:${normalizeComparableCableTypeName(cable.type_name)}`;
+    const cached = defaultMaterialsCache.get(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const next = resolveCableTypeDefaultMaterials(
+      queryable,
+      projectId,
+      cable.cable_type_id,
+      cable.type_name,
+    );
+    defaultMaterialsCache.set(cacheKey, next);
+    return next;
+  };
+
+  for (const cable of cables) {
+    const designLength = parseInstallLength(cable.design_length);
+
+    const existingMaterials = cableMaterialsByCableId.get(cable.id) ?? [];
+    const shouldUseDefaultMaterials =
+      !cable.materials_initialized ||
+      (!cable.materials_customized && existingMaterials.length === 0);
+    const materials = shouldUseDefaultMaterials
+      ? await getDefaultMaterials(cable)
+      : existingMaterials;
+
+    addCableToReportAccumulator(totalAccumulator, cable, designLength, materials);
+
+    const delivery = normalizeOptionalString(cable.delivery ?? null);
+    const deliveryKey = getCableReportDeliveryKey(delivery);
+    const deliverySummary =
+      deliveryAccumulators.get(deliveryKey) ??
+      (() => {
+        const next = {
+          delivery,
+          deliveryName: getCableReportDeliveryName(delivery),
+          accumulator: createCableReportAccumulator(),
+        };
+        deliveryAccumulators.set(deliveryKey, next);
+        return next;
+      })();
+
+    addCableToReportAccumulator(deliverySummary.accumulator, cable, designLength, materials);
+  }
+
+  const totalSummary = finalizeCableReportAccumulator(totalAccumulator);
+  const deliverySummaries = Array.from(deliveryAccumulators.values())
+    .sort((a, b) => {
+      if (a.delivery === null && b.delivery !== null) {
+        return 1;
+      }
+
+      if (a.delivery !== null && b.delivery === null) {
+        return -1;
+      }
+
+      return a.deliveryName.localeCompare(b.deliveryName, undefined, { sensitivity: 'base' });
+    })
+    .map<CableReportDeliverySummary>((deliverySummary) => ({
+      delivery: deliverySummary.delivery,
+      deliveryName: deliverySummary.deliveryName,
+      ...finalizeCableReportAccumulator(deliverySummary.accumulator),
+    }));
+
+  return {
+    ...totalSummary,
+    deliverySummaries,
+  };
+};
+
 const buildCableReportMaterialTotals = (
-  summary: CableReportSummary,
+  summary: CableReportSummaryCore,
 ): Array<{
   name: string;
   unit: string;
@@ -1696,6 +1782,109 @@ const buildCableReportMaterialTotals = (
       });
     });
 };
+
+type CableReportMaterialTotal = ReturnType<typeof buildCableReportMaterialTotals>[number];
+
+const createExcelTableName = (
+  rawName: string,
+  usedNames: Set<string>,
+  fallbackName: string,
+): string => {
+  const sanitized = rawName
+    .trim()
+    .replace(/[^A-Za-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  let baseName = sanitized || fallbackName;
+
+  if (!/^[A-Za-z_]/.test(baseName)) {
+    baseName = `T_${baseName}`;
+  }
+
+  if (/^[A-Za-z]{1,3}\d{1,7}$/.test(baseName)) {
+    baseName = `T_${baseName}`;
+  }
+
+  baseName = baseName.slice(0, 255);
+
+  let tableName = baseName;
+  let suffix = 2;
+
+  while (usedNames.has(tableName.toLowerCase())) {
+    const suffixText = `_${suffix}`;
+    tableName = `${baseName.slice(0, 255 - suffixText.length)}${suffixText}`;
+    suffix += 1;
+  }
+
+  usedNames.add(tableName.toLowerCase());
+  return tableName;
+};
+
+const buildCableTypeReportRows = (
+  cableTypeSummaries: CableReportCableTypeSummary[],
+  cableTypeMetadataById: Map<string, CableDetailsRow>,
+  materialCableTypeDetailsByName: Map<string, MaterialCableTypeRow>,
+): Array<Array<string | number>> =>
+  cableTypeSummaries.map((cableTypeSummary) => {
+    const metadata = cableTypeMetadataById.get(cableTypeSummary.cableTypeId);
+    const materialDetails = metadata
+      ? materialCableTypeDetailsByName.get(
+          normalizeComparableCableTypeName(metadata.type_name ?? ''),
+        )
+      : null;
+
+    return [
+      cableTypeSummary.typeName,
+      pickFirstNonEmptyString(metadata?.type_purpose, materialDetails?.purpose),
+      metadata?.type_diameter_mm !== null &&
+      metadata?.type_diameter_mm !== undefined &&
+      metadata.type_diameter_mm !== ''
+        ? Number(metadata.type_diameter_mm)
+        : materialDetails?.diameter_mm !== null &&
+            materialDetails?.diameter_mm !== undefined &&
+            materialDetails.diameter_mm !== ''
+          ? Number(materialDetails.diameter_mm)
+          : '',
+      pickFirstNonEmptyString(metadata?.type_material, materialDetails?.material),
+      metadata?.type_weight_kg_per_m !== null &&
+      metadata?.type_weight_kg_per_m !== undefined &&
+      metadata.type_weight_kg_per_m !== ''
+        ? Number(metadata.type_weight_kg_per_m)
+        : materialDetails?.weight_kg_per_m !== null &&
+            materialDetails?.weight_kg_per_m !== undefined &&
+            materialDetails.weight_kg_per_m !== ''
+          ? Number(materialDetails.weight_kg_per_m)
+          : '',
+      pickFirstNonEmptyString(metadata?.type_description, materialDetails?.description),
+      pickFirstNonEmptyString(metadata?.type_manufacturer, materialDetails?.manufacturer),
+      pickFirstNonEmptyString(metadata?.type_part_no, materialDetails?.part_no),
+      pickFirstNonEmptyString(metadata?.type_remarks, materialDetails?.remarks),
+      cableTypeSummary.cableCount,
+      cableTypeSummary.totalDesignLength,
+    ];
+  });
+
+const buildCableMaterialReportRows = (
+  materialTotals: CableReportMaterialTotal[],
+  materialInstallationDetailsByType: Map<string, MaterialCableInstallationMaterialRow>,
+): Array<Array<string | number>> =>
+  materialTotals.map((material) => {
+    const metadata = materialInstallationDetailsByType.get(
+      normalizeComparableCableTypeName(material.name),
+    );
+
+    return [
+      pickFirstNonEmptyString(metadata?.type, material.name),
+      pickFirstNonEmptyString(metadata?.purpose),
+      pickFirstNonEmptyString(metadata?.material),
+      pickFirstNonEmptyString(metadata?.description),
+      pickFirstNonEmptyString(metadata?.manufacturer),
+      pickFirstNonEmptyString(metadata?.part_no),
+      material.totalQuantity,
+      material.unit,
+      material.cableCount,
+    ];
+  });
 
 const cablesRouter = Router({ mergeParams: true });
 
@@ -2030,7 +2219,7 @@ cablesRouter.patch(
         cableId: newCableId ?? currentSnapshot.cableId,
         revision:
           revision !== undefined ? normalizeOptionalString(revision) : currentSnapshot.revision,
-        mto: mto !== undefined ? mto ?? null : currentSnapshot.mto,
+        mto: mto !== undefined ? (mto ?? null) : currentSnapshot.mto,
         tag: tag !== undefined ? normalizeOptionalString(tag) : currentSnapshot.tag,
         cableTypeId: nextCableTypeId,
         typeName: nextCableTypeName,
@@ -2039,23 +2228,23 @@ cablesRouter.patch(
             ? normalizeOptionalString(fromLocation)
             : currentSnapshot.fromLocation,
         toLocation:
-          toLocation !== undefined ? normalizeOptionalString(toLocation) : currentSnapshot.toLocation,
+          toLocation !== undefined
+            ? normalizeOptionalString(toLocation)
+            : currentSnapshot.toLocation,
         routing: routing !== undefined ? normalizeOptionalString(routing) : currentSnapshot.routing,
         delivery:
           delivery !== undefined ? normalizeOptionalString(delivery) : currentSnapshot.delivery,
         designLength:
-          designLength !== undefined ? designLength ?? null : currentSnapshot.designLength,
+          designLength !== undefined ? (designLength ?? null) : currentSnapshot.designLength,
         installLength:
-          installLength !== undefined ? installLength ?? null : currentSnapshot.installLength,
+          installLength !== undefined ? (installLength ?? null) : currentSnapshot.installLength,
         pullDate: pullDate !== undefined ? normalizeDateValue(pullDate) : currentSnapshot.pullDate,
         connectedFrom:
           connectedFrom !== undefined
             ? normalizeDateValue(connectedFrom)
             : currentSnapshot.connectedFrom,
         connectedTo:
-          connectedTo !== undefined
-            ? normalizeDateValue(connectedTo)
-            : currentSnapshot.connectedTo,
+          connectedTo !== undefined ? normalizeDateValue(connectedTo) : currentSnapshot.connectedTo,
         tested: tested !== undefined ? normalizeDateValue(tested) : currentSnapshot.tested,
       };
 
@@ -3218,37 +3407,37 @@ cablesRouter.post(
           cableId: currentSnapshot.cableId,
           revision:
             columnAvailability.revision && fields.revision !== undefined
-              ? fields.revision ?? null
+              ? (fields.revision ?? null)
               : currentSnapshot.revision,
           mto:
             columnAvailability.mto && fields.mto !== undefined
-              ? fields.mto ?? null
+              ? (fields.mto ?? null)
               : currentSnapshot.mto,
           tag:
             columnAvailability.tag && fields.tag !== undefined
-              ? fields.tag ?? null
+              ? (fields.tag ?? null)
               : currentSnapshot.tag,
           cableTypeId: type.id,
           typeName: type.name,
           fromLocation:
             columnAvailability.fromLocation && fields.fromLocation !== undefined
-              ? fields.fromLocation ?? null
+              ? (fields.fromLocation ?? null)
               : currentSnapshot.fromLocation,
           toLocation:
             columnAvailability.toLocation && fields.toLocation !== undefined
-              ? fields.toLocation ?? null
+              ? (fields.toLocation ?? null)
               : currentSnapshot.toLocation,
           routing:
             columnAvailability.routing && fields.routing !== undefined
-              ? fields.routing ?? null
+              ? (fields.routing ?? null)
               : currentSnapshot.routing,
           delivery:
             columnAvailability.delivery && fields.delivery !== undefined
-              ? fields.delivery ?? null
+              ? (fields.delivery ?? null)
               : currentSnapshot.delivery,
           designLength:
             columnAvailability.designLength && fields.designLength !== undefined
-              ? fields.designLength ?? null
+              ? (fields.designLength ?? null)
               : currentSnapshot.designLength,
           installLength: currentSnapshot.installLength,
           pullDate: currentSnapshot.pullDate,
@@ -3385,18 +3574,18 @@ cablesRouter.get('/report-summary', async (req: Request, res: Response): Promise
                   ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
                   : filterCriteria === 'delivery'
                     ? [`LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`]
-                  : [
-                      `LOWER(c.cable_id::text) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.mto, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.design_length::text, '')) LIKE ${likeParam}`,
-                    ];
+                    : [
+                        `LOWER(c.cable_id::text) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.mto, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.design_length::text, '')) LIKE ${likeParam}`,
+                      ];
 
       conditions.push(`(${filterExpressions.join(' OR ')})`);
       values.push(`%${normalizedFilter}%`);
@@ -3489,17 +3678,17 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
                   ? [`LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`]
                   : filterCriteria === 'delivery'
                     ? [`LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`]
-                  : [
-                      `LOWER(c.cable_id::text) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.mto, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
-                      `LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`,
-                    ];
+                    : [
+                        `LOWER(c.cable_id::text) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.revision, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.mto, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.tag, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(ct.name, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.from_location, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.to_location, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.routing, '')) LIKE ${likeParam}`,
+                        `LOWER(COALESCE(c.delivery, '')) LIKE ${likeParam}`,
+                      ];
 
       conditions.push(`(${filterExpressions.join(' OR ')})`);
       values.push(`%${normalizedFilter}%`);
@@ -3559,6 +3748,21 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         reportRows.map((row: CableDetailsRow) => row.type_name ?? ''),
       );
       const summary = await buildCableReportSummary(pool, projectId, reportRows);
+      const reportSections: CableReportDeliverySummary[] =
+        summary.deliverySummaries.length > 0
+          ? summary.deliverySummaries
+          : [
+              {
+                delivery: null,
+                deliveryName: CABLE_REPORT_NO_DELIVERY_LABEL,
+                cableCount: summary.cableCount,
+                cableTypeCount: summary.cableTypeCount,
+                totalDesignLength: summary.totalDesignLength,
+                omittedMaterialCount: summary.omittedMaterialCount,
+                missingDesignLengthMaterialCount: summary.missingDesignLengthMaterialCount,
+                cableTypeSummaries: summary.cableTypeSummaries,
+              },
+            ];
       const materialTotals = buildCableReportMaterialTotals(summary);
       const materialInstallationDetailsByType =
         await listMaterialCableInstallationMaterialDetailsByTypes(
@@ -3574,7 +3778,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       }
 
       const summaryWorksheet = workbook.addWorksheet('Cables report', {
-        views: [{ state: 'frozen', ySplit: 1 }],
+        views: [{ state: 'frozen', ySplit: 2 }],
       });
 
       const cableTypeColumns = [
@@ -3607,65 +3811,46 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         },
       ] as const;
 
-      const cableTypeRows = summary.cableTypeSummaries.map((cableTypeSummary) => {
-        const metadata = cableTypeMetadataById.get(cableTypeSummary.cableTypeId);
-        const materialDetails = metadata
-          ? materialCableTypeDetailsByName.get(
-              normalizeComparableCableTypeName(metadata.type_name ?? ''),
-            )
-          : null;
+      const usedExcelTableNames = new Set<string>();
+      let nextCableTypeTableRow = 1;
 
-        return [
-          cableTypeSummary.typeName,
-          pickFirstNonEmptyString(metadata?.type_purpose, materialDetails?.purpose),
-          metadata?.type_diameter_mm !== null &&
-          metadata?.type_diameter_mm !== undefined &&
-          metadata.type_diameter_mm !== ''
-            ? Number(metadata.type_diameter_mm)
-            : materialDetails?.diameter_mm !== null &&
-                materialDetails?.diameter_mm !== undefined &&
-                materialDetails.diameter_mm !== ''
-              ? Number(materialDetails.diameter_mm)
-              : '',
-          pickFirstNonEmptyString(metadata?.type_material, materialDetails?.material),
-          metadata?.type_weight_kg_per_m !== null &&
-          metadata?.type_weight_kg_per_m !== undefined &&
-          metadata.type_weight_kg_per_m !== ''
-            ? Number(metadata.type_weight_kg_per_m)
-            : materialDetails?.weight_kg_per_m !== null &&
-                materialDetails?.weight_kg_per_m !== undefined &&
-                materialDetails.weight_kg_per_m !== ''
-              ? Number(materialDetails.weight_kg_per_m)
-              : '',
-          pickFirstNonEmptyString(metadata?.type_description, materialDetails?.description),
-          pickFirstNonEmptyString(metadata?.type_manufacturer, materialDetails?.manufacturer),
-          pickFirstNonEmptyString(metadata?.type_part_no, materialDetails?.part_no),
-          pickFirstNonEmptyString(metadata?.type_remarks, materialDetails?.remarks),
-          cableTypeSummary.cableCount,
-          cableTypeSummary.totalDesignLength,
-        ];
-      });
+      for (const deliverySummary of reportSections) {
+        const titleCell = summaryWorksheet.getCell(nextCableTypeTableRow, 1);
+        titleCell.value = deliverySummary.deliveryName;
+        titleCell.font = { bold: true, size: 14 };
+        summaryWorksheet.getCell(nextCableTypeTableRow, 2).value =
+          `${deliverySummary.cableCount} cables, ${deliverySummary.totalDesignLength} m`;
+        nextCableTypeTableRow += 1;
 
-      const cableTypeTable = summaryWorksheet.addTable({
-        name: 'CableTypeTotals',
-        ref: 'A1',
-        headerRow: true,
-        totalsRow: false,
-        style: {
-          theme: 'TableStyleLight8',
-          showFirstColumn: false,
-          showLastColumn: false,
-          showRowStripes: true,
-          showColumnStripes: true,
-        },
-        columns: cableTypeColumns.map((column) => ({
-          name: column.name,
-          filterButton: true,
-        })),
-        rows: cableTypeRows.length > 0 ? cableTypeRows : [Array(cableTypeColumns.length).fill('')],
-      });
+        const cableTypeRows = buildCableTypeReportRows(
+          deliverySummary.cableTypeSummaries,
+          cableTypeMetadataById,
+          materialCableTypeDetailsByName,
+        );
+        const tableRows =
+          cableTypeRows.length > 0 ? cableTypeRows : [Array(cableTypeColumns.length).fill('')];
+        const cableTypeTable = summaryWorksheet.addTable({
+          name: createExcelTableName(deliverySummary.deliveryName, usedExcelTableNames, 'Delivery'),
+          ref: `A${nextCableTypeTableRow}`,
+          headerRow: true,
+          totalsRow: false,
+          style: {
+            theme: 'TableStyleLight8',
+            showFirstColumn: false,
+            showLastColumn: false,
+            showRowStripes: true,
+            showColumnStripes: true,
+          },
+          columns: cableTypeColumns.map((column) => ({
+            name: column.name,
+            filterButton: true,
+          })),
+          rows: tableRows,
+        });
 
-      cableTypeTable.commit();
+        cableTypeTable.commit();
+        nextCableTypeTableRow += tableRows.length + 2;
+      }
 
       cableTypeColumns.forEach((column, index) => {
         const worksheetColumn = summaryWorksheet.getColumn(index + 1);
@@ -3685,7 +3870,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       });
 
       const materialWorksheet = workbook.addWorksheet('Material totals', {
-        views: [{ state: 'frozen', ySplit: 1 }],
+        views: [{ state: 'frozen', ySplit: 2 }],
       });
 
       const materialColumns = [
@@ -3736,44 +3921,49 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         },
       ] as const;
 
-      const materialRows = materialTotals.map((material) => {
-        const metadata = materialInstallationDetailsByType.get(
-          normalizeComparableCableTypeName(material.name),
+      let nextMaterialTableRow = 1;
+
+      for (const deliverySummary of reportSections) {
+        const titleCell = materialWorksheet.getCell(nextMaterialTableRow, 1);
+        titleCell.value = deliverySummary.deliveryName;
+        titleCell.font = { bold: true, size: 14 };
+        materialWorksheet.getCell(nextMaterialTableRow, 2).value =
+          `${deliverySummary.cableCount} cables, ${deliverySummary.totalDesignLength} m`;
+        nextMaterialTableRow += 1;
+
+        const deliveryMaterialTotals = buildCableReportMaterialTotals(deliverySummary);
+        const materialRows = buildCableMaterialReportRows(
+          deliveryMaterialTotals,
+          materialInstallationDetailsByType,
         );
+        const tableRows =
+          materialRows.length > 0 ? materialRows : [Array(materialColumns.length).fill('')];
+        const materialTable = materialWorksheet.addTable({
+          name: createExcelTableName(
+            `${deliverySummary.deliveryName}_MaterialTotals`,
+            usedExcelTableNames,
+            'MaterialTotals',
+          ),
+          ref: `A${nextMaterialTableRow}`,
+          headerRow: true,
+          totalsRow: false,
+          style: {
+            theme: 'TableStyleLight8',
+            showFirstColumn: false,
+            showLastColumn: false,
+            showRowStripes: true,
+            showColumnStripes: true,
+          },
+          columns: materialColumns.map((column) => ({
+            name: column.name,
+            filterButton: true,
+          })),
+          rows: tableRows,
+        });
 
-        return [
-          pickFirstNonEmptyString(metadata?.type, material.name),
-          pickFirstNonEmptyString(metadata?.purpose),
-          pickFirstNonEmptyString(metadata?.material),
-          pickFirstNonEmptyString(metadata?.description),
-          pickFirstNonEmptyString(metadata?.manufacturer),
-          pickFirstNonEmptyString(metadata?.part_no),
-          material.totalQuantity,
-          material.unit,
-          material.cableCount,
-        ];
-      });
-
-      const materialTable = materialWorksheet.addTable({
-        name: 'CableMaterialTotals',
-        ref: 'A1',
-        headerRow: true,
-        totalsRow: false,
-        style: {
-          theme: 'TableStyleLight8',
-          showFirstColumn: false,
-          showLastColumn: false,
-          showRowStripes: true,
-          showColumnStripes: true,
-        },
-        columns: materialColumns.map((column) => ({
-          name: column.name,
-          filterButton: true,
-        })),
-        rows: materialRows.length > 0 ? materialRows : [Array(materialColumns.length).fill('')],
-      });
-
-      materialTable.commit();
+        materialTable.commit();
+        nextMaterialTableRow += tableRows.length + 2;
+      }
 
       materialColumns.forEach((column, index) => {
         const worksheetColumn = materialWorksheet.getColumn(index + 1);
