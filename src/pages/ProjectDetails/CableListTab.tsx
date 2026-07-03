@@ -48,6 +48,7 @@ type CableListTabProps = {
   onCreate: () => void;
   onImportClick: () => void;
   onExport: () => void;
+  onExportChangeTracker: () => void;
   onGetTemplate: () => void;
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   isImporting: boolean;
@@ -114,6 +115,7 @@ export const CableListTab = ({
   onCreate,
   onImportClick,
   onExport,
+  onExportChangeTracker,
   onGetTemplate,
   onImportFileChange,
   isImporting,
@@ -198,6 +200,13 @@ export const CableListTab = ({
             disabled={isExporting}
           >
             {isExporting ? 'Exporting...' : 'Export to Excel'}
+          </Button>
+          <Button
+            appearance="secondary"
+            onClick={onExportChangeTracker}
+            disabled={isExporting}
+          >
+            {isExporting ? 'Exporting...' : 'Change tracker'}
           </Button>
           <Switch
             checked={inlineEditingEnabled}

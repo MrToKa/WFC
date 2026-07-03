@@ -523,7 +523,7 @@ export async function exportCables(
     mto?: CableMtoOption | null;
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;
-    view?: 'list' | 'report';
+    view?: 'list' | 'report' | 'change-tracker';
   },
 ): Promise<Blob> {
   const params = new URLSearchParams();

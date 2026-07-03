@@ -122,7 +122,7 @@ type UseCableListSectionResult = {
   handleDeleteCable: (cable: Cable) => Promise<void>;
   handleImportCables: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleExportCables: (
-    view?: 'list' | 'report',
+    view?: 'list' | 'report' | 'change-tracker',
     mto?: CableMtoOption | null
   ) => Promise<void>;
   handleGetCablesTemplate: (view?: 'list' | 'report') => Promise<void>;
@@ -991,7 +991,10 @@ export const useCableListSection = ({
   );
 
   const handleExportCables = useCallback(
-    async (view: 'list' | 'report' = 'list', mto: CableMtoOption | null = null) => {
+    async (
+      view: 'list' | 'report' | 'change-tracker' = 'list',
+      mto: CableMtoOption | null = null
+    ) => {
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
@@ -1017,6 +1020,8 @@ export const useCableListSection = ({
             ? mto
               ? `cables-report-${sanitizeFileSegment(mto)}`
               : 'cables-report'
+            : view === 'change-tracker'
+              ? 'change-tracker'
             : 'cable-list';
         const fileName = `${sanitizeFileSegment(
           projectSnapshot.projectNumber

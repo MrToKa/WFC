@@ -27,6 +27,7 @@ import {
   mapCableVersionRow,
   type CableVersionChangeSource,
   type CableVersionChangeType,
+  type PublicCableVersion,
   type CableVersionRow,
 } from '../models/cableVersion.js';
 import {
@@ -86,6 +87,15 @@ const LIST_OUTPUT_HEADERS = {
   designLength: 'Design Length [m]',
 } as const;
 
+const CHANGE_TRACKER_OUTPUT_HEADERS = {
+  version: 'Version',
+  revision: 'Revision snapshot',
+  change: 'Change',
+  changedBy: 'Changed by',
+  changedAt: 'Changed at',
+  fieldChanges: 'Field changes',
+} as const;
+
 const REVISION_INPUT_HEADERS = [INPUT_HEADERS.revision, 'Rev.'] as const;
 
 const REPORT_OUTPUT_HEADERS = {
@@ -118,6 +128,55 @@ const REPORT_MATERIAL_TOTALS_OUTPUT_HEADERS = {
   unit: 'Unit',
   cableCount: 'Cables',
 } as const;
+
+const CABLE_LIST_EXPORT_COLUMNS = [
+  { name: LIST_OUTPUT_HEADERS.cableId, key: 'cableId', width: 18 },
+  { name: LIST_OUTPUT_HEADERS.revision, key: 'revision', width: 14 },
+  { name: LIST_OUTPUT_HEADERS.mto, key: 'mto', width: 20 },
+  { name: LIST_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
+  { name: LIST_OUTPUT_HEADERS.type, key: 'type', width: 28 },
+  { name: LIST_OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
+  {
+    name: LIST_OUTPUT_HEADERS.diameter,
+    key: 'diameter',
+    width: 18,
+  },
+  { name: LIST_OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
+  {
+    name: LIST_OUTPUT_HEADERS.fromLocation,
+    key: 'fromLocation',
+    width: 26,
+  },
+  {
+    name: LIST_OUTPUT_HEADERS.toLocation,
+    key: 'toLocation',
+    width: 26,
+  },
+  {
+    name: LIST_OUTPUT_HEADERS.delivery,
+    key: 'delivery',
+    width: 24,
+  },
+  {
+    name: LIST_OUTPUT_HEADERS.routing,
+    key: 'routing',
+    width: 30,
+  },
+  {
+    name: LIST_OUTPUT_HEADERS.designLength,
+    key: 'designLength',
+    width: 18,
+  },
+] as const;
+
+const CHANGE_TRACKER_REVISION_COLUMNS = [
+  { name: CHANGE_TRACKER_OUTPUT_HEADERS.version, key: 'trackerVersion', width: 14 },
+  { name: CHANGE_TRACKER_OUTPUT_HEADERS.revision, key: 'trackerRevision', width: 20 },
+  { name: CHANGE_TRACKER_OUTPUT_HEADERS.change, key: 'trackerChange', width: 24 },
+  { name: CHANGE_TRACKER_OUTPUT_HEADERS.changedBy, key: 'trackerChangedBy', width: 24 },
+  { name: CHANGE_TRACKER_OUTPUT_HEADERS.changedAt, key: 'trackerChangedAt', width: 22 },
+  { name: CHANGE_TRACKER_OUTPUT_HEADERS.fieldChanges, key: 'trackerFieldChanges', width: 60 },
+] as const;
 
 const normalizeOptionalString = (value: string | null | undefined): string | null => {
   if (value === undefined || value === null) {
@@ -477,6 +536,171 @@ const selectMaterialCableInstallationMaterialDetailsQuery = `
 `;
 
 type Queryable = Pick<PoolClient, 'query'>;
+
+type ExcelExportCellValue = string | number | Date;
+
+const buildCableListExportRow = (row: CableWithTypeRow): ExcelExportCellValue[] => [
+  row.cable_id ?? '',
+  row.revision ?? '',
+  row.mto ?? '',
+  row.tag ?? '',
+  row.type_name ?? '',
+  row.type_purpose ?? '',
+  row.type_diameter_mm !== null && row.type_diameter_mm !== '' ? Number(row.type_diameter_mm) : '',
+  row.type_weight_kg_per_m !== null && row.type_weight_kg_per_m !== ''
+    ? Number(row.type_weight_kg_per_m)
+    : '',
+  row.from_location ?? '',
+  row.to_location ?? '',
+  row.delivery ?? '',
+  row.routing ?? '',
+  row.design_length !== null && row.design_length !== '' ? Number(row.design_length) : '',
+];
+
+const formatCableVersionUserLabel = (version: PublicCableVersion): string => {
+  const rawName = version.changedBy
+    ? [version.changedBy.firstName, version.changedBy.lastName].filter(Boolean).join(' ').trim()
+    : '';
+
+  return rawName || version.changedBy?.email || '-';
+};
+
+const formatCableVersionChangeLabel = (version: PublicCableVersion): string => {
+  const changeLabel = version.changeType === 'create' ? 'Created' : 'Updated';
+  const sourceLabel = version.changeSource === 'import' ? 'import' : 'manual save';
+
+  return `${changeLabel} via ${sourceLabel}`;
+};
+
+const formatCableVersionValue = (value: string | number | null): string =>
+  value === null || value === '' ? '-' : String(value);
+
+const diffCableVersions = (
+  current: PublicCableVersion,
+  previous: PublicCableVersion | null,
+): Array<{ label: string; previousValue: string; nextValue: string }> => {
+  if (!previous) {
+    return [];
+  }
+
+  const fields: Array<{
+    label: string;
+    currentValue: string | number | null;
+    previousValue: string | number | null;
+  }> = [
+    {
+      label: 'Cable ID',
+      currentValue: current.cableId,
+      previousValue: previous.cableId,
+    },
+    {
+      label: 'Revision',
+      currentValue: current.revision,
+      previousValue: previous.revision,
+    },
+    {
+      label: 'MTO',
+      currentValue: current.mto,
+      previousValue: previous.mto,
+    },
+    {
+      label: 'Tag',
+      currentValue: current.tag,
+      previousValue: previous.tag,
+    },
+    {
+      label: 'Type',
+      currentValue: current.typeName,
+      previousValue: previous.typeName,
+    },
+    {
+      label: 'From location',
+      currentValue: current.fromLocation,
+      previousValue: previous.fromLocation,
+    },
+    {
+      label: 'To location',
+      currentValue: current.toLocation,
+      previousValue: previous.toLocation,
+    },
+    {
+      label: 'Routing',
+      currentValue: current.routing,
+      previousValue: previous.routing,
+    },
+    {
+      label: 'Delivery',
+      currentValue: current.delivery,
+      previousValue: previous.delivery,
+    },
+    {
+      label: 'Design length [m]',
+      currentValue: current.designLength,
+      previousValue: previous.designLength,
+    },
+    {
+      label: 'Install length [m]',
+      currentValue: current.installLength,
+      previousValue: previous.installLength,
+    },
+    {
+      label: 'Pull date',
+      currentValue: current.pullDate,
+      previousValue: previous.pullDate,
+    },
+    {
+      label: 'Connected from',
+      currentValue: current.connectedFrom,
+      previousValue: previous.connectedFrom,
+    },
+    {
+      label: 'Connected to',
+      currentValue: current.connectedTo,
+      previousValue: previous.connectedTo,
+    },
+    {
+      label: 'Tested',
+      currentValue: current.tested,
+      previousValue: previous.tested,
+    },
+  ];
+
+  return fields
+    .filter(
+      (field) =>
+        formatCableVersionValue(field.currentValue) !==
+        formatCableVersionValue(field.previousValue),
+    )
+    .map((field) => ({
+      label: field.label,
+      previousValue: formatCableVersionValue(field.previousValue),
+      nextValue: formatCableVersionValue(field.currentValue),
+    }));
+};
+
+const formatCableVersionFieldChanges = (
+  current: PublicCableVersion,
+  previous: PublicCableVersion | null,
+): string => {
+  if (!previous) {
+    return 'Initial snapshot';
+  }
+
+  const changes = diffCableVersions(current, previous);
+
+  if (changes.length === 0) {
+    return 'No tracked field changes';
+  }
+
+  return changes
+    .map((change) => `${change.label}: ${change.previousValue} to ${change.nextValue}`)
+    .join('\n');
+};
+
+const formatDateTimeCell = (value: string): Date | string => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed;
+};
 
 type MaterialCableInstallationMaterialMatchRow = {
   type: string;
@@ -854,6 +1078,63 @@ const listCableMaterials = async (
   );
 
   return result.rows;
+};
+
+const listCableVersionsByCableRecordIds = async (
+  queryable: Queryable,
+  cableRecordIds: string[],
+): Promise<Map<string, PublicCableVersion[]>> => {
+  const versionsByCableRecordId = new Map<string, PublicCableVersion[]>();
+
+  if (cableRecordIds.length === 0) {
+    return versionsByCableRecordId;
+  }
+
+  const result = await queryable.query<CableVersionRow>(
+    `
+      SELECT
+        v.id,
+        v.cable_id,
+        v.version_number,
+        v.change_type,
+        v.change_source,
+        v.cable_number,
+        v.revision,
+        v.mto,
+        v.tag,
+        v.cable_type_id,
+        v.cable_type_name,
+        v.from_location,
+        v.to_location,
+        v.routing,
+        v.delivery,
+        v.design_length,
+        v.install_length,
+        v.pull_date,
+        v.connected_from,
+        v.connected_to,
+        v.tested,
+        v.changed_by,
+        v.created_at,
+        u.first_name AS changed_by_first_name,
+        u.last_name AS changed_by_last_name,
+        u.email AS changed_by_email
+      FROM cable_versions v
+      LEFT JOIN users u ON u.id = v.changed_by
+      WHERE v.cable_id = ANY($1::uuid[])
+      ORDER BY v.cable_id ASC, v.version_number DESC;
+    `,
+    [cableRecordIds],
+  );
+
+  for (const row of result.rows) {
+    const version = mapCableVersionRow(row);
+    const versions = versionsByCableRecordId.get(version.cableRecordId) ?? [];
+    versions.push(version);
+    versionsByCableRecordId.set(version.cableRecordId, versions);
+  }
+
+  return versionsByCableRecordId;
 };
 
 const findMaterialCableTypeDetailsByName = async (
@@ -3730,7 +4011,12 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const viewParam = typeof req.query.view === 'string' ? req.query.view.toLowerCase() : undefined;
-    const exportView = viewParam === 'report' ? 'report' : 'list';
+    const exportView =
+      viewParam === 'report'
+        ? 'report'
+        : viewParam === 'change-tracker'
+          ? 'change-tracker'
+          : 'list';
     const workbook = new ExcelJS.Workbook();
     if (exportView === 'report') {
       const reportResult = await pool.query<CableDetailsRow>(
@@ -3973,6 +4259,89 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
           worksheetColumn.numFmt = '#,##0.###';
         }
       });
+    } else if (exportView === 'change-tracker') {
+      const result = await pool.query<CableWithTypeRow>(
+        `
+            ${selectCablesQuery}
+            ${whereClause}
+            ORDER BY ${sortExpression} ${normalizedSortDirection}, c.cable_id ASC;
+          `,
+        values,
+      );
+
+      const versionsByCableRecordId = await listCableVersionsByCableRecordIds(
+        pool,
+        result.rows.map((row: CableWithTypeRow) => row.id),
+      );
+      const worksheet = workbook.addWorksheet('Change tracker', {
+        views: [{ state: 'frozen', ySplit: 1 }],
+      });
+      const columns = [...CABLE_LIST_EXPORT_COLUMNS, ...CHANGE_TRACKER_REVISION_COLUMNS] as const;
+      const rows: ExcelExportCellValue[][] = result.rows.flatMap(
+        (row: CableWithTypeRow): ExcelExportCellValue[][] => {
+          const cableRow = buildCableListExportRow(row);
+          const versions = versionsByCableRecordId.get(row.id) ?? [];
+
+          if (versions.length === 0) {
+            return [[...cableRow, ...Array(CHANGE_TRACKER_REVISION_COLUMNS.length).fill('')]];
+          }
+
+          return versions.map((version, index) => {
+            const previousVersion = versions[index + 1] ?? null;
+
+            return [
+              ...cableRow,
+              `v${version.versionNumber}`,
+              version.revision ?? '',
+              formatCableVersionChangeLabel(version),
+              formatCableVersionUserLabel(version),
+              formatDateTimeCell(version.changedAt),
+              formatCableVersionFieldChanges(version, previousVersion),
+            ];
+          });
+        },
+      );
+
+      const table = worksheet.addTable({
+        name: 'ChangeTracker',
+        ref: 'A1',
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: 'TableStyleLight8',
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: true,
+        },
+        columns: columns.map((column) => ({
+          name: column.name,
+          filterButton: true,
+        })),
+        rows: rows.length > 0 ? rows : [Array(columns.length).fill('')],
+      });
+
+      table.commit();
+
+      columns.forEach((column, index) => {
+        const worksheetColumn = worksheet.getColumn(index + 1);
+        worksheetColumn.width = column.width;
+        if (column.key === 'diameter') {
+          worksheetColumn.numFmt = '#,##0.00';
+        }
+        if (column.key === 'weight') {
+          worksheetColumn.numFmt = '#,##0.000';
+        }
+        if (column.key === 'designLength') {
+          worksheetColumn.numFmt = '#,##0';
+        }
+        if (column.key === 'trackerChangedAt') {
+          worksheetColumn.numFmt = 'dd-mm-yyyy hh:mm';
+        }
+        if (column.key === 'trackerFieldChanges') {
+          worksheetColumn.alignment = { wrapText: true, vertical: 'top' };
+        }
+      });
     } else {
       const result = await pool.query<CableWithTypeRow>(
         `
@@ -3987,65 +4356,8 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         views: [{ state: 'frozen', ySplit: 1 }],
       });
 
-      const columns = [
-        { name: LIST_OUTPUT_HEADERS.cableId, key: 'cableId', width: 18 },
-        { name: LIST_OUTPUT_HEADERS.revision, key: 'revision', width: 14 },
-        { name: LIST_OUTPUT_HEADERS.mto, key: 'mto', width: 20 },
-        { name: LIST_OUTPUT_HEADERS.tag, key: 'tag', width: 20 },
-        { name: LIST_OUTPUT_HEADERS.type, key: 'type', width: 28 },
-        { name: LIST_OUTPUT_HEADERS.purpose, key: 'purpose', width: 30 },
-        {
-          name: LIST_OUTPUT_HEADERS.diameter,
-          key: 'diameter',
-          width: 18,
-        },
-        { name: LIST_OUTPUT_HEADERS.weight, key: 'weight', width: 18 },
-        {
-          name: LIST_OUTPUT_HEADERS.fromLocation,
-          key: 'fromLocation',
-          width: 26,
-        },
-        {
-          name: LIST_OUTPUT_HEADERS.toLocation,
-          key: 'toLocation',
-          width: 26,
-        },
-        {
-          name: LIST_OUTPUT_HEADERS.delivery,
-          key: 'delivery',
-          width: 24,
-        },
-        {
-          name: LIST_OUTPUT_HEADERS.routing,
-          key: 'routing',
-          width: 30,
-        },
-        {
-          name: LIST_OUTPUT_HEADERS.designLength,
-          key: 'designLength',
-          width: 18,
-        },
-      ] as const;
-
-      const rows = result.rows.map((row: CableWithTypeRow) => [
-        row.cable_id ?? '',
-        row.revision ?? '',
-        row.mto ?? '',
-        row.tag ?? '',
-        row.type_name ?? '',
-        row.type_purpose ?? '',
-        row.type_diameter_mm !== null && row.type_diameter_mm !== ''
-          ? Number(row.type_diameter_mm)
-          : '',
-        row.type_weight_kg_per_m !== null && row.type_weight_kg_per_m !== ''
-          ? Number(row.type_weight_kg_per_m)
-          : '',
-        row.from_location ?? '',
-        row.to_location ?? '',
-        row.delivery ?? '',
-        row.routing ?? '',
-        row.design_length !== null && row.design_length !== '' ? Number(row.design_length) : '',
-      ]);
+      const columns = CABLE_LIST_EXPORT_COLUMNS;
+      const rows = result.rows.map(buildCableListExportRow);
 
       const table = worksheet.addTable({
         name: 'Cables',
@@ -4069,15 +4381,16 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       table.commit();
 
       columns.forEach((column, index) => {
-        worksheet.getColumn(index + 1).width = column.width;
+        const worksheetColumn = worksheet.getColumn(index + 1);
+        worksheetColumn.width = column.width;
         if (column.key === 'diameter') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+          worksheetColumn.numFmt = '#,##0.00';
         }
         if (column.key === 'weight') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+          worksheetColumn.numFmt = '#,##0.000';
         }
         if (column.key === 'designLength') {
-          worksheet.getColumn(index + 1).numFmt = '#,##0';
+          worksheetColumn.numFmt = '#,##0';
         }
       });
     }
@@ -4090,7 +4403,9 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         ? requestedMto
           ? `cables-report-${sanitizeFileSegment(requestedMto)}`
           : 'cables-report'
-        : 'cable-list';
+        : exportView === 'change-tracker'
+          ? 'change-tracker'
+          : 'cable-list';
     const fileName = `${projectSegment}-${fileSuffix}.xlsx`;
 
     res.setHeader(

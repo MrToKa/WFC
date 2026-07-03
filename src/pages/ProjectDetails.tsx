@@ -1738,6 +1738,7 @@ export const ProjectDetails = () => {
           onCreate={handleCreateCable}
           onImportClick={() => cablesFileInputRef.current?.click()}
           onExport={() => void handleExportCables('list')}
+          onExportChangeTracker={() => void handleExportCables('change-tracker')}
           onGetTemplate={() => void handleGetCablesTemplate('list')}
           onImportFileChange={handleImportCables}
           isImporting={cablesImporting}
