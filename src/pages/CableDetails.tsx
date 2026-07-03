@@ -39,6 +39,7 @@ import {
   fetchCableDetails,
   fetchCableVersions,
   fetchMaterialCableInstallationMaterials,
+  fetchTrays,
   syncCableBaseMaterials,
   type Cable,
   type CableDetails as CableDetailsData,
@@ -47,6 +48,7 @@ import {
   type CableVersion,
   type CableTypeDefaultMaterial,
   type MaterialCableInstallationMaterial,
+  type Tray,
   updateCable,
   updateCableMaterial,
 } from '@/api/client';
@@ -251,6 +253,62 @@ const formatOptionalText = (value: string | null | undefined): string => {
   return trimmed ? trimmed : '-';
 };
 
+const normalizeRoutingSegment = (value: string): string => value.trim().toLowerCase();
+
+const calculateAutoCableLength = (
+  routing: string | null | undefined,
+  trays: Tray[],
+  secondaryTrayLength: number | null | undefined,
+): number | null => {
+  const routingSegments =
+    routing
+      ?.split('/')
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0) ?? [];
+
+  if (routingSegments.length === 0) {
+    return null;
+  }
+
+  const traysByName = new Map<string, Tray>();
+
+  for (const tray of trays) {
+    const key = normalizeRoutingSegment(tray.name);
+
+    if (key && !traysByName.has(key)) {
+      traysByName.set(key, tray);
+    }
+  }
+
+  let totalLengthM = 0;
+
+  for (const segment of routingSegments) {
+    if (normalizeRoutingSegment(segment) === 'secondary') {
+      if (
+        typeof secondaryTrayLength !== 'number' ||
+        !Number.isFinite(secondaryTrayLength) ||
+        secondaryTrayLength < 0
+      ) {
+        return null;
+      }
+
+      totalLengthM += secondaryTrayLength;
+      continue;
+    }
+
+    const tray = traysByName.get(normalizeRoutingSegment(segment));
+    const lengthMm = tray?.lengthMm;
+
+    if (typeof lengthMm !== 'number' || !Number.isFinite(lengthMm) || lengthMm < 0) {
+      return null;
+    }
+
+    totalLengthM += lengthMm / 1000;
+  }
+
+  return Math.ceil(totalLengthM * 1.1 + 5);
+};
+
 const formatCableVersionOption = (version: CableVersion): string => {
   const revisionPart = version.revision?.trim() ? ` - ${version.revision.trim()}` : '';
   return `v${version.versionNumber}${revisionPart} (${formatCableVersionTimestamp(
@@ -420,6 +478,7 @@ export const CableDetails = () => {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [comparedVersionId, setComparedVersionId] = useState<string | null>(null);
   const [projectCables, setProjectCables] = useState<Cable[]>([]);
+  const [projectTrays, setProjectTrays] = useState<Tray[]>([]);
   const [cableTypes, setCableTypes] = useState<CableType[]>([]);
   const [availableMaterials, setAvailableMaterials] = useState<MaterialCableInstallationMaterial[]>(
     [],
@@ -533,6 +592,41 @@ export const CableDetails = () => {
     };
 
     void loadProjectCables();
+
+    return () => {
+      active = false;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectTrays([]);
+      return;
+    }
+
+    let active = true;
+
+    const loadProjectTrays = async () => {
+      try {
+        const response = await fetchTrays(projectId);
+
+        if (!active) {
+          return;
+        }
+
+        setProjectTrays(response.trays);
+      } catch (err) {
+        console.error('Failed to load trays for cable auto length', err);
+
+        if (!active) {
+          return;
+        }
+
+        setProjectTrays([]);
+      }
+    };
+
+    void loadProjectTrays();
 
     return () => {
       active = false;
@@ -1102,6 +1196,11 @@ export const CableDetails = () => {
     return `Last updated ${dateFormatter.format(new Date(details.cable.updatedAt))}`;
   }, [details]);
 
+  const autoCalculatedLength = useMemo(
+    () => calculateAutoCableLength(details?.cable.routing, projectTrays, project?.secondaryTrayLength),
+    [details?.cable.routing, project?.secondaryTrayLength, projectTrays],
+  );
+
   const availableMaterialNames = useMemo(
     () => availableMaterials.map((material) => material.type),
     [availableMaterials],
@@ -1384,6 +1483,10 @@ export const CableDetails = () => {
       <Card appearance="outline" className={styles.fullWidthCard}>
         <Title3>Cable routing</Title3>
         <Body1 className={styles.routingText}>{formatOptionalText(details.cable.routing)}</Body1>
+        <div className={styles.field}>
+          <Caption1 className={styles.label}>Auto calculated length [m]</Caption1>
+          <Body1>{formatNumeric(autoCalculatedLength)}</Body1>
+        </div>
       </Card>
 
       <Card appearance="outline" className={styles.fullWidthCard}>
