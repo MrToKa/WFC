@@ -539,6 +539,8 @@ type Queryable = Pick<PoolClient, 'query'>;
 
 type ExcelExportCellValue = string | number | Date;
 
+const EXCEL_BUILT_IN_NUMBER_FORMAT = '0';
+
 const buildCableListExportRow = (row: CableWithTypeRow): ExcelExportCellValue[] => [
   row.cable_id ?? '',
   row.revision ?? '',
@@ -4151,7 +4153,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         }
 
         if (column.key === 'cableCount' || column.key === 'totalDesignLength') {
-          worksheetColumn.numFmt = '#,##0.###';
+          worksheetColumn.numFmt = EXCEL_BUILT_IN_NUMBER_FORMAT;
         }
       });
 
