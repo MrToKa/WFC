@@ -5,6 +5,7 @@ import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import { z } from 'zod';
 import { pool } from '../db.js';
 import {
   mapMaterialTrayRow,
@@ -24,6 +25,7 @@ import {
   type PublicMaterialLoadCurveSummary
 } from '../models/materialLoadCurve.js';
 import { authenticate, requireAdmin } from '../middleware.js';
+import { listStandardMaterialAssignments } from '../services/standardMaterialService.js';
 import {
   createMaterialLoadCurveSchema,
   createMaterialSupportSchema,
@@ -32,6 +34,7 @@ import {
   updateMaterialSupportSchema,
   updateMaterialTraySchema
 } from '../validators.js';
+import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
 
 const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -1857,8 +1860,8 @@ materialsRouter.get(
   async (req: Request, res: Response): Promise<void> => {
     const { loadCurveId } = req.params;
 
-    if (!loadCurveId) {
-      res.status(400).json({ error: 'Load curve ID is required' });
+    if (!z.string().uuid().safeParse(loadCurveId).success) {
+      res.status(400).json({ error: 'Invalid loadCurveId' });
       return;
     }
 
@@ -1869,7 +1872,14 @@ materialsRouter.get(
         return;
       }
 
-      res.json({ loadCurve });
+      res.json({
+        category: {
+          key: 'load-curve',
+          label: 'Load curve',
+          supportsStandardMaterials: false,
+        },
+        loadCurve,
+      });
     } catch (error) {
       console.error('Fetch material load curve error', error);
       res.status(500).json({ error: 'Failed to fetch load curve' });
@@ -2327,6 +2337,77 @@ materialsRouter.post(
       res.status(500).json({ error: 'Failed to read Excel file' });
     }
   }
+);
+
+materialsRouter.get('/trays/:trayId', async (req: Request, res: Response): Promise<void> => {
+  const parsedId = z.string().uuid().safeParse(req.params.trayId);
+  if (!parsedId.success) {
+    res.status(400).json({ error: 'Invalid trayId' });
+    return;
+  }
+  try {
+    const result = await pool.query<MaterialTrayRow>(
+      `${selectMaterialTraysQuery} WHERE mt.id = $1 LIMIT 1`,
+      [parsedId.data],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      res.status(404).json({ error: 'Tray not found' });
+      return;
+    }
+    const standardMaterials = await listStandardMaterialAssignments(pool, 'tray', parsedId.data);
+    res.json({
+      category: { key: 'tray', label: 'Tray', supportsStandardMaterials: true },
+      material: mapMaterialTrayRow(row),
+      standardMaterials,
+    });
+  } catch (error) {
+    console.error('Fetch material tray details error', error);
+    res.status(500).json({ error: 'Failed to fetch tray details' });
+  }
+});
+
+materialsRouter.get(
+  '/supports/:supportId',
+  async (req: Request, res: Response): Promise<void> => {
+    const parsedId = z.string().uuid().safeParse(req.params.supportId);
+    if (!parsedId.success) {
+      res.status(400).json({ error: 'Invalid supportId' });
+      return;
+    }
+    try {
+      const result = await pool.query<MaterialSupportRow>(
+        `${selectMaterialSupportsQuery} WHERE ms.id = $1 LIMIT 1`,
+        [parsedId.data],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        res.status(404).json({ error: 'Support not found' });
+        return;
+      }
+      const standardMaterials = await listStandardMaterialAssignments(
+        pool,
+        'support',
+        parsedId.data,
+      );
+      res.json({
+        category: { key: 'support', label: 'Support', supportsStandardMaterials: true },
+        material: mapMaterialSupportRow(row),
+        standardMaterials,
+      });
+    } catch (error) {
+      console.error('Fetch material support details error', error);
+      res.status(500).json({ error: 'Failed to fetch support details' });
+    }
+  },
+);
+
+registerStandardMaterialMutationRoutes(materialsRouter, 'tray', '/trays/:trayId', 'trayId');
+registerStandardMaterialMutationRoutes(
+  materialsRouter,
+  'support',
+  '/supports/:supportId',
+  'supportId',
 );
 
 export { materialsRouter };

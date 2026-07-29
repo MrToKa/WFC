@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Body1, Button, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useStyles } from './Materials/Materials.styles';
-import { MaterialsTab } from './Materials/Materials.types';
+import { parseMaterialsTab, type MaterialsTab } from './Materials/Materials.types';
 import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
 import { useLoadCurves } from './Materials/hooks/useLoadCurves';
@@ -23,6 +23,7 @@ import { LoadCurveDialog } from './Materials/components/LoadCurveDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
+import { MATERIAL_DETAILS_CAPABILITIES } from './Materials/materialCapabilities';
 
 export const Materials = () => {
   const styles = useStyles();
@@ -30,9 +31,11 @@ export const Materials = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const isAdmin = Boolean(user?.isAdmin);
-  const [selectedTab, setSelectedTab] = useState<MaterialsTab>('cableTypes');
+  const initialTab = parseMaterialsTab(searchParams.get('tab'));
+  const [selectedTab, setSelectedTab] = useState<MaterialsTab>(initialTab);
 
   const numberFormatter = useMemo(
     () =>
@@ -82,9 +85,14 @@ export const Materials = () => {
   });
   const templateImagesHook = useTemplateImages({ token, showToast });
 
-  const handleTabSelect = useCallback((_event: unknown, data: { value: TabValue }) => {
-    setSelectedTab(data.value as MaterialsTab);
-  }, []);
+  const handleTabSelect = useCallback(
+    (_event: unknown, data: { value: TabValue }) => {
+      const nextTab = parseMaterialsTab(String(data.value));
+      setSelectedTab(nextTab);
+      setSearchParams({ tab: nextTab }, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   const trayTotalPages = traysHook.trayPagination ? traysHook.trayPagination.totalPages : 1;
   const supportTotalPages = supportsHook.supportPagination
@@ -162,6 +170,9 @@ export const Materials = () => {
             isLoading={cableInstallationMaterialsHook.cableInstallationMaterialsLoading}
             items={cableInstallationMaterialsHook.pagedCableInstallationMaterials}
             pendingId={cableInstallationMaterialsHook.pendingCableInstallationMaterialId}
+            onDetails={(item) =>
+              navigate(MATERIAL_DETAILS_CAPABILITIES['cable-installation-material'].route(item.id))
+            }
             onEdit={cableInstallationMaterialsHook.openEditCableInstallationMaterialDialog}
             onDelete={(item) =>
               void cableInstallationMaterialsHook.handleDeleteCableInstallationMaterial(item)
@@ -236,6 +247,9 @@ export const Materials = () => {
               formatNumeric={formatNumeric}
               formatWeight={formatWeight}
               onEdit={traysHook.openTrayEditDialog}
+              onDetails={(tray) =>
+                navigate(MATERIAL_DETAILS_CAPABILITIES.tray.route(tray.id))
+              }
               onDelete={traysHook.handleTrayDelete}
               onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
               token={token}
@@ -303,6 +317,9 @@ export const Materials = () => {
               formatNumeric={formatNumeric}
               formatWeight={formatWeight}
               onEdit={supportsHook.openSupportEditDialog}
+              onDetails={(support) =>
+                navigate(MATERIAL_DETAILS_CAPABILITIES.support.route(support.id))
+              }
               onDelete={supportsHook.handleSupportDelete}
               token={token}
               page={supportsHook.supportPage}
@@ -373,6 +390,9 @@ export const Materials = () => {
             isLoading={cableTypesHook.cableTypesLoading}
             items={cableTypesHook.pagedCableTypes}
             pendingId={cableTypesHook.pendingCableTypeId}
+            onDetails={(cableType) =>
+              navigate(MATERIAL_DETAILS_CAPABILITIES['cable-type'].route(cableType.id))
+            }
             onEdit={cableTypesHook.openEditCableTypeDialog}
             onDelete={(cableType) => void cableTypesHook.handleDeleteCableType(cableType)}
             formatNumeric={formatNumeric}

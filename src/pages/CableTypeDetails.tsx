@@ -940,6 +940,7 @@ export const CableTypeDetails = () => {
                   </th>
                   <th className={styles.tableHeadCell}>Unit</th>
                   <th className={styles.tableHeadCell}>Remarks</th>
+                  <th className={styles.tableHeadCell}>Source</th>
                   {isAdmin ? <th className={styles.tableHeadCell}>Actions</th> : null}
                 </tr>
               </thead>
@@ -957,6 +958,11 @@ export const CableTypeDetails = () => {
                         {formatOptionalText(normalizeDefaultMaterialUnit(material.unit))}
                       </td>
                       <td className={styles.tableCell}>{formatOptionalText(material.remarks)}</td>
+                      <td className={styles.tableCell}>
+                        {material.sourceKind === 'standard-material'
+                          ? 'Inherited from Materials'
+                          : 'Project default'}
+                      </td>
                       {isAdmin ? (
                         <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
                           <Button

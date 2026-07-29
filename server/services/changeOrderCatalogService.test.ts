@@ -6,8 +6,15 @@ import {
   snapshotSupport,
   snapshotTray,
 } from './changeOrderCatalogService.js';
+import { calculateInheritedChangeOrderQuantities } from './changeOrderService.js';
 
 describe('Change Order catalog snapshots', () => {
+  it('multiplies inherited quantities by the parent quantities', () => {
+    expect(calculateInheritedChangeOrderQuantities(4, 5, 2)).toEqual({
+      designQuantity: 8,
+      orderQuantity: 10,
+    });
+  });
   it('maps cable types and does not change a snapshot when its source changes later', () => {
     const source = {
       id: 'cable-id',

@@ -12,6 +12,7 @@ type TraysTableProps = {
   isSubmitting: boolean;
   formatNumeric: (value: number | null) => string;
   formatWeight: (value: number | null) => string;
+  onDetails: (tray: MaterialTray) => void;
   onEdit: (tray: MaterialTray) => void;
   onDelete: (tray: MaterialTray) => void;
   onAssignLoadCurve: (tray: MaterialTray) => void;
@@ -42,6 +43,7 @@ export const TraysTable = ({
   isSubmitting,
   formatNumeric,
   formatWeight,
+  onDetails,
   onEdit,
   onDelete,
   onAssignLoadCurve,
@@ -93,7 +95,7 @@ export const TraysTable = ({
                 Weight [kg/m]
               </th>
               <th className={styles.tableHeadCell}>Load curve</th>
-              {isAdmin ? <th className={styles.tableHeadCell}>Actions</th> : null}
+              <th className={styles.tableHeadCell}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -119,8 +121,12 @@ export const TraysTable = ({
                   <td className={styles.tableCell}>
                     {tray.loadCurveName ?? 'No load curve assigned'}
                   </td>
-                  {isAdmin ? (
-                    <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                  <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                    <Button size="small" onClick={() => onDetails(tray)}>
+                      Details
+                    </Button>
+                    {isAdmin ? (
+                      <>
                       <Button
                         size='small'
                         appearance='secondary'
@@ -152,8 +158,9 @@ export const TraysTable = ({
                       >
                         {isBusy ? 'Deleting...' : 'Delete'}
                       </Button>
-                    </td>
-                  ) : null}
+                      </>
+                    ) : null}
+                  </td>
                 </tr>
               );
             })}

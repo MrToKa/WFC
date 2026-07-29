@@ -16,6 +16,7 @@ import {
   resolveChangeOrderCatalogSnapshot,
   type ChangeOrderItemSnapshot,
 } from './changeOrderCatalogService.js';
+import { expandStandardMaterials } from './standardMaterialService.js';
 
 export type ChangeOrderHeaderInput = {
   title: string;
@@ -57,6 +58,15 @@ export type ChangeOrderItemUpdate = {
   remarks?: string | null;
 };
 
+export const calculateInheritedChangeOrderQuantities = (
+  designQuantity: number,
+  orderQuantity: number,
+  quantityPerParent: number,
+): { designQuantity: number; orderQuantity: number } => ({
+  designQuantity: designQuantity * quantityPerParent,
+  orderQuantity: orderQuantity * quantityPerParent,
+});
+
 const ITEM_COLUMNS = `
   id, change_order_id, sort_order, source_catalog, source_material_id,
   design_quantity, order_quantity, unit, packaging, packaging_quantity,
@@ -64,6 +74,7 @@ const ITEM_COLUMNS = `
   description_de, dimension_mm, material, weight_kg, clear_description, unit_price,
   country_of_origin, hs_code, tag_no, drawing_no, shipping_list, revision_number,
   client_barcode, manufacturer, manufacturer_part_no, acs_barcode, remarks,
+  line_kind, parent_item_id, quantity_per_parent, source_standard_material_assignment_ids,
   created_at, updated_at
 `;
 
@@ -209,14 +220,26 @@ const insertSnapshot = async (
   changeOrderId: string,
   sortOrder: number,
   snapshot: ChangeOrderItemSnapshot,
+  provenance?: {
+    lineKind: 'manual' | 'inherited';
+    parentItemId?: string | null;
+    quantityPerParent?: number | null;
+    sourceAssignmentIds?: string[];
+    designQuantity?: number;
+    orderQuantity?: number;
+  },
 ): Promise<ChangeOrderItem> => {
   const result = await client.query<ChangeOrderItemRow>(
     `
       INSERT INTO project_change_order_items (
         id, change_order_id, sort_order, source_catalog, source_material_id,
         unit, description_en, clear_description, dimension_mm, material, weight_kg,
-        manufacturer, manufacturer_part_no
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        manufacturer, manufacturer_part_no, line_kind, parent_item_id, quantity_per_parent,
+        source_standard_material_assignment_ids, design_quantity, order_quantity
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17::uuid[], $18, $19
+      )
       RETURNING ${ITEM_COLUMNS}
     `,
     [
@@ -233,6 +256,12 @@ const insertSnapshot = async (
       snapshot.weightKg,
       snapshot.manufacturer,
       snapshot.manufacturerPartNo,
+      provenance?.lineKind ?? 'manual',
+      provenance?.parentItemId ?? null,
+      provenance?.quantityPerParent ?? null,
+      provenance?.sourceAssignmentIds ?? [],
+      provenance?.designQuantity ?? 0,
+      provenance?.orderQuantity ?? 0,
     ],
   );
   return mapChangeOrderItemRow(result.rows[0]);
@@ -272,6 +301,34 @@ export const addChangeOrderItem = async (
       orderResult.rows[0]?.next_order ?? 1,
       snapshot,
     );
+    const expanded = await expandStandardMaterials(client, sourceCatalog, sourceMaterialId);
+    let nextSortOrder = (orderResult.rows[0]?.next_order ?? 1) + 1;
+    for (const material of expanded) {
+      await insertSnapshot(
+        client,
+        changeOrderId,
+        nextSortOrder,
+        {
+          sourceCatalog: 'cable-installation-material',
+          sourceMaterialId: material.referencedMaterialId,
+          unit: material.unit,
+          descriptionEn: material.name,
+          clearDescription: material.description,
+          dimensionMm: null,
+          material: material.material,
+          weightKg: null,
+          manufacturer: material.manufacturer,
+          manufacturerPartNo: material.partNo,
+        },
+        {
+          lineKind: 'inherited',
+          parentItemId: item.id,
+          quantityPerParent: material.quantity,
+          sourceAssignmentIds: material.sourceAssignmentIds,
+        },
+      );
+      nextSortOrder += 1;
+    }
     await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
       changeOrderId,
     ]);
@@ -346,6 +403,10 @@ export const updateChangeOrderItem = async (
 ): Promise<ChangeOrderItem | null> => {
   const assignments: string[] = [];
   const values: unknown[] = [];
+  const updatesSystemManagedFields =
+    input.designQuantity !== undefined ||
+    input.orderQuantity !== undefined ||
+    input.unit !== undefined;
   for (const key of Object.keys(input) as Array<keyof ChangeOrderItemUpdate>) {
     const rawValue = input[key];
     values.push(
@@ -356,26 +417,50 @@ export const updateChangeOrderItem = async (
     assignments.push(`${ITEM_COLUMN_MAP[key]} = $${values.length}`);
   }
   values.push(itemId, changeOrderId, projectId);
-  const result = await pool.query<ChangeOrderItemRow>(
-    `
-      UPDATE project_change_order_items i
-      SET ${assignments.join(', ')}, updated_at = NOW()
-      FROM project_change_orders co
-      WHERE i.id = $${values.length - 2}
-        AND i.change_order_id = $${values.length - 1}
-        AND co.id = i.change_order_id
-        AND co.project_id = $${values.length}
-      RETURNING ${ITEM_COLUMNS.split(',')
-        .map((column) => `i.${column.trim()}`)
-        .join(', ')}
-    `,
-    values,
-  );
-  if (!result.rows[0]) return null;
-  await pool.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
-    changeOrderId,
-  ]);
-  return mapChangeOrderItemRow(result.rows[0]);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await client.query<ChangeOrderItemRow>(
+      `
+        UPDATE project_change_order_items i
+        SET ${assignments.join(', ')}, updated_at = NOW()
+        FROM project_change_orders co
+        WHERE i.id = $${values.length - 2}
+          AND i.change_order_id = $${values.length - 1}
+          ${updatesSystemManagedFields ? "AND i.line_kind = 'manual'" : ''}
+          AND co.id = i.change_order_id
+          AND co.project_id = $${values.length}
+        RETURNING ${ITEM_COLUMNS.split(',')
+          .map((column) => `i.${column.trim()}`)
+          .join(', ')}
+      `,
+      values,
+    );
+    const updated = result.rows[0];
+    if (!updated) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    await client.query(
+      `UPDATE project_change_order_items
+       SET
+         design_quantity = $2 * quantity_per_parent,
+         order_quantity = $3 * quantity_per_parent,
+         updated_at = NOW()
+       WHERE parent_item_id = $1 AND line_kind = 'inherited'`,
+      [itemId, updated.design_quantity, updated.order_quantity],
+    );
+    await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
+      changeOrderId,
+    ]);
+    await client.query('COMMIT');
+    return mapChangeOrderItemRow(updated);
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
 export const deleteChangeOrderItem = async (
@@ -391,6 +476,7 @@ export const deleteChangeOrderItem = async (
         DELETE FROM project_change_order_items i
         USING project_change_orders co
         WHERE i.id = $1 AND i.change_order_id = $2
+          AND i.line_kind = 'manual'
           AND co.id = i.change_order_id AND co.project_id = $3
       `,
       [itemId, changeOrderId, projectId],

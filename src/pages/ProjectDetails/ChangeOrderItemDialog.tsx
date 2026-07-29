@@ -137,10 +137,15 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
       return;
     }
     try {
+      const inherited = item?.lineKind === 'inherited';
       const update: ChangeOrderItemUpdate = {
-        designQuantity: parseRequiredNumber(form.designQuantity, 'Design quantity'),
-        orderQuantity: parseRequiredNumber(form.orderQuantity, 'Order quantity'),
-        unit: nullable(form.unit),
+        ...(inherited
+          ? {}
+          : {
+              designQuantity: parseRequiredNumber(form.designQuantity, 'Design quantity'),
+              orderQuantity: parseRequiredNumber(form.orderQuantity, 'Order quantity'),
+              unit: nullable(form.unit),
+            }),
         packaging: nullable(form.packaging),
         packagingQuantity: parseOptionalNumber(form.packagingQuantity, 'Packaging quantity'),
         packagingUnit: nullable(form.packagingUnit),
@@ -181,6 +186,11 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
         step={type === 'number' ? 'any' : undefined}
         value={form?.[field] ?? ''}
         onChange={(_, data) => set(field, data.value)}
+        disabled={
+          saving ||
+          (item?.lineKind === 'inherited' &&
+            (field === 'designQuantity' || field === 'orderQuantity' || field === 'unit'))
+        }
       />
     </Field>
   );

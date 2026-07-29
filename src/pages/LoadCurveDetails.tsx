@@ -481,6 +481,9 @@ export const LoadCurveDetails = () => {
   const updatedAt = loadCurve
     ? `Last updated ${dateFormatter.format(new Date(loadCurve.updatedAt))}`
     : null;
+  const createdAt = loadCurve
+    ? `Created ${dateFormatter.format(new Date(loadCurve.createdAt))}`
+    : null;
 
   if (isLoading) {
     return (
@@ -499,7 +502,10 @@ export const LoadCurveDetails = () => {
           <Title2 id='load-curve-heading'>Load curve details</Title2>
           <Body1 className={styles.errorText}>{error}</Body1>
           <div className={styles.headerActions}>
-            <Button appearance='primary' onClick={() => navigate('/materials')}>
+            <Button
+              appearance='primary'
+              onClick={() => navigate('/materials?tab=loadCurves')}
+            >
               Back to materials
             </Button>
             <Button onClick={() => loadData()}>Retry</Button>
@@ -536,13 +542,17 @@ export const LoadCurveDetails = () => {
     <section className={styles.root} aria-labelledby='load-curve-heading'>
       <div className={styles.header}>
         <div className={styles.headerActions}>
-          <Button appearance='secondary' onClick={() => navigate('/materials')}>
+          <Button
+            appearance='secondary'
+            onClick={() => navigate('/materials?tab=loadCurves')}
+          >
             Back to materials
           </Button>
           <Button onClick={() => loadData()}>Refresh</Button>
         </div>
+        <Caption1>Load curve</Caption1>
         <Title2 id='load-curve-heading'>{pageTitle}</Title2>
-        {updatedAt ? <Caption1>{updatedAt}</Caption1> : null}
+        {createdAt && updatedAt ? <Caption1>{createdAt} · {updatedAt}</Caption1> : null}
       </div>
 
       <div className={styles.layout}>

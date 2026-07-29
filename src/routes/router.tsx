@@ -15,6 +15,10 @@ import { Projects } from '@/pages/Projects';
 import { Login } from '@/pages/Login';
 import { Register } from '@/pages/Register';
 import { LoadCurveDetails } from '@/pages/LoadCurveDetails';
+import { MaterialCableTypeDetails } from '@/pages/MaterialCableTypeDetails';
+import { MaterialCableInstallationMaterialDetails } from '@/pages/MaterialCableInstallationMaterialDetails';
+import { MaterialTrayDetails } from '@/pages/MaterialTrayDetails';
+import { MaterialSupportDetails } from '@/pages/MaterialSupportDetails';
 
 export const routes: RouteObject[] = [
   {
@@ -44,6 +48,22 @@ export const routes: RouteObject[] = [
             <Assemblies />
           </RequireAuth>
         )
+      },
+      {
+        path: 'materials/cable-types/:cableTypeId',
+        element: <MaterialCableTypeDetails />
+      },
+      {
+        path: 'materials/cable-installation-materials/:cableInstallationMaterialId',
+        element: <MaterialCableInstallationMaterialDetails />
+      },
+      {
+        path: 'materials/trays/:trayId',
+        element: <MaterialTrayDetails />
+      },
+      {
+        path: 'materials/supports/:supportId',
+        element: <MaterialSupportDetails />
       },
       {
         path: 'materials/load-curves/:loadCurveId',

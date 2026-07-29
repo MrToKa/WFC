@@ -57,6 +57,10 @@ export type ChangeOrderItemRow = {
   manufacturer_part_no: string | null;
   acs_barcode: string | null;
   remarks: string | null;
+  line_kind?: 'manual' | 'inherited';
+  parent_item_id?: string | null;
+  quantity_per_parent?: string | number | null;
+  source_standard_material_assignment_ids?: string[] | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -96,6 +100,10 @@ export type ChangeOrderItem = {
   manufacturerPartNo: string | null;
   acsBarcode: string | null;
   remarks: string | null;
+  lineKind?: 'manual' | 'inherited';
+  parentItemId?: string | null;
+  quantityPerParent?: number | null;
+  sourceStandardMaterialAssignmentIds?: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -190,6 +198,10 @@ export const mapChangeOrderItemRow = (row: ChangeOrderItemRow): ChangeOrderItem 
     manufacturerPartNo: row.manufacturer_part_no ?? null,
     acsBarcode: row.acs_barcode ?? null,
     remarks: row.remarks ?? null,
+    lineKind: row.line_kind ?? 'manual',
+    parentItemId: row.parent_item_id ?? null,
+    quantityPerParent: toFiniteNumber(row.quantity_per_parent),
+    sourceStandardMaterialAssignmentIds: row.source_standard_material_assignment_ids ?? [],
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };

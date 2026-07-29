@@ -5,6 +5,17 @@ export type MaterialsTab =
   | 'cableTypes'
   | 'cableInstallationMaterials';
 
+export const MATERIAL_TABS: MaterialsTab[] = [
+  'cableTypes',
+  'cableInstallationMaterials',
+  'trays',
+  'supports',
+  'loadCurves',
+];
+
+export const parseMaterialsTab = (value: string | null): MaterialsTab =>
+  MATERIAL_TABS.includes(value as MaterialsTab) ? (value as MaterialsTab) : 'cableTypes';
+
 export type TrayFormState = {
   type: string;
   manufacturer: string;

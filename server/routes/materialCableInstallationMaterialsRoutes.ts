@@ -5,16 +5,19 @@ import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import { z } from 'zod';
 import { pool } from '../db.js';
 import {
   mapMaterialCableInstallationMaterialRow,
   type MaterialCableInstallationMaterialRow,
 } from '../models/materialCableInstallationMaterial.js';
 import { authenticate, requireAdmin } from '../middleware.js';
+import { listStandardMaterialAssignments } from '../services/standardMaterialService.js';
 import {
   createMaterialCableInstallationMaterialSchema,
   updateMaterialCableInstallationMaterialSchema,
 } from '../validators.js';
+import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
 
 const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -310,6 +313,18 @@ materialCableInstallationMaterialsRouter.delete(
 
       res.status(204).send();
     } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23503'
+      ) {
+        res.status(409).json({
+          error:
+            'Cable installation material is used by a Standard Material assignment. Remove the assignment first.',
+        });
+        return;
+      }
       console.error('Delete material cable installation material error', error);
       res.status(500).json({ error: 'Failed to delete cable installation material' });
     }
@@ -693,6 +708,52 @@ materialCableInstallationMaterialsRouter.get(
       res.status(500).json({ error: 'Failed to export cable installation materials' });
     }
   },
+);
+
+materialCableInstallationMaterialsRouter.get(
+  '/:cableInstallationMaterialId',
+  async (req: Request, res: Response): Promise<void> => {
+    const parsedId = z.string().uuid().safeParse(req.params.cableInstallationMaterialId);
+    if (!parsedId.success) {
+      res.status(400).json({ error: 'Invalid cableInstallationMaterialId' });
+      return;
+    }
+    try {
+      const result = await pool.query<MaterialCableInstallationMaterialRow>(
+        `${selectMaterialCableInstallationMaterialsQuery} WHERE id = $1 LIMIT 1`,
+        [parsedId.data],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        res.status(404).json({ error: 'Cable installation material not found' });
+        return;
+      }
+      const standardMaterials = await listStandardMaterialAssignments(
+        pool,
+        'cable-installation-material',
+        parsedId.data,
+      );
+      res.json({
+        category: {
+          key: 'cable-installation-material',
+          label: 'Cable installation material',
+          supportsStandardMaterials: true,
+        },
+        material: mapMaterialCableInstallationMaterialRow(row),
+        standardMaterials,
+      });
+    } catch (error) {
+      console.error('Fetch cable installation material details error', error);
+      res.status(500).json({ error: 'Failed to fetch cable installation material details' });
+    }
+  },
+);
+
+registerStandardMaterialMutationRoutes(
+  materialCableInstallationMaterialsRouter,
+  'cable-installation-material',
+  '/:cableInstallationMaterialId',
+  'cableInstallationMaterialId',
 );
 
 export { materialCableInstallationMaterialsRouter };

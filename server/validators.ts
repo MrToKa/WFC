@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CABLE_MTO_VALUES } from './models/cable.js';
 import { CHANGE_ORDER_SOURCE_CATALOGS } from './models/changeOrder.js';
+import { STANDARD_MATERIAL_UNITS } from './models/standardMaterial.js';
 
 export const registerSchema = z
   .object({
@@ -194,6 +195,7 @@ const cableTypeDefaultMaterialUnitField = z.enum(['pcs', 'meters', 'pcs/m']).nul
 export const createCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
+    sourceMaterialCableTypeId: z.string().uuid().optional(),
     purpose: cableTypeStringField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
@@ -203,6 +205,7 @@ export const createCableTypeSchema = z
 export const updateCableTypeSchema = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
+    sourceMaterialCableTypeId: z.string().uuid().optional(),
     purpose: cableTypeStringField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
@@ -211,6 +214,7 @@ export const updateCableTypeSchema = z
   .refine(
     (value) =>
       value.name !== undefined ||
+      value.sourceMaterialCableTypeId !== undefined ||
       value.purpose !== undefined ||
       value.diameterMm !== undefined ||
       value.weightKgPerM !== undefined,
@@ -319,6 +323,27 @@ export const updateCableTypeDefaultMaterialSchema = z
 export const createCableMaterialSchema = createCableTypeDefaultMaterialSchema;
 
 export const updateCableMaterialSchema = updateCableTypeDefaultMaterialSchema;
+
+const standardMaterialQuantity = z
+  .number()
+  .finite()
+  .positive()
+  .max(1_000_000_000);
+
+export const createStandardMaterialSchema = z
+  .object({
+    referencedMaterialId: z.string().uuid(),
+    quantity: standardMaterialQuantity,
+    unit: z.enum(STANDARD_MATERIAL_UNITS),
+    remarks: z.string().trim().max(2_000).nullable().optional(),
+  })
+  .strict();
+
+export const updateStandardMaterialSchema = createStandardMaterialSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field must be provided',
+  });
 
 const cableStringField = z.string().trim().max(500).optional();
 const cableMtoField = z.enum(CABLE_MTO_VALUES).nullable().optional();

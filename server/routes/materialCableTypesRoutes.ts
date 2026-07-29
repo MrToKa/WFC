@@ -5,10 +5,13 @@ import { Router } from 'express';
 import ExcelJS from 'exceljs';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import { z } from 'zod';
 import { pool } from '../db.js';
 import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
 import { authenticate, requireAdmin } from '../middleware.js';
+import { listStandardMaterialAssignments } from '../services/standardMaterialService.js';
 import { createMaterialCableTypeSchema, updateMaterialCableTypeSchema } from '../validators.js';
+import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
 
 const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -787,6 +790,52 @@ materialCableTypesRouter.get(
       res.status(500).json({ error: 'Failed to export cable types' });
     }
   },
+);
+
+materialCableTypesRouter.get(
+  '/:cableTypeId',
+  async (req: Request, res: Response): Promise<void> => {
+    const parsedId = z.string().uuid().safeParse(req.params.cableTypeId);
+    if (!parsedId.success) {
+      res.status(400).json({ error: 'Invalid cableTypeId' });
+      return;
+    }
+    try {
+      const result = await pool.query<MaterialCableTypeRow>(
+        `${selectMaterialCableTypesQuery} WHERE id = $1 LIMIT 1`,
+        [parsedId.data],
+      );
+      const row = result.rows[0];
+      if (!row) {
+        res.status(404).json({ error: 'Cable type not found' });
+        return;
+      }
+      const standardMaterials = await listStandardMaterialAssignments(
+        pool,
+        'cable-type',
+        parsedId.data,
+      );
+      res.json({
+        category: {
+          key: 'cable-type',
+          label: 'Cable type',
+          supportsStandardMaterials: true,
+        },
+        material: mapMaterialCableTypeRow(row),
+        standardMaterials,
+      });
+    } catch (error) {
+      console.error('Fetch material cable type details error', error);
+      res.status(500).json({ error: 'Failed to fetch cable type details' });
+    }
+  },
+);
+
+registerStandardMaterialMutationRoutes(
+  materialCableTypesRouter,
+  'cable-type',
+  '/:cableTypeId',
+  'cableTypeId',
 );
 
 export { materialCableTypesRouter };

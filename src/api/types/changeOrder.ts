@@ -39,6 +39,10 @@ export type ChangeOrderItem = {
   manufacturerPartNo: string | null;
   acsBarcode: string | null;
   remarks: string | null;
+  lineKind?: 'manual' | 'inherited';
+  parentItemId?: string | null;
+  quantityPerParent?: number | null;
+  sourceStandardMaterialAssignmentIds?: string[];
   createdAt: string;
   updatedAt: string;
 };

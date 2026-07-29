@@ -495,13 +495,18 @@ export const useCableTypesSection = ({
 
       setDialogSubmitting(true);
       setDialogErrors({});
+      const sourceMaterialCableTypeId = findMaterialCableTypeByName(input.name)?.id;
+      const snapshotInput = {
+        ...input,
+        ...(sourceMaterialCableTypeId ? { sourceMaterialCableTypeId } : {}),
+      };
 
       try {
         if (dialogMode === 'create') {
           const response = await createCableType(
             token,
             projectSnapshot.id,
-            input
+            snapshotInput
           );
           setCableTypes((previous: CableType[]) =>
             sortCableTypes([...previous, response.cableType])
@@ -513,7 +518,7 @@ export const useCableTypesSection = ({
             token,
             projectSnapshot.id,
             editingCableTypeId,
-            input
+            snapshotInput
           );
         setCableTypes((previous: CableType[]) =>
           sortCableTypes(
@@ -554,6 +559,7 @@ export const useCableTypesSection = ({
       dialogMode,
       dialogValues,
       editingCableTypeId,
+      findMaterialCableTypeByName,
       onMutate,
       projectSnapshot,
       resetDialog,

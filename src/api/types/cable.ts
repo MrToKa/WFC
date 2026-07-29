@@ -9,6 +9,7 @@ export type CableType = {
   id: string;
   projectId: string;
   name: string;
+  sourceMaterialCableTypeId?: string;
   tag: string | null;
   purpose: string | null;
   diameterMm: number | null;
@@ -128,6 +129,9 @@ export type CableTypeDefaultMaterial = {
   quantity: number | null;
   unit: string | null;
   remarks: string | null;
+  sourceKind: 'manual' | 'standard-material' | null;
+  sourceMasterMaterialId: string | null;
+  sourceStandardMaterialAssignmentIds: string[];
   createdAt: string;
   updatedAt: string;
 };

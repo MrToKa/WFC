@@ -21,6 +21,7 @@ export type CableTypeRow = {
   remarks?: string | null;
   diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  source_material_cable_type_id?: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -32,6 +33,7 @@ export type PublicCableType = {
   purpose: string | null;
   diameterMm: number | null;
   weightKgPerM: number | null;
+  sourceMaterialCableTypeId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -43,6 +45,7 @@ export const mapCableTypeRow = (row: CableTypeRow): PublicCableType => ({
   purpose: row.purpose ?? null,
   diameterMm: toNumberOrNull(row.diameter_mm),
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
+  sourceMaterialCableTypeId: row.source_material_cable_type_id ?? null,
   createdAt:
     typeof row.created_at === 'string'
       ? row.created_at

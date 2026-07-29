@@ -171,3 +171,61 @@ export type MaterialSupportInput = {
   weightKg?: number | null;
   imageTemplateId?: string | null;
 };
+
+export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
+  'cable-type',
+  'cable-installation-material',
+  'tray',
+  'support',
+] as const;
+
+export type StandardMaterialOwnerCategory =
+  (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
+export type MaterialDetailsCategory = StandardMaterialOwnerCategory | 'load-curve';
+export type StandardMaterialUnit = 'pcs' | 'meters' | 'pcs/m';
+
+export type MaterialCategoryMetadata = {
+  key: MaterialDetailsCategory;
+  label: string;
+  supportsStandardMaterials: boolean;
+};
+
+export type StandardMaterialAssignment = {
+  id: string;
+  ownerId: string;
+  ownerCategory: StandardMaterialOwnerCategory;
+  referencedMaterialId: string;
+  referencedMaterial: {
+    id: string;
+    type: string;
+    purpose: string | null;
+    material: string | null;
+    description: string | null;
+    manufacturer: string | null;
+    partNo: string | null;
+  };
+  quantity: number;
+  unit: StandardMaterialUnit;
+  remarks: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type StandardMaterialInput = {
+  referencedMaterialId: string;
+  quantity: number;
+  unit: StandardMaterialUnit;
+  remarks?: string | null;
+};
+
+export type StandardMaterialOwner =
+  | MaterialCableType
+  | MaterialCableInstallationMaterial
+  | MaterialTray
+  | MaterialSupport;
+
+export type MaterialDetailsResponse<T extends StandardMaterialOwner = StandardMaterialOwner> = {
+  category: MaterialCategoryMetadata;
+  material: T;
+  standardMaterials: StandardMaterialAssignment[];
+};

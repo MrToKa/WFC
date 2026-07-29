@@ -11,6 +11,7 @@ type SupportsTableProps = {
   isSubmitting: boolean;
   formatNumeric: (value: number | null) => string;
   formatWeight: (value: number | null) => string;
+  onDetails: (support: MaterialSupport) => void;
   onEdit: (support: MaterialSupport) => void;
   onDelete: (support: MaterialSupport) => void;
   token: string | null;
@@ -39,6 +40,7 @@ export const SupportsTable = ({
   isSubmitting,
   formatNumeric,
   formatWeight,
+  onDetails,
   onEdit,
   onDelete,
   token,
@@ -88,7 +90,7 @@ export const SupportsTable = ({
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Weight [kg]
               </th>
-              {isAdmin ? <th className={styles.tableHeadCell}>Actions</th> : null}
+              <th className={styles.tableHeadCell}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -110,8 +112,12 @@ export const SupportsTable = ({
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatWeight(support.weightKg)}
                   </td>
-                  {isAdmin ? (
-                    <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                  <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                    <Button size="small" onClick={() => onDetails(support)}>
+                      Details
+                    </Button>
+                    {isAdmin ? (
+                      <>
                       {support.imageTemplateId ? (
                         <TemplateImagePreview
                           token={token}
@@ -135,8 +141,9 @@ export const SupportsTable = ({
                       >
                         {isBusy ? 'Deleting...' : 'Delete'}
                       </Button>
-                    </td>
-                  ) : null}
+                      </>
+                    ) : null}
+                  </td>
                 </tr>
               );
             })}

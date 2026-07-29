@@ -43,6 +43,7 @@ type CableInstallationMaterialsTabProps = {
   isLoading: boolean;
   items: MaterialCableInstallationMaterial[];
   pendingId: string | null;
+  onDetails: (item: MaterialCableInstallationMaterial) => void;
   onEdit: (item: MaterialCableInstallationMaterial) => void;
   onDelete: (item: MaterialCableInstallationMaterial) => void;
   showPagination: boolean;
@@ -76,6 +77,7 @@ export const CableInstallationMaterialsTab = ({
   isLoading,
   items,
   pendingId,
+  onDetails,
   onEdit,
   onDelete,
   showPagination,
@@ -191,7 +193,7 @@ export const CableInstallationMaterialsTab = ({
                 <th className={styles.tableHeadCell}>Description</th>
                 <th className={styles.tableHeadCell}>Manufacturer</th>
                 <th className={styles.tableHeadCell}>Part No.</th>
-                {isAdmin ? <th className={styles.tableHeadCell}>Actions</th> : null}
+                <th className={styles.tableHeadCell}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -205,8 +207,12 @@ export const CableInstallationMaterialsTab = ({
                     <td className={styles.tableCell}>{item.description ?? '-'}</td>
                     <td className={styles.tableCell}>{item.manufacturer ?? '-'}</td>
                     <td className={styles.tableCell}>{item.partNo ?? '-'}</td>
-                    {isAdmin ? (
-                      <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                    <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
+                      <Button size="small" onClick={() => onDetails(item)}>
+                        Details
+                      </Button>
+                      {isAdmin ? (
+                        <>
                         <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>
                           Edit
                         </Button>
@@ -218,8 +224,9 @@ export const CableInstallationMaterialsTab = ({
                         >
                           Delete
                         </Button>
-                      </td>
-                    ) : null}
+                        </>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}

@@ -942,6 +942,185 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_cable_type_standard_materials (
+      id UUID PRIMARY KEY,
+      cable_type_id UUID NOT NULL
+        REFERENCES material_cable_types(id) ON DELETE CASCADE,
+      referenced_material_id UUID NOT NULL
+        REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT,
+      quantity NUMERIC NOT NULL,
+      unit TEXT NOT NULL,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT material_cable_type_standard_materials_quantity_check
+        CHECK (quantity > 0 AND quantity < 'Infinity'::numeric),
+      CONSTRAINT material_cable_type_standard_materials_unit_check
+        CHECK (unit IN ('pcs', 'meters', 'pcs/m')),
+      CONSTRAINT material_cable_type_standard_materials_owner_child_unique
+        UNIQUE (cable_type_id, referenced_material_id)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_cable_type_standard_materials_owner_idx
+      ON material_cable_type_standard_materials (cable_type_id);
+    CREATE INDEX IF NOT EXISTS material_cable_type_standard_materials_reference_idx
+      ON material_cable_type_standard_materials (referenced_material_id);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_cable_installation_standard_materials (
+      id UUID PRIMARY KEY,
+      cable_installation_material_id UUID NOT NULL
+        REFERENCES material_cable_installation_materials(id) ON DELETE CASCADE,
+      referenced_material_id UUID NOT NULL
+        REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT,
+      quantity NUMERIC NOT NULL,
+      unit TEXT NOT NULL,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT material_cable_installation_standard_materials_quantity_check
+        CHECK (quantity > 0 AND quantity < 'Infinity'::numeric),
+      CONSTRAINT material_cable_installation_standard_materials_unit_check
+        CHECK (unit IN ('pcs', 'meters', 'pcs/m')),
+      CONSTRAINT material_cable_installation_standard_materials_self_check
+        CHECK (cable_installation_material_id <> referenced_material_id),
+      CONSTRAINT material_cable_installation_standard_materials_owner_child_unique
+        UNIQUE (cable_installation_material_id, referenced_material_id)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_cable_installation_standard_materials_owner_idx
+      ON material_cable_installation_standard_materials (cable_installation_material_id);
+    CREATE INDEX IF NOT EXISTS material_cable_installation_standard_materials_reference_idx
+      ON material_cable_installation_standard_materials (referenced_material_id);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_tray_standard_materials (
+      id UUID PRIMARY KEY,
+      tray_id UUID NOT NULL REFERENCES material_trays(id) ON DELETE CASCADE,
+      referenced_material_id UUID NOT NULL
+        REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT,
+      quantity NUMERIC NOT NULL,
+      unit TEXT NOT NULL,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT material_tray_standard_materials_quantity_check
+        CHECK (quantity > 0 AND quantity < 'Infinity'::numeric),
+      CONSTRAINT material_tray_standard_materials_unit_check
+        CHECK (unit IN ('pcs', 'meters', 'pcs/m')),
+      CONSTRAINT material_tray_standard_materials_owner_child_unique
+        UNIQUE (tray_id, referenced_material_id)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_tray_standard_materials_owner_idx
+      ON material_tray_standard_materials (tray_id);
+    CREATE INDEX IF NOT EXISTS material_tray_standard_materials_reference_idx
+      ON material_tray_standard_materials (referenced_material_id);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_support_standard_materials (
+      id UUID PRIMARY KEY,
+      support_id UUID NOT NULL REFERENCES material_supports(id) ON DELETE CASCADE,
+      referenced_material_id UUID NOT NULL
+        REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT,
+      quantity NUMERIC NOT NULL,
+      unit TEXT NOT NULL,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT material_support_standard_materials_quantity_check
+        CHECK (quantity > 0 AND quantity < 'Infinity'::numeric),
+      CONSTRAINT material_support_standard_materials_unit_check
+        CHECK (unit IN ('pcs', 'meters', 'pcs/m')),
+      CONSTRAINT material_support_standard_materials_owner_child_unique
+        UNIQUE (support_id, referenced_material_id)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_support_standard_materials_owner_idx
+      ON material_support_standard_materials (support_id);
+    CREATE INDEX IF NOT EXISTS material_support_standard_materials_reference_idx
+      ON material_support_standard_materials (referenced_material_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_types
+      ADD COLUMN IF NOT EXISTS source_material_cable_type_id UUID;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_types_source_material_cable_type_id_fkey'
+          AND table_name = 'cable_types'
+      ) THEN
+        ALTER TABLE cable_types
+          ADD CONSTRAINT cable_types_source_material_cable_type_id_fkey
+          FOREIGN KEY (source_material_cable_type_id)
+          REFERENCES material_cable_types(id)
+          ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_types_source_material_cable_type_id_idx
+      ON cable_types (source_material_cable_type_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE cable_type_default_materials
+      ADD COLUMN IF NOT EXISTS source_kind TEXT;
+    ALTER TABLE cable_type_default_materials
+      ADD COLUMN IF NOT EXISTS source_master_material_id UUID;
+    ALTER TABLE cable_type_default_materials
+      ADD COLUMN IF NOT EXISTS source_standard_material_assignment_ids UUID[];
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_type_default_materials_source_kind_check'
+          AND table_name = 'cable_type_default_materials'
+      ) THEN
+        ALTER TABLE cable_type_default_materials
+          ADD CONSTRAINT cable_type_default_materials_source_kind_check
+          CHECK (source_kind IS NULL OR source_kind IN ('manual', 'standard-material'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'cable_type_default_materials_source_master_material_id_fkey'
+          AND table_name = 'cable_type_default_materials'
+      ) THEN
+        ALTER TABLE cable_type_default_materials
+          ADD CONSTRAINT cable_type_default_materials_source_master_material_id_fkey
+          FOREIGN KEY (source_master_material_id)
+          REFERENCES material_cable_installation_materials(id)
+          ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS cable_type_default_materials_source_master_material_id_idx
+      ON cable_type_default_materials (source_master_material_id);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS project_change_orders (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -1038,6 +1217,60 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS project_change_order_items_source_idx
       ON project_change_order_items (source_catalog, source_material_id);
+  `);
+
+  await pool.query(`
+    ALTER TABLE project_change_order_items
+      ADD COLUMN IF NOT EXISTS line_kind TEXT NOT NULL DEFAULT 'manual';
+    ALTER TABLE project_change_order_items
+      ADD COLUMN IF NOT EXISTS parent_item_id UUID;
+    ALTER TABLE project_change_order_items
+      ADD COLUMN IF NOT EXISTS quantity_per_parent NUMERIC;
+    ALTER TABLE project_change_order_items
+      ADD COLUMN IF NOT EXISTS source_standard_material_assignment_ids UUID[];
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'project_change_order_items_line_kind_check'
+          AND table_name = 'project_change_order_items'
+      ) THEN
+        ALTER TABLE project_change_order_items
+          ADD CONSTRAINT project_change_order_items_line_kind_check
+          CHECK (line_kind IN ('manual', 'inherited'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'project_change_order_items_parent_item_id_fkey'
+          AND table_name = 'project_change_order_items'
+      ) THEN
+        ALTER TABLE project_change_order_items
+          ADD CONSTRAINT project_change_order_items_parent_item_id_fkey
+          FOREIGN KEY (parent_item_id)
+          REFERENCES project_change_order_items(id)
+          ON DELETE CASCADE;
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'project_change_order_items_quantity_per_parent_check'
+          AND table_name = 'project_change_order_items'
+      ) THEN
+        ALTER TABLE project_change_order_items
+          ADD CONSTRAINT project_change_order_items_quantity_per_parent_check
+          CHECK (
+            quantity_per_parent IS NULL OR
+            (quantity_per_parent > 0 AND quantity_per_parent < 'Infinity'::numeric)
+          );
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_change_order_items_parent_item_id_idx
+      ON project_change_order_items (parent_item_id);
   `);
 }
 

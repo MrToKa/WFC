@@ -7,6 +7,9 @@ export type CableTypeDefaultMaterialRow = {
   quantity: string | number | null;
   unit: string | null;
   remarks: string | null;
+  source_kind?: 'manual' | 'standard-material' | null;
+  source_master_material_id?: string | null;
+  source_standard_material_assignment_ids?: string[] | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -21,6 +24,9 @@ export type PublicCableTypeDefaultMaterial = {
   quantity: number | null;
   unit: string | null;
   remarks: string | null;
+  sourceKind: 'manual' | 'standard-material' | null;
+  sourceMasterMaterialId: string | null;
+  sourceStandardMaterialAssignmentIds: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -34,6 +40,9 @@ export const mapCableTypeDefaultMaterialRow = (
   quantity: toNumberOrNull(row.quantity),
   unit: row.unit ?? null,
   remarks: row.remarks ?? null,
+  sourceKind: row.source_kind ?? null,
+  sourceMasterMaterialId: row.source_master_material_id ?? null,
+  sourceStandardMaterialAssignmentIds: row.source_standard_material_assignment_ids ?? [],
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at)
 });

@@ -478,6 +478,9 @@ const selectCableTypeDefaultMaterialsQuery = `
     quantity,
     unit,
     remarks,
+    source_kind,
+    source_master_material_id,
+    source_standard_material_assignment_ids,
     created_at,
     updated_at
   FROM cable_type_default_materials

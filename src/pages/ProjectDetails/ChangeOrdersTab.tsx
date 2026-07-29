@@ -11,6 +11,7 @@ import {
 import {
   Body1,
   Button,
+  Caption1,
   Field,
   Input,
   MessageBar,
@@ -104,6 +105,9 @@ const useStyles = makeStyles({
   warning: {
     color: tokens.colorPaletteRedForeground1,
   },
+  inherited: {
+    color: tokens.colorNeutralForeground3,
+  },
 });
 
 const localDate = (): string => {
@@ -186,6 +190,10 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
 
   const items = details?.items ?? [];
   const total = useMemo(() => items.reduce((sum, item) => sum + item.totalPrice, 0), [items]);
+  const itemDescriptions = useMemo(
+    () => new Map(items.map((item) => [item.id, item.descriptionEn])),
+    [items],
+  );
 
   const canLeave = (): boolean =>
     !headerDirty || window.confirm('Discard unsaved Change Order header changes?');
@@ -535,7 +543,21 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                       {items.map((item, index) => (
                         <TableRow key={item.id}>
                           <TableCell>{index + 1}</TableCell>
-                          <TableCell>{item.descriptionEn}</TableCell>
+                          <TableCell>
+                            <div>{item.descriptionEn}</div>
+                            {item.lineKind === 'inherited' ? (
+                              <Caption1 className={styles.inherited}>
+                                Inherited Standard Material
+                                {item.parentItemId
+                                  ? ` for ${itemDescriptions.get(item.parentItemId) ?? 'parent material'}`
+                                  : ''}
+                                {item.quantityPerParent !== null &&
+                                item.quantityPerParent !== undefined
+                                  ? ` · ${item.quantityPerParent} per parent`
+                                  : ''}
+                              </Caption1>
+                            ) : null}
+                          </TableCell>
                           <TableCell className={styles.numeric}>{item.designQuantity}</TableCell>
                           <TableCell className={styles.numeric}>{item.orderQuantity}</TableCell>
                           <TableCell
@@ -576,7 +598,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                                 icon={<DeleteRegular />}
                                 aria-label={`Delete item ${index + 1}`}
                                 title="Delete"
-                                disabled={pendingAction}
+                                disabled={pendingAction || item.lineKind === 'inherited'}
                                 onClick={() => void removeItem(item)}
                               />
                               <Button
@@ -585,7 +607,9 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                                 icon={<ArrowUpRegular />}
                                 aria-label={`Move item ${index + 1} up`}
                                 title="Move up"
-                                disabled={index === 0 || pendingAction}
+                                disabled={
+                                  index === 0 || pendingAction || item.lineKind === 'inherited'
+                                }
                                 onClick={() => void moveItem(index, -1)}
                               />
                               <Button
@@ -594,7 +618,11 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                                 icon={<ArrowDownRegular />}
                                 aria-label={`Move item ${index + 1} down`}
                                 title="Move down"
-                                disabled={index === items.length - 1 || pendingAction}
+                                disabled={
+                                  index === items.length - 1 ||
+                                  pendingAction ||
+                                  item.lineKind === 'inherited'
+                                }
                                 onClick={() => void moveItem(index, 1)}
                               />
                             </div>

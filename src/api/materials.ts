@@ -17,6 +17,11 @@ import type {
   MaterialImportSummary,
   MaterialLoadCurveImportSummary,
   PaginationMeta,
+  MaterialDetailsResponse,
+  StandardMaterialAssignment,
+  StandardMaterialInput,
+  StandardMaterialOwner,
+  StandardMaterialOwnerCategory,
 } from './types';
 
 const extractErrorMessage = (payload: unknown, fallback: string): string => {
@@ -31,6 +36,67 @@ const extractErrorMessage = (payload: unknown, fallback: string): string => {
 
   return fallback;
 };
+
+const standardMaterialOwnerPath = (
+  category: StandardMaterialOwnerCategory,
+  ownerId: string,
+): string => {
+  switch (category) {
+    case 'cable-type':
+      return `/api/materials/cable-types/${ownerId}`;
+    case 'cable-installation-material':
+      return `/api/materials/cable-installation-materials/${ownerId}`;
+    case 'tray':
+      return `/api/materials/trays/${ownerId}`;
+    case 'support':
+      return `/api/materials/supports/${ownerId}`;
+  }
+};
+
+export async function fetchMaterialDetails<T extends StandardMaterialOwner>(
+  category: StandardMaterialOwnerCategory,
+  ownerId: string,
+): Promise<MaterialDetailsResponse<T>> {
+  return request<MaterialDetailsResponse<T>>(standardMaterialOwnerPath(category, ownerId));
+}
+
+export async function createStandardMaterial(
+  token: string,
+  category: StandardMaterialOwnerCategory,
+  ownerId: string,
+  data: StandardMaterialInput,
+): Promise<{ standardMaterial: StandardMaterialAssignment }> {
+  return request(`${standardMaterialOwnerPath(category, ownerId)}/standard-materials`, {
+    method: 'POST',
+    token,
+    body: data,
+  });
+}
+
+export async function updateStandardMaterial(
+  token: string,
+  category: StandardMaterialOwnerCategory,
+  ownerId: string,
+  assignmentId: string,
+  data: Partial<StandardMaterialInput>,
+): Promise<{ standardMaterial: StandardMaterialAssignment }> {
+  return request(
+    `${standardMaterialOwnerPath(category, ownerId)}/standard-materials/${assignmentId}`,
+    { method: 'PATCH', token, body: data },
+  );
+}
+
+export async function deleteStandardMaterial(
+  token: string,
+  category: StandardMaterialOwnerCategory,
+  ownerId: string,
+  assignmentId: string,
+): Promise<void> {
+  await request(
+    `${standardMaterialOwnerPath(category, ownerId)}/standard-materials/${assignmentId}`,
+    { method: 'DELETE', token },
+  );
+}
 
 // Material Cable Types
 export async function fetchMaterialCableTypes(): Promise<{
