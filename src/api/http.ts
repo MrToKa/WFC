@@ -10,9 +10,9 @@ export class ApiError extends Error {
     const message =
       typeof payload === 'string'
         ? payload
-        : payload.formErrors?.[0] ??
+        : (payload.formErrors?.[0] ??
           Object.values(payload.fieldErrors ?? {})[0]?.[0] ??
-          'Request failed';
+          'Request failed');
     super(message);
     this.status = status;
     this.payload = payload;
@@ -20,7 +20,7 @@ export class ApiError extends Error {
 }
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string;
 };
@@ -43,10 +43,7 @@ const resolveDefaultApiBaseUrl = (): string => {
 
 const API_BASE_URL = resolveDefaultApiBaseUrl();
 
-export async function request<T>(
-  path: string,
-  options: RequestOptions = {}
-): Promise<T> {
+export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
 
   if (options.body !== undefined) {
@@ -60,7 +57,7 @@ export async function request<T>(
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? 'GET',
     headers,
-    body: options.body ? JSON.stringify(options.body) : undefined
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
   const contentType = response.headers.get('content-type') ?? '';

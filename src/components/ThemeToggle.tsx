@@ -1,15 +1,12 @@
 import { Switch, Tooltip, makeStyles, tokens } from '@fluentui/react-components';
-import {
-  WeatherMoon24Regular,
-  WeatherSunny24Regular
-} from '@fluentui/react-icons';
+import { WeatherMoon24Regular, WeatherSunny24Regular } from '@fluentui/react-icons';
 import { useCallback } from 'react';
 import { useTheme } from '@/app/ThemeProvider';
 
 const useStyles = makeStyles({
   switchRoot: {
     display: 'flex',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   label: {
     display: 'inline-flex',
@@ -17,12 +14,12 @@ const useStyles = makeStyles({
     gap: '0.25rem',
     padding: 0,
     color: tokens.colorNeutralForeground2,
-    fontWeight: tokens.fontWeightSemibold
+    fontWeight: tokens.fontWeightSemibold,
   },
   icon: {
     fontSize: tokens.fontSizeBase500,
-    lineHeight: 0
-  }
+    lineHeight: 0,
+  },
 });
 
 export const ThemeToggle = () => {
@@ -38,6 +35,7 @@ export const ThemeToggle = () => {
     <Tooltip content={`Switch to ${isDark ? 'light' : 'dark'} theme`} relationship="label">
       <Switch
         checked={isDark}
+        aria-checked={isDark}
         onChange={handleChange}
         aria-label="Toggle dark mode"
         className={styles.switchRoot}

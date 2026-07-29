@@ -940,6 +940,105 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS material_supports_image_template_id_idx
       ON material_supports (image_template_id);
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_change_orders (
+      id UUID PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      project_reference TEXT,
+      prepared_by TEXT NOT NULL,
+      report_date DATE NOT NULL,
+      revision TEXT NOT NULL DEFAULT '00',
+      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT project_change_orders_title_not_empty CHECK (btrim(title) <> ''),
+      CONSTRAINT project_change_orders_prepared_by_not_empty CHECK (btrim(prepared_by) <> ''),
+      CONSTRAINT project_change_orders_revision_not_empty CHECK (btrim(revision) <> '')
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_change_orders_project_id_idx
+      ON project_change_orders (project_id);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_change_order_items (
+      id UUID PRIMARY KEY,
+      change_order_id UUID NOT NULL REFERENCES project_change_orders(id) ON DELETE CASCADE,
+      sort_order INTEGER NOT NULL,
+      source_catalog TEXT NOT NULL,
+      source_material_id UUID NOT NULL,
+      design_quantity NUMERIC NOT NULL DEFAULT 0,
+      order_quantity NUMERIC NOT NULL DEFAULT 0,
+      unit TEXT,
+      packaging TEXT,
+      packaging_quantity NUMERIC,
+      packaging_unit TEXT,
+      ordered_quantity NUMERIC,
+      ordered_unit TEXT,
+      sap_number TEXT,
+      description_en TEXT NOT NULL,
+      description_de TEXT,
+      dimension_mm TEXT,
+      material TEXT,
+      weight_kg NUMERIC,
+      clear_description TEXT,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
+      country_of_origin TEXT,
+      hs_code TEXT,
+      tag_no TEXT,
+      drawing_no TEXT,
+      shipping_list TEXT,
+      revision_number TEXT,
+      client_barcode TEXT,
+      manufacturer TEXT,
+      manufacturer_part_no TEXT,
+      acs_barcode TEXT,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT project_change_order_items_sort_order_positive CHECK (sort_order > 0),
+      CONSTRAINT project_change_order_items_source_catalog_check
+        CHECK (source_catalog IN ('cable-type', 'cable-installation-material', 'tray', 'support')),
+      CONSTRAINT project_change_order_items_description_not_empty CHECK (btrim(description_en) <> ''),
+      CONSTRAINT project_change_order_items_design_quantity_check
+        CHECK (design_quantity >= 0 AND design_quantity < 'Infinity'::numeric),
+      CONSTRAINT project_change_order_items_order_quantity_check
+        CHECK (order_quantity >= 0 AND order_quantity < 'Infinity'::numeric),
+      CONSTRAINT project_change_order_items_packaging_quantity_check
+        CHECK (
+          packaging_quantity IS NULL OR
+          (packaging_quantity >= 0 AND packaging_quantity < 'Infinity'::numeric)
+        ),
+      CONSTRAINT project_change_order_items_ordered_quantity_check
+        CHECK (
+          ordered_quantity IS NULL OR
+          (ordered_quantity >= 0 AND ordered_quantity < 'Infinity'::numeric)
+        ),
+      CONSTRAINT project_change_order_items_weight_check
+        CHECK (weight_kg IS NULL OR (weight_kg >= 0 AND weight_kg < 'Infinity'::numeric)),
+      CONSTRAINT project_change_order_items_unit_price_check
+        CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_change_order_items_change_order_id_idx
+      ON project_change_order_items (change_order_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_change_order_items_change_order_sort_idx
+      ON project_change_order_items (change_order_id, sort_order);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_change_order_items_source_idx
+      ON project_change_order_items (source_catalog, source_material_id);
+  `);
 }
 
 export async function shutdownDatabase(): Promise<void> {

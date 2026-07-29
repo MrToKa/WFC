@@ -10,22 +10,19 @@ import {
   deleteObject,
   getObjectStream,
   getTemplateBucket,
-  uploadObject
+  uploadObject,
 } from '../services/objectStorageService.js';
-import {
-  mapTemplateFileRow,
-  type TemplateFileRow
-} from '../models/templateFile.js';
+import { mapTemplateFileRow, type TemplateFileRow } from '../models/templateFile.js';
 import {
   mapTemplateFileVersionRow,
-  type TemplateFileVersionRow
+  type TemplateFileVersionRow,
 } from '../models/templateFileVersion.js';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE }
+  limits: { fileSize: MAX_FILE_SIZE },
 });
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -36,20 +33,18 @@ const ALLOWED_EXTENSIONS = new Set([
   '.pdf',
   '.jpg',
   '.jpeg',
-  '.png'
+  '.png',
 ]);
 
 const FALLBACK_MIME_BY_EXTENSION: Record<string, string> = {
   '.doc': 'application/msword',
-  '.docx':
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xls': 'application/vnd.ms-excel',
-  '.xlsx':
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   '.pdf': 'application/pdf',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.png': 'image/png'
+  '.png': 'image/png',
 };
 
 type TemplateFilesRequest = AuthenticatedRequest & {
@@ -61,10 +56,7 @@ const sanitizeObjectFileName = (name: string): string => {
   return normalized.replace(/-+/g, '-').replace(/^-+|-+$/g, '') || 'file';
 };
 
-const normalizeOriginalFileName = (
-  originalName: string,
-  extension: string
-): string => {
+const normalizeOriginalFileName = (originalName: string, extension: string): string => {
   const baseName = path.basename(originalName, extension).trim();
   const normalizedBase = baseName
     ? baseName
@@ -76,10 +68,7 @@ const normalizeOriginalFileName = (
   return `${normalizedBase}${extension}`;
 };
 
-const determineContentType = (
-  extension: string,
-  mimetype: string
-): string => {
+const determineContentType = (extension: string, mimetype: string): string => {
   if (mimetype && mimetype !== 'application/octet-stream') {
     return mimetype;
   }
@@ -98,9 +87,7 @@ const buildObjectKey = (originalFileName: string): string => {
   const nameWithoutExt = path.basename(originalFileName, extension);
   const sanitizedBase = sanitizeObjectFileName(nameWithoutExt);
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return `templates/${timestamp}-${randomUUID()}-${sanitizedBase || 'template'}${
-    extension
-  }`;
+  return `templates/${timestamp}-${randomUUID()}-${sanitizedBase || 'template'}${extension}`;
 };
 
 export const templateFilesRouter = (() => {
@@ -126,11 +113,11 @@ export const templateFilesRouter = (() => {
           FROM template_files tf
           LEFT JOIN users u ON u.id = tf.uploaded_by
           ORDER BY tf.uploaded_at DESC;
-        `
+        `,
       );
 
       const files = result.rows.map((row) =>
-        mapTemplateFileRow(row, { canDelete: req.isAdmin === true })
+        mapTemplateFileRow(row, { canDelete: req.isAdmin === true }),
       );
 
       res.json({ files });
@@ -162,20 +149,16 @@ export const templateFilesRouter = (() => {
       if (!ALLOWED_EXTENSIONS.has(extension)) {
         res.status(400).json({
           error:
-            'Unsupported file type. Allowed extensions: .doc, .docx, .xls, .xlsx, .pdf, .jpg, .jpeg, .png'
+            'Unsupported file type. Allowed extensions: .doc, .docx, .xls, .xlsx, .pdf, .jpg, .jpeg, .png',
         });
         return;
       }
 
-      const displayFileName = normalizeOriginalFileName(
-        file.originalname,
-        extension
-      );
+      const displayFileName = normalizeOriginalFileName(file.originalname, extension);
       const objectKey = buildObjectKey(displayFileName);
       const contentType = determineContentType(extension, file.mimetype);
       const replaceTemplateId =
-        typeof req.query.replaceId === 'string' &&
-        req.query.replaceId.trim() !== ''
+        typeof req.query.replaceId === 'string' && req.query.replaceId.trim() !== ''
           ? req.query.replaceId.trim()
           : undefined;
 
@@ -183,10 +166,7 @@ export const templateFilesRouter = (() => {
         try {
           await deleteObject(getTemplateBucket(), objectKey);
         } catch (cleanupError) {
-          console.warn(
-            `Failed to clean up uploaded template object "${objectKey}"`,
-            cleanupError
-          );
+          console.warn(`Failed to clean up uploaded template object "${objectKey}"`, cleanupError);
         }
       };
 
@@ -199,13 +179,13 @@ export const templateFilesRouter = (() => {
               WHERE LOWER(file_name) = LOWER($1)
               LIMIT 1;
             `,
-            [displayFileName]
+            [displayFileName],
           );
 
-          if (existing.rowCount > 0) {
+          if ((existing.rowCount ?? 0) > 0) {
             res.status(409).json({
               error: 'A template with this name already exists',
-              templateId: existing.rows[0].id
+              templateId: existing.rows[0].id,
             });
             return;
           }
@@ -216,7 +196,7 @@ export const templateFilesRouter = (() => {
           objectKey,
           data: file.buffer,
           size: file.size,
-          contentType
+          contentType,
         });
 
         if (replaceTemplateId) {
@@ -243,7 +223,7 @@ export const templateFilesRouter = (() => {
                 WHERE id = $1
                 LIMIT 1;
               `,
-              [replaceTemplateId]
+              [replaceTemplateId],
             );
 
             const existingTemplate = existingResult.rows[0];
@@ -255,10 +235,7 @@ export const templateFilesRouter = (() => {
               return;
             }
 
-            if (
-              existingTemplate.file_name.toLowerCase() !==
-              displayFileName.toLowerCase()
-            ) {
+            if (existingTemplate.file_name.toLowerCase() !== displayFileName.toLowerCase()) {
               const conflict = await client.query<{ id: string }>(
                 `
                   SELECT id
@@ -267,15 +244,15 @@ export const templateFilesRouter = (() => {
                     AND id <> $2
                   LIMIT 1;
                 `,
-                [displayFileName, replaceTemplateId]
+                [displayFileName, replaceTemplateId],
               );
 
-              if (conflict.rowCount > 0) {
+              if ((conflict.rowCount ?? 0) > 0) {
                 await client.query('ROLLBACK');
                 await deleteUploadedObject();
                 res.status(409).json({
                   error: 'A template with this name already exists',
-                  templateId: conflict.rows[0].id
+                  templateId: conflict.rows[0].id,
                 });
                 return;
               }
@@ -287,11 +264,10 @@ export const templateFilesRouter = (() => {
                 FROM template_file_versions
                 WHERE template_id = $1;
               `,
-              [replaceTemplateId]
+              [replaceTemplateId],
             );
 
-            const nextVersion =
-              Number(versionResult.rows[0]?.version ?? 0) + 1;
+            const nextVersion = Number(versionResult.rows[0]?.version ?? 0) + 1;
 
             await client.query(
               `
@@ -314,8 +290,8 @@ export const templateFilesRouter = (() => {
                 existingTemplate.file_name,
                 existingTemplate.content_type,
                 existingTemplate.size_bytes ?? null,
-                existingTemplate.uploaded_by
-              ]
+                existingTemplate.uploaded_by,
+              ],
             );
 
             await client.query(
@@ -330,14 +306,7 @@ export const templateFilesRouter = (() => {
                   uploaded_at = NOW()
                 WHERE id = $6;
               `,
-              [
-                objectKey,
-                displayFileName,
-                contentType,
-                file.size,
-                req.userId,
-                replaceTemplateId
-              ]
+              [objectKey, displayFileName, contentType, file.size, req.userId, replaceTemplateId],
             );
 
             const updatedResult = await client.query<TemplateFileRow>(
@@ -357,15 +326,12 @@ export const templateFilesRouter = (() => {
                 LEFT JOIN users u ON u.id = tf.uploaded_by
                 WHERE tf.id = $1;
               `,
-              [replaceTemplateId]
+              [replaceTemplateId],
             );
 
             await client.query('COMMIT');
 
-            const updatedTemplate = mapTemplateFileRow(
-              updatedResult.rows[0],
-              { canDelete: true }
-            );
+            const updatedTemplate = mapTemplateFileRow(updatedResult.rows[0], { canDelete: true });
 
             res.json({ file: updatedTemplate });
             return;
@@ -373,10 +339,7 @@ export const templateFilesRouter = (() => {
             try {
               await client.query('ROLLBACK');
             } catch (rollbackError) {
-              console.warn(
-                'Failed to rollback template replace transaction',
-                rollbackError
-              );
+              console.warn('Failed to rollback template replace transaction', rollbackError);
             }
             await deleteUploadedObject();
             console.error('Replace template file error', error);
@@ -400,7 +363,7 @@ export const templateFilesRouter = (() => {
               uploaded_by
             ) VALUES ($1, $2, $3, $4, $5, $6);
           `,
-          [id, objectKey, displayFileName, contentType, file.size, req.userId]
+          [id, objectKey, displayFileName, contentType, file.size, req.userId],
         );
 
         const result = await pool.query<TemplateFileRow>(
@@ -420,11 +383,11 @@ export const templateFilesRouter = (() => {
             LEFT JOIN users u ON u.id = tf.uploaded_by
             WHERE tf.id = $1;
           `,
-          [id]
+          [id],
         );
 
         const newFile = mapTemplateFileRow(result.rows[0], {
-          canDelete: true
+          canDelete: true,
         });
 
         res.status(201).json({ file: newFile });
@@ -433,93 +396,85 @@ export const templateFilesRouter = (() => {
         console.error('Failed to upload template file', error);
         res.status(500).json({ error: 'Failed to upload template file' });
       }
-    }
+    },
   );
 
-  router.delete(
-    '/:templateId',
-    requireAdmin,
-    async (req: TemplateFilesRequest, res: Response) => {
-      const { templateId } = req.params;
+  router.delete('/:templateId', requireAdmin, async (req: TemplateFilesRequest, res: Response) => {
+    const { templateId } = req.params;
 
-      if (!templateId) {
-        res.status(400).json({ error: 'Template ID is required' });
-        return;
-      }
+    if (!templateId) {
+      res.status(400).json({ error: 'Template ID is required' });
+      return;
+    }
 
-      try {
-        const result = await pool.query<{
-          object_key: string;
-        }>(
-          `
+    try {
+      const result = await pool.query<{
+        object_key: string;
+      }>(
+        `
             SELECT object_key
             FROM template_files
             WHERE id = $1;
           `,
-          [templateId]
-        );
+        [templateId],
+      );
 
-        const fileRow = result.rows[0];
+      const fileRow = result.rows[0];
 
-        if (!fileRow) {
-          res.status(404).json({ error: 'Template file not found' });
-          return;
-        }
+      if (!fileRow) {
+        res.status(404).json({ error: 'Template file not found' });
+        return;
+      }
 
-        const versions = await pool.query<{ object_key: string }>(
-          `
+      const versions = await pool.query<{ object_key: string }>(
+        `
             SELECT object_key
             FROM template_file_versions
             WHERE template_id = $1;
           `,
-          [templateId]
-        );
-
-        try {
-          await deleteObject(getTemplateBucket(), fileRow.object_key);
-        } catch (error) {
-          console.warn(
-            `Failed to delete template file object "${fileRow.object_key}" from storage`,
-            error
-          );
-        }
-
-        for (const version of versions.rows) {
-          try {
-            await deleteObject(getTemplateBucket(), version.object_key);
-          } catch (error) {
-            console.warn(
-              `Failed to delete template file version object "${version.object_key}" from storage`,
-              error
-            );
-          }
-        }
-
-        await pool.query(`DELETE FROM template_files WHERE id = $1;`, [
-          templateId
-        ]);
-
-        res.status(204).send();
-      } catch (error) {
-        console.error('Failed to delete template file', error);
-        res.status(500).json({ error: 'Failed to delete template file' });
-      }
-    }
-  );
-
-  router.get(
-    '/:templateId/download',
-    async (req: TemplateFilesRequest, res: Response) => {
-      const { templateId } = req.params;
-
-      if (!templateId) {
-        res.status(400).json({ error: 'Template ID is required' });
-        return;
-      }
+        [templateId],
+      );
 
       try {
-        const result = await pool.query<TemplateFileRow>(
-          `
+        await deleteObject(getTemplateBucket(), fileRow.object_key);
+      } catch (error) {
+        console.warn(
+          `Failed to delete template file object "${fileRow.object_key}" from storage`,
+          error,
+        );
+      }
+
+      for (const version of versions.rows) {
+        try {
+          await deleteObject(getTemplateBucket(), version.object_key);
+        } catch (error) {
+          console.warn(
+            `Failed to delete template file version object "${version.object_key}" from storage`,
+            error,
+          );
+        }
+      }
+
+      await pool.query(`DELETE FROM template_files WHERE id = $1;`, [templateId]);
+
+      res.status(204).send();
+    } catch (error) {
+      console.error('Failed to delete template file', error);
+      res.status(500).json({ error: 'Failed to delete template file' });
+    }
+  });
+
+  router.get('/:templateId/download', async (req: TemplateFilesRequest, res: Response) => {
+    const { templateId } = req.params;
+
+    if (!templateId) {
+      res.status(400).json({ error: 'Template ID is required' });
+      return;
+    }
+
+    try {
+      const result = await pool.query<TemplateFileRow>(
+        `
             SELECT
               tf.id,
               tf.object_key,
@@ -536,72 +491,60 @@ export const templateFilesRouter = (() => {
             WHERE tf.id = $1
             LIMIT 1;
           `,
-          [templateId]
-        );
+        [templateId],
+      );
 
-        const templateRow = result.rows[0];
+      const templateRow = result.rows[0];
 
-        if (!templateRow) {
-          res.status(404).json({ error: 'Template file not found' });
-          return;
-        }
-
-        const stream = await getObjectStream(
-          getTemplateBucket(),
-          templateRow.object_key
-        );
-
-        const contentType =
-          templateRow.content_type ??
-          determineContentType(
-            path.extname(templateRow.file_name).toLowerCase(),
-            ''
-          );
-
-        res.setHeader('Content-Type', contentType);
-        res.setHeader(
-          'Content-Disposition',
-          buildContentDisposition(templateRow.file_name)
-        );
-
-        if (templateRow.size_bytes !== null) {
-          res.setHeader('Content-Length', String(templateRow.size_bytes));
-        }
-
-        stream.on('error', (error) => {
-          console.error('Stream error while downloading template file', error);
-          if (!res.headersSent) {
-            res.status(500).end('Failed to download template file');
-          } else {
-            res.end();
-          }
-        });
-
-        stream.pipe(res);
-      } catch (error) {
-        console.error('Failed to download template file', error);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Failed to download template file' });
-        } else {
-          res.end();
-        }
-      }
-    }
-  );
-
-  router.get(
-    '/:templateId/versions',
-    async (req: TemplateFilesRequest, res: Response) => {
-      const { templateId } = req.params;
-
-      if (!templateId) {
-        res.status(400).json({ error: 'Template ID is required' });
+      if (!templateRow) {
+        res.status(404).json({ error: 'Template file not found' });
         return;
       }
 
-      try {
-        const result = await pool.query<TemplateFileVersionRow>(
-          `
+      const stream = await getObjectStream(getTemplateBucket(), templateRow.object_key);
+
+      const contentType =
+        templateRow.content_type ??
+        determineContentType(path.extname(templateRow.file_name).toLowerCase(), '');
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', buildContentDisposition(templateRow.file_name));
+
+      if (templateRow.size_bytes !== null) {
+        res.setHeader('Content-Length', String(templateRow.size_bytes));
+      }
+
+      stream.on('error', (error) => {
+        console.error('Stream error while downloading template file', error);
+        if (!res.headersSent) {
+          res.status(500).end('Failed to download template file');
+        } else {
+          res.end();
+        }
+      });
+
+      stream.pipe(res);
+    } catch (error) {
+      console.error('Failed to download template file', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to download template file' });
+      } else {
+        res.end();
+      }
+    }
+  });
+
+  router.get('/:templateId/versions', async (req: TemplateFilesRequest, res: Response) => {
+    const { templateId } = req.params;
+
+    if (!templateId) {
+      res.status(400).json({ error: 'Template ID is required' });
+      return;
+    }
+
+    try {
+      const result = await pool.query<TemplateFileVersionRow>(
+        `
             SELECT
               v.id,
               v.template_id,
@@ -620,17 +563,16 @@ export const templateFilesRouter = (() => {
             WHERE v.template_id = $1
             ORDER BY v.version_number DESC;
           `,
-          [templateId]
-        );
+        [templateId],
+      );
 
-        const versions = result.rows.map(mapTemplateFileVersionRow);
-        res.json({ versions });
-      } catch (error) {
-        console.error('Failed to list template versions', error);
-        res.status(500).json({ error: 'Failed to load template versions' });
-      }
+      const versions = result.rows.map(mapTemplateFileVersionRow);
+      res.json({ versions });
+    } catch (error) {
+      console.error('Failed to list template versions', error);
+      res.status(500).json({ error: 'Failed to load template versions' });
     }
-  );
+  });
 
   router.get(
     '/:templateId/versions/:versionId/download',
@@ -641,9 +583,7 @@ export const templateFilesRouter = (() => {
       };
 
       if (!templateId || !versionId) {
-        res
-          .status(400)
-          .json({ error: 'Template ID and version ID are required' });
+        res.status(400).json({ error: 'Template ID and version ID are required' });
         return;
       }
 
@@ -668,7 +608,7 @@ export const templateFilesRouter = (() => {
             WHERE v.template_id = $1 AND v.id = $2
             LIMIT 1;
           `,
-          [templateId, versionId]
+          [templateId, versionId],
         );
 
         const versionRow = result.rows[0];
@@ -678,33 +618,21 @@ export const templateFilesRouter = (() => {
           return;
         }
 
-        const stream = await getObjectStream(
-          getTemplateBucket(),
-          versionRow.object_key
-        );
+        const stream = await getObjectStream(getTemplateBucket(), versionRow.object_key);
 
         const contentType =
           versionRow.content_type ??
-          determineContentType(
-            path.extname(versionRow.file_name).toLowerCase(),
-            ''
-          );
+          determineContentType(path.extname(versionRow.file_name).toLowerCase(), '');
 
         res.setHeader('Content-Type', contentType);
-        res.setHeader(
-          'Content-Disposition',
-          buildContentDisposition(versionRow.file_name)
-        );
+        res.setHeader('Content-Disposition', buildContentDisposition(versionRow.file_name));
 
         if (versionRow.size_bytes !== null) {
           res.setHeader('Content-Length', String(versionRow.size_bytes));
         }
 
         stream.on('error', (error) => {
-          console.error(
-            'Stream error while downloading template version',
-            error
-          );
+          console.error('Stream error while downloading template version', error);
           if (!res.headersSent) {
             res.status(500).end('Failed to download template version');
           } else {
@@ -721,7 +649,7 @@ export const templateFilesRouter = (() => {
           res.end();
         }
       }
-    }
+    },
   );
 
   router.delete(
@@ -734,9 +662,7 @@ export const templateFilesRouter = (() => {
       };
 
       if (!templateId || !versionId) {
-        res
-          .status(400)
-          .json({ error: 'Template ID and version ID are required' });
+        res.status(400).json({ error: 'Template ID and version ID are required' });
         return;
       }
 
@@ -750,7 +676,7 @@ export const templateFilesRouter = (() => {
             WHERE template_id = $1 AND id = $2
             LIMIT 1;
           `,
-          [templateId, versionId]
+          [templateId, versionId],
         );
 
         const versionRow = result.rows[0];
@@ -765,21 +691,21 @@ export const templateFilesRouter = (() => {
         } catch (error) {
           console.warn(
             `Failed to delete template version object "${versionRow.object_key}" from storage`,
-            error
+            error,
           );
         }
 
-        await pool.query(
-          `DELETE FROM template_file_versions WHERE template_id = $1 AND id = $2;`,
-          [templateId, versionId]
-        );
+        await pool.query(`DELETE FROM template_file_versions WHERE template_id = $1 AND id = $2;`, [
+          templateId,
+          versionId,
+        ]);
 
         res.status(204).send();
       } catch (error) {
         console.error('Failed to delete template version', error);
         res.status(500).json({ error: 'Failed to delete template version' });
       }
-    }
+    },
   );
 
   return router;

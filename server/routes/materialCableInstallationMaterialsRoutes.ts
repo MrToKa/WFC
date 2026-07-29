@@ -112,7 +112,7 @@ materialCableInstallationMaterialsRouter.post(
         [type],
       );
 
-      if (duplicateResult.rowCount > 0) {
+      if ((duplicateResult.rowCount ?? 0) > 0) {
         res.status(409).json({
           error: 'A material cable installation material with this type already exists',
         });
@@ -201,7 +201,7 @@ materialCableInstallationMaterialsRouter.patch(
           [type, cableInstallationMaterialId],
         );
 
-        if (duplicateResult.rowCount > 0) {
+        if ((duplicateResult.rowCount ?? 0) > 0) {
           res.status(409).json({
             error: 'A material cable installation material with this type already exists',
           });

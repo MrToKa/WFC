@@ -2,7 +2,7 @@ import {
   FluentProvider,
   type Theme,
   webDarkTheme,
-  webLightTheme
+  webLightTheme,
 } from '@fluentui/react-components';
 import {
   createContext,
@@ -10,8 +10,9 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
-  type PropsWithChildren
+  type PropsWithChildren,
 } from 'react';
 
 type ThemeMode = 'light' | 'dark';
@@ -54,9 +55,13 @@ const getPreferredTheme = (): ThemeMode => {
 
 export const ThemeProvider = ({ children }: PropsWithChildren) => {
   const [mode, setMode] = useState<ThemeMode>(() => getPreferredTheme());
+  const persistNextMode = useRef(false);
 
   useEffect(() => {
-    window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+    if (persistNextMode.current) {
+      window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+      persistNextMode.current = false;
+    }
     document.documentElement.setAttribute('data-theme', mode);
   }, [mode]);
 
@@ -79,6 +84,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
   }, []);
 
   const toggleTheme = useCallback(() => {
+    persistNextMode.current = true;
     setMode((previous) => (previous === 'light' ? 'dark' : 'light'));
   }, []);
 
@@ -88,9 +94,9 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     () => ({
       mode,
       theme,
-      toggleTheme
+      toggleTheme,
     }),
-    [mode, theme, toggleTheme]
+    [mode, theme, toggleTheme],
   );
 
   return (

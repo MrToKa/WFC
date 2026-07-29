@@ -2543,7 +2543,7 @@ cablesRouter.patch(
           [projectId, cableId, newCableId],
         );
 
-        if (duplicate.rowCount > 0) {
+        if ((duplicate.rowCount ?? 0) > 0) {
           await client.query('ROLLBACK');
           res.status(409).json({ error: 'Cable ID already exists for this project' });
           return;

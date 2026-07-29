@@ -5,17 +5,14 @@ import { pool } from '../db.js';
 import { mapProjectRow } from '../models/project.js';
 import type { ProjectRow } from '../models/project.js';
 import { authenticate, requireAdmin } from '../middleware.js';
-import {
-  clearProjectDataSchema,
-  createProjectSchema,
-  updateProjectSchema
-} from '../validators.js';
+import { clearProjectDataSchema, createProjectSchema, updateProjectSchema } from '../validators.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { cableTypesRouter } from './cableTypesRoutes.js';
 import { cablesRouter } from './cablesRoutes.js';
 import { roxtecEntriesRouter } from './roxtecEntriesRoutes.js';
 import { traysRouter } from './traysRoutes.js';
 import { projectFilesRouter } from './projectFilesRoutes.js';
+import { changeOrdersRouter } from './changeOrdersRoutes.js';
 
 const projectsRouter = Router();
 const INVALID_TRAY_TEMPLATE_FILE = 'INVALID_TRAY_TEMPLATE_FILE';
@@ -37,23 +34,20 @@ type NormalizedTrayPurposeTemplates = Record<
 
 const syncSupportDistances = async (
   projectId: string,
-  overrides: NormalizedSupportOverrides
+  overrides: NormalizedSupportOverrides,
 ): Promise<void> => {
   const entries = Object.entries(overrides)
     .map(([trayType, value]) => [trayType.trim(), value] as const)
     .filter(
       ([trayType, value]) =>
-        trayType !== '' && (value.distance !== null || value.supportId !== null)
+        trayType !== '' && (value.distance !== null || value.supportId !== null),
     );
 
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
-    await client.query(
-      `DELETE FROM project_support_distances WHERE project_id = $1;`,
-      [projectId]
-    );
+    await client.query(`DELETE FROM project_support_distances WHERE project_id = $1;`, [projectId]);
 
     for (const [trayType, value] of entries) {
       await client.query(
@@ -74,7 +68,7 @@ const syncSupportDistances = async (
             support_id = EXCLUDED.support_id,
             updated_at = NOW();
         `,
-        [projectId, trayType, value.distance, value.supportId]
+        [projectId, trayType, value.distance, value.supportId],
       );
     }
 
@@ -89,7 +83,7 @@ const syncSupportDistances = async (
 
 const syncTrayPurposeTemplates = async (
   projectId: string,
-  templates: NormalizedTrayPurposeTemplates
+  templates: NormalizedTrayPurposeTemplates,
 ): Promise<void> => {
   const entries = Object.entries(templates)
     .map(([purpose, value]) => [purpose.trim(), value] as const)
@@ -99,10 +93,9 @@ const syncTrayPurposeTemplates = async (
 
   try {
     await client.query('BEGIN');
-    await client.query(
-      `DELETE FROM project_tray_purpose_templates WHERE project_id = $1;`,
-      [projectId]
-    );
+    await client.query(`DELETE FROM project_tray_purpose_templates WHERE project_id = $1;`, [
+      projectId,
+    ]);
 
     if (entries.length > 0) {
       const fileIds = Array.from(new Set(entries.map(([, value]) => value.fileId)));
@@ -114,7 +107,7 @@ const syncTrayPurposeTemplates = async (
             WHERE project_id = $1
               AND id = ANY($2::uuid[])
           `,
-          [projectId, fileIds]
+          [projectId, fileIds],
         );
         if (rows.length !== fileIds.length) {
           throw new Error(INVALID_TRAY_TEMPLATE_FILE);
@@ -139,7 +132,7 @@ const syncTrayPurposeTemplates = async (
             project_file_id = EXCLUDED.project_file_id,
             updated_at = NOW();
         `,
-        [projectId, purpose, value.fileId]
+        [projectId, purpose, value.fileId],
       );
     }
 
@@ -221,7 +214,7 @@ type NormalizedCableCategorySettings = {
 };
 
 const normalizeSupportDistances = (
-  distances: Record<string, SupportOverrideInput>
+  distances: Record<string, SupportOverrideInput>,
 ): NormalizedSupportOverrides => {
   const parseNumeric = (value: unknown): number | null => {
     if (typeof value === 'number') {
@@ -268,8 +261,7 @@ const normalizeSupportDistances = (
         if (candidate.supportId !== undefined) {
           if (
             candidate.supportId === null ||
-            (typeof candidate.supportId === 'string' &&
-              candidate.supportId.trim() === '')
+            (typeof candidate.supportId === 'string' && candidate.supportId.trim() === '')
           ) {
             supportId = null;
           } else if (typeof candidate.supportId === 'string') {
@@ -287,12 +279,12 @@ const normalizeSupportDistances = (
       acc[normalizedTrayType] = { distance, supportId };
       return acc;
     },
-    {}
+    {},
   );
 };
 
 const normalizeTrayPurposeTemplates = (
-  templates: Record<string, TrayPurposeTemplateInput>
+  templates: Record<string, TrayPurposeTemplateInput>,
 ): NormalizedTrayPurposeTemplates => {
   return Object.entries(templates).reduce<NormalizedTrayPurposeTemplates>(
     (acc, [purpose, rawValue]) => {
@@ -326,12 +318,12 @@ const normalizeTrayPurposeTemplates = (
 
       return acc;
     },
-    {}
+    {},
   );
 };
 
 const normalizeCableCategory = (
-  settings: CableCategorySettingsInput
+  settings: CableCategorySettingsInput,
 ): NormalizedCableCategorySettings | null => {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
     return null;
@@ -341,34 +333,30 @@ const normalizeCableCategory = (
     settings.maxRows === undefined || settings.maxRows === null
       ? null
       : Number.isInteger(settings.maxRows)
-      ? settings.maxRows
-      : null;
+        ? settings.maxRows
+        : null;
   const maxColumns =
     settings.maxColumns === undefined || settings.maxColumns === null
       ? null
       : Number.isInteger(settings.maxColumns)
-      ? settings.maxColumns
-      : null;
+        ? settings.maxColumns
+        : null;
   const bundleSpacing =
-    settings.bundleSpacing === undefined ? null : settings.bundleSpacing ?? null;
+    settings.bundleSpacing === undefined ? null : (settings.bundleSpacing ?? null);
   const trefoil =
-    settings.trefoil === undefined
-      ? null
-      : settings.trefoil === null
-      ? null
-      : settings.trefoil;
+    settings.trefoil === undefined ? null : settings.trefoil === null ? null : settings.trefoil;
   const trefoilSpacingBetweenBundles =
     settings.trefoilSpacingBetweenBundles === undefined
       ? null
       : settings.trefoilSpacingBetweenBundles === null
-      ? null
-      : settings.trefoilSpacingBetweenBundles;
+        ? null
+        : settings.trefoilSpacingBetweenBundles;
   const applyPhaseRotation =
     settings.applyPhaseRotation === undefined
       ? null
       : settings.applyPhaseRotation === null
-      ? null
-      : settings.applyPhaseRotation;
+        ? null
+        : settings.applyPhaseRotation;
 
   if (
     maxRows === null &&
@@ -387,13 +375,11 @@ const normalizeCableCategory = (
     bundleSpacing,
     trefoil,
     trefoilSpacingBetweenBundles,
-    applyPhaseRotation
+    applyPhaseRotation,
   };
 };
 
-const normalizeCableLayout = (
-  layout: CableLayoutInput
-): Record<string, unknown> | null => {
+const normalizeCableLayout = (layout: CableLayoutInput): Record<string, unknown> | null => {
   if (layout === null || layout === undefined) {
     return null;
   }
@@ -410,8 +396,8 @@ const normalizeCableLayout = (
       value === null || value === undefined
         ? null
         : Number.isFinite(value)
-        ? Math.round(value * 1000) / 1000
-        : null;
+          ? Math.round(value * 1000) / 1000
+          : null;
   }
 
   if ('considerBundleSpacingAsFree' in layout) {
@@ -426,8 +412,8 @@ const normalizeCableLayout = (
       value === null || value === undefined
         ? null
         : Number.isFinite(value)
-        ? Math.min(100, Math.max(1, Math.round(value)))
-        : null;
+          ? Math.min(100, Math.max(1, Math.round(value)))
+          : null;
   }
 
   if ('maxFreeSpacePercent' in layout) {
@@ -436,13 +422,13 @@ const normalizeCableLayout = (
       value === null || value === undefined
         ? null
         : Number.isFinite(value)
-        ? Math.min(100, Math.max(1, Math.round(value)))
-        : null;
+          ? Math.min(100, Math.max(1, Math.round(value)))
+          : null;
   }
 
   const assignCategory = (
     key: 'mv' | 'power' | 'vfd' | 'control',
-    value: CableCategorySettingsInput
+    value: CableCategorySettingsInput,
   ) => {
     const normalizedCategory = normalizeCableCategory(value);
     if (normalizedCategory) {
@@ -486,12 +472,12 @@ const normalizeCableLayout = (
                 typeof r.id === 'string' &&
                 typeof r.min === 'number' &&
                 typeof r.max === 'number' &&
-                r.max > r.min
+                r.max > r.min,
             )
             .map((r) => ({
               id: r.id,
               min: Math.round(r.min * 10) / 10,
-              max: Math.round(r.max * 10) / 10
+              max: Math.round(r.max * 10) / 10,
             }));
           if (normalizedRanges[category].length > 0) {
             hasRanges = true;
@@ -508,12 +494,10 @@ const normalizeCableLayout = (
   return Object.keys(normalized).length > 0 ? normalized : null;
 };
 
-projectsRouter.get(
-  '/',
-  async (_req: Request, res: Response): Promise<void> => {
-    try {
-      const result = await pool.query<ProjectRow>(
-        `
+projectsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await pool.query<ProjectRow>(
+      `
           SELECT
             p.id,
             p.project_number,
@@ -546,41 +530,37 @@ projectsRouter.get(
             p.updated_at
           FROM projects p
           ORDER BY p.created_at DESC;
-        `
-      );
-      res.json({ projects: result.rows.map(mapProjectRow) });
-    } catch (error) {
-      console.error('List projects error', error);
-      res.status(500).json({ error: 'Failed to fetch projects' });
-    }
+        `,
+    );
+    res.json({ projects: result.rows.map(mapProjectRow) });
+  } catch (error) {
+    console.error('List projects error', error);
+    res.status(500).json({ error: 'Failed to fetch projects' });
   }
-);
+});
 
-projectsRouter.get(
-  '/:projectId',
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId } = req.params;
+projectsRouter.get('/:projectId', async (req: Request, res: Response): Promise<void> => {
+  const { projectId } = req.params;
 
-    if (!projectId) {
-      res.status(400).json({ error: 'Project ID is required' });
+  if (!projectId) {
+    res.status(400).json({ error: 'Project ID is required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
       return;
     }
 
-    try {
-      const project = await ensureProjectExists(projectId);
-
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      res.json({ project: mapProjectRow(project) });
-    } catch (error) {
-      console.error('Fetch project error', error);
-      res.status(500).json({ error: 'Failed to fetch project details' });
-    }
+    res.json({ project: mapProjectRow(project) });
+  } catch (error) {
+    console.error('Fetch project error', error);
+    res.status(500).json({ error: 'Failed to fetch project details' });
   }
-);
+});
 
 projectsRouter.post(
   '/',
@@ -605,11 +585,10 @@ projectsRouter.post(
       supportWeight,
       trayLoadSafetyFactor,
       cableLayout,
-      supportDistances
+      supportDistances,
     } = parseResult.data;
     const projectId = randomUUID();
-    const normalizedDescription =
-      description === undefined ? undefined : description.trim();
+    const normalizedDescription = description === undefined ? undefined : description.trim();
     const normalizedManager = manager === undefined ? undefined : manager.trim();
     const normalizedCableLayout = normalizeCableLayout(cableLayout);
 
@@ -637,9 +616,7 @@ projectsRouter.post(
           projectNumber.trim(),
           name.trim(),
           customer.trim(),
-          normalizedManager === undefined || normalizedManager === ''
-            ? null
-            : normalizedManager,
+          normalizedManager === undefined || normalizedManager === '' ? null : normalizedManager,
           normalizedDescription === undefined || normalizedDescription === ''
             ? null
             : normalizedDescription,
@@ -647,8 +624,8 @@ projectsRouter.post(
           supportDistance ?? null,
           supportWeight ?? null,
           trayLoadSafetyFactor ?? null,
-          normalizedCableLayout
-        ]
+          normalizedCableLayout,
+        ],
       );
 
       if (supportDistances !== undefined) {
@@ -663,22 +640,19 @@ projectsRouter.post(
       }
 
       res.status(201).json({ project: mapProjectRow(projectRow) });
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          error.message === INVALID_TRAY_TEMPLATE_FILE
-        ) {
-          res.status(400).json({
-            error: 'Tray report template must reference a file attached to this project.'
-          });
-          return;
-        }
+    } catch (error) {
+      if (error instanceof Error && error.message === INVALID_TRAY_TEMPLATE_FILE) {
+        res.status(400).json({
+          error: 'Tray report template must reference a file attached to this project.',
+        });
+        return;
+      }
 
-        if (
-          typeof error === 'object' &&
-          error !== null &&
-          'code' in error &&
-          (error as { code?: string }).code === '23505'
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === '23505'
       ) {
         res.status(409).json({ error: 'Project number already in use' });
         return;
@@ -687,7 +661,7 @@ projectsRouter.post(
       console.error('Create project error', error);
       res.status(500).json({ error: 'Failed to create project' });
     }
-  }
+  },
 );
 
 projectsRouter.patch(
@@ -709,16 +683,16 @@ projectsRouter.patch(
       return;
     }
 
-      const {
-        projectNumber,
-        name,
-        customer,
-        description,
-        manager,
-        supportDistances,
-        trayPurposeTemplates,
-        cableLayout
-      } = parseResult.data;
+    const {
+      projectNumber,
+      name,
+      customer,
+      description,
+      manager,
+      supportDistances,
+      trayPurposeTemplates,
+      cableLayout,
+    } = parseResult.data;
 
     const fields: string[] = [];
     const values: Array<string | number | null | Record<string, unknown>> = [];
@@ -774,7 +748,7 @@ projectsRouter.patch(
     if (parseResult.data.cableLayout !== undefined) {
       const normalizedCableLayout = normalizeCableLayout(cableLayout);
       fields.push(
-        `cable_layout_settings = CASE WHEN $${index}::jsonb IS NULL THEN NULL ELSE COALESCE(cable_layout_settings, '{}'::jsonb) || $${index}::jsonb END`
+        `cable_layout_settings = CASE WHEN $${index}::jsonb IS NULL THEN NULL ELSE COALESCE(cable_layout_settings, '{}'::jsonb) || $${index}::jsonb END`,
       );
       values.push(normalizedCableLayout);
       index += 1;
@@ -790,7 +764,7 @@ projectsRouter.patch(
           WHERE id = $${index}
           RETURNING id;
         `,
-        [...values, projectId]
+        [...values, projectId],
       );
 
       if (result.rowCount === 0) {
@@ -798,19 +772,16 @@ projectsRouter.patch(
         return;
       }
 
-        if (supportDistances !== undefined) {
-          await syncSupportDistances(
-            projectId,
-            normalizeSupportDistances(supportDistances)
-          );
-        }
+      if (supportDistances !== undefined) {
+        await syncSupportDistances(projectId, normalizeSupportDistances(supportDistances));
+      }
 
-        if (trayPurposeTemplates !== undefined) {
-          await syncTrayPurposeTemplates(
-            projectId,
-            normalizeTrayPurposeTemplates(trayPurposeTemplates)
-          );
-        }
+      if (trayPurposeTemplates !== undefined) {
+        await syncTrayPurposeTemplates(
+          projectId,
+          normalizeTrayPurposeTemplates(trayPurposeTemplates),
+        );
+      }
 
       const projectRow = await ensureProjectExists(projectId);
 
@@ -834,7 +805,7 @@ projectsRouter.patch(
       console.error('Update project error', error);
       res.status(500).json({ error: 'Failed to update project' });
     }
-  }
+  },
 );
 
 projectsRouter.post(
@@ -856,11 +827,7 @@ projectsRouter.post(
       return;
     }
 
-    const {
-      cableTypes = false,
-      cables = false,
-      trays = false
-    } = parseResult.data;
+    const { cableTypes = false, cables = false, trays = false } = parseResult.data;
 
     const client = await pool.connect();
 
@@ -869,7 +836,7 @@ projectsRouter.post(
 
       const projectResult = await client.query<{ id: string }>(
         `SELECT id FROM projects WHERE id = $1`,
-        [projectId]
+        [projectId],
       );
 
       if (projectResult.rowCount === 0) {
@@ -883,10 +850,9 @@ projectsRouter.post(
       let deletedTrays = 0;
 
       if (trays) {
-        const traysResult = await client.query(
-          `DELETE FROM trays WHERE project_id = $1`,
-          [projectId]
-        );
+        const traysResult = await client.query(`DELETE FROM trays WHERE project_id = $1`, [
+          projectId,
+        ]);
         deletedTrays = traysResult.rowCount ?? 0;
       }
 
@@ -894,12 +860,12 @@ projectsRouter.post(
         const [cablesCountResult, cableTypesCountResult] = await Promise.all([
           client.query<{ count: number }>(
             `SELECT COUNT(*)::int AS count FROM cables WHERE project_id = $1`,
-            [projectId]
+            [projectId],
           ),
           client.query<{ count: number }>(
             `SELECT COUNT(*)::int AS count FROM cable_types WHERE project_id = $1`,
-            [projectId]
-          )
+            [projectId],
+          ),
         ]);
 
         deletedCables = cablesCountResult.rows[0]?.count ?? 0;
@@ -907,10 +873,9 @@ projectsRouter.post(
 
         await client.query(`DELETE FROM cable_types WHERE project_id = $1`, [projectId]);
       } else if (cables) {
-        const cablesResult = await client.query(
-          `DELETE FROM cables WHERE project_id = $1`,
-          [projectId]
-        );
+        const cablesResult = await client.query(`DELETE FROM cables WHERE project_id = $1`, [
+          projectId,
+        ]);
         deletedCables = cablesResult.rowCount ?? 0;
       }
 
@@ -919,8 +884,8 @@ projectsRouter.post(
         deleted: {
           cableTypes: deletedCableTypes,
           cables: deletedCables,
-          trays: deletedTrays
-        }
+          trays: deletedTrays,
+        },
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -929,7 +894,7 @@ projectsRouter.post(
     } finally {
       client.release();
     }
-  }
+  },
 );
 
 projectsRouter.delete(
@@ -945,10 +910,9 @@ projectsRouter.delete(
     }
 
     try {
-      const result = await pool.query(
-        `DELETE FROM projects WHERE id = $1 RETURNING id`,
-        [projectId]
-      );
+      const result = await pool.query(`DELETE FROM projects WHERE id = $1 RETURNING id`, [
+        projectId,
+      ]);
 
       if (result.rowCount === 0) {
         res.status(404).json({ error: 'Project not found' });
@@ -960,7 +924,7 @@ projectsRouter.delete(
       console.error('Delete project error', error);
       res.status(500).json({ error: 'Failed to delete project' });
     }
-  }
+  },
 );
 
 projectsRouter.use('/:projectId/cable-types', cableTypesRouter);
@@ -968,5 +932,6 @@ projectsRouter.use('/:projectId/cables', cablesRouter);
 projectsRouter.use('/:projectId/roxtec', roxtecEntriesRouter);
 projectsRouter.use('/:projectId/trays', traysRouter);
 projectsRouter.use('/:projectId/files', projectFilesRouter);
+projectsRouter.use('/:projectId/change-orders', changeOrdersRouter);
 
 export { projectsRouter };

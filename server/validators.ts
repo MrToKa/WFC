@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CABLE_MTO_VALUES } from './models/cable.js';
+import { CHANGE_ORDER_SOURCE_CATALOGS } from './models/changeOrder.js';
 
 export const registerSchema = z
   .object({
@@ -593,3 +594,88 @@ export const updateMaterialLoadCurveSchema = z
       value.points !== undefined,
     { message: 'At least one field must be provided' },
   );
+
+const changeOrderDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a date in YYYY-MM-DD format')
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }, 'Enter a valid calendar date');
+
+const optionalChangeOrderText = (maximum = 2_000) =>
+  z.string().trim().max(maximum).nullable().optional();
+
+const finiteNonNegativeNumber = z
+  .number({ invalid_type_error: 'Enter a non-negative number' })
+  .finite('Enter a finite number')
+  .nonnegative('Enter a non-negative number');
+
+export const createChangeOrderSchema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required').max(300),
+    projectReference: optionalChangeOrderText(300),
+    preparedBy: z.string().trim().min(1, 'Prepared by is required').max(300),
+    reportDate: changeOrderDateSchema,
+    revision: z.string().trim().min(1, 'Revision is required').max(50),
+  })
+  .strict();
+
+export const updateChangeOrderSchema = createChangeOrderSchema
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
+export const addChangeOrderItemSchema = z
+  .object({
+    sourceCatalog: z.enum(CHANGE_ORDER_SOURCE_CATALOGS),
+    sourceMaterialId: z.string().uuid(),
+  })
+  .strict();
+
+export const updateChangeOrderItemSchema = z
+  .object({
+    designQuantity: finiteNonNegativeNumber.optional(),
+    orderQuantity: finiteNonNegativeNumber.optional(),
+    unit: optionalChangeOrderText(50),
+    packaging: optionalChangeOrderText(200),
+    packagingQuantity: finiteNonNegativeNumber.nullable().optional(),
+    packagingUnit: optionalChangeOrderText(50),
+    orderedQuantity: finiteNonNegativeNumber.nullable().optional(),
+    orderedUnit: optionalChangeOrderText(50),
+    sapNumber: optionalChangeOrderText(200),
+    descriptionEn: z.string().trim().min(1).max(2_000).optional(),
+    descriptionDe: optionalChangeOrderText(),
+    dimensionMm: optionalChangeOrderText(500),
+    material: optionalChangeOrderText(500),
+    weightKg: finiteNonNegativeNumber.nullable().optional(),
+    clearDescription: optionalChangeOrderText(5_000),
+    unitPrice: finiteNonNegativeNumber.optional(),
+    countryOfOrigin: optionalChangeOrderText(200),
+    hsCode: optionalChangeOrderText(200),
+    tagNo: optionalChangeOrderText(500),
+    drawingNo: optionalChangeOrderText(500),
+    shippingList: optionalChangeOrderText(500),
+    revisionNumber: optionalChangeOrderText(100),
+    clientBarcode: optionalChangeOrderText(500),
+    manufacturer: optionalChangeOrderText(500),
+    manufacturerPartNo: optionalChangeOrderText(500),
+    acsBarcode: optionalChangeOrderText(500),
+    remarks: optionalChangeOrderText(5_000),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
+export const reorderChangeOrderItemsSchema = z
+  .object({
+    orderedItemIds: z
+      .array(z.string().uuid())
+      .min(1)
+      .max(5_000)
+      .refine((ids) => new Set(ids).size === ids.length, 'Item IDs must be unique'),
+  })
+  .strict();

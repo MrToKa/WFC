@@ -8,10 +8,7 @@ import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
 import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
 import { authenticate, requireAdmin } from '../middleware.js';
-import {
-  createMaterialCableTypeSchema,
-  updateMaterialCableTypeSchema,
-} from '../validators.js';
+import { createMaterialCableTypeSchema, updateMaterialCableTypeSchema } from '../validators.js';
 
 const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -123,7 +120,7 @@ materialCableTypesRouter.post(
         [name],
       );
 
-      if (duplicateResult.rowCount > 0) {
+      if ((duplicateResult.rowCount ?? 0) > 0) {
         res.status(409).json({
           error: 'A material cable type with this name already exists',
         });
@@ -229,7 +226,7 @@ materialCableTypesRouter.patch(
           [name, cableTypeId],
         );
 
-        if (duplicateResult.rowCount > 0) {
+        if ((duplicateResult.rowCount ?? 0) > 0) {
           res.status(409).json({
             error: 'A material cable type with this name already exists',
           });
@@ -446,10 +443,7 @@ materialCableTypesRouter.post(
     const readString = (raw: unknown): string | null =>
       raw === undefined || raw === null ? null : normalizeOptionalString(String(raw));
 
-    const readCell = (
-      row: CableImportRow,
-      headers: readonly string[],
-    ): unknown => {
+    const readCell = (row: CableImportRow, headers: readonly string[]): unknown => {
       for (const header of headers) {
         if (header in row) {
           return row[header];

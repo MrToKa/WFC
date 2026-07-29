@@ -6,13 +6,10 @@ import {
   type CableType,
   type CableTypeInput,
   type Tray,
-  type TrayInput
+  type TrayInput,
 } from '@/api/client';
 
-import {
-  parseNumberInput,
-  toNullableString
-} from './ProjectDetails.utils';
+import { parseNumberInput, toNullableString } from './ProjectDetails.utils';
 
 export const CABLE_TYPES_PER_PAGE = 10;
 export const CABLE_LIST_PER_PAGE = 10;
@@ -27,6 +24,7 @@ export type ProjectDetailsTab =
   | 'roxtec'
   | 'files'
   | 'cable-report'
+  | 'change-orders'
   | 'variables-api';
 
 export type CableTypeFormState = {
@@ -41,9 +39,7 @@ export type CableTypeFormState = {
   weightKgPerM: string;
 };
 
-export type CableTypeFormErrors = Partial<
-  Record<keyof CableTypeFormState, string>
-> & {
+export type CableTypeFormErrors = Partial<Record<keyof CableTypeFormState, string>> & {
   general?: string;
 };
 
@@ -56,12 +52,10 @@ export const emptyCableTypeForm: CableTypeFormState = {
   partNo: '',
   remarks: '',
   diameterMm: '',
-  weightKgPerM: ''
+  weightKgPerM: '',
 };
 
-export const toCableTypeFormState = (
-  cableType: CableType
-): CableTypeFormState => ({
+export const toCableTypeFormState = (cableType: CableType): CableTypeFormState => ({
   name: cableType.name,
   purpose: cableType.purpose ?? '',
   material: '',
@@ -69,27 +63,24 @@ export const toCableTypeFormState = (
   manufacturer: '',
   partNo: '',
   remarks: '',
-  diameterMm:
-    cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
-  weightKgPerM:
-    cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : ''
+  diameterMm: cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
+  weightKgPerM: cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '',
 });
 
-export const parseCableTypeApiErrors = (
-  payload: ApiErrorPayload
-): CableTypeFormErrors => {
+export const parseCableTypeApiErrors = (payload: ApiErrorPayload): CableTypeFormErrors => {
   if (typeof payload === 'string') {
     return { general: payload };
   }
 
-  const fieldErrors = Object.entries(payload.fieldErrors ?? {}).reduce<
-    CableTypeFormErrors
-  >((acc, [field, messages]) => {
-    if (messages.length > 0 && field in emptyCableTypeForm) {
-      acc[field as keyof CableTypeFormState] = messages[0];
-    }
-    return acc;
-  }, {});
+  const fieldErrors = Object.entries(payload.fieldErrors ?? {}).reduce<CableTypeFormErrors>(
+    (acc, [field, messages]) => {
+      if (messages.length > 0 && field in emptyCableTypeForm) {
+        acc[field as keyof CableTypeFormState] = messages[0];
+      }
+      return acc;
+    },
+    {},
+  );
 
   const generalMessage = payload.formErrors?.[0];
   if (generalMessage) {
@@ -100,7 +91,7 @@ export const parseCableTypeApiErrors = (
 };
 
 export const buildCableTypeInput = (
-  values: CableTypeFormState
+  values: CableTypeFormState,
 ): {
   input: CableTypeInput;
   errors: CableTypeFormErrors;
@@ -129,14 +120,14 @@ export const buildCableTypeInput = (
       return trimmed === '' ? null : trimmed;
     })(),
     diameterMm: diameterResult.numeric,
-    weightKgPerM: weightResult.numeric
+    weightKgPerM: weightResult.numeric,
   };
 
   return { input, errors };
 };
 
 export const buildMaterialCableTypeInput = (
-  values: CableTypeFormState
+  values: CableTypeFormState,
 ): {
   input: {
     name: string;
@@ -163,9 +154,9 @@ export const buildMaterialCableTypeInput = (
       partNo: toNullableString(values.partNo),
       remarks: toNullableString(values.remarks),
       diameterMm: input.diameterMm ?? null,
-      weightKgPerM: input.weightKgPerM ?? null
+      weightKgPerM: input.weightKgPerM ?? null,
     },
-    errors
+    errors,
   };
 };
 
@@ -188,7 +179,7 @@ export const emptyTrayForm: TrayFormState = {
   purpose: '',
   widthMm: '',
   heightMm: '',
-  lengthMm: ''
+  lengthMm: '',
 };
 
 export const toTrayFormState = (tray: Tray): TrayFormState => ({
@@ -197,21 +188,17 @@ export const toTrayFormState = (tray: Tray): TrayFormState => ({
   purpose: tray.purpose ?? '',
   widthMm: tray.widthMm !== null ? String(tray.widthMm) : '',
   heightMm: tray.heightMm !== null ? String(tray.heightMm) : '',
-  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : ''
+  lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : '',
 });
 
-export const parseTrayApiErrors = (
-  payload: ApiErrorPayload
-): TrayFormErrors => {
+export const parseTrayApiErrors = (payload: ApiErrorPayload): TrayFormErrors => {
   if (typeof payload === 'string') {
     return { general: payload };
   }
 
   const fieldErrors: TrayFormErrors = {};
 
-  for (const [field, messages] of Object.entries(
-    payload.fieldErrors ?? {}
-  )) {
+  for (const [field, messages] of Object.entries(payload.fieldErrors ?? {})) {
     if (messages.length === 0) {
       continue;
     }
@@ -229,7 +216,7 @@ export const parseTrayApiErrors = (
 };
 
 export const buildTrayInput = (
-  values: TrayFormState
+  values: TrayFormState,
 ): {
   input: TrayInput;
   errors: TrayFormErrors;
@@ -266,7 +253,7 @@ export const buildTrayInput = (
     purpose,
     widthMm: widthResult.numeric,
     heightMm: heightResult.numeric,
-    lengthMm: lengthResult.numeric
+    lengthMm: lengthResult.numeric,
   };
 
   return { input, errors };
@@ -299,7 +286,7 @@ export const emptyCableForm: CableFormState = {
   toLocation: '',
   routing: '',
   delivery: '',
-  designLength: ''
+  designLength: '',
 };
 
 export const toCableFormState = (cable: Cable): CableFormState => ({
@@ -312,13 +299,10 @@ export const toCableFormState = (cable: Cable): CableFormState => ({
   toLocation: cable.toLocation ?? '',
   routing: cable.routing ?? '',
   delivery: cable.delivery ?? '',
-  designLength:
-    cable.designLength !== null ? String(cable.designLength) : ''
+  designLength: cable.designLength !== null ? String(cable.designLength) : '',
 });
 
-export const parseCableFormErrors = (
-  payload: ApiErrorPayload
-): CableFormErrors => {
+export const parseCableFormErrors = (payload: ApiErrorPayload): CableFormErrors => {
   if (typeof payload === 'string') {
     return { general: payload };
   }
@@ -343,7 +327,7 @@ export const parseCableFormErrors = (
 };
 
 export const buildCableInput = (
-  values: CableFormState
+  values: CableFormState,
 ): {
   input: CableInput;
   errors: CableFormErrors;
@@ -357,11 +341,7 @@ export const buildCableInput = (
     errors.cableId = 'Cable ID is required';
   } else {
     const parsedCableId = Number(cableIdValue);
-    if (
-      !Number.isFinite(parsedCableId) ||
-      !Number.isInteger(parsedCableId) ||
-      parsedCableId < 0
-    ) {
+    if (!Number.isFinite(parsedCableId) || !Number.isInteger(parsedCableId) || parsedCableId < 0) {
       errors.cableId = 'Cable ID must be a non-negative integer';
     } else {
       cableId = parsedCableId;
@@ -392,17 +372,13 @@ export const buildCableInput = (
     fromLocation: normalize(values.fromLocation),
     toLocation: normalize(values.toLocation),
     routing: normalize(values.routing),
-    delivery: normalize(values.delivery)
+    delivery: normalize(values.delivery),
   };
 
   const normalizedMto = values.mto.trim();
   if (normalizedMto === '') {
     input.mto = null;
-  } else if (
-    CABLE_MTO_OPTIONS.includes(
-      normalizedMto as (typeof CABLE_MTO_OPTIONS)[number]
-    )
-  ) {
+  } else if (CABLE_MTO_OPTIONS.includes(normalizedMto as (typeof CABLE_MTO_OPTIONS)[number])) {
     input.mto = normalizedMto as (typeof CABLE_MTO_OPTIONS)[number];
   } else {
     errors.mto = 'Select a valid MTO';

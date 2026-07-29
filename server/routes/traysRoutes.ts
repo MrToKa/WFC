@@ -11,7 +11,7 @@ import type { PublicTray, TrayRow } from '../models/tray.js';
 import { mapProjectRow } from '../models/project.js';
 import {
   computeTrayFreeSpaceByTrayId,
-  type TrayCableForFreeSpace
+  type TrayCableForFreeSpace,
 } from '../utils/trayFreeSpace.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
@@ -21,7 +21,7 @@ const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE }
+  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
 });
 
 const TRAY_EXCEL_HEADERS = {
@@ -31,12 +31,10 @@ const TRAY_EXCEL_HEADERS = {
   width: 'Width [mm]',
   height: 'Height [mm]',
   length: 'Length [mm]',
-  freeSpace: 'Cable tray free space [%]'
+  freeSpace: 'Cable tray free space [%]',
 } as const;
 
-const normalizeOptionalString = (
-  value: string | null | undefined
-): string | null => {
+const normalizeOptionalString = (value: string | null | undefined): string | null => {
   if (value === undefined || value === null) {
     return null;
   }
@@ -154,7 +152,7 @@ traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
         WHERE project_id = $1
         ORDER BY name ASC;
       `,
-      [projectId]
+      [projectId],
     );
 
     res.json({ trays: result.rows.map(mapTrayRow) });
@@ -188,14 +186,14 @@ traysRouter.get(
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Trays', {
-        views: [{ state: 'frozen', ySplit: 1 }]
+        views: [{ state: 'frozen', ySplit: 1 }],
       });
 
       const columns = [
         { name: TRAY_EXCEL_HEADERS.name, key: 'name', width: 30 },
         { name: TRAY_EXCEL_HEADERS.type, key: 'type', width: 24 },
         { name: TRAY_EXCEL_HEADERS.purpose, key: 'purpose', width: 36 },
-        { name: TRAY_EXCEL_HEADERS.length, key: 'length', width: 18 }
+        { name: TRAY_EXCEL_HEADERS.length, key: 'length', width: 18 },
       ] as const;
 
       const table = worksheet.addTable({
@@ -208,13 +206,13 @@ traysRouter.get(
           showFirstColumn: false,
           showLastColumn: false,
           showRowStripes: true,
-          showColumnStripes: true
+          showColumnStripes: true,
         },
         columns: columns.map((column) => ({
           name: column.name,
-          filterButton: true
+          filterButton: true,
         })),
-        rows: [Array(columns.length).fill('')]
+        rows: [Array(columns.length).fill('')],
       });
 
       table.commit();
@@ -235,19 +233,16 @@ traysRouter.get(
 
       res.setHeader(
         'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`
-      );
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
       res.send(Buffer.from(buffer));
     } catch (error) {
       console.error('Generate trays template error', error);
       res.status(500).json({ error: 'Failed to generate template' });
     }
-  }
+  },
 );
 
 traysRouter.post(
@@ -256,7 +251,7 @@ traysRouter.post(
   requireAdmin,
   async (
     req: Request<{ projectId?: string }, unknown, TrayExportBody>,
-    res: Response
+    res: Response,
   ): Promise<void> => {
     const { projectId } = req.params;
 
@@ -280,26 +275,24 @@ traysRouter.post(
             WHERE project_id = $1
             ORDER BY name ASC;
           `,
-          [projectId]
+          [projectId],
         ),
-        pool.query<CableFreeSpaceRow>(selectTrayCablesQuery, [projectId])
+        pool.query<CableFreeSpaceRow>(selectTrayCablesQuery, [projectId]),
       ]);
 
       const trays = traysResult.rows.map(mapTrayRow);
       const project = mapProjectRow(projectRow);
 
-      const cables: TrayCableForFreeSpace[] = cablesResult.rows.map(
-        (row: CableFreeSpaceRow) => ({
-          routing: row.routing ?? null,
-          purpose: row.purpose ?? null,
-          diameterMm: toNumberOrNull(row.diameter_mm)
-        })
-      );
+      const cables: TrayCableForFreeSpace[] = cablesResult.rows.map((row: CableFreeSpaceRow) => ({
+        routing: row.routing ?? null,
+        purpose: row.purpose ?? null,
+        diameterMm: toNumberOrNull(row.diameter_mm),
+      }));
 
       const computedFreeSpaceByTrayId = computeTrayFreeSpaceByTrayId({
         trays,
         cables,
-        layout: project.cableLayout
+        layout: project.cableLayout,
       });
 
       const providedMap = req.body?.freeSpaceByTrayId;
@@ -329,7 +322,7 @@ traysRouter.post(
       }
 
       const freeSpaceByTrayId: Record<string, number | null> = {
-        ...computedFreeSpaceByTrayId
+        ...computedFreeSpaceByTrayId,
       };
 
       for (const [trayId, value] of Object.entries(sanitizedProvided)) {
@@ -338,7 +331,7 @@ traysRouter.post(
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Trays', {
-        views: [{ state: 'frozen', ySplit: 1 }]
+        views: [{ state: 'frozen', ySplit: 1 }],
       });
 
       const columns = [
@@ -348,7 +341,7 @@ traysRouter.post(
         { name: TRAY_EXCEL_HEADERS.width, key: 'width', width: 18 },
         { name: TRAY_EXCEL_HEADERS.height, key: 'height', width: 18 },
         { name: TRAY_EXCEL_HEADERS.length, key: 'length', width: 18 },
-        { name: TRAY_EXCEL_HEADERS.freeSpace, key: 'freeSpace', width: 24 }
+        { name: TRAY_EXCEL_HEADERS.freeSpace, key: 'freeSpace', width: 24 },
       ] as const;
 
       const rows = trays.map((tray: PublicTray) => {
@@ -365,7 +358,7 @@ traysRouter.post(
           tray.widthMm ?? '',
           tray.heightMm ?? '',
           tray.lengthMm ?? '',
-          roundedFreeSpace ?? ''
+          roundedFreeSpace ?? '',
         ];
       });
 
@@ -379,13 +372,13 @@ traysRouter.post(
           showFirstColumn: false,
           showLastColumn: false,
           showRowStripes: true,
-          showColumnStripes: true
+          showColumnStripes: true,
         },
         columns: columns.map((column) => ({
           name: column.name,
-          filterButton: true
+          filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '']]
+        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '']],
       });
 
       table.commit();
@@ -410,64 +403,56 @@ traysRouter.post(
 
       res.setHeader(
         'Content-Type',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${fileName}"`
-      );
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
       res.send(Buffer.from(buffer));
     } catch (error) {
       console.error('Export trays error', error);
       res.status(500).json({ error: 'Failed to export trays' });
     }
-  }
+  },
 );
 
-traysRouter.get(
-  '/:trayId',
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId, trayId } = req.params;
+traysRouter.get('/:trayId', async (req: Request, res: Response): Promise<void> => {
+  const { projectId, trayId } = req.params;
 
-    if (!projectId || !trayId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and tray ID are required' });
+  if (!projectId || !trayId) {
+    res.status(400).json({ error: 'Project ID and tray ID are required' });
+    return;
+  }
+
+  try {
+    const project = await ensureProjectExists(projectId);
+
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' });
       return;
     }
 
-    try {
-      const project = await ensureProjectExists(projectId);
-
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      const result = await pool.query<TrayRow>(
-        `
+    const result = await pool.query<TrayRow>(
+      `
           ${selectTraysQuery}
           WHERE id = $1
             AND project_id = $2;
         `,
-        [trayId, projectId]
-      );
+      [trayId, projectId],
+    );
 
-      const tray = result.rows[0];
+    const tray = result.rows[0];
 
-      if (!tray) {
-        res.status(404).json({ error: 'Tray not found' });
-        return;
-      }
-
-      res.json({ tray: mapTrayRow(tray) });
-    } catch (error) {
-      console.error('Fetch tray error', error);
-      res.status(500).json({ error: 'Failed to fetch tray' });
+    if (!tray) {
+      res.status(404).json({ error: 'Tray not found' });
+      return;
     }
+
+    res.json({ tray: mapTrayRow(tray) });
+  } catch (error) {
+    console.error('Fetch tray error', error);
+    res.status(500).json({ error: 'Failed to fetch tray' });
   }
-);
+});
 
 traysRouter.post(
   '/',
@@ -501,8 +486,7 @@ traysRouter.post(
       return;
     }
 
-    const { name, type, purpose, widthMm, heightMm, lengthMm } =
-      parseResult.data;
+    const { name, type, purpose, widthMm, heightMm, lengthMm } = parseResult.data;
 
     try {
       const result = await pool.query<TrayRow>(
@@ -540,8 +524,8 @@ traysRouter.post(
           normalizeOptionalString(purpose ?? null),
           widthMm ?? null,
           heightMm ?? null,
-          lengthMm ?? null
-        ]
+          lengthMm ?? null,
+        ],
       );
 
       res.status(201).json({ tray: mapTrayRow(result.rows[0]) });
@@ -552,16 +536,14 @@ traysRouter.post(
         'code' in error &&
         (error as { code?: string }).code === '23505'
       ) {
-        res
-          .status(409)
-          .json({ error: 'A tray with this name already exists for the project' });
+        res.status(409).json({ error: 'A tray with this name already exists for the project' });
         return;
       }
 
       console.error('Create tray error', error);
       res.status(500).json({ error: 'Failed to create tray' });
     }
-  }
+  },
 );
 
 traysRouter.patch(
@@ -572,9 +554,7 @@ traysRouter.patch(
     const { projectId, trayId } = req.params;
 
     if (!projectId || !trayId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and tray ID are required' });
+      res.status(400).json({ error: 'Project ID and tray ID are required' });
       return;
     }
 
@@ -593,13 +573,10 @@ traysRouter.patch(
       heightMm,
       lengthMm,
       includeGroundingCable,
-      groundingCableTypeId
+      groundingCableTypeId,
     } = parseResult.data;
 
-    if (
-      groundingCableTypeId !== undefined &&
-      groundingCableTypeId !== null
-    ) {
+    if (groundingCableTypeId !== undefined && groundingCableTypeId !== null) {
       try {
         const cableTypeResult = await pool.query(
           `
@@ -607,15 +584,12 @@ traysRouter.patch(
             FROM cable_types
             WHERE id = $1;
           `,
-          [groundingCableTypeId]
+          [groundingCableTypeId],
         );
 
-        if (
-          cableTypeResult.rowCount === 0 ||
-          cableTypeResult.rows[0]?.project_id !== projectId
-        ) {
+        if (cableTypeResult.rowCount === 0 || cableTypeResult.rows[0]?.project_id !== projectId) {
           res.status(400).json({
-            error: 'Grounding cable type does not belong to this project'
+            error: 'Grounding cable type does not belong to this project',
           });
           return;
         }
@@ -636,13 +610,11 @@ traysRouter.patch(
               AND id <> $2
               AND lower(name) = lower($3);
           `,
-          [projectId, trayId, name.trim()]
+          [projectId, trayId, name.trim()],
         );
 
-        if (duplicate.rowCount > 0) {
-          res
-            .status(409)
-            .json({ error: 'A tray with this name already exists for the project' });
+        if ((duplicate.rowCount ?? 0) > 0) {
+          res.status(409).json({ error: 'A tray with this name already exists for the project' });
           return;
         }
       } catch (error) {
@@ -712,7 +684,7 @@ traysRouter.patch(
             created_at,
             updated_at;
         `,
-        [...values, trayId, projectId]
+        [...values, trayId, projectId],
       );
 
       const tray = result.rows[0];
@@ -727,7 +699,7 @@ traysRouter.patch(
       console.error('Update tray error', error);
       res.status(500).json({ error: 'Failed to update tray' });
     }
-  }
+  },
 );
 
 traysRouter.delete(
@@ -738,9 +710,7 @@ traysRouter.delete(
     const { projectId, trayId } = req.params;
 
     if (!projectId || !trayId) {
-      res
-        .status(400)
-        .json({ error: 'Project ID and tray ID are required' });
+      res.status(400).json({ error: 'Project ID and tray ID are required' });
       return;
     }
 
@@ -751,7 +721,7 @@ traysRouter.delete(
           WHERE id = $1
             AND project_id = $2;
         `,
-        [trayId, projectId]
+        [trayId, projectId],
       );
 
       if (result.rowCount === 0) {
@@ -764,7 +734,7 @@ traysRouter.delete(
       console.error('Delete tray error', error);
       res.status(500).json({ error: 'Failed to delete tray' });
     }
-  }
+  },
 );
 
 traysRouter.post(
@@ -812,9 +782,7 @@ traysRouter.post(
       const sheetName = workbook.SheetNames[0];
 
       if (!sheetName) {
-        res
-          .status(400)
-          .json({ error: 'The workbook does not contain any sheets' });
+        res.status(400).json({ error: 'The workbook does not contain any sheets' });
         return;
       }
 
@@ -829,13 +797,13 @@ traysRouter.post(
 
     const rows = XLSX.utils.sheet_to_json<TrayImportRow>(worksheet, {
       defval: '',
-      raw: false
+      raw: false,
     });
 
     const summary = {
       inserted: 0,
       updated: 0,
-      skipped: 0
+      skipped: 0,
     };
 
     const prepared: Array<{
@@ -853,10 +821,7 @@ traysRouter.post(
 
     for (const row of rows) {
       const rawName = row[TRAY_EXCEL_HEADERS.name] as unknown;
-      const name =
-        typeof rawName === 'number'
-          ? String(rawName)
-          : String(rawName ?? '').trim();
+      const name = typeof rawName === 'number' ? String(rawName) : String(rawName ?? '').trim();
 
       if (name === '') {
         summary.skipped += 1;
@@ -873,7 +838,7 @@ traysRouter.post(
       seenNames.add(key);
 
       const typeValue = normalizeOptionalString(
-        row[TRAY_EXCEL_HEADERS.type] as string | null | undefined
+        row[TRAY_EXCEL_HEADERS.type] as string | null | undefined,
       );
 
       prepared.push({
@@ -882,17 +847,11 @@ traysRouter.post(
         type: typeValue,
         typeKey: typeValue ? typeValue.toLowerCase() : null,
         purpose: normalizeOptionalString(
-          row[TRAY_EXCEL_HEADERS.purpose] as string | null | undefined
+          row[TRAY_EXCEL_HEADERS.purpose] as string | null | undefined,
         ),
-        width: toNumberOrNull(
-          row[TRAY_EXCEL_HEADERS.width] as string | number | null
-        ),
-        height: toNumberOrNull(
-          row[TRAY_EXCEL_HEADERS.height] as string | number | null
-        ),
-        length: toNumberOrNull(
-          row[TRAY_EXCEL_HEADERS.length] as string | number | null
-        )
+        width: toNumberOrNull(row[TRAY_EXCEL_HEADERS.width] as string | number | null),
+        height: toNumberOrNull(row[TRAY_EXCEL_HEADERS.height] as string | number | null),
+        length: toNumberOrNull(row[TRAY_EXCEL_HEADERS.length] as string | number | null),
       });
     }
 
@@ -904,18 +863,18 @@ traysRouter.post(
             WHERE project_id = $1
             ORDER BY name ASC;
           `,
-          [projectId]
+          [projectId],
         );
 
         res.json({
           summary,
-          trays: existing.rows.map(mapTrayRow)
+          trays: existing.rows.map(mapTrayRow),
         });
       } catch (error) {
         console.error('Fetch trays after empty import error', error);
         res.status(500).json({
           error: 'No rows imported and failed to fetch existing trays',
-          summary
+          summary,
         });
       }
       return;
@@ -928,10 +887,8 @@ traysRouter.post(
 
     const materialTypeKeys = Array.from(
       new Set(
-        prepared
-          .map((row) => row.typeKey)
-          .filter((typeKey): typeKey is string => Boolean(typeKey))
-      )
+        prepared.map((row) => row.typeKey).filter((typeKey): typeKey is string => Boolean(typeKey)),
+      ),
     );
 
     if (materialTypeKeys.length > 0) {
@@ -950,14 +907,14 @@ traysRouter.post(
             FROM material_trays
             WHERE LOWER(tray_type) = ANY($1::text[]);
           `,
-          [materialTypeKeys]
+          [materialTypeKeys],
         );
 
         for (const row of result.rows) {
           const key = row.tray_type.toLowerCase();
           materialDimensionsByType.set(key, {
             width: toNumberOrNull(row.width_mm),
-            height: toNumberOrNull(row.height_mm)
+            height: toNumberOrNull(row.height_mm),
           });
         }
       } catch (error) {
@@ -976,7 +933,7 @@ traysRouter.post(
           WHERE project_id = $1
             AND lower(name) = ANY($2::text[]);
         `,
-        [projectId, prepared.map((row) => row.key)]
+        [projectId, prepared.map((row) => row.key)],
       );
 
       const existingMap = new Map<string, TrayRow>();
@@ -987,9 +944,7 @@ traysRouter.post(
 
       for (const row of prepared) {
         const dimensions =
-          row.typeKey !== null
-            ? materialDimensionsByType.get(row.typeKey)
-            : undefined;
+          row.typeKey !== null ? materialDimensionsByType.get(row.typeKey) : undefined;
         const widthMm = dimensions?.width ?? row.width ?? null;
         const heightMm = dimensions?.height ?? row.height ?? null;
 
@@ -1008,14 +963,7 @@ traysRouter.post(
                 updated_at = NOW()
               WHERE id = $6;
             `,
-            [
-              row.type,
-              row.purpose,
-              widthMm,
-              heightMm,
-              row.length,
-              existing.id
-            ]
+            [row.type, row.purpose, widthMm, heightMm, row.length, existing.id],
           );
           summary.updated += 1;
         } else {
@@ -1041,8 +989,8 @@ traysRouter.post(
               row.purpose,
               widthMm,
               heightMm,
-              row.length
-            ]
+              row.length,
+            ],
           );
           summary.inserted += 1;
         }
@@ -1065,22 +1013,21 @@ traysRouter.post(
           WHERE project_id = $1
           ORDER BY name ASC;
         `,
-        [projectId]
+        [projectId],
       );
 
       res.json({
         summary,
-        trays: refreshed.rows.map(mapTrayRow)
+        trays: refreshed.rows.map(mapTrayRow),
       });
     } catch (error) {
       console.error('Fetch trays after import error', error);
       res.status(500).json({
         error: 'Trays imported but failed to refresh list',
-        summary
+        summary,
       });
     }
-  }
+  },
 );
 
 export { traysRouter };
-

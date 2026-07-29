@@ -2,17 +2,9 @@ import type { NextFunction, Request, Response } from 'express';
 import { verifyAccessToken } from './auth.js';
 import { pool } from './db.js';
 
-export interface AuthenticatedRequest extends Request {
-  userId?: string;
-  userEmail?: string;
-  isAdmin?: boolean;
-}
+export type AuthenticatedRequest = Request;
 
-export function authenticate(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-): void {
+export function authenticate(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   const authHeader = req.header('authorization') ?? '';
   const [, token] = authHeader.split(' ');
 
@@ -35,7 +27,7 @@ export function authenticate(
 export async function requireAdmin(
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   if (
     typeof req.originalUrl === 'string' &&
@@ -54,7 +46,7 @@ export async function requireAdmin(
   try {
     const result = await pool.query<{ is_admin: boolean }>(
       `SELECT is_admin FROM users WHERE id = $1`,
-      [req.userId]
+      [req.userId],
     );
 
     const isAdmin = result.rows[0]?.is_admin ?? false;

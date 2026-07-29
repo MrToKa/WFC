@@ -207,8 +207,7 @@ const formatMissingMaterialCableTypesError = (names: string[]): string => {
 };
 
 const formatMissingMaterialCableInstallationMaterialsError = (names: string[]): string => {
-  const label =
-    names.length === 1 ? 'Cable installation material' : 'Cable installation materials';
+  const label = names.length === 1 ? 'Cable installation material' : 'Cable installation materials';
   return `${label} not found in materials: ${names.join(', ')}.`;
 };
 
@@ -427,7 +426,7 @@ cableTypesRouter.post(
         [projectId, name],
       );
 
-      if (duplicateResult.rowCount > 0) {
+      if ((duplicateResult.rowCount ?? 0) > 0) {
         res.status(409).json({
           error: 'A cable type with this name already exists for the project',
         });
@@ -563,7 +562,7 @@ cableTypesRouter.patch(
         [projectId, materialCableType.name, cableTypeId],
       );
 
-      if (duplicateResult.rowCount > 0) {
+      if ((duplicateResult.rowCount ?? 0) > 0) {
         res.status(409).json({
           error: 'A cable type with this name already exists for the project',
         });
@@ -1364,9 +1363,8 @@ cableTypesRouter.post(
     };
 
     const hasCellValue = (value: unknown): boolean =>
-      normalizeOptionalString(
-        typeof value === 'number' ? String(value) : String(value ?? ''),
-      ) !== null;
+      normalizeOptionalString(typeof value === 'number' ? String(value) : String(value ?? '')) !==
+      null;
 
     const prepared: Array<{
       name: string;
@@ -1388,9 +1386,7 @@ cableTypesRouter.post(
       }
 
       const name =
-        typeof materialRaw === 'number'
-          ? String(materialRaw)
-          : String(materialRaw ?? '').trim();
+        typeof materialRaw === 'number' ? String(materialRaw) : String(materialRaw ?? '').trim();
 
       if (name === '') {
         res.status(400).json({ error: `Row ${rowNumber}: Material is required.` });
