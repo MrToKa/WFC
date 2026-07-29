@@ -2,6 +2,7 @@ import { access } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import {
   calculateChangeOrderTotal,
   type ChangeOrderDetails,
@@ -41,6 +42,29 @@ const EXPECTED_HEADERS = [
   'ACS barcode',
   'Remarks',
 ] as const;
+
+// ExcelJS serializes font properties in JavaScript object order, which is not the
+// order required by SpreadsheetML. Excel desktop rejects the resulting styles.xml
+// even though ExcelJS can read it back.
+const FONT_PROPERTY_ORDER = new Map(
+  [
+    'b',
+    'i',
+    'strike',
+    'condense',
+    'extend',
+    'outline',
+    'shadow',
+    'u',
+    'vertAlign',
+    'sz',
+    'color',
+    'name',
+    'family',
+    'charset',
+    'scheme',
+  ].map((name, index) => [name, index]),
+);
 
 export class ChangeOrderTemplateError extends Error {}
 export class EmptyChangeOrderError extends Error {}
@@ -195,6 +219,65 @@ const setMergedHeaderValue = (
   worksheet.getCell(address).value = escapeSpreadsheetText(value);
 };
 
+export const normalizeSpreadsheetFontOrder = (stylesXml: string): string =>
+  stylesXml.replace(
+    /<font(\s[^>]*)?>([\s\S]*?)<\/font>/g,
+    (fontXml, attributes: string | undefined, content: string) => {
+      const children = content.match(/<([A-Za-z][\w.-]*)(?:\s[^>]*)?\/>/g);
+      if (!children || children.join('') !== content) {
+        return fontXml;
+      }
+
+      const orderedChildren = children
+        .map((xml, originalIndex) => ({
+          xml,
+          originalIndex,
+          name: /^<([A-Za-z][\w.-]*)/.exec(xml)?.[1] ?? '',
+        }))
+        .sort((left, right) => {
+          const leftOrder = FONT_PROPERTY_ORDER.get(left.name) ?? Number.MAX_SAFE_INTEGER;
+          const rightOrder = FONT_PROPERTY_ORDER.get(right.name) ?? Number.MAX_SAFE_INTEGER;
+          return leftOrder - rightOrder || left.originalIndex - right.originalIndex;
+        })
+        .map(({ xml }) => xml)
+        .join('');
+
+      return `<font${attributes ?? ''}>${orderedChildren}</font>`;
+    },
+  );
+
+export const trimWorksheetAfterRow = (worksheetXml: string, lastRow: number): string =>
+  worksheetXml
+    .replace(
+      /<row\b(?=[^>]*\br="(\d+)")[^>]*(?:\/>|>[\s\S]*?<\/row>)/g,
+      (rowXml, rowNumber: string) => (Number(rowNumber) > lastRow ? '' : rowXml),
+    )
+    .replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:AD${lastRow}"/>`);
+
+export const currentExcelDate = (now = new Date()): Date =>
+  new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+const makeExcelDesktopCompatible = async (
+  output: Buffer,
+  totalRowNumber: number,
+): Promise<Buffer> => {
+  const archive = await JSZip.loadAsync(output);
+  const stylesPart = archive.file('xl/styles.xml');
+  if (stylesPart) {
+    const stylesXml = await stylesPart.async('string');
+    archive.file('xl/styles.xml', normalizeSpreadsheetFontOrder(stylesXml));
+  }
+  const worksheetPart = archive.file('xl/worksheets/sheet1.xml');
+  if (worksheetPart) {
+    const worksheetXml = await worksheetPart.async('string');
+    archive.file('xl/worksheets/sheet1.xml', trimWorksheetAfterRow(worksheetXml, totalRowNumber));
+  }
+  return archive.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+  });
+};
+
 export async function generateChangeOrderWorkbook(
   changeOrder: ChangeOrderDetails,
   templatePath?: string,
@@ -214,6 +297,19 @@ export async function generateChangeOrderWorkbook(
 
   const worksheet = findTemplateWorksheet(workbook);
   validateChangeOrderTemplateHeaders(worksheet);
+
+  // Row splicing makes ExcelJS write the template's conditional-formatting
+  // containers without their rules. Empty containers are invalid SpreadsheetML
+  // and cause Excel to repair sheet1.xml on open.
+  worksheet.removeConditionalFormatting(() => false);
+
+  // The source workbook contains a hidden filter name tied to its original sheet/table.
+  // ExcelJS does not update that name when the table is removed and the sheet is renamed,
+  // leaving a broken external reference that desktop Excel attempts to repair.
+  workbook.definedNames.model = workbook.definedNames.model.filter(
+    (definedName) => definedName.name !== '_xlnm._FilterDatabase',
+  );
+
   const totalTemplateRowNumber = findTotalRowNumber(worksheet);
   const dataTemplate = captureRowTemplate(worksheet.getRow(5));
   const totalTemplate = captureRowTemplate(worksheet.getRow(totalTemplateRowNumber));
@@ -255,7 +351,7 @@ export async function generateChangeOrderWorkbook(
   setMergedHeaderValue(worksheet, ['K1', 'F1'], changeOrder.projectName);
   setMergedHeaderValue(worksheet, ['K2', 'F2'], changeOrder.title);
   worksheet.getCell('AD1').value = escapeSpreadsheetText(changeOrder.preparedBy);
-  worksheet.getCell('AD2').value = new Date(`${changeOrder.reportDate}T00:00:00.000Z`);
+  worksheet.getCell('AD2').value = currentExcelDate();
   worksheet.getCell('AD3').value = escapeSpreadsheetText(changeOrder.revision);
 
   worksheet.autoFilter = `A4:AD${lastItemRow}`;
@@ -270,7 +366,7 @@ export async function generateChangeOrderWorkbook(
   calculationProperties.calcMode = 'auto';
 
   const output = await workbook.xlsx.writeBuffer();
-  return Buffer.from(output);
+  return makeExcelDesktopCompatible(Buffer.from(output), totalRowNumber);
 }
 
 export const sanitizeChangeOrderFileName = (title: string, revision: string): string => {

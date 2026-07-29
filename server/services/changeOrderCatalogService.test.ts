@@ -17,6 +17,7 @@ describe('Change Order catalog snapshots', () => {
       description: 'Low-smoke cable',
       manufacturer: 'Cable Co',
       part_no: 'C-1',
+      diameter_mm: '12.5',
       weight_kg_per_m: '0.25',
     };
     const snapshot = snapshotCableType(source);
@@ -27,6 +28,7 @@ describe('Change Order catalog snapshots', () => {
       sourceCatalog: 'cable-type',
       descriptionEn: 'Power cable',
       clearDescription: 'Low-smoke cable',
+      dimensionMm: '12.5',
       material: 'Copper',
       weightKg: 0.25,
       manufacturer: 'Cable Co',

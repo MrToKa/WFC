@@ -1,9 +1,13 @@
 import path from 'node:path';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import type { ChangeOrderDetails, ChangeOrderItem } from '../models/changeOrder.js';
 import {
+  currentExcelDate,
   generateChangeOrderWorkbook,
+  normalizeSpreadsheetFontOrder,
+  trimWorksheetAfterRow,
   validateChangeOrderTemplateHeaders,
 } from './changeOrderExcelExportService.js';
 
@@ -73,13 +77,15 @@ const createDetails = (count: number): ChangeOrderDetails => {
   };
 };
 
-const reopen = async (count: number): Promise<ExcelJS.Worksheet> => {
+const reopen = async (
+  count: number,
+): Promise<{ workbook: ExcelJS.Workbook; worksheet: ExcelJS.Worksheet; buffer: Buffer }> => {
   const buffer = await generateChangeOrderWorkbook(createDetails(count), templatePath);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
   const worksheet = workbook.getWorksheet('Change Order');
   if (!worksheet) throw new Error('Generated worksheet is missing');
-  return worksheet;
+  return { workbook, worksheet, buffer };
 };
 
 describe('Change Order workbook export', () => {
@@ -89,7 +95,7 @@ describe('Change Order workbook export', () => {
     const source = sourceWorkbook.worksheets[0];
     validateChangeOrderTemplateHeaders(source);
 
-    const worksheet = await reopen(2);
+    const { workbook, worksheet, buffer } = await reopen(2);
     expect(worksheet.name).toBe('Change Order');
     expect(worksheet.getCell('B1').value).toBe('Heat Pump Project');
     expect(worksheet.getCell('B2').value).toBe('Customer Ltd');
@@ -118,10 +124,58 @@ describe('Change Order workbook export', () => {
       source.getCell('A5').border.left?.style,
     );
     expect(worksheet.getCell('R7').font.bold).toBe(source.getCell('R29').font.bold);
+
+    expect(
+      workbook.definedNames.model.some(
+        (definedName) =>
+          definedName.name === '_xlnm._FilterDatabase' ||
+          definedName.ranges.some((range) => range.includes('List1') || range.includes('[1]')),
+      ),
+    ).toBe(false);
+
+    const archive = await JSZip.loadAsync(buffer);
+    const workbookXml = await archive.file('xl/workbook.xml')?.async('string');
+    const worksheetXml = await archive.file('xl/worksheets/sheet1.xml')?.async('string');
+    expect(workbookXml).toBeDefined();
+    expect(workbookXml).not.toContain('_xlnm._FilterDatabase');
+    expect(workbookXml).not.toContain('List1');
+    expect(worksheetXml).toContain('<cols>');
+    expect(worksheetXml).toContain('<mergeCells');
+    expect(worksheetXml).toContain('<autoFilter ref="A4:AD6"');
+    expect(worksheetXml).not.toContain('<conditionalFormatting');
+    expect(worksheetXml).toContain('<dimension ref="A1:AD7"');
+    expect(worksheetXml).not.toMatch(/<row\b[^>]*\br="(?:8|9|[1-9]\d+)"/);
+    expect(archive.file('xl/calcChain.xml')).toBeNull();
+    expect(archive.file(/xl\/externalLinks\//)).toHaveLength(0);
+  });
+
+  it('writes font properties in the SpreadsheetML order required by Excel desktop', () => {
+    const stylesXml =
+      '<fonts><font><charset val="238"/><color theme="1"/><family val="2"/>' +
+      '<scheme val="minor"/><sz val="11"/><name val="Calibri"/></font></fonts>';
+
+    expect(normalizeSpreadsheetFontOrder(stylesXml)).toBe(
+      '<fonts><font><sz val="11"/><color theme="1"/><name val="Calibri"/>' +
+        '<family val="2"/><charset val="238"/><scheme val="minor"/></font></fonts>',
+    );
+  });
+
+  it('uses the current local date and removes styled template rows below Total', () => {
+    const localDate = new Date(2026, 7, 2, 23, 45);
+    expect(currentExcelDate(localDate).toISOString()).toBe('2026-08-02T00:00:00.000Z');
+
+    const worksheetXml =
+      '<worksheet><dimension ref="A1:AD29"/><sheetData>' +
+      '<row r="6"><c r="S6"/></row><row r="7"><c r="A7" s="5"/></row>' +
+      '<row r="29"><c r="A29" s="8"/></row></sheetData></worksheet>';
+    expect(trimWorksheetAfterRow(worksheetXml, 6)).toBe(
+      '<worksheet><dimension ref="A1:AD6"/><sheetData>' +
+        '<row r="6"><c r="S6"/></row></sheetData></worksheet>',
+    );
   });
 
   it('supports more rows than the original data capacity', async () => {
-    const worksheet = await reopen(30);
+    const { worksheet } = await reopen(30);
     expect(worksheet.getCell('A34').value).toBe(30);
     expect(worksheet.getCell('D34').value).toMatchObject({ formula: 'C34-B34' });
     expect(worksheet.getCell('S34').value).toMatchObject({ formula: 'R34*C34' });

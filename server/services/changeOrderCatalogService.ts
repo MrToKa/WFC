@@ -29,6 +29,7 @@ export type CableTypeCatalogRecord = {
   description: string | null;
   manufacturer: string | null;
   part_no: string | null;
+  diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
 };
 
@@ -95,7 +96,10 @@ export const snapshotCableType = (record: CableTypeCatalogRecord): ChangeOrderIt
   unit: 'm',
   descriptionEn: record.name.trim(),
   clearDescription: firstText(record.description, record.purpose),
-  dimensionMm: null,
+  dimensionMm:
+    record.diameter_mm === null || String(record.diameter_mm).trim() === ''
+      ? null
+      : String(record.diameter_mm),
   material: firstText(record.material),
   weightKg: toNumberOrNull(record.weight_kg_per_m),
   manufacturer: firstText(record.manufacturer),
@@ -165,7 +169,9 @@ export const resolveChangeOrderCatalogSnapshot = async (
   switch (sourceCatalog) {
     case 'cable-type': {
       const result = await queryable.query<CableTypeCatalogRecord>(
-        `SELECT id, name, purpose, material, description, manufacturer, part_no, weight_kg_per_m
+        `SELECT
+           id, name, purpose, material, description, manufacturer, part_no,
+           diameter_mm, weight_kg_per_m
          FROM material_cable_types WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );

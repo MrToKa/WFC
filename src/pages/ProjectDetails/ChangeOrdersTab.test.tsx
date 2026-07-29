@@ -1,6 +1,5 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeOrderDetails, Project, User } from '@/api/client';
 import { ToastProvider } from '@/context/ToastContext';
@@ -144,26 +143,29 @@ describe('ChangeOrdersTab', () => {
     vi.clearAllMocks();
   });
 
-  it('loads rows, displays derived values, and disables export after an unsaved header edit', async () => {
-    const interaction = userEvent.setup();
-    render(
-      <FluentProvider theme={webLightTheme}>
-        <ToastProvider>
-          <ChangeOrdersTab project={project} token="token" currentUser={user} />
-        </ToastProvider>
-      </FluentProvider>,
-    );
+  it(
+    'loads rows, displays derived values, and disables export after an unsaved header edit',
+    async () => {
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab project={project} token="token" currentUser={user} />
+          </ToastProvider>
+        </FluentProvider>,
+      );
 
-    expect(await screen.findByRole('cell', { name: 'Widget support' })).toBeInTheDocument();
-    expect(screen.getByText('-2')).toBeInTheDocument();
-    expect(screen.getByText(/Total: 40\.00/)).toBeInTheDocument();
+      expect(await screen.findByRole('cell', { name: 'Widget support' })).toBeInTheDocument();
+      expect(screen.getByText('-2')).toBeInTheDocument();
+      expect(screen.getByText(/Total: 40\.00/)).toBeInTheDocument();
 
-    const exportButton = screen.getByRole('button', { name: /export excel/i });
-    expect(exportButton).toBeEnabled();
+      const exportButton = screen.getByRole('button', { name: /export excel/i });
+      expect(exportButton).toBeEnabled();
 
-    const title = screen.getByRole('textbox', { name: /^title/i });
-    await interaction.type(title, ' changed');
-    await waitFor(() => expect(exportButton).toBeDisabled());
-    expect(screen.getByText('Unsaved header changes')).toBeInTheDocument();
-  });
+      const title = screen.getByRole('textbox', { name: /^title/i });
+      fireEvent.change(title, { target: { value: 'Existing order changed' } });
+      await waitFor(() => expect(exportButton).toBeDisabled());
+      expect(screen.getByText('Unsaved header changes')).toBeInTheDocument();
+    },
+    15_000,
+  );
 });

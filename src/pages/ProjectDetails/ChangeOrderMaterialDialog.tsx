@@ -110,7 +110,11 @@ export const ChangeOrderMaterialDialog = ({ open, adding, onDismiss, onSelect }:
             id: item.id,
             category: 'cable-type' as const,
             description: item.name,
-            details: [item.description ?? item.purpose ?? '', item.material ?? '']
+            details: [
+              item.diameterMm !== null ? `Ø ${item.diameterMm} mm` : '',
+              item.description ?? item.purpose ?? '',
+              item.material ?? '',
+            ]
               .filter(Boolean)
               .join(' · '),
             manufacturer: item.manufacturer ?? '',
