@@ -59,13 +59,25 @@ export type ChangeOrderItemUpdate = {
 };
 
 export const calculateInheritedChangeOrderQuantities = (
+  sourceCatalog: ChangeOrderSourceCatalog,
   designQuantity: number,
   orderQuantity: number,
   quantityPerParent: number,
-): { designQuantity: number; orderQuantity: number } => ({
-  designQuantity: designQuantity * quantityPerParent,
-  orderQuantity: orderQuantity * quantityPerParent,
-});
+): { designQuantity: number; orderQuantity: number } => {
+  // A Cable Type line represents one cable whose commercial quantity is its
+  // length in metres. Its Standard Materials are per cable, not per metre.
+  if (sourceCatalog === 'cable-type') {
+    return {
+      designQuantity: quantityPerParent,
+      orderQuantity: quantityPerParent,
+    };
+  }
+
+  return {
+    designQuantity: designQuantity * quantityPerParent,
+    orderQuantity: orderQuantity * quantityPerParent,
+  };
+};
 
 const ITEM_COLUMNS = `
   id, change_order_id, sort_order, source_catalog, source_material_id,
@@ -304,6 +316,12 @@ export const addChangeOrderItem = async (
     const expanded = await expandStandardMaterials(client, sourceCatalog, sourceMaterialId);
     let nextSortOrder = (orderResult.rows[0]?.next_order ?? 1) + 1;
     for (const material of expanded) {
+      const inheritedQuantities = calculateInheritedChangeOrderQuantities(
+        sourceCatalog,
+        0,
+        0,
+        material.quantity,
+      );
       await insertSnapshot(
         client,
         changeOrderId,
@@ -325,6 +343,8 @@ export const addChangeOrderItem = async (
           parentItemId: item.id,
           quantityPerParent: material.quantity,
           sourceAssignmentIds: material.sourceAssignmentIds,
+          designQuantity: inheritedQuantities.designQuantity,
+          orderQuantity: inheritedQuantities.orderQuantity,
         },
       );
       nextSortOrder += 1;
@@ -442,13 +462,19 @@ export const updateChangeOrderItem = async (
       return null;
     }
     await client.query(
-      `UPDATE project_change_order_items
+      `UPDATE project_change_order_items child
        SET
-         design_quantity = $2 * quantity_per_parent,
-         order_quantity = $3 * quantity_per_parent,
+         design_quantity = CASE
+           WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
+           ELSE $2 * child.quantity_per_parent
+         END,
+         order_quantity = CASE
+           WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
+           ELSE $3 * child.quantity_per_parent
+         END,
          updated_at = NOW()
-       WHERE parent_item_id = $1 AND line_kind = 'inherited'`,
-      [itemId, updated.design_quantity, updated.order_quantity],
+       WHERE child.parent_item_id = $1 AND child.line_kind = 'inherited'`,
+      [itemId, updated.design_quantity, updated.order_quantity, updated.source_catalog],
     );
     await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
       changeOrderId,

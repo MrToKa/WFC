@@ -9,10 +9,24 @@ import {
 import { calculateInheritedChangeOrderQuantities } from './changeOrderService.js';
 
 describe('Change Order catalog snapshots', () => {
-  it('multiplies inherited quantities by the parent quantities', () => {
-    expect(calculateInheritedChangeOrderQuantities(4, 5, 2)).toEqual({
+  it('multiplies inherited quantities for piece-based parent materials', () => {
+    expect(
+      calculateInheritedChangeOrderQuantities(
+        'cable-installation-material',
+        4,
+        5,
+        2,
+      ),
+    ).toEqual({
       designQuantity: 8,
       orderQuantity: 10,
+    });
+  });
+
+  it('counts Cable Type Standard Materials per cable line rather than per metre', () => {
+    expect(calculateInheritedChangeOrderQuantities('cable-type', 200, 240, 4)).toEqual({
+      designQuantity: 4,
+      orderQuantity: 4,
     });
   });
   it('maps cable types and does not change a snapshot when its source changes later', () => {

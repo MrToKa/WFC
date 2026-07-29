@@ -1272,6 +1272,26 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS project_change_order_items_parent_item_id_idx
       ON project_change_order_items (parent_item_id);
   `);
+
+  // Cable Type Change Order quantities are lengths in metres, while their
+  // inherited Standard Material quantities are per cable line. Correct rows
+  // created by the former per-metre calculation using only snapshot data.
+  await pool.query(`
+    UPDATE project_change_order_items child
+    SET
+      design_quantity = child.quantity_per_parent,
+      order_quantity = child.quantity_per_parent,
+      updated_at = NOW()
+    FROM project_change_order_items parent
+    WHERE child.parent_item_id = parent.id
+      AND child.line_kind = 'inherited'
+      AND child.quantity_per_parent IS NOT NULL
+      AND parent.source_catalog = 'cable-type'
+      AND (
+        child.design_quantity IS DISTINCT FROM child.quantity_per_parent OR
+        child.order_quantity IS DISTINCT FROM child.quantity_per_parent
+      );
+  `);
 }
 
 export async function shutdownDatabase(): Promise<void> {

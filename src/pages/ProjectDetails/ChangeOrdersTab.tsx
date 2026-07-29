@@ -190,8 +190,8 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
 
   const items = details?.items ?? [];
   const total = useMemo(() => items.reduce((sum, item) => sum + item.totalPrice, 0), [items]);
-  const itemDescriptions = useMemo(
-    () => new Map(items.map((item) => [item.id, item.descriptionEn])),
+  const itemsById = useMemo(
+    () => new Map(items.map((item) => [item.id, item])),
     [items],
   );
 
@@ -549,11 +549,17 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                               <Caption1 className={styles.inherited}>
                                 Inherited Standard Material
                                 {item.parentItemId
-                                  ? ` for ${itemDescriptions.get(item.parentItemId) ?? 'parent material'}`
+                                  ? ` for ${itemsById.get(item.parentItemId)?.descriptionEn ?? 'parent material'}`
                                   : ''}
                                 {item.quantityPerParent !== null &&
                                 item.quantityPerParent !== undefined
-                                  ? ` · ${item.quantityPerParent} per parent`
+                                  ? ` · ${item.quantityPerParent} per ${
+                                      item.parentItemId &&
+                                      itemsById.get(item.parentItemId)?.sourceCatalog ===
+                                        'cable-type'
+                                        ? 'cable'
+                                        : 'parent'
+                                    }`
                                   : ''}
                               </Caption1>
                             ) : null}

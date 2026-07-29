@@ -28,6 +28,11 @@ snapshots. Project Cable Type source changes replace inherited defaults only; ma
 defaults and customized cable materials are preserved. Cable-level synchronization remains an
 explicit operation.
 
+For Change Orders, a Cable Type row represents one cable line while its commercial quantity is
+the cable length in metres. Standard Material quantities on that row are therefore copied once per
+cable line and are not multiplied by design or spare metres. Piece-based material categories keep
+the general parent-quantity multiplication rule.
+
 ## Consequences
 
 The explicit tables duplicate a small amount of schema and repository code, but enforce owner
