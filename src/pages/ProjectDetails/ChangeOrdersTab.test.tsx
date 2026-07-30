@@ -87,6 +87,7 @@ vi.mock('@/api/client', () => ({
   addChangeOrderItem: vi.fn(),
   updateChangeOrderItem: vi.fn(),
   deleteChangeOrderItem: vi.fn(),
+  duplicateChangeOrderItem: vi.fn(async () => ({ item: details.items[0] })),
   reorderChangeOrderItems: vi.fn(),
   exportChangeOrder: vi.fn(),
   fetchMaterialCableTypes: vi.fn(async () => ({ cableTypes: [] })),
@@ -141,6 +142,14 @@ const user: User = {
 describe('ChangeOrdersTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
   });
 
   it(
@@ -165,6 +174,33 @@ describe('ChangeOrdersTab', () => {
       fireEvent.change(title, { target: { value: 'Existing order changed' } });
       await waitFor(() => expect(exportButton).toBeDisabled());
       expect(screen.getByText('Unsaved header changes')).toBeInTheDocument();
+    },
+    15_000,
+  );
+
+  it(
+    'duplicates a manual material from its row action',
+    async () => {
+      const api = await import('@/api/client');
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab project={project} token="token" currentUser={user} />
+          </ToastProvider>
+        </FluentProvider>,
+      );
+
+      await screen.findByRole('cell', { name: 'Widget support' });
+      fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
+
+      await waitFor(() =>
+        expect(api.duplicateChangeOrderItem).toHaveBeenCalledWith(
+          'token',
+          project.id,
+          details.id,
+          details.items[0].id,
+        ),
+      );
     },
     15_000,
   );

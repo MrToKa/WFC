@@ -81,6 +81,18 @@ export async function updateChangeOrderItem(
   });
 }
 
+export async function duplicateChangeOrderItem(
+  token: string,
+  projectId: string,
+  changeOrderId: string,
+  itemId: string,
+): Promise<{ item: ChangeOrderItem }> {
+  return request(`${basePath(projectId)}/${changeOrderId}/items/${itemId}/duplicate`, {
+    method: 'POST',
+    token,
+  });
+}
+
 export async function deleteChangeOrderItem(
   token: string,
   projectId: string,

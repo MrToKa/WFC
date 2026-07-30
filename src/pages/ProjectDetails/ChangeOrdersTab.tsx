@@ -4,6 +4,7 @@ import {
   ArrowDownRegular,
   ArrowDownloadRegular,
   ArrowUpRegular,
+  CopyRegular,
   DeleteRegular,
   EditRegular,
   SaveRegular,
@@ -36,6 +37,7 @@ import {
   createChangeOrder,
   deleteChangeOrder,
   deleteChangeOrderItem,
+  duplicateChangeOrderItem,
   exportChangeOrder,
   reorderChangeOrderItems,
   updateChangeOrder,
@@ -340,6 +342,30 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     }
   };
 
+  const duplicateItem = async (item: ChangeOrderItem): Promise<void> => {
+    if (!token || !selectedId || item.lineKind === 'inherited') return;
+    setPendingAction(true);
+    try {
+      const result = await duplicateChangeOrderItem(
+        token,
+        project.id,
+        selectedId,
+        item.id,
+      );
+      await reloadActive();
+      setEditingItem(result.item);
+      showToast({ title: 'Material duplicated', intent: 'success' });
+    } catch (caught) {
+      showToast({
+        title: 'Could not duplicate material',
+        body: caught instanceof Error ? caught.message : undefined,
+        intent: 'error',
+      });
+    } finally {
+      setPendingAction(false);
+    }
+  };
+
   const moveItem = async (index: number, direction: -1 | 1): Promise<void> => {
     if (!token || !selectedId) return;
     const target = index + direction;
@@ -597,6 +623,15 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                                 aria-label={`Edit item ${index + 1}`}
                                 title="Edit"
                                 onClick={() => setEditingItem(item)}
+                              />
+                              <Button
+                                size="small"
+                                appearance="subtle"
+                                icon={<CopyRegular />}
+                                aria-label={`Duplicate item ${index + 1}`}
+                                title="Duplicate"
+                                disabled={pendingAction || item.lineKind === 'inherited'}
+                                onClick={() => void duplicateItem(item)}
                               />
                               <Button
                                 size="small"

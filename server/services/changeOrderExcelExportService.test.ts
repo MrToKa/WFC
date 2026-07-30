@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 import type { ChangeOrderDetails, ChangeOrderItem } from '../models/changeOrder.js';
 import {
+  consolidateChangeOrderItemsForExport,
   currentExcelDate,
   generateChangeOrderWorkbook,
   normalizeSpreadsheetFontOrder,
@@ -89,6 +90,68 @@ const reopen = async (
 };
 
 describe('Change Order workbook export', () => {
+  it('consolidates identical cable materials into one export position', async () => {
+    const firstCable: ChangeOrderItem = {
+      ...createItem(1),
+      sourceCatalog: 'cable-type',
+      sourceMaterialId: 'same-cable-type',
+      unit: 'm',
+      designQuantity: 50,
+      orderQuantity: 60,
+      spareQuantity: 10,
+      orderedQuantity: null,
+      unitPrice: 2,
+      totalPrice: 120,
+    };
+    const secondCable: ChangeOrderItem = {
+      ...firstCable,
+      id: 'second-cable-line',
+      sortOrder: 2,
+      designQuantity: 100,
+      orderQuantity: 120,
+      spareQuantity: 20,
+      totalPrice: 240,
+    };
+    const details = createDetails(0);
+    details.items = [firstCable, secondCable];
+    details.itemCount = 2;
+    details.totalPrice = 360;
+
+    expect(consolidateChangeOrderItemsForExport(details.items)).toMatchObject([
+      {
+        sourceMaterialId: 'same-cable-type',
+        designQuantity: 150,
+        orderQuantity: 180,
+        spareQuantity: 30,
+        unit: 'm',
+        totalPrice: 360,
+      },
+    ]);
+
+    const buffer = await generateChangeOrderWorkbook(details, templatePath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+    const worksheet = workbook.getWorksheet('Change Order');
+    if (!worksheet) throw new Error('Generated worksheet is missing');
+
+    expect(worksheet.getCell('B5').value).toBe(150);
+    expect(worksheet.getCell('C5').value).toBe(180);
+    expect(worksheet.getCell('E5').value).toBe('m');
+    expect(worksheet.getCell('R6').value).toBe('TOTAL:');
+    expect(worksheet.getCell('A6').value).toBeNull();
+  });
+
+  it('keeps the same material separate when unit prices differ', () => {
+    const first = createItem(1);
+    const second = {
+      ...first,
+      id: 'second-price',
+      unitPrice: first.unitPrice + 1,
+    };
+
+    expect(consolidateChangeOrderItemsForExport([first, second])).toHaveLength(2);
+  });
+
   it('populates headers, dynamic rows, formulas, ranges, dates, and safe text', async () => {
     const sourceWorkbook = new ExcelJS.Workbook();
     await sourceWorkbook.xlsx.readFile(templatePath);

@@ -362,6 +362,126 @@ export const addChangeOrderItem = async (
   }
 };
 
+const CLONED_ITEM_COLUMNS = `
+  source_catalog, source_material_id, design_quantity, order_quantity, unit,
+  packaging, packaging_quantity, packaging_unit, ordered_quantity, ordered_unit,
+  sap_number, description_en, description_de, dimension_mm, material, weight_kg,
+  clear_description, unit_price, country_of_origin, hs_code, tag_no, drawing_no,
+  shipping_list, revision_number, client_barcode, manufacturer, manufacturer_part_no,
+  acs_barcode, remarks, line_kind, quantity_per_parent,
+  source_standard_material_assignment_ids
+`;
+
+const cloneChangeOrderItemRow = async (
+  client: PoolClient,
+  sourceItemId: string,
+  targetItemId: string,
+  targetSortOrder: number,
+  targetParentItemId: string | null,
+): Promise<ChangeOrderItem> => {
+  const result = await client.query<ChangeOrderItemRow>(
+    `
+      INSERT INTO project_change_order_items (
+        id, change_order_id, sort_order, parent_item_id, ${CLONED_ITEM_COLUMNS}
+      )
+      SELECT
+        $2, source.change_order_id, $3, $4::uuid,
+        source.source_catalog, source.source_material_id,
+        source.design_quantity, source.order_quantity, source.unit,
+        source.packaging, source.packaging_quantity, source.packaging_unit,
+        source.ordered_quantity, source.ordered_unit, source.sap_number,
+        source.description_en, source.description_de, source.dimension_mm,
+        source.material, source.weight_kg, source.clear_description,
+        source.unit_price, source.country_of_origin, source.hs_code, source.tag_no,
+        source.drawing_no, source.shipping_list, source.revision_number,
+        source.client_barcode, source.manufacturer, source.manufacturer_part_no,
+        source.acs_barcode, source.remarks, source.line_kind,
+        source.quantity_per_parent, source.source_standard_material_assignment_ids
+      FROM project_change_order_items source
+      WHERE source.id = $1
+      RETURNING ${ITEM_COLUMNS}
+    `,
+    [sourceItemId, targetItemId, targetSortOrder, targetParentItemId],
+  );
+  const cloned = result.rows[0];
+  if (!cloned) throw new Error('Change Order item clone could not be created');
+  return mapChangeOrderItemRow(cloned);
+};
+
+export const duplicateChangeOrderItem = async (
+  projectId: string,
+  changeOrderId: string,
+  itemId: string,
+): Promise<ChangeOrderItem | null> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sourceResult = await client.query<{ id: string }>(
+      `SELECT item.id
+       FROM project_change_order_items item
+       JOIN project_change_orders change_order ON change_order.id = item.change_order_id
+       WHERE item.id = $1
+         AND item.change_order_id = $2
+         AND item.line_kind = 'manual'
+         AND change_order.project_id = $3
+       FOR UPDATE OF item, change_order`,
+      [itemId, changeOrderId, projectId],
+    );
+    if (!sourceResult.rows[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const children = await client.query<{ id: string }>(
+      `SELECT id
+       FROM project_change_order_items
+       WHERE parent_item_id = $1 AND line_kind = 'inherited'
+       ORDER BY sort_order, created_at, id`,
+      [itemId],
+    );
+    const orderResult = await client.query<{ next_order: number }>(
+      `SELECT COALESCE(MAX(sort_order), 0)::int + 1 AS next_order
+       FROM project_change_order_items
+       WHERE change_order_id = $1`,
+      [changeOrderId],
+    );
+
+    let nextSortOrder = orderResult.rows[0]?.next_order ?? 1;
+    const duplicatedItemId = randomUUID();
+    const duplicatedItem = await cloneChangeOrderItemRow(
+      client,
+      itemId,
+      duplicatedItemId,
+      nextSortOrder,
+      null,
+    );
+    nextSortOrder += 1;
+
+    for (const child of children.rows) {
+      await cloneChangeOrderItemRow(
+        client,
+        child.id,
+        randomUUID(),
+        nextSortOrder,
+        duplicatedItemId,
+      );
+      nextSortOrder += 1;
+    }
+
+    await client.query(
+      'UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1',
+      [changeOrderId],
+    );
+    await client.query('COMMIT');
+    return duplicatedItem;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 const ITEM_COLUMN_MAP: Record<keyof ChangeOrderItemUpdate, string> = {
   designQuantity: 'design_quantity',
   orderQuantity: 'order_quantity',

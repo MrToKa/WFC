@@ -15,6 +15,7 @@ import {
   createChangeOrder,
   deleteChangeOrder,
   deleteChangeOrderItem,
+  duplicateChangeOrderItem,
   getChangeOrder,
   InvalidChangeOrderOrderError,
   listChangeOrders,
@@ -200,6 +201,28 @@ changeOrdersRouter.patch(
     } catch (error) {
       console.error('Update Change Order item error', error);
       res.status(500).json({ error: 'Failed to update Change Order item' });
+    }
+  },
+);
+
+changeOrdersRouter.post(
+  '/:changeOrderId/items/:itemId/duplicate',
+  async (req: Request, res: Response): Promise<void> => {
+    if (!parseIds(req, res, ['changeOrderId', 'itemId'])) return;
+    try {
+      const item = await duplicateChangeOrderItem(
+        req.params.projectId,
+        req.params.changeOrderId,
+        req.params.itemId,
+      );
+      if (!item) {
+        res.status(404).json({ error: 'Change Order item not found' });
+        return;
+      }
+      res.status(201).json({ item });
+    } catch (error) {
+      console.error('Duplicate Change Order item error', error);
+      res.status(500).json({ error: 'Failed to duplicate Change Order item' });
     }
   },
 );

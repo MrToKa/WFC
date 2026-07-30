@@ -5,6 +5,8 @@ import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import {
   calculateChangeOrderTotal,
+  calculateLineTotal,
+  calculateSpareQuantity,
   type ChangeOrderDetails,
   type ChangeOrderItem,
 } from '../models/changeOrder.js';
@@ -94,6 +96,81 @@ export const validateChangeOrderTemplateHeaders = (worksheet: ExcelJS.Worksheet)
 export const escapeSpreadsheetText = (value: string | null | undefined): string | null => {
   if (value === null || value === undefined) return null;
   return /^[=+\-@]/.test(value) ? `'${value}` : value;
+};
+
+const exportGroupingKey = (item: ChangeOrderItem): string =>
+  JSON.stringify([
+    item.sourceCatalog,
+    item.sourceMaterialId,
+    item.unit,
+    item.packaging,
+    item.packagingQuantity,
+    item.packagingUnit,
+    item.orderedUnit,
+    item.sapNumber,
+    item.descriptionEn,
+    item.descriptionDe,
+    item.dimensionMm,
+    item.material,
+    item.weightKg,
+    item.clearDescription,
+    item.unitPrice,
+    item.countryOfOrigin,
+    item.hsCode,
+    item.tagNo,
+    item.drawingNo,
+    item.shippingList,
+    item.revisionNumber,
+    item.clientBarcode,
+    item.manufacturer,
+    item.manufacturerPartNo,
+    item.acsBarcode,
+    item.remarks,
+  ]);
+
+const sumNullableQuantity = (
+  left: number | null,
+  right: number | null,
+): number | null =>
+  left === null && right === null ? null : (left ?? 0) + (right ?? 0);
+
+export const consolidateChangeOrderItemsForExport = (
+  items: readonly ChangeOrderItem[],
+): ChangeOrderItem[] => {
+  const consolidated = new Map<string, ChangeOrderItem>();
+
+  for (const item of items) {
+    const key = exportGroupingKey(item);
+    const existing = consolidated.get(key);
+    if (!existing) {
+      consolidated.set(key, {
+        ...item,
+        sourceStandardMaterialAssignmentIds: [
+          ...(item.sourceStandardMaterialAssignmentIds ?? []),
+        ],
+      });
+      continue;
+    }
+
+    const designQuantity = existing.designQuantity + item.designQuantity;
+    const orderQuantity = existing.orderQuantity + item.orderQuantity;
+    existing.designQuantity = designQuantity;
+    existing.orderQuantity = orderQuantity;
+    existing.spareQuantity = calculateSpareQuantity(designQuantity, orderQuantity);
+    existing.orderedQuantity = sumNullableQuantity(
+      existing.orderedQuantity,
+      item.orderedQuantity,
+    );
+    existing.totalPrice = calculateLineTotal(orderQuantity, existing.unitPrice);
+    existing.sourceStandardMaterialAssignmentIds = Array.from(
+      new Set([
+        ...(existing.sourceStandardMaterialAssignmentIds ?? []),
+        ...(item.sourceStandardMaterialAssignmentIds ?? []),
+      ]),
+    ).sort();
+  }
+
+  return Array.from(consolidated.values());
 };
 
 const cloneStyle = (style: Partial<ExcelJS.Style>): Partial<ExcelJS.Style> =>
@@ -285,6 +362,7 @@ export async function generateChangeOrderWorkbook(
   if (changeOrder.items.length === 0) {
     throw new EmptyChangeOrderError('A Change Order must contain at least one material row');
   }
+  const exportItems = consolidateChangeOrderItemsForExport(changeOrder.items);
 
   const workbook = new ExcelJS.Workbook();
   const resolvedTemplatePath = templatePath ?? (await resolveDefaultTemplatePath());
@@ -325,20 +403,20 @@ export async function generateChangeOrderWorkbook(
     }
   }
 
-  changeOrder.items.forEach((item, index) => {
+  exportItems.forEach((item, index) => {
     const row = worksheet.getRow(5 + index);
     applyRowTemplate(row, dataTemplate);
     setItemValues(row, item, index + 1);
   });
 
-  const lastItemRow = 4 + changeOrder.items.length;
+  const lastItemRow = 4 + exportItems.length;
   const totalRowNumber = lastItemRow + 1;
   const totalRow = worksheet.getRow(totalRowNumber);
   applyRowTemplate(totalRow, totalTemplate);
   totalRow.getCell(18).value = 'TOTAL:';
   totalRow.getCell(19).value = {
     formula: `SUM(S5:S${lastItemRow})`,
-    result: calculateChangeOrderTotal(changeOrder.items),
+    result: calculateChangeOrderTotal(exportItems),
   };
   if (totalRowNumber < totalTemplateRowNumber) {
     worksheet.spliceRows(totalRowNumber + 1, totalTemplateRowNumber - totalRowNumber);
