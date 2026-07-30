@@ -4,6 +4,7 @@ import type {
   MaterialCableInstallationMaterialInput,
 } from '@/api/client';
 import { toNullableString } from '../ProjectDetails.utils';
+import { parseNumberInput } from './Materials.utils';
 
 export type CableInstallationMaterialSearchCriteria =
   | 'all'
@@ -21,6 +22,9 @@ export type CableInstallationMaterialFormState = {
   description: string;
   manufacturer: string;
   partNo: string;
+  minimumOrderQuantity: string;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
 export type CableInstallationMaterialFormErrors = Partial<
@@ -36,6 +40,9 @@ export const emptyCableInstallationMaterialForm: CableInstallationMaterialFormSt
   description: '',
   manufacturer: '',
   partNo: '',
+  minimumOrderQuantity: '1',
+  orderMeasurement: 'pcs',
+  packaging: 'pcs',
 };
 
 export const toCableInstallationMaterialFormState = (
@@ -47,6 +54,9 @@ export const toCableInstallationMaterialFormState = (
   description: material.description ?? '',
   manufacturer: material.manufacturer ?? '',
   partNo: material.partNo ?? '',
+  minimumOrderQuantity: String(material.minimumOrderQuantity),
+  orderMeasurement: material.orderMeasurement,
+  packaging: material.packaging,
 });
 
 export const parseCableInstallationMaterialApiErrors = (
@@ -85,6 +95,14 @@ export const buildMaterialCableInstallationMaterialInput = (
   if (type === '') {
     errors.type = 'Type is required';
   }
+  const minimumOrderResult = parseNumberInput(values.minimumOrderQuantity);
+  if (
+    minimumOrderResult.error ||
+    minimumOrderResult.numeric === null ||
+    minimumOrderResult.numeric <= 0
+  ) {
+    errors.minimumOrderQuantity = 'Minimum order quantity must be greater than zero';
+  }
 
   return {
     input: {
@@ -94,6 +112,9 @@ export const buildMaterialCableInstallationMaterialInput = (
       description: toNullableString(values.description),
       manufacturer: toNullableString(values.manufacturer),
       partNo: toNullableString(values.partNo),
+      minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
+      orderMeasurement: values.orderMeasurement,
+      packaging: values.packaging,
     },
     errors,
   };

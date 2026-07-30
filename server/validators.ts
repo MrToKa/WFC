@@ -186,6 +186,14 @@ const cableTypeNumericField = z.number().min(0).max(1_000_000).nullable().option
 const cableTypeStringField = z.string().trim().max(500).optional();
 
 const materialCableTypeStringField = z.string().trim().max(2000).nullable().optional();
+const minimumOrderQuantityField = z
+  .number({ invalid_type_error: 'Enter a minimum order quantity' })
+  .finite('Enter a finite minimum order quantity')
+  .positive('Minimum order quantity must be greater than zero')
+  .max(1_000_000)
+  .optional();
+const orderMeasurementField = z.enum(['pcs', 'pack', 'meters']).optional();
+const materialPackagingField = z.enum(['m', 'Package', 'Box', 'Drum', 'pcs']).optional();
 
 const cableTypeDefaultMaterialNameField = z.string().trim().min(1).max(200);
 const cableTypeDefaultMaterialTextField = z.string().trim().max(500).nullable().optional();
@@ -229,6 +237,9 @@ export const createMaterialCableTypeSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
     remarks: materialCableTypeStringField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
@@ -243,6 +254,9 @@ export const updateMaterialCableTypeSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
     remarks: materialCableTypeStringField,
     diameterMm: cableTypeNumericField,
     weightKgPerM: cableTypeNumericField,
@@ -258,7 +272,10 @@ export const updateMaterialCableTypeSchema = z
       value.partNo !== undefined ||
       value.remarks !== undefined ||
       value.diameterMm !== undefined ||
-      value.weightKgPerM !== undefined,
+      value.weightKgPerM !== undefined ||
+      value.minimumOrderQuantity !== undefined ||
+      value.orderMeasurement !== undefined ||
+      value.packaging !== undefined,
     { message: 'At least one field must be provided' },
   );
 
@@ -270,6 +287,9 @@ export const createMaterialCableInstallationMaterialSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
   })
   .strict();
 
@@ -281,6 +301,9 @@ export const updateMaterialCableInstallationMaterialSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
   })
   .strict()
   .refine(
@@ -290,7 +313,10 @@ export const updateMaterialCableInstallationMaterialSchema = z
       value.material !== undefined ||
       value.description !== undefined ||
       value.manufacturer !== undefined ||
-      value.partNo !== undefined,
+      value.partNo !== undefined ||
+      value.minimumOrderQuantity !== undefined ||
+      value.orderMeasurement !== undefined ||
+      value.packaging !== undefined,
     { message: 'At least one field must be provided' },
   );
 
@@ -518,6 +544,9 @@ export const createMaterialTraySchema = z
     widthMm: materialNumericField,
     weightKgPerM: materialNumericField,
     imageTemplateId: materialImageTemplateField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
   })
   .strict();
 
@@ -530,6 +559,9 @@ export const createMaterialSupportSchema = z
     lengthMm: materialNumericField,
     weightKg: materialNumericField,
     imageTemplateId: materialImageTemplateField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
   })
   .strict();
 
@@ -543,6 +575,9 @@ export const updateMaterialTraySchema = z
     weightKgPerM: materialNumericField,
     loadCurveId: z.string().uuid().optional().nullable(),
     imageTemplateId: materialImageTemplateField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
   })
   .strict()
   .refine(
@@ -554,7 +589,10 @@ export const updateMaterialTraySchema = z
       value.widthMm !== undefined ||
       value.weightKgPerM !== undefined ||
       value.loadCurveId !== undefined ||
-      value.imageTemplateId !== undefined,
+      value.imageTemplateId !== undefined ||
+      value.minimumOrderQuantity !== undefined ||
+      value.orderMeasurement !== undefined ||
+      value.packaging !== undefined,
     { message: 'At least one field must be provided' },
   );
 
@@ -567,6 +605,9 @@ export const updateMaterialSupportSchema = z
     lengthMm: materialNumericField,
     weightKg: materialNumericField,
     imageTemplateId: materialImageTemplateField,
+    minimumOrderQuantity: minimumOrderQuantityField,
+    orderMeasurement: orderMeasurementField,
+    packaging: materialPackagingField,
   })
   .strict()
   .refine(
@@ -577,7 +618,10 @@ export const updateMaterialSupportSchema = z
       value.widthMm !== undefined ||
       value.lengthMm !== undefined ||
       value.weightKg !== undefined ||
-      value.imageTemplateId !== undefined,
+      value.imageTemplateId !== undefined ||
+      value.minimumOrderQuantity !== undefined ||
+      value.orderMeasurement !== undefined ||
+      value.packaging !== undefined,
     { message: 'At least one field must be provided' },
   );
 

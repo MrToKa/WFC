@@ -141,6 +141,9 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       rungHeightMm: toFormValue(tray.rungHeightMm),
       widthMm: toFormValue(tray.widthMm),
       weightKgPerM: toFormValue(tray.weightKgPerM),
+      minimumOrderQuantity: String(tray.minimumOrderQuantity),
+      orderMeasurement: tray.orderMeasurement,
+      packaging: tray.packaging,
       imageTemplateId: tray.imageTemplateId
     });
     setTrayFormErrors({});
@@ -311,6 +314,14 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       if (weightResult.error) {
         errors.weightKgPerM = weightResult.error;
       }
+      const minimumOrderResult = parseNumberInput(trayForm.minimumOrderQuantity);
+      if (
+        minimumOrderResult.error ||
+        minimumOrderResult.numeric === null ||
+        minimumOrderResult.numeric <= 0
+      ) {
+        errors.minimumOrderQuantity = 'Minimum order quantity must be greater than zero';
+      }
 
       if (Object.keys(errors).length > 0) {
         setTrayFormErrors(errors);
@@ -333,6 +344,9 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,
             weightKgPerM: weightResult.numeric,
+            minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
+            orderMeasurement: trayForm.orderMeasurement,
+            packaging: trayForm.packaging,
             imageTemplateId
           });
           showToast({ intent: 'success', title: 'Tray added' });
@@ -350,6 +364,9 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             rungHeightMm: rungHeightResult.numeric,
             widthMm: widthResult.numeric,
             weightKgPerM: weightResult.numeric,
+            minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
+            orderMeasurement: trayForm.orderMeasurement,
+            packaging: trayForm.packaging,
             imageTemplateId
           });
           showToast({ intent: 'success', title: 'Tray updated' });

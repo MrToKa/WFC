@@ -24,7 +24,14 @@ type PaginationHandlers = {
   onPageSelect: (page: number) => void;
 };
 
-type CableTypesTabItem = Pick<CableType, 'id' | 'name' | 'purpose' | 'diameterMm' | 'weightKgPerM'>;
+type CableTypesTabItem = Pick<
+  CableType,
+  'id' | 'name' | 'purpose' | 'diameterMm' | 'weightKgPerM'
+> & {
+  minimumOrderQuantity?: number;
+  orderMeasurement?: 'pcs' | 'pack' | 'meters';
+  packaging?: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+};
 
 type CableTypesTabProps<T extends CableTypesTabItem> = {
   styles: FilterableTableSectionStyles;
@@ -105,6 +112,9 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
 }: CableTypesTabProps<T>) => {
   const selectedCriteria = useMemo<string[]>(() => [searchCriteria], [searchCriteria]);
   const showActions = Boolean(onDetails) || isAdmin;
+  const showOrderFields = items.some(
+    (item) => item.minimumOrderQuantity !== undefined && item.orderMeasurement !== undefined,
+  );
 
   const resolvedEmptyStateBody =
     emptyStateBody ??
@@ -213,6 +223,12 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                 <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                   Weight [kg/m]
                 </th>
+                {showOrderFields ? (
+                  <>
+                    <th className={styles.tableHeadCell}>Minimum order</th>
+                    <th className={styles.tableHeadCell}>Packaging</th>
+                  </>
+                ) : null}
                 {showActions ? <th className={styles.tableHeadCell}>Actions</th> : null}
               </tr>
             </thead>
@@ -229,6 +245,14 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                     <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                       {formatNumeric(cableType.weightKgPerM)}
                     </td>
+                    {showOrderFields ? (
+                      <>
+                        <td className={styles.tableCell}>
+                          {cableType.minimumOrderQuantity} {cableType.orderMeasurement}
+                        </td>
+                        <td className={styles.tableCell}>{cableType.packaging ?? '—'}</td>
+                      </>
+                    ) : null}
                     {showActions ? (
                       <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
                         {onDetails ? (

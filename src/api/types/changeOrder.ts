@@ -43,6 +43,8 @@ export type ChangeOrderItem = {
   parentItemId?: string | null;
   quantityPerParent?: number | null;
   sourceStandardMaterialAssignmentIds?: string[];
+  minimumOrderQuantity?: number | null;
+  orderMeasurement?: 'pcs' | 'pack' | 'meters' | null;
   createdAt: string;
   updatedAt: string;
 };

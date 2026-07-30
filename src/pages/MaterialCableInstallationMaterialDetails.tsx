@@ -15,6 +15,11 @@ export const MaterialCableInstallationMaterialDetails = () => (
       { label: 'Description', value: value(material.description) },
       { label: 'Manufacturer', value: value(material.manufacturer) },
       { label: 'Part number', value: value(material.partNo) },
+      {
+        label: 'Minimum order',
+        value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,
+      },
+      { label: 'Packaging', value: material.packaging },
     ]}
   />
 );

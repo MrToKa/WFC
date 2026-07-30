@@ -193,6 +193,8 @@ export const CableInstallationMaterialsTab = ({
                 <th className={styles.tableHeadCell}>Description</th>
                 <th className={styles.tableHeadCell}>Manufacturer</th>
                 <th className={styles.tableHeadCell}>Part No.</th>
+                <th className={styles.tableHeadCell}>Minimum order</th>
+                <th className={styles.tableHeadCell}>Packaging</th>
                 <th className={styles.tableHeadCell}>Actions</th>
               </tr>
             </thead>
@@ -207,6 +209,10 @@ export const CableInstallationMaterialsTab = ({
                     <td className={styles.tableCell}>{item.description ?? '-'}</td>
                     <td className={styles.tableCell}>{item.manufacturer ?? '-'}</td>
                     <td className={styles.tableCell}>{item.partNo ?? '-'}</td>
+                    <td className={styles.tableCell}>
+                      {item.minimumOrderQuantity} {item.orderMeasurement}
+                    </td>
+                    <td className={styles.tableCell}>{item.packaging}</td>
                     <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
                       <Button size="small" onClick={() => onDetails(item)}>
                         Details

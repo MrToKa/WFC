@@ -19,6 +19,11 @@ export const MaterialCableTypeDetails = () => (
       { label: 'Remarks', value: value(material.remarks) },
       { label: 'Diameter', value: value(material.diameterMm, ' mm') },
       { label: 'Weight', value: value(material.weightKgPerM, ' kg/m') },
+      {
+        label: 'Minimum order',
+        value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,
+      },
+      { label: 'Packaging', value: material.packaging },
     ]}
   />
 );

@@ -456,6 +456,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
         </MessageBar>
       ) : null}
       {detailsLoading ? <Spinner label="Loading Change Order" /> : null}
+      {loading ? <Spinner label="Loading Change Orders" /> : null}
 
       {(newMode || details) && !detailsLoading ? (
         <>
@@ -558,6 +559,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                         <TableHeaderCell>Spare Qty</TableHeaderCell>
                         <TableHeaderCell>Unit</TableHeaderCell>
                         <TableHeaderCell>Packaging</TableHeaderCell>
+                        <TableHeaderCell>Ordered</TableHeaderCell>
                         <TableHeaderCell>Manufacturer</TableHeaderCell>
                         <TableHeaderCell>Part No.</TableHeaderCell>
                         <TableHeaderCell>Price/pcs</TableHeaderCell>
@@ -603,6 +605,11 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                           <TableCell>{item.unit ?? '—'}</TableCell>
                           <TableCell>
                             {[item.packaging, item.packagingQuantity, item.packagingUnit]
+                              .filter((part) => part !== null && part !== '')
+                              .join(' ') || '—'}
+                          </TableCell>
+                          <TableCell>
+                            {[item.orderedQuantity, item.orderedUnit]
                               .filter((part) => part !== null && part !== '')
                               .join(' ') || '—'}
                           </TableCell>
@@ -680,6 +687,59 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
             )}
           </div>
         </>
+      ) : null}
+
+      {!loading &&
+      !detailsLoading &&
+      !newMode &&
+      !details &&
+      changeOrders.length > 0 ? (
+        <div className={styles.card}>
+          <Title3>All Change Orders</Title3>
+          <div className={styles.tableWrap}>
+            <Table size="small" aria-label="All Change Orders">
+              <TableHeader>
+                <TableRow>
+                  <TableHeaderCell>Title</TableHeaderCell>
+                  <TableHeaderCell>Project reference</TableHeaderCell>
+                  <TableHeaderCell>Revision</TableHeaderCell>
+                  <TableHeaderCell>Report date</TableHeaderCell>
+                  <TableHeaderCell>Prepared by</TableHeaderCell>
+                  <TableHeaderCell>Items</TableHeaderCell>
+                  <TableHeaderCell>Total price</TableHeaderCell>
+                  <TableHeaderCell>Updated</TableHeaderCell>
+                  <TableHeaderCell>Actions</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {changeOrders.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell>{order.title}</TableCell>
+                    <TableCell>{order.projectReference ?? '—'}</TableCell>
+                    <TableCell>{order.revision}</TableCell>
+                    <TableCell>{order.reportDate}</TableCell>
+                    <TableCell>{order.preparedBy}</TableCell>
+                    <TableCell className={styles.numeric}>{order.itemCount}</TableCell>
+                    <TableCell className={styles.numeric}>
+                      {formatMoney(order.totalPrice)}
+                    </TableCell>
+                    <TableCell>{order.updatedAt.slice(0, 10)}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        onClick={() => void choose(order.id)}
+                        disabled={pendingAction}
+                        aria-label={`Open ${order.title}`}
+                      >
+                        Open
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       ) : null}
 
       {!loading && !detailsLoading && !newMode && changeOrders.length === 0 ? (

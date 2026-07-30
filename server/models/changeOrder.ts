@@ -61,6 +61,8 @@ export type ChangeOrderItemRow = {
   parent_item_id?: string | null;
   quantity_per_parent?: string | number | null;
   source_standard_material_assignment_ids?: string[] | null;
+  minimum_order_quantity?: string | number | null;
+  order_measurement?: 'pcs' | 'pack' | 'meters' | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -104,6 +106,8 @@ export type ChangeOrderItem = {
   parentItemId?: string | null;
   quantityPerParent?: number | null;
   sourceStandardMaterialAssignmentIds?: string[];
+  minimumOrderQuantity?: number | null;
+  orderMeasurement?: 'pcs' | 'pack' | 'meters' | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -147,8 +151,23 @@ export const toFiniteNumber = (value: string | number | null | undefined): numbe
   return Number.isFinite(numeric) ? numeric : null;
 };
 
-export const calculateSpareQuantity = (designQuantity: number, orderQuantity: number): number =>
-  orderQuantity - designQuantity;
+export const calculateSpareQuantity = (
+  designQuantity: number,
+  orderQuantity: number,
+  packagingQuantity?: number | null,
+  orderedQuantity?: number | null,
+): number => {
+  if (
+    packagingQuantity !== null &&
+    packagingQuantity !== undefined &&
+    packagingQuantity > 0 &&
+    orderedQuantity !== null &&
+    orderedQuantity !== undefined
+  ) {
+    return orderedQuantity * packagingQuantity - designQuantity;
+  }
+  return orderQuantity - designQuantity;
+};
 
 export const calculateLineTotal = (orderQuantity: number, unitPrice: number): number =>
   orderQuantity * unitPrice;
@@ -161,6 +180,8 @@ export const calculateChangeOrderTotal = (
 export const mapChangeOrderItemRow = (row: ChangeOrderItemRow): ChangeOrderItem => {
   const designQuantity = toFiniteNumber(row.design_quantity) ?? 0;
   const orderQuantity = toFiniteNumber(row.order_quantity) ?? 0;
+  const packagingQuantity = toFiniteNumber(row.packaging_quantity);
+  const orderedQuantity = toFiniteNumber(row.ordered_quantity);
   const unitPrice = toFiniteNumber(row.unit_price) ?? 0;
 
   return {
@@ -171,12 +192,17 @@ export const mapChangeOrderItemRow = (row: ChangeOrderItemRow): ChangeOrderItem 
     sourceMaterialId: row.source_material_id,
     designQuantity,
     orderQuantity,
-    spareQuantity: calculateSpareQuantity(designQuantity, orderQuantity),
+    spareQuantity: calculateSpareQuantity(
+      designQuantity,
+      orderQuantity,
+      packagingQuantity,
+      orderedQuantity,
+    ),
     unit: row.unit ?? null,
     packaging: row.packaging ?? null,
-    packagingQuantity: toFiniteNumber(row.packaging_quantity),
+    packagingQuantity,
     packagingUnit: row.packaging_unit ?? null,
-    orderedQuantity: toFiniteNumber(row.ordered_quantity),
+    orderedQuantity,
     orderedUnit: row.ordered_unit ?? null,
     sapNumber: row.sap_number ?? null,
     descriptionEn: row.description_en,
@@ -202,6 +228,8 @@ export const mapChangeOrderItemRow = (row: ChangeOrderItemRow): ChangeOrderItem 
     parentItemId: row.parent_item_id ?? null,
     quantityPerParent: toFiniteNumber(row.quantity_per_parent),
     sourceStandardMaterialAssignmentIds: row.source_standard_material_assignment_ids ?? [],
+    minimumOrderQuantity: toFiniteNumber(row.minimum_order_quantity),
+    orderMeasurement: row.order_measurement ?? null,
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };

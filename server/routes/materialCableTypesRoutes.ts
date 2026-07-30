@@ -30,6 +30,9 @@ const MATERIAL_CABLE_EXCEL_HEADERS = {
   manufacturer: 'Manufacturer',
   partNo: 'Part No.',
   remarks: 'Remarks',
+  minimumOrder: 'Minimum order quantity',
+  orderMeasurement: 'Order measurement',
+  packaging: 'Packaging',
 } as const;
 
 const MATERIAL_CABLE_EXCEL_HEADER_ALIASES = {
@@ -42,6 +45,9 @@ const MATERIAL_CABLE_EXCEL_HEADER_ALIASES = {
   manufacturer: [MATERIAL_CABLE_EXCEL_HEADERS.manufacturer],
   partNo: [MATERIAL_CABLE_EXCEL_HEADERS.partNo, 'Part No'],
   remarks: [MATERIAL_CABLE_EXCEL_HEADERS.remarks, 'Remarks (optional)'],
+  minimumOrder: [MATERIAL_CABLE_EXCEL_HEADERS.minimumOrder],
+  orderMeasurement: [MATERIAL_CABLE_EXCEL_HEADERS.orderMeasurement, 'Measurement'],
+  packaging: [MATERIAL_CABLE_EXCEL_HEADERS.packaging],
 } as const;
 
 const normalizeOptionalString = (value: string | null | undefined): string | null => {
@@ -65,6 +71,9 @@ const selectMaterialCableTypesQuery = `
     remarks,
     diameter_mm,
     weight_kg_per_m,
+    minimum_order_quantity,
+    order_measurement,
+    packaging,
     created_at,
     updated_at
   FROM material_cable_types
@@ -110,6 +119,9 @@ materialCableTypesRouter.post(
       remarks,
       diameterMm,
       weightKgPerM,
+      minimumOrderQuantity,
+      orderMeasurement,
+      packaging,
     } = parseResult.data;
 
     try {
@@ -143,8 +155,11 @@ materialCableTypesRouter.post(
             remarks,
             diameter_mm,
             weight_kg_per_m
+            ,minimum_order_quantity
+            ,order_measurement
+            ,packaging
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING
             id,
             name,
@@ -156,6 +171,9 @@ materialCableTypesRouter.post(
             remarks,
             diameter_mm,
             weight_kg_per_m,
+            minimum_order_quantity,
+            order_measurement,
+            packaging,
             created_at,
             updated_at;
         `,
@@ -170,6 +188,9 @@ materialCableTypesRouter.post(
           normalizeOptionalString(remarks ?? null),
           diameterMm ?? null,
           weightKgPerM ?? null,
+          minimumOrderQuantity ?? 1,
+          orderMeasurement ?? 'meters',
+          packaging ?? 'm',
         ],
       );
 
@@ -210,6 +231,9 @@ materialCableTypesRouter.patch(
       remarks,
       diameterMm,
       weightKgPerM,
+      minimumOrderQuantity,
+      orderMeasurement,
+      packaging,
     } = parseResult.data;
 
     const updates: string[] = [];
@@ -285,6 +309,21 @@ materialCableTypesRouter.patch(
       values.push(weightKgPerM ?? null);
     }
 
+    if (minimumOrderQuantity !== undefined) {
+      updates.push(`minimum_order_quantity = $${index++}`);
+      values.push(minimumOrderQuantity);
+    }
+
+    if (orderMeasurement !== undefined) {
+      updates.push(`order_measurement = $${index++}`);
+      values.push(orderMeasurement);
+    }
+
+    if (packaging !== undefined) {
+      updates.push(`packaging = $${index++}`);
+      values.push(packaging);
+    }
+
     updates.push('updated_at = NOW()');
 
     try {
@@ -304,6 +343,9 @@ materialCableTypesRouter.patch(
             remarks,
             diameter_mm,
             weight_kg_per_m,
+            minimum_order_quantity,
+            order_measurement,
+            packaging,
             created_at,
             updated_at;
         `,
@@ -419,6 +461,9 @@ materialCableTypesRouter.post(
       remarks: string | null;
       diameter: number | null;
       weight: number | null;
+      minimumOrderQuantity: number;
+      orderMeasurement: 'pcs' | 'pack' | 'meters';
+      packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
     }> = [];
 
     const seenKeys = new Set<string>();
@@ -485,6 +530,30 @@ materialCableTypesRouter.post(
         remarks: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.remarks)),
         diameter: readNumeric(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.diameter)),
         weight: readNumeric(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.weight)),
+        minimumOrderQuantity: (() => {
+          const parsed = readNumeric(
+            readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.minimumOrder),
+          );
+          return parsed !== null && parsed > 0 ? parsed : 1;
+        })(),
+        orderMeasurement: (() => {
+          const parsed = readString(
+            readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.orderMeasurement),
+          );
+          return parsed === 'pcs' || parsed === 'pack' || parsed === 'meters'
+            ? parsed
+            : 'meters';
+        })(),
+        packaging: (() => {
+          const parsed = readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.packaging));
+          return parsed === 'm' ||
+            parsed === 'Package' ||
+            parsed === 'Box' ||
+            parsed === 'Drum' ||
+            parsed === 'pcs'
+            ? parsed
+            : 'm';
+        })(),
       });
     }
 
@@ -546,8 +615,11 @@ materialCableTypesRouter.post(
                 remarks = $6,
                 diameter_mm = $7,
                 weight_kg_per_m = $8,
+                minimum_order_quantity = $9,
+                order_measurement = $10,
+                packaging = $11,
                 updated_at = NOW()
-              WHERE id = $9;
+              WHERE id = $12;
             `,
             [
               row.purpose,
@@ -558,6 +630,9 @@ materialCableTypesRouter.post(
               row.remarks,
               row.diameter,
               row.weight,
+              row.minimumOrderQuantity,
+              row.orderMeasurement,
+              row.packaging,
               existing.id,
             ],
           );
@@ -576,8 +651,11 @@ materialCableTypesRouter.post(
                 remarks,
                 diameter_mm,
                 weight_kg_per_m
+                ,minimum_order_quantity
+                ,order_measurement
+                ,packaging
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
             `,
             [
               randomUUID(),
@@ -590,6 +668,9 @@ materialCableTypesRouter.post(
               row.remarks,
               row.diameter,
               row.weight,
+              row.minimumOrderQuantity,
+              row.orderMeasurement,
+              row.packaging,
             ],
           );
           summary.inserted += 1;
@@ -649,6 +730,13 @@ materialCableTypesRouter.get(
         { name: MATERIAL_CABLE_EXCEL_HEADERS.manufacturer, key: 'manufacturer', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.partNo, key: 'partNo', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.remarks, key: 'remarks', width: 30 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
+        {
+          name: MATERIAL_CABLE_EXCEL_HEADERS.orderMeasurement,
+          key: 'orderMeasurement',
+          width: 20,
+        },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.packaging, key: 'packaging', width: 18 },
       ] as const;
 
       const table = worksheet.addTable({
@@ -667,7 +755,7 @@ materialCableTypesRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: [['', '', '', '', '', '', '', '', '']],
+        rows: [['', '', '', '', '', '', '', '', '', 1, 'meters', 'm']],
       });
 
       table.commit();
@@ -729,6 +817,13 @@ materialCableTypesRouter.get(
         { name: MATERIAL_CABLE_EXCEL_HEADERS.manufacturer, key: 'manufacturer', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.partNo, key: 'partNo', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.remarks, key: 'remarks', width: 30 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
+        {
+          name: MATERIAL_CABLE_EXCEL_HEADERS.orderMeasurement,
+          key: 'orderMeasurement',
+          width: 20,
+        },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.packaging, key: 'packaging', width: 18 },
       ] as const;
 
       const rows = result.rows.map((row) => [
@@ -743,6 +838,9 @@ materialCableTypesRouter.get(
         row.manufacturer ?? '',
         row.part_no ?? '',
         row.remarks ?? '',
+        Number(row.minimum_order_quantity),
+        row.order_measurement,
+        row.packaging,
       ]);
 
       const table = worksheet.addTable({
@@ -761,7 +859,8 @@ materialCableTypesRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '', '', '']],
+        rows:
+          rows.length > 0 ? rows : [['', '', '', '', '', '', '', '', '', 1, 'meters', 'm']],
       });
 
       table.commit();

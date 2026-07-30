@@ -112,6 +112,9 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       widthMm: toFormValue(support.widthMm),
       lengthMm: toFormValue(support.lengthMm),
       weightKg: toFormValue(support.weightKg),
+      minimumOrderQuantity: String(support.minimumOrderQuantity),
+      orderMeasurement: support.orderMeasurement,
+      packaging: support.packaging,
       imageTemplateId: support.imageTemplateId
     });
     setSupportFormErrors({});
@@ -180,6 +183,14 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       if (weightResult.error) {
         errors.weightKg = weightResult.error;
       }
+      const minimumOrderResult = parseNumberInput(supportForm.minimumOrderQuantity);
+      if (
+        minimumOrderResult.error ||
+        minimumOrderResult.numeric === null ||
+        minimumOrderResult.numeric <= 0
+      ) {
+        errors.minimumOrderQuantity = 'Minimum order quantity must be greater than zero';
+      }
 
       if (Object.keys(errors).length > 0) {
         setSupportFormErrors(errors);
@@ -199,6 +210,9 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             widthMm: widthResult.numeric,
             lengthMm: lengthResult.numeric,
             weightKg: weightResult.numeric,
+            minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
+            orderMeasurement: supportForm.orderMeasurement,
+            packaging: supportForm.packaging,
             imageTemplateId
           });
           showToast({ intent: 'success', title: 'Support added' });
@@ -216,6 +230,9 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             widthMm: widthResult.numeric,
             lengthMm: lengthResult.numeric,
             weightKg: weightResult.numeric,
+            minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
+            orderMeasurement: supportForm.orderMeasurement,
+            packaging: supportForm.packaging,
             imageTemplateId
           });
           showToast({ intent: 'success', title: 'Support updated' });

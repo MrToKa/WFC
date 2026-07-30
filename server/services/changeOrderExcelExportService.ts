@@ -107,6 +107,8 @@ const exportGroupingKey = (item: ChangeOrderItem): string =>
     item.packagingQuantity,
     item.packagingUnit,
     item.orderedUnit,
+    item.minimumOrderQuantity,
+    item.orderMeasurement,
     item.sapNumber,
     item.descriptionEn,
     item.descriptionDe,
@@ -127,12 +129,6 @@ const exportGroupingKey = (item: ChangeOrderItem): string =>
     item.acsBarcode,
     item.remarks,
   ]);
-
-const sumNullableQuantity = (
-  left: number | null,
-  right: number | null,
-): number | null =>
-  left === null && right === null ? null : (left ?? 0) + (right ?? 0);
 
 export const consolidateChangeOrderItemsForExport = (
   items: readonly ChangeOrderItem[],
@@ -156,10 +152,17 @@ export const consolidateChangeOrderItemsForExport = (
     const orderQuantity = existing.orderQuantity + item.orderQuantity;
     existing.designQuantity = designQuantity;
     existing.orderQuantity = orderQuantity;
-    existing.spareQuantity = calculateSpareQuantity(designQuantity, orderQuantity);
-    existing.orderedQuantity = sumNullableQuantity(
+    existing.orderedQuantity =
+      existing.packagingQuantity !== null && existing.packagingQuantity > 0
+        ? Math.ceil(orderQuantity / existing.packagingQuantity)
+        : existing.orderedQuantity === null && item.orderedQuantity === null
+          ? null
+          : (existing.orderedQuantity ?? 0) + (item.orderedQuantity ?? 0);
+    existing.spareQuantity = calculateSpareQuantity(
+      designQuantity,
+      orderQuantity,
+      existing.packagingQuantity,
       existing.orderedQuantity,
-      item.orderedQuantity,
     );
     existing.totalPrice = calculateLineTotal(orderQuantity, existing.unitPrice);
     existing.sourceStandardMaterialAssignmentIds = Array.from(
@@ -206,7 +209,10 @@ const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: numb
     itemNumber,
     item.designQuantity,
     item.orderQuantity,
-    { formula: `C${rowNumber}-B${rowNumber}`, result: item.spareQuantity },
+    {
+      formula: `IF(AND(ISNUMBER(I${rowNumber}),ISNUMBER(G${rowNumber})),I${rowNumber}*G${rowNumber}-B${rowNumber},C${rowNumber}-B${rowNumber})`,
+      result: item.spareQuantity,
+    },
     toText(item.unit),
     toText(item.packaging),
     item.packagingQuantity,

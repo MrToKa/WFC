@@ -152,6 +152,32 @@ describe('ChangeOrdersTab', () => {
     );
   });
 
+  const openExistingOrder = async (): Promise<void> => {
+    await screen.findByRole('table', { name: 'All Change Orders' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+    await screen.findByRole('cell', { name: 'Widget support' });
+  };
+
+  it('shows all Change Orders in a table until one is selected', async () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+
+    const table = await screen.findByRole('table', { name: 'All Change Orders' });
+    expect(table).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Existing order' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'P-100' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '40.00' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+    expect(await screen.findByRole('cell', { name: 'Widget support' })).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'All Change Orders' })).not.toBeInTheDocument();
+  });
+
   it(
     'loads rows, displays derived values, and disables export after an unsaved header edit',
     async () => {
@@ -163,7 +189,7 @@ describe('ChangeOrdersTab', () => {
         </FluentProvider>,
       );
 
-      expect(await screen.findByRole('cell', { name: 'Widget support' })).toBeInTheDocument();
+      await openExistingOrder();
       expect(screen.getByText('-2')).toBeInTheDocument();
       expect(screen.getByText(/Total: 40\.00/)).toBeInTheDocument();
 
@@ -190,7 +216,7 @@ describe('ChangeOrdersTab', () => {
         </FluentProvider>,
       );
 
-      await screen.findByRole('cell', { name: 'Widget support' });
+      await openExistingOrder();
       fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
 
       await waitFor(() =>

@@ -6,6 +6,9 @@ export type MaterialSupportRow = {
   width_mm: string | number | null;
   length_mm: string | number | null;
   weight_kg: string | number | null;
+  minimum_order_quantity: string | number;
+  order_measurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   image_template_id: string | null;
   image_template_file_name: string | null;
   image_template_content_type: string | null;
@@ -33,6 +36,9 @@ export type PublicMaterialSupport = {
   widthMm: number | null;
   lengthMm: number | null;
   weightKg: number | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   imageTemplateId: string | null;
   imageTemplateFileName: string | null;
   imageTemplateContentType: string | null;
@@ -50,6 +56,9 @@ export const mapMaterialSupportRow = (
   widthMm: toNumberOrNull(row.width_mm),
   lengthMm: toNumberOrNull(row.length_mm),
   weightKg: toNumberOrNull(row.weight_kg),
+  minimumOrderQuantity: toNumberOrNull(row.minimum_order_quantity) ?? 1,
+  orderMeasurement: row.order_measurement,
+  packaging: row.packaging,
   imageTemplateId: row.image_template_id ?? null,
   imageTemplateFileName: row.image_template_file_name ?? null,
   imageTemplateContentType: row.image_template_content_type ?? null,

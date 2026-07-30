@@ -19,6 +19,9 @@ export type ChangeOrderItemSnapshot = {
   weightKg: number | null;
   manufacturer: string | null;
   manufacturerPartNo: string | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
 export type CableTypeCatalogRecord = {
@@ -31,6 +34,9 @@ export type CableTypeCatalogRecord = {
   part_no: string | null;
   diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  minimum_order_quantity: string | number;
+  order_measurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
 export type CableInstallationMaterialCatalogRecord = {
@@ -41,6 +47,9 @@ export type CableInstallationMaterialCatalogRecord = {
   description: string | null;
   manufacturer: string | null;
   part_no: string | null;
+  minimum_order_quantity: string | number;
+  order_measurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
 export type TrayCatalogRecord = {
@@ -51,6 +60,9 @@ export type TrayCatalogRecord = {
   rung_height_mm: string | number | null;
   width_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  minimum_order_quantity: string | number;
+  order_measurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
 export type SupportCatalogRecord = {
@@ -61,6 +73,9 @@ export type SupportCatalogRecord = {
   width_mm: string | number | null;
   length_mm: string | number | null;
   weight_kg: string | number | null;
+  minimum_order_quantity: string | number;
+  order_measurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
 const toNumberOrNull = (value: string | number | null): number | null => {
@@ -93,7 +108,7 @@ const formatDimensions = (
 export const snapshotCableType = (record: CableTypeCatalogRecord): ChangeOrderItemSnapshot => ({
   sourceCatalog: 'cable-type',
   sourceMaterialId: record.id,
-  unit: 'm',
+  unit: record.order_measurement,
   descriptionEn: record.name.trim(),
   clearDescription: firstText(record.description, record.purpose),
   dimensionMm:
@@ -104,6 +119,9 @@ export const snapshotCableType = (record: CableTypeCatalogRecord): ChangeOrderIt
   weightKg: toNumberOrNull(record.weight_kg_per_m),
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: firstText(record.part_no),
+  minimumOrderQuantity: Number(record.minimum_order_quantity),
+  orderMeasurement: record.order_measurement,
+  packaging: record.packaging,
 });
 
 export const snapshotCableInstallationMaterial = (
@@ -111,7 +129,7 @@ export const snapshotCableInstallationMaterial = (
 ): ChangeOrderItemSnapshot => ({
   sourceCatalog: 'cable-installation-material',
   sourceMaterialId: record.id,
-  unit: 'pcs',
+  unit: record.order_measurement,
   descriptionEn: record.type.trim(),
   clearDescription: firstText(record.description, record.purpose),
   dimensionMm: null,
@@ -119,12 +137,15 @@ export const snapshotCableInstallationMaterial = (
   weightKg: null,
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: firstText(record.part_no),
+  minimumOrderQuantity: Number(record.minimum_order_quantity),
+  orderMeasurement: record.order_measurement,
+  packaging: record.packaging,
 });
 
 export const snapshotTray = (record: TrayCatalogRecord): ChangeOrderItemSnapshot => ({
   sourceCatalog: 'tray',
   sourceMaterialId: record.id,
-  unit: 'pcs',
+  unit: record.order_measurement,
   descriptionEn: record.tray_type.trim(),
   clearDescription: null,
   dimensionMm: formatDimensions([
@@ -136,12 +157,15 @@ export const snapshotTray = (record: TrayCatalogRecord): ChangeOrderItemSnapshot
   weightKg: toNumberOrNull(record.weight_kg_per_m),
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: null,
+  minimumOrderQuantity: Number(record.minimum_order_quantity),
+  orderMeasurement: record.order_measurement,
+  packaging: record.packaging,
 });
 
 export const snapshotSupport = (record: SupportCatalogRecord): ChangeOrderItemSnapshot => ({
   sourceCatalog: 'support',
   sourceMaterialId: record.id,
-  unit: 'pcs',
+  unit: record.order_measurement,
   descriptionEn: record.support_type.trim(),
   clearDescription: null,
   dimensionMm: formatDimensions([
@@ -153,6 +177,9 @@ export const snapshotSupport = (record: SupportCatalogRecord): ChangeOrderItemSn
   weightKg: toNumberOrNull(record.weight_kg),
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: null,
+  minimumOrderQuantity: Number(record.minimum_order_quantity),
+  orderMeasurement: record.order_measurement,
+  packaging: record.packaging,
 });
 
 export class CatalogMaterialNotFoundError extends Error {
@@ -171,7 +198,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
       const result = await queryable.query<CableTypeCatalogRecord>(
         `SELECT
            id, name, purpose, material, description, manufacturer, part_no,
-           diameter_mm, weight_kg_per_m
+           diameter_mm, weight_kg_per_m, minimum_order_quantity, order_measurement, packaging
          FROM material_cable_types WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );
@@ -180,7 +207,8 @@ export const resolveChangeOrderCatalogSnapshot = async (
     }
     case 'cable-installation-material': {
       const result = await queryable.query<CableInstallationMaterialCatalogRecord>(
-        `SELECT id, type, purpose, material, description, manufacturer, part_no
+        `SELECT id, type, purpose, material, description, manufacturer, part_no,
+                minimum_order_quantity, order_measurement, packaging
          FROM material_cable_installation_materials WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );
@@ -189,7 +217,8 @@ export const resolveChangeOrderCatalogSnapshot = async (
     }
     case 'tray': {
       const result = await queryable.query<TrayCatalogRecord>(
-        `SELECT id, tray_type, manufacturer, height_mm, rung_height_mm, width_mm, weight_kg_per_m
+        `SELECT id, tray_type, manufacturer, height_mm, rung_height_mm, width_mm,
+                weight_kg_per_m, minimum_order_quantity, order_measurement, packaging
          FROM material_trays WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );
@@ -198,7 +227,8 @@ export const resolveChangeOrderCatalogSnapshot = async (
     }
     case 'support': {
       const result = await queryable.query<SupportCatalogRecord>(
-        `SELECT id, support_type, manufacturer, height_mm, width_mm, length_mm, weight_kg
+        `SELECT id, support_type, manufacturer, height_mm, width_mm, length_mm,
+                weight_kg, minimum_order_quantity, order_measurement, packaging
          FROM material_supports WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );

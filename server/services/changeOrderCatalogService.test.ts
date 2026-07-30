@@ -6,7 +6,10 @@ import {
   snapshotSupport,
   snapshotTray,
 } from './changeOrderCatalogService.js';
-import { calculateInheritedChangeOrderQuantities } from './changeOrderService.js';
+import {
+  calculateInheritedChangeOrderQuantities,
+  calculateMinimumOrder,
+} from './changeOrderService.js';
 
 describe('Change Order catalog snapshots', () => {
   it('multiplies inherited quantities for piece-based parent materials', () => {
@@ -29,6 +32,34 @@ describe('Change Order catalog snapshots', () => {
       orderQuantity: 4,
     });
   });
+
+  it('rounds required quantities to complete minimum-order packs', () => {
+    expect(calculateMinimumOrder(24, 24, 50)).toEqual({
+      orderQuantity: 24,
+      packageCount: 1,
+      spareQuantity: 26,
+    });
+    expect(calculateMinimumOrder(51, 51, 50)).toEqual({
+      orderQuantity: 51,
+      packageCount: 2,
+      spareQuantity: 49,
+    });
+    expect(calculateMinimumOrder(75, 75, 50)).toEqual({
+      orderQuantity: 75,
+      packageCount: 2,
+      spareQuantity: 25,
+    });
+    expect(calculateMinimumOrder(104, 104, 1)).toEqual({
+      orderQuantity: 104,
+      packageCount: 104,
+      spareQuantity: 0,
+    });
+    expect(calculateMinimumOrder(50, 52, 1)).toEqual({
+      orderQuantity: 52,
+      packageCount: 52,
+      spareQuantity: 2,
+    });
+  });
   it('maps cable types and does not change a snapshot when its source changes later', () => {
     const source = {
       id: 'cable-id',
@@ -40,6 +71,9 @@ describe('Change Order catalog snapshots', () => {
       part_no: 'C-1',
       diameter_mm: '12.5',
       weight_kg_per_m: '0.25',
+      minimum_order_quantity: '50',
+      order_measurement: 'meters' as const,
+      packaging: 'Drum' as const,
     };
     const snapshot = snapshotCableType(source);
     source.name = 'Renamed cable';
@@ -54,7 +88,10 @@ describe('Change Order catalog snapshots', () => {
       weightKg: 0.25,
       manufacturer: 'Cable Co',
       manufacturerPartNo: 'C-1',
-      unit: 'm',
+      unit: 'meters',
+      minimumOrderQuantity: 50,
+      orderMeasurement: 'meters',
+      packaging: 'Drum',
     });
   });
 
@@ -68,6 +105,9 @@ describe('Change Order catalog snapshots', () => {
         description: null,
         manufacturer: null,
         part_no: null,
+        minimum_order_quantity: 50,
+        order_measurement: 'pcs',
+        packaging: 'Package',
       }),
     ).toMatchObject({
       sourceCatalog: 'cable-installation-material',
@@ -78,6 +118,9 @@ describe('Change Order catalog snapshots', () => {
       manufacturer: null,
       manufacturerPartNo: null,
       unit: 'pcs',
+      minimumOrderQuantity: 50,
+      orderMeasurement: 'pcs',
+      packaging: 'Package',
     });
   });
 
@@ -91,6 +134,9 @@ describe('Change Order catalog snapshots', () => {
         rung_height_mm: null,
         width_mm: 300,
         weight_kg_per_m: 2.2,
+        minimum_order_quantity: 1,
+        order_measurement: 'meters',
+        packaging: 'm',
       }).dimensionMm,
     ).toBe('H 60 × W 300');
     expect(
@@ -102,6 +148,9 @@ describe('Change Order catalog snapshots', () => {
         width_mm: 60,
         length_mm: 3000,
         weight_kg: 3.3,
+        minimum_order_quantity: 10,
+        order_measurement: 'pcs',
+        packaging: 'Box',
       }),
     ).toMatchObject({
       sourceCatalog: 'support',

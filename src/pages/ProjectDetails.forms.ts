@@ -37,6 +37,9 @@ export type CableTypeFormState = {
   remarks: string;
   diameterMm: string;
   weightKgPerM: string;
+  minimumOrderQuantity: string;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
 export type CableTypeFormErrors = Partial<Record<keyof CableTypeFormState, string>> & {
@@ -53,6 +56,9 @@ export const emptyCableTypeForm: CableTypeFormState = {
   remarks: '',
   diameterMm: '',
   weightKgPerM: '',
+  minimumOrderQuantity: '1',
+  orderMeasurement: 'meters',
+  packaging: 'm',
 };
 
 export const toCableTypeFormState = (cableType: CableType): CableTypeFormState => ({
@@ -65,6 +71,9 @@ export const toCableTypeFormState = (cableType: CableType): CableTypeFormState =
   remarks: '',
   diameterMm: cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
   weightKgPerM: cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '',
+  minimumOrderQuantity: '1',
+  orderMeasurement: 'meters',
+  packaging: 'm',
 });
 
 export const parseCableTypeApiErrors = (payload: ApiErrorPayload): CableTypeFormErrors => {
@@ -139,10 +148,21 @@ export const buildMaterialCableTypeInput = (
     remarks: string | null;
     diameterMm: number | null;
     weightKgPerM: number | null;
+    minimumOrderQuantity: number;
+    orderMeasurement: 'pcs' | 'pack' | 'meters';
+    packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   };
   errors: CableTypeFormErrors;
 } => {
   const { input, errors } = buildCableTypeInput(values);
+  const minimumOrderResult = parseNumberInput(values.minimumOrderQuantity);
+  if (
+    minimumOrderResult.error ||
+    minimumOrderResult.numeric === null ||
+    minimumOrderResult.numeric <= 0
+  ) {
+    errors.minimumOrderQuantity = 'Minimum order quantity must be greater than zero';
+  }
 
   return {
     input: {
@@ -155,6 +175,9 @@ export const buildMaterialCableTypeInput = (
       remarks: toNullableString(values.remarks),
       diameterMm: input.diameterMm ?? null,
       weightKgPerM: input.weightKgPerM ?? null,
+      minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
+      orderMeasurement: values.orderMeasurement,
+      packaging: values.packaging,
     },
     errors,
   };

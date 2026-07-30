@@ -9,6 +9,9 @@ export type MaterialCableTypeRow = {
   remarks: string | null;
   diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  minimum_order_quantity: string | number;
+  order_measurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -36,6 +39,9 @@ export type PublicMaterialCableType = {
   remarks: string | null;
   diameterMm: number | null;
   weightKgPerM: number | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   createdAt: string;
   updatedAt: string;
 };
@@ -51,6 +57,9 @@ export const mapMaterialCableTypeRow = (row: MaterialCableTypeRow): PublicMateri
   remarks: row.remarks ?? null,
   diameterMm: toNumberOrNull(row.diameter_mm),
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
+  minimumOrderQuantity: toNumberOrNull(row.minimum_order_quantity) ?? 1,
+  orderMeasurement: row.order_measurement,
+  packaging: row.packaging,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at),
 });

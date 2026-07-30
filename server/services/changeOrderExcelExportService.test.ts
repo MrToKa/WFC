@@ -26,7 +26,7 @@ const createItem = (index: number): ChangeOrderItem => ({
   sourceMaterialId: `source-${index}`,
   designQuantity: index === 1 ? 10.5 : 2,
   orderQuantity: index === 1 ? 8.25 : 3,
-  spareQuantity: index === 1 ? -2.25 : 1,
+  spareQuantity: index === 1 ? 1.75 : 7,
   unit: 'pcs',
   packaging: 'box',
   packagingQuantity: 5,
@@ -98,8 +98,14 @@ describe('Change Order workbook export', () => {
       unit: 'm',
       designQuantity: 50,
       orderQuantity: 60,
-      spareQuantity: 10,
-      orderedQuantity: null,
+      spareQuantity: 0,
+      packaging: 'Drum',
+      packagingQuantity: 1,
+      packagingUnit: 'meters',
+      orderedQuantity: 60,
+      orderedUnit: 'Drum',
+      minimumOrderQuantity: 1,
+      orderMeasurement: 'meters',
       unitPrice: 2,
       totalPrice: 120,
     };
@@ -109,7 +115,8 @@ describe('Change Order workbook export', () => {
       sortOrder: 2,
       designQuantity: 100,
       orderQuantity: 120,
-      spareQuantity: 20,
+      spareQuantity: 0,
+      orderedQuantity: 120,
       totalPrice: 240,
     };
     const details = createDetails(0);
@@ -123,6 +130,7 @@ describe('Change Order workbook export', () => {
         designQuantity: 150,
         orderQuantity: 180,
         spareQuantity: 30,
+        orderedQuantity: 180,
         unit: 'm',
         totalPrice: 360,
       },
@@ -137,6 +145,11 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('B5').value).toBe(150);
     expect(worksheet.getCell('C5').value).toBe(180);
     expect(worksheet.getCell('E5').value).toBe('m');
+    expect(worksheet.getCell('F5').value).toBe('Drum');
+    expect(worksheet.getCell('G5').value).toBe(1);
+    expect(worksheet.getCell('H5').value).toBe('meters');
+    expect(worksheet.getCell('I5').value).toBe(180);
+    expect(worksheet.getCell('J5').value).toBe('Drum');
     expect(worksheet.getCell('R6').value).toBe('TOTAL:');
     expect(worksheet.getCell('A6').value).toBeNull();
   });
@@ -147,6 +160,86 @@ describe('Change Order workbook export', () => {
       ...first,
       id: 'second-price',
       unitPrice: first.unitPrice + 1,
+    };
+
+    expect(consolidateChangeOrderItemsForExport([first, second])).toHaveLength(2);
+  });
+
+  it('recalculates packages and spare after identical materials are consolidated', () => {
+    const first = {
+      ...createItem(1),
+      designQuantity: 8,
+      orderQuantity: 8,
+      packaging: 'Box',
+      packagingQuantity: 50,
+      packagingUnit: 'pcs',
+      orderedQuantity: 1,
+      orderedUnit: 'Box',
+      minimumOrderQuantity: 50,
+      orderMeasurement: 'pcs' as const,
+    };
+    const second = {
+      ...first,
+      id: 'second-box-line',
+      designQuantity: 30,
+      orderQuantity: 30,
+    };
+
+    expect(consolidateChangeOrderItemsForExport([first, second])).toMatchObject([
+      {
+        designQuantity: 38,
+        orderQuantity: 38,
+        orderedQuantity: 1,
+        spareQuantity: 12,
+        packaging: 'Box',
+        packagingQuantity: 50,
+        packagingUnit: 'pcs',
+        orderedUnit: 'Box',
+      },
+    ]);
+  });
+
+  it('counts the order above cable design as spare after consolidation', () => {
+    const first = {
+      ...createItem(1),
+      sourceCatalog: 'cable-type' as const,
+      sourceMaterialId: 'same-cable',
+      designQuantity: 50,
+      orderQuantity: 52,
+      packaging: 'm',
+      packagingQuantity: 1,
+      packagingUnit: 'meters',
+      orderedQuantity: 52,
+      orderedUnit: 'm',
+      minimumOrderQuantity: 1,
+      orderMeasurement: 'meters' as const,
+    };
+    const second = {
+      ...first,
+      id: 'second-cable',
+      sortOrder: 2,
+    };
+
+    expect(consolidateChangeOrderItemsForExport([first, second])).toMatchObject([
+      {
+        designQuantity: 100,
+        orderQuantity: 104,
+        orderedQuantity: 104,
+        spareQuantity: 4,
+      },
+    ]);
+  });
+
+  it('keeps historical snapshots separate when minimum orders differ', () => {
+    const first = {
+      ...createItem(1),
+      minimumOrderQuantity: 1,
+      orderMeasurement: 'pack' as const,
+    };
+    const second = {
+      ...first,
+      id: 'second-minimum',
+      minimumOrderQuantity: 2,
     };
 
     expect(consolidateChangeOrderItemsForExport([first, second])).toHaveLength(2);
@@ -171,7 +264,9 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('A6').value).toBe(2);
     expect(worksheet.getCell('L5').value).toBe("'=unsafe formula");
     expect(worksheet.getCell('AD6').value).toBe("'@unsafe remark");
-    expect(worksheet.getCell('D5').value).toMatchObject({ formula: 'C5-B5' });
+    expect(worksheet.getCell('D5').value).toMatchObject({
+      formula: 'IF(AND(ISNUMBER(I5),ISNUMBER(G5)),I5*G5-B5,C5-B5)',
+    });
     expect(worksheet.getCell('S5').value).toMatchObject({ formula: 'R5*C5' });
     expect(worksheet.getCell('R7').value).toBe('TOTAL:');
     expect(worksheet.getCell('S7').value).toMatchObject({ formula: 'SUM(S5:S6)' });
@@ -240,7 +335,9 @@ describe('Change Order workbook export', () => {
   it('supports more rows than the original data capacity', async () => {
     const { worksheet } = await reopen(30);
     expect(worksheet.getCell('A34').value).toBe(30);
-    expect(worksheet.getCell('D34').value).toMatchObject({ formula: 'C34-B34' });
+    expect(worksheet.getCell('D34').value).toMatchObject({
+      formula: 'IF(AND(ISNUMBER(I34),ISNUMBER(G34)),I34*G34-B34,C34-B34)',
+    });
     expect(worksheet.getCell('S34').value).toMatchObject({ formula: 'R34*C34' });
     expect(worksheet.getCell('R35').value).toBe('TOTAL:');
     expect(worksheet.getCell('S35').value).toMatchObject({ formula: 'SUM(S5:S34)' });

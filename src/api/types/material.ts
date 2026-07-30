@@ -1,3 +1,6 @@
+export type MaterialOrderMeasurement = 'pcs' | 'pack' | 'meters';
+export type MaterialPackaging = 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+
 export type MaterialTray = {
   id: string;
   type: string;
@@ -6,6 +9,9 @@ export type MaterialTray = {
   rungHeightMm: number | null;
   widthMm: number | null;
   weightKgPerM: number | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: MaterialOrderMeasurement;
+  packaging: MaterialPackaging;
   loadCurveId: string | null;
   loadCurveName: string | null;
   imageTemplateId: string | null;
@@ -26,6 +32,9 @@ export type MaterialCableType = {
   remarks: string | null;
   diameterMm: number | null;
   weightKgPerM: number | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: MaterialOrderMeasurement;
+  packaging: MaterialPackaging;
   createdAt: string;
   updatedAt: string;
 };
@@ -38,6 +47,9 @@ export type MaterialCableInstallationMaterial = {
   description: string | null;
   manufacturer: string | null;
   partNo: string | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: MaterialOrderMeasurement;
+  packaging: MaterialPackaging;
   createdAt: string;
   updatedAt: string;
 };
@@ -50,6 +62,9 @@ export type MaterialSupport = {
   widthMm: number | null;
   lengthMm: number | null;
   weightKg: number | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: MaterialOrderMeasurement;
+  packaging: MaterialPackaging;
   imageTemplateId: string | null;
   imageTemplateFileName: string | null;
   imageTemplateContentType: string | null;
@@ -140,6 +155,9 @@ export type MaterialCableTypeInput = {
   remarks?: string | null;
   diameterMm?: number | null;
   weightKgPerM?: number | null;
+  minimumOrderQuantity?: number;
+  orderMeasurement?: MaterialOrderMeasurement;
+  packaging?: MaterialPackaging;
 };
 
 export type MaterialCableInstallationMaterialInput = {
@@ -149,6 +167,9 @@ export type MaterialCableInstallationMaterialInput = {
   description?: string | null;
   manufacturer?: string | null;
   partNo?: string | null;
+  minimumOrderQuantity?: number;
+  orderMeasurement?: MaterialOrderMeasurement;
+  packaging?: MaterialPackaging;
 };
 
 export type MaterialTrayInput = {
@@ -160,6 +181,9 @@ export type MaterialTrayInput = {
   weightKgPerM?: number | null;
   loadCurveId?: string | null;
   imageTemplateId?: string | null;
+  minimumOrderQuantity?: number;
+  orderMeasurement?: MaterialOrderMeasurement;
+  packaging?: MaterialPackaging;
 };
 
 export type MaterialSupportInput = {
@@ -170,6 +194,9 @@ export type MaterialSupportInput = {
   lengthMm?: number | null;
   weightKg?: number | null;
   imageTemplateId?: string | null;
+  minimumOrderQuantity?: number;
+  orderMeasurement?: MaterialOrderMeasurement;
+  packaging?: MaterialPackaging;
 };
 
 export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
@@ -203,6 +230,9 @@ export type StandardMaterialAssignment = {
     description: string | null;
     manufacturer: string | null;
     partNo: string | null;
+    minimumOrderQuantity: number;
+    orderMeasurement: MaterialOrderMeasurement;
+    packaging: MaterialPackaging;
   };
   quantity: number;
   unit: StandardMaterialUnit;

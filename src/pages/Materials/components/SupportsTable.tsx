@@ -90,6 +90,8 @@ export const SupportsTable = ({
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Weight [kg]
               </th>
+              <th className={styles.tableHeadCell}>Minimum order</th>
+              <th className={styles.tableHeadCell}>Packaging</th>
               <th className={styles.tableHeadCell}>Actions</th>
             </tr>
           </thead>
@@ -112,6 +114,10 @@ export const SupportsTable = ({
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatWeight(support.weightKg)}
                   </td>
+                  <td className={styles.tableCell}>
+                    {support.minimumOrderQuantity} {support.orderMeasurement}
+                  </td>
+                  <td className={styles.tableCell}>{support.packaging}</td>
                   <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
                     <Button size="small" onClick={() => onDetails(support)}>
                       Details

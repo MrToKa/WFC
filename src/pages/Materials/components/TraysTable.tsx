@@ -95,6 +95,8 @@ export const TraysTable = ({
                 Weight [kg/m]
               </th>
               <th className={styles.tableHeadCell}>Load curve</th>
+              <th className={styles.tableHeadCell}>Minimum order</th>
+              <th className={styles.tableHeadCell}>Packaging</th>
               <th className={styles.tableHeadCell}>Actions</th>
             </tr>
           </thead>
@@ -121,6 +123,10 @@ export const TraysTable = ({
                   <td className={styles.tableCell}>
                     {tray.loadCurveName ?? 'No load curve assigned'}
                   </td>
+                  <td className={styles.tableCell}>
+                    {tray.minimumOrderQuantity} {tray.orderMeasurement}
+                  </td>
+                  <td className={styles.tableCell}>{tray.packaging}</td>
                   <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
                     <Button size="small" onClick={() => onDetails(tray)}>
                       Details

@@ -10,6 +10,9 @@ describe('Change Order calculations', () => {
     expect(calculateSpareQuantity(10, 12.5)).toBe(2.5);
     expect(calculateSpareQuantity(5.25, 5.25)).toBe(0);
     expect(calculateSpareQuantity(10, 8)).toBe(-2);
+    expect(calculateSpareQuantity(8, 8, 50, 1)).toBe(42);
+    expect(calculateSpareQuantity(75, 75, 50, 2)).toBe(25);
+    expect(calculateSpareQuantity(100, 104, 1, 104)).toBe(4);
   });
 
   it('calculates line totals and the Change Order total', () => {

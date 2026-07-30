@@ -6,6 +6,9 @@ export type MaterialTrayRow = {
   rung_height_mm: string | number | null;
   width_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  minimum_order_quantity: string | number;
+  order_measurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   load_curve_id: string | null;
   image_template_id: string | null;
   image_template_file_name: string | null;
@@ -35,6 +38,9 @@ export type PublicMaterialTray = {
   rungHeightMm: number | null;
   widthMm: number | null;
   weightKgPerM: number | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   loadCurveId: string | null;
   loadCurveName: string | null;
   imageTemplateId: string | null;
@@ -52,6 +58,9 @@ export const mapMaterialTrayRow = (row: MaterialTrayRow): PublicMaterialTray => 
   rungHeightMm: toNumberOrNull(row.rung_height_mm),
   widthMm: toNumberOrNull(row.width_mm),
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
+  minimumOrderQuantity: toNumberOrNull(row.minimum_order_quantity) ?? 1,
+  orderMeasurement: row.order_measurement,
+  packaging: row.packaging,
   loadCurveId: row.load_curve_id ?? null,
   loadCurveName: row.load_curve_name ?? null,
   imageTemplateId: row.image_template_id ?? null,

@@ -16,6 +16,11 @@ export const MaterialSupportDetails = () => (
       { label: 'Width', value: numeric(material.widthMm, 'mm') },
       { label: 'Length', value: numeric(material.lengthMm, 'mm') },
       { label: 'Weight', value: numeric(material.weightKg, 'kg') },
+      {
+        label: 'Minimum order',
+        value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,
+      },
+      { label: 'Packaging', value: material.packaging },
       { label: 'Image template', value: material.imageTemplateFileName ?? '—' },
     ]}
   />

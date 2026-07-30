@@ -16,6 +16,11 @@ export const MaterialTrayDetails = () => (
       { label: 'Rung height', value: numeric(material.rungHeightMm, 'mm') },
       { label: 'Width', value: numeric(material.widthMm, 'mm') },
       { label: 'Weight', value: numeric(material.weightKgPerM, 'kg/m') },
+      {
+        label: 'Minimum order',
+        value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,
+      },
+      { label: 'Packaging', value: material.packaging },
       { label: 'Load curve', value: material.loadCurveName ?? '—' },
       { label: 'Image template', value: material.imageTemplateFileName ?? '—' },
     ]}

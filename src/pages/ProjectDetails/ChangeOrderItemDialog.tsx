@@ -138,6 +138,7 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
     }
     try {
       const inherited = item?.lineKind === 'inherited';
+      const minimumOrderManaged = Boolean(item?.minimumOrderQuantity && item.orderMeasurement);
       const update: ChangeOrderItemUpdate = {
         ...(inherited
           ? {}
@@ -146,11 +147,18 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
               orderQuantity: parseRequiredNumber(form.orderQuantity, 'Order quantity'),
               unit: nullable(form.unit),
             }),
-        packaging: nullable(form.packaging),
-        packagingQuantity: parseOptionalNumber(form.packagingQuantity, 'Packaging quantity'),
-        packagingUnit: nullable(form.packagingUnit),
-        orderedQuantity: parseOptionalNumber(form.orderedQuantity, 'Ordered quantity'),
-        orderedUnit: nullable(form.orderedUnit),
+        ...(minimumOrderManaged
+          ? {}
+          : {
+              packaging: nullable(form.packaging),
+              packagingQuantity: parseOptionalNumber(
+                form.packagingQuantity,
+                'Packaging quantity',
+              ),
+              packagingUnit: nullable(form.packagingUnit),
+              orderedQuantity: parseOptionalNumber(form.orderedQuantity, 'Ordered quantity'),
+              orderedUnit: nullable(form.orderedUnit),
+            }),
         sapNumber: nullable(form.sapNumber),
         descriptionEn: form.descriptionEn.trim(),
         descriptionDe: nullable(form.descriptionDe),
@@ -189,7 +197,15 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
         disabled={
           saving ||
           (item?.lineKind === 'inherited' &&
-            (field === 'designQuantity' || field === 'orderQuantity' || field === 'unit'))
+            (field === 'designQuantity' || field === 'orderQuantity' || field === 'unit')) ||
+          (Boolean(item?.minimumOrderQuantity) &&
+            [
+              'packaging',
+              'packagingQuantity',
+              'packagingUnit',
+              'orderedQuantity',
+              'orderedUnit',
+            ].includes(field))
         }
       />
     </Field>
@@ -216,6 +232,15 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
               <MessageBar intent="warning">
                 <MessageBarBody>
                   Order quantity is lower than design quantity; spare quantity will be negative.
+                </MessageBarBody>
+              </MessageBar>
+            ) : null}
+            {item?.minimumOrderQuantity && item.orderMeasurement ? (
+              <MessageBar intent="info">
+                <MessageBarBody>
+                  Packaging: {item.packaging ?? '—'} × {item.minimumOrderQuantity}{' '}
+                  {item.orderMeasurement}. Ordered Qty and Spare Qty are calculated automatically
+                  from Order Qty.
                 </MessageBarBody>
               </MessageBar>
             ) : null}

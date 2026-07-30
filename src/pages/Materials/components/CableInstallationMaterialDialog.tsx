@@ -12,6 +12,7 @@ import {
   Field,
   Input,
   Option,
+  Select,
 } from '@fluentui/react-components';
 import type {
   CableInstallationMaterialFormErrors,
@@ -117,6 +118,53 @@ export const CableInstallationMaterialDialog = ({
               validationMessage={errors.partNo}
             >
               <Input value={values.partNo} onChange={onFieldChange('partNo')} />
+            </Field>
+            <Field
+              label="Minimum order quantity"
+              required
+              validationState={errors.minimumOrderQuantity ? 'error' : undefined}
+              validationMessage={errors.minimumOrderQuantity}
+            >
+              <Input
+                type="number"
+                min={0.000001}
+                step="any"
+                value={values.minimumOrderQuantity}
+                onChange={onFieldChange('minimumOrderQuantity')}
+                required
+              />
+            </Field>
+            <Field label="Order measurement" required>
+              <Select
+                value={values.orderMeasurement}
+                onChange={(event) =>
+                  onFieldChange('orderMeasurement')(
+                    event as unknown as ChangeEvent<HTMLInputElement>,
+                    { value: event.target.value },
+                  )
+                }
+              >
+                <option value="pcs">pcs</option>
+                <option value="pack">pack</option>
+                <option value="meters">meters</option>
+              </Select>
+            </Field>
+            <Field label="Packaging" required>
+              <Select
+                value={values.packaging}
+                onChange={(event) =>
+                  onFieldChange('packaging')(
+                    event as unknown as ChangeEvent<HTMLInputElement>,
+                    { value: event.target.value },
+                  )
+                }
+              >
+                <option value="m">m</option>
+                <option value="Package">Package</option>
+                <option value="Box">Box</option>
+                <option value="Drum">Drum</option>
+                <option value="pcs">pcs</option>
+              </Select>
             </Field>
             {errors.general ? <Body1 className={styles.errorText}>{errors.general}</Body1> : null}
           </DialogContent>

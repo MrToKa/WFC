@@ -88,6 +88,9 @@ const toCableTypeFormState = (cableType: MaterialCableType): CableTypeFormState 
   remarks: cableType.remarks ?? '',
   diameterMm: cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
   weightKgPerM: cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '',
+  minimumOrderQuantity: String(cableType.minimumOrderQuantity),
+  orderMeasurement: cableType.orderMeasurement,
+  packaging: cableType.packaging,
 });
 
 export const useCableTypes = ({

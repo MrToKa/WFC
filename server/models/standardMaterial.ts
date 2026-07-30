@@ -22,6 +22,9 @@ export type StandardMaterialAssignmentRow = {
   referenced_material_description: string | null;
   referenced_material_manufacturer: string | null;
   referenced_material_part_no: string | null;
+  referenced_material_minimum_order_quantity: string | number;
+  referenced_material_order_measurement: 'pcs' | 'pack' | 'meters';
+  referenced_material_packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   quantity: string | number;
   unit: StandardMaterialUnit;
   remarks: string | null;
@@ -42,6 +45,9 @@ export type StandardMaterialAssignment = {
     description: string | null;
     manufacturer: string | null;
     partNo: string | null;
+    minimumOrderQuantity: number;
+    orderMeasurement: 'pcs' | 'pack' | 'meters';
+    packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   };
   quantity: number;
   unit: StandardMaterialUnit;
@@ -68,6 +74,9 @@ export const mapStandardMaterialAssignmentRow = (
     description: row.referenced_material_description ?? null,
     manufacturer: row.referenced_material_manufacturer ?? null,
     partNo: row.referenced_material_part_no ?? null,
+    minimumOrderQuantity: Number(row.referenced_material_minimum_order_quantity),
+    orderMeasurement: row.referenced_material_order_measurement,
+    packaging: row.referenced_material_packaging,
   },
   quantity: Number(row.quantity),
   unit: row.unit,
@@ -84,6 +93,9 @@ export type ExpandedStandardMaterial = {
   description: string | null;
   manufacturer: string | null;
   partNo: string | null;
+  minimumOrderQuantity: number;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   quantity: number;
   unit: StandardMaterialUnit;
   remarks: string | null;

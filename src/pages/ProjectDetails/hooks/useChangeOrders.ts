@@ -60,16 +60,8 @@ export const useChangeOrders = (projectId: string, token: string | null) => {
   }, [loadList, selectChangeOrder, selectedId]);
 
   useEffect(() => {
-    let active = true;
-    void loadList().then((items) => {
-      if (active && items.length > 0) {
-        void selectChangeOrder(items[0].id);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [loadList, selectChangeOrder]);
+    void loadList();
+  }, [loadList]);
 
   return {
     changeOrders,

@@ -50,7 +50,10 @@ const TRAY_HEADERS = {
   rungHeight: 'Rung height [mm]',
   width: 'Width [mm]',
   weight: 'Weight [kg/m]',
-  loadCurve: 'Load curve'
+  loadCurve: 'Load curve',
+  minimumOrder: 'Minimum order quantity',
+  orderMeasurement: 'Order measurement',
+  packaging: 'Packaging'
 } as const;
 
 const SUPPORT_HEADERS = {
@@ -59,7 +62,10 @@ const SUPPORT_HEADERS = {
   height: 'Height [mm]',
   width: 'Width [mm]',
   length: 'Length [mm]',
-  weight: 'Weight [kg]'
+  weight: 'Weight [kg]',
+  minimumOrder: 'Minimum order quantity',
+  orderMeasurement: 'Order measurement',
+  packaging: 'Packaging'
 } as const;
 
 const LOAD_CURVE_HEADERS = {
@@ -103,6 +109,35 @@ const toNullableNumber = (value: unknown): number | null => {
   }
 
   return null;
+};
+
+const toMinimumOrderQuantity = (value: unknown): number => {
+  const parsed = toNullableNumber(value);
+  return parsed !== null && parsed > 0 ? parsed : 1;
+};
+
+const toOrderMeasurement = (
+  value: unknown,
+  fallback: 'pcs' | 'pack' | 'meters' = 'pcs'
+): 'pcs' | 'pack' | 'meters' => {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized === 'pcs' || normalized === 'pack' || normalized === 'meters'
+    ? normalized
+    : fallback;
+};
+
+const toPackaging = (
+  value: unknown,
+  fallback: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs' = 'pcs'
+): 'm' | 'Package' | 'Box' | 'Drum' | 'pcs' => {
+  const normalized = String(value ?? '').trim();
+  return normalized === 'm' ||
+    normalized === 'Package' ||
+    normalized === 'Box' ||
+    normalized === 'Drum' ||
+    normalized === 'pcs'
+    ? normalized
+    : fallback;
 };
 
 const normalizeType = (value: string): string => value.trim().replace(/\s+/g, ' ');
@@ -280,6 +315,9 @@ const selectMaterialTraysQuery = `
     mt.rung_height_mm,
     mt.width_mm,
     mt.weight_kg_per_m,
+    mt.minimum_order_quantity,
+    mt.order_measurement,
+    mt.packaging,
     mt.load_curve_id,
     mt.image_template_id,
     tf.file_name AS image_template_file_name,
@@ -301,6 +339,9 @@ const selectMaterialSupportsQuery = `
     ms.width_mm,
     ms.length_mm,
     ms.weight_kg,
+    ms.minimum_order_quantity,
+    ms.order_measurement,
+    ms.packaging,
     ms.image_template_id,
     tf.file_name AS image_template_file_name,
     tf.content_type AS image_template_content_type,
@@ -504,9 +545,12 @@ materialsRouter.post(
             rung_height_mm,
             width_mm,
             weight_kg_per_m,
+            minimum_order_quantity,
+            order_measurement,
+            packaging,
             load_curve_id,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11);
         `,
         [
           trayId,
@@ -516,6 +560,9 @@ materialsRouter.post(
           data.rungHeightMm ?? null,
           data.widthMm ?? null,
           data.weightKgPerM ?? null,
+          data.minimumOrderQuantity ?? 1,
+          data.orderMeasurement ?? 'pcs',
+          data.packaging ?? 'pcs',
           normalizedImageTemplateId
         ]
       );
@@ -632,6 +679,24 @@ materialsRouter.patch(
     if (data.weightKgPerM !== undefined) {
       setClauses.push(`weight_kg_per_m = $${parameterIndex}`);
       values.push(data.weightKgPerM ?? null);
+      parameterIndex += 1;
+    }
+
+    if (data.minimumOrderQuantity !== undefined) {
+      setClauses.push(`minimum_order_quantity = $${parameterIndex}`);
+      values.push(data.minimumOrderQuantity);
+      parameterIndex += 1;
+    }
+
+    if (data.orderMeasurement !== undefined) {
+      setClauses.push(`order_measurement = $${parameterIndex}`);
+      values.push(data.orderMeasurement);
+      parameterIndex += 1;
+    }
+
+    if (data.packaging !== undefined) {
+      setClauses.push(`packaging = $${parameterIndex}`);
+      values.push(data.packaging);
       parameterIndex += 1;
     }
 
@@ -823,6 +888,9 @@ materialsRouter.post(
           const widthRaw = row[TRAY_HEADERS.width];
           const weightRaw = row[TRAY_HEADERS.weight];
           const loadCurveRaw = row[TRAY_HEADERS.loadCurve];
+          const minimumOrderRaw = row[TRAY_HEADERS.minimumOrder];
+          const orderMeasurementRaw = row[TRAY_HEADERS.orderMeasurement];
+          const packagingRaw = row[TRAY_HEADERS.packaging];
 
           if (typeRaw === null || typeRaw === undefined || String(typeRaw).trim() === '') {
             skipped += 1;
@@ -879,7 +947,10 @@ materialsRouter.post(
             heightMm,
             rungHeightMm,
             widthMm,
-            weightKgPerM
+            weightKgPerM,
+            minimumOrderQuantity: toMinimumOrderQuantity(minimumOrderRaw),
+            orderMeasurement: toOrderMeasurement(orderMeasurementRaw),
+            packaging: toPackaging(packagingRaw)
           });
 
           if (!parseResult.success) {
@@ -910,8 +981,11 @@ materialsRouter.post(
                   width_mm = $5,
                   weight_kg_per_m = $6,
                   load_curve_id = $7,
+                  minimum_order_quantity = $8,
+                  order_measurement = $9,
+                  packaging = $10,
                   updated_at = NOW()
-                WHERE id = $8;
+                WHERE id = $11;
               `,
               [
                 data.type,
@@ -921,6 +995,9 @@ materialsRouter.post(
                 data.widthMm ?? null,
                 data.weightKgPerM ?? null,
                 loadCurveId,
+                data.minimumOrderQuantity ?? 1,
+                data.orderMeasurement ?? 'pcs',
+                data.packaging ?? 'pcs',
                 existing.rows[0].id
               ]
             );
@@ -936,8 +1013,11 @@ materialsRouter.post(
                   rung_height_mm,
                   width_mm,
                   weight_kg_per_m,
-                  load_curve_id
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+                  load_curve_id,
+                  minimum_order_quantity,
+                  order_measurement,
+                  packaging
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
               `,
               [
                 randomUUID(),
@@ -947,7 +1027,10 @@ materialsRouter.post(
                 data.rungHeightMm ?? null,
                 data.widthMm ?? null,
                 data.weightKgPerM ?? null,
-                loadCurveId
+                loadCurveId,
+                data.minimumOrderQuantity ?? 1,
+                data.orderMeasurement ?? 'pcs',
+                data.packaging ?? 'pcs'
               ]
             );
             created += 1;
@@ -1008,7 +1091,10 @@ materialsRouter.get(
         { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
         { name: TRAY_HEADERS.weight, key: 'weight', width: 18 },
-        { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 }
+        { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 },
+        { name: TRAY_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
+        { name: TRAY_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
+        { name: TRAY_HEADERS.packaging, key: 'packaging', width: 18 }
       ] as const;
 
       const rows = result.rows.map((row) => [
@@ -1020,7 +1106,10 @@ materialsRouter.get(
         row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
           ? Number(row.weight_kg_per_m)
           : '',
-        row.load_curve_name ?? ''
+        row.load_curve_name ?? '',
+        Number(row.minimum_order_quantity),
+        row.order_measurement,
+        row.packaging
       ]);
 
       const table = worksheet.addTable({
@@ -1052,6 +1141,9 @@ materialsRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'minimumOrder') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.###';
         }
       });
 
@@ -1090,7 +1182,10 @@ materialsRouter.get(
         { name: TRAY_HEADERS.rungHeight, key: 'rungHeight', width: 18 },
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
         { name: TRAY_HEADERS.weight, key: 'weight', width: 18 },
-        { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 }
+        { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 },
+        { name: TRAY_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
+        { name: TRAY_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
+        { name: TRAY_HEADERS.packaging, key: 'packaging', width: 18 }
       ] as const;
 
       const table = worksheet.addTable({
@@ -1107,7 +1202,7 @@ materialsRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: [Array.from({ length: columns.length }, () => '')]
+        rows: [[...Array.from({ length: columns.length - 3 }, () => ''), 1, 'pcs', 'pcs']]
       });
 
       table.commit();
@@ -1119,6 +1214,9 @@ materialsRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'minimumOrder') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.###';
         }
       });
 
@@ -1215,8 +1313,11 @@ materialsRouter.post(
             width_mm,
             length_mm,
             weight_kg,
+            minimum_order_quantity,
+            order_measurement,
+            packaging,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
         `,
         [
           supportId,
@@ -1226,6 +1327,9 @@ materialsRouter.post(
           data.widthMm ?? null,
           data.lengthMm ?? null,
           data.weightKg ?? null,
+          data.minimumOrderQuantity ?? 1,
+          data.orderMeasurement ?? 'pcs',
+          data.packaging ?? 'pcs',
           normalizedImageTemplateId
         ]
       );
@@ -1343,6 +1447,24 @@ materialsRouter.patch(
   if (data.weightKg !== undefined) {
     setClauses.push(`weight_kg = $${parameterIndex}`);
     values.push(data.weightKg ?? null);
+    parameterIndex += 1;
+  }
+
+  if (data.minimumOrderQuantity !== undefined) {
+    setClauses.push(`minimum_order_quantity = $${parameterIndex}`);
+    values.push(data.minimumOrderQuantity);
+    parameterIndex += 1;
+  }
+
+  if (data.orderMeasurement !== undefined) {
+    setClauses.push(`order_measurement = $${parameterIndex}`);
+    values.push(data.orderMeasurement);
+    parameterIndex += 1;
+  }
+
+  if (data.packaging !== undefined) {
+    setClauses.push(`packaging = $${parameterIndex}`);
+    values.push(data.packaging);
     parameterIndex += 1;
   }
 
@@ -1506,6 +1628,9 @@ materialsRouter.post(
           const widthRaw = row[SUPPORT_HEADERS.width];
           const lengthRaw = row[SUPPORT_HEADERS.length];
           const weightRaw = row[SUPPORT_HEADERS.weight];
+          const minimumOrderRaw = row[SUPPORT_HEADERS.minimumOrder];
+          const orderMeasurementRaw = row[SUPPORT_HEADERS.orderMeasurement];
+          const packagingRaw = row[SUPPORT_HEADERS.packaging];
 
           if (typeRaw === null || typeRaw === undefined || String(typeRaw).trim() === '') {
             skipped += 1;
@@ -1542,7 +1667,10 @@ materialsRouter.post(
             heightMm: heightValue,
             widthMm: widthValue,
             lengthMm: lengthValue,
-            weightKg: weightValue
+            weightKg: weightValue,
+            minimumOrderQuantity: toMinimumOrderQuantity(minimumOrderRaw),
+            orderMeasurement: toOrderMeasurement(orderMeasurementRaw),
+            packaging: toPackaging(packagingRaw)
           });
 
           if (!parseResult.success) {
@@ -1572,8 +1700,11 @@ materialsRouter.post(
                   width_mm = $4,
                   length_mm = $5,
                   weight_kg = $6,
+                  minimum_order_quantity = $7,
+                  order_measurement = $8,
+                  packaging = $9,
                   updated_at = NOW()
-                WHERE id = $7;
+                WHERE id = $10;
               `,
               [
                 data.type,
@@ -1582,6 +1713,9 @@ materialsRouter.post(
                 data.widthMm ?? null,
                 data.lengthMm ?? null,
                 data.weightKg ?? null,
+                data.minimumOrderQuantity ?? 1,
+                data.orderMeasurement ?? 'pcs',
+                data.packaging ?? 'pcs',
                 existing.rows[0].id
               ]
             );
@@ -1596,8 +1730,11 @@ materialsRouter.post(
                   height_mm,
                   width_mm,
                   length_mm,
-                  weight_kg
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7);
+                  weight_kg,
+                  minimum_order_quantity,
+                  order_measurement,
+                  packaging
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
               `,
               [
                 randomUUID(),
@@ -1606,7 +1743,10 @@ materialsRouter.post(
                 data.heightMm ?? null,
                 data.widthMm ?? null,
                 data.lengthMm ?? null,
-                data.weightKg ?? null
+                data.weightKg ?? null,
+                data.minimumOrderQuantity ?? 1,
+                data.orderMeasurement ?? 'pcs',
+                data.packaging ?? 'pcs'
               ]
             );
             created += 1;
@@ -1666,7 +1806,10 @@ materialsRouter.get(
         { name: SUPPORT_HEADERS.height, key: 'height', width: 18 },
         { name: SUPPORT_HEADERS.width, key: 'width', width: 18 },
         { name: SUPPORT_HEADERS.length, key: 'length', width: 18 },
-        { name: SUPPORT_HEADERS.weight, key: 'weight', width: 18 }
+        { name: SUPPORT_HEADERS.weight, key: 'weight', width: 18 },
+        { name: SUPPORT_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
+        { name: SUPPORT_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
+        { name: SUPPORT_HEADERS.packaging, key: 'packaging', width: 18 }
       ] as const;
 
       const rows = result.rows.map((row) => [
@@ -1675,7 +1818,10 @@ materialsRouter.get(
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',
         row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
         row.length_mm !== null && row.length_mm !== '' ? Number(row.length_mm) : '',
-        row.weight_kg !== null && row.weight_kg !== '' ? Number(row.weight_kg) : ''
+        row.weight_kg !== null && row.weight_kg !== '' ? Number(row.weight_kg) : '',
+        Number(row.minimum_order_quantity),
+        row.order_measurement,
+        row.packaging
       ]);
 
       const table = worksheet.addTable({
@@ -1710,6 +1856,9 @@ materialsRouter.get(
           column.key === 'length'
         ) {
           worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
+        if (column.key === 'minimumOrder') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.###';
         }
       });
 
@@ -1747,7 +1896,10 @@ materialsRouter.get(
         { name: SUPPORT_HEADERS.height, key: 'height', width: 18 },
         { name: SUPPORT_HEADERS.width, key: 'width', width: 18 },
         { name: SUPPORT_HEADERS.length, key: 'length', width: 18 },
-        { name: SUPPORT_HEADERS.weight, key: 'weight', width: 18 }
+        { name: SUPPORT_HEADERS.weight, key: 'weight', width: 18 },
+        { name: SUPPORT_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
+        { name: SUPPORT_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
+        { name: SUPPORT_HEADERS.packaging, key: 'packaging', width: 18 }
       ] as const;
 
       const table = worksheet.addTable({
@@ -1764,7 +1916,7 @@ materialsRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: [Array.from({ length: columns.length }, () => '')]
+        rows: [[...Array.from({ length: columns.length - 3 }, () => ''), 1, 'pcs', 'pcs']]
       });
 
       table.commit();
@@ -1780,6 +1932,9 @@ materialsRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'minimumOrder') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.###';
         }
       });
 
@@ -2345,6 +2500,7 @@ materialsRouter.get('/trays/:trayId', async (req: Request, res: Response): Promi
     res.status(400).json({ error: 'Invalid trayId' });
     return;
   }
+
   try {
     const result = await pool.query<MaterialTrayRow>(
       `${selectMaterialTraysQuery} WHERE mt.id = $1 LIMIT 1`,

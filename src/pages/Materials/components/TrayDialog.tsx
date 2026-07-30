@@ -10,7 +10,8 @@ import {
   Field,
   Input,
   Dropdown,
-  Option
+  Option,
+  Select
 } from '@fluentui/react-components';
 import { MaterialTray } from '@/api/client';
 import { TrayFormErrors, TrayFormState } from '../Materials.types';
@@ -122,6 +123,53 @@ export const TrayDialog = ({
                   value={form.weightKgPerM}
                   onChange={onFieldChange('weightKgPerM')}
                 />
+              </Field>
+              <Field
+                label='Minimum order quantity'
+                  required
+                  validationState={formErrors.minimumOrderQuantity ? 'error' : undefined}
+                  validationMessage={formErrors.minimumOrderQuantity}
+                >
+                  <Input
+                    type='number'
+                    min={0.000001}
+                    step='any'
+                    value={form.minimumOrderQuantity}
+                    onChange={onFieldChange('minimumOrderQuantity')}
+                    required
+                  />
+              </Field>
+              <Field label='Order measurement' required>
+                <Select
+                  value={form.orderMeasurement}
+                  onChange={(event) =>
+                    onFieldChange('orderMeasurement')(
+                      event as unknown as ChangeEvent<HTMLInputElement>,
+                      { value: event.target.value }
+                    )
+                  }
+                >
+                  <option value='pcs'>pcs</option>
+                  <option value='pack'>pack</option>
+                  <option value='meters'>meters</option>
+                </Select>
+              </Field>
+              <Field label='Packaging' required>
+                <Select
+                  value={form.packaging}
+                  onChange={(event) =>
+                    onFieldChange('packaging')(
+                      event as unknown as ChangeEvent<HTMLInputElement>,
+                      { value: event.target.value }
+                    )
+                  }
+                >
+                  <option value='m'>m</option>
+                  <option value='Package'>Package</option>
+                  <option value='Box'>Box</option>
+                  <option value='Drum'>Drum</option>
+                  <option value='pcs'>pcs</option>
+                </Select>
               </Field>
               <Field
                 label='Image template'

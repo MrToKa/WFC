@@ -937,6 +937,139 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE material_cable_types
+      ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'meters',
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'm';
+    ALTER TABLE material_cable_installation_materials
+      ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'pcs',
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs';
+    ALTER TABLE material_trays
+      ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'pcs',
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs';
+    ALTER TABLE material_supports
+      ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'pcs',
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs';
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_types'
+          AND constraint_name = 'material_cable_types_minimum_order_quantity_check'
+      ) THEN
+        ALTER TABLE material_cable_types
+          ADD CONSTRAINT material_cable_types_minimum_order_quantity_check
+          CHECK (minimum_order_quantity > 0 AND minimum_order_quantity < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_types'
+          AND constraint_name = 'material_cable_types_order_measurement_check'
+      ) THEN
+        ALTER TABLE material_cable_types
+          ADD CONSTRAINT material_cable_types_order_measurement_check
+          CHECK (order_measurement IN ('pcs', 'pack', 'meters'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_types'
+          AND constraint_name = 'material_cable_types_packaging_check'
+      ) THEN
+        ALTER TABLE material_cable_types
+          ADD CONSTRAINT material_cable_types_packaging_check
+          CHECK (packaging IN ('m', 'Package', 'Box', 'Drum', 'pcs'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_installation_materials'
+          AND constraint_name = 'material_cable_installation_materials_minimum_order_quantity_check'
+      ) THEN
+        ALTER TABLE material_cable_installation_materials
+          ADD CONSTRAINT material_cable_installation_materials_minimum_order_quantity_check
+          CHECK (minimum_order_quantity > 0 AND minimum_order_quantity < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_installation_materials'
+          AND constraint_name = 'material_cable_installation_materials_order_measurement_check'
+      ) THEN
+        ALTER TABLE material_cable_installation_materials
+          ADD CONSTRAINT material_cable_installation_materials_order_measurement_check
+          CHECK (order_measurement IN ('pcs', 'pack', 'meters'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_installation_materials'
+          AND constraint_name = 'material_cable_installation_materials_packaging_check'
+      ) THEN
+        ALTER TABLE material_cable_installation_materials
+          ADD CONSTRAINT material_cable_installation_materials_packaging_check
+          CHECK (packaging IN ('m', 'Package', 'Box', 'Drum', 'pcs'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_trays'
+          AND constraint_name = 'material_trays_minimum_order_quantity_check'
+      ) THEN
+        ALTER TABLE material_trays
+          ADD CONSTRAINT material_trays_minimum_order_quantity_check
+          CHECK (minimum_order_quantity > 0 AND minimum_order_quantity < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_trays'
+          AND constraint_name = 'material_trays_order_measurement_check'
+      ) THEN
+        ALTER TABLE material_trays
+          ADD CONSTRAINT material_trays_order_measurement_check
+          CHECK (order_measurement IN ('pcs', 'pack', 'meters'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_trays'
+          AND constraint_name = 'material_trays_packaging_check'
+      ) THEN
+        ALTER TABLE material_trays
+          ADD CONSTRAINT material_trays_packaging_check
+          CHECK (packaging IN ('m', 'Package', 'Box', 'Drum', 'pcs'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_supports'
+          AND constraint_name = 'material_supports_minimum_order_quantity_check'
+      ) THEN
+        ALTER TABLE material_supports
+          ADD CONSTRAINT material_supports_minimum_order_quantity_check
+          CHECK (minimum_order_quantity > 0 AND minimum_order_quantity < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_supports'
+          AND constraint_name = 'material_supports_order_measurement_check'
+      ) THEN
+        ALTER TABLE material_supports
+          ADD CONSTRAINT material_supports_order_measurement_check
+          CHECK (order_measurement IN ('pcs', 'pack', 'meters'));
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_supports'
+          AND constraint_name = 'material_supports_packaging_check'
+      ) THEN
+        ALTER TABLE material_supports
+          ADD CONSTRAINT material_supports_packaging_check
+          CHECK (packaging IN ('m', 'Package', 'Box', 'Drum', 'pcs'));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS material_supports_image_template_id_idx
       ON material_supports (image_template_id);
   `);
@@ -1228,6 +1361,10 @@ export async function initializeDatabase(): Promise<void> {
       ADD COLUMN IF NOT EXISTS quantity_per_parent NUMERIC;
     ALTER TABLE project_change_order_items
       ADD COLUMN IF NOT EXISTS source_standard_material_assignment_ids UUID[];
+    ALTER TABLE project_change_order_items
+      ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC;
+    ALTER TABLE project_change_order_items
+      ADD COLUMN IF NOT EXISTS order_measurement TEXT;
   `);
 
   await pool.query(`
@@ -1263,6 +1400,30 @@ export async function initializeDatabase(): Promise<void> {
           CHECK (
             quantity_per_parent IS NULL OR
             (quantity_per_parent > 0 AND quantity_per_parent < 'Infinity'::numeric)
+          );
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'project_change_order_items_minimum_order_quantity_check'
+          AND table_name = 'project_change_order_items'
+      ) THEN
+        ALTER TABLE project_change_order_items
+          ADD CONSTRAINT project_change_order_items_minimum_order_quantity_check
+          CHECK (
+            minimum_order_quantity IS NULL OR
+            (minimum_order_quantity > 0 AND minimum_order_quantity < 'Infinity'::numeric)
+          );
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'project_change_order_items_order_measurement_check'
+          AND table_name = 'project_change_order_items'
+      ) THEN
+        ALTER TABLE project_change_order_items
+          ADD CONSTRAINT project_change_order_items_order_measurement_check
+          CHECK (
+            order_measurement IS NULL OR
+            order_measurement IN ('pcs', 'pack', 'meters')
           );
       END IF;
     END $$;

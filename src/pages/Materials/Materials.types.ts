@@ -23,6 +23,9 @@ export type TrayFormState = {
   rungHeightMm: string;
   widthMm: string;
   weightKgPerM: string;
+  minimumOrderQuantity: string;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   imageTemplateId: string | null;
 };
 
@@ -33,6 +36,9 @@ export type SupportFormState = {
   widthMm: string;
   lengthMm: string;
   weightKg: string;
+  minimumOrderQuantity: string;
+  orderMeasurement: 'pcs' | 'pack' | 'meters';
+  packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   imageTemplateId: string | null;
 };
 
@@ -52,6 +58,9 @@ export const initialTrayForm: TrayFormState = {
   rungHeightMm: '',
   widthMm: '',
   weightKgPerM: '',
+  minimumOrderQuantity: '1',
+  orderMeasurement: 'pcs',
+  packaging: 'pcs',
   imageTemplateId: null,
 };
 
@@ -62,6 +71,9 @@ export const initialSupportForm: SupportFormState = {
   widthMm: '',
   lengthMm: '',
   weightKg: '',
+  minimumOrderQuantity: '1',
+  orderMeasurement: 'pcs',
+  packaging: 'pcs',
   imageTemplateId: null,
 };
 

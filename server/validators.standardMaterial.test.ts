@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createMaterialCableInstallationMaterialSchema,
+  createMaterialCableTypeSchema,
+  createMaterialSupportSchema,
+  createMaterialTraySchema,
   createStandardMaterialSchema,
   updateStandardMaterialSchema,
 } from './validators.js';
@@ -32,4 +36,53 @@ describe('Standard Material validators', () => {
   it('rejects an empty update', () => {
     expect(updateStandardMaterialSchema.safeParse({}).success).toBe(false);
   });
+});
+
+describe('Material minimum order validators', () => {
+  const materialInputs = [
+    {
+      schema: createMaterialCableTypeSchema,
+      input: { name: 'Power cable' },
+    },
+    {
+      schema: createMaterialCableInstallationMaterialSchema,
+      input: { type: 'Ferrule' },
+    },
+    {
+      schema: createMaterialTraySchema,
+      input: { type: 'Tray' },
+    },
+    {
+      schema: createMaterialSupportSchema,
+      input: { type: 'Support' },
+    },
+  ] as const;
+
+  it.each(materialInputs)(
+    'accepts a positive minimum and supported measurement',
+    ({ schema, input }) => {
+      expect(
+        schema.safeParse({
+          ...input,
+          minimumOrderQuantity: 50,
+          orderMeasurement: 'pcs',
+          packaging: 'Box',
+        }).success,
+      ).toBe(true);
+    },
+  );
+
+  it.each(materialInputs)(
+    'rejects an invalid minimum or measurement',
+    ({ schema, input }) => {
+      expect(
+        schema.safeParse({
+          ...input,
+          minimumOrderQuantity: 0,
+          orderMeasurement: 'boxes',
+          packaging: 'Bag',
+        }).success,
+      ).toBe(false);
+    },
+  );
 });

@@ -79,6 +79,35 @@ export const calculateInheritedChangeOrderQuantities = (
   };
 };
 
+export const calculateMinimumOrder = (
+  designQuantity: number,
+  requestedOrderQuantity: number,
+  minimumOrderQuantity: number | null | undefined,
+): { orderQuantity: number; packageCount: number | null; spareQuantity: number } => {
+  if (
+    minimumOrderQuantity === null ||
+    minimumOrderQuantity === undefined ||
+    !Number.isFinite(minimumOrderQuantity) ||
+    minimumOrderQuantity <= 0
+  ) {
+    return {
+      orderQuantity: Math.max(designQuantity, requestedOrderQuantity),
+      packageCount: null,
+      spareQuantity: Math.max(designQuantity, requestedOrderQuantity) - designQuantity,
+    };
+  }
+  const orderQuantity = Math.max(designQuantity, requestedOrderQuantity);
+  if (orderQuantity === 0) {
+    return { orderQuantity: 0, packageCount: 0, spareQuantity: 0 };
+  }
+  const packageCount = Math.ceil(orderQuantity / minimumOrderQuantity);
+  return {
+    orderQuantity,
+    packageCount,
+    spareQuantity: packageCount * minimumOrderQuantity - designQuantity,
+  };
+};
+
 const ITEM_COLUMNS = `
   id, change_order_id, sort_order, source_catalog, source_material_id,
   design_quantity, order_quantity, unit, packaging, packaging_quantity,
@@ -87,6 +116,7 @@ const ITEM_COLUMNS = `
   country_of_origin, hs_code, tag_no, drawing_no, shipping_list, revision_number,
   client_barcode, manufacturer, manufacturer_part_no, acs_barcode, remarks,
   line_kind, parent_item_id, quantity_per_parent, source_standard_material_assignment_ids,
+  minimum_order_quantity, order_measurement,
   created_at, updated_at
 `;
 
@@ -241,16 +271,24 @@ const insertSnapshot = async (
     orderQuantity?: number;
   },
 ): Promise<ChangeOrderItem> => {
+  const designQuantity = provenance?.designQuantity ?? 0;
+  const minimumOrder = calculateMinimumOrder(
+    designQuantity,
+    provenance?.orderQuantity ?? 0,
+    snapshot.minimumOrderQuantity,
+  );
   const result = await client.query<ChangeOrderItemRow>(
     `
       INSERT INTO project_change_order_items (
         id, change_order_id, sort_order, source_catalog, source_material_id,
         unit, description_en, clear_description, dimension_mm, material, weight_kg,
         manufacturer, manufacturer_part_no, line_kind, parent_item_id, quantity_per_parent,
-        source_standard_material_assignment_ids, design_quantity, order_quantity
+        source_standard_material_assignment_ids, design_quantity, order_quantity,
+        minimum_order_quantity, order_measurement, packaging, packaging_quantity,
+        packaging_unit, ordered_quantity, ordered_unit
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17::uuid[], $18, $19
+        $14, $15, $16, $17::uuid[], $18, $19, $20, $21, $22, $23, $24, $25, $26
       )
       RETURNING ${ITEM_COLUMNS}
     `,
@@ -272,8 +310,15 @@ const insertSnapshot = async (
       provenance?.parentItemId ?? null,
       provenance?.quantityPerParent ?? null,
       provenance?.sourceAssignmentIds ?? [],
-      provenance?.designQuantity ?? 0,
-      provenance?.orderQuantity ?? 0,
+      designQuantity,
+      minimumOrder.orderQuantity,
+      snapshot.minimumOrderQuantity,
+      snapshot.orderMeasurement,
+      snapshot.packaging,
+      snapshot.minimumOrderQuantity,
+      snapshot.orderMeasurement,
+      minimumOrder.packageCount,
+      snapshot.packaging,
     ],
   );
   return mapChangeOrderItemRow(result.rows[0]);
@@ -337,6 +382,9 @@ export const addChangeOrderItem = async (
           weightKg: null,
           manufacturer: material.manufacturer,
           manufacturerPartNo: material.partNo,
+          minimumOrderQuantity: material.minimumOrderQuantity,
+          orderMeasurement: material.orderMeasurement,
+          packaging: material.packaging,
         },
         {
           lineKind: 'inherited',
@@ -369,7 +417,7 @@ const CLONED_ITEM_COLUMNS = `
   clear_description, unit_price, country_of_origin, hs_code, tag_no, drawing_no,
   shipping_list, revision_number, client_barcode, manufacturer, manufacturer_part_no,
   acs_barcode, remarks, line_kind, quantity_per_parent,
-  source_standard_material_assignment_ids
+  source_standard_material_assignment_ids, minimum_order_quantity, order_measurement
 `;
 
 const cloneChangeOrderItemRow = async (
@@ -396,7 +444,8 @@ const cloneChangeOrderItemRow = async (
         source.drawing_no, source.shipping_list, source.revision_number,
         source.client_barcode, source.manufacturer, source.manufacturer_part_no,
         source.acs_barcode, source.remarks, source.line_kind,
-        source.quantity_per_parent, source.source_standard_material_assignment_ids
+        source.quantity_per_parent, source.source_standard_material_assignment_ids,
+        source.minimum_order_quantity, source.order_measurement
       FROM project_change_order_items source
       WHERE source.id = $1
       RETURNING ${ITEM_COLUMNS}
@@ -581,26 +630,88 @@ export const updateChangeOrderItem = async (
       await client.query('ROLLBACK');
       return null;
     }
+    let normalizedUpdated = updated;
+    const minimumOrderQuantity =
+      updated.minimum_order_quantity === null ||
+      updated.minimum_order_quantity === undefined
+        ? null
+        : Number(updated.minimum_order_quantity);
+    if (minimumOrderQuantity && updated.order_measurement) {
+      const minimumOrder = calculateMinimumOrder(
+        Number(updated.design_quantity),
+        Number(updated.order_quantity),
+        minimumOrderQuantity,
+      );
+      const normalizedResult = await client.query<ChangeOrderItemRow>(
+        `UPDATE project_change_order_items
+         SET
+           order_quantity = $2,
+           packaging = $3,
+           packaging_quantity = $4,
+           packaging_unit = $5,
+           ordered_quantity = $6,
+           ordered_unit = $7,
+           updated_at = NOW()
+         WHERE id = $1
+         RETURNING ${ITEM_COLUMNS}`,
+        [
+          itemId,
+          minimumOrder.orderQuantity,
+          updated.packaging,
+          minimumOrderQuantity,
+          updated.order_measurement,
+          minimumOrder.packageCount,
+          updated.packaging,
+        ],
+      );
+      normalizedUpdated = normalizedResult.rows[0] ?? updated;
+    }
     await client.query(
-      `UPDATE project_change_order_items child
+      `WITH required AS (
+         SELECT
+           child.id,
+           CASE
+             WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
+             ELSE $2 * child.quantity_per_parent
+           END AS design_quantity,
+           CASE
+             WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
+             ELSE $3 * child.quantity_per_parent
+           END AS raw_order_quantity
+         FROM project_change_order_items child
+         WHERE child.parent_item_id = $1 AND child.line_kind = 'inherited'
+       )
+       UPDATE project_change_order_items child
        SET
-         design_quantity = CASE
-           WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
-           ELSE $2 * child.quantity_per_parent
+         design_quantity = required.design_quantity,
+         order_quantity = GREATEST(required.design_quantity, required.raw_order_quantity),
+         packaging_quantity = child.minimum_order_quantity,
+         packaging_unit = child.order_measurement,
+         ordered_quantity = CASE
+           WHEN child.minimum_order_quantity IS NOT NULL
+             AND GREATEST(required.design_quantity, required.raw_order_quantity) > 0
+           THEN CEIL(
+             GREATEST(required.design_quantity, required.raw_order_quantity) /
+             child.minimum_order_quantity
+           )
+           ELSE GREATEST(required.design_quantity, required.raw_order_quantity)
          END,
-         order_quantity = CASE
-           WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
-           ELSE $3 * child.quantity_per_parent
-         END,
+         ordered_unit = COALESCE(child.packaging, child.order_measurement),
          updated_at = NOW()
-       WHERE child.parent_item_id = $1 AND child.line_kind = 'inherited'`,
-      [itemId, updated.design_quantity, updated.order_quantity, updated.source_catalog],
+       FROM required
+       WHERE child.id = required.id`,
+      [
+        itemId,
+        normalizedUpdated.design_quantity,
+        normalizedUpdated.order_quantity,
+        normalizedUpdated.source_catalog,
+      ],
     );
     await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
       changeOrderId,
     ]);
     await client.query('COMMIT');
-    return mapChangeOrderItemRow(updated);
+    return mapChangeOrderItemRow(normalizedUpdated);
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw error;
