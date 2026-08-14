@@ -138,10 +138,20 @@ const readExportError = async (response: Response): Promise<string> => {
   return 'Failed to export Change Order';
 };
 
+export const buildChangeOrderExportFileName = (title: string): string => {
+  const safeTitle = title
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
+  return `Change order - ${safeTitle || 'report'}.xlsx`;
+};
+
 export async function exportChangeOrder(
   token: string,
   projectId: string,
   changeOrderId: string,
+  changeOrderTitle: string,
 ): Promise<{ blob: Blob; fileName: string }> {
   const response = await fetch(`${getApiBaseUrl()}${basePath(projectId)}/${changeOrderId}/export`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -153,6 +163,6 @@ export async function exportChangeOrder(
   const fileNameMatch = disposition.match(/filename="([^"]+)"/i);
   return {
     blob: await response.blob(),
-    fileName: fileNameMatch?.[1] ?? 'Change order.xlsx',
+    fileName: fileNameMatch?.[1] ?? buildChangeOrderExportFileName(changeOrderTitle),
   };
 }

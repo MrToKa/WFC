@@ -437,10 +437,10 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
   };
 
   const download = async (): Promise<void> => {
-    if (!token || !selectedId) return;
+    if (!token || !selectedId || !details) return;
     setExporting(true);
     try {
-      const result = await exportChangeOrder(token, project.id, selectedId);
+      const result = await exportChangeOrder(token, project.id, selectedId, details.title);
       const url = URL.createObjectURL(result.blob);
       const link = document.createElement('a');
       link.href = url;

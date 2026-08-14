@@ -16,6 +16,7 @@ export const createApp = (): Express => {
   app.use(
     cors({
       origin: config.clientOrigin,
+      exposedHeaders: ['Content-Disposition'],
     }),
   );
   app.use(express.json());

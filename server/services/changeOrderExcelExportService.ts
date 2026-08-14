@@ -453,12 +453,12 @@ export async function generateChangeOrderWorkbook(
   return makeExcelDesktopCompatible(Buffer.from(output), totalRowNumber);
 }
 
-export const sanitizeChangeOrderFileName = (title: string, revision: string): string => {
+export const sanitizeChangeOrderFileName = (title: string): string => {
   const clean = (value: string): string =>
     value
       .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 100);
-  return `Change order - ${clean(title) || 'report'} - Rev ${clean(revision) || '00'}.xlsx`;
+  return `Change order - ${clean(title) || 'report'}.xlsx`;
 };

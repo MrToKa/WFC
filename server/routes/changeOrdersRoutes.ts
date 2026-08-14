@@ -301,7 +301,7 @@ changeOrdersRouter.get(
         return;
       }
       const workbook = await generateChangeOrderWorkbook(changeOrder);
-      const fileName = sanitizeChangeOrderFileName(changeOrder.title, changeOrder.revision);
+      const fileName = sanitizeChangeOrderFileName(changeOrder.title);
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

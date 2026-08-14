@@ -8,6 +8,7 @@ import {
   currentExcelDate,
   generateChangeOrderWorkbook,
   normalizeSpreadsheetFontOrder,
+  sanitizeChangeOrderFileName,
   trimWorksheetAfterRow,
   validateChangeOrderTemplateHeaders,
 } from './changeOrderExcelExportService.js';
@@ -90,6 +91,15 @@ const reopen = async (
 };
 
 describe('Change Order workbook export', () => {
+  it('names the export after the Change Order title', () => {
+    expect(sanitizeChangeOrderFileName('Discharge impulse lines')).toBe(
+      'Change order - Discharge impulse lines.xlsx',
+    );
+    expect(sanitizeChangeOrderFileName('  Area 1: cable/order  ')).toBe(
+      'Change order - Area 1 cable order.xlsx',
+    );
+  });
+
   it('consolidates identical cable materials into one export position', async () => {
     const firstCable: ChangeOrderItem = {
       ...createItem(1),
