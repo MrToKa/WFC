@@ -36,6 +36,7 @@ const MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS = {
   minimumOrder: 'Minimum order quantity',
   orderMeasurement: 'Order measurement',
   packaging: 'Packaging',
+  source: 'Source',
 } as const;
 
 const MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES = {
@@ -46,11 +47,9 @@ const MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES = {
   manufacturer: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.manufacturer],
   partNo: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.partNo, 'Part No'],
   minimumOrder: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder],
-  orderMeasurement: [
-    MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement,
-    'Measurement',
-  ],
+  orderMeasurement: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, 'Measurement'],
   packaging: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging],
+  source: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.source],
 } as const;
 
 const normalizeOptionalString = (value: string | null | undefined): string | null => {
@@ -74,6 +73,7 @@ const selectMaterialCableInstallationMaterialsQuery = `
     minimum_order_quantity,
     order_measurement,
     packaging,
+    source,
     created_at,
     updated_at
   FROM material_cable_installation_materials
@@ -124,6 +124,7 @@ materialCableInstallationMaterialsRouter.post(
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
+      source,
     } = parseResult.data;
 
     try {
@@ -157,8 +158,9 @@ materialCableInstallationMaterialsRouter.post(
             ,minimum_order_quantity
             ,order_measurement
             ,packaging
+            ,source
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           RETURNING
             id,
             type,
@@ -170,6 +172,7 @@ materialCableInstallationMaterialsRouter.post(
             minimum_order_quantity,
             order_measurement,
             packaging,
+            source,
             created_at,
             updated_at;
         `,
@@ -184,6 +187,7 @@ materialCableInstallationMaterialsRouter.post(
           minimumOrderQuantity ?? 1,
           orderMeasurement ?? 'pcs',
           packaging ?? 'pcs',
+          normalizeOptionalString(source ?? null),
         ],
       );
 
@@ -226,6 +230,7 @@ materialCableInstallationMaterialsRouter.patch(
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
+      source,
     } = parseResult.data;
 
     const updates: string[] = [];
@@ -301,6 +306,11 @@ materialCableInstallationMaterialsRouter.patch(
       values.push(packaging);
     }
 
+    if (source !== undefined) {
+      updates.push(`source = $${index++}`);
+      values.push(normalizeOptionalString(source));
+    }
+
     updates.push('updated_at = NOW()');
 
     try {
@@ -320,6 +330,7 @@ materialCableInstallationMaterialsRouter.patch(
             minimum_order_quantity,
             order_measurement,
             packaging,
+            source,
             created_at,
             updated_at;
         `,
@@ -450,6 +461,7 @@ materialCableInstallationMaterialsRouter.post(
       minimumOrderQuantity: number;
       orderMeasurement: 'pcs' | 'pack' | 'meters';
       packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+      source: string | null;
     }> = [];
 
     const seenKeys = new Set<string>();
@@ -457,7 +469,11 @@ materialCableInstallationMaterialsRouter.post(
     const readString = (raw: unknown): string | null =>
       raw === undefined || raw === null ? null : normalizeOptionalString(String(raw));
     const readPositiveNumber = (raw: unknown): number => {
-      const parsed = Number(String(raw ?? '').trim().replace(',', '.'));
+      const parsed = Number(
+        String(raw ?? '')
+          .trim()
+          .replace(',', '.'),
+      );
       return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
     };
 
@@ -526,6 +542,7 @@ materialCableInstallationMaterialsRouter.post(
             ? parsed
             : 'pcs';
         })(),
+        source: readString(readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.source)),
       });
     }
 
@@ -590,8 +607,9 @@ materialCableInstallationMaterialsRouter.post(
                 minimum_order_quantity = $6,
                 order_measurement = $7,
                 packaging = $8,
+                source = $9,
                 updated_at = NOW()
-              WHERE id = $9;
+              WHERE id = $10;
             `,
             [
               row.purpose,
@@ -602,6 +620,7 @@ materialCableInstallationMaterialsRouter.post(
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
+              row.source,
               existing.id,
             ],
           );
@@ -620,8 +639,9 @@ materialCableInstallationMaterialsRouter.post(
                 ,minimum_order_quantity
                 ,order_measurement
                 ,packaging
+                ,source
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
             `,
             [
               randomUUID(),
@@ -634,6 +654,7 @@ materialCableInstallationMaterialsRouter.post(
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
+              row.source,
             ],
           );
           summary.inserted += 1;
@@ -693,6 +714,7 @@ materialCableInstallationMaterialsRouter.get(
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder, width: 22 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, width: 20 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging, width: 18 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.source, width: 40 },
       ] as const;
 
       const table = worksheet.addTable({
@@ -711,7 +733,7 @@ materialCableInstallationMaterialsRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: [['', '', '', '', '', '', 1, 'pcs', 'pcs']],
+        rows: [['', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
       });
 
       table.commit();
@@ -767,6 +789,7 @@ materialCableInstallationMaterialsRouter.get(
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder, width: 22 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, width: 20 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging, width: 18 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.source, width: 40 },
       ] as const;
 
       const rows = result.rows.map((row: MaterialCableInstallationMaterialRow) => [
@@ -779,6 +802,7 @@ materialCableInstallationMaterialsRouter.get(
         Number(row.minimum_order_quantity),
         row.order_measurement,
         row.packaging,
+        row.source ?? '',
       ]);
 
       const table = worksheet.addTable({
@@ -797,7 +821,7 @@ materialCableInstallationMaterialsRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', 1, 'pcs', 'pcs']],
+        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
       });
 
       table.commit();

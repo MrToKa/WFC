@@ -1,5 +1,6 @@
 import type { MaterialCableInstallationMaterial } from '@/api/client';
 import { MasterMaterialDetailsPage } from './Materials/MasterMaterialDetailsPage';
+import { MaterialSourceLink } from './Materials/components/MaterialDetailsLayout';
 
 const value = (input: string | null): string => input ?? '—';
 
@@ -20,6 +21,7 @@ export const MaterialCableInstallationMaterialDetails = () => (
         value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,
       },
       { label: 'Packaging', value: material.packaging },
+      { label: 'Source', value: <MaterialSourceLink source={material.source} /> },
     ]}
   />
 );

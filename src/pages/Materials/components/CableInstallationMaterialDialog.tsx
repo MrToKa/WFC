@@ -171,6 +171,19 @@ export const CableInstallationMaterialDialog = ({
                   <option value="pcs">pcs</option>
                 </Select>
               </Field>
+              <Field
+                label="Source"
+                hint="Internet link to the material"
+                validationState={errors.source ? 'error' : undefined}
+                validationMessage={errors.source}
+              >
+                <Input
+                  type="url"
+                  value={values.source}
+                  onChange={onFieldChange('source')}
+                  placeholder="https://example.com/material"
+                />
+              </Field>
               {errors.general ? <Body1 className={styles.errorText}>{errors.general}</Body1> : null}
             </DialogContent>
             <DialogActions className={styles.dialogActions}>

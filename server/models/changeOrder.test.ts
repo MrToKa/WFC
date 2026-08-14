@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   calculateChangeOrderTotal,
   calculateLineTotal,
   calculateSpareQuantity,
+  mapChangeOrderSummaryRow,
 } from './changeOrder.js';
 
 describe('Change Order calculations', () => {
@@ -24,5 +25,27 @@ describe('Change Order calculations', () => {
         { orderQuantity: 3, unitPrice: 2 },
       ]),
     ).toBeCloseTo(16.5);
+  });
+
+  it('preserves the local calendar day returned for a database DATE', () => {
+    const reportDate = new Date('2026-08-13T21:00:00.000Z');
+    vi.spyOn(reportDate, 'getFullYear').mockReturnValue(2026);
+    vi.spyOn(reportDate, 'getMonth').mockReturnValue(7);
+    vi.spyOn(reportDate, 'getDate').mockReturnValue(14);
+
+    const result = mapChangeOrderSummaryRow({
+      id: '11111111-1111-4111-8111-111111111111',
+      project_id: '22222222-2222-4222-8222-222222222222',
+      title: 'Test order',
+      project_reference: null,
+      prepared_by: 'Test User',
+      report_date: reportDate,
+      revision: '00',
+      created_by: null,
+      created_at: '2026-08-14T00:00:00.000Z',
+      updated_at: '2026-08-14T00:00:00.000Z',
+    });
+
+    expect(result.reportDate).toBe('2026-08-14');
   });
 });

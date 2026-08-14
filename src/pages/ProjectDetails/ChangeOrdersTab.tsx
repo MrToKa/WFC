@@ -196,7 +196,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
   const [savingItem, setSavingItem] = useState(false);
   const [pendingAction, setPendingAction] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [collapsedParentIds, setCollapsedParentIds] = useState<Set<string>>(() => new Set());
+  const [expandedParentIds, setExpandedParentIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (!details) return;
@@ -206,7 +206,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
   }, [details]);
 
   useEffect(() => {
-    setCollapsedParentIds(new Set());
+    setExpandedParentIds(new Set());
   }, [selectedId]);
 
   const items = details?.items ?? [];
@@ -226,7 +226,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
   );
 
   const toggleInheritedItems = (parentId: string): void => {
-    setCollapsedParentIds((current) => {
+    setExpandedParentIds((current) => {
       const next = new Set(current);
       if (next.has(parentId)) next.delete(parentId);
       else next.add(parentId);
@@ -333,7 +333,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
         sourceMaterialId: choice.id,
       });
       setDetails(result.changeOrder);
-      setCollapsedParentIds((current) => {
+      setExpandedParentIds((current) => {
         const next = new Set(current);
         next.delete(result.item.id);
         return next;
@@ -396,7 +396,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
         item.id,
       );
       setDetails(result.changeOrder);
-      setCollapsedParentIds((current) => {
+      setExpandedParentIds((current) => {
         const next = new Set(current);
         next.delete(result.item.id);
         return next;
@@ -540,6 +540,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
               </Field>
               <Field label="Date" required>
                 <Input
+                  aria-label="Date"
                   type="date"
                   value={header.reportDate}
                   onChange={(_, data) => setHeaderField('reportDate', data.value)}
@@ -621,13 +622,13 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                         if (
                           item.lineKind === 'inherited' &&
                           item.parentItemId &&
-                          collapsedParentIds.has(item.parentItemId)
+                          !expandedParentIds.has(item.parentItemId)
                         ) {
                           return null;
                         }
 
                         const hasInheritedItems = parentIdsWithInheritedItems.has(item.id);
-                        const inheritedItemsCollapsed = collapsedParentIds.has(item.id);
+                        const inheritedItemsExpanded = expandedParentIds.has(item.id);
 
                         return (
                           <TableRow key={item.id}>
@@ -640,20 +641,20 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                                     appearance="subtle"
                                     className={styles.expansionButton}
                                     icon={
-                                      inheritedItemsCollapsed ? (
-                                        <ChevronRightRegular />
-                                      ) : (
+                                      inheritedItemsExpanded ? (
                                         <ChevronDownRegular />
+                                      ) : (
+                                        <ChevronRightRegular />
                                       )
                                     }
                                     aria-label={`${
-                                      inheritedItemsCollapsed ? 'Expand' : 'Collapse'
+                                      inheritedItemsExpanded ? 'Collapse' : 'Expand'
                                     } inherited standard materials for item ${index + 1}`}
-                                    aria-expanded={!inheritedItemsCollapsed}
+                                    aria-expanded={inheritedItemsExpanded}
                                     title={
-                                      inheritedItemsCollapsed
-                                        ? 'Show inherited standard materials'
-                                        : 'Hide inherited standard materials'
+                                      inheritedItemsExpanded
+                                        ? 'Hide inherited standard materials'
+                                        : 'Show inherited standard materials'
                                     }
                                     onClick={() => toggleInheritedItems(item.id)}
                                   />

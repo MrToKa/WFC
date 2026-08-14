@@ -154,7 +154,7 @@ describe('Change Order workbook export', () => {
     if (!worksheet) throw new Error('Generated worksheet is missing');
 
     expect(worksheet.getCell('B5').value).toBe(150);
-    expect(worksheet.getCell('C5').value).toBe(180);
+    expect(worksheet.getCell('C5').value).toMatchObject({ formula: 'G5*I5', result: 180 });
     expect(worksheet.getCell('E5').value).toBe('m');
     expect(worksheet.getCell('F5').value).toBe('Drum');
     expect(worksheet.getCell('G5').value).toBe(1);
@@ -200,7 +200,7 @@ describe('Change Order workbook export', () => {
     const worksheet = workbook.getWorksheet('Change Order');
     if (!worksheet) throw new Error('Generated worksheet is missing');
 
-    expect(worksheet.getCell('C5').value).toBe(30);
+    expect(worksheet.getCell('C5').value).toMatchObject({ formula: 'G5*I5', result: 30 });
     expect(worksheet.getCell('Y5').value).toBe('01');
     expect(worksheet.getCell('A6').value).toBeNull();
   });
@@ -265,7 +265,7 @@ describe('Change Order workbook export', () => {
     if (!worksheet) throw new Error('Generated worksheet is missing');
 
     expect(worksheet.getCell('B5').value).toBe(175);
-    expect(worksheet.getCell('C5').value).toBe(210);
+    expect(worksheet.getCell('C5').value).toMatchObject({ formula: 'G5*I5', result: 210 });
     expect(worksheet.getCell('L5').value).toBe("'=unsafe formula, Updated cable description");
     expect(worksheet.getCell('V5').value).toBe('ESD-001, ESD-002');
     expect(worksheet.getCell('W5').value).toBe('GDS-100, GDS-200');
@@ -383,10 +383,12 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('A6').value).toBe(2);
     expect(worksheet.getCell('L5').value).toBe("'=unsafe formula");
     expect(worksheet.getCell('AD6').value).toBe("'@unsafe remark");
+    expect(worksheet.getCell('C5').value).toMatchObject({ formula: 'G5*I5', result: 10 });
     expect(worksheet.getCell('D5').value).toMatchObject({
-      formula: 'IF(AND(ISNUMBER(I5),ISNUMBER(G5)),I5*G5-B5,C5-B5)',
+      formula: 'C5-B5',
+      result: -0.5,
     });
-    expect(worksheet.getCell('S5').value).toMatchObject({ formula: 'R5*C5' });
+    expect(worksheet.getCell('S5').value).toMatchObject({ formula: 'R5*C5', result: 45 });
     for (const address of ['B5', 'C5', 'D5', 'G5', 'I5']) {
       expect(worksheet.getCell(address).numFmt).toBe('#,##0.00');
     }
@@ -457,8 +459,9 @@ describe('Change Order workbook export', () => {
   it('supports more rows than the original data capacity', async () => {
     const { worksheet } = await reopen(30);
     expect(worksheet.getCell('A34').value).toBe(30);
+    expect(worksheet.getCell('C34').value).toMatchObject({ formula: 'G34*I34' });
     expect(worksheet.getCell('D34').value).toMatchObject({
-      formula: 'IF(AND(ISNUMBER(I34),ISNUMBER(G34)),I34*G34-B34,C34-B34)',
+      formula: 'C34-B34',
     });
     expect(worksheet.getCell('S34').value).toMatchObject({ formula: 'R34*C34' });
     expect(worksheet.getCell('R35').value).toBe('TOTAL:');

@@ -40,6 +40,7 @@ export type CableTypeFormState = {
   minimumOrderQuantity: string;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  source: string;
 };
 
 export type CableTypeFormErrors = Partial<Record<keyof CableTypeFormState, string>> & {
@@ -59,6 +60,7 @@ export const emptyCableTypeForm: CableTypeFormState = {
   minimumOrderQuantity: '1',
   orderMeasurement: 'meters',
   packaging: 'm',
+  source: '',
 };
 
 export const toCableTypeFormState = (cableType: CableType): CableTypeFormState => ({
@@ -74,6 +76,7 @@ export const toCableTypeFormState = (cableType: CableType): CableTypeFormState =
   minimumOrderQuantity: '1',
   orderMeasurement: 'meters',
   packaging: 'm',
+  source: '',
 });
 
 export const parseCableTypeApiErrors = (payload: ApiErrorPayload): CableTypeFormErrors => {
@@ -151,6 +154,7 @@ export const buildMaterialCableTypeInput = (
     minimumOrderQuantity: number;
     orderMeasurement: 'pcs' | 'pack' | 'meters';
     packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+    source: string | null;
   };
   errors: CableTypeFormErrors;
 } => {
@@ -178,6 +182,7 @@ export const buildMaterialCableTypeInput = (
       minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
       orderMeasurement: values.orderMeasurement,
       packaging: values.packaging,
+      source: toNullableString(values.source),
     },
     errors,
   };

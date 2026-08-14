@@ -27,6 +27,7 @@ export type TrayFormState = {
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   imageTemplateId: string | null;
+  source: string;
 };
 
 export type SupportFormState = {
@@ -40,6 +41,7 @@ export type SupportFormState = {
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
   imageTemplateId: string | null;
+  source: string;
 };
 
 export type TrayFormErrors = Partial<Record<keyof TrayFormState, string>>;
@@ -62,6 +64,7 @@ export const initialTrayForm: TrayFormState = {
   orderMeasurement: 'pcs',
   packaging: 'pcs',
   imageTemplateId: null,
+  source: '',
 };
 
 export const initialSupportForm: SupportFormState = {
@@ -75,6 +78,7 @@ export const initialSupportForm: SupportFormState = {
   orderMeasurement: 'pcs',
   packaging: 'pcs',
   imageTemplateId: null,
+  source: '',
 };
 
 export const initialLoadCurveForm: LoadCurveFormState = {

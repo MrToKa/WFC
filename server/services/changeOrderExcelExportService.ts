@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import {
-  calculateChangeOrderTotal,
   calculateLineTotal,
   calculateSpareQuantity,
   type ChangeOrderDetails,
@@ -161,6 +160,8 @@ const consolidateExportGroup = (items: readonly ChangeOrderItem[]): ChangeOrderI
       : items.every((item) => item.orderedQuantity === null)
         ? null
         : items.reduce((total, item) => total + (item.orderedQuantity ?? 0), 0);
+  const packagedOrderQuantity =
+    (first.packagingQuantity ?? 0) * (orderedQuantity ?? 0);
 
   return {
     ...first,
@@ -173,7 +174,7 @@ const consolidateExportGroup = (items: readonly ChangeOrderItem[]): ChangeOrderI
       first.packagingQuantity,
       orderedQuantity,
     ),
-    totalPrice: calculateLineTotal(orderQuantity, first.unitPrice),
+    totalPrice: calculateLineTotal(packagedOrderQuantity, first.unitPrice),
     unit: joinDistinctTextValues(items, (item) => item.unit),
     packaging: joinDistinctTextValues(items, (item) => item.packaging),
     packagingUnit: joinDistinctTextValues(items, (item) => item.packagingUnit),
@@ -246,13 +247,15 @@ const toText = (value: string | null): string | null => escapeSpreadsheetText(va
 
 const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: number): void => {
   const rowNumber = row.number;
+  const packagedOrderQuantity =
+    (item.packagingQuantity ?? 0) * (item.orderedQuantity ?? 0);
   const values: Array<ExcelJS.CellValue> = [
     itemNumber,
     item.designQuantity,
-    item.orderQuantity,
+    { formula: `G${rowNumber}*I${rowNumber}`, result: packagedOrderQuantity },
     {
-      formula: `IF(AND(ISNUMBER(I${rowNumber}),ISNUMBER(G${rowNumber})),I${rowNumber}*G${rowNumber}-B${rowNumber},C${rowNumber}-B${rowNumber})`,
-      result: item.spareQuantity,
+      formula: `C${rowNumber}-B${rowNumber}`,
+      result: packagedOrderQuantity - item.designQuantity,
     },
     toText(item.unit),
     toText(item.packaging),
@@ -268,7 +271,10 @@ const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: numb
     item.weightKg,
     toText(item.clearDescription),
     item.unitPrice,
-    { formula: `R${rowNumber}*C${rowNumber}`, result: item.totalPrice },
+    {
+      formula: `R${rowNumber}*C${rowNumber}`,
+      result: calculateLineTotal(packagedOrderQuantity, item.unitPrice),
+    },
     toText(item.countryOfOrigin),
     toText(item.hsCode),
     toText(item.tagNo),
@@ -464,7 +470,7 @@ export async function generateChangeOrderWorkbook(
   totalRow.getCell(18).value = 'TOTAL:';
   totalRow.getCell(19).value = {
     formula: `SUM(S5:S${lastItemRow})`,
-    result: calculateChangeOrderTotal(exportItems),
+    result: exportItems.reduce((total, item) => total + item.totalPrice, 0),
   };
   if (totalRowNumber < totalTemplateRowNumber) {
     worksheet.spliceRows(totalRowNumber + 1, totalTemplateRowNumber - totalRowNumber);

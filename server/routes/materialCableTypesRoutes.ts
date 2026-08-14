@@ -74,6 +74,7 @@ const selectMaterialCableTypesQuery = `
     minimum_order_quantity,
     order_measurement,
     packaging,
+    source,
     created_at,
     updated_at
   FROM material_cable_types
@@ -122,6 +123,7 @@ materialCableTypesRouter.post(
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
+      source,
     } = parseResult.data;
 
     try {
@@ -158,8 +160,9 @@ materialCableTypesRouter.post(
             ,minimum_order_quantity
             ,order_measurement
             ,packaging
+            ,source
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           RETURNING
             id,
             name,
@@ -174,6 +177,7 @@ materialCableTypesRouter.post(
             minimum_order_quantity,
             order_measurement,
             packaging,
+            source,
             created_at,
             updated_at;
         `,
@@ -191,6 +195,7 @@ materialCableTypesRouter.post(
           minimumOrderQuantity ?? 1,
           orderMeasurement ?? 'meters',
           packaging ?? 'm',
+          normalizeOptionalString(source ?? null),
         ],
       );
 
@@ -234,6 +239,7 @@ materialCableTypesRouter.patch(
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
+      source,
     } = parseResult.data;
 
     const updates: string[] = [];
@@ -324,6 +330,11 @@ materialCableTypesRouter.patch(
       values.push(packaging);
     }
 
+    if (source !== undefined) {
+      updates.push(`source = $${index++}`);
+      values.push(normalizeOptionalString(source));
+    }
+
     updates.push('updated_at = NOW()');
 
     try {
@@ -346,6 +357,7 @@ materialCableTypesRouter.patch(
             minimum_order_quantity,
             order_measurement,
             packaging,
+            source,
             created_at,
             updated_at;
         `,
@@ -540,9 +552,7 @@ materialCableTypesRouter.post(
           const parsed = readString(
             readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.orderMeasurement),
           );
-          return parsed === 'pcs' || parsed === 'pack' || parsed === 'meters'
-            ? parsed
-            : 'meters';
+          return parsed === 'pcs' || parsed === 'pack' || parsed === 'meters' ? parsed : 'meters';
         })(),
         packaging: (() => {
           const parsed = readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.packaging));
@@ -859,8 +869,7 @@ materialCableTypesRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows:
-          rows.length > 0 ? rows : [['', '', '', '', '', '', '', '', '', 1, 'meters', 'm']],
+        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '', '', '', 1, 'meters', 'm']],
       });
 
       table.commit();

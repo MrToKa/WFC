@@ -85,4 +85,22 @@ describe('Material minimum order validators', () => {
       ).toBe(false);
     },
   );
+
+  it.each(materialInputs)('accepts an HTTP source link', ({ schema, input }) => {
+    expect(
+      schema.safeParse({
+        ...input,
+        source: 'https://manufacturer.example/material',
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each(materialInputs)('rejects a non-internet source', ({ schema, input }) => {
+    expect(
+      schema.safeParse({
+        ...input,
+        source: 'manufacturer.example/material',
+      }).success,
+    ).toBe(false);
+  });
 });

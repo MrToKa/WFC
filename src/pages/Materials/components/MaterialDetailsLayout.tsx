@@ -54,6 +54,15 @@ export type MaterialProperty = {
   value: ReactNode;
 };
 
+export const MaterialSourceLink = ({ source }: { source?: string | null }) =>
+  source ? (
+    <a href={source} target="_blank" rel="noreferrer">
+      {source}
+    </a>
+  ) : (
+    '—'
+  );
+
 type MaterialDetailsLayoutProps = {
   title: string;
   categoryLabel: string;
@@ -61,6 +70,7 @@ type MaterialDetailsLayoutProps = {
   createdAt: string;
   updatedAt: string;
   onBack: () => void;
+  onEdit?: () => void;
   onRefresh: () => void;
   refreshing: boolean;
   children?: ReactNode;
@@ -113,6 +123,7 @@ export const MaterialDetailsLayout = ({
   createdAt,
   updatedAt,
   onBack,
+  onEdit,
   onRefresh,
   refreshing,
   children,
@@ -124,6 +135,11 @@ export const MaterialDetailsLayout = ({
         <Button appearance="secondary" onClick={onBack}>
           Back to Materials
         </Button>
+        {onEdit ? (
+          <Button appearance="primary" onClick={onEdit}>
+            Edit
+          </Button>
+        ) : null}
         <Button onClick={onRefresh} disabled={refreshing}>
           {refreshing ? 'Refreshing...' : 'Refresh'}
         </Button>

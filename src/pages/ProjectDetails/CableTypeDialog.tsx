@@ -222,6 +222,19 @@ export const CableTypeDialog = ({
                       <option value="pcs">pcs</option>
                     </Select>
                   </Field>
+                  <Field
+                    label="Source"
+                    hint="Internet link to the material"
+                    validationState={errors.source ? 'error' : undefined}
+                    validationMessage={errors.source}
+                  >
+                    <Input
+                      type="url"
+                      value={values.source}
+                      onChange={onFieldChange('source')}
+                      placeholder="https://example.com/material"
+                    />
+                  </Field>
                 </>
               ) : null}
               <Field

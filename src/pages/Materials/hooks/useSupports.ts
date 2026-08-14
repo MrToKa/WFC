@@ -115,7 +115,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       minimumOrderQuantity: String(support.minimumOrderQuantity),
       orderMeasurement: support.orderMeasurement,
       packaging: support.packaging,
-      imageTemplateId: support.imageTemplateId
+      imageTemplateId: support.imageTemplateId,
+      source: support.source ?? ''
     });
     setSupportFormErrors({});
     setIsSupportDialogOpen(true);
@@ -213,7 +214,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: supportForm.orderMeasurement,
             packaging: supportForm.packaging,
-            imageTemplateId
+            imageTemplateId,
+            source: supportForm.source.trim() || null
           });
           showToast({ intent: 'success', title: 'Support added' });
 
@@ -233,7 +235,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: supportForm.orderMeasurement,
             packaging: supportForm.packaging,
-            imageTemplateId
+            imageTemplateId,
+            source: supportForm.source.trim() || null
           });
           showToast({ intent: 'success', title: 'Support updated' });
           await loadSupports(supportPage, { silent: true });

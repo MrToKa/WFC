@@ -12,6 +12,7 @@ export type MaterialTray = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  source?: string | null;
   loadCurveId: string | null;
   loadCurveName: string | null;
   imageTemplateId: string | null;
@@ -35,6 +36,7 @@ export type MaterialCableType = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  source?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -50,6 +52,7 @@ export type MaterialCableInstallationMaterial = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  source?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -65,6 +68,7 @@ export type MaterialSupport = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  source?: string | null;
   imageTemplateId: string | null;
   imageTemplateFileName: string | null;
   imageTemplateContentType: string | null;
@@ -158,6 +162,7 @@ export type MaterialCableTypeInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  source?: string | null;
 };
 
 export type MaterialCableInstallationMaterialInput = {
@@ -170,6 +175,7 @@ export type MaterialCableInstallationMaterialInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  source?: string | null;
 };
 
 export type MaterialTrayInput = {
@@ -184,6 +190,7 @@ export type MaterialTrayInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  source?: string | null;
 };
 
 export type MaterialSupportInput = {
@@ -197,6 +204,7 @@ export type MaterialSupportInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  source?: string | null;
 };
 
 export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
@@ -206,8 +214,7 @@ export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
   'support',
 ] as const;
 
-export type StandardMaterialOwnerCategory =
-  (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
+export type StandardMaterialOwnerCategory = (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
 export type MaterialDetailsCategory = StandardMaterialOwnerCategory | 'load-curve';
 export type StandardMaterialUnit = 'pcs' | 'meters' | 'pcs/m';
 

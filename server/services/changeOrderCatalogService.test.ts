@@ -42,6 +42,11 @@ describe('Change Order catalog snapshots', () => {
   });
 
   it('rounds required quantities to complete minimum-order packs', () => {
+    expect(calculateMinimumOrder(4, 4, 100)).toEqual({
+      orderQuantity: 4,
+      packageCount: 1,
+      spareQuantity: 96,
+    });
     expect(calculateMinimumOrder(24, 24, 50)).toEqual({
       orderQuantity: 24,
       packageCount: 1,

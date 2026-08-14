@@ -207,6 +207,39 @@ describe('ChangeOrdersTab', () => {
     15_000,
   );
 
+  it('allows selecting an unrestricted future header date', async () => {
+    const api = await import('@/api/client');
+    vi.mocked(api.updateChangeOrder).mockResolvedValueOnce({
+      changeOrder: { ...details, reportDate: '2099-12-31' },
+    });
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+
+    await openExistingOrder();
+    const dateInput = screen.getByLabelText('Date');
+    fireEvent.change(dateInput, { target: { value: '2099-12-31' } });
+
+    expect(dateInput).toHaveValue('2099-12-31');
+    expect(dateInput).not.toHaveAttribute('min');
+    expect(dateInput).not.toHaveAttribute('max');
+    expect(screen.getByText('Unsaved header changes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(api.updateChangeOrder).toHaveBeenCalledWith(
+        'token',
+        project.id,
+        details.id,
+        expect.objectContaining({ reportDate: '2099-12-31' }),
+      ),
+    );
+  });
+
   it(
     'duplicates a manual material from its row action',
     async () => {
@@ -274,11 +307,13 @@ describe('ChangeOrdersTab', () => {
     await openExistingOrder();
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
 
-    expect(
-      await screen.findByRole('button', {
-        name: 'Collapse inherited standard materials for item 2',
-      }),
-    ).toBeInTheDocument();
+    const expandButton = await screen.findByRole('button', {
+      name: 'Expand inherited standard materials for item 2',
+    });
+    expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Copied inherited material')).not.toBeInTheDocument();
+
+    fireEvent.click(expandButton);
     expect(screen.getByText('Copied inherited material')).toBeInTheDocument();
   }, 15_000);
 
@@ -349,15 +384,17 @@ describe('ChangeOrdersTab', () => {
     expect(catalogRow).not.toBeNull();
     fireEvent.click(within(catalogRow!).getByText('Add'));
 
-    expect(
-      await screen.findByRole('button', {
-        name: 'Collapse inherited standard materials for item 2',
-      }),
-    ).toBeInTheDocument();
+    const expandButton = await screen.findByRole('button', {
+      name: 'Expand inherited standard materials for item 2',
+    });
+    expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('New inherited material')).not.toBeInTheDocument();
+
+    fireEvent.click(expandButton);
     expect(screen.getByText('New inherited material')).toBeInTheDocument();
   }, 15_000);
 
-  it('collapses inherited standard materials without renumbering the remaining rows', async () => {
+  it('starts inherited standard materials collapsed without renumbering rows', async () => {
     const api = await import('@/api/client');
     const inheritedDetails: ChangeOrderDetails = {
       ...details,
@@ -413,26 +450,26 @@ describe('ChangeOrdersTab', () => {
 
     const cableTypeItemCell = within(cableTypeRow!).getAllByRole('cell')[0];
     const standaloneItemCell = within(standaloneRow!).getAllByRole('cell')[0];
-    const collapseButton = within(cableTypeItemCell).getByRole('button', {
-      name: 'Collapse inherited standard materials for item 1',
-    });
-    expect(cableTypeItemCell).toHaveTextContent('1');
-    expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
-    expect(standaloneItemCell).toHaveTextContent('3');
-    expect(within(materialsTable).getByText('Inherited cable cleat')).toBeInTheDocument();
-    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
-
-    fireEvent.click(collapseButton);
-
-    expect(within(materialsTable).queryByText('Inherited cable cleat')).not.toBeInTheDocument();
-    expect(within(standaloneRow!).getAllByRole('cell')[0]).toHaveTextContent('3');
-    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
-
     const expandButton = within(cableTypeItemCell).getByRole('button', {
       name: 'Expand inherited standard materials for item 1',
     });
+    expect(cableTypeItemCell).toHaveTextContent('1');
     expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+    expect(standaloneItemCell).toHaveTextContent('3');
+    expect(within(materialsTable).queryByText('Inherited cable cleat')).not.toBeInTheDocument();
+    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
+
     fireEvent.click(expandButton);
+
     expect(within(materialsTable).getByText('Inherited cable cleat')).toBeInTheDocument();
+    expect(within(standaloneRow!).getAllByRole('cell')[0]).toHaveTextContent('3');
+    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
+
+    const collapseButton = within(cableTypeItemCell).getByRole('button', {
+      name: 'Collapse inherited standard materials for item 1',
+    });
+    expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(collapseButton);
+    expect(within(materialsTable).queryByText('Inherited cable cleat')).not.toBeInTheDocument();
   }, 15_000);
 });

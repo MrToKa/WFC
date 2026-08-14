@@ -126,7 +126,8 @@ const toMaterialCableTypeFormState = (
     cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '',
   minimumOrderQuantity: '1',
   orderMeasurement: 'meters',
-  packaging: 'm'
+  packaging: 'm',
+  source: ''
 });
 
 export const useCableTypesSection = ({

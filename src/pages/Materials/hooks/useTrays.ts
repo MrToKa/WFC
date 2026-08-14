@@ -144,7 +144,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       minimumOrderQuantity: String(tray.minimumOrderQuantity),
       orderMeasurement: tray.orderMeasurement,
       packaging: tray.packaging,
-      imageTemplateId: tray.imageTemplateId
+      imageTemplateId: tray.imageTemplateId,
+      source: tray.source ?? ''
     });
     setTrayFormErrors({});
     setIsTrayDialogOpen(true);
@@ -347,7 +348,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: trayForm.orderMeasurement,
             packaging: trayForm.packaging,
-            imageTemplateId
+            imageTemplateId,
+            source: trayForm.source.trim() || null
           });
           showToast({ intent: 'success', title: 'Tray added' });
 
@@ -367,7 +369,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: trayForm.orderMeasurement,
             packaging: trayForm.packaging,
-            imageTemplateId
+            imageTemplateId,
+            source: trayForm.source.trim() || null
           });
           showToast({ intent: 'success', title: 'Tray updated' });
           await loadTrays(trayPage, { silent: true });

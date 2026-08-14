@@ -23,6 +23,7 @@ import {
   type MaterialProperty,
 } from './components/MaterialDetailsLayout';
 import { StandardMaterialDialog } from './components/StandardMaterialDialog';
+import { MaterialEditDialog } from './components/MaterialEditDialog';
 import { StandardMaterialsSection } from './components/StandardMaterialsSection';
 import {
   MATERIAL_DETAILS_CAPABILITIES,
@@ -55,6 +56,7 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StandardMaterialAssignment | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -178,6 +180,10 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
     void navigate(backPath);
   };
 
+  const editMaterial = (): void => {
+    setEditDialogOpen(true);
+  };
+
   if (loading) return <MaterialDetailsLoading />;
   if (error || !details) {
     return (
@@ -198,6 +204,7 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
         createdAt={details.material.createdAt}
         updatedAt={details.material.updatedAt}
         onBack={goBack}
+        onEdit={isAdmin ? editMaterial : undefined}
         onRefresh={() => void loadDetails(true)}
         refreshing={refreshing}
       >
@@ -221,6 +228,19 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
         onDismiss={() => setDialogOpen(false)}
         onSave={save}
       />
+      {token ? (
+        <MaterialEditDialog
+          open={editDialogOpen}
+          category={category}
+          material={details.material}
+          token={token}
+          onDismiss={() => setEditDialogOpen(false)}
+          onSaved={async () => {
+            await loadDetails(true);
+            showToast({ title: `${capability.label} updated`, intent: 'success' });
+          }}
+        />
+      ) : null}
     </>
   );
 };

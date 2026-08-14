@@ -940,19 +940,23 @@ export async function initializeDatabase(): Promise<void> {
     ALTER TABLE material_cable_types
       ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
       ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'meters',
-      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'm';
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'm',
+      ADD COLUMN IF NOT EXISTS source TEXT;
     ALTER TABLE material_cable_installation_materials
       ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
       ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'pcs',
-      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs';
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs',
+      ADD COLUMN IF NOT EXISTS source TEXT;
     ALTER TABLE material_trays
       ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
       ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'pcs',
-      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs';
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs',
+      ADD COLUMN IF NOT EXISTS source TEXT;
     ALTER TABLE material_supports
       ADD COLUMN IF NOT EXISTS minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
       ADD COLUMN IF NOT EXISTS order_measurement TEXT NOT NULL DEFAULT 'pcs',
-      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs';
+      ADD COLUMN IF NOT EXISTS packaging TEXT NOT NULL DEFAULT 'pcs',
+      ADD COLUMN IF NOT EXISTS source TEXT;
   `);
 
   await pool.query(`
@@ -1442,6 +1446,42 @@ export async function initializeDatabase(): Promise<void> {
     WHERE child.parent_item_id = parent.id
       AND child.line_kind = 'inherited'
       AND child.revision_number IS DISTINCT FROM parent.revision_number;
+  `);
+
+  // Inherited rows stay linked to the Materials catalog for commercial ordering
+  // metadata. Manual Change Order rows remain independent historical snapshots.
+  await pool.query(`
+    UPDATE project_change_order_items item
+    SET
+      minimum_order_quantity = source.minimum_order_quantity,
+      order_measurement = source.order_measurement,
+      packaging = source.packaging,
+      packaging_quantity = source.minimum_order_quantity,
+      packaging_unit = source.order_measurement,
+      ordered_quantity = CASE
+        WHEN item.order_quantity > 0
+        THEN CEIL(item.order_quantity / source.minimum_order_quantity)
+        ELSE 0
+      END,
+      ordered_unit = source.packaging,
+      updated_at = NOW()
+    FROM material_cable_installation_materials source
+    WHERE item.line_kind = 'inherited'
+      AND item.source_catalog = 'cable-installation-material'
+      AND item.source_material_id = source.id
+      AND (
+        item.minimum_order_quantity IS DISTINCT FROM source.minimum_order_quantity OR
+        item.order_measurement IS DISTINCT FROM source.order_measurement OR
+        item.packaging IS DISTINCT FROM source.packaging OR
+        item.packaging_quantity IS DISTINCT FROM source.minimum_order_quantity OR
+        item.packaging_unit IS DISTINCT FROM source.order_measurement OR
+        item.ordered_quantity IS DISTINCT FROM CASE
+          WHEN item.order_quantity > 0
+          THEN CEIL(item.order_quantity / source.minimum_order_quantity)
+          ELSE 0
+        END OR
+        item.ordered_unit IS DISTINCT FROM source.packaging
+      );
   `);
 
   // Cable Type Change Order quantities are lengths in metres. Fixed inherited

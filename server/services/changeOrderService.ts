@@ -129,6 +129,50 @@ const normalizeText = (value: string | null | undefined): string | null => {
   return trimmed === '' ? null : trimmed;
 };
 
+const synchronizeInheritedMaterialOrdering = async (
+  queryable: Pick<PoolClient, 'query'> | typeof pool,
+  changeOrderId: string,
+): Promise<void> => {
+  // Inherited rows are derived from Standard Materials. Keep their commercial
+  // ordering fields aligned with the referenced Materials catalog entry while
+  // leaving manually added Change Order snapshots untouched.
+  await queryable.query(
+    `UPDATE project_change_order_items item
+     SET
+       minimum_order_quantity = source.minimum_order_quantity,
+       order_measurement = source.order_measurement,
+       packaging = source.packaging,
+       packaging_quantity = source.minimum_order_quantity,
+       packaging_unit = source.order_measurement,
+       ordered_quantity = CASE
+         WHEN item.order_quantity > 0
+         THEN CEIL(item.order_quantity / source.minimum_order_quantity)
+         ELSE 0
+       END,
+       ordered_unit = source.packaging,
+       updated_at = NOW()
+     FROM material_cable_installation_materials source
+     WHERE item.change_order_id = $1
+       AND item.line_kind = 'inherited'
+       AND item.source_catalog = 'cable-installation-material'
+       AND item.source_material_id = source.id
+       AND (
+         item.minimum_order_quantity IS DISTINCT FROM source.minimum_order_quantity OR
+         item.order_measurement IS DISTINCT FROM source.order_measurement OR
+         item.packaging IS DISTINCT FROM source.packaging OR
+         item.packaging_quantity IS DISTINCT FROM source.minimum_order_quantity OR
+         item.packaging_unit IS DISTINCT FROM source.order_measurement OR
+         item.ordered_quantity IS DISTINCT FROM CASE
+           WHEN item.order_quantity > 0
+           THEN CEIL(item.order_quantity / source.minimum_order_quantity)
+           ELSE 0
+         END OR
+         item.ordered_unit IS DISTINCT FROM source.packaging
+       )`,
+    [changeOrderId],
+  );
+};
+
 export const listChangeOrders = async (projectId: string): Promise<ChangeOrderSummary[]> => {
   const result = await pool.query<ChangeOrderRow>(
     `
@@ -170,6 +214,8 @@ export const getChangeOrder = async (
   );
   const row = headerResult.rows[0];
   if (!row) return null;
+
+  await synchronizeInheritedMaterialOrdering(queryable, changeOrderId);
 
   const itemResult = await queryable.query<ChangeOrderItemRow>(
     `SELECT ${ITEM_COLUMNS}

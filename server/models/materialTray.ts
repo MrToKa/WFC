@@ -9,6 +9,7 @@ export type MaterialTrayRow = {
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  source: string | null;
   load_curve_id: string | null;
   image_template_id: string | null;
   image_template_file_name: string | null;
@@ -41,6 +42,7 @@ export type PublicMaterialTray = {
   minimumOrderQuantity: number;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  source: string | null;
   loadCurveId: string | null;
   loadCurveName: string | null;
   imageTemplateId: string | null;
@@ -61,11 +63,12 @@ export const mapMaterialTrayRow = (row: MaterialTrayRow): PublicMaterialTray => 
   minimumOrderQuantity: toNumberOrNull(row.minimum_order_quantity) ?? 1,
   orderMeasurement: row.order_measurement,
   packaging: row.packaging,
+  source: row.source ?? null,
   loadCurveId: row.load_curve_id ?? null,
   loadCurveName: row.load_curve_name ?? null,
   imageTemplateId: row.image_template_id ?? null,
   imageTemplateFileName: row.image_template_file_name ?? null,
   imageTemplateContentType: row.image_template_content_type ?? null,
   createdAt: toIsoString(row.created_at),
-  updatedAt: toIsoString(row.updated_at)
+  updatedAt: toIsoString(row.updated_at),
 });

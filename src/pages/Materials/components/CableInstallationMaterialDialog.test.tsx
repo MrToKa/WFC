@@ -42,6 +42,12 @@ const TestDialog = ({ mode }: { mode: 'create' | 'edit' }) => {
 };
 
 describe('CableInstallationMaterialDialog', () => {
+  it.each(['create', 'edit'] as const)('shows a Source URL input in %s mode', (mode) => {
+    render(<TestDialog mode={mode} />);
+
+    expect(screen.getByRole('textbox', { name: 'Source' })).toHaveAttribute('type', 'url');
+  });
+
   it.each(['create', 'edit'] as const)('allows a new purpose to be typed in %s mode', (mode) => {
     render(<TestDialog mode={mode} />);
 

@@ -318,6 +318,7 @@ const selectMaterialTraysQuery = `
     mt.minimum_order_quantity,
     mt.order_measurement,
     mt.packaging,
+    mt.source,
     mt.load_curve_id,
     mt.image_template_id,
     tf.file_name AS image_template_file_name,
@@ -342,6 +343,7 @@ const selectMaterialSupportsQuery = `
     ms.minimum_order_quantity,
     ms.order_measurement,
     ms.packaging,
+    ms.source,
     ms.image_template_id,
     tf.file_name AS image_template_file_name,
     tf.content_type AS image_template_content_type,
@@ -548,9 +550,10 @@ materialsRouter.post(
             minimum_order_quantity,
             order_measurement,
             packaging,
+            source,
             load_curve_id,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, $11);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, $12);
         `,
         [
           trayId,
@@ -563,6 +566,7 @@ materialsRouter.post(
           data.minimumOrderQuantity ?? 1,
           data.orderMeasurement ?? 'pcs',
           data.packaging ?? 'pcs',
+          normalizeOptionalText(data.source ?? null),
           normalizedImageTemplateId
         ]
       );
@@ -697,6 +701,12 @@ materialsRouter.patch(
     if (data.packaging !== undefined) {
       setClauses.push(`packaging = $${parameterIndex}`);
       values.push(data.packaging);
+      parameterIndex += 1;
+    }
+
+    if (data.source !== undefined) {
+      setClauses.push(`source = $${parameterIndex}`);
+      values.push(normalizeOptionalText(data.source));
       parameterIndex += 1;
     }
 
@@ -1316,8 +1326,9 @@ materialsRouter.post(
             minimum_order_quantity,
             order_measurement,
             packaging,
+            source,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
         `,
         [
           supportId,
@@ -1330,6 +1341,7 @@ materialsRouter.post(
           data.minimumOrderQuantity ?? 1,
           data.orderMeasurement ?? 'pcs',
           data.packaging ?? 'pcs',
+          normalizeOptionalText(data.source ?? null),
           normalizedImageTemplateId
         ]
       );
@@ -1465,6 +1477,12 @@ materialsRouter.patch(
   if (data.packaging !== undefined) {
     setClauses.push(`packaging = $${parameterIndex}`);
     values.push(data.packaging);
+    parameterIndex += 1;
+  }
+
+  if (data.source !== undefined) {
+    setClauses.push(`source = $${parameterIndex}`);
+    values.push(normalizeOptionalText(data.source));
     parameterIndex += 1;
   }
 

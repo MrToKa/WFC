@@ -7,6 +7,7 @@ import type {
 } from '@/api/client';
 import {
   MaterialDetailsError,
+  MaterialDetailsLayout,
   MaterialDetailsLoading,
 } from './MaterialDetailsLayout';
 import { StandardMaterialDialog } from './StandardMaterialDialog';
@@ -46,6 +47,26 @@ const standardMaterial: StandardMaterialAssignment = {
 };
 
 describe('Material Details shared components', () => {
+  it('exposes the material Edit action when provided', () => {
+    const onEdit = vi.fn();
+    renderFluent(
+      <MaterialDetailsLayout
+        title="Cable gland M32"
+        categoryLabel="Cable installation material"
+        properties={[]}
+        createdAt="2026-01-01T00:00:00.000Z"
+        updatedAt="2026-01-01T00:00:00.000Z"
+        onBack={vi.fn()}
+        onEdit={onEdit}
+        onRefresh={vi.fn()}
+        refreshing={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(onEdit).toHaveBeenCalledOnce();
+  });
+
   it('renders loading and API failure states', () => {
     const { rerender } = renderFluent(<MaterialDetailsLoading />);
     expect(screen.getByText('Loading material details...')).toBeInTheDocument();

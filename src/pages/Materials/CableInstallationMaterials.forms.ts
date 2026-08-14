@@ -25,6 +25,7 @@ export type CableInstallationMaterialFormState = {
   minimumOrderQuantity: string;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  source: string;
 };
 
 export type CableInstallationMaterialFormErrors = Partial<
@@ -43,6 +44,7 @@ export const emptyCableInstallationMaterialForm: CableInstallationMaterialFormSt
   minimumOrderQuantity: '1',
   orderMeasurement: 'pcs',
   packaging: 'pcs',
+  source: '',
 };
 
 export const toCableInstallationMaterialFormState = (
@@ -57,6 +59,7 @@ export const toCableInstallationMaterialFormState = (
   minimumOrderQuantity: String(material.minimumOrderQuantity),
   orderMeasurement: material.orderMeasurement,
   packaging: material.packaging,
+  source: material.source ?? '',
 });
 
 export const parseCableInstallationMaterialApiErrors = (
@@ -115,6 +118,7 @@ export const buildMaterialCableInstallationMaterialInput = (
       minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
       orderMeasurement: values.orderMeasurement,
       packaging: values.packaging,
+      source: toNullableString(values.source),
     },
     errors,
   };

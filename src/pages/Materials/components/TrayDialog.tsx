@@ -200,6 +200,14 @@ export const TrayDialog = ({
                   ))}
                 </Dropdown>
               </Field>
+              <Field label='Source' hint='Internet link to the material'>
+                <Input
+                  type='url'
+                  value={form.source}
+                  onChange={onFieldChange('source')}
+                  placeholder='https://example.com/material'
+                />
+              </Field>
             </DialogContent>
             <DialogActions className={dialogActionsClassName}>
               <Button appearance='secondary' onClick={onClose}>

@@ -1,5 +1,6 @@
 import type { MaterialTray } from '@/api/client';
 import { MasterMaterialDetailsPage } from './Materials/MasterMaterialDetailsPage';
+import { MaterialSourceLink } from './Materials/components/MaterialDetailsLayout';
 
 const numeric = (input: number | null, suffix: string): string =>
   input === null ? '—' : `${input} ${suffix}`;
@@ -23,6 +24,7 @@ export const MaterialTrayDetails = () => (
       { label: 'Packaging', value: material.packaging },
       { label: 'Load curve', value: material.loadCurveName ?? '—' },
       { label: 'Image template', value: material.imageTemplateFileName ?? '—' },
+      { label: 'Source', value: <MaterialSourceLink source={material.source} /> },
     ]}
   />
 );
