@@ -12,6 +12,7 @@ import {
   type ChangeOrderSourceCatalog,
   type ChangeOrderSummary,
 } from '../models/changeOrder.js';
+import type { StandardMaterialUnit } from '../models/standardMaterial.js';
 import {
   resolveChangeOrderCatalogSnapshot,
   type ChangeOrderItemSnapshot,
@@ -63,10 +64,12 @@ export const calculateInheritedChangeOrderQuantities = (
   designQuantity: number,
   orderQuantity: number,
   quantityPerParent: number,
+  unit: StandardMaterialUnit,
 ): { designQuantity: number; orderQuantity: number } => {
   // A Cable Type line represents one cable whose commercial quantity is its
-  // length in metres. Its Standard Materials are per cable, not per metre.
-  if (sourceCatalog === 'cable-type') {
+  // length in metres. Fixed Standard Materials are per cable, while pcs/m
+  // materials must follow the cable's design and ordered lengths.
+  if (sourceCatalog === 'cable-type' && unit !== 'pcs/m') {
     return {
       designQuantity: quantityPerParent,
       orderQuantity: quantityPerParent,
@@ -366,6 +369,7 @@ export const addChangeOrderItem = async (
         0,
         0,
         material.quantity,
+        material.unit,
       );
       await insertSnapshot(
         client,
@@ -518,6 +522,13 @@ export const duplicateChangeOrderItem = async (
     }
 
     await client.query(
+      `UPDATE project_change_order_items
+       SET revision_number = $2
+       WHERE parent_item_id = $1 AND line_kind = 'inherited'`,
+      [duplicatedItemId, duplicatedItem.revisionNumber],
+    );
+
+    await client.query(
       'UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1',
       [changeOrderId],
     );
@@ -592,10 +603,11 @@ export const updateChangeOrderItem = async (
 ): Promise<ChangeOrderItem | null> => {
   const assignments: string[] = [];
   const values: unknown[] = [];
-  const updatesSystemManagedFields =
+  const updatesInheritedManagedFields =
     input.designQuantity !== undefined ||
     input.orderQuantity !== undefined ||
-    input.unit !== undefined;
+    input.unit !== undefined ||
+    input.revisionNumber !== undefined;
   for (const key of Object.keys(input) as Array<keyof ChangeOrderItemUpdate>) {
     const rawValue = input[key];
     values.push(
@@ -616,7 +628,7 @@ export const updateChangeOrderItem = async (
         FROM project_change_orders co
         WHERE i.id = $${values.length - 2}
           AND i.change_order_id = $${values.length - 1}
-          ${updatesSystemManagedFields ? "AND i.line_kind = 'manual'" : ''}
+          ${updatesInheritedManagedFields ? "AND i.line_kind = 'manual'" : ''}
           AND co.id = i.change_order_id
           AND co.project_id = $${values.length}
         RETURNING ${ITEM_COLUMNS.split(',')
@@ -671,11 +683,13 @@ export const updateChangeOrderItem = async (
          SELECT
            child.id,
            CASE
-             WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
+             WHEN $4::text = 'cable-type' AND child.unit <> 'pcs/m'
+             THEN child.quantity_per_parent
              ELSE $2 * child.quantity_per_parent
            END AS design_quantity,
            CASE
-             WHEN $4::text = 'cable-type' THEN child.quantity_per_parent
+             WHEN $4::text = 'cable-type' AND child.unit <> 'pcs/m'
+             THEN child.quantity_per_parent
              ELSE $3 * child.quantity_per_parent
            END AS raw_order_quantity
          FROM project_change_order_items child
@@ -683,6 +697,7 @@ export const updateChangeOrderItem = async (
        )
        UPDATE project_change_order_items child
        SET
+         revision_number = $5,
          design_quantity = required.design_quantity,
          order_quantity = GREATEST(required.design_quantity, required.raw_order_quantity),
          packaging_quantity = child.minimum_order_quantity,
@@ -705,6 +720,7 @@ export const updateChangeOrderItem = async (
         normalizedUpdated.design_quantity,
         normalizedUpdated.order_quantity,
         normalizedUpdated.source_catalog,
+        normalizedUpdated.revision_number,
       ],
     );
     await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [

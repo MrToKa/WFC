@@ -1434,23 +1434,70 @@ export async function initializeDatabase(): Promise<void> {
       ON project_change_order_items (parent_item_id);
   `);
 
-  // Cable Type Change Order quantities are lengths in metres, while their
-  // inherited Standard Material quantities are per cable line. Correct rows
-  // created by the former per-metre calculation using only snapshot data.
+  // Inherited Change Order materials always use their parent item's revision.
   await pool.query(`
     UPDATE project_change_order_items child
-    SET
-      design_quantity = child.quantity_per_parent,
-      order_quantity = child.quantity_per_parent,
-      updated_at = NOW()
+    SET revision_number = parent.revision_number
     FROM project_change_order_items parent
     WHERE child.parent_item_id = parent.id
       AND child.line_kind = 'inherited'
-      AND child.quantity_per_parent IS NOT NULL
-      AND parent.source_catalog = 'cable-type'
+      AND child.revision_number IS DISTINCT FROM parent.revision_number;
+  `);
+
+  // Cable Type Change Order quantities are lengths in metres. Fixed inherited
+  // materials are per cable line, while pcs/m materials follow those lengths.
+  // Keep existing snapshots consistent with the live calculation.
+  await pool.query(`
+    WITH required AS (
+      SELECT
+        child.id,
+        CASE
+          WHEN child.unit = 'pcs/m'
+          THEN parent.design_quantity * child.quantity_per_parent
+          ELSE child.quantity_per_parent
+        END AS design_quantity,
+        CASE
+          WHEN child.unit = 'pcs/m'
+          THEN parent.order_quantity * child.quantity_per_parent
+          ELSE child.quantity_per_parent
+        END AS order_quantity
+      FROM project_change_order_items child
+      JOIN project_change_order_items parent ON parent.id = child.parent_item_id
+      WHERE child.line_kind = 'inherited'
+        AND child.quantity_per_parent IS NOT NULL
+        AND parent.source_catalog = 'cable-type'
+    )
+    UPDATE project_change_order_items child
+    SET
+      design_quantity = required.design_quantity,
+      order_quantity = GREATEST(required.design_quantity, required.order_quantity),
+      ordered_quantity = CASE
+        WHEN child.minimum_order_quantity IS NOT NULL
+          AND GREATEST(required.design_quantity, required.order_quantity) > 0
+        THEN CEIL(
+          GREATEST(required.design_quantity, required.order_quantity) /
+          child.minimum_order_quantity
+        )
+        ELSE GREATEST(required.design_quantity, required.order_quantity)
+      END,
+      updated_at = NOW()
+    FROM required
+    WHERE child.id = required.id
       AND (
-        child.design_quantity IS DISTINCT FROM child.quantity_per_parent OR
-        child.order_quantity IS DISTINCT FROM child.quantity_per_parent
+        child.design_quantity IS DISTINCT FROM required.design_quantity OR
+        child.order_quantity IS DISTINCT FROM GREATEST(
+          required.design_quantity,
+          required.order_quantity
+        ) OR
+        child.ordered_quantity IS DISTINCT FROM CASE
+          WHEN child.minimum_order_quantity IS NOT NULL
+            AND GREATEST(required.design_quantity, required.order_quantity) > 0
+          THEN CEIL(
+            GREATEST(required.design_quantity, required.order_quantity) /
+            child.minimum_order_quantity
+          )
+          ELSE GREATEST(required.design_quantity, required.order_quantity)
+        END
       );
   `);
 }

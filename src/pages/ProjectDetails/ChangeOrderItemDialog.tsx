@@ -146,6 +146,7 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
               designQuantity: parseRequiredNumber(form.designQuantity, 'Design quantity'),
               orderQuantity: parseRequiredNumber(form.orderQuantity, 'Order quantity'),
               unit: nullable(form.unit),
+              revisionNumber: nullable(form.revisionNumber),
             }),
         ...(minimumOrderManaged
           ? {}
@@ -172,7 +173,6 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
         tagNo: nullable(form.tagNo),
         drawingNo: nullable(form.drawingNo),
         shippingList: nullable(form.shippingList),
-        revisionNumber: nullable(form.revisionNumber),
         clientBarcode: nullable(form.clientBarcode),
         manufacturer: nullable(form.manufacturer),
         manufacturerPartNo: nullable(form.manufacturerPartNo),
@@ -197,7 +197,10 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
         disabled={
           saving ||
           (item?.lineKind === 'inherited' &&
-            (field === 'designQuantity' || field === 'orderQuantity' || field === 'unit')) ||
+            (field === 'designQuantity' ||
+              field === 'orderQuantity' ||
+              field === 'unit' ||
+              field === 'revisionNumber')) ||
           (Boolean(item?.minimumOrderQuantity) &&
             [
               'packaging',

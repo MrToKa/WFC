@@ -19,6 +19,7 @@ describe('Change Order catalog snapshots', () => {
         4,
         5,
         2,
+        'pcs',
       ),
     ).toEqual({
       designQuantity: 8,
@@ -27,9 +28,16 @@ describe('Change Order catalog snapshots', () => {
   });
 
   it('counts Cable Type Standard Materials per cable line rather than per metre', () => {
-    expect(calculateInheritedChangeOrderQuantities('cable-type', 200, 240, 4)).toEqual({
+    expect(calculateInheritedChangeOrderQuantities('cable-type', 200, 240, 4, 'pcs')).toEqual({
       designQuantity: 4,
       orderQuantity: 4,
+    });
+  });
+
+  it('multiplies Cable Type pcs/m materials by cable length', () => {
+    expect(calculateInheritedChangeOrderQuantities('cable-type', 200, 240, 2, 'pcs/m')).toEqual({
+      designQuantity: 400,
+      orderQuantity: 480,
     });
   });
 

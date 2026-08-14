@@ -98,82 +98,123 @@ export const escapeSpreadsheetText = (value: string | null | undefined): string 
   return /^[=+\-@]/.test(value) ? `'${value}` : value;
 };
 
+// Descriptive values are deliberately excluded: the same catalog material can be
+// used by several cable lines with different tags or other report text. Those
+// values are joined below. Numeric values that drive package and price formulas
+// remain in the key so the consolidated row keeps valid calculations.
 const exportGroupingKey = (item: ChangeOrderItem): string =>
   JSON.stringify([
     item.sourceCatalog,
     item.sourceMaterialId,
-    item.unit,
-    item.packaging,
     item.packagingQuantity,
-    item.packagingUnit,
-    item.orderedUnit,
     item.minimumOrderQuantity,
     item.orderMeasurement,
-    item.sapNumber,
-    item.descriptionEn,
-    item.descriptionDe,
-    item.dimensionMm,
-    item.material,
     item.weightKg,
-    item.clearDescription,
     item.unitPrice,
-    item.countryOfOrigin,
-    item.hsCode,
-    item.tagNo,
-    item.drawingNo,
-    item.shippingList,
-    item.revisionNumber,
-    item.clientBarcode,
-    item.manufacturer,
-    item.manufacturerPartNo,
-    item.acsBarcode,
-    item.remarks,
   ]);
+
+const joinDistinctTextValues = (
+  items: readonly ChangeOrderItem[],
+  select: (item: ChangeOrderItem) => string | null,
+): string | null => {
+  const values: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    const value = select(item)?.trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    values.push(value);
+  }
+
+  return values.length > 0 ? values.join(', ') : null;
+};
+
+const revisionCollator = new Intl.Collator('en', {
+  numeric: true,
+  sensitivity: 'base',
+});
+
+export const newestRevisionNumber = (items: readonly ChangeOrderItem[]): string | null => {
+  let newest: string | null = null;
+  for (const item of items) {
+    const revision = item.revisionNumber?.trim();
+    if (!revision) continue;
+    if (newest === null || revisionCollator.compare(revision, newest) > 0) {
+      newest = revision;
+    }
+  }
+  return newest;
+};
+
+const consolidateExportGroup = (items: readonly ChangeOrderItem[]): ChangeOrderItem => {
+  const first = items[0];
+  if (!first) {
+    throw new Error('Cannot consolidate an empty Change Order export group');
+  }
+
+  const designQuantity = items.reduce((total, item) => total + item.designQuantity, 0);
+  const orderQuantity = items.reduce((total, item) => total + item.orderQuantity, 0);
+  const orderedQuantity =
+    first.packagingQuantity !== null && first.packagingQuantity > 0
+      ? Math.ceil(orderQuantity / first.packagingQuantity)
+      : items.every((item) => item.orderedQuantity === null)
+        ? null
+        : items.reduce((total, item) => total + (item.orderedQuantity ?? 0), 0);
+
+  return {
+    ...first,
+    designQuantity,
+    orderQuantity,
+    orderedQuantity,
+    spareQuantity: calculateSpareQuantity(
+      designQuantity,
+      orderQuantity,
+      first.packagingQuantity,
+      orderedQuantity,
+    ),
+    totalPrice: calculateLineTotal(orderQuantity, first.unitPrice),
+    unit: joinDistinctTextValues(items, (item) => item.unit),
+    packaging: joinDistinctTextValues(items, (item) => item.packaging),
+    packagingUnit: joinDistinctTextValues(items, (item) => item.packagingUnit),
+    orderedUnit: joinDistinctTextValues(items, (item) => item.orderedUnit),
+    sapNumber: joinDistinctTextValues(items, (item) => item.sapNumber),
+    descriptionEn:
+      joinDistinctTextValues(items, (item) => item.descriptionEn) ?? first.descriptionEn,
+    descriptionDe: joinDistinctTextValues(items, (item) => item.descriptionDe),
+    dimensionMm: joinDistinctTextValues(items, (item) => item.dimensionMm),
+    material: joinDistinctTextValues(items, (item) => item.material),
+    clearDescription: joinDistinctTextValues(items, (item) => item.clearDescription),
+    countryOfOrigin: joinDistinctTextValues(items, (item) => item.countryOfOrigin),
+    hsCode: joinDistinctTextValues(items, (item) => item.hsCode),
+    tagNo: joinDistinctTextValues(items, (item) => item.tagNo),
+    drawingNo: joinDistinctTextValues(items, (item) => item.drawingNo),
+    shippingList: joinDistinctTextValues(items, (item) => item.shippingList),
+    revisionNumber: newestRevisionNumber(items),
+    clientBarcode: joinDistinctTextValues(items, (item) => item.clientBarcode),
+    manufacturer: joinDistinctTextValues(items, (item) => item.manufacturer),
+    manufacturerPartNo: joinDistinctTextValues(items, (item) => item.manufacturerPartNo),
+    acsBarcode: joinDistinctTextValues(items, (item) => item.acsBarcode),
+    remarks: joinDistinctTextValues(items, (item) => item.remarks),
+    sourceStandardMaterialAssignmentIds: Array.from(
+      new Set(items.flatMap((item) => item.sourceStandardMaterialAssignmentIds ?? [])),
+    ).sort(),
+  };
+};
 
 export const consolidateChangeOrderItemsForExport = (
   items: readonly ChangeOrderItem[],
 ): ChangeOrderItem[] => {
-  const consolidated = new Map<string, ChangeOrderItem>();
+  const groups = new Map<string, ChangeOrderItem[]>();
 
   for (const item of items) {
     const key = exportGroupingKey(item);
-    const existing = consolidated.get(key);
-    if (!existing) {
-      consolidated.set(key, {
-        ...item,
-        sourceStandardMaterialAssignmentIds: [
-          ...(item.sourceStandardMaterialAssignmentIds ?? []),
-        ],
-      });
-      continue;
-    }
-
-    const designQuantity = existing.designQuantity + item.designQuantity;
-    const orderQuantity = existing.orderQuantity + item.orderQuantity;
-    existing.designQuantity = designQuantity;
-    existing.orderQuantity = orderQuantity;
-    existing.orderedQuantity =
-      existing.packagingQuantity !== null && existing.packagingQuantity > 0
-        ? Math.ceil(orderQuantity / existing.packagingQuantity)
-        : existing.orderedQuantity === null && item.orderedQuantity === null
-          ? null
-          : (existing.orderedQuantity ?? 0) + (item.orderedQuantity ?? 0);
-    existing.spareQuantity = calculateSpareQuantity(
-      designQuantity,
-      orderQuantity,
-      existing.packagingQuantity,
-      existing.orderedQuantity,
-    );
-    existing.totalPrice = calculateLineTotal(orderQuantity, existing.unitPrice);
-    existing.sourceStandardMaterialAssignmentIds = Array.from(
-      new Set([
-        ...(existing.sourceStandardMaterialAssignmentIds ?? []),
-        ...(item.sourceStandardMaterialAssignmentIds ?? []),
-      ]),
-    ).sort();
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
   }
 
-  return Array.from(consolidated.values());
+  return Array.from(groups.values(), consolidateExportGroup);
 };
 
 const cloneStyle = (style: Partial<ExcelJS.Style>): Partial<ExcelJS.Style> =>
@@ -244,9 +285,10 @@ const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: numb
     row.getCell(index + 1).value = value;
   });
 
-  for (const column of [2, 3, 4, 7, 9, 16]) {
-    row.getCell(column).numFmt = '#,##0.###';
+  for (const column of [2, 3, 4, 7, 9]) {
+    row.getCell(column).numFmt = '#,##0.00';
   }
+  row.getCell(16).numFmt = '#,##0.###';
   row.getCell(18).numFmt = '#,##0.00 [$€-1]';
   row.getCell(19).numFmt = '#,##0.00 [$€-1]';
 };

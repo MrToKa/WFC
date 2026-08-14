@@ -7,6 +7,7 @@ import {
   consolidateChangeOrderItemsForExport,
   currentExcelDate,
   generateChangeOrderWorkbook,
+  newestRevisionNumber,
   normalizeSpreadsheetFontOrder,
   sanitizeChangeOrderFileName,
   trimWorksheetAfterRow,
@@ -164,6 +165,114 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('A6').value).toBeNull();
   });
 
+  it('sums the same material and exports only its newest revision', async () => {
+    const revision00: ChangeOrderItem = {
+      ...createItem(1),
+      designQuantity: 10,
+      orderQuantity: 10,
+      revisionNumber: '00',
+    };
+    const revision01: ChangeOrderItem = {
+      ...revision00,
+      id: 'same-material-new-revision',
+      sortOrder: 2,
+      designQuantity: 20,
+      orderQuantity: 20,
+      revisionNumber: '01',
+    };
+
+    expect(newestRevisionNumber([revision00, revision01])).toBe('01');
+    expect(consolidateChangeOrderItemsForExport([revision00, revision01])).toMatchObject([
+      {
+        designQuantity: 30,
+        orderQuantity: 30,
+        revisionNumber: '01',
+      },
+    ]);
+
+    const details = createDetails(0);
+    details.items = [revision00, revision01];
+    details.itemCount = 2;
+    details.totalPrice = 135;
+    const buffer = await generateChangeOrderWorkbook(details, templatePath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+    const worksheet = workbook.getWorksheet('Change Order');
+    if (!worksheet) throw new Error('Generated worksheet is missing');
+
+    expect(worksheet.getCell('C5').value).toBe(30);
+    expect(worksheet.getCell('Y5').value).toBe('01');
+    expect(worksheet.getCell('A6').value).toBeNull();
+  });
+
+  it('joins differing report fields while summing the same material type', async () => {
+    const firstCable: ChangeOrderItem = {
+      ...createItem(1),
+      sourceCatalog: 'cable-type',
+      sourceMaterialId: 'same-cable-type',
+      designQuantity: 50,
+      orderQuantity: 60,
+      tagNo: 'ESD-001',
+      drawingNo: 'GDS-100',
+      remarks: 'Area A',
+    };
+    const secondCable: ChangeOrderItem = {
+      ...firstCable,
+      id: 'second-cable-line',
+      sortOrder: 2,
+      designQuantity: 100,
+      orderQuantity: 120,
+      descriptionEn: 'Updated cable description',
+      tagNo: 'ESD-002',
+      drawingNo: 'GDS-200',
+      remarks: 'Area B',
+    };
+    const thirdCable: ChangeOrderItem = {
+      ...secondCable,
+      id: 'third-cable-line',
+      sortOrder: 3,
+      designQuantity: 25,
+      orderQuantity: 30,
+      tagNo: 'ESD-001',
+      drawingNo: null,
+      remarks: null,
+    };
+
+    const consolidated = consolidateChangeOrderItemsForExport([
+      firstCable,
+      secondCable,
+      thirdCable,
+    ]);
+    expect(consolidated).toMatchObject([
+      {
+        designQuantity: 175,
+        orderQuantity: 210,
+        descriptionEn: '=unsafe formula, Updated cable description',
+        tagNo: 'ESD-001, ESD-002',
+        drawingNo: 'GDS-100, GDS-200',
+        remarks: 'Area A, Area B',
+      },
+    ]);
+
+    const details = createDetails(0);
+    details.items = [firstCable, secondCable, thirdCable];
+    details.itemCount = 3;
+    details.totalPrice = consolidated[0].totalPrice;
+    const buffer = await generateChangeOrderWorkbook(details, templatePath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+    const worksheet = workbook.getWorksheet('Change Order');
+    if (!worksheet) throw new Error('Generated worksheet is missing');
+
+    expect(worksheet.getCell('B5').value).toBe(175);
+    expect(worksheet.getCell('C5').value).toBe(210);
+    expect(worksheet.getCell('L5').value).toBe("'=unsafe formula, Updated cable description");
+    expect(worksheet.getCell('V5').value).toBe('ESD-001, ESD-002');
+    expect(worksheet.getCell('W5').value).toBe('GDS-100, GDS-200');
+    expect(worksheet.getCell('AD5').value).toBe('Area A, Area B');
+    expect(worksheet.getCell('R6').value).toBe('TOTAL:');
+  });
+
   it('keeps the same material separate when unit prices differ', () => {
     const first = createItem(1);
     const second = {
@@ -278,6 +387,9 @@ describe('Change Order workbook export', () => {
       formula: 'IF(AND(ISNUMBER(I5),ISNUMBER(G5)),I5*G5-B5,C5-B5)',
     });
     expect(worksheet.getCell('S5').value).toMatchObject({ formula: 'R5*C5' });
+    for (const address of ['B5', 'C5', 'D5', 'G5', 'I5']) {
+      expect(worksheet.getCell(address).numFmt).toBe('#,##0.00');
+    }
     expect(worksheet.getCell('R7').value).toBe('TOTAL:');
     expect(worksheet.getCell('S7').value).toMatchObject({ formula: 'SUM(S5:S6)' });
     expect(worksheet.getCell('L8').value).toBeNull();
