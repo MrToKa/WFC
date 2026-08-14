@@ -165,7 +165,12 @@ changeOrdersRouter.post(
         res.status(404).json({ error: 'Change Order not found' });
         return;
       }
-      res.status(201).json({ item });
+      const changeOrder = await getChangeOrder(req.params.projectId, req.params.changeOrderId);
+      if (!changeOrder) {
+        res.status(404).json({ error: 'Change Order not found' });
+        return;
+      }
+      res.status(201).json({ item, changeOrder });
     } catch (error) {
       if (error instanceof CatalogMaterialNotFoundError) {
         res.status(404).json({ error: 'Source material not found' });
@@ -219,7 +224,12 @@ changeOrdersRouter.post(
         res.status(404).json({ error: 'Change Order item not found' });
         return;
       }
-      res.status(201).json({ item });
+      const changeOrder = await getChangeOrder(req.params.projectId, req.params.changeOrderId);
+      if (!changeOrder) {
+        res.status(404).json({ error: 'Change Order not found' });
+        return;
+      }
+      res.status(201).json({ item, changeOrder });
     } catch (error) {
       console.error('Duplicate Change Order item error', error);
       res.status(500).json({ error: 'Failed to duplicate Change Order item' });

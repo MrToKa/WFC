@@ -59,7 +59,7 @@ export async function addChangeOrderItem(
   projectId: string,
   changeOrderId: string,
   input: { sourceCatalog: ChangeOrderSourceCatalog; sourceMaterialId: string },
-): Promise<{ item: ChangeOrderItem }> {
+): Promise<{ item: ChangeOrderItem; changeOrder: ChangeOrderDetails }> {
   return request(`${basePath(projectId)}/${changeOrderId}/items`, {
     method: 'POST',
     token,
@@ -86,7 +86,7 @@ export async function duplicateChangeOrderItem(
   projectId: string,
   changeOrderId: string,
   itemId: string,
-): Promise<{ item: ChangeOrderItem }> {
+): Promise<{ item: ChangeOrderItem; changeOrder: ChangeOrderDetails }> {
   return request(`${basePath(projectId)}/${changeOrderId}/items/${itemId}/duplicate`, {
     method: 'POST',
     token,

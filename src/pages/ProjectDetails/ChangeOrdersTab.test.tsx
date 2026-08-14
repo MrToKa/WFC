@@ -1,5 +1,5 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeOrderDetails, Project, User } from '@/api/client';
 import { ToastProvider } from '@/context/ToastContext';
@@ -87,7 +87,10 @@ vi.mock('@/api/client', () => ({
   addChangeOrderItem: vi.fn(),
   updateChangeOrderItem: vi.fn(),
   deleteChangeOrderItem: vi.fn(),
-  duplicateChangeOrderItem: vi.fn(async () => ({ item: details.items[0] })),
+  duplicateChangeOrderItem: vi.fn(async () => ({
+    item: details.items[0],
+    changeOrder: details,
+  })),
   reorderChangeOrderItems: vi.fn(),
   exportChangeOrder: vi.fn(),
   fetchMaterialCableTypes: vi.fn(async () => ({ cableTypes: [] })),
@@ -230,4 +233,206 @@ describe('ChangeOrdersTab', () => {
     },
     15_000,
   );
+
+  it('shows an expansion control immediately for a copied material', async () => {
+    const api = await import('@/api/client');
+    const copiedParent: ChangeOrderDetails['items'][number] = {
+      ...details.items[0],
+      id: '88888888-8888-4888-8888-888888888888',
+      sortOrder: 2,
+      lineKind: 'manual',
+      parentItemId: null,
+    };
+    const copiedChild: ChangeOrderDetails['items'][number] = {
+      ...details.items[0],
+      id: '99999999-9999-4999-8999-999999999999',
+      sortOrder: 3,
+      sourceCatalog: 'cable-installation-material',
+      descriptionEn: 'Copied inherited material',
+      lineKind: 'inherited',
+      parentItemId: copiedParent.id,
+      quantityPerParent: 1,
+    };
+    vi.mocked(api.duplicateChangeOrderItem).mockResolvedValueOnce({
+      item: copiedParent,
+      changeOrder: {
+        ...details,
+        itemCount: 3,
+        totalPrice: 120,
+        items: [details.items[0], copiedParent, copiedChild],
+      },
+    });
+
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+
+    await openExistingOrder();
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Collapse inherited standard materials for item 2',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Copied inherited material')).toBeInTheDocument();
+  }, 15_000);
+
+  it('shows an expansion control immediately for a newly added material', async () => {
+    const api = await import('@/api/client');
+    const addedParent: ChangeOrderDetails['items'][number] = {
+      ...details.items[0],
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      sortOrder: 2,
+      sourceCatalog: 'cable-type',
+      descriptionEn: 'New cable type',
+      lineKind: 'manual',
+      parentItemId: null,
+    };
+    const addedChild: ChangeOrderDetails['items'][number] = {
+      ...details.items[0],
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      sortOrder: 3,
+      sourceCatalog: 'cable-installation-material',
+      descriptionEn: 'New inherited material',
+      lineKind: 'inherited',
+      parentItemId: addedParent.id,
+      quantityPerParent: 1,
+    };
+    vi.mocked(api.fetchMaterialCableTypes).mockResolvedValueOnce({
+      cableTypes: [
+        {
+          id: addedParent.sourceMaterialId,
+          name: addedParent.descriptionEn,
+          purpose: null,
+          material: null,
+          description: null,
+          manufacturer: null,
+          partNo: null,
+          remarks: null,
+          diameterMm: null,
+          weightKgPerM: null,
+          minimumOrderQuantity: 1,
+          orderMeasurement: 'pcs',
+          packaging: 'pcs',
+          createdAt: details.createdAt,
+          updatedAt: details.updatedAt,
+        },
+      ],
+    });
+    vi.mocked(api.addChangeOrderItem).mockResolvedValueOnce({
+      item: addedParent,
+      changeOrder: {
+        ...details,
+        itemCount: 3,
+        totalPrice: 120,
+        items: [details.items[0], addedParent, addedChild],
+      },
+    });
+
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+
+    await openExistingOrder();
+    fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
+
+    const catalogRow = (await screen.findByText('New cable type')).closest('tr');
+    expect(catalogRow).not.toBeNull();
+    fireEvent.click(within(catalogRow!).getByText('Add'));
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Collapse inherited standard materials for item 2',
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('New inherited material')).toBeInTheDocument();
+  }, 15_000);
+
+  it('collapses inherited standard materials without renumbering the remaining rows', async () => {
+    const api = await import('@/api/client');
+    const inheritedDetails: ChangeOrderDetails = {
+      ...details,
+      itemCount: 3,
+      totalPrice: 120,
+      items: [
+        {
+          ...details.items[0],
+          sourceCatalog: 'cable-type',
+          descriptionEn: 'Cable type',
+          lineKind: 'manual',
+          parentItemId: null,
+          sortOrder: 1,
+        },
+        {
+          ...details.items[0],
+          id: '66666666-6666-4666-8666-666666666666',
+          sourceCatalog: 'cable-installation-material',
+          descriptionEn: 'Inherited cable cleat',
+          lineKind: 'inherited',
+          parentItemId: details.items[0].id,
+          quantityPerParent: 2,
+          sortOrder: 2,
+        },
+        {
+          ...details.items[0],
+          id: '77777777-7777-4777-8777-777777777777',
+          descriptionEn: 'Standalone support',
+          lineKind: 'manual',
+          parentItemId: null,
+          sortOrder: 3,
+        },
+      ],
+    };
+    vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({ changeOrder: inheritedDetails });
+
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+
+    await screen.findByRole('table', { name: 'All Change Orders' });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+
+    const materialsTable = await screen.findByRole('table', { name: 'Change Order items' });
+    const cableTypeRow = within(materialsTable).getByText('Cable type').closest('tr');
+    const standaloneRow = within(materialsTable).getByText('Standalone support').closest('tr');
+    expect(cableTypeRow).not.toBeNull();
+    expect(standaloneRow).not.toBeNull();
+
+    const cableTypeItemCell = within(cableTypeRow!).getAllByRole('cell')[0];
+    const standaloneItemCell = within(standaloneRow!).getAllByRole('cell')[0];
+    const collapseButton = within(cableTypeItemCell).getByRole('button', {
+      name: 'Collapse inherited standard materials for item 1',
+    });
+    expect(cableTypeItemCell).toHaveTextContent('1');
+    expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
+    expect(standaloneItemCell).toHaveTextContent('3');
+    expect(within(materialsTable).getByText('Inherited cable cleat')).toBeInTheDocument();
+    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
+
+    fireEvent.click(collapseButton);
+
+    expect(within(materialsTable).queryByText('Inherited cable cleat')).not.toBeInTheDocument();
+    expect(within(standaloneRow!).getAllByRole('cell')[0]).toHaveTextContent('3');
+    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
+
+    const expandButton = within(cableTypeItemCell).getByRole('button', {
+      name: 'Expand inherited standard materials for item 1',
+    });
+    expect(expandButton).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(expandButton);
+    expect(within(materialsTable).getByText('Inherited cable cleat')).toBeInTheDocument();
+  }, 15_000);
 });

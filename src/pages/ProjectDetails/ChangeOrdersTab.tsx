@@ -4,6 +4,8 @@ import {
   ArrowDownRegular,
   ArrowDownloadRegular,
   ArrowUpRegular,
+  ChevronDownRegular,
+  ChevronRightRegular,
   CopyRegular,
   DeleteRegular,
   EditRegular,
@@ -99,6 +101,17 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalXS,
     whiteSpace: 'nowrap',
   },
+  itemCell: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalXS,
+    whiteSpace: 'nowrap',
+  },
+  expansionButton: {
+    minWidth: '20px',
+    width: '20px',
+    height: '20px',
+  },
   total: {
     display: 'flex',
     justifyContent: 'flex-end',
@@ -167,6 +180,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     loading,
     detailsLoading,
     error,
+    setDetails,
     loadList,
     selectChangeOrder,
   } = useChangeOrders(project.id, token);
@@ -182,6 +196,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
   const [savingItem, setSavingItem] = useState(false);
   const [pendingAction, setPendingAction] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [collapsedParentIds, setCollapsedParentIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (!details) return;
@@ -190,12 +205,34 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     setNewMode(false);
   }, [details]);
 
+  useEffect(() => {
+    setCollapsedParentIds(new Set());
+  }, [selectedId]);
+
   const items = details?.items ?? [];
   const total = useMemo(() => items.reduce((sum, item) => sum + item.totalPrice, 0), [items]);
   const itemsById = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
     [items],
   );
+  const parentIdsWithInheritedItems = useMemo(
+    () =>
+      new Set(
+        items
+          .filter((item) => item.lineKind === 'inherited' && item.parentItemId)
+          .map((item) => item.parentItemId as string),
+      ),
+    [items],
+  );
+
+  const toggleInheritedItems = (parentId: string): void => {
+    setCollapsedParentIds((current) => {
+      const next = new Set(current);
+      if (next.has(parentId)) next.delete(parentId);
+      else next.add(parentId);
+      return next;
+    });
+  };
 
   const canLeave = (): boolean =>
     !headerDirty || window.confirm('Discard unsaved Change Order header changes?');
@@ -291,12 +328,18 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     if (!token || !selectedId) return;
     setAddingMaterial(true);
     try {
-      await addChangeOrderItem(token, project.id, selectedId, {
+      const result = await addChangeOrderItem(token, project.id, selectedId, {
         sourceCatalog: choice.category,
         sourceMaterialId: choice.id,
       });
+      setDetails(result.changeOrder);
+      setCollapsedParentIds((current) => {
+        const next = new Set(current);
+        next.delete(result.item.id);
+        return next;
+      });
       setMaterialDialogOpen(false);
-      await reloadActive();
+      await loadList();
       showToast({ title: 'Material added', intent: 'success' });
     } catch (caught) {
       showToast({
@@ -352,7 +395,13 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
         selectedId,
         item.id,
       );
-      await reloadActive();
+      setDetails(result.changeOrder);
+      setCollapsedParentIds((current) => {
+        const next = new Set(current);
+        next.delete(result.item.id);
+        return next;
+      });
+      await loadList();
       setEditingItem(result.item);
       showToast({ title: 'Material duplicated', intent: 'success' });
     } catch (caught) {
@@ -568,115 +617,156 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {items.map((item, index) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>
-                            <div>{item.descriptionEn}</div>
-                            {item.lineKind === 'inherited' ? (
-                              <Caption1 className={styles.inherited}>
-                                Inherited Standard Material
-                                {item.parentItemId
-                                  ? ` for ${itemsById.get(item.parentItemId)?.descriptionEn ?? 'parent material'}`
-                                  : ''}
-                                {item.quantityPerParent !== null &&
-                                item.quantityPerParent !== undefined
-                                  ? ` · ${item.quantityPerParent} per ${
-                                      item.parentItemId &&
-                                      itemsById.get(item.parentItemId)?.sourceCatalog ===
-                                        'cable-type'
-                                        ? 'cable'
-                                        : 'parent'
-                                    }`
-                                  : ''}
-                              </Caption1>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className={styles.numeric}>{item.designQuantity}</TableCell>
-                          <TableCell className={styles.numeric}>{item.orderQuantity}</TableCell>
-                          <TableCell
-                            className={mergeClasses(
-                              styles.numeric,
-                              item.spareQuantity < 0 && styles.warning,
-                            )}
-                          >
-                            {item.spareQuantity}
-                          </TableCell>
-                          <TableCell>{item.unit ?? '—'}</TableCell>
-                          <TableCell>
-                            {[item.packaging, item.packagingQuantity, item.packagingUnit]
-                              .filter((part) => part !== null && part !== '')
-                              .join(' ') || '—'}
-                          </TableCell>
-                          <TableCell>
-                            {[item.orderedQuantity, item.orderedUnit]
-                              .filter((part) => part !== null && part !== '')
-                              .join(' ') || '—'}
-                          </TableCell>
-                          <TableCell>{item.manufacturer ?? '—'}</TableCell>
-                          <TableCell>{item.manufacturerPartNo ?? '—'}</TableCell>
-                          <TableCell className={styles.numeric}>
-                            {formatMoney(item.unitPrice)}
-                          </TableCell>
-                          <TableCell className={styles.numeric}>
-                            {formatMoney(item.totalPrice)}
-                          </TableCell>
-                          <TableCell>
-                            <div className={styles.actions}>
-                              <Button
-                                size="small"
-                                appearance="subtle"
-                                icon={<EditRegular />}
-                                aria-label={`Edit item ${index + 1}`}
-                                title="Edit"
-                                onClick={() => setEditingItem(item)}
-                              />
-                              <Button
-                                size="small"
-                                appearance="subtle"
-                                icon={<CopyRegular />}
-                                aria-label={`Duplicate item ${index + 1}`}
-                                title="Duplicate"
-                                disabled={pendingAction || item.lineKind === 'inherited'}
-                                onClick={() => void duplicateItem(item)}
-                              />
-                              <Button
-                                size="small"
-                                appearance="subtle"
-                                icon={<DeleteRegular />}
-                                aria-label={`Delete item ${index + 1}`}
-                                title="Delete"
-                                disabled={pendingAction || item.lineKind === 'inherited'}
-                                onClick={() => void removeItem(item)}
-                              />
-                              <Button
-                                size="small"
-                                appearance="subtle"
-                                icon={<ArrowUpRegular />}
-                                aria-label={`Move item ${index + 1} up`}
-                                title="Move up"
-                                disabled={
-                                  index === 0 || pendingAction || item.lineKind === 'inherited'
-                                }
-                                onClick={() => void moveItem(index, -1)}
-                              />
-                              <Button
-                                size="small"
-                                appearance="subtle"
-                                icon={<ArrowDownRegular />}
-                                aria-label={`Move item ${index + 1} down`}
-                                title="Move down"
-                                disabled={
-                                  index === items.length - 1 ||
-                                  pendingAction ||
-                                  item.lineKind === 'inherited'
-                                }
-                                onClick={() => void moveItem(index, 1)}
-                              />
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {items.map((item, index) => {
+                        if (
+                          item.lineKind === 'inherited' &&
+                          item.parentItemId &&
+                          collapsedParentIds.has(item.parentItemId)
+                        ) {
+                          return null;
+                        }
+
+                        const hasInheritedItems = parentIdsWithInheritedItems.has(item.id);
+                        const inheritedItemsCollapsed = collapsedParentIds.has(item.id);
+
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell>
+                              <div className={styles.itemCell}>
+                                <span>{index + 1}</span>
+                                {hasInheritedItems ? (
+                                  <Button
+                                    size="small"
+                                    appearance="subtle"
+                                    className={styles.expansionButton}
+                                    icon={
+                                      inheritedItemsCollapsed ? (
+                                        <ChevronRightRegular />
+                                      ) : (
+                                        <ChevronDownRegular />
+                                      )
+                                    }
+                                    aria-label={`${
+                                      inheritedItemsCollapsed ? 'Expand' : 'Collapse'
+                                    } inherited standard materials for item ${index + 1}`}
+                                    aria-expanded={!inheritedItemsCollapsed}
+                                    title={
+                                      inheritedItemsCollapsed
+                                        ? 'Show inherited standard materials'
+                                        : 'Hide inherited standard materials'
+                                    }
+                                    onClick={() => toggleInheritedItems(item.id)}
+                                  />
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div>{item.descriptionEn}</div>
+                              {item.lineKind === 'inherited' ? (
+                                <Caption1 className={styles.inherited}>
+                                  Inherited Standard Material
+                                  {item.parentItemId
+                                    ? ` for ${itemsById.get(item.parentItemId)?.descriptionEn ?? 'parent material'}`
+                                    : ''}
+                                  {item.quantityPerParent !== null &&
+                                  item.quantityPerParent !== undefined
+                                    ? ` · ${item.quantityPerParent} per ${
+                                        item.parentItemId &&
+                                        itemsById.get(item.parentItemId)?.sourceCatalog ===
+                                          'cable-type'
+                                          ? 'cable'
+                                          : 'parent'
+                                      }`
+                                    : ''}
+                                </Caption1>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className={styles.numeric}>{item.designQuantity}</TableCell>
+                            <TableCell className={styles.numeric}>{item.orderQuantity}</TableCell>
+                            <TableCell
+                              className={mergeClasses(
+                                styles.numeric,
+                                item.spareQuantity < 0 && styles.warning,
+                              )}
+                            >
+                              {item.spareQuantity}
+                            </TableCell>
+                            <TableCell>{item.unit ?? '—'}</TableCell>
+                            <TableCell>
+                              {[item.packaging, item.packagingQuantity, item.packagingUnit]
+                                .filter((part) => part !== null && part !== '')
+                                .join(' ') || '—'}
+                            </TableCell>
+                            <TableCell>
+                              {[item.orderedQuantity, item.orderedUnit]
+                                .filter((part) => part !== null && part !== '')
+                                .join(' ') || '—'}
+                            </TableCell>
+                            <TableCell>{item.manufacturer ?? '—'}</TableCell>
+                            <TableCell>{item.manufacturerPartNo ?? '—'}</TableCell>
+                            <TableCell className={styles.numeric}>
+                              {formatMoney(item.unitPrice)}
+                            </TableCell>
+                            <TableCell className={styles.numeric}>
+                              {formatMoney(item.totalPrice)}
+                            </TableCell>
+                            <TableCell>
+                              <div className={styles.actions}>
+                                <Button
+                                  size="small"
+                                  appearance="subtle"
+                                  icon={<EditRegular />}
+                                  aria-label={`Edit item ${index + 1}`}
+                                  title="Edit"
+                                  onClick={() => setEditingItem(item)}
+                                />
+                                <Button
+                                  size="small"
+                                  appearance="subtle"
+                                  icon={<CopyRegular />}
+                                  aria-label={`Duplicate item ${index + 1}`}
+                                  title="Duplicate"
+                                  disabled={pendingAction || item.lineKind === 'inherited'}
+                                  onClick={() => void duplicateItem(item)}
+                                />
+                                <Button
+                                  size="small"
+                                  appearance="subtle"
+                                  icon={<DeleteRegular />}
+                                  aria-label={`Delete item ${index + 1}`}
+                                  title="Delete"
+                                  disabled={pendingAction || item.lineKind === 'inherited'}
+                                  onClick={() => void removeItem(item)}
+                                />
+                                <Button
+                                  size="small"
+                                  appearance="subtle"
+                                  icon={<ArrowUpRegular />}
+                                  aria-label={`Move item ${index + 1} up`}
+                                  title="Move up"
+                                  disabled={
+                                    index === 0 || pendingAction || item.lineKind === 'inherited'
+                                  }
+                                  onClick={() => void moveItem(index, -1)}
+                                />
+                                <Button
+                                  size="small"
+                                  appearance="subtle"
+                                  icon={<ArrowDownRegular />}
+                                  aria-label={`Move item ${index + 1} down`}
+                                  title="Move down"
+                                  disabled={
+                                    index === items.length - 1 ||
+                                    pendingAction ||
+                                    item.lineKind === 'inherited'
+                                  }
+                                  onClick={() => void moveItem(index, 1)}
+                                />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
