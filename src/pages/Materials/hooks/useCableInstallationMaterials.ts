@@ -34,6 +34,7 @@ type CableInstallationMaterialDialogController = {
   values: CableInstallationMaterialFormState;
   errors: CableInstallationMaterialFormErrors;
   submitting: boolean;
+  purposeOptions: string[];
   handleFieldChange: (
     field: keyof CableInstallationMaterialFormState,
   ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
@@ -120,6 +121,25 @@ export const useCableInstallationMaterials = ({
       [...items].sort((a, b) => a.type.localeCompare(b.type, undefined, { sensitivity: 'base' })),
     [],
   );
+
+  const purposeOptions = useMemo(() => {
+    const options = ['Grounding', 'Control', 'Power', 'VFD', 'MV'];
+    const uniqueOptions = new Map<string, string>();
+
+    for (const purpose of [
+      ...options,
+      ...cableInstallationMaterials.map((item) => item.purpose ?? ''),
+    ]) {
+      const trimmedPurpose = purpose.trim();
+      if (trimmedPurpose !== '') {
+        uniqueOptions.set(trimmedPurpose.toLocaleLowerCase(), trimmedPurpose);
+      }
+    }
+
+    return [...uniqueOptions.values()].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' }),
+    );
+  }, [cableInstallationMaterials]);
 
   const filteredCableInstallationMaterials = useMemo(() => {
     const normalizedFilter = searchText.trim().toLowerCase();
@@ -272,9 +292,14 @@ export const useCableInstallationMaterials = ({
     };
 
   const handlePurposeSelect = useCallback((_event: unknown, data: { optionValue?: string }) => {
+    const optionValue = data.optionValue;
+    if (optionValue === undefined) {
+      return;
+    }
+
     setDialogValues((previous) => ({
       ...previous,
-      purpose: data.optionValue ?? '',
+      purpose: optionValue,
     }));
   }, []);
 
@@ -591,6 +616,7 @@ export const useCableInstallationMaterials = ({
       values: dialogValues,
       errors: dialogErrors,
       submitting: dialogSubmitting,
+      purposeOptions,
       handleFieldChange,
       handlePurposeSelect,
       handleSubmit,

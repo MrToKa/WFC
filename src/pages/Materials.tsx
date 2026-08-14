@@ -494,6 +494,9 @@ export const Materials = () => {
         values={cableInstallationMaterialsHook.cableInstallationMaterialDialog.values}
         errors={cableInstallationMaterialsHook.cableInstallationMaterialDialog.errors}
         submitting={cableInstallationMaterialsHook.cableInstallationMaterialDialog.submitting}
+        purposeOptions={
+          cableInstallationMaterialsHook.cableInstallationMaterialDialog.purposeOptions
+        }
         onFieldChange={
           cableInstallationMaterialsHook.cableInstallationMaterialDialog.handleFieldChange
         }
