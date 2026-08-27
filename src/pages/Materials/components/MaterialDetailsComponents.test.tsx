@@ -1,10 +1,7 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  MaterialCableInstallationMaterial,
-  StandardMaterialAssignment,
-} from '@/api/client';
+import type { MaterialCableInstallationMaterial, StandardMaterialAssignment } from '@/api/client';
 import {
   MaterialDetailsError,
   MaterialDetailsLayout,
@@ -30,6 +27,22 @@ const catalog: MaterialCableInstallationMaterial[] = [
     packaging: 'Package',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+const catalogWithPurposes: MaterialCableInstallationMaterial[] = [
+  { ...catalog[0], purpose: 'Power' },
+  {
+    ...catalog[0],
+    id: '00000000-0000-4000-8000-000000000004',
+    type: 'Control cable tie',
+    purpose: 'Control',
+  },
+  {
+    ...catalog[0],
+    id: '00000000-0000-4000-8000-000000000005',
+    type: 'Control cable marker',
+    purpose: 'Control',
   },
 ];
 
@@ -93,7 +106,9 @@ describe('Material Details shared components', () => {
     );
     expect(screen.getByText('No Standard Materials are assigned.')).toBeInTheDocument();
     expect(screen.getByText(/read-only for non-admin users/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /add standard material/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /add standard material/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('exposes admin add, edit, and delete controls', () => {
@@ -139,5 +154,31 @@ describe('Material Details shared components', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(screen.getByRole('alert')).toHaveTextContent(/greater than zero/i);
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('filters Cable Installation Materials by Purpose', () => {
+    renderFluent(
+      <StandardMaterialDialog
+        open
+        assignment={null}
+        catalog={catalogWithPurposes}
+        ownerMaterialId="owner"
+        excludeOwnerFromCatalog={false}
+        saving={false}
+        onDismiss={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Purpose' }), {
+      target: { value: 'Control' },
+    });
+
+    expect(screen.getByRole('combobox', { name: 'Cable Installation Material' })).toHaveValue(
+      '00000000-0000-4000-8000-000000000004',
+    );
+    expect(screen.getByRole('option', { name: 'Control cable tie' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Control cable marker' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Cable gland M32' })).not.toBeInTheDocument();
   });
 });

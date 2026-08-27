@@ -41,27 +41,62 @@ export const StandardMaterialDialog = ({
   onSave,
 }: StandardMaterialDialogProps) => {
   const [referencedMaterialId, setReferencedMaterialId] = useState('');
+  const [purpose, setPurpose] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState<StandardMaterialUnit>('pcs');
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const options = useMemo(
-    () =>
-      catalog.filter(
-        (item) => !excludeOwnerFromCatalog || item.id !== ownerMaterialId,
-      ),
+    () => catalog.filter((item) => !excludeOwnerFromCatalog || item.id !== ownerMaterialId),
     [catalog, excludeOwnerFromCatalog, ownerMaterialId],
   );
 
+  const purposeOptions = useMemo(() => {
+    const uniquePurposes = new Map<string, string>();
+
+    for (const item of options) {
+      const trimmedPurpose = item.purpose?.trim();
+      if (trimmedPurpose) {
+        uniquePurposes.set(trimmedPurpose.toLocaleLowerCase(), trimmedPurpose);
+      }
+    }
+
+    return [...uniquePurposes.values()].sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: 'base' }),
+    );
+  }, [options]);
+
+  const filteredOptions = useMemo(() => {
+    const normalizedPurpose = purpose.toLocaleLowerCase();
+    if (!normalizedPurpose) return options;
+
+    return options.filter((item) => item.purpose?.trim().toLocaleLowerCase() === normalizedPurpose);
+  }, [options, purpose]);
+
   useEffect(() => {
     if (!open) return;
+    const assignedMaterial = options.find((item) => item.id === assignment?.referencedMaterialId);
+    setPurpose(assignedMaterial?.purpose?.trim() ?? '');
     setReferencedMaterialId(assignment?.referencedMaterialId ?? options[0]?.id ?? '');
     setQuantity(assignment ? String(assignment.quantity) : '1');
     setUnit(assignment?.unit ?? 'pcs');
     setRemarks(assignment?.remarks ?? '');
     setError(null);
   }, [assignment, open, options]);
+
+  const handlePurposeChange = (nextPurpose: string): void => {
+    setPurpose(nextPurpose);
+
+    const normalizedPurpose = nextPurpose.toLocaleLowerCase();
+    const matchingOptions = normalizedPurpose
+      ? options.filter((item) => item.purpose?.trim().toLocaleLowerCase() === normalizedPurpose)
+      : options;
+
+    if (!matchingOptions.some((item) => item.id === referencedMaterialId)) {
+      setReferencedMaterialId(matchingOptions[0]?.id ?? '');
+    }
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
@@ -88,8 +123,25 @@ export const StandardMaterialDialog = ({
       <DialogSurface aria-label={assignment ? 'Edit Standard Material' : 'Add Standard Material'}>
         <form onSubmit={(event) => void submit(event)}>
           <DialogBody>
-            <DialogTitle>{assignment ? 'Edit Standard Material' : 'Add Standard Material'}</DialogTitle>
+            <DialogTitle>
+              {assignment ? 'Edit Standard Material' : 'Add Standard Material'}
+            </DialogTitle>
             <DialogContent>
+              <Field label="Purpose">
+                <Select
+                  aria-label="Purpose"
+                  value={purpose}
+                  onChange={(event) => handlePurposeChange(event.target.value)}
+                  disabled={saving}
+                >
+                  <option value="">All purposes</option>
+                  {purposeOptions.map((purposeOption) => (
+                    <option key={purposeOption.toLocaleLowerCase()} value={purposeOption}>
+                      {purposeOption}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               <Field label="Cable Installation Material" required>
                 <Select
                   aria-label="Cable Installation Material"
@@ -98,7 +150,7 @@ export const StandardMaterialDialog = ({
                   disabled={saving}
                 >
                   <option value="">Select a material</option>
-                  {options.map((item) => (
+                  {filteredOptions.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.type}
                     </option>

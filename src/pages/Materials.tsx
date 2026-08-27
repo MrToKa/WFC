@@ -164,8 +164,11 @@ export const Materials = () => {
             fileInputRef={cableInstallationMaterialsHook.fileInputRef}
             searchText={cableInstallationMaterialsHook.searchText}
             searchCriteria={cableInstallationMaterialsHook.searchCriteria}
+            purposeFilter={cableInstallationMaterialsHook.purposeFilter}
+            purposeOptions={cableInstallationMaterialsHook.purposeFilterOptions}
             onSearchTextChange={cableInstallationMaterialsHook.setSearchText}
             onSearchCriteriaChange={cableInstallationMaterialsHook.setSearchCriteria}
+            onPurposeFilterChange={cableInstallationMaterialsHook.setPurposeFilter}
             error={cableInstallationMaterialsHook.cableInstallationMaterialsError}
             isLoading={cableInstallationMaterialsHook.cableInstallationMaterialsLoading}
             items={cableInstallationMaterialsHook.pagedCableInstallationMaterials}
@@ -247,9 +250,7 @@ export const Materials = () => {
               formatNumeric={formatNumeric}
               formatWeight={formatWeight}
               onEdit={traysHook.openTrayEditDialog}
-              onDetails={(tray) =>
-                navigate(MATERIAL_DETAILS_CAPABILITIES.tray.route(tray.id))
-              }
+              onDetails={(tray) => navigate(MATERIAL_DETAILS_CAPABILITIES.tray.route(tray.id))}
               onDelete={traysHook.handleTrayDelete}
               onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
               token={token}

@@ -37,8 +37,11 @@ type CableInstallationMaterialsTabProps = {
   fileInputRef: RefObject<HTMLInputElement | null>;
   searchText: string;
   searchCriteria: CableInstallationMaterialSearchCriteria;
+  purposeFilter: string;
+  purposeOptions: string[];
   onSearchTextChange: (value: string) => void;
   onSearchCriteriaChange: (value: CableInstallationMaterialSearchCriteria) => void;
+  onPurposeFilterChange: (value: string) => void;
   error: string | null;
   isLoading: boolean;
   items: MaterialCableInstallationMaterial[];
@@ -71,8 +74,11 @@ export const CableInstallationMaterialsTab = ({
   fileInputRef,
   searchText,
   searchCriteria,
+  purposeFilter,
+  purposeOptions,
   onSearchTextChange,
   onSearchCriteriaChange,
+  onPurposeFilterChange,
   error,
   isLoading,
   items,
@@ -89,6 +95,10 @@ export const CableInstallationMaterialsTab = ({
   emptyStateBody,
 }: CableInstallationMaterialsTabProps) => {
   const selectedCriteria = useMemo<string[]>(() => [searchCriteria], [searchCriteria]);
+  const selectedPurpose = useMemo<string[]>(
+    () => (purposeFilter ? [purposeFilter] : []),
+    [purposeFilter],
+  );
 
   const resolvedEmptyStateBody =
     emptyStateBody ??
@@ -171,6 +181,19 @@ export const CableInstallationMaterialsTab = ({
           <Option value="manufacturer">Manufacturer</Option>
           <Option value="partNo">Part No.</Option>
         </Dropdown>
+        <Dropdown
+          selectedOptions={selectedPurpose}
+          value={purposeFilter || 'All purposes'}
+          onOptionSelect={(_, data) => onPurposeFilterChange(data.optionValue ?? '')}
+          aria-label="Filter by purpose"
+        >
+          <Option value="">All purposes</Option>
+          {purposeOptions.map((purposeOption) => (
+            <Option key={purposeOption.toLocaleLowerCase()} value={purposeOption}>
+              {purposeOption}
+            </Option>
+          ))}
+        </Dropdown>
       </div>
 
       {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
@@ -219,17 +242,17 @@ export const CableInstallationMaterialsTab = ({
                       </Button>
                       {isAdmin ? (
                         <>
-                        <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>
-                          Edit
-                        </Button>
-                        <Button
-                          size="small"
-                          appearance="secondary"
-                          onClick={() => onDelete(item)}
-                          disabled={isBusy}
-                        >
-                          Delete
-                        </Button>
+                          <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>
+                            Edit
+                          </Button>
+                          <Button
+                            size="small"
+                            appearance="secondary"
+                            onClick={() => onDelete(item)}
+                            disabled={isBusy}
+                          >
+                            Delete
+                          </Button>
                         </>
                       ) : null}
                     </td>

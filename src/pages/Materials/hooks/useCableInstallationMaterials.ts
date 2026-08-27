@@ -65,8 +65,11 @@ type UseCableInstallationMaterialsResult = {
   fileInputRef: RefObject<HTMLInputElement | null>;
   searchText: string;
   searchCriteria: CableInstallationMaterialSearchCriteria;
+  purposeFilter: string;
+  purposeFilterOptions: string[];
   setSearchText: (value: string) => void;
   setSearchCriteria: (value: CableInstallationMaterialSearchCriteria) => void;
+  setPurposeFilter: (value: string) => void;
   reloadCableInstallationMaterials: (options?: { showSpinner?: boolean }) => Promise<void>;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
@@ -115,6 +118,7 @@ export const useCableInstallationMaterials = ({
   const [searchText, setSearchText] = useState<string>('');
   const [searchCriteria, setSearchCriteria] =
     useState<CableInstallationMaterialSearchCriteria>('all');
+  const [purposeFilter, setPurposeFilter] = useState<string>('');
 
   const sortCableInstallationMaterials = useCallback(
     (items: MaterialCableInstallationMaterial[]) =>
@@ -141,13 +145,32 @@ export const useCableInstallationMaterials = ({
     );
   }, [cableInstallationMaterials]);
 
-  const filteredCableInstallationMaterials = useMemo(() => {
-    const normalizedFilter = searchText.trim().toLowerCase();
-    if (!normalizedFilter) {
-      return cableInstallationMaterials;
+  const purposeFilterOptions = useMemo(() => {
+    const uniqueOptions = new Map<string, string>();
+
+    for (const item of cableInstallationMaterials) {
+      const trimmedPurpose = item.purpose?.trim();
+      if (trimmedPurpose) {
+        uniqueOptions.set(trimmedPurpose.toLocaleLowerCase(), trimmedPurpose);
+      }
     }
 
+    return [...uniqueOptions.values()].sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: 'base' }),
+    );
+  }, [cableInstallationMaterials]);
+
+  const filteredCableInstallationMaterials = useMemo(() => {
+    const normalizedFilter = searchText.trim().toLowerCase();
+    const normalizedPurpose = purposeFilter.trim().toLocaleLowerCase();
+
     return cableInstallationMaterials.filter((item) => {
+      if (normalizedPurpose && item.purpose?.trim().toLocaleLowerCase() !== normalizedPurpose) {
+        return false;
+      }
+
+      if (!normalizedFilter) return true;
+
       if (searchCriteria === 'all') {
         const values = [
           item.type,
@@ -184,7 +207,7 @@ export const useCableInstallationMaterials = ({
 
       return value.toLowerCase().includes(normalizedFilter);
     });
-  }, [cableInstallationMaterials, searchCriteria, searchText]);
+  }, [cableInstallationMaterials, purposeFilter, searchCriteria, searchText]);
 
   const totalPages = useMemo(() => {
     if (filteredCableInstallationMaterials.length === 0) {
@@ -281,6 +304,11 @@ export const useCableInstallationMaterials = ({
     },
     [],
   );
+
+  const handlePurposeFilterChange = useCallback((value: string) => {
+    setPurposeFilter(value);
+    setPage(1);
+  }, []);
 
   const handleFieldChange =
     (field: keyof CableInstallationMaterialFormState) =>
@@ -598,8 +626,11 @@ export const useCableInstallationMaterials = ({
     fileInputRef,
     searchText,
     searchCriteria,
+    purposeFilter,
+    purposeFilterOptions,
     setSearchText: handleSearchTextChange,
     setSearchCriteria: handleSearchCriteriaChange,
+    setPurposeFilter: handlePurposeFilterChange,
     reloadCableInstallationMaterials,
     goToPreviousPage,
     goToNextPage,
