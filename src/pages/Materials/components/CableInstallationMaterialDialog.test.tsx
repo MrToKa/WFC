@@ -48,6 +48,13 @@ describe('CableInstallationMaterialDialog', () => {
     expect(screen.getByRole('textbox', { name: 'Source' })).toHaveAttribute('type', 'url');
   });
 
+  it.each(['create', 'edit'] as const)('shows dimension and weight inputs in %s mode', (mode) => {
+    render(<TestDialog mode={mode} />);
+
+      expect(screen.getByRole('textbox', { name: 'Dimension [mm]' })).toBeInTheDocument();
+      expect(screen.getByRole('spinbutton', { name: 'Weight [kg]' })).not.toBeRequired();
+  });
+
   it.each(['create', 'edit'] as const)('allows a new purpose to be typed in %s mode', (mode) => {
     render(<TestDialog mode={mode} />);
 

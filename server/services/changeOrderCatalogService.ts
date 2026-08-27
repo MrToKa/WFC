@@ -47,6 +47,8 @@ export type CableInstallationMaterialCatalogRecord = {
   description: string | null;
   manufacturer: string | null;
   part_no: string | null;
+  dimension_mm: string | null;
+  weight_kg: string | number | null;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -132,9 +134,9 @@ export const snapshotCableInstallationMaterial = (
   unit: record.order_measurement,
   descriptionEn: record.type.trim(),
   clearDescription: firstText(record.description, record.purpose),
-  dimensionMm: null,
+  dimensionMm: firstText(record.dimension_mm),
   material: firstText(record.material),
-  weightKg: null,
+  weightKg: toNumberOrNull(record.weight_kg),
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: firstText(record.part_no),
   minimumOrderQuantity: Number(record.minimum_order_quantity),
@@ -208,6 +210,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
     case 'cable-installation-material': {
       const result = await queryable.query<CableInstallationMaterialCatalogRecord>(
         `SELECT id, type, purpose, material, description, manufacturer, part_no,
+                dimension_mm, weight_kg,
                 minimum_order_quantity, order_measurement, packaging
          FROM material_cable_installation_materials WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],

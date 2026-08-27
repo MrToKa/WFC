@@ -3,6 +3,8 @@ import { MasterMaterialDetailsPage } from './Materials/MasterMaterialDetailsPage
 import { MaterialSourceLink } from './Materials/components/MaterialDetailsLayout';
 
 const value = (input: string | null): string => input ?? '—';
+const numeric = (input: number | null, suffix: string): string =>
+  input === null ? '—' : `${input} ${suffix}`;
 
 export const MaterialCableInstallationMaterialDetails = () => (
   <MasterMaterialDetailsPage<MaterialCableInstallationMaterial>
@@ -16,6 +18,8 @@ export const MaterialCableInstallationMaterialDetails = () => (
       { label: 'Description', value: value(material.description) },
       { label: 'Manufacturer', value: value(material.manufacturer) },
       { label: 'Part number', value: value(material.partNo) },
+      { label: 'Dimension [mm]', value: value(material.dimensionMm) },
+      { label: 'Weight [kg]', value: numeric(material.weightKg, 'kg') },
       {
         label: 'Minimum order',
         value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,

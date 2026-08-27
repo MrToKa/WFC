@@ -126,6 +126,26 @@ export const CableInstallationMaterialDialog = ({
                 <Input value={values.partNo} onChange={onFieldChange('partNo')} />
               </Field>
               <Field
+                label="Dimension [mm]"
+                validationState={errors.dimensionMm ? 'error' : undefined}
+                validationMessage={errors.dimensionMm}
+              >
+                <Input value={values.dimensionMm} onChange={onFieldChange('dimensionMm')} />
+              </Field>
+              <Field
+                label="Weight [kg]"
+                validationState={errors.weightKg ? 'error' : undefined}
+                validationMessage={errors.weightKg}
+              >
+                <Input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={values.weightKg}
+                  onChange={onFieldChange('weightKg')}
+                />
+              </Field>
+              <Field
                 label="Minimum order quantity"
                 required
                 validationState={errors.minimumOrderQuantity ? 'error' : undefined}

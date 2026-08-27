@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   resolveChangeOrderCatalogSnapshot,
   snapshotCableInstallationMaterial,
@@ -9,6 +9,7 @@ import {
 import {
   calculateInheritedChangeOrderQuantities,
   calculateMinimumOrder,
+  synchronizeChangeOrderMaterialOrdering,
 } from './changeOrderService.js';
 
 describe('Change Order catalog snapshots', () => {
@@ -73,6 +74,27 @@ describe('Change Order catalog snapshots', () => {
       spareQuantity: 2,
     });
   });
+
+  it('refreshes ordering metadata for existing manual and inherited Change Order items', async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+
+    await synchronizeChangeOrderMaterialOrdering(
+      { query } as Parameters<typeof synchronizeChangeOrderMaterialOrdering>[0],
+      'change-order-id',
+    );
+
+    expect(query).toHaveBeenCalledOnce();
+    const [sql, values] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("WHEN item.line_kind = 'manual'");
+    expect(sql).toContain('item.order_measurement IS NULL');
+    expect(sql).toContain('item.unit IS NOT DISTINCT FROM item.order_measurement');
+    expect(sql).toContain('THEN source.order_measurement');
+    expect(sql).toContain('item.source_catalog = source.source_catalog');
+    expect(sql).not.toContain("AND item.line_kind = 'inherited'");
+    expect(sql).toContain('FROM material_cable_installation_materials');
+    expect(values).toEqual(['change-order-id']);
+  });
+
   it('maps cable types and does not change a snapshot when its source changes later', () => {
     const source = {
       id: 'cable-id',
@@ -118,6 +140,8 @@ describe('Change Order catalog snapshots', () => {
         description: null,
         manufacturer: null,
         part_no: null,
+        dimension_mm: null,
+        weight_kg: null,
         minimum_order_quantity: 50,
         order_measurement: 'pcs',
         packaging: 'Package',

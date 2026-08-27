@@ -129,16 +129,59 @@ const normalizeText = (value: string | null | undefined): string | null => {
   return trimmed === '' ? null : trimmed;
 };
 
-const synchronizeInheritedMaterialOrdering = async (
+export const synchronizeChangeOrderMaterialOrdering = async (
   queryable: Pick<PoolClient, 'query'> | typeof pool,
   changeOrderId: string,
 ): Promise<void> => {
-  // Inherited rows are derived from Standard Materials. Keep their commercial
-  // ordering fields aligned with the referenced Materials catalog entry while
-  // leaving manually added Change Order snapshots untouched.
+  // Keep commercial ordering fields aligned with the referenced catalog row.
+  // An inherited row's unit is its Standard Material consumption unit (pcs or
+  // pcs/m). A manual row follows order_measurement unless its unit was explicitly
+  // customized in the Change Order.
   await queryable.query(
-    `UPDATE project_change_order_items item
+    `WITH source AS (
+       SELECT
+         'cable-type'::text AS source_catalog,
+         id,
+         minimum_order_quantity,
+         order_measurement,
+         packaging
+       FROM material_cable_types
+       UNION ALL
+       SELECT
+         'cable-installation-material'::text,
+         id,
+         minimum_order_quantity,
+         order_measurement,
+         packaging
+       FROM material_cable_installation_materials
+       UNION ALL
+       SELECT
+         'tray'::text,
+         id,
+         minimum_order_quantity,
+         order_measurement,
+         packaging
+       FROM material_trays
+       UNION ALL
+       SELECT
+         'support'::text,
+         id,
+         minimum_order_quantity,
+         order_measurement,
+         packaging
+       FROM material_supports
+     )
+     UPDATE project_change_order_items item
      SET
+       unit = CASE
+         WHEN item.line_kind = 'manual'
+           AND (
+             item.order_measurement IS NULL OR
+             item.unit IS NOT DISTINCT FROM item.order_measurement
+           )
+         THEN source.order_measurement
+         ELSE item.unit
+       END,
        minimum_order_quantity = source.minimum_order_quantity,
        order_measurement = source.order_measurement,
        packaging = source.packaging,
@@ -151,12 +194,19 @@ const synchronizeInheritedMaterialOrdering = async (
        END,
        ordered_unit = source.packaging,
        updated_at = NOW()
-     FROM material_cable_installation_materials source
+     FROM source
      WHERE item.change_order_id = $1
-       AND item.line_kind = 'inherited'
-       AND item.source_catalog = 'cable-installation-material'
+       AND item.source_catalog = source.source_catalog
        AND item.source_material_id = source.id
        AND (
+         (
+           item.line_kind = 'manual' AND
+           (
+             item.order_measurement IS NULL OR
+             item.unit IS NOT DISTINCT FROM item.order_measurement
+           ) AND
+           item.unit IS DISTINCT FROM source.order_measurement
+         ) OR
          item.minimum_order_quantity IS DISTINCT FROM source.minimum_order_quantity OR
          item.order_measurement IS DISTINCT FROM source.order_measurement OR
          item.packaging IS DISTINCT FROM source.packaging OR
@@ -215,7 +265,7 @@ export const getChangeOrder = async (
   const row = headerResult.rows[0];
   if (!row) return null;
 
-  await synchronizeInheritedMaterialOrdering(queryable, changeOrderId);
+  await synchronizeChangeOrderMaterialOrdering(queryable, changeOrderId);
 
   const itemResult = await queryable.query<ChangeOrderItemRow>(
     `SELECT ${ITEM_COLUMNS}

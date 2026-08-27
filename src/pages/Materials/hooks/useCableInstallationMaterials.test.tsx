@@ -20,6 +20,8 @@ const baseMaterial: MaterialCableInstallationMaterial = {
   description: null,
   manufacturer: null,
   partNo: null,
+  dimensionMm: null,
+  weightKg: null,
   minimumOrderQuantity: 1,
   orderMeasurement: 'pcs',
   packaging: 'Box',

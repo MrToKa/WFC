@@ -48,6 +48,7 @@ type FormState = {
   partNo: string;
   remarks: string;
   diameterMm: string;
+  dimensionMm: string;
   weightKgPerM: string;
   heightMm: string;
   rungHeightMm: string;
@@ -70,6 +71,7 @@ const emptyForm: FormState = {
   partNo: '',
   remarks: '',
   diameterMm: '',
+  dimensionMm: '',
   weightKgPerM: '',
   heightMm: '',
   rungHeightMm: '',
@@ -123,6 +125,8 @@ const formFromMaterial = (
         description: item.description ?? '',
         manufacturer: item.manufacturer ?? '',
         partNo: item.partNo ?? '',
+        dimensionMm: item.dimensionMm ?? '',
+        weightKg: numberValue(item.weightKg),
       };
     }
     case 'tray': {
@@ -234,6 +238,8 @@ export const MaterialEditDialog = ({
             description: nullableText(form.description),
             manufacturer: nullableText(form.manufacturer),
             partNo: nullableText(form.partNo),
+            dimensionMm: nullableText(form.dimensionMm),
+            weightKg: optionalNumber(form.weightKg, 'Weight'),
             minimumOrderQuantity,
             orderMeasurement: form.orderMeasurement,
             packaging: form.packaging,
@@ -322,6 +328,8 @@ export const MaterialEditDialog = ({
                   {textField('Description', 'description')}
                   {textField('Manufacturer', 'manufacturer')}
                   {textField('Part No.', 'partNo')}
+                  {textField('Dimension [mm]', 'dimensionMm')}
+                  {textField('Weight [kg]', 'weightKg')}
                 </>
               ) : category === 'tray' ? (
                 <>

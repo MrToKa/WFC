@@ -33,6 +33,8 @@ const MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS = {
   description: 'Description',
   manufacturer: 'Manufacturer',
   partNo: 'Part No.',
+  dimensionMm: 'Dimension [mm]',
+  weightKg: 'Weight [kg]',
   minimumOrder: 'Minimum order quantity',
   orderMeasurement: 'Order measurement',
   packaging: 'Packaging',
@@ -46,6 +48,8 @@ const MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES = {
   description: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.description],
   manufacturer: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.manufacturer],
   partNo: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.partNo, 'Part No'],
+  dimensionMm: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.dimensionMm, 'Dimension'],
+  weightKg: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.weightKg, 'Weight'],
   minimumOrder: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder],
   orderMeasurement: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, 'Measurement'],
   packaging: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging],
@@ -70,6 +74,8 @@ const selectMaterialCableInstallationMaterialsQuery = `
     description,
     manufacturer,
     part_no,
+    dimension_mm,
+    weight_kg,
     minimum_order_quantity,
     order_measurement,
     packaging,
@@ -121,6 +127,8 @@ materialCableInstallationMaterialsRouter.post(
       description,
       manufacturer,
       partNo,
+      dimensionMm,
+      weightKg,
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
@@ -155,12 +163,14 @@ materialCableInstallationMaterialsRouter.post(
             description,
             manufacturer,
             part_no
+            ,dimension_mm
+            ,weight_kg
             ,minimum_order_quantity
             ,order_measurement
             ,packaging
             ,source
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING
             id,
             type,
@@ -169,6 +179,8 @@ materialCableInstallationMaterialsRouter.post(
             description,
             manufacturer,
             part_no,
+            dimension_mm,
+            weight_kg,
             minimum_order_quantity,
             order_measurement,
             packaging,
@@ -184,6 +196,8 @@ materialCableInstallationMaterialsRouter.post(
           normalizeOptionalString(description ?? null),
           normalizeOptionalString(manufacturer ?? null),
           normalizeOptionalString(partNo ?? null),
+          normalizeOptionalString(dimensionMm ?? null),
+          weightKg ?? null,
           minimumOrderQuantity ?? 1,
           orderMeasurement ?? 'pcs',
           packaging ?? 'pcs',
@@ -227,6 +241,8 @@ materialCableInstallationMaterialsRouter.patch(
       description,
       manufacturer,
       partNo,
+      dimensionMm,
+      weightKg,
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
@@ -291,6 +307,16 @@ materialCableInstallationMaterialsRouter.patch(
       values.push(normalizeOptionalString(partNo ?? null));
     }
 
+    if (dimensionMm !== undefined) {
+      updates.push(`dimension_mm = $${index++}`);
+      values.push(normalizeOptionalString(dimensionMm));
+    }
+
+    if (weightKg !== undefined) {
+      updates.push(`weight_kg = $${index++}`);
+      values.push(weightKg);
+    }
+
     if (minimumOrderQuantity !== undefined) {
       updates.push(`minimum_order_quantity = $${index++}`);
       values.push(minimumOrderQuantity);
@@ -327,6 +353,8 @@ materialCableInstallationMaterialsRouter.patch(
             description,
             manufacturer,
             part_no,
+            dimension_mm,
+            weight_kg,
             minimum_order_quantity,
             order_measurement,
             packaging,
@@ -458,6 +486,8 @@ materialCableInstallationMaterialsRouter.post(
       description: string | null;
       manufacturer: string | null;
       partNo: string | null;
+      dimensionMm: string | null;
+      weightKg: number | null;
       minimumOrderQuantity: number;
       orderMeasurement: 'pcs' | 'pack' | 'meters';
       packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -475,6 +505,12 @@ materialCableInstallationMaterialsRouter.post(
           .replace(',', '.'),
       );
       return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    };
+    const readNonNegativeNumber = (raw: unknown): number | null => {
+      const text = String(raw ?? '').trim();
+      if (text === '') return null;
+      const parsed = Number(text.replace(',', '.'));
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
     };
 
     const readCell = (row: CableInstallationImportRow, headers: readonly string[]): unknown => {
@@ -521,6 +557,12 @@ materialCableInstallationMaterialsRouter.post(
           readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.manufacturer),
         ),
         partNo: readString(readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.partNo)),
+        dimensionMm: readString(
+          readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.dimensionMm),
+        ),
+        weightKg: readNonNegativeNumber(
+          readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.weightKg),
+        ),
         minimumOrderQuantity: readPositiveNumber(
           readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.minimumOrder),
         ),
@@ -604,12 +646,14 @@ materialCableInstallationMaterialsRouter.post(
                 description = $3,
                 manufacturer = $4,
                 part_no = $5,
-                minimum_order_quantity = $6,
-                order_measurement = $7,
-                packaging = $8,
-                source = $9,
+                dimension_mm = $6,
+                weight_kg = $7,
+                minimum_order_quantity = $8,
+                order_measurement = $9,
+                packaging = $10,
+                source = $11,
                 updated_at = NOW()
-              WHERE id = $10;
+              WHERE id = $12;
             `,
             [
               row.purpose,
@@ -617,6 +661,8 @@ materialCableInstallationMaterialsRouter.post(
               row.description,
               row.manufacturer,
               row.partNo,
+              row.dimensionMm,
+              row.weightKg,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -636,12 +682,14 @@ materialCableInstallationMaterialsRouter.post(
                 description,
                 manufacturer,
                 part_no
+                ,dimension_mm
+                ,weight_kg
                 ,minimum_order_quantity
                 ,order_measurement
                 ,packaging
                 ,source
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
             `,
             [
               randomUUID(),
@@ -651,6 +699,8 @@ materialCableInstallationMaterialsRouter.post(
               row.description,
               row.manufacturer,
               row.partNo,
+              row.dimensionMm,
+              row.weightKg,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -711,6 +761,8 @@ materialCableInstallationMaterialsRouter.get(
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.description, width: 40 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.manufacturer, width: 24 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.partNo, width: 24 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.dimensionMm, width: 24 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.weightKg, width: 16 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder, width: 22 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, width: 20 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging, width: 18 },
@@ -733,7 +785,7 @@ materialCableInstallationMaterialsRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: [['', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
+        rows: [['', '', '', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
       });
 
       table.commit();
@@ -786,6 +838,8 @@ materialCableInstallationMaterialsRouter.get(
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.description, width: 40 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.manufacturer, width: 24 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.partNo, width: 24 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.dimensionMm, width: 24 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.weightKg, width: 16 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder, width: 22 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, width: 20 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging, width: 18 },
@@ -799,6 +853,8 @@ materialCableInstallationMaterialsRouter.get(
         row.description ?? '',
         row.manufacturer ?? '',
         row.part_no ?? '',
+        row.dimension_mm ?? '',
+        row.weight_kg === null ? '' : Number(row.weight_kg),
         Number(row.minimum_order_quantity),
         row.order_measurement,
         row.packaging,
@@ -821,7 +877,7 @@ materialCableInstallationMaterialsRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
+        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
       });
 
       table.commit();

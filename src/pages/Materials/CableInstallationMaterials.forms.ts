@@ -22,6 +22,8 @@ export type CableInstallationMaterialFormState = {
   description: string;
   manufacturer: string;
   partNo: string;
+  dimensionMm: string;
+  weightKg: string;
   minimumOrderQuantity: string;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -41,6 +43,8 @@ export const emptyCableInstallationMaterialForm: CableInstallationMaterialFormSt
   description: '',
   manufacturer: '',
   partNo: '',
+  dimensionMm: '',
+  weightKg: '',
   minimumOrderQuantity: '1',
   orderMeasurement: 'pcs',
   packaging: 'pcs',
@@ -56,6 +60,8 @@ export const toCableInstallationMaterialFormState = (
   description: material.description ?? '',
   manufacturer: material.manufacturer ?? '',
   partNo: material.partNo ?? '',
+  dimensionMm: material.dimensionMm ?? '',
+  weightKg: material.weightKg === null ? '' : String(material.weightKg),
   minimumOrderQuantity: String(material.minimumOrderQuantity),
   orderMeasurement: material.orderMeasurement,
   packaging: material.packaging,
@@ -99,6 +105,10 @@ export const buildMaterialCableInstallationMaterialInput = (
     errors.type = 'Type is required';
   }
   const minimumOrderResult = parseNumberInput(values.minimumOrderQuantity);
+  const weightResult = parseNumberInput(values.weightKg);
+  if (weightResult.error || (weightResult.numeric !== null && weightResult.numeric < 0)) {
+    errors.weightKg = 'Weight must be a non-negative number';
+  }
   if (
     minimumOrderResult.error ||
     minimumOrderResult.numeric === null ||
@@ -115,6 +125,8 @@ export const buildMaterialCableInstallationMaterialInput = (
       description: toNullableString(values.description),
       manufacturer: toNullableString(values.manufacturer),
       partNo: toNullableString(values.partNo),
+      dimensionMm: toNullableString(values.dimensionMm),
+      weightKg: weightResult.numeric,
       minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
       orderMeasurement: values.orderMeasurement,
       packaging: values.packaging,

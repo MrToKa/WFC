@@ -6,6 +6,8 @@ export type MaterialCableInstallationMaterialRow = {
   description: string | null;
   manufacturer: string | null;
   part_no: string | null;
+  dimension_mm: string | null;
+  weight_kg: string | number | null;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -25,6 +27,8 @@ export type PublicMaterialCableInstallationMaterial = {
   description: string | null;
   manufacturer: string | null;
   partNo: string | null;
+  dimensionMm: string | null;
+  weightKg: number | null;
   minimumOrderQuantity: number;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -43,6 +47,8 @@ export const mapMaterialCableInstallationMaterialRow = (
   description: row.description ?? null,
   manufacturer: row.manufacturer ?? null,
   partNo: row.part_no ?? null,
+  dimensionMm: row.dimension_mm ?? null,
+  weightKg: row.weight_kg === null ? null : Number(row.weight_kg),
   minimumOrderQuantity: Number(row.minimum_order_quantity),
   orderMeasurement: row.order_measurement,
   packaging: row.packaging,

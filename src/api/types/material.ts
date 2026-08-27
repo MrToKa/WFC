@@ -49,6 +49,8 @@ export type MaterialCableInstallationMaterial = {
   description: string | null;
   manufacturer: string | null;
   partNo: string | null;
+  dimensionMm: string | null;
+  weightKg: number | null;
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
@@ -172,6 +174,8 @@ export type MaterialCableInstallationMaterialInput = {
   description?: string | null;
   manufacturer?: string | null;
   partNo?: string | null;
+  dimensionMm?: string | null;
+  weightKg?: number | null;
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;

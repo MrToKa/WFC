@@ -314,6 +314,8 @@ export async function initializeDatabase(): Promise<void> {
       description TEXT,
       manufacturer TEXT,
       part_no TEXT,
+      dimension_mm TEXT,
+      weight_kg NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -342,6 +344,16 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE material_cable_installation_materials
     ADD COLUMN IF NOT EXISTS part_no TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_installation_materials
+    ADD COLUMN IF NOT EXISTS dimension_mm TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_installation_materials
+    ADD COLUMN IF NOT EXISTS weight_kg NUMERIC;
   `);
 
   await pool.query(`
@@ -1448,11 +1460,55 @@ export async function initializeDatabase(): Promise<void> {
       AND child.revision_number IS DISTINCT FROM parent.revision_number;
   `);
 
-  // Inherited rows stay linked to the Materials catalog for commercial ordering
-  // metadata. Manual Change Order rows remain independent historical snapshots.
+  // Existing Change Order rows stay linked to their catalog entries for
+  // commercial ordering metadata. Inherited rows keep their Standard Material
+  // consumption unit (pcs or pcs/m). Manual rows use the catalog measurement
+  // unless their unit was explicitly customized in the Change Order.
   await pool.query(`
+    WITH source AS (
+      SELECT
+        'cable-type'::text AS source_catalog,
+        id,
+        minimum_order_quantity,
+        order_measurement,
+        packaging
+      FROM material_cable_types
+      UNION ALL
+      SELECT
+        'cable-installation-material'::text,
+        id,
+        minimum_order_quantity,
+        order_measurement,
+        packaging
+      FROM material_cable_installation_materials
+      UNION ALL
+      SELECT
+        'tray'::text,
+        id,
+        minimum_order_quantity,
+        order_measurement,
+        packaging
+      FROM material_trays
+      UNION ALL
+      SELECT
+        'support'::text,
+        id,
+        minimum_order_quantity,
+        order_measurement,
+        packaging
+      FROM material_supports
+    )
     UPDATE project_change_order_items item
     SET
+      unit = CASE
+        WHEN item.line_kind = 'manual'
+          AND (
+            item.order_measurement IS NULL OR
+            item.unit IS NOT DISTINCT FROM item.order_measurement
+          )
+        THEN source.order_measurement
+        ELSE item.unit
+      END,
       minimum_order_quantity = source.minimum_order_quantity,
       order_measurement = source.order_measurement,
       packaging = source.packaging,
@@ -1465,11 +1521,18 @@ export async function initializeDatabase(): Promise<void> {
       END,
       ordered_unit = source.packaging,
       updated_at = NOW()
-    FROM material_cable_installation_materials source
-    WHERE item.line_kind = 'inherited'
-      AND item.source_catalog = 'cable-installation-material'
+    FROM source
+    WHERE item.source_catalog = source.source_catalog
       AND item.source_material_id = source.id
       AND (
+        (
+          item.line_kind = 'manual' AND
+          (
+            item.order_measurement IS NULL OR
+            item.unit IS NOT DISTINCT FROM item.order_measurement
+          ) AND
+          item.unit IS DISTINCT FROM source.order_measurement
+        ) OR
         item.minimum_order_quantity IS DISTINCT FROM source.minimum_order_quantity OR
         item.order_measurement IS DISTINCT FROM source.order_measurement OR
         item.packaging IS DISTINCT FROM source.packaging OR

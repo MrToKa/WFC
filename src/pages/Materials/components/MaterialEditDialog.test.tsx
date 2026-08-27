@@ -21,6 +21,8 @@ const material: MaterialCableInstallationMaterial = {
   description: null,
   manufacturer: 'Original manufacturer',
   partNo: 'CG-32',
+  dimensionMm: '32 × 45',
+  weightKg: 0.18,
   minimumOrderQuantity: 10,
   orderMeasurement: 'pcs',
   packaging: 'Box',
@@ -56,6 +58,8 @@ describe('MaterialEditDialog', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Manufacturer' }), {
       target: { value: 'Updated manufacturer' },
     });
+    expect(screen.getByRole('textbox', { name: 'Dimension [mm]' })).toHaveValue('32 × 45');
+    expect(screen.getByRole('textbox', { name: 'Weight [kg]' })).toHaveValue('0.18');
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>

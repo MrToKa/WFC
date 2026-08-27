@@ -22,6 +22,8 @@ const catalog: MaterialCableInstallationMaterial[] = [
     description: null,
     manufacturer: null,
     partNo: null,
+    dimensionMm: null,
+    weightKg: null,
     minimumOrderQuantity: 50,
     orderMeasurement: 'pcs',
     packaging: 'Package',

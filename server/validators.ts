@@ -303,6 +303,8 @@ export const createMaterialCableInstallationMaterialSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    dimensionMm: z.string().trim().min(1).max(500).nullable().optional(),
+    weightKg: cableTypeNumericField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
     packaging: materialPackagingField,
@@ -318,6 +320,8 @@ export const updateMaterialCableInstallationMaterialSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    dimensionMm: z.string().trim().min(1).max(500).nullable().optional(),
+    weightKg: cableTypeNumericField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
     packaging: materialPackagingField,
@@ -332,6 +336,8 @@ export const updateMaterialCableInstallationMaterialSchema = z
       value.description !== undefined ||
       value.manufacturer !== undefined ||
       value.partNo !== undefined ||
+      value.dimensionMm !== undefined ||
+      value.weightKg !== undefined ||
       value.minimumOrderQuantity !== undefined ||
       value.orderMeasurement !== undefined ||
       value.packaging !== undefined ||
