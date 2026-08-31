@@ -11,7 +11,8 @@ import {
   type ChangeOrderItem,
 } from '../models/changeOrder.js';
 
-const TEMPLATE_FILE_NAME = 'Change order - Discharge Impulse lines materials.xlsx';
+const TEMPLATE_FILE_NAME =
+  'Change order - Change order - Trafo interface and Sampling pumps cables.xlsx';
 const EXPECTED_HEADERS = [
   'Item No.',
   'Design Qty',
@@ -38,12 +39,13 @@ const EXPECTED_HEADERS = [
   'Drawing No.',
   'Shipping list',
   'Revision number',
-  'Client Barcode',
+  'Certificates',
   'Original Equipment Manufacturer',
   'Manufacturer Part No.',
   'ACS barcode',
   'Remarks',
 ] as const;
+const HEADER_ALIASES = new Map<number, readonly string[]>([[25, ['Client Barcode']]]);
 
 // ExcelJS serializes font properties in JavaScript object order, which is not the
 // order required by SpreadsheetML. Excel desktop rejects the resulting styles.xml
@@ -78,11 +80,32 @@ const normalizeHeader = (value: unknown): string =>
     .replace(/\d+$/, '')
     .toLowerCase();
 
-export const validateChangeOrderTemplateHeaders = (worksheet: ExcelJS.Worksheet): void => {
+const findTableHeaderRowNumber = (worksheet: ExcelJS.Worksheet): number => {
+  const lastCandidateRow = Math.min(worksheet.rowCount, 20);
+  for (let rowNumber = 1; rowNumber <= lastCandidateRow; rowNumber += 1) {
+    if (
+      normalizeHeader(worksheet.getCell(`A${rowNumber}`).value) ===
+      normalizeHeader(EXPECTED_HEADERS[0])
+    ) {
+      return rowNumber;
+    }
+  }
+  throw new ChangeOrderTemplateError('Change Order template table header row is missing');
+};
+
+export const validateChangeOrderTemplateHeaders = (
+  worksheet: ExcelJS.Worksheet,
+  headerRowNumber = findTableHeaderRowNumber(worksheet),
+): void => {
   const invalid: string[] = [];
   EXPECTED_HEADERS.forEach((expected, index) => {
-    const cell = worksheet.getRow(4).getCell(index + 1);
-    if (normalizeHeader(cell.value) !== normalizeHeader(expected)) {
+    const cell = worksheet.getRow(headerRowNumber).getCell(index + 1);
+    const actual = normalizeHeader(cell.value);
+    const matchesExpected = actual === normalizeHeader(expected);
+    const matchesAlias = HEADER_ALIASES.get(index)?.some(
+      (alias) => actual === normalizeHeader(alias),
+    );
+    if (!matchesExpected && !matchesAlias) {
       invalid.push(`${cell.address}: expected "${expected}", found "${String(cell.value ?? '')}"`);
     }
   });
@@ -161,8 +184,7 @@ const consolidateExportGroup = (items: readonly ChangeOrderItem[]): ChangeOrderI
       : items.every((item) => item.orderedQuantity === null)
         ? null
         : items.reduce((total, item) => total + (item.orderedQuantity ?? 0), 0);
-  const packagedOrderQuantity =
-    (first.packagingQuantity ?? 0) * (orderedQuantity ?? 0);
+  const packagedOrderQuantity = (first.packagingQuantity ?? 0) * (orderedQuantity ?? 0);
 
   return {
     ...first,
@@ -248,8 +270,7 @@ const toText = (value: string | null): string | null => escapeSpreadsheetText(va
 
 const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: number): void => {
   const rowNumber = row.number;
-  const packagedOrderQuantity =
-    (item.packagingQuantity ?? 0) * (item.orderedQuantity ?? 0);
+  const packagedOrderQuantity = (item.packagingQuantity ?? 0) * (item.orderedQuantity ?? 0);
   const values: Array<ExcelJS.CellValue> = [
     itemNumber,
     item.designQuantity,
@@ -329,8 +350,8 @@ const findTemplateWorksheet = (workbook: ExcelJS.Workbook): ExcelJS.Worksheet =>
   return worksheet;
 };
 
-const findTotalRowNumber = (worksheet: ExcelJS.Worksheet): number => {
-  for (let rowNumber = 5; rowNumber <= worksheet.rowCount; rowNumber += 1) {
+const findTotalRowNumber = (worksheet: ExcelJS.Worksheet, dataStartRowNumber: number): number => {
+  for (let rowNumber = dataStartRowNumber; rowNumber <= worksheet.rowCount; rowNumber += 1) {
     if (normalizeHeader(worksheet.getCell(`R${rowNumber}`).value) === 'total:') {
       return rowNumber;
     }
@@ -349,6 +370,44 @@ const setMergedHeaderValue = (
       return cell.isMerged || cell.value !== null;
     }) ?? candidates[0];
   worksheet.getCell(address).value = escapeSpreadsheetText(value);
+};
+
+const addDays = (date: Date, days: number): Date =>
+  new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+
+const populateDocumentHeader = (
+  worksheet: ExcelJS.Worksheet,
+  headerRowNumber: number,
+  changeOrder: ChangeOrderDetails,
+): void => {
+  const reportDate = currentExcelDate();
+
+  if (headerRowNumber === 5) {
+    // Current shared template: a four-row header with outlined merged blocks.
+    setMergedHeaderValue(worksheet, ['D1'], changeOrder.projectName);
+    setMergedHeaderValue(worksheet, ['D2'], changeOrder.projectCustomer);
+    setMergedHeaderValue(worksheet, ['D3'], changeOrder.projectReference ?? '');
+    setMergedHeaderValue(worksheet, ['K1'], changeOrder.projectName);
+    setMergedHeaderValue(worksheet, ['K3'], changeOrder.title);
+    worksheet.getCell('AD1').value = escapeSpreadsheetText(changeOrder.preparedBy);
+    worksheet.getCell('AD2').value = reportDate;
+    worksheet.getCell('AD3').value = {
+      formula: 'AD2+28',
+      result: addDays(reportDate, 28),
+    };
+    worksheet.getCell('AD4').value = escapeSpreadsheetText(changeOrder.revision);
+    return;
+  }
+
+  // Compatibility with the previous three-row template layout.
+  worksheet.getCell('B1').value = escapeSpreadsheetText(changeOrder.projectName);
+  worksheet.getCell('B2').value = escapeSpreadsheetText(changeOrder.projectCustomer);
+  worksheet.getCell('B3').value = escapeSpreadsheetText(changeOrder.projectReference ?? '');
+  setMergedHeaderValue(worksheet, ['K1', 'F1'], changeOrder.projectName);
+  setMergedHeaderValue(worksheet, ['K2', 'F2'], changeOrder.title);
+  worksheet.getCell('AD1').value = escapeSpreadsheetText(changeOrder.preparedBy);
+  worksheet.getCell('AD2').value = reportDate;
+  worksheet.getCell('AD3').value = escapeSpreadsheetText(changeOrder.revision);
 };
 
 export const normalizeSpreadsheetFontOrder = (stylesXml: string): string =>
@@ -434,7 +493,10 @@ export async function generateChangeOrderWorkbook(
   }
 
   const worksheet = findTemplateWorksheet(workbook);
-  validateChangeOrderTemplateHeaders(worksheet);
+  const headerRowNumber = findTableHeaderRowNumber(worksheet);
+  validateChangeOrderTemplateHeaders(worksheet, headerRowNumber);
+  worksheet.getRow(headerRowNumber).getCell(26).value = EXPECTED_HEADERS[25];
+  const dataStartRowNumber = headerRowNumber + 1;
 
   // Row splicing makes ExcelJS write the template's conditional-formatting
   // containers without their rules. Empty containers are invalid SpreadsheetML
@@ -448,15 +510,15 @@ export async function generateChangeOrderWorkbook(
     (definedName) => definedName.name !== '_xlnm._FilterDatabase',
   );
 
-  const totalTemplateRowNumber = findTotalRowNumber(worksheet);
-  const dataTemplate = captureRowTemplate(worksheet.getRow(5));
+  const totalTemplateRowNumber = findTotalRowNumber(worksheet, dataStartRowNumber);
+  const dataTemplate = captureRowTemplate(worksheet.getRow(dataStartRowNumber));
   const totalTemplate = captureRowTemplate(worksheet.getRow(totalTemplateRowNumber));
 
   if (worksheet.getTable('MTO')) {
     worksheet.removeTable('MTO');
   }
 
-  for (let rowNumber = 5; rowNumber <= totalTemplateRowNumber; rowNumber += 1) {
+  for (let rowNumber = dataStartRowNumber; rowNumber <= totalTemplateRowNumber; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
     for (let column = 1; column <= 30; column += 1) {
       row.getCell(column).value = null;
@@ -464,18 +526,18 @@ export async function generateChangeOrderWorkbook(
   }
 
   exportItems.forEach((item, index) => {
-    const row = worksheet.getRow(5 + index);
+    const row = worksheet.getRow(dataStartRowNumber + index);
     applyRowTemplate(row, dataTemplate);
     setItemValues(row, item, index + 1);
   });
 
-  const lastItemRow = 4 + exportItems.length;
+  const lastItemRow = headerRowNumber + exportItems.length;
   const totalRowNumber = lastItemRow + 1;
   const totalRow = worksheet.getRow(totalRowNumber);
   applyRowTemplate(totalRow, totalTemplate);
   totalRow.getCell(18).value = 'TOTAL:';
   totalRow.getCell(19).value = {
-    formula: `SUM(S5:S${lastItemRow})`,
+    formula: `SUM(S${dataStartRowNumber}:S${lastItemRow})`,
     result: exportItems.reduce((total, item) => total + item.totalPrice, 0),
   };
   if (totalRowNumber < totalTemplateRowNumber) {
@@ -483,18 +545,11 @@ export async function generateChangeOrderWorkbook(
   }
 
   worksheet.name = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
-  worksheet.getCell('B1').value = escapeSpreadsheetText(changeOrder.projectName);
-  worksheet.getCell('B2').value = escapeSpreadsheetText(changeOrder.projectCustomer);
-  worksheet.getCell('B3').value = escapeSpreadsheetText(changeOrder.projectReference ?? '');
-  setMergedHeaderValue(worksheet, ['K1', 'F1'], changeOrder.projectName);
-  setMergedHeaderValue(worksheet, ['K2', 'F2'], changeOrder.title);
-  worksheet.getCell('AD1').value = escapeSpreadsheetText(changeOrder.preparedBy);
-  worksheet.getCell('AD2').value = currentExcelDate();
-  worksheet.getCell('AD3').value = escapeSpreadsheetText(changeOrder.revision);
+  populateDocumentHeader(worksheet, headerRowNumber, changeOrder);
 
-  worksheet.autoFilter = `A4:AD${lastItemRow}`;
+  worksheet.autoFilter = `A${headerRowNumber}:AD${lastItemRow}`;
   worksheet.pageSetup.printArea = `A1:AD${totalRowNumber}`;
-  worksheet.pageSetup.printTitlesRow = '4:4';
+  worksheet.pageSetup.printTitlesRow = `${headerRowNumber}:${headerRowNumber}`;
   const calculationProperties = workbook.calcProperties as typeof workbook.calcProperties & {
     forceFullCalc?: boolean;
     calcMode?: string;
