@@ -7,9 +7,14 @@ export const CHANGE_ORDER_SOURCE_CATALOGS = [
 
 export type ChangeOrderSourceCatalog = (typeof CHANGE_ORDER_SOURCE_CATALOGS)[number];
 
+export const CHANGE_ORDER_DOCUMENT_TYPES = ['change-order', 'internal-ncr'] as const;
+
+export type ChangeOrderDocumentType = (typeof CHANGE_ORDER_DOCUMENT_TYPES)[number];
+
 export type ChangeOrderRow = {
   id: string;
   project_id: string;
+  document_type: ChangeOrderDocumentType;
   project_name?: string;
   project_customer?: string;
   title: string;

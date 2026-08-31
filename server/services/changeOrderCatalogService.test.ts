@@ -80,6 +80,8 @@ describe('Change Order catalog snapshots', () => {
 
     await synchronizeChangeOrderMaterialOrdering(
       { query } as Parameters<typeof synchronizeChangeOrderMaterialOrdering>[0],
+      'project-id',
+      'change-order',
       'change-order-id',
     );
 
@@ -90,9 +92,10 @@ describe('Change Order catalog snapshots', () => {
     expect(sql).toContain('item.unit IS NOT DISTINCT FROM item.order_measurement');
     expect(sql).toContain('THEN source.order_measurement');
     expect(sql).toContain('item.source_catalog = source.source_catalog');
+    expect(sql).toContain('change_order.document_type = $3');
     expect(sql).not.toContain("AND item.line_kind = 'inherited'");
     expect(sql).toContain('FROM material_cable_installation_materials');
-    expect(values).toEqual(['change-order-id']);
+    expect(values).toEqual(['change-order-id', 'project-id', 'change-order']);
   });
 
   it('maps cable types and does not change a snapshot when its source changes later', () => {

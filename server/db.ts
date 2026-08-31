@@ -1273,6 +1273,7 @@ export async function initializeDatabase(): Promise<void> {
     CREATE TABLE IF NOT EXISTS project_change_orders (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      document_type TEXT NOT NULL DEFAULT 'change-order',
       title TEXT NOT NULL,
       project_reference TEXT,
       prepared_by TEXT NOT NULL,
@@ -1281,6 +1282,8 @@ export async function initializeDatabase(): Promise<void> {
       created_by UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT project_change_orders_document_type_check
+        CHECK (document_type IN ('change-order', 'internal-ncr')),
       CONSTRAINT project_change_orders_title_not_empty CHECK (btrim(title) <> ''),
       CONSTRAINT project_change_orders_prepared_by_not_empty CHECK (btrim(prepared_by) <> ''),
       CONSTRAINT project_change_orders_revision_not_empty CHECK (btrim(revision) <> '')
@@ -1288,8 +1291,34 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE project_change_orders
+      ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'change-order';
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'project_change_orders_document_type_check'
+          AND table_name = 'project_change_orders'
+      ) THEN
+        ALTER TABLE project_change_orders
+          ADD CONSTRAINT project_change_orders_document_type_check
+          CHECK (document_type IN ('change-order', 'internal-ncr'));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
     CREATE INDEX IF NOT EXISTS project_change_orders_project_id_idx
       ON project_change_orders (project_id);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS project_change_orders_project_type_idx
+      ON project_change_orders (project_id, document_type);
   `);
 
   await pool.query(`

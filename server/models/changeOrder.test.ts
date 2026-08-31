@@ -36,6 +36,7 @@ describe('Change Order calculations', () => {
     const result = mapChangeOrderSummaryRow({
       id: '11111111-1111-4111-8111-111111111111',
       project_id: '22222222-2222-4222-8222-222222222222',
+      document_type: 'change-order',
       title: 'Test order',
       project_reference: null,
       prepared_by: 'Test User',

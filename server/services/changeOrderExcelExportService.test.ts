@@ -101,6 +101,23 @@ describe('Change Order workbook export', () => {
     );
   });
 
+  it('uses Internal NCR branding while reusing the Change Order workbook template', async () => {
+    expect(sanitizeChangeOrderFileName('Area 1: cable/order', 'internal-ncr')).toBe(
+      'Internal NCR - Area 1 cable order.xlsx',
+    );
+
+    const buffer = await generateChangeOrderWorkbook(
+      createDetails(1),
+      templatePath,
+      'internal-ncr',
+    );
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+
+    expect(workbook.getWorksheet('Internal NCR')).toBeDefined();
+    expect(workbook.getWorksheet('Change Order')).toBeUndefined();
+  });
+
   it('consolidates identical cable materials into one export position', async () => {
     const firstCable: ChangeOrderItem = {
       ...createItem(1),

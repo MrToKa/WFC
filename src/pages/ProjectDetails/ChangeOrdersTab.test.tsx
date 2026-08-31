@@ -181,31 +181,66 @@ describe('ChangeOrdersTab', () => {
     expect(screen.queryByRole('table', { name: 'All Change Orders' })).not.toBeInTheDocument();
   });
 
-  it(
-    'loads rows, displays derived values, and disables export after an unsaved header edit',
-    async () => {
-      render(
-        <FluentProvider theme={webLightTheme}>
-          <ToastProvider>
-            <ChangeOrdersTab project={project} token="token" currentUser={user} />
-          </ToastProvider>
-        </FluentProvider>,
-      );
+  it('uses Internal NCR terminology and the independent API collection', async () => {
+    const api = await import('@/api/client');
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab
+            project={project}
+            token="token"
+            currentUser={user}
+            collection="internal-ncrs"
+          />
+        </ToastProvider>
+      </FluentProvider>,
+    );
 
-      await openExistingOrder();
-      expect(screen.getByText('-2')).toBeInTheDocument();
-      expect(screen.getByText(/Total: 40\.00/)).toBeInTheDocument();
+    await screen.findByRole('table', { name: 'All Internal NCRs' });
+    expect(screen.getByRole('option', { name: 'Select an Internal NCR' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Internal NCR' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Internal NCR' })).toBeInTheDocument();
+    expect(api.fetchChangeOrders).toHaveBeenCalledWith('token', project.id, 'internal-ncrs');
 
-      const exportButton = screen.getByRole('button', { name: /export excel/i });
-      expect(exportButton).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+    await screen.findByRole('table', { name: 'Internal NCR items' });
+    expect(api.fetchChangeOrder).toHaveBeenCalledWith(
+      'token',
+      project.id,
+      details.id,
+      'internal-ncrs',
+    );
 
-      const title = screen.getByRole('textbox', { name: /^title/i });
-      fireEvent.change(title, { target: { value: 'Existing order changed' } });
-      await waitFor(() => expect(exportButton).toBeDisabled());
-      expect(screen.getByText('Unsaved header changes')).toBeInTheDocument();
-    },
-    15_000,
-  );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
+    expect(screen.getByText('Edit Internal NCR item')).toBeInTheDocument();
+  });
+
+  it('loads rows, displays derived values, and disables export after an unsaved header edit', async () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+
+    await openExistingOrder();
+    expect(screen.getByText('-2')).toBeInTheDocument();
+    expect(screen.getByText(/Total: 40\.00/)).toBeInTheDocument();
+
+    const exportButton = screen.getByRole('button', { name: /export excel/i });
+    expect(exportButton).toBeEnabled();
+
+    const title = screen.getByRole('textbox', { name: /^title/i });
+    fireEvent.change(title, { target: { value: 'Existing order changed' } });
+    await waitFor(
+      () => {
+        expect(screen.getByText('Unsaved header changes')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /export excel/i })).toBeDisabled();
+      },
+      { timeout: 5_000 },
+    );
+  }, 15_000);
 
   it('allows selecting an unrestricted future header date', async () => {
     const api = await import('@/api/client');
@@ -236,36 +271,34 @@ describe('ChangeOrdersTab', () => {
         project.id,
         details.id,
         expect.objectContaining({ reportDate: '2099-12-31' }),
+        'change-orders',
       ),
     );
   });
 
-  it(
-    'duplicates a manual material from its row action',
-    async () => {
-      const api = await import('@/api/client');
-      render(
-        <FluentProvider theme={webLightTheme}>
-          <ToastProvider>
-            <ChangeOrdersTab project={project} token="token" currentUser={user} />
-          </ToastProvider>
-        </FluentProvider>,
-      );
+  it('duplicates a manual material from its row action', async () => {
+    const api = await import('@/api/client');
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
 
-      await openExistingOrder();
-      fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
+    await openExistingOrder();
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
 
-      await waitFor(() =>
-        expect(api.duplicateChangeOrderItem).toHaveBeenCalledWith(
-          'token',
-          project.id,
-          details.id,
-          details.items[0].id,
-        ),
-      );
-    },
-    15_000,
-  );
+    await waitFor(() =>
+      expect(api.duplicateChangeOrderItem).toHaveBeenCalledWith(
+        'token',
+        project.id,
+        details.id,
+        details.items[0].id,
+        'change-orders',
+      ),
+    );
+  }, 15_000);
 
   it('shows an expansion control immediately for a copied material', async () => {
     const api = await import('@/api/client');

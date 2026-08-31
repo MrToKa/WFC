@@ -112,11 +112,18 @@ const nullable = (input: string): string | null => input.trim() || null;
 type Props = {
   item: ChangeOrderItem | null;
   saving: boolean;
+  documentName?: string;
   onDismiss: () => void;
   onSave: (update: ChangeOrderItemUpdate) => Promise<void>;
 };
 
-export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props) => {
+export const ChangeOrderItemDialog = ({
+  item,
+  saving,
+  documentName = 'Change Order',
+  onDismiss,
+  onSave,
+}: Props) => {
   const styles = useStyles();
   const [form, setForm] = useState<FormState | null>(item ? toForm(item) : null);
   const [error, setError] = useState<string | null>(null);
@@ -152,10 +159,7 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
           ? {}
           : {
               packaging: nullable(form.packaging),
-              packagingQuantity: parseOptionalNumber(
-                form.packagingQuantity,
-                'Packaging quantity',
-              ),
+              packagingQuantity: parseOptionalNumber(form.packagingQuantity, 'Packaging quantity'),
               packagingUnit: nullable(form.packagingUnit),
               orderedQuantity: parseOptionalNumber(form.orderedQuantity, 'Ordered quantity'),
               orderedUnit: nullable(form.orderedUnit),
@@ -224,7 +228,7 @@ export const ChangeOrderItemDialog = ({ item, saving, onDismiss, onSave }: Props
     <Dialog open={item !== null} onOpenChange={(_, data) => !data.open && onDismiss()}>
       <DialogSurface className={styles.surface}>
         <DialogBody>
-          <DialogTitle>Edit Change Order item</DialogTitle>
+          <DialogTitle>Edit {documentName} item</DialogTitle>
           <DialogContent>
             {error ? (
               <MessageBar intent="error">

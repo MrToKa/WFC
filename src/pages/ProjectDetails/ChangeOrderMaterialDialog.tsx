@@ -80,11 +80,18 @@ const loadAllSupports = async (): Promise<CatalogChoice[]> => {
 type Props = {
   open: boolean;
   adding: boolean;
+  documentName?: string;
   onDismiss: () => void;
   onSelect: (choice: Pick<CatalogChoice, 'id' | 'category'>) => Promise<void>;
 };
 
-export const ChangeOrderMaterialDialog = ({ open, adding, onDismiss, onSelect }: Props) => {
+export const ChangeOrderMaterialDialog = ({
+  open,
+  adding,
+  documentName = 'Change Order',
+  onDismiss,
+  onSelect,
+}: Props) => {
   const styles = useStyles();
   const [category, setCategory] = useState<ChangeOrderSourceCatalog>('cable-type');
   const [search, setSearch] = useState('');
@@ -174,7 +181,7 @@ export const ChangeOrderMaterialDialog = ({ open, adding, onDismiss, onSelect }:
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onDismiss()}>
-      <DialogSurface aria-label="Add material to Change Order">
+      <DialogSurface aria-label={`Add material to ${documentName}`}>
         <DialogBody>
           <DialogTitle>Add material</DialogTitle>
           <DialogContent>

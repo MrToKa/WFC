@@ -25,6 +25,7 @@ export type ProjectDetailsTab =
   | 'files'
   | 'cable-report'
   | 'change-orders'
+  | 'internal-ncrs'
   | 'variables-api';
 
 export type CableTypeFormState = {

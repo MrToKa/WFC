@@ -189,6 +189,7 @@ const VALID_TABS: ProjectDetailsTab[] = [
   'files',
   'cable-report',
   'change-orders',
+  'internal-ncrs',
   'variables-api',
 ];
 
@@ -1513,6 +1514,7 @@ export const ProjectDetails = () => {
         <Tab value="trays">Trays</Tab>
         <Tab value="cable-report">Cables report</Tab>
         <Tab value="change-orders">Change Orders</Tab>
+        <Tab value="internal-ncrs">Internal NCRs</Tab>
         <Tab value="roxtec">Roxtec</Tab>
         <Tab value="files">Files</Tab>
         {isAdmin ? <Tab value="variables-api">Variables API</Tab> : null}
@@ -1725,6 +1727,15 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'change-orders' ? (
         <ChangeOrdersTab project={project} token={token} currentUser={user} />
+      ) : null}
+
+      {selectedTab === 'internal-ncrs' ? (
+        <ChangeOrdersTab
+          project={project}
+          token={token}
+          currentUser={user}
+          collection="internal-ncrs"
+        />
       ) : null}
 
       {selectedTab === 'roxtec' ? (

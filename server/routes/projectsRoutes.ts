@@ -12,7 +12,7 @@ import { cablesRouter } from './cablesRoutes.js';
 import { roxtecEntriesRouter } from './roxtecEntriesRoutes.js';
 import { traysRouter } from './traysRoutes.js';
 import { projectFilesRouter } from './projectFilesRoutes.js';
-import { changeOrdersRouter } from './changeOrdersRoutes.js';
+import { changeOrdersRouter, internalNcrsRouter } from './changeOrdersRoutes.js';
 
 const projectsRouter = Router();
 const INVALID_TRAY_TEMPLATE_FILE = 'INVALID_TRAY_TEMPLATE_FILE';
@@ -933,5 +933,6 @@ projectsRouter.use('/:projectId/roxtec', roxtecEntriesRouter);
 projectsRouter.use('/:projectId/trays', traysRouter);
 projectsRouter.use('/:projectId/files', projectFilesRouter);
 projectsRouter.use('/:projectId/change-orders', changeOrdersRouter);
+projectsRouter.use('/:projectId/internal-ncrs', internalNcrsRouter);
 
 export { projectsRouter };

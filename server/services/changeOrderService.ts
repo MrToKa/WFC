@@ -6,6 +6,7 @@ import {
   mapChangeOrderItemRow,
   mapChangeOrderSummaryRow,
   type ChangeOrderDetails,
+  type ChangeOrderDocumentType,
   type ChangeOrderItem,
   type ChangeOrderItemRow,
   type ChangeOrderRow,
@@ -123,6 +124,11 @@ const ITEM_COLUMNS = `
   created_at, updated_at
 `;
 
+const qualifiedItemColumns = (alias: string): string =>
+  ITEM_COLUMNS.split(',')
+    .map((column) => `${alias}.${column.trim()}`)
+    .join(', ');
+
 const normalizeText = (value: string | null | undefined): string | null => {
   if (value === null || value === undefined) return null;
   const trimmed = value.trim();
@@ -131,6 +137,8 @@ const normalizeText = (value: string | null | undefined): string | null => {
 
 export const synchronizeChangeOrderMaterialOrdering = async (
   queryable: Pick<PoolClient, 'query'> | typeof pool,
+  projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
 ): Promise<void> => {
   // Keep commercial ordering fields aligned with the referenced catalog row.
@@ -195,8 +203,15 @@ export const synchronizeChangeOrderMaterialOrdering = async (
        ordered_unit = source.packaging,
        updated_at = NOW()
      FROM source
-     WHERE item.change_order_id = $1
-       AND item.source_catalog = source.source_catalog
+      WHERE item.change_order_id = $1
+        AND EXISTS (
+          SELECT 1
+          FROM project_change_orders change_order
+          WHERE change_order.id = item.change_order_id
+            AND change_order.project_id = $2
+            AND change_order.document_type = $3
+        )
+        AND item.source_catalog = source.source_catalog
        AND item.source_material_id = source.id
        AND (
          (
@@ -219,11 +234,14 @@ export const synchronizeChangeOrderMaterialOrdering = async (
          END OR
          item.ordered_unit IS DISTINCT FROM source.packaging
        )`,
-    [changeOrderId],
+    [changeOrderId, projectId, documentType],
   );
 };
 
-export const listChangeOrders = async (projectId: string): Promise<ChangeOrderSummary[]> => {
+export const listChangeOrders = async (
+  projectId: string,
+  documentType: ChangeOrderDocumentType,
+): Promise<ChangeOrderSummary[]> => {
   const result = await pool.query<ChangeOrderRow>(
     `
       SELECT
@@ -232,17 +250,18 @@ export const listChangeOrders = async (projectId: string): Promise<ChangeOrderSu
         COALESCE(SUM(i.order_quantity * i.unit_price), 0) AS total_price
       FROM project_change_orders co
       LEFT JOIN project_change_order_items i ON i.change_order_id = co.id
-      WHERE co.project_id = $1
+      WHERE co.project_id = $1 AND co.document_type = $2
       GROUP BY co.id
       ORDER BY co.updated_at DESC, co.created_at DESC
     `,
-    [projectId],
+    [projectId, documentType],
   );
   return result.rows.map(mapChangeOrderSummaryRow);
 };
 
 export const getChangeOrder = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   queryable: Pick<PoolClient, 'query'> | typeof pool = pool,
 ): Promise<ChangeOrderDetails | null> => {
@@ -257,22 +276,25 @@ export const getChangeOrder = async (
       FROM project_change_orders co
       JOIN projects p ON p.id = co.project_id
       LEFT JOIN project_change_order_items i ON i.change_order_id = co.id
-      WHERE co.project_id = $1 AND co.id = $2
+      WHERE co.project_id = $1 AND co.document_type = $2 AND co.id = $3
       GROUP BY co.id, p.name, p.customer
     `,
-    [projectId, changeOrderId],
+    [projectId, documentType, changeOrderId],
   );
   const row = headerResult.rows[0];
   if (!row) return null;
 
-  await synchronizeChangeOrderMaterialOrdering(queryable, changeOrderId);
+  await synchronizeChangeOrderMaterialOrdering(queryable, projectId, documentType, changeOrderId);
 
   const itemResult = await queryable.query<ChangeOrderItemRow>(
-    `SELECT ${ITEM_COLUMNS}
-     FROM project_change_order_items
-     WHERE change_order_id = $1
-     ORDER BY sort_order ASC, created_at ASC`,
-    [changeOrderId],
+    `SELECT ${qualifiedItemColumns('item')}
+     FROM project_change_order_items item
+     JOIN project_change_orders change_order ON change_order.id = item.change_order_id
+     WHERE item.change_order_id = $1
+       AND change_order.project_id = $2
+       AND change_order.document_type = $3
+     ORDER BY item.sort_order ASC, item.created_at ASC`,
+    [changeOrderId, projectId, documentType],
   );
   const summary = mapChangeOrderSummaryRow(row);
   const items = itemResult.rows.map(mapChangeOrderItemRow);
@@ -289,6 +311,7 @@ export const getChangeOrder = async (
 
 export const createChangeOrder = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   createdBy: string,
   input: ChangeOrderHeaderInput,
 ): Promise<ChangeOrderDetails> => {
@@ -296,12 +319,14 @@ export const createChangeOrder = async (
   await pool.query(
     `
       INSERT INTO project_change_orders (
-        id, project_id, title, project_reference, prepared_by, report_date, revision, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        id, project_id, document_type, title, project_reference, prepared_by, report_date,
+        revision, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `,
     [
       id,
       projectId,
+      documentType,
       input.title.trim(),
       normalizeText(input.projectReference),
       input.preparedBy.trim(),
@@ -310,8 +335,9 @@ export const createChangeOrder = async (
       createdBy,
     ],
   );
-  const created = await getChangeOrder(projectId, id);
-  if (!created) throw new Error('Created Change Order could not be loaded');
+  const created = await getChangeOrder(projectId, documentType, id);
+  const documentName = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
+  if (!created) throw new Error(`Created ${documentName} could not be loaded`);
   return created;
 };
 
@@ -325,6 +351,7 @@ const HEADER_COLUMN_MAP: Record<keyof ChangeOrderHeaderInput, string> = {
 
 export const updateChangeOrder = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   input: ChangeOrderHeaderUpdate,
 ): Promise<ChangeOrderDetails | null> => {
@@ -334,24 +361,28 @@ export const updateChangeOrder = async (
     values.push(key === 'projectReference' ? normalizeText(input[key]) : input[key]);
     assignments.push(`${HEADER_COLUMN_MAP[key]} = $${values.length}`);
   }
-  values.push(changeOrderId, projectId);
+  values.push(changeOrderId, projectId, documentType);
   const result = await pool.query(
     `UPDATE project_change_orders
      SET ${assignments.join(', ')}, updated_at = NOW()
-     WHERE id = $${values.length - 1} AND project_id = $${values.length}`,
+     WHERE id = $${values.length - 2}
+       AND project_id = $${values.length - 1}
+       AND document_type = $${values.length}`,
     values,
   );
   if (result.rowCount === 0) return null;
-  return getChangeOrder(projectId, changeOrderId);
+  return getChangeOrder(projectId, documentType, changeOrderId);
 };
 
 export const deleteChangeOrder = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
 ): Promise<boolean> => {
   const result = await pool.query(
-    'DELETE FROM project_change_orders WHERE id = $1 AND project_id = $2',
-    [changeOrderId, projectId],
+    `DELETE FROM project_change_orders
+     WHERE id = $1 AND project_id = $2 AND document_type = $3`,
+    [changeOrderId, projectId, documentType],
   );
   return (result.rowCount ?? 0) > 0;
 };
@@ -425,6 +456,7 @@ const insertSnapshot = async (
 
 export const addChangeOrderItem = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   sourceCatalog: ChangeOrderSourceCatalog,
   sourceMaterialId: string,
@@ -434,8 +466,8 @@ export const addChangeOrderItem = async (
     await client.query('BEGIN');
     const owner = await client.query<{ id: string }>(
       `SELECT id FROM project_change_orders
-       WHERE id = $1 AND project_id = $2 FOR UPDATE`,
-      [changeOrderId, projectId],
+       WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
+      [changeOrderId, projectId, documentType],
     );
     if (!owner.rows[0]) {
       await client.query('ROLLBACK');
@@ -497,9 +529,12 @@ export const addChangeOrderItem = async (
       );
       nextSortOrder += 1;
     }
-    await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
-      changeOrderId,
-    ]);
+    await client.query(
+      `UPDATE project_change_orders
+       SET updated_at = NOW()
+       WHERE id = $1 AND project_id = $2 AND document_type = $3`,
+      [changeOrderId, projectId, documentType],
+    );
     await client.query('COMMIT');
     return item;
   } catch (error) {
@@ -553,12 +588,13 @@ const cloneChangeOrderItemRow = async (
     [sourceItemId, targetItemId, targetSortOrder, targetParentItemId],
   );
   const cloned = result.rows[0];
-  if (!cloned) throw new Error('Change Order item clone could not be created');
+  if (!cloned) throw new Error('Document item clone could not be created');
   return mapChangeOrderItemRow(cloned);
 };
 
 export const duplicateChangeOrderItem = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   itemId: string,
 ): Promise<ChangeOrderItem | null> => {
@@ -573,8 +609,9 @@ export const duplicateChangeOrderItem = async (
          AND item.change_order_id = $2
          AND item.line_kind = 'manual'
          AND change_order.project_id = $3
+         AND change_order.document_type = $4
        FOR UPDATE OF item, change_order`,
-      [itemId, changeOrderId, projectId],
+      [itemId, changeOrderId, projectId, documentType],
     );
     if (!sourceResult.rows[0]) {
       await client.query('ROLLBACK');
@@ -584,9 +621,11 @@ export const duplicateChangeOrderItem = async (
     const children = await client.query<{ id: string }>(
       `SELECT id
        FROM project_change_order_items
-       WHERE parent_item_id = $1 AND line_kind = 'inherited'
+       WHERE parent_item_id = $1
+         AND change_order_id = $2
+         AND line_kind = 'inherited'
        ORDER BY sort_order, created_at, id`,
-      [itemId],
+      [itemId, changeOrderId],
     );
     const orderResult = await client.query<{ next_order: number }>(
       `SELECT COALESCE(MAX(sort_order), 0)::int + 1 AS next_order
@@ -620,13 +659,17 @@ export const duplicateChangeOrderItem = async (
     await client.query(
       `UPDATE project_change_order_items
        SET revision_number = $2
-       WHERE parent_item_id = $1 AND line_kind = 'inherited'`,
-      [duplicatedItemId, duplicatedItem.revisionNumber],
+       WHERE parent_item_id = $1
+         AND change_order_id = $3
+         AND line_kind = 'inherited'`,
+      [duplicatedItemId, duplicatedItem.revisionNumber, changeOrderId],
     );
 
     await client.query(
-      'UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1',
-      [changeOrderId],
+      `UPDATE project_change_orders
+       SET updated_at = NOW()
+       WHERE id = $1 AND project_id = $2 AND document_type = $3`,
+      [changeOrderId, projectId, documentType],
     );
     await client.query('COMMIT');
     return duplicatedItem;
@@ -693,6 +736,7 @@ const NULLABLE_TEXT_ITEM_KEYS = new Set<keyof ChangeOrderItemUpdate>([
 
 export const updateChangeOrderItem = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   itemId: string,
   input: ChangeOrderItemUpdate,
@@ -713,7 +757,7 @@ export const updateChangeOrderItem = async (
     );
     assignments.push(`${ITEM_COLUMN_MAP[key]} = $${values.length}`);
   }
-  values.push(itemId, changeOrderId, projectId);
+  values.push(itemId, changeOrderId, projectId, documentType);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -722,14 +766,13 @@ export const updateChangeOrderItem = async (
         UPDATE project_change_order_items i
         SET ${assignments.join(', ')}, updated_at = NOW()
         FROM project_change_orders co
-        WHERE i.id = $${values.length - 2}
-          AND i.change_order_id = $${values.length - 1}
+        WHERE i.id = $${values.length - 3}
+          AND i.change_order_id = $${values.length - 2}
           ${updatesInheritedManagedFields ? "AND i.line_kind = 'manual'" : ''}
           AND co.id = i.change_order_id
-          AND co.project_id = $${values.length}
-        RETURNING ${ITEM_COLUMNS.split(',')
-          .map((column) => `i.${column.trim()}`)
-          .join(', ')}
+          AND co.project_id = $${values.length - 1}
+          AND co.document_type = $${values.length}
+        RETURNING ${qualifiedItemColumns('i')}
       `,
       values,
     );
@@ -789,7 +832,9 @@ export const updateChangeOrderItem = async (
              ELSE $3 * child.quantity_per_parent
            END AS raw_order_quantity
          FROM project_change_order_items child
-         WHERE child.parent_item_id = $1 AND child.line_kind = 'inherited'
+         WHERE child.parent_item_id = $1
+           AND child.change_order_id = $6
+           AND child.line_kind = 'inherited'
        )
        UPDATE project_change_order_items child
        SET
@@ -817,11 +862,15 @@ export const updateChangeOrderItem = async (
         normalizedUpdated.order_quantity,
         normalizedUpdated.source_catalog,
         normalizedUpdated.revision_number,
+        changeOrderId,
       ],
     );
-    await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
-      changeOrderId,
-    ]);
+    await client.query(
+      `UPDATE project_change_orders
+       SET updated_at = NOW()
+       WHERE id = $1 AND project_id = $2 AND document_type = $3`,
+      [changeOrderId, projectId, documentType],
+    );
     await client.query('COMMIT');
     return mapChangeOrderItemRow(normalizedUpdated);
   } catch (error) {
@@ -834,6 +883,7 @@ export const updateChangeOrderItem = async (
 
 export const deleteChangeOrderItem = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   itemId: string,
 ): Promise<boolean> => {
@@ -847,8 +897,9 @@ export const deleteChangeOrderItem = async (
         WHERE i.id = $1 AND i.change_order_id = $2
           AND i.line_kind = 'manual'
           AND co.id = i.change_order_id AND co.project_id = $3
+          AND co.document_type = $4
       `,
-      [itemId, changeOrderId, projectId],
+      [itemId, changeOrderId, projectId, documentType],
     );
     if (deleted.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -866,9 +917,12 @@ export const deleteChangeOrderItem = async (
       `,
       [changeOrderId],
     );
-    await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
-      changeOrderId,
-    ]);
+    await client.query(
+      `UPDATE project_change_orders
+       SET updated_at = NOW()
+       WHERE id = $1 AND project_id = $2 AND document_type = $3`,
+      [changeOrderId, projectId, documentType],
+    );
     await client.query('COMMIT');
     return true;
   } catch (error) {
@@ -883,6 +937,7 @@ export class InvalidChangeOrderOrderError extends Error {}
 
 export const reorderChangeOrderItems = async (
   projectId: string,
+  documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   orderedItemIds: string[],
 ): Promise<ChangeOrderItem[] | null> => {
@@ -890,8 +945,9 @@ export const reorderChangeOrderItems = async (
   try {
     await client.query('BEGIN');
     const owner = await client.query<{ id: string }>(
-      'SELECT id FROM project_change_orders WHERE id = $1 AND project_id = $2 FOR UPDATE',
-      [changeOrderId, projectId],
+      `SELECT id FROM project_change_orders
+       WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
+      [changeOrderId, projectId, documentType],
     );
     if (!owner.rows[0]) {
       await client.query('ROLLBACK');
@@ -916,13 +972,21 @@ export const reorderChangeOrderItems = async (
         [index + 1, orderedItemIds[index], changeOrderId],
       );
     }
-    await client.query('UPDATE project_change_orders SET updated_at = NOW() WHERE id = $1', [
-      changeOrderId,
-    ]);
+    await client.query(
+      `UPDATE project_change_orders
+       SET updated_at = NOW()
+       WHERE id = $1 AND project_id = $2 AND document_type = $3`,
+      [changeOrderId, projectId, documentType],
+    );
     const reordered = await client.query<ChangeOrderItemRow>(
-      `SELECT ${ITEM_COLUMNS} FROM project_change_order_items
-       WHERE change_order_id = $1 ORDER BY sort_order`,
-      [changeOrderId],
+      `SELECT ${qualifiedItemColumns('item')}
+       FROM project_change_order_items item
+       JOIN project_change_orders change_order ON change_order.id = item.change_order_id
+       WHERE item.change_order_id = $1
+         AND change_order.project_id = $2
+         AND change_order.document_type = $3
+       ORDER BY item.sort_order`,
+      [changeOrderId, projectId, documentType],
     );
     await client.query('COMMIT');
     return reordered.rows.map(mapChangeOrderItemRow);

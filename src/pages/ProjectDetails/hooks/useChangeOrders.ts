@@ -2,11 +2,26 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   fetchChangeOrder,
   fetchChangeOrders,
+  type ChangeOrderCollection,
   type ChangeOrderDetails,
   type ChangeOrderSummary,
 } from '@/api/client';
 
-export const useChangeOrders = (projectId: string, token: string | null) => {
+type UseChangeOrdersOptions = {
+  collection?: ChangeOrderCollection;
+  singularLabel?: string;
+  pluralLabel?: string;
+};
+
+export const useChangeOrders = (
+  projectId: string,
+  token: string | null,
+  {
+    collection = 'change-orders',
+    singularLabel = 'Change Order',
+    pluralLabel = 'Change Orders',
+  }: UseChangeOrdersOptions = {},
+) => {
   const [changeOrders, setChangeOrders] = useState<ChangeOrderSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [details, setDetails] = useState<ChangeOrderDetails | null>(null);
@@ -22,16 +37,16 @@ export const useChangeOrders = (projectId: string, token: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchChangeOrders(token, projectId);
+      const response = await fetchChangeOrders(token, projectId, collection);
       setChangeOrders(response.changeOrders);
       return response.changeOrders;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Failed to load Change Orders');
+      setError(caught instanceof Error ? caught.message : `Failed to load ${pluralLabel}`);
       return [];
     } finally {
       setLoading(false);
     }
-  }, [projectId, token]);
+  }, [collection, pluralLabel, projectId, token]);
 
   const selectChangeOrder = useCallback(
     async (id: string | null): Promise<void> => {
@@ -41,15 +56,15 @@ export const useChangeOrders = (projectId: string, token: string | null) => {
       setDetailsLoading(true);
       setError(null);
       try {
-        const response = await fetchChangeOrder(token, projectId, id);
+        const response = await fetchChangeOrder(token, projectId, id, collection);
         setDetails(response.changeOrder);
       } catch (caught) {
-        setError(caught instanceof Error ? caught.message : 'Failed to load Change Order');
+        setError(caught instanceof Error ? caught.message : `Failed to load ${singularLabel}`);
       } finally {
         setDetailsLoading(false);
       }
     },
-    [projectId, token],
+    [collection, projectId, singularLabel, token],
   );
 
   const refreshCurrent = useCallback(async (): Promise<void> => {

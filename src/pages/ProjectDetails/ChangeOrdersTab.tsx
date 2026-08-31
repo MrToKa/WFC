@@ -44,6 +44,7 @@ import {
   reorderChangeOrderItems,
   updateChangeOrder,
   updateChangeOrderItem,
+  type ChangeOrderCollection,
   type ChangeOrderHeaderInput,
   type ChangeOrderItem,
   type ChangeOrderItemUpdate,
@@ -168,11 +169,26 @@ type Props = {
   project: Project;
   token: string | null;
   currentUser: User | null;
+  collection?: ChangeOrderCollection;
 };
 
-export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
+const DOCUMENT_LABELS: Record<
+  ChangeOrderCollection,
+  { singular: string; plural: string; article: 'a' | 'an' }
+> = {
+  'change-orders': { singular: 'Change Order', plural: 'Change Orders', article: 'a' },
+  'internal-ncrs': { singular: 'Internal NCR', plural: 'Internal NCRs', article: 'an' },
+};
+
+export const ChangeOrdersTab = ({
+  project,
+  token,
+  currentUser,
+  collection = 'change-orders',
+}: Props) => {
   const styles = useStyles();
   const { showToast } = useToast();
+  const labels = DOCUMENT_LABELS[collection];
   const {
     changeOrders,
     selectedId,
@@ -183,7 +199,11 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     setDetails,
     loadList,
     selectChangeOrder,
-  } = useChangeOrders(project.id, token);
+  } = useChangeOrders(project.id, token, {
+    collection,
+    singularLabel: labels.singular,
+    pluralLabel: labels.plural,
+  });
   const [header, setHeader] = useState<ChangeOrderHeaderInput>(() =>
     defaultHeader(project, currentUser),
   );
@@ -211,10 +231,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
 
   const items = details?.items ?? [];
   const total = useMemo(() => items.reduce((sum, item) => sum + item.totalPrice, 0), [items]);
-  const itemsById = useMemo(
-    () => new Map(items.map((item) => [item.id, item])),
-    [items],
-  );
+  const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const parentIdsWithInheritedItems = useMemo(
     () =>
       new Set(
@@ -235,7 +252,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
   };
 
   const canLeave = (): boolean =>
-    !headerDirty || window.confirm('Discard unsaved Change Order header changes?');
+    !headerDirty || window.confirm(`Discard unsaved ${labels.singular} header changes?`);
 
   const choose = async (id: string): Promise<void> => {
     if (!canLeave()) return;
@@ -274,20 +291,20 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     setSavingHeader(true);
     try {
       if (newMode) {
-        const response = await createChangeOrder(token, project.id, header);
+        const response = await createChangeOrder(token, project.id, header, collection);
         await loadList();
         await selectChangeOrder(response.changeOrder.id);
-        showToast({ title: 'Change Order created', intent: 'success' });
+        showToast({ title: `${labels.singular} created`, intent: 'success' });
       } else if (selectedId) {
-        const response = await updateChangeOrder(token, project.id, selectedId, header);
+        const response = await updateChangeOrder(token, project.id, selectedId, header, collection);
         setHeader(toHeader(response.changeOrder));
         setHeaderDirty(false);
         await loadList();
-        showToast({ title: 'Change Order saved', intent: 'success' });
+        showToast({ title: `${labels.singular} saved`, intent: 'success' });
       }
     } catch (caught) {
       showToast({
-        title: 'Could not save Change Order',
+        title: `Could not save ${labels.singular}`,
         body: caught instanceof Error ? caught.message : undefined,
         intent: 'error',
       });
@@ -297,17 +314,21 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
   };
 
   const removeChangeOrder = async (): Promise<void> => {
-    if (!token || !selectedId || !window.confirm('Delete this Change Order and all its rows?'))
+    if (
+      !token ||
+      !selectedId ||
+      !window.confirm(`Delete this ${labels.singular} and all its rows?`)
+    )
       return;
     setPendingAction(true);
     try {
-      await deleteChangeOrder(token, project.id, selectedId);
+      await deleteChangeOrder(token, project.id, selectedId, collection);
       const remaining = await loadList();
       await selectChangeOrder(remaining[0]?.id ?? null);
-      showToast({ title: 'Change Order deleted', intent: 'success' });
+      showToast({ title: `${labels.singular} deleted`, intent: 'success' });
     } catch (caught) {
       showToast({
-        title: 'Could not delete Change Order',
+        title: `Could not delete ${labels.singular}`,
         body: caught instanceof Error ? caught.message : undefined,
         intent: 'error',
       });
@@ -328,10 +349,16 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     if (!token || !selectedId) return;
     setAddingMaterial(true);
     try {
-      const result = await addChangeOrderItem(token, project.id, selectedId, {
-        sourceCatalog: choice.category,
-        sourceMaterialId: choice.id,
-      });
+      const result = await addChangeOrderItem(
+        token,
+        project.id,
+        selectedId,
+        {
+          sourceCatalog: choice.category,
+          sourceMaterialId: choice.id,
+        },
+        collection,
+      );
       setDetails(result.changeOrder);
       setExpandedParentIds((current) => {
         const next = new Set(current);
@@ -356,7 +383,14 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     if (!token || !selectedId || !editingItem) return;
     setSavingItem(true);
     try {
-      await updateChangeOrderItem(token, project.id, selectedId, editingItem.id, update);
+      await updateChangeOrderItem(
+        token,
+        project.id,
+        selectedId,
+        editingItem.id,
+        update,
+        collection,
+      );
       setEditingItem(null);
       await reloadActive();
       showToast({ title: 'Item saved', intent: 'success' });
@@ -371,7 +405,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     if (!token || !selectedId || !window.confirm(`Remove "${item.descriptionEn}"?`)) return;
     setPendingAction(true);
     try {
-      await deleteChangeOrderItem(token, project.id, selectedId, item.id);
+      await deleteChangeOrderItem(token, project.id, selectedId, item.id, collection);
       await reloadActive();
       showToast({ title: 'Item removed', intent: 'success' });
     } catch (caught) {
@@ -394,6 +428,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
         project.id,
         selectedId,
         item.id,
+        collection,
       );
       setDetails(result.changeOrder);
       setExpandedParentIds((current) => {
@@ -423,7 +458,7 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     [ids[index], ids[target]] = [ids[target], ids[index]];
     setPendingAction(true);
     try {
-      await reorderChangeOrderItems(token, project.id, selectedId, ids);
+      await reorderChangeOrderItems(token, project.id, selectedId, ids, collection);
       await reloadActive();
     } catch (caught) {
       showToast({
@@ -440,17 +475,23 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     if (!token || !selectedId || !details) return;
     setExporting(true);
     try {
-      const result = await exportChangeOrder(token, project.id, selectedId, details.title);
+      const result = await exportChangeOrder(
+        token,
+        project.id,
+        selectedId,
+        details.title,
+        collection,
+      );
       const url = URL.createObjectURL(result.blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = result.fileName;
       link.click();
       URL.revokeObjectURL(url);
-      showToast({ title: 'Change Order exported', intent: 'success' });
+      showToast({ title: `${labels.singular} exported`, intent: 'success' });
     } catch (caught) {
       showToast({
-        title: 'Could not export Change Order',
+        title: `Could not export ${labels.singular}`,
         body: caught instanceof Error ? caught.message : undefined,
         intent: 'error',
       });
@@ -463,23 +504,25 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
     return (
       <MessageBar intent="warning">
         <MessageBarBody>
-          Sign in to view project Change Orders and commercial prices.
+          Sign in to view project {labels.plural} and commercial prices.
         </MessageBarBody>
       </MessageBar>
     );
   }
 
   return (
-    <section className={styles.root} aria-label="Change Orders">
+    <section className={styles.root} aria-label={labels.plural}>
       <div className={styles.selectorRow}>
-        <Field label="Change Order" className={styles.selector}>
+        <Field label={labels.singular} className={styles.selector}>
           <Select
             value={newMode ? '__new__' : (selectedId ?? '')}
             onChange={(event) => void choose(event.target.value)}
             disabled={loading || pendingAction}
           >
-            <option value="">Select a Change Order</option>
-            {newMode ? <option value="__new__">New unsaved Change Order</option> : null}
+            <option value="">
+              Select {labels.article} {labels.singular}
+            </option>
+            {newMode ? <option value="__new__">New unsaved {labels.singular}</option> : null}
             {changeOrders.map((order) => (
               <option key={order.id} value={order.id}>
                 {order.title} · Rev {order.revision} · {order.itemCount} items
@@ -488,14 +531,14 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
           </Select>
         </Field>
         <Button icon={<AddRegular />} onClick={() => void startNew()}>
-          New Change Order
+          New {labels.singular}
         </Button>
         <Button
           icon={<DeleteRegular />}
           disabled={!selectedId || newMode || pendingAction}
           onClick={() => void removeChangeOrder()}
         >
-          Delete Change Order
+          Delete {labels.singular}
         </Button>
       </div>
 
@@ -504,8 +547,8 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
           <MessageBarBody>{error}</MessageBarBody>
         </MessageBar>
       ) : null}
-      {detailsLoading ? <Spinner label="Loading Change Order" /> : null}
-      {loading ? <Spinner label="Loading Change Orders" /> : null}
+      {detailsLoading ? <Spinner label={`Loading ${labels.singular}`} /> : null}
+      {loading ? <Spinner label={`Loading ${labels.plural}`} /> : null}
 
       {(newMode || details) && !detailsLoading ? (
         <>
@@ -593,13 +636,13 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
               </Button>
             </div>
             {newMode ? (
-              <Text>Save the Change Order header before adding materials.</Text>
+              <Text>Save the {labels.singular} header before adding materials.</Text>
             ) : items.length === 0 ? (
               <Text>No materials have been added.</Text>
             ) : (
               <>
                 <div className={styles.tableWrap}>
-                  <Table size="small" aria-label="Change Order items">
+                  <Table size="small" aria-label={`${labels.singular} items`}>
                     <TableHeader>
                       <TableRow>
                         <TableHeaderCell>Item</TableHeaderCell>
@@ -780,15 +823,11 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
         </>
       ) : null}
 
-      {!loading &&
-      !detailsLoading &&
-      !newMode &&
-      !details &&
-      changeOrders.length > 0 ? (
+      {!loading && !detailsLoading && !newMode && !details && changeOrders.length > 0 ? (
         <div className={styles.card}>
-          <Title3>All Change Orders</Title3>
+          <Title3>All {labels.plural}</Title3>
           <div className={styles.tableWrap}>
-            <Table size="small" aria-label="All Change Orders">
+            <Table size="small" aria-label={`All ${labels.plural}`}>
               <TableHeader>
                 <TableRow>
                   <TableHeaderCell>Title</TableHeaderCell>
@@ -834,18 +873,20 @@ export const ChangeOrdersTab = ({ project, token, currentUser }: Props) => {
       ) : null}
 
       {!loading && !detailsLoading && !newMode && changeOrders.length === 0 ? (
-        <Text>No Change Orders yet. Create the first one to begin.</Text>
+        <Text>No {labels.plural} yet. Create the first one to begin.</Text>
       ) : null}
 
       <ChangeOrderMaterialDialog
         open={materialDialogOpen}
         adding={addingMaterial}
+        documentName={labels.singular}
         onDismiss={() => setMaterialDialogOpen(false)}
         onSelect={addMaterial}
       />
       <ChangeOrderItemDialog
         item={editingItem}
         saving={savingItem}
+        documentName={labels.singular}
         onDismiss={() => setEditingItem(null)}
         onSave={saveItem}
       />

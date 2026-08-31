@@ -7,6 +7,7 @@ import {
   calculateLineTotal,
   calculateSpareQuantity,
   type ChangeOrderDetails,
+  type ChangeOrderDocumentType,
   type ChangeOrderItem,
 } from '../models/changeOrder.js';
 
@@ -412,9 +413,14 @@ const makeExcelDesktopCompatible = async (
 export async function generateChangeOrderWorkbook(
   changeOrder: ChangeOrderDetails,
   templatePath?: string,
+  documentType: ChangeOrderDocumentType = 'change-order',
 ): Promise<Buffer> {
   if (changeOrder.items.length === 0) {
-    throw new EmptyChangeOrderError('A Change Order must contain at least one material row');
+    const documentName = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
+    const article = documentType === 'internal-ncr' ? 'An' : 'A';
+    throw new EmptyChangeOrderError(
+      `${article} ${documentName} must contain at least one material row`,
+    );
   }
   const exportItems = consolidateChangeOrderItemsForExport(changeOrder.items);
 
@@ -476,7 +482,7 @@ export async function generateChangeOrderWorkbook(
     worksheet.spliceRows(totalRowNumber + 1, totalTemplateRowNumber - totalRowNumber);
   }
 
-  worksheet.name = 'Change Order';
+  worksheet.name = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
   worksheet.getCell('B1').value = escapeSpreadsheetText(changeOrder.projectName);
   worksheet.getCell('B2').value = escapeSpreadsheetText(changeOrder.projectCustomer);
   worksheet.getCell('B3').value = escapeSpreadsheetText(changeOrder.projectReference ?? '');
@@ -501,12 +507,16 @@ export async function generateChangeOrderWorkbook(
   return makeExcelDesktopCompatible(Buffer.from(output), totalRowNumber);
 }
 
-export const sanitizeChangeOrderFileName = (title: string): string => {
+export const sanitizeChangeOrderFileName = (
+  title: string,
+  documentType: ChangeOrderDocumentType = 'change-order',
+): string => {
   const clean = (value: string): string =>
     value
       .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 100);
-  return `Change order - ${clean(title) || 'report'}.xlsx`;
+  const prefix = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change order';
+  return `${prefix} - ${clean(title) || 'report'}.xlsx`;
 };
