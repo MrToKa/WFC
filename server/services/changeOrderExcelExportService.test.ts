@@ -134,6 +134,20 @@ describe('Change Order workbook export', () => {
       pattern: 'solid',
       fgColor: { theme: 4 },
     });
+    expect(worksheet?.getCell('K1').font).toMatchObject({ bold: true, size: 26 });
+    expect(worksheet?.getCell('K3').font).toMatchObject({ bold: true, size: 20 });
+    for (const address of ['K1', 'K3']) {
+      expect(worksheet?.getCell(address).alignment).toMatchObject({
+        horizontal: 'center',
+        vertical: 'middle',
+      });
+      expect(worksheet?.getCell(address).border).toMatchObject({
+        top: { style: 'thin' },
+        right: { style: 'thin' },
+        bottom: { style: 'thin' },
+        left: { style: 'thin' },
+      });
+    }
     expect(worksheet?.getCell('V5').value).toBe('Certificates');
     expect(worksheet?.getCell('P7').font.bold).toBe(true);
     expect(worksheet?.getCell('Q7').font.bold).toBe(true);
@@ -433,6 +447,20 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('D3').value).toBe('P-100');
     expect(worksheet.getCell('K1').value).toBe('Heat Pump Project');
     expect(worksheet.getCell('K3').value).toBe('Discharge impulse lines');
+    expect(worksheet.getCell('K1').font).toMatchObject({ bold: true, size: 26 });
+    expect(worksheet.getCell('K3').font).toMatchObject({ bold: true, size: 20 });
+    for (const address of ['K1', 'K3']) {
+      expect(worksheet.getCell(address).alignment).toMatchObject({
+        horizontal: 'center',
+        vertical: 'middle',
+      });
+      expect(worksheet.getCell(address).border).toMatchObject({
+        top: { style: 'thin' },
+        right: { style: 'thin' },
+        bottom: { style: 'thin' },
+        left: { style: 'thin' },
+      });
+    }
     expect(worksheet.getCell('Z1').value).toBe('Test User');
     expect(worksheet.getCell('Z2').value).toBeInstanceOf(Date);
     expect(worksheet.getCell('Z3').value).toMatchObject({ formula: 'Z2+28' });

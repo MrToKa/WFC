@@ -53,6 +53,14 @@ const TEMPLATE_WIDE_HEADER_MERGES = [
   ['K1:AB2', 'K1:X2'],
   ['K3:AB4', 'K3:X4'],
 ] as const;
+const DOCUMENT_TITLE_STYLES = [
+  ['K1', 26],
+  ['K3', 20],
+] as const;
+const DOCUMENT_TITLE_BORDER: Partial<ExcelJS.Border> = {
+  style: 'thin',
+  color: { argb: 'FF000000' },
+};
 
 // ExcelJS serializes font properties in JavaScript object order, which is not the
 // order required by SpreadsheetML. Excel desktop rejects the resulting styles.xml
@@ -291,6 +299,21 @@ const removeUnusedExportColumns = (worksheet: ExcelJS.Worksheet): void => {
 
   for (const [, exportMerge] of mergesToRestore) {
     worksheet.mergeCells(exportMerge);
+  }
+};
+
+const styleDocumentTitles = (worksheet: ExcelJS.Worksheet): void => {
+  for (const [address, fontSize] of DOCUMENT_TITLE_STYLES) {
+    const cell = worksheet.getCell(address);
+    cell.font = { ...cell.font, bold: true, size: fontSize };
+    cell.alignment = { ...cell.alignment, horizontal: 'center', vertical: 'middle' };
+    cell.border = {
+      ...cell.border,
+      top: DOCUMENT_TITLE_BORDER,
+      right: DOCUMENT_TITLE_BORDER,
+      bottom: DOCUMENT_TITLE_BORDER,
+      left: DOCUMENT_TITLE_BORDER,
+    };
   }
 };
 
@@ -569,6 +592,7 @@ export async function generateChangeOrderWorkbook(
 
   worksheet.name = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
   populateDocumentHeader(worksheet, headerRowNumber, changeOrder);
+  styleDocumentTitles(worksheet);
 
   worksheet.autoFilter = `A${headerRowNumber}:${LAST_EXPORT_COLUMN}${lastItemRow}`;
   worksheet.pageSetup.printArea = `A1:${LAST_EXPORT_COLUMN}${totalRowNumber}`;
