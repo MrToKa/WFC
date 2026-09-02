@@ -27,8 +27,8 @@ const expectedHeaderMerges = [
   'D1:J1',
   'D2:J2',
   'D3:J4',
-  'K1:AB2',
-  'K3:AB4',
+  'K1:X2',
+  'K3:X4',
 ] as const;
 
 const createItem = (index: number): ChangeOrderItem => ({
@@ -134,9 +134,9 @@ describe('Change Order workbook export', () => {
       pattern: 'solid',
       fgColor: { theme: 4 },
     });
-    expect(worksheet?.getCell('Z5').value).toBe('Certificates');
-    expect(worksheet?.getCell('R7').font.bold).toBe(true);
-    expect(worksheet?.getCell('S7').font.bold).toBe(true);
+    expect(worksheet?.getCell('V5').value).toBe('Certificates');
+    expect(worksheet?.getCell('P7').font.bold).toBe(true);
+    expect(worksheet?.getCell('Q7').font.bold).toBe(true);
   });
 
   it('uses the supplied styled workbook as the default shared template', async () => {
@@ -152,9 +152,9 @@ describe('Change Order workbook export', () => {
       pattern: 'solid',
       fgColor: { theme: 4 },
     });
-    expect(worksheet.getCell('Z5').value).toBe('Certificates');
-    expect(worksheet.getCell('R7').font.bold).toBe(true);
-    expect(worksheet.getCell('S7').font.bold).toBe(true);
+    expect(worksheet.getCell('V5').value).toBe('Certificates');
+    expect(worksheet.getCell('P7').font.bold).toBe(true);
+    expect(worksheet.getCell('Q7').font.bold).toBe(true);
   });
 
   it('consolidates identical cable materials into one export position', async () => {
@@ -217,7 +217,7 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('H6').value).toBe('meters');
     expect(worksheet.getCell('I6').value).toBe(180);
     expect(worksheet.getCell('J6').value).toBe('Drum');
-    expect(worksheet.getCell('R7').value).toBe('TOTAL:');
+    expect(worksheet.getCell('P7').value).toBe('TOTAL:');
     expect(worksheet.getCell('A7').value).toBeNull();
   });
 
@@ -257,7 +257,7 @@ describe('Change Order workbook export', () => {
     if (!worksheet) throw new Error('Generated worksheet is missing');
 
     expect(worksheet.getCell('C6').value).toMatchObject({ formula: 'G6*I6', result: 30 });
-    expect(worksheet.getCell('Y6').value).toBe('01');
+    expect(worksheet.getCell('U6').value).toBe('01');
     expect(worksheet.getCell('A7').value).toBeNull();
   });
 
@@ -322,11 +322,11 @@ describe('Change Order workbook export', () => {
 
     expect(worksheet.getCell('B6').value).toBe(175);
     expect(worksheet.getCell('C6').value).toMatchObject({ formula: 'G6*I6', result: 210 });
-    expect(worksheet.getCell('L6').value).toBe("'=unsafe formula, Updated cable description");
-    expect(worksheet.getCell('V6').value).toBe('ESD-001, ESD-002');
-    expect(worksheet.getCell('W6').value).toBe('GDS-100, GDS-200');
-    expect(worksheet.getCell('AD6').value).toBe('Area A, Area B');
-    expect(worksheet.getCell('R7').value).toBe('TOTAL:');
+    expect(worksheet.getCell('K6').value).toBe("'=unsafe formula, Updated cable description");
+    expect(worksheet.getCell('S6').value).toBe('ESD-001, ESD-002');
+    expect(worksheet.getCell('T6').value).toBe('GDS-100, GDS-200');
+    expect(worksheet.getCell('Z6').value).toBe('Area A, Area B');
+    expect(worksheet.getCell('P7').value).toBe('TOTAL:');
   });
 
   it('keeps the same material separate when unit prices differ', () => {
@@ -433,42 +433,45 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('D3').value).toBe('P-100');
     expect(worksheet.getCell('K1').value).toBe('Heat Pump Project');
     expect(worksheet.getCell('K3').value).toBe('Discharge impulse lines');
-    expect(worksheet.getCell('AD1').value).toBe('Test User');
-    expect(worksheet.getCell('AD2').value).toBeInstanceOf(Date);
-    expect(worksheet.getCell('AD3').value).toMatchObject({ formula: 'AD2+28' });
-    expect(worksheet.getCell('AD4').value).toBe('02');
+    expect(worksheet.getCell('Z1').value).toBe('Test User');
+    expect(worksheet.getCell('Z2').value).toBeInstanceOf(Date);
+    expect(worksheet.getCell('Z3').value).toMatchObject({ formula: 'Z2+28' });
+    expect(worksheet.getCell('Z4').value).toBe('02');
     expect(worksheet.getCell('A5').value).toBe('Item No.');
-    expect(worksheet.getCell('Z5').value).toBe('Certificates');
-    expect(worksheet.getCell('AD5').value).toBe('Remarks');
+    expect(worksheet.getCell('V5').value).toBe('Certificates');
+    expect(worksheet.getCell('Z5').value).toBe('Remarks');
+    const exportedHeaders = worksheet.getRow(5).values;
+    expect(exportedHeaders).not.toContain('SAP number');
+    expect(exportedHeaders).not.toContain('Description (DE)');
+    expect(exportedHeaders).not.toContain('HS Code');
+    expect(exportedHeaders).not.toContain('Shipping list');
     expect(worksheet.getCell('A6').value).toBe(1);
     expect(worksheet.getCell('A7').value).toBe(2);
-    expect(worksheet.getCell('L6').value).toBe("'=unsafe formula");
-    expect(worksheet.getCell('AD7').value).toBe("'@unsafe remark");
+    expect(worksheet.getCell('K6').value).toBe("'=unsafe formula");
+    expect(worksheet.getCell('Z7').value).toBe("'@unsafe remark");
     expect(worksheet.getCell('C6').value).toMatchObject({ formula: 'G6*I6', result: 10 });
     expect(worksheet.getCell('D6').value).toMatchObject({
       formula: 'C6-B6',
       result: -0.5,
     });
-    expect(worksheet.getCell('S6').value).toMatchObject({ formula: 'R6*C6', result: 45 });
+    expect(worksheet.getCell('Q6').value).toMatchObject({ formula: 'P6*C6', result: 45 });
     for (const address of ['B6', 'C6', 'D6', 'G6', 'I6']) {
       expect(worksheet.getCell(address).numFmt).toBe('#,##0.00');
     }
-    expect(worksheet.getCell('R8').value).toBe('TOTAL:');
-    expect(worksheet.getCell('S8').value).toMatchObject({ formula: 'SUM(S6:S7)' });
+    expect(worksheet.getCell('P8').value).toBe('TOTAL:');
+    expect(worksheet.getCell('Q8').value).toMatchObject({ formula: 'SUM(Q6:Q7)' });
     expect(worksheet.getCell('L9').value).toBeNull();
-    expect(worksheet.getColumn('M').hidden).toBe(true);
-    expect(worksheet.getColumn('U').hidden).toBe(true);
     expect(worksheet.pageSetup.orientation).toBe('landscape');
-    expect(worksheet.pageSetup.printArea).toBe('A1:AD8');
+    expect(worksheet.pageSetup.printArea).toBe('A1:Z8');
     expect(worksheet.pageSetup.printTitlesRow).toBe('5:5');
-    expect(worksheet.autoFilter).toBe('A5:AD7');
+    expect(worksheet.autoFilter).toBe('A5:Z7');
     expect(worksheet.getRow(6).height).toBe(source.getRow(6).height);
     expect(worksheet.getCell('A6').border.left?.style).toBe(
       source.getCell('A6').border.left?.style,
     );
     expect(worksheet.model.merges).toHaveLength(expectedHeaderMerges.length);
     expect(worksheet.model.merges).toEqual(expect.arrayContaining([...expectedHeaderMerges]));
-    for (let column = 1; column <= 30; column += 1) {
+    for (let column = 1; column <= 26; column += 1) {
       const fill = worksheet.getRow(5).getCell(column).fill;
       expect(fill.type).toBe('pattern');
       if (fill.type !== 'pattern') throw new Error('Expected a pattern fill');
@@ -476,7 +479,7 @@ describe('Change Order workbook export', () => {
       expect(fill.fgColor?.theme).toBe(4);
       expect(fill.fgColor?.tint).toBeCloseTo(0.5999938962981048, 12);
     }
-    for (const address of ['R8', 'S8']) {
+    for (const address of ['P8', 'Q8']) {
       const cell = worksheet.getCell(address);
       expect(cell.font.bold).toBe(true);
       expect(cell.fill).toMatchObject({
@@ -485,8 +488,8 @@ describe('Change Order workbook export', () => {
         fgColor: { argb: 'FFFFFF00' },
       });
     }
-    expect(worksheet.getCell('R8').border).toEqual(source.getCell('R9').border);
-    expect(worksheet.getCell('S8').border).toEqual(source.getCell('S9').border);
+    expect(worksheet.getCell('P8').border).toEqual(source.getCell('R9').border);
+    expect(worksheet.getCell('Q8').border).toEqual(source.getCell('S9').border);
 
     expect(
       workbook.definedNames.model.some(
@@ -504,9 +507,9 @@ describe('Change Order workbook export', () => {
     expect(workbookXml).not.toContain('List1');
     expect(worksheetXml).toContain('<cols>');
     expect(worksheetXml).toContain('<mergeCells');
-    expect(worksheetXml).toContain('<autoFilter ref="A5:AD7"');
+    expect(worksheetXml).toContain('<autoFilter ref="A5:Z7"');
     expect(worksheetXml).not.toContain('<conditionalFormatting');
-    expect(worksheetXml).toContain('<dimension ref="A1:AD8"');
+    expect(worksheetXml).toContain('<dimension ref="A1:Z8"');
     expect(worksheetXml).not.toMatch(/<row\b[^>]*\br="(?:9|[1-9]\d+)"/);
     expect(archive.file('xl/calcChain.xml')).toBeNull();
     expect(archive.file(/xl\/externalLinks\//)).toHaveLength(0);
@@ -532,7 +535,7 @@ describe('Change Order workbook export', () => {
       '<row r="7"><c r="S7"/></row><row r="8"><c r="A8" s="5"/></row>' +
       '<row r="29"><c r="A29" s="8"/></row></sheetData></worksheet>';
     expect(trimWorksheetAfterRow(worksheetXml, 7)).toBe(
-      '<worksheet><dimension ref="A1:AD7"/><sheetData>' +
+      '<worksheet><dimension ref="A1:Z7"/><sheetData>' +
         '<row r="7"><c r="S7"/></row></sheetData></worksheet>',
     );
   });
@@ -544,10 +547,10 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('D35').value).toMatchObject({
       formula: 'C35-B35',
     });
-    expect(worksheet.getCell('S35').value).toMatchObject({ formula: 'R35*C35' });
-    expect(worksheet.getCell('R36').value).toBe('TOTAL:');
-    expect(worksheet.getCell('S36').value).toMatchObject({ formula: 'SUM(S6:S35)' });
-    expect(worksheet.pageSetup.printArea).toBe('A1:AD36');
-    expect(worksheet.autoFilter).toBe('A5:AD35');
+    expect(worksheet.getCell('Q35').value).toMatchObject({ formula: 'P35*C35' });
+    expect(worksheet.getCell('P36').value).toBe('TOTAL:');
+    expect(worksheet.getCell('Q36').value).toMatchObject({ formula: 'SUM(Q6:Q35)' });
+    expect(worksheet.pageSetup.printArea).toBe('A1:Z36');
+    expect(worksheet.autoFilter).toBe('A5:Z35');
   });
 });

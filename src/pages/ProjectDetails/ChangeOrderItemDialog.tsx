@@ -26,19 +26,15 @@ type FormState = {
   packagingUnit: string;
   orderedQuantity: string;
   orderedUnit: string;
-  sapNumber: string;
   descriptionEn: string;
-  descriptionDe: string;
   dimensionMm: string;
   material: string;
   weightKg: string;
   clearDescription: string;
   unitPrice: string;
   countryOfOrigin: string;
-  hsCode: string;
   tagNo: string;
   drawingNo: string;
-  shippingList: string;
   revisionNumber: string;
   clientBarcode: string;
   manufacturer: string;
@@ -73,19 +69,15 @@ const toForm = (item: ChangeOrderItem): FormState => ({
   packagingUnit: value(item.packagingUnit),
   orderedQuantity: value(item.orderedQuantity),
   orderedUnit: value(item.orderedUnit),
-  sapNumber: value(item.sapNumber),
   descriptionEn: item.descriptionEn,
-  descriptionDe: value(item.descriptionDe),
   dimensionMm: value(item.dimensionMm),
   material: value(item.material),
   weightKg: value(item.weightKg),
   clearDescription: value(item.clearDescription),
   unitPrice: value(item.unitPrice),
   countryOfOrigin: value(item.countryOfOrigin),
-  hsCode: value(item.hsCode),
   tagNo: value(item.tagNo),
   drawingNo: value(item.drawingNo),
-  shippingList: value(item.shippingList),
   revisionNumber: value(item.revisionNumber),
   clientBarcode: value(item.clientBarcode),
   manufacturer: value(item.manufacturer),
@@ -164,19 +156,15 @@ export const ChangeOrderItemDialog = ({
               orderedQuantity: parseOptionalNumber(form.orderedQuantity, 'Ordered quantity'),
               orderedUnit: nullable(form.orderedUnit),
             }),
-        sapNumber: nullable(form.sapNumber),
         descriptionEn: form.descriptionEn.trim(),
-        descriptionDe: nullable(form.descriptionDe),
         dimensionMm: nullable(form.dimensionMm),
         material: nullable(form.material),
         weightKg: parseOptionalNumber(form.weightKg, 'Weight'),
         clearDescription: nullable(form.clearDescription),
         unitPrice: parseRequiredNumber(form.unitPrice, 'Unit price'),
         countryOfOrigin: nullable(form.countryOfOrigin),
-        hsCode: nullable(form.hsCode),
         tagNo: nullable(form.tagNo),
         drawingNo: nullable(form.drawingNo),
-        shippingList: nullable(form.shippingList),
         clientBarcode: nullable(form.clientBarcode),
         manufacturer: nullable(form.manufacturer),
         manufacturerPartNo: nullable(form.manufacturerPartNo),
@@ -253,7 +241,6 @@ export const ChangeOrderItemDialog = ({
             ) : null}
             <div className={styles.grid}>
               {input('descriptionEn', 'Description (EN)')}
-              {input('descriptionDe', 'Description (DE)')}
               {input('designQuantity', 'Design Qty', 'number')}
               {input('orderQuantity', 'Order Qty', 'number')}
               {input('unit', 'Unit')}
@@ -264,16 +251,13 @@ export const ChangeOrderItemDialog = ({
               {input('orderedQuantity', 'Ordered Qty', 'number')}
               {input('orderedUnit', 'Ordered Unit')}
               {input('weightKg', 'Weight [kg]', 'number')}
-              {input('sapNumber', 'SAP number')}
               {input('dimensionMm', 'Dimension [mm]')}
               {input('material', 'Material')}
               {input('manufacturer', 'Manufacturer')}
               {input('manufacturerPartNo', 'Manufacturer Part No.')}
               {input('countryOfOrigin', 'Country of origin')}
-              {input('hsCode', 'HS Code')}
               {input('tagNo', 'Pos./TAG-No')}
               {input('drawingNo', 'Drawing No.')}
-              {input('shippingList', 'Shipping list')}
               {input('revisionNumber', 'Revision number')}
               {input('clientBarcode', 'Client Barcode')}
               {input('acsBarcode', 'ACS barcode')}

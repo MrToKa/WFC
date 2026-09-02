@@ -216,6 +216,10 @@ describe('ChangeOrdersTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
     expect(screen.getByText('Edit Internal NCR item')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'SAP number' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Description (DE)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'HS Code' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Shipping list' })).not.toBeInTheDocument();
   });
 
   it.each([

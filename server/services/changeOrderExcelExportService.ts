@@ -46,6 +46,13 @@ const EXPECTED_HEADERS = [
   'Remarks',
 ] as const;
 const HEADER_ALIASES = new Map<number, readonly string[]>([[25, ['Client Barcode']]]);
+const OMITTED_EXPORT_COLUMN_NUMBERS = [24, 21, 13, 11] as const;
+const EXPORT_COLUMN_COUNT = EXPECTED_HEADERS.length - OMITTED_EXPORT_COLUMN_NUMBERS.length;
+const LAST_EXPORT_COLUMN = 'Z';
+const TEMPLATE_WIDE_HEADER_MERGES = [
+  ['K1:AB2', 'K1:X2'],
+  ['K3:AB4', 'K3:X4'],
+] as const;
 
 // ExcelJS serializes font properties in JavaScript object order, which is not the
 // order required by SpreadsheetML. Excel desktop rejects the resulting styles.xml
@@ -253,7 +260,9 @@ type RowTemplate = {
 const captureRowTemplate = (row: ExcelJS.Row): RowTemplate => ({
   height: row.height,
   hidden: row.hidden,
-  styles: Array.from({ length: 30 }, (_, index) => cloneStyle(row.getCell(index + 1).style)),
+  styles: Array.from({ length: EXPORT_COLUMN_COUNT }, (_, index) =>
+    cloneStyle(row.getCell(index + 1).style),
+  ),
 });
 
 const applyRowTemplate = (row: ExcelJS.Row, template: RowTemplate): void => {
@@ -267,6 +276,23 @@ const applyRowTemplate = (row: ExcelJS.Row, template: RowTemplate): void => {
 };
 
 const toText = (value: string | null): string | null => escapeSpreadsheetText(value);
+
+const removeUnusedExportColumns = (worksheet: ExcelJS.Worksheet): void => {
+  const mergesToRestore = TEMPLATE_WIDE_HEADER_MERGES.filter(([templateMerge]) =>
+    worksheet.model.merges.includes(templateMerge),
+  );
+  for (const [templateMerge] of mergesToRestore) {
+    worksheet.unMergeCells(templateMerge);
+  }
+
+  for (const columnNumber of OMITTED_EXPORT_COLUMN_NUMBERS) {
+    worksheet.spliceColumns(columnNumber, 1);
+  }
+
+  for (const [, exportMerge] of mergesToRestore) {
+    worksheet.mergeCells(exportMerge);
+  }
+};
 
 const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: number): void => {
   const rowNumber = row.number;
@@ -285,23 +311,19 @@ const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: numb
     toText(item.packagingUnit),
     item.orderedQuantity,
     toText(item.orderedUnit),
-    toText(item.sapNumber),
     escapeSpreadsheetText(item.descriptionEn),
-    toText(item.descriptionDe),
     toText(item.dimensionMm),
     toText(item.material),
     item.weightKg,
     toText(item.clearDescription),
     item.unitPrice,
     {
-      formula: `R${rowNumber}*C${rowNumber}`,
+      formula: `P${rowNumber}*C${rowNumber}`,
       result: calculateLineTotal(packagedOrderQuantity, item.unitPrice),
     },
     toText(item.countryOfOrigin),
-    toText(item.hsCode),
     toText(item.tagNo),
     toText(item.drawingNo),
-    toText(item.shippingList),
     toText(item.revisionNumber),
     toText(item.clientBarcode),
     toText(item.manufacturer),
@@ -316,9 +338,9 @@ const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: numb
   for (const column of [2, 3, 4, 7, 9]) {
     row.getCell(column).numFmt = '#,##0.00';
   }
-  row.getCell(16).numFmt = '#,##0.###';
-  row.getCell(18).numFmt = '#,##0.00 [$€-1]';
-  row.getCell(19).numFmt = '#,##0.00 [$€-1]';
+  row.getCell(14).numFmt = '#,##0.###';
+  row.getCell(16).numFmt = '#,##0.00 [$€-1]';
+  row.getCell(17).numFmt = '#,##0.00 [$€-1]';
 };
 
 const resolveDefaultTemplatePath = async (): Promise<string> => {
@@ -389,13 +411,13 @@ const populateDocumentHeader = (
     setMergedHeaderValue(worksheet, ['D3'], changeOrder.projectReference ?? '');
     setMergedHeaderValue(worksheet, ['K1'], changeOrder.projectName);
     setMergedHeaderValue(worksheet, ['K3'], changeOrder.title);
-    worksheet.getCell('AD1').value = escapeSpreadsheetText(changeOrder.preparedBy);
-    worksheet.getCell('AD2').value = reportDate;
-    worksheet.getCell('AD3').value = {
-      formula: 'AD2+28',
+    worksheet.getCell('Z1').value = escapeSpreadsheetText(changeOrder.preparedBy);
+    worksheet.getCell('Z2').value = reportDate;
+    worksheet.getCell('Z3').value = {
+      formula: 'Z2+28',
       result: addDays(reportDate, 28),
     };
-    worksheet.getCell('AD4').value = escapeSpreadsheetText(changeOrder.revision);
+    worksheet.getCell('Z4').value = escapeSpreadsheetText(changeOrder.revision);
     return;
   }
 
@@ -405,9 +427,9 @@ const populateDocumentHeader = (
   worksheet.getCell('B3').value = escapeSpreadsheetText(changeOrder.projectReference ?? '');
   setMergedHeaderValue(worksheet, ['K1', 'F1'], changeOrder.projectName);
   setMergedHeaderValue(worksheet, ['K2', 'F2'], changeOrder.title);
-  worksheet.getCell('AD1').value = escapeSpreadsheetText(changeOrder.preparedBy);
-  worksheet.getCell('AD2').value = reportDate;
-  worksheet.getCell('AD3').value = escapeSpreadsheetText(changeOrder.revision);
+  worksheet.getCell('Z1').value = escapeSpreadsheetText(changeOrder.preparedBy);
+  worksheet.getCell('Z2').value = reportDate;
+  worksheet.getCell('Z3').value = escapeSpreadsheetText(changeOrder.revision);
 };
 
 export const normalizeSpreadsheetFontOrder = (stylesXml: string): string =>
@@ -443,7 +465,7 @@ export const trimWorksheetAfterRow = (worksheetXml: string, lastRow: number): st
       /<row\b(?=[^>]*\br="(\d+)")[^>]*(?:\/>|>[\s\S]*?<\/row>)/g,
       (rowXml, rowNumber: string) => (Number(rowNumber) > lastRow ? '' : rowXml),
     )
-    .replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:AD${lastRow}"/>`);
+    .replace(/<dimension ref="[^"]*"\/>/, `<dimension ref="A1:${LAST_EXPORT_COLUMN}${lastRow}"/>`);
 
 export const currentExcelDate = (now = new Date()): Date =>
   new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
@@ -497,6 +519,7 @@ export async function generateChangeOrderWorkbook(
   validateChangeOrderTemplateHeaders(worksheet, headerRowNumber);
   worksheet.getRow(headerRowNumber).getCell(26).value = EXPECTED_HEADERS[25];
   const dataStartRowNumber = headerRowNumber + 1;
+  const totalTemplateRowNumber = findTotalRowNumber(worksheet, dataStartRowNumber);
 
   // Row splicing makes ExcelJS write the template's conditional-formatting
   // containers without their rules. Empty containers are invalid SpreadsheetML
@@ -510,17 +533,17 @@ export async function generateChangeOrderWorkbook(
     (definedName) => definedName.name !== '_xlnm._FilterDatabase',
   );
 
-  const totalTemplateRowNumber = findTotalRowNumber(worksheet, dataStartRowNumber);
-  const dataTemplate = captureRowTemplate(worksheet.getRow(dataStartRowNumber));
-  const totalTemplate = captureRowTemplate(worksheet.getRow(totalTemplateRowNumber));
-
   if (worksheet.getTable('MTO')) {
     worksheet.removeTable('MTO');
   }
 
+  removeUnusedExportColumns(worksheet);
+  const dataTemplate = captureRowTemplate(worksheet.getRow(dataStartRowNumber));
+  const totalTemplate = captureRowTemplate(worksheet.getRow(totalTemplateRowNumber));
+
   for (let rowNumber = dataStartRowNumber; rowNumber <= totalTemplateRowNumber; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
-    for (let column = 1; column <= 30; column += 1) {
+    for (let column = 1; column <= EXPORT_COLUMN_COUNT; column += 1) {
       row.getCell(column).value = null;
     }
   }
@@ -535,9 +558,9 @@ export async function generateChangeOrderWorkbook(
   const totalRowNumber = lastItemRow + 1;
   const totalRow = worksheet.getRow(totalRowNumber);
   applyRowTemplate(totalRow, totalTemplate);
-  totalRow.getCell(18).value = 'TOTAL:';
-  totalRow.getCell(19).value = {
-    formula: `SUM(S${dataStartRowNumber}:S${lastItemRow})`,
+  totalRow.getCell(16).value = 'TOTAL:';
+  totalRow.getCell(17).value = {
+    formula: `SUM(Q${dataStartRowNumber}:Q${lastItemRow})`,
     result: exportItems.reduce((total, item) => total + item.totalPrice, 0),
   };
   if (totalRowNumber < totalTemplateRowNumber) {
@@ -547,8 +570,8 @@ export async function generateChangeOrderWorkbook(
   worksheet.name = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
   populateDocumentHeader(worksheet, headerRowNumber, changeOrder);
 
-  worksheet.autoFilter = `A${headerRowNumber}:AD${lastItemRow}`;
-  worksheet.pageSetup.printArea = `A1:AD${totalRowNumber}`;
+  worksheet.autoFilter = `A${headerRowNumber}:${LAST_EXPORT_COLUMN}${lastItemRow}`;
+  worksheet.pageSetup.printArea = `A1:${LAST_EXPORT_COLUMN}${totalRowNumber}`;
   worksheet.pageSetup.printTitlesRow = `${headerRowNumber}:${headerRowNumber}`;
   const calculationProperties = workbook.calcProperties as typeof workbook.calcProperties & {
     forceFullCalc?: boolean;
