@@ -676,84 +676,96 @@ describe('ChangeOrdersTab', () => {
     expect(within(materialsTable).queryByText('Inherited cable cleat')).not.toBeInTheDocument();
   }, 15_000);
 
-  it('moves a main material together with its inherited materials between main material groups', async () => {
-    const api = await import('@/api/client');
-    const firstMainId = details.items[0].id;
-    const firstChildId = '66666666-6666-4666-8666-666666666666';
-    const secondChildId = '77777777-7777-4777-8777-777777777777';
-    const secondMainId = '88888888-8888-4888-8888-888888888888';
-    const thirdChildId = '99999999-9999-4999-8999-999999999999';
-    const inheritedDetails: ChangeOrderDetails = {
-      ...details,
-      itemCount: 5,
-      items: [
-        {
-          ...details.items[0],
-          id: firstMainId,
-          descriptionEn: 'First main material',
-          lineKind: 'manual',
-          parentItemId: null,
-          sortOrder: 1,
-        },
-        {
-          ...details.items[0],
-          id: firstChildId,
-          descriptionEn: 'First inherited material',
-          lineKind: 'inherited',
-          parentItemId: firstMainId,
-          sortOrder: 2,
-        },
-        {
-          ...details.items[0],
-          id: secondChildId,
-          descriptionEn: 'Second inherited material',
-          lineKind: 'inherited',
-          parentItemId: firstMainId,
-          sortOrder: 3,
-        },
-        {
-          ...details.items[0],
-          id: secondMainId,
-          descriptionEn: 'Second main material',
-          lineKind: 'manual',
-          parentItemId: null,
-          sortOrder: 4,
-        },
-        {
-          ...details.items[0],
-          id: thirdChildId,
-          descriptionEn: 'Third inherited material',
-          lineKind: 'inherited',
-          parentItemId: secondMainId,
-          sortOrder: 5,
-        },
-      ],
-    };
-    vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({ changeOrder: inheritedDetails });
+  it.each([
+    ['change-orders', 'All Change Orders'],
+    ['internal-ncrs', 'All Internal NCRs'],
+  ] as const)(
+    'moves a main material together with its inherited materials through the %s collection',
+    async (collection, collectionTableName) => {
+      const api = await import('@/api/client');
+      const firstMainId = details.items[0].id;
+      const firstChildId = '66666666-6666-4666-8666-666666666666';
+      const secondChildId = '77777777-7777-4777-8777-777777777777';
+      const secondMainId = '88888888-8888-4888-8888-888888888888';
+      const thirdChildId = '99999999-9999-4999-8999-999999999999';
+      const inheritedDetails: ChangeOrderDetails = {
+        ...details,
+        itemCount: 5,
+        items: [
+          {
+            ...details.items[0],
+            id: firstMainId,
+            descriptionEn: 'First main material',
+            lineKind: 'manual',
+            parentItemId: null,
+            sortOrder: 1,
+          },
+          {
+            ...details.items[0],
+            id: firstChildId,
+            descriptionEn: 'First inherited material',
+            lineKind: 'inherited',
+            parentItemId: firstMainId,
+            sortOrder: 2,
+          },
+          {
+            ...details.items[0],
+            id: secondChildId,
+            descriptionEn: 'Second inherited material',
+            lineKind: 'inherited',
+            parentItemId: firstMainId,
+            sortOrder: 3,
+          },
+          {
+            ...details.items[0],
+            id: secondMainId,
+            descriptionEn: 'Second main material',
+            lineKind: 'manual',
+            parentItemId: null,
+            sortOrder: 4,
+          },
+          {
+            ...details.items[0],
+            id: thirdChildId,
+            descriptionEn: 'Third inherited material',
+            lineKind: 'inherited',
+            parentItemId: secondMainId,
+            sortOrder: 5,
+          },
+        ],
+      };
+      vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({ changeOrder: inheritedDetails });
 
-    render(
-      <FluentProvider theme={webLightTheme}>
-        <ToastProvider>
-          <ChangeOrdersTab project={project} token="token" currentUser={user} />
-        </ToastProvider>
-      </FluentProvider>,
-    );
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab
+              project={project}
+              token="token"
+              currentUser={user}
+              collection={collection}
+            />
+          </ToastProvider>
+        </FluentProvider>,
+      );
 
-    await screen.findByRole('table', { name: 'All Change Orders' });
-    fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
-    await screen.findByRole('cell', { name: 'First main material' });
+      await screen.findByRole('table', { name: collectionTableName });
+      fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+      await screen.findByRole('cell', { name: 'First main material' });
 
-    expect(screen.getByRole('button', { name: 'Move item 4 down' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Move item 4 up' }));
+      expect(screen.getByRole('button', { name: 'Move item 4 down' })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Move item 4 up' }));
 
-    await waitFor(() =>
-      expect(api.reorderChangeOrderItems).toHaveBeenCalledWith(
-        'token',
-        project.id,
-        details.id,
-        [secondMainId, thirdChildId, firstMainId, firstChildId, secondChildId],
-        'change-orders',
-      ),
-    );
-  }, 15_000);
+      await waitFor(() =>
+        expect(api.reorderChangeOrderItems).toHaveBeenCalledWith(
+          'token',
+          project.id,
+          details.id,
+          [secondMainId, thirdChildId, firstMainId, firstChildId, secondChildId],
+          collection,
+        ),
+      );
+    },
+    15_000,
+  );
 });
