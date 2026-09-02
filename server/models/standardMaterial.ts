@@ -1,6 +1,7 @@
 export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
   'cable-type',
   'cable-installation-material',
+  'tray-installation-material',
   'tray',
   'support',
 ] as const;
@@ -9,6 +10,15 @@ export const STANDARD_MATERIAL_UNITS = ['pcs', 'meters', 'pcs/m'] as const;
 
 export type StandardMaterialOwnerCategory =
   (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
+
+export const STANDARD_MATERIAL_REFERENCE_CATEGORIES = [
+  'cable-installation-material',
+  'tray-installation-material',
+] as const;
+
+export type StandardMaterialReferenceCategory =
+  (typeof STANDARD_MATERIAL_REFERENCE_CATEGORIES)[number];
+
 export type StandardMaterialUnit = (typeof STANDARD_MATERIAL_UNITS)[number];
 
 export type StandardMaterialAssignmentRow = {
@@ -16,6 +26,7 @@ export type StandardMaterialAssignmentRow = {
   owner_id: string;
   owner_category: StandardMaterialOwnerCategory;
   referenced_material_id: string;
+  referenced_material_category: StandardMaterialReferenceCategory;
   referenced_material_name: string;
   referenced_material_purpose: string | null;
   referenced_material_material: string | null;
@@ -37,6 +48,7 @@ export type StandardMaterialAssignment = {
   ownerId: string;
   ownerCategory: StandardMaterialOwnerCategory;
   referencedMaterialId: string;
+  referencedMaterialCategory: StandardMaterialReferenceCategory;
   referencedMaterial: {
     id: string;
     type: string;
@@ -66,6 +78,7 @@ export const mapStandardMaterialAssignmentRow = (
   ownerId: row.owner_id,
   ownerCategory: row.owner_category,
   referencedMaterialId: row.referenced_material_id,
+  referencedMaterialCategory: row.referenced_material_category,
   referencedMaterial: {
     id: row.referenced_material_id,
     type: row.referenced_material_name,
@@ -87,6 +100,7 @@ export const mapStandardMaterialAssignmentRow = (
 
 export type ExpandedStandardMaterial = {
   referencedMaterialId: string;
+  referencedMaterialCategory: StandardMaterialReferenceCategory;
   name: string;
   purpose: string | null;
   material: string | null;

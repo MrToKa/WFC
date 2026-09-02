@@ -345,6 +345,14 @@ export const updateMaterialCableInstallationMaterialSchema = z
     { message: 'At least one field must be provided' },
   );
 
+// Tray installation materials intentionally share the same catalog shape and
+// validation rules as cable installation materials.
+export const createMaterialTrayInstallationMaterialSchema =
+  createMaterialCableInstallationMaterialSchema;
+
+export const updateMaterialTrayInstallationMaterialSchema =
+  updateMaterialCableInstallationMaterialSchema;
+
 export const createCableTypeDefaultMaterialSchema = z
   .object({
     name: cableTypeDefaultMaterialNameField,

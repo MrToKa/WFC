@@ -362,6 +362,37 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_tray_installation_materials (
+      id UUID PRIMARY KEY,
+      type TEXT NOT NULL,
+      purpose TEXT,
+      material TEXT,
+      description TEXT,
+      manufacturer TEXT,
+      part_no TEXT,
+      dimension_mm TEXT,
+      weight_kg NUMERIC,
+      minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
+      order_measurement TEXT NOT NULL DEFAULT 'pcs',
+      packaging TEXT NOT NULL DEFAULT 'pcs',
+      source TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT material_tray_installation_materials_minimum_order_quantity_check
+        CHECK (minimum_order_quantity > 0 AND minimum_order_quantity < 'Infinity'::numeric),
+      CONSTRAINT material_tray_installation_materials_order_measurement_check
+        CHECK (order_measurement IN ('pcs', 'pack', 'meters')),
+      CONSTRAINT material_tray_installation_materials_packaging_check
+        CHECK (packaging IN ('m', 'Package', 'Box', 'Drum', 'pcs'))
+    );
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS material_tray_installation_materials_type_lower_idx
+      ON material_tray_installation_materials (LOWER(type));
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS cables (
       id UUID PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -1149,6 +1180,363 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS material_tray_installation_standard_materials (
+      id UUID PRIMARY KEY,
+      tray_installation_material_id UUID NOT NULL
+        REFERENCES material_tray_installation_materials(id) ON DELETE CASCADE,
+      referenced_material_id UUID NOT NULL
+        CONSTRAINT material_tray_installation_standard_materials_reference_fkey
+        REFERENCES material_tray_installation_materials(id) ON DELETE RESTRICT,
+      quantity NUMERIC NOT NULL,
+      unit TEXT NOT NULL,
+      remarks TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT material_tray_installation_standard_materials_quantity_check
+        CHECK (quantity > 0 AND quantity < 'Infinity'::numeric),
+      CONSTRAINT material_tray_installation_standard_materials_unit_check
+        CHECK (unit IN ('pcs', 'meters', 'pcs/m')),
+      CONSTRAINT material_tray_installation_standard_materials_self_check
+        CHECK (tray_installation_material_id <> referenced_material_id),
+      CONSTRAINT material_tray_installation_standard_materials_owner_child_unique
+        UNIQUE (tray_installation_material_id, referenced_material_id)
+    );
+  `);
+
+  // Early builds pointed Tray Installation Material compositions at the Cable
+  // Installation Material catalog. Preserve those assignments by resolving the
+  // old child by normalized type, or by copying it into the tray catalog when
+  // there is no equivalent row, before replacing and validating the FK.
+  await pool.query(`
+    DO $$
+    DECLARE
+      referenced_attnum SMALLINT;
+      had_cable_reference_fk BOOLEAN;
+      has_correct_reference_fk BOOLEAN;
+      has_self_references BOOLEAN;
+      migration_required BOOLEAN;
+      legacy_assignment RECORD;
+      source_material RECORD;
+      constraint_to_drop RECORD;
+      target_material_id UUID;
+      cloned_material_id UUID;
+      cloned_type TEXT;
+      clone_attempt INTEGER;
+    BEGIN
+      SELECT attnum
+      INTO referenced_attnum
+      FROM pg_attribute
+      WHERE attrelid = 'material_tray_installation_standard_materials'::regclass
+        AND attname = 'referenced_material_id'
+        AND NOT attisdropped;
+
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'material_tray_installation_standard_materials'::regclass
+          AND contype = 'f'
+          AND confrelid = 'material_cable_installation_materials'::regclass
+          AND conkey = ARRAY[referenced_attnum]::SMALLINT[]
+      )
+      INTO had_cable_reference_fk;
+
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'material_tray_installation_standard_materials'::regclass
+          AND contype = 'f'
+          AND confrelid = 'material_tray_installation_materials'::regclass
+          AND confdeltype = 'r'
+          AND conkey = ARRAY[referenced_attnum]::SMALLINT[]
+          AND convalidated
+      )
+      INTO has_correct_reference_fk;
+
+      SELECT EXISTS (
+        SELECT 1
+        FROM material_tray_installation_standard_materials
+        WHERE tray_installation_material_id = referenced_material_id
+      )
+      INTO has_self_references;
+
+      migration_required :=
+        had_cable_reference_fk OR
+        NOT has_correct_reference_fk OR
+        has_self_references OR
+        EXISTS (
+          SELECT 1
+          FROM material_tray_installation_standard_materials assignment
+          LEFT JOIN material_tray_installation_materials referenced
+            ON referenced.id = assignment.referenced_material_id
+          WHERE referenced.id IS NULL
+        );
+
+      IF migration_required THEN
+        FOR constraint_to_drop IN
+          SELECT conname
+          FROM pg_constraint
+          WHERE conrelid = 'material_tray_installation_standard_materials'::regclass
+            AND contype = 'f'
+            AND conkey = ARRAY[referenced_attnum]::SMALLINT[]
+        LOOP
+          EXECUTE format(
+            'ALTER TABLE material_tray_installation_standard_materials DROP CONSTRAINT %I',
+            constraint_to_drop.conname
+          );
+        END LOOP;
+
+        FOR legacy_assignment IN
+          SELECT
+            assignment.id,
+            assignment.tray_installation_material_id,
+            assignment.referenced_material_id
+          FROM material_tray_installation_standard_materials assignment
+          WHERE had_cable_reference_fk
+             OR assignment.tray_installation_material_id = assignment.referenced_material_id
+             OR NOT EXISTS (
+               SELECT 1
+               FROM material_tray_installation_materials referenced
+               WHERE referenced.id = assignment.referenced_material_id
+             )
+          ORDER BY assignment.id
+        LOOP
+          SELECT candidate.*
+          INTO source_material
+          FROM (
+            SELECT
+              0 AS catalog_priority,
+              cable.id,
+              cable.type,
+              cable.purpose,
+              cable.material,
+              cable.description,
+              cable.manufacturer,
+              cable.part_no,
+              cable.dimension_mm,
+              cable.weight_kg,
+              cable.minimum_order_quantity,
+              cable.order_measurement,
+              cable.packaging,
+              cable.source,
+              cable.created_at,
+              cable.updated_at
+            FROM material_cable_installation_materials cable
+            WHERE cable.id = legacy_assignment.referenced_material_id
+            UNION ALL
+            SELECT
+              1 AS catalog_priority,
+              tray.id,
+              tray.type,
+              tray.purpose,
+              tray.material,
+              tray.description,
+              tray.manufacturer,
+              tray.part_no,
+              tray.dimension_mm,
+              tray.weight_kg,
+              tray.minimum_order_quantity,
+              tray.order_measurement,
+              tray.packaging,
+              tray.source,
+              tray.created_at,
+              tray.updated_at
+            FROM material_tray_installation_materials tray
+            WHERE tray.id = legacy_assignment.referenced_material_id
+          ) candidate
+          ORDER BY CASE
+            WHEN had_cable_reference_fk THEN candidate.catalog_priority
+            ELSE -candidate.catalog_priority
+          END
+          LIMIT 1;
+
+          IF source_material.id IS NULL THEN
+            RAISE EXCEPTION
+              'Cannot migrate Tray Installation Standard Material assignment %: referenced material % is missing from both installation catalogs',
+              legacy_assignment.id,
+              legacy_assignment.referenced_material_id;
+          END IF;
+
+          SELECT candidate.id
+          INTO target_material_id
+          FROM material_tray_installation_materials candidate
+          WHERE LOWER(BTRIM(candidate.type)) = LOWER(BTRIM(source_material.type))
+            AND candidate.id <> legacy_assignment.tray_installation_material_id
+            -- Reusing a composed target could turn legacy cross-catalog links
+            -- into a recursive tray cycle. Non-leaf targets are cloned instead.
+            AND NOT EXISTS (
+              SELECT 1
+              FROM material_tray_installation_standard_materials outgoing
+              WHERE outgoing.tray_installation_material_id = candidate.id
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM material_tray_installation_standard_materials duplicate
+              WHERE duplicate.tray_installation_material_id =
+                    legacy_assignment.tray_installation_material_id
+                AND duplicate.referenced_material_id = candidate.id
+                AND duplicate.id <> legacy_assignment.id
+            )
+          ORDER BY
+            CASE
+              WHEN candidate.id = legacy_assignment.referenced_material_id THEN 0
+              ELSE 1
+            END,
+            candidate.created_at,
+            candidate.id
+          LIMIT 1;
+
+          IF target_material_id IS NULL THEN
+            cloned_material_id := source_material.id;
+
+            IF cloned_material_id = legacy_assignment.tray_installation_material_id
+               OR EXISTS (
+                 SELECT 1
+                 FROM material_tray_installation_materials existing
+                 WHERE existing.id = cloned_material_id
+               ) THEN
+              clone_attempt := 0;
+              LOOP
+                cloned_material_id := MD5(
+                  'wfc:tray-installation-standard-material:' ||
+                  legacy_assignment.id::TEXT || ':' || clone_attempt::TEXT
+                )::UUID;
+                EXIT WHEN cloned_material_id <>
+                              legacy_assignment.tray_installation_material_id
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM material_tray_installation_materials existing
+                    WHERE existing.id = cloned_material_id
+                  );
+                clone_attempt := clone_attempt + 1;
+              END LOOP;
+            END IF;
+
+            cloned_type := source_material.type;
+            IF EXISTS (
+              SELECT 1
+              FROM material_tray_installation_materials existing
+              WHERE LOWER(BTRIM(existing.type)) = LOWER(BTRIM(cloned_type))
+            ) THEN
+              clone_attempt := 0;
+              LOOP
+                cloned_type := RTRIM(source_material.type) ||
+                  ' [legacy ' || legacy_assignment.id::TEXT ||
+                  CASE
+                    WHEN clone_attempt = 0 THEN ''
+                    ELSE '-' || clone_attempt::TEXT
+                  END || ']';
+                EXIT WHEN NOT EXISTS (
+                  SELECT 1
+                  FROM material_tray_installation_materials existing
+                  WHERE LOWER(BTRIM(existing.type)) = LOWER(BTRIM(cloned_type))
+                );
+                clone_attempt := clone_attempt + 1;
+              END LOOP;
+            END IF;
+
+            INSERT INTO material_tray_installation_materials (
+              id,
+              type,
+              purpose,
+              material,
+              description,
+              manufacturer,
+              part_no,
+              dimension_mm,
+              weight_kg,
+              minimum_order_quantity,
+              order_measurement,
+              packaging,
+              source,
+              created_at,
+              updated_at
+            ) VALUES (
+              cloned_material_id,
+              cloned_type,
+              source_material.purpose,
+              source_material.material,
+              source_material.description,
+              source_material.manufacturer,
+              source_material.part_no,
+              source_material.dimension_mm,
+              source_material.weight_kg,
+              source_material.minimum_order_quantity,
+              source_material.order_measurement,
+              source_material.packaging,
+              source_material.source,
+              source_material.created_at,
+              source_material.updated_at
+            );
+
+            target_material_id := cloned_material_id;
+          END IF;
+
+          UPDATE material_tray_installation_standard_materials
+          SET referenced_material_id = target_material_id,
+              updated_at = NOW()
+          WHERE id = legacy_assignment.id;
+        END LOOP;
+
+        IF EXISTS (
+          SELECT 1
+          FROM material_tray_installation_standard_materials assignment
+          LEFT JOIN material_tray_installation_materials referenced
+            ON referenced.id = assignment.referenced_material_id
+          WHERE referenced.id IS NULL
+             OR assignment.tray_installation_material_id = assignment.referenced_material_id
+        ) THEN
+          RAISE EXCEPTION
+            'Tray Installation Standard Material migration left invalid references';
+        END IF;
+
+        ALTER TABLE material_tray_installation_standard_materials
+          DROP CONSTRAINT IF EXISTS
+            material_tray_installation_standard_materials_reference_fkey;
+        ALTER TABLE material_tray_installation_standard_materials
+          ADD CONSTRAINT material_tray_installation_standard_materials_reference_fkey
+          FOREIGN KEY (referenced_material_id)
+          REFERENCES material_tray_installation_materials(id)
+          ON DELETE RESTRICT
+          NOT VALID;
+        ALTER TABLE material_tray_installation_standard_materials
+          VALIDATE CONSTRAINT
+            material_tray_installation_standard_materials_reference_fkey;
+      END IF;
+
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'material_tray_installation_standard_materials'::regclass
+          AND conname = 'material_tray_installation_standard_materials_self_check'
+          AND contype = 'c'
+          AND POSITION(
+            'tray_installation_material_id <> referenced_material_id'
+            IN pg_get_constraintdef(oid)
+          ) > 0
+      ) THEN
+        ALTER TABLE material_tray_installation_standard_materials
+          DROP CONSTRAINT IF EXISTS
+            material_tray_installation_standard_materials_self_check;
+        ALTER TABLE material_tray_installation_standard_materials
+          ADD CONSTRAINT material_tray_installation_standard_materials_self_check
+          CHECK (tray_installation_material_id <> referenced_material_id)
+          NOT VALID;
+      END IF;
+
+      ALTER TABLE material_tray_installation_standard_materials
+        VALIDATE CONSTRAINT
+          material_tray_installation_standard_materials_self_check;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_tray_installation_standard_materials_owner_idx
+      ON material_tray_installation_standard_materials (tray_installation_material_id);
+    CREATE INDEX IF NOT EXISTS material_tray_installation_standard_materials_reference_idx
+      ON material_tray_installation_standard_materials (referenced_material_id);
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS material_tray_standard_materials (
       id UUID PRIMARY KEY,
       tray_id UUID NOT NULL REFERENCES material_trays(id) ON DELETE CASCADE,
@@ -1359,7 +1747,13 @@ export async function initializeDatabase(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       CONSTRAINT project_change_order_items_sort_order_positive CHECK (sort_order > 0),
       CONSTRAINT project_change_order_items_source_catalog_check
-        CHECK (source_catalog IN ('cable-type', 'cable-installation-material', 'tray', 'support')),
+        CHECK (source_catalog IN (
+          'cable-type',
+          'cable-installation-material',
+          'tray-installation-material',
+          'tray',
+          'support'
+        )),
       CONSTRAINT project_change_order_items_description_not_empty CHECK (btrim(description_en) <> ''),
       CONSTRAINT project_change_order_items_design_quantity_check
         CHECK (design_quantity >= 0 AND design_quantity < 'Infinity'::numeric),
@@ -1380,6 +1774,33 @@ export async function initializeDatabase(): Promise<void> {
       CONSTRAINT project_change_order_items_unit_price_check
         CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric)
     );
+  `);
+
+  // CREATE TABLE IF NOT EXISTS does not update the constraint in existing
+  // databases, so widen it explicitly when the new catalog is introduced.
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'project_change_order_items_source_catalog_check'
+          AND conrelid = 'project_change_order_items'::regclass
+          AND pg_get_constraintdef(oid) LIKE '%tray-installation-material%'
+      ) THEN
+        ALTER TABLE project_change_order_items
+          DROP CONSTRAINT IF EXISTS project_change_order_items_source_catalog_check;
+        ALTER TABLE project_change_order_items
+          ADD CONSTRAINT project_change_order_items_source_catalog_check
+          CHECK (source_catalog IN (
+            'cable-type',
+            'cable-installation-material',
+            'tray-installation-material',
+            'tray',
+            'support'
+          ));
+      END IF;
+    END $$;
   `);
 
   await pool.query(`
@@ -1510,6 +1931,14 @@ export async function initializeDatabase(): Promise<void> {
         order_measurement,
         packaging
       FROM material_cable_installation_materials
+      UNION ALL
+      SELECT
+        'tray-installation-material'::text,
+        id,
+        minimum_order_quantity,
+        order_measurement,
+        packaging
+      FROM material_tray_installation_materials
       UNION ALL
       SELECT
         'tray'::text,

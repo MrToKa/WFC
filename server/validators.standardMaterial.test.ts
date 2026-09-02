@@ -3,6 +3,7 @@ import {
   createMaterialCableInstallationMaterialSchema,
   createMaterialCableTypeSchema,
   createMaterialSupportSchema,
+  createMaterialTrayInstallationMaterialSchema,
   createMaterialTraySchema,
   createStandardMaterialSchema,
   updateStandardMaterialSchema,
@@ -47,6 +48,10 @@ describe('Material minimum order validators', () => {
     {
       schema: createMaterialCableInstallationMaterialSchema,
       input: { type: 'Ferrule' },
+    },
+    {
+      schema: createMaterialTrayInstallationMaterialSchema,
+      input: { type: 'Tray splice connector' },
     },
     {
       schema: createMaterialTraySchema,

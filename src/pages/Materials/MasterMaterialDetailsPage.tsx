@@ -6,8 +6,10 @@ import {
   deleteStandardMaterial,
   fetchMaterialCableInstallationMaterials,
   fetchMaterialDetails,
+  fetchMaterialTrayInstallationMaterials,
   updateStandardMaterial,
   type MaterialCableInstallationMaterial,
+  type MaterialTrayInstallationMaterial,
   type MaterialDetailsResponse,
   type StandardMaterialAssignment,
   type StandardMaterialInput,
@@ -25,10 +27,7 @@ import {
 import { StandardMaterialDialog } from './components/StandardMaterialDialog';
 import { MaterialEditDialog } from './components/MaterialEditDialog';
 import { StandardMaterialsSection } from './components/StandardMaterialsSection';
-import {
-  MATERIAL_DETAILS_CAPABILITIES,
-  materialsBackPath,
-} from './materialCapabilities';
+import { MATERIAL_DETAILS_CAPABILITIES, materialsBackPath } from './materialCapabilities';
 
 type MasterMaterialDetailsPageProps<T extends StandardMaterialOwner> = {
   category: StandardMaterialOwnerCategory;
@@ -36,6 +35,10 @@ type MasterMaterialDetailsPageProps<T extends StandardMaterialOwner> = {
   getTitle: (material: T) => string;
   getProperties: (material: T) => MaterialProperty[];
 };
+
+type StandardMaterialCatalogItem =
+  | MaterialCableInstallationMaterial
+  | MaterialTrayInstallationMaterial;
 
 export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   category,
@@ -50,7 +53,7 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   const { showToast } = useToast();
   const capability = MATERIAL_DETAILS_CAPABILITIES[category];
   const [details, setDetails] = useState<MaterialDetailsResponse<T> | null>(null);
-  const [catalog, setCatalog] = useState<MaterialCableInstallationMaterial[]>([]);
+  const [catalog, setCatalog] = useState<StandardMaterialCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -62,6 +65,10 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   const [busyId, setBusyId] = useState<string | null>(null);
   const isAdmin = Boolean(user?.isAdmin);
   const backPath = materialsBackPath(capability.tab);
+  const usesTrayInstallationCatalog = category === 'tray-installation-material';
+  const standardMaterialCatalogItemLabel = usesTrayInstallationCatalog
+    ? 'Tray Installation Material'
+    : 'Cable Installation Material';
 
   const loadDetails = useCallback(
     async (silent = false): Promise<void> => {
@@ -96,17 +103,22 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
     if (!isAdmin) return;
     setCatalogLoading(true);
     try {
-      const response = await fetchMaterialCableInstallationMaterials();
-      setCatalog(response.cableInstallationMaterials);
+      if (usesTrayInstallationCatalog) {
+        const response = await fetchMaterialTrayInstallationMaterials();
+        setCatalog(response.trayInstallationMaterials);
+      } else {
+        const response = await fetchMaterialCableInstallationMaterials();
+        setCatalog(response.cableInstallationMaterials);
+      }
     } catch {
       showToast({
-        title: 'Unable to load Cable Installation Materials',
+        title: `Unable to load ${standardMaterialCatalogItemLabel}s`,
         intent: 'error',
       });
     } finally {
       setCatalogLoading(false);
     }
-  }, [isAdmin, showToast]);
+  }, [isAdmin, showToast, standardMaterialCatalogItemLabel, usesTrayInstallationCatalog]);
 
   useEffect(() => {
     void loadDetails();
@@ -222,8 +234,11 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
         open={dialogOpen}
         assignment={editing}
         catalog={catalog}
+        catalogItemLabel={standardMaterialCatalogItemLabel}
         ownerMaterialId={ownerId}
-        excludeOwnerFromCatalog={category === 'cable-installation-material'}
+        excludeOwnerFromCatalog={
+          category === 'cable-installation-material' || category === 'tray-installation-material'
+        }
         saving={saving}
         onDismiss={() => setDialogOpen(false)}
         onSave={save}

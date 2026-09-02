@@ -54,6 +54,8 @@ export type CableInstallationMaterialCatalogRecord = {
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 };
 
+export type TrayInstallationMaterialCatalogRecord = CableInstallationMaterialCatalogRecord;
+
 export type TrayCatalogRecord = {
   id: string;
   tray_type: string;
@@ -144,6 +146,24 @@ export const snapshotCableInstallationMaterial = (
   packaging: record.packaging,
 });
 
+export const snapshotTrayInstallationMaterial = (
+  record: TrayInstallationMaterialCatalogRecord,
+): ChangeOrderItemSnapshot => ({
+  sourceCatalog: 'tray-installation-material',
+  sourceMaterialId: record.id,
+  unit: record.order_measurement,
+  descriptionEn: record.type.trim(),
+  clearDescription: firstText(record.description, record.purpose),
+  dimensionMm: firstText(record.dimension_mm),
+  material: firstText(record.material),
+  weightKg: toNumberOrNull(record.weight_kg),
+  manufacturer: firstText(record.manufacturer),
+  manufacturerPartNo: firstText(record.part_no),
+  minimumOrderQuantity: Number(record.minimum_order_quantity),
+  orderMeasurement: record.order_measurement,
+  packaging: record.packaging,
+});
+
 export const snapshotTray = (record: TrayCatalogRecord): ChangeOrderItemSnapshot => ({
   sourceCatalog: 'tray',
   sourceMaterialId: record.id,
@@ -217,6 +237,17 @@ export const resolveChangeOrderCatalogSnapshot = async (
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
       return snapshotCableInstallationMaterial(result.rows[0]);
+    }
+    case 'tray-installation-material': {
+      const result = await queryable.query<TrayInstallationMaterialCatalogRecord>(
+        `SELECT id, type, purpose, material, description, manufacturer, part_no,
+                dimension_mm, weight_kg,
+                minimum_order_quantity, order_measurement, packaging
+         FROM material_tray_installation_materials WHERE id = $1 LIMIT 1`,
+        [sourceMaterialId],
+      );
+      if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
+      return snapshotTrayInstallationMaterial(result.rows[0]);
     }
     case 'tray': {
       const result = await queryable.query<TrayCatalogRecord>(

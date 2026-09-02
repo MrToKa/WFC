@@ -47,6 +47,7 @@ const assignmentSelect = (
       a.${capability.assignmentOwnerColumn} AS owner_id,
       '${category}'::text AS owner_category,
       a.referenced_material_id,
+      '${capability.referencedMaterialCategory}'::text AS referenced_material_category,
       child.type AS referenced_material_name,
       child.purpose AS referenced_material_purpose,
       child.material AS referenced_material_material,
@@ -62,7 +63,7 @@ const assignmentSelect = (
       a.created_at,
       a.updated_at
     FROM ${capability.assignmentTable} a
-    JOIN material_cable_installation_materials child
+    JOIN ${capability.referencedMaterialTable} child
       ON child.id = a.referenced_material_id
     ${whereClause}
   `;
@@ -98,10 +99,11 @@ const ownerExists = async (
 
 const referencedMaterialExists = async (
   queryable: Queryable,
+  referencedMaterialTable: string,
   referencedMaterialId: string,
 ): Promise<boolean> => {
   const result = await queryable.query(
-    'SELECT 1 FROM material_cable_installation_materials WHERE id = $1 LIMIT 1',
+    `SELECT 1 FROM ${referencedMaterialTable} WHERE id = $1 LIMIT 1`,
     [referencedMaterialId],
   );
   return Boolean(result.rows[0]);
@@ -113,6 +115,7 @@ const loadAllAssignments = async (
   const categories: StandardMaterialOwnerCategory[] = [
     'cable-type',
     'cable-installation-material',
+    'tray-installation-material',
     'tray',
     'support',
   ];
@@ -162,6 +165,7 @@ export const aggregateExpandedStandardMaterials = (
   const aggregated = new Map<string, ExpandedStandardMaterial>();
   for (const material of materials) {
     const key = [
+      material.referencedMaterialCategory,
       material.referencedMaterialId,
       material.unit,
       normalizeRemarks(material.remarks) ?? '',
@@ -183,6 +187,7 @@ export const aggregateExpandedStandardMaterials = (
   return Array.from(aggregated.values()).sort(
     (left, right) =>
       left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) ||
+      left.referencedMaterialCategory.localeCompare(right.referencedMaterialCategory) ||
       left.unit.localeCompare(right.unit) ||
       (left.remarks ?? '').localeCompare(right.remarks ?? '') ||
       left.referencedMaterialId.localeCompare(right.referencedMaterialId),
@@ -220,6 +225,7 @@ const expandFromGraph = (
       const child = assignment.referencedMaterial;
       expanded.push({
         referencedMaterialId: child.id,
+        referencedMaterialCategory: assignment.referencedMaterialCategory,
         name: child.type,
         purpose: child.purpose,
         material: child.material,
@@ -237,7 +243,7 @@ const expandFromGraph = (
       });
 
       const descendants = expandOwner(
-        'cable-installation-material',
+        assignment.referencedMaterialCategory,
         child.id,
         nextPath,
       );
@@ -279,23 +285,29 @@ const assertAssignmentValid = async (
   input: StandardMaterialInput,
   ignoredAssignmentId?: string,
 ): Promise<void> => {
+  const capability = getMaterialCapability(category);
   if (!(await ownerExists(queryable, category, ownerId))) {
     throw new StandardMaterialDomainError('OWNER_NOT_FOUND', 'Owner material was not found.');
   }
-  if (!(await referencedMaterialExists(queryable, input.referencedMaterialId))) {
+  if (
+    !(await referencedMaterialExists(
+      queryable,
+      capability.referencedMaterialTable,
+      input.referencedMaterialId,
+    ))
+  ) {
     throw new StandardMaterialDomainError(
       'REFERENCED_MATERIAL_NOT_FOUND',
-      'Referenced Cable Installation Material was not found.',
+      `Referenced ${capability.referencedMaterialLabel} was not found.`,
     );
   }
-  if (category === 'cable-installation-material' && ownerId === input.referencedMaterialId) {
+  if (category === capability.referencedMaterialCategory && ownerId === input.referencedMaterialId) {
     throw new StandardMaterialDomainError(
       'SELF_REFERENCE',
       'A material cannot reference itself.',
     );
   }
 
-  const capability = getMaterialCapability(category);
   const duplicate = await queryable.query(
     `SELECT id FROM ${capability.assignmentTable}
      WHERE ${capability.assignmentOwnerColumn} = $1
@@ -321,6 +333,7 @@ const assertAssignmentValid = async (
     ownerId,
     ownerCategory: category,
     referencedMaterialId: input.referencedMaterialId,
+    referencedMaterialCategory: capability.referencedMaterialCategory,
     referencedMaterial: {
       id: input.referencedMaterialId,
       type: '',

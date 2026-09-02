@@ -17,6 +17,7 @@ import { Register } from '@/pages/Register';
 import { LoadCurveDetails } from '@/pages/LoadCurveDetails';
 import { MaterialCableTypeDetails } from '@/pages/MaterialCableTypeDetails';
 import { MaterialCableInstallationMaterialDetails } from '@/pages/MaterialCableInstallationMaterialDetails';
+import { MaterialTrayInstallationMaterialDetails } from '@/pages/MaterialTrayInstallationMaterialDetails';
 import { MaterialTrayDetails } from '@/pages/MaterialTrayDetails';
 import { MaterialSupportDetails } from '@/pages/MaterialSupportDetails';
 
@@ -27,11 +28,11 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <Projects />
+        element: <Projects />,
       },
       {
         path: 'materials',
-        element: <Materials />
+        element: <Materials />,
       },
       {
         path: 'templates',
@@ -39,7 +40,7 @@ export const routes: RouteObject[] = [
           <RequireAuth>
             <Templates />
           </RequireAuth>
-        )
+        ),
       },
       {
         path: 'assemblies',
@@ -47,47 +48,51 @@ export const routes: RouteObject[] = [
           <RequireAuth>
             <Assemblies />
           </RequireAuth>
-        )
+        ),
       },
       {
         path: 'materials/cable-types/:cableTypeId',
-        element: <MaterialCableTypeDetails />
+        element: <MaterialCableTypeDetails />,
       },
       {
         path: 'materials/cable-installation-materials/:cableInstallationMaterialId',
-        element: <MaterialCableInstallationMaterialDetails />
+        element: <MaterialCableInstallationMaterialDetails />,
+      },
+      {
+        path: 'materials/tray-installation-materials/:trayInstallationMaterialId',
+        element: <MaterialTrayInstallationMaterialDetails />,
       },
       {
         path: 'materials/trays/:trayId',
-        element: <MaterialTrayDetails />
+        element: <MaterialTrayDetails />,
       },
       {
         path: 'materials/supports/:supportId',
-        element: <MaterialSupportDetails />
+        element: <MaterialSupportDetails />,
       },
       {
         path: 'materials/load-curves/:loadCurveId',
-        element: <LoadCurveDetails />
+        element: <LoadCurveDetails />,
       },
       {
         path: 'projects/:projectId',
-        element: <ProjectDetails />
+        element: <ProjectDetails />,
       },
       {
         path: 'projects/:projectId/roxtec/:roxtecId',
-        element: <RoxtecDetails />
+        element: <RoxtecDetails />,
       },
       {
         path: 'projects/:projectId/cable-types/:cableTypeId',
-        element: <CableTypeDetails />
+        element: <CableTypeDetails />,
       },
       {
         path: 'projects/:projectId/cables/:cableId',
-        element: <CableDetails />
+        element: <CableDetails />,
       },
       {
         path: 'projects/:projectId/trays/:trayId',
-        element: <TrayDetails />
+        element: <TrayDetails />,
       },
       {
         path: 'login',
@@ -95,7 +100,7 @@ export const routes: RouteObject[] = [
           <RedirectIfAuthenticated>
             <Login />
           </RedirectIfAuthenticated>
-        )
+        ),
       },
       {
         path: 'register',
@@ -103,7 +108,7 @@ export const routes: RouteObject[] = [
           <RedirectIfAuthenticated>
             <Register />
           </RedirectIfAuthenticated>
-        )
+        ),
       },
       {
         path: 'account',
@@ -111,7 +116,7 @@ export const routes: RouteObject[] = [
           <RequireAuth>
             <Account />
           </RequireAuth>
-        )
+        ),
       },
       {
         path: 'admin',
@@ -119,10 +124,10 @@ export const routes: RouteObject[] = [
           <RequireAdmin>
             <AdminPanel />
           </RequireAdmin>
-        )
-      }
-    ]
-  }
+        ),
+      },
+    ],
+  },
 ];
 
 export const router = createBrowserRouter(routes);

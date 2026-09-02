@@ -5,10 +5,12 @@ import {
   snapshotCableType,
   snapshotSupport,
   snapshotTray,
+  snapshotTrayInstallationMaterial,
 } from './changeOrderCatalogService.js';
 import {
   calculateInheritedChangeOrderQuantities,
   calculateMinimumOrder,
+  snapshotExpandedStandardMaterial,
   synchronizeChangeOrderMaterialOrdering,
 } from './changeOrderService.js';
 
@@ -39,6 +41,34 @@ describe('Change Order catalog snapshots', () => {
     expect(calculateInheritedChangeOrderQuantities('cable-type', 200, 240, 2, 'pcs/m')).toEqual({
       designQuantity: 400,
       orderQuantity: 480,
+    });
+  });
+
+  it('keeps Tray Installation Standard Materials in the tray installation catalog', () => {
+    expect(
+      snapshotExpandedStandardMaterial({
+        referencedMaterialCategory: 'tray-installation-material',
+        referencedMaterialId: 'tray-fastener-id',
+        name: 'Tray fastener',
+        purpose: 'Tray mounting',
+        material: 'Steel',
+        description: 'M8 tray fastener',
+        manufacturer: 'Tray Co',
+        partNo: 'TF-8',
+        minimumOrderQuantity: 25,
+        orderMeasurement: 'pcs',
+        packaging: 'Box',
+        quantity: 4,
+        unit: 'pcs',
+        remarks: null,
+        sourceAssignmentIds: ['assignment-id'],
+        depth: 1,
+      }),
+    ).toMatchObject({
+      sourceCatalog: 'tray-installation-material',
+      sourceMaterialId: 'tray-fastener-id',
+      descriptionEn: 'Tray fastener',
+      manufacturerPartNo: 'TF-8',
     });
   });
 
@@ -95,6 +125,7 @@ describe('Change Order catalog snapshots', () => {
     expect(sql).toContain('change_order.document_type = $3');
     expect(sql).not.toContain("AND item.line_kind = 'inherited'");
     expect(sql).toContain('FROM material_cable_installation_materials');
+    expect(sql).toContain('FROM material_tray_installation_materials');
     expect(values).toEqual(['change-order-id', 'project-id', 'change-order']);
   });
 
@@ -162,6 +193,76 @@ describe('Change Order catalog snapshots', () => {
       orderMeasurement: 'pcs',
       packaging: 'Package',
     });
+  });
+
+  it('maps tray installation materials into their own source catalog', () => {
+    expect(
+      snapshotTrayInstallationMaterial({
+        id: 'tray-install-id',
+        type: 'Tray connector',
+        purpose: 'Tray joining',
+        material: 'Steel',
+        description: 'Connector plate',
+        manufacturer: 'Tray Co',
+        part_no: 'TC-1',
+        dimension_mm: '100 x 40',
+        weight_kg: '0.25',
+        minimum_order_quantity: '10',
+        order_measurement: 'pcs',
+        packaging: 'Box',
+      }),
+    ).toMatchObject({
+      sourceCatalog: 'tray-installation-material',
+      sourceMaterialId: 'tray-install-id',
+      descriptionEn: 'Tray connector',
+      clearDescription: 'Connector plate',
+      dimensionMm: '100 x 40',
+      material: 'Steel',
+      weightKg: 0.25,
+      manufacturer: 'Tray Co',
+      manufacturerPartNo: 'TC-1',
+      unit: 'pcs',
+      minimumOrderQuantity: 10,
+      orderMeasurement: 'pcs',
+      packaging: 'Box',
+    });
+  });
+
+  it('resolves tray installation materials from their catalog table', async () => {
+    const query = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          id: 'tray-install-id',
+          type: 'Tray connector',
+          purpose: null,
+          material: null,
+          description: null,
+          manufacturer: null,
+          part_no: null,
+          dimension_mm: null,
+          weight_kg: null,
+          minimum_order_quantity: 1,
+          order_measurement: 'pcs',
+          packaging: 'pcs',
+        },
+      ],
+    });
+
+    await expect(
+      resolveChangeOrderCatalogSnapshot(
+        { query },
+        'tray-installation-material',
+        'tray-install-id',
+      ),
+    ).resolves.toMatchObject({
+      sourceCatalog: 'tray-installation-material',
+      sourceMaterialId: 'tray-install-id',
+      descriptionEn: 'Tray connector',
+    });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM material_tray_installation_materials'),
+      ['tray-install-id'],
+    );
   });
 
   it('maps only the available tray and support dimensions', () => {

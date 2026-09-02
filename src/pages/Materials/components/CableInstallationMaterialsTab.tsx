@@ -54,6 +54,8 @@ type CableInstallationMaterialsTabProps = {
   totalPages: number;
   paginationHandlers: PaginationHandlers;
   includeTabPanelRole?: boolean;
+  catalogLabel?: string;
+  itemLabel?: string;
   emptyStateTitle?: string;
   emptyStateBody?: string;
 };
@@ -91,7 +93,9 @@ export const CableInstallationMaterialsTab = ({
   totalPages,
   paginationHandlers,
   includeTabPanelRole = true,
-  emptyStateTitle = 'No cable installation materials found',
+  catalogLabel = 'Cable installation materials',
+  itemLabel = 'cable installation material',
+  emptyStateTitle,
   emptyStateBody,
 }: CableInstallationMaterialsTabProps) => {
   const selectedCriteria = useMemo<string[]>(() => [searchCriteria], [searchCriteria]);
@@ -100,16 +104,18 @@ export const CableInstallationMaterialsTab = ({
     [purposeFilter],
   );
 
+  const catalogLabelLower = catalogLabel.toLocaleLowerCase();
+  const resolvedEmptyStateTitle = emptyStateTitle ?? `No ${catalogLabelLower} found`;
   const resolvedEmptyStateBody =
     emptyStateBody ??
     (isAdmin
-      ? 'Use the buttons above to add or import cable installation materials.'
-      : 'There are no cable installation materials recorded yet.');
+      ? `Use the buttons above to add or import ${catalogLabelLower}.`
+      : `There are no ${catalogLabelLower} recorded yet.`);
 
   const panelProps = includeTabPanelRole
     ? {
         role: 'tabpanel' as const,
-        'aria-label': 'Cable installation materials',
+        'aria-label': catalogLabel,
       }
     : {};
 
@@ -122,7 +128,7 @@ export const CableInstallationMaterialsTab = ({
         {isAdmin ? (
           <>
             <Button appearance="primary" onClick={onCreate}>
-              Add cable installation material
+              Add {itemLabel}
             </Button>
             <Button onClick={onImportClick} disabled={isImporting}>
               {isImporting ? 'Importing...' : 'Import from Excel'}
@@ -147,9 +153,9 @@ export const CableInstallationMaterialsTab = ({
       <div className={styles.filtersRow}>
         <Input
           value={searchText}
-          placeholder="Filter cable installation materials"
+          placeholder={`Filter ${catalogLabelLower}`}
           onChange={(_, data) => onSearchTextChange(data.value)}
-          aria-label="Filter cable installation materials"
+          aria-label={`Filter ${catalogLabelLower}`}
         />
         <Dropdown
           selectedOptions={selectedCriteria}
@@ -199,10 +205,10 @@ export const CableInstallationMaterialsTab = ({
       {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
 
       {isLoading ? (
-        <Spinner label="Loading cable installation materials..." />
+        <Spinner label={`Loading ${catalogLabelLower}...`} />
       ) : items.length === 0 ? (
         <div className={styles.emptyState}>
-          <Caption1>{emptyStateTitle}</Caption1>
+          <Caption1>{resolvedEmptyStateTitle}</Caption1>
           <Body1>{resolvedEmptyStateBody}</Body1>
         </div>
       ) : (
@@ -269,7 +275,7 @@ export const CableInstallationMaterialsTab = ({
               onPrevious={paginationHandlers.onPrevious}
               onNext={paginationHandlers.onNext}
               onPageSelect={paginationHandlers.onPageSelect}
-              dropdownAriaLabel="Select cable installation materials page"
+              dropdownAriaLabel={`Select ${catalogLabelLower} page`}
             />
           ) : null}
         </div>

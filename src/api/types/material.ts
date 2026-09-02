@@ -59,6 +59,8 @@ export type MaterialCableInstallationMaterial = {
   updatedAt: string;
 };
 
+export type MaterialTrayInstallationMaterial = MaterialCableInstallationMaterial;
+
 export type MaterialSupport = {
   id: string;
   type: string;
@@ -151,6 +153,9 @@ export type MaterialCableInstallationMaterialImportSummary = {
   skipped: number;
 };
 
+export type MaterialTrayInstallationMaterialImportSummary =
+  MaterialCableInstallationMaterialImportSummary;
+
 export type MaterialCableTypeInput = {
   name: string;
   purpose?: string | null;
@@ -181,6 +186,8 @@ export type MaterialCableInstallationMaterialInput = {
   packaging?: MaterialPackaging;
   source?: string | null;
 };
+
+export type MaterialTrayInstallationMaterialInput = MaterialCableInstallationMaterialInput;
 
 export type MaterialTrayInput = {
   type: string;
@@ -214,6 +221,7 @@ export type MaterialSupportInput = {
 export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
   'cable-type',
   'cable-installation-material',
+  'tray-installation-material',
   'tray',
   'support',
 ] as const;
@@ -221,6 +229,9 @@ export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
 export type StandardMaterialOwnerCategory = (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
 export type MaterialDetailsCategory = StandardMaterialOwnerCategory | 'load-curve';
 export type StandardMaterialUnit = 'pcs' | 'meters' | 'pcs/m';
+export type StandardMaterialReferenceCategory =
+  | 'cable-installation-material'
+  | 'tray-installation-material';
 
 export type MaterialCategoryMetadata = {
   key: MaterialDetailsCategory;
@@ -233,6 +244,7 @@ export type StandardMaterialAssignment = {
   ownerId: string;
   ownerCategory: StandardMaterialOwnerCategory;
   referencedMaterialId: string;
+  referencedMaterialCategory: StandardMaterialReferenceCategory;
   referencedMaterial: {
     id: string;
     type: string;
@@ -262,6 +274,7 @@ export type StandardMaterialInput = {
 export type StandardMaterialOwner =
   | MaterialCableType
   | MaterialCableInstallationMaterial
+  | MaterialTrayInstallationMaterial
   | MaterialTray
   | MaterialSupport;
 

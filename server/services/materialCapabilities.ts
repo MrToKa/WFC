@@ -1,4 +1,7 @@
-import type { StandardMaterialOwnerCategory } from '../models/standardMaterial.js';
+import type {
+  StandardMaterialOwnerCategory,
+  StandardMaterialReferenceCategory,
+} from '../models/standardMaterial.js';
 
 type MaterialCapability = {
   category: StandardMaterialOwnerCategory;
@@ -8,6 +11,9 @@ type MaterialCapability = {
   ownerNameColumn: string;
   assignmentTable: string;
   assignmentOwnerColumn: string;
+  referencedMaterialCategory: StandardMaterialReferenceCategory;
+  referencedMaterialTable: string;
+  referencedMaterialLabel: string;
 };
 
 export const MATERIAL_CAPABILITIES: Record<
@@ -22,6 +28,9 @@ export const MATERIAL_CAPABILITIES: Record<
     ownerNameColumn: 'name',
     assignmentTable: 'material_cable_type_standard_materials',
     assignmentOwnerColumn: 'cable_type_id',
+    referencedMaterialCategory: 'cable-installation-material',
+    referencedMaterialTable: 'material_cable_installation_materials',
+    referencedMaterialLabel: 'Cable Installation Material',
   },
   'cable-installation-material': {
     category: 'cable-installation-material',
@@ -31,6 +40,21 @@ export const MATERIAL_CAPABILITIES: Record<
     ownerNameColumn: 'type',
     assignmentTable: 'material_cable_installation_standard_materials',
     assignmentOwnerColumn: 'cable_installation_material_id',
+    referencedMaterialCategory: 'cable-installation-material',
+    referencedMaterialTable: 'material_cable_installation_materials',
+    referencedMaterialLabel: 'Cable Installation Material',
+  },
+  'tray-installation-material': {
+    category: 'tray-installation-material',
+    label: 'Tray installation material',
+    ownerTable: 'material_tray_installation_materials',
+    ownerIdColumn: 'id',
+    ownerNameColumn: 'type',
+    assignmentTable: 'material_tray_installation_standard_materials',
+    assignmentOwnerColumn: 'tray_installation_material_id',
+    referencedMaterialCategory: 'tray-installation-material',
+    referencedMaterialTable: 'material_tray_installation_materials',
+    referencedMaterialLabel: 'Tray Installation Material',
   },
   tray: {
     category: 'tray',
@@ -40,6 +64,9 @@ export const MATERIAL_CAPABILITIES: Record<
     ownerNameColumn: 'tray_type',
     assignmentTable: 'material_tray_standard_materials',
     assignmentOwnerColumn: 'tray_id',
+    referencedMaterialCategory: 'cable-installation-material',
+    referencedMaterialTable: 'material_cable_installation_materials',
+    referencedMaterialLabel: 'Cable Installation Material',
   },
   support: {
     category: 'support',
@@ -49,6 +76,9 @@ export const MATERIAL_CAPABILITIES: Record<
     ownerNameColumn: 'support_type',
     assignmentTable: 'material_support_standard_materials',
     assignmentOwnerColumn: 'support_id',
+    referencedMaterialCategory: 'cable-installation-material',
+    referencedMaterialTable: 'material_cable_installation_materials',
+    referencedMaterialLabel: 'Cable Installation Material',
   },
 };
 

@@ -97,6 +97,9 @@ vi.mock('@/api/client', () => ({
   fetchMaterialCableInstallationMaterials: vi.fn(async () => ({
     cableInstallationMaterials: [],
   })),
+  fetchMaterialTrayInstallationMaterials: vi.fn(async () => ({
+    trayInstallationMaterials: [],
+  })),
   fetchAllMaterialTrays: vi.fn(async () => ({ trays: [] })),
   fetchMaterialSupports: vi.fn(async () => ({
     supports: [],
@@ -214,6 +217,93 @@ describe('ChangeOrdersTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
     expect(screen.getByText('Edit Internal NCR item')).toBeInTheDocument();
   });
+
+  it.each([
+    ['change-orders', 'All Change Orders'],
+    ['internal-ncrs', 'All Internal NCRs'],
+  ] as const)(
+    'adds a Trays installation material through the %s collection',
+    async (collection, collectionTableName) => {
+      const api = await import('@/api/client');
+      const trayInstallationMaterialId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      const addedItem: ChangeOrderDetails['items'][number] = {
+        ...details.items[0],
+        id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        sortOrder: 2,
+        sourceCatalog: 'tray-installation-material',
+        sourceMaterialId: trayInstallationMaterialId,
+        descriptionEn: 'Tray splice plate',
+      };
+      vi.mocked(api.fetchMaterialTrayInstallationMaterials).mockResolvedValueOnce({
+        trayInstallationMaterials: [
+          {
+            id: trayInstallationMaterialId,
+            type: 'Tray splice plate',
+            purpose: 'Tray joining',
+            material: 'Stainless steel',
+            description: 'Joining plate for tray sections',
+            manufacturer: 'Tray Co',
+            partNo: 'TSP-1',
+            dimensionMm: '100 × 40',
+            weightKg: 0.2,
+            minimumOrderQuantity: 10,
+            orderMeasurement: 'pcs',
+            packaging: 'Box',
+            source: null,
+            createdAt: details.createdAt,
+            updatedAt: details.updatedAt,
+          },
+        ],
+      });
+      vi.mocked(api.addChangeOrderItem).mockResolvedValueOnce({
+        item: addedItem,
+        changeOrder: {
+          ...details,
+          itemCount: 2,
+          items: [...details.items, addedItem],
+        },
+      });
+
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab
+              project={project}
+              token="token"
+              currentUser={user}
+              collection={collection}
+            />
+          </ToastProvider>
+        </FluentProvider>,
+      );
+
+      await screen.findByRole('table', { name: collectionTableName });
+      fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+      await screen.findByRole('cell', { name: 'Widget support' });
+      fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Catalog category' }), {
+        target: { value: 'tray-installation-material' },
+      });
+
+      const catalogRow = (await screen.findByText('Tray splice plate')).closest('tr');
+      expect(catalogRow).not.toBeNull();
+      fireEvent.click(within(catalogRow!).getByText('Add'));
+
+      await waitFor(() =>
+        expect(api.addChangeOrderItem).toHaveBeenCalledWith(
+          'token',
+          project.id,
+          details.id,
+          {
+            sourceCatalog: 'tray-installation-material',
+            sourceMaterialId: trayInstallationMaterialId,
+          },
+          collection,
+        ),
+      );
+    },
+    15_000,
+  );
 
   it('loads rows, displays derived values, and disables export after an unsaved header edit', async () => {
     render(

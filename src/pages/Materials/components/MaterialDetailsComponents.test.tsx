@@ -53,6 +53,7 @@ const standardMaterial: StandardMaterialAssignment = {
   ownerId: '00000000-0000-4000-8000-000000000003',
   ownerCategory: 'cable-type',
   referencedMaterialId: catalog[0].id,
+  referencedMaterialCategory: 'cable-installation-material',
   referencedMaterial: catalog[0],
   quantity: 2,
   unit: 'pcs',
@@ -182,5 +183,32 @@ describe('Material Details shared components', () => {
     expect(screen.getByRole('option', { name: 'Control cable tie' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Control cable marker' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Cable gland M32' })).not.toBeInTheDocument();
+  });
+
+  it('labels a tray installation catalog accurately and excludes its recursive owner', () => {
+    const ownerMaterialId = catalogWithPurposes[0].id;
+    renderFluent(
+      <StandardMaterialDialog
+        open
+        assignment={null}
+        catalog={catalogWithPurposes}
+        catalogItemLabel="Tray Installation Material"
+        ownerMaterialId={ownerMaterialId}
+        excludeOwnerFromCatalog
+        saving={false}
+        onDismiss={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    const materialSelect = screen.getByRole('combobox', {
+      name: 'Tray Installation Material',
+    });
+    expect(materialSelect).toHaveValue('00000000-0000-4000-8000-000000000004');
+    expect(screen.queryByRole('option', { name: 'Cable gland M32' })).not.toBeInTheDocument();
+
+    fireEvent.change(materialSelect, { target: { value: '' } });
+    fireEvent.submit(materialSelect.closest('form')!);
+    expect(screen.getByRole('alert')).toHaveTextContent('Select a Tray Installation Material.');
   });
 });

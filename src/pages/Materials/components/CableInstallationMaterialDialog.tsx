@@ -28,6 +28,7 @@ type CableInstallationMaterialDialogProps = {
   errors: CableInstallationMaterialFormErrors;
   submitting: boolean;
   purposeOptions: string[];
+  itemLabel?: string;
   onFieldChange: (
     field: keyof CableInstallationMaterialFormState,
   ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
@@ -44,6 +45,7 @@ export const CableInstallationMaterialDialog = ({
   errors,
   submitting,
   purposeOptions,
+  itemLabel = 'cable installation material',
   onFieldChange,
   onPurposeSelect,
   onSubmit,
@@ -66,9 +68,7 @@ export const CableInstallationMaterialDialog = ({
         <form className={styles.dialogForm} onSubmit={onSubmit}>
           <DialogBody>
             <DialogTitle>
-              {mode === 'create'
-                ? 'Add cable installation material'
-                : 'Edit cable installation material'}
+              {mode === 'create' ? `Add ${itemLabel}` : `Edit ${itemLabel}`}
             </DialogTitle>
             <DialogContent>
               <Field

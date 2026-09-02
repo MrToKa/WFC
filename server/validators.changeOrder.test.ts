@@ -41,6 +41,12 @@ describe('Change Order validation', () => {
   it('rejects invalid UUIDs, unsupported catalogs, and invalid reorder lists', () => {
     expect(
       addChangeOrderItemSchema.safeParse({
+        sourceCatalog: 'tray-installation-material',
+        sourceMaterialId: validId,
+      }).success,
+    ).toBe(true);
+    expect(
+      addChangeOrderItemSchema.safeParse({
         sourceCatalog: 'tray',
         sourceMaterialId: 'invalid',
       }).success,

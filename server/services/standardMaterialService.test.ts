@@ -14,11 +14,14 @@ const assignment = (
   childName: string,
   quantity: number,
   unit: StandardMaterialAssignment['unit'],
+  referencedMaterialCategory: StandardMaterialAssignment['referencedMaterialCategory'] =
+    'cable-installation-material',
 ): StandardMaterialAssignment => ({
   id,
   ownerCategory,
   ownerId,
   referencedMaterialId: childId,
+  referencedMaterialCategory,
   referencedMaterial: {
     id: childId,
     type: childName,
@@ -39,6 +42,52 @@ const assignment = (
 });
 
 describe('Standard Material expansion', () => {
+  it('recursively expands Tray Installation Materials within their own catalog', () => {
+    const assignments = [
+      assignment(
+        'a1',
+        'tray-installation-material',
+        'tray-kit',
+        'fastener',
+        'Fastener',
+        4,
+        'pcs',
+        'tray-installation-material',
+      ),
+      assignment(
+        'a2',
+        'tray-installation-material',
+        'fastener',
+        'washer',
+        'Washer',
+        2,
+        'pcs',
+        'tray-installation-material',
+      ),
+    ];
+
+    expect(
+      expandStandardMaterialsFromAssignments(assignments, 'tray-installation-material', 'tray-kit'),
+    ).toEqual([
+      expect.objectContaining({
+        referencedMaterialId: 'fastener',
+        referencedMaterialCategory: 'tray-installation-material',
+        name: 'Fastener',
+        quantity: 4,
+        unit: 'pcs',
+        depth: 1,
+      }),
+      expect.objectContaining({
+        referencedMaterialId: 'washer',
+        referencedMaterialCategory: 'tray-installation-material',
+        name: 'Washer',
+        quantity: 8,
+        unit: 'pcs',
+        depth: 2,
+      }),
+    ]);
+  });
+
   it('multiplies recursive quantities, retains child units, and orders deterministically', () => {
     const assignments = [
       assignment('a1', 'cable-type', 'cable', 'gland', 'Cable gland', 2, 'pcs'),
@@ -106,6 +155,7 @@ describe('Standard Material expansion', () => {
     const materials = aggregateExpandedStandardMaterials([
       {
         referencedMaterialId: 'gland',
+        referencedMaterialCategory: 'cable-installation-material',
         name: 'Cable gland',
         purpose: null,
         material: null,
@@ -123,6 +173,7 @@ describe('Standard Material expansion', () => {
       },
       {
         referencedMaterialId: 'gland',
+        referencedMaterialCategory: 'cable-installation-material',
         name: 'Cable gland',
         purpose: null,
         material: null,

@@ -9,7 +9,10 @@ import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
 import { useLoadCurves } from './Materials/hooks/useLoadCurves';
 import { useCableTypes } from './Materials/hooks/useCableTypes';
-import { useCableInstallationMaterials } from './Materials/hooks/useCableInstallationMaterials';
+import {
+  useCableInstallationMaterials,
+  useTrayInstallationMaterials,
+} from './Materials/hooks/useCableInstallationMaterials';
 import { useTemplateImages } from './Materials/hooks/useTemplateImages';
 import { CableInstallationMaterialDialog } from './Materials/components/CableInstallationMaterialDialog';
 import { CableInstallationMaterialsTab } from './Materials/components/CableInstallationMaterialsTab';
@@ -83,6 +86,11 @@ export const Materials = () => {
     isAdmin,
     showToast,
   });
+  const trayInstallationMaterialsHook = useTrayInstallationMaterials({
+    token,
+    isAdmin,
+    showToast,
+  });
   const templateImagesHook = useTemplateImages({ token, showToast });
 
   const handleTabSelect = useCallback(
@@ -104,21 +112,23 @@ export const Materials = () => {
   const selectedTabLabel =
     selectedTab === 'cableInstallationMaterials'
       ? 'Cable installation materials'
-      : selectedTab === 'trays'
-        ? 'Trays'
-        : selectedTab === 'supports'
-          ? 'Supports'
-          : selectedTab === 'loadCurves'
-            ? 'Load curves'
-            : 'Cable types';
+      : selectedTab === 'trayInstallationMaterials'
+        ? 'Trays installation materials'
+        : selectedTab === 'trays'
+          ? 'Trays'
+          : selectedTab === 'supports'
+            ? 'Supports'
+            : selectedTab === 'loadCurves'
+              ? 'Load curves'
+              : 'Cable types';
 
   return (
     <section className={styles.root} aria-labelledby="materials-heading">
       <div className={styles.header}>
         <Title3 id="materials-heading">Materials</Title3>
         <Body1>
-          Reference cable types, cable installation materials, trays, supports, and load curves that
-          can be reused across projects.
+          Reference cable types, cable and tray installation materials, trays, supports, and load
+          curves that can be reused across projects.
         </Body1>
       </div>
 
@@ -129,6 +139,7 @@ export const Materials = () => {
       >
         <Tab value="cableTypes">Cable types</Tab>
         <Tab value="cableInstallationMaterials">Cable installation materials</Tab>
+        <Tab value="trayInstallationMaterials">Trays installation materials</Tab>
         <Tab value="trays">Trays</Tab>
         <Tab value="supports">Supports</Tab>
         <Tab value="loadCurves">Load curves</Tab>
@@ -194,6 +205,69 @@ export const Materials = () => {
               isAdmin
                 ? 'Use the buttons above to add or import cable installation materials.'
                 : 'There are no cable installation materials recorded for materials yet.'
+            }
+          />
+        ) : selectedTab === 'trayInstallationMaterials' ? (
+          <CableInstallationMaterialsTab
+            styles={cableTypesStyles}
+            isAdmin={isAdmin}
+            isRefreshing={trayInstallationMaterialsHook.cableInstallationMaterialsRefreshing}
+            onRefresh={() =>
+              void trayInstallationMaterialsHook.reloadCableInstallationMaterials({
+                showSpinner: false,
+              })
+            }
+            onCreate={trayInstallationMaterialsHook.openCreateCableInstallationMaterialDialog}
+            onImportClick={() => trayInstallationMaterialsHook.fileInputRef.current?.click()}
+            onExport={() =>
+              void trayInstallationMaterialsHook.handleExportCableInstallationMaterials()
+            }
+            onGetTemplate={() =>
+              void trayInstallationMaterialsHook.handleGetCableInstallationMaterialsTemplate()
+            }
+            onImportFileChange={
+              trayInstallationMaterialsHook.handleImportCableInstallationMaterials
+            }
+            isImporting={trayInstallationMaterialsHook.cableInstallationMaterialsImporting}
+            isExporting={trayInstallationMaterialsHook.cableInstallationMaterialsExporting}
+            isGettingTemplate={
+              trayInstallationMaterialsHook.cableInstallationMaterialsGettingTemplate
+            }
+            fileInputRef={trayInstallationMaterialsHook.fileInputRef}
+            searchText={trayInstallationMaterialsHook.searchText}
+            searchCriteria={trayInstallationMaterialsHook.searchCriteria}
+            purposeFilter={trayInstallationMaterialsHook.purposeFilter}
+            purposeOptions={trayInstallationMaterialsHook.purposeFilterOptions}
+            onSearchTextChange={trayInstallationMaterialsHook.setSearchText}
+            onSearchCriteriaChange={trayInstallationMaterialsHook.setSearchCriteria}
+            onPurposeFilterChange={trayInstallationMaterialsHook.setPurposeFilter}
+            error={trayInstallationMaterialsHook.cableInstallationMaterialsError}
+            isLoading={trayInstallationMaterialsHook.cableInstallationMaterialsLoading}
+            items={trayInstallationMaterialsHook.pagedCableInstallationMaterials}
+            pendingId={trayInstallationMaterialsHook.pendingCableInstallationMaterialId}
+            onDetails={(item) =>
+              navigate(MATERIAL_DETAILS_CAPABILITIES['tray-installation-material'].route(item.id))
+            }
+            onEdit={trayInstallationMaterialsHook.openEditCableInstallationMaterialDialog}
+            onDelete={(item) =>
+              void trayInstallationMaterialsHook.handleDeleteCableInstallationMaterial(item)
+            }
+            showPagination={trayInstallationMaterialsHook.showCableInstallationMaterialPagination}
+            page={trayInstallationMaterialsHook.cableInstallationMaterialPage}
+            totalPages={trayInstallationMaterialsHook.totalCableInstallationMaterialPages}
+            paginationHandlers={{
+              onPrevious: trayInstallationMaterialsHook.goToPreviousPage,
+              onNext: trayInstallationMaterialsHook.goToNextPage,
+              onPageSelect: trayInstallationMaterialsHook.goToPage,
+            }}
+            includeTabPanelRole={false}
+            catalogLabel="Trays installation materials"
+            itemLabel="tray installation material"
+            emptyStateTitle="No tray installation materials found"
+            emptyStateBody={
+              isAdmin
+                ? 'Use the buttons above to add or import tray installation materials.'
+                : 'There are no tray installation materials recorded for materials yet.'
             }
           />
         ) : selectedTab === 'trays' ? (
@@ -508,6 +582,28 @@ export const Materials = () => {
           void cableInstallationMaterialsHook.cableInstallationMaterialDialog.handleSubmit(event)
         }
         onDismiss={cableInstallationMaterialsHook.cableInstallationMaterialDialog.reset}
+      />
+      <CableInstallationMaterialDialog
+        styles={cableTypesStyles}
+        open={trayInstallationMaterialsHook.cableInstallationMaterialDialog.open}
+        mode={trayInstallationMaterialsHook.cableInstallationMaterialDialog.mode}
+        values={trayInstallationMaterialsHook.cableInstallationMaterialDialog.values}
+        errors={trayInstallationMaterialsHook.cableInstallationMaterialDialog.errors}
+        submitting={trayInstallationMaterialsHook.cableInstallationMaterialDialog.submitting}
+        purposeOptions={
+          trayInstallationMaterialsHook.cableInstallationMaterialDialog.purposeOptions
+        }
+        itemLabel="tray installation material"
+        onFieldChange={
+          trayInstallationMaterialsHook.cableInstallationMaterialDialog.handleFieldChange
+        }
+        onPurposeSelect={
+          trayInstallationMaterialsHook.cableInstallationMaterialDialog.handlePurposeSelect
+        }
+        onSubmit={(event) =>
+          void trayInstallationMaterialsHook.cableInstallationMaterialDialog.handleSubmit(event)
+        }
+        onDismiss={trayInstallationMaterialsHook.cableInstallationMaterialDialog.reset}
       />
     </section>
   );

@@ -17,6 +17,7 @@ import {
 import {
   ApiError,
   updateMaterialCableInstallationMaterial,
+  updateMaterialTrayInstallationMaterial,
   updateMaterialCableType,
   updateMaterialSupport,
   updateMaterialTray,
@@ -115,7 +116,8 @@ const formFromMaterial = (
         weightKgPerM: numberValue(item.weightKgPerM),
       };
     }
-    case 'cable-installation-material': {
+    case 'cable-installation-material':
+    case 'tray-installation-material': {
       const item = material as MaterialCableInstallationMaterial;
       return {
         ...common,
@@ -230,8 +232,13 @@ export const MaterialEditDialog = ({
           });
           break;
         case 'cable-installation-material':
+        case 'tray-installation-material':
           if (!form.type.trim()) throw new Error('Type is required.');
-          await updateMaterialCableInstallationMaterial(token, material.id, {
+          await (
+            category === 'cable-installation-material'
+              ? updateMaterialCableInstallationMaterial
+              : updateMaterialTrayInstallationMaterial
+          )(token, material.id, {
             type: form.type.trim(),
             purpose: nullableText(form.purpose),
             material: nullableText(form.material),
@@ -320,7 +327,8 @@ export const MaterialEditDialog = ({
                   {textField('Diameter [mm]', 'diameterMm')}
                   {textField('Weight [kg/m]', 'weightKgPerM')}
                 </>
-              ) : category === 'cable-installation-material' ? (
+              ) : category === 'cable-installation-material' ||
+                category === 'tray-installation-material' ? (
                 <>
                   {textField('Type', 'type')}
                   {textField('Purpose', 'purpose')}

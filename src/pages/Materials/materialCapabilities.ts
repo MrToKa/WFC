@@ -24,6 +24,12 @@ export const MATERIAL_DETAILS_CAPABILITIES: Record<
     tab: 'cableInstallationMaterials',
     route: (id) => `/materials/cable-installation-materials/${id}`,
   },
+  'tray-installation-material': {
+    category: 'tray-installation-material',
+    label: 'Tray installation material',
+    tab: 'trayInstallationMaterials',
+    route: (id) => `/materials/tray-installation-materials/${id}`,
+  },
   tray: {
     category: 'tray',
     label: 'Tray',

@@ -13,7 +13,10 @@ import {
   type ChangeOrderSourceCatalog,
   type ChangeOrderSummary,
 } from '../models/changeOrder.js';
-import type { StandardMaterialUnit } from '../models/standardMaterial.js';
+import type {
+  ExpandedStandardMaterial,
+  StandardMaterialUnit,
+} from '../models/standardMaterial.js';
 import {
   resolveChangeOrderCatalogSnapshot,
   type ChangeOrderItemSnapshot,
@@ -82,6 +85,24 @@ export const calculateInheritedChangeOrderQuantities = (
     orderQuantity: orderQuantity * quantityPerParent,
   };
 };
+
+export const snapshotExpandedStandardMaterial = (
+  material: ExpandedStandardMaterial,
+): ChangeOrderItemSnapshot => ({
+  sourceCatalog: material.referencedMaterialCategory,
+  sourceMaterialId: material.referencedMaterialId,
+  unit: material.unit,
+  descriptionEn: material.name,
+  clearDescription: material.description,
+  dimensionMm: null,
+  material: material.material,
+  weightKg: null,
+  manufacturer: material.manufacturer,
+  manufacturerPartNo: material.partNo,
+  minimumOrderQuantity: material.minimumOrderQuantity,
+  orderMeasurement: material.orderMeasurement,
+  packaging: material.packaging,
+});
 
 export const calculateMinimumOrder = (
   designQuantity: number,
@@ -162,6 +183,14 @@ export const synchronizeChangeOrderMaterialOrdering = async (
          order_measurement,
          packaging
        FROM material_cable_installation_materials
+       UNION ALL
+       SELECT
+         'tray-installation-material'::text,
+         id,
+         minimum_order_quantity,
+         order_measurement,
+         packaging
+       FROM material_tray_installation_materials
        UNION ALL
        SELECT
          'tray'::text,
@@ -503,21 +532,7 @@ export const addChangeOrderItem = async (
         client,
         changeOrderId,
         nextSortOrder,
-        {
-          sourceCatalog: 'cable-installation-material',
-          sourceMaterialId: material.referencedMaterialId,
-          unit: material.unit,
-          descriptionEn: material.name,
-          clearDescription: material.description,
-          dimensionMm: null,
-          material: material.material,
-          weightKg: null,
-          manufacturer: material.manufacturer,
-          manufacturerPartNo: material.partNo,
-          minimumOrderQuantity: material.minimumOrderQuantity,
-          orderMeasurement: material.orderMeasurement,
-          packaging: material.packaging,
-        },
+        snapshotExpandedStandardMaterial(material),
         {
           lineKind: 'inherited',
           parentItemId: item.id,

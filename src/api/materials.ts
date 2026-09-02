@@ -3,6 +3,9 @@ import type {
   MaterialCableInstallationMaterial,
   MaterialCableInstallationMaterialImportSummary,
   MaterialCableInstallationMaterialInput,
+  MaterialTrayInstallationMaterial,
+  MaterialTrayInstallationMaterialImportSummary,
+  MaterialTrayInstallationMaterialInput,
   MaterialCableType,
   MaterialCableTypeImportSummary,
   MaterialCableTypeInput,
@@ -46,6 +49,8 @@ const standardMaterialOwnerPath = (
       return `/api/materials/cable-types/${ownerId}`;
     case 'cable-installation-material':
       return `/api/materials/cable-installation-materials/${ownerId}`;
+    case 'tray-installation-material':
+      return `/api/materials/tray-installation-materials/${ownerId}`;
     case 'tray':
       return `/api/materials/trays/${ownerId}`;
     case 'support':
@@ -364,6 +369,160 @@ export async function exportMaterialCableInstallationMaterials(token: string): P
 export async function getMaterialCableInstallationMaterialsTemplate(token: string): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/materials/cable-installation-materials/template`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse errors to rethrow generic message
+    }
+
+    throw new ApiError(
+      response.status,
+      extractErrorMessage(payload, 'Failed to generate template'),
+    );
+  }
+
+  return response.blob();
+}
+
+// Material Tray Installation Materials
+export async function fetchMaterialTrayInstallationMaterials(): Promise<{
+  trayInstallationMaterials: MaterialTrayInstallationMaterial[];
+}> {
+  return request<{
+    trayInstallationMaterials: MaterialTrayInstallationMaterial[];
+  }>('/api/materials/tray-installation-materials');
+}
+
+export async function createMaterialTrayInstallationMaterial(
+  token: string,
+  data: MaterialTrayInstallationMaterialInput,
+): Promise<{ trayInstallationMaterial: MaterialTrayInstallationMaterial }> {
+  return request<{ trayInstallationMaterial: MaterialTrayInstallationMaterial }>(
+    '/api/materials/tray-installation-materials',
+    {
+      method: 'POST',
+      token,
+      body: data,
+    },
+  );
+}
+
+export async function updateMaterialTrayInstallationMaterial(
+  token: string,
+  trayInstallationMaterialId: string,
+  data: Partial<MaterialTrayInstallationMaterialInput>,
+): Promise<{ trayInstallationMaterial: MaterialTrayInstallationMaterial }> {
+  return request<{ trayInstallationMaterial: MaterialTrayInstallationMaterial }>(
+    `/api/materials/tray-installation-materials/${trayInstallationMaterialId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data,
+    },
+  );
+}
+
+export async function deleteMaterialTrayInstallationMaterial(
+  token: string,
+  trayInstallationMaterialId: string,
+): Promise<void> {
+  await request<void>(`/api/materials/tray-installation-materials/${trayInstallationMaterialId}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function importMaterialTrayInstallationMaterials(
+  token: string,
+  file: File,
+): Promise<{
+  summary: MaterialTrayInstallationMaterialImportSummary;
+  trayInstallationMaterials: MaterialTrayInstallationMaterial[];
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/tray-installation-materials/import`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    },
+  );
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import tray installation materials';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    summary: MaterialTrayInstallationMaterialImportSummary;
+    trayInstallationMaterials: MaterialTrayInstallationMaterial[];
+  };
+}
+
+export async function exportMaterialTrayInstallationMaterials(token: string): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/tray-installation-materials/export`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export tray installation materials';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function getMaterialTrayInstallationMaterialsTemplate(token: string): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/tray-installation-materials/template`,
     {
       method: 'GET',
       headers: {

@@ -26,6 +26,7 @@ import {
   fetchMaterialCableInstallationMaterials,
   fetchMaterialCableTypes,
   fetchMaterialSupports,
+  fetchMaterialTrayInstallationMaterials,
   type ChangeOrderSourceCatalog,
 } from '@/api/client';
 
@@ -107,10 +108,11 @@ export const ChangeOrderMaterialDialog = ({
     void Promise.all([
       fetchMaterialCableTypes(),
       fetchMaterialCableInstallationMaterials(),
+      fetchMaterialTrayInstallationMaterials(),
       fetchAllMaterialTrays(),
       loadAllSupports(),
     ])
-      .then(([cables, installation, trays, supports]) => {
+      .then(([cables, cableInstallation, trayInstallation, trays, supports]) => {
         if (!active) return;
         setChoices([
           ...cables.cableTypes.map((item) => ({
@@ -127,9 +129,19 @@ export const ChangeOrderMaterialDialog = ({
             manufacturer: item.manufacturer ?? '',
             partNumber: item.partNo ?? '',
           })),
-          ...installation.cableInstallationMaterials.map((item) => ({
+          ...cableInstallation.cableInstallationMaterials.map((item) => ({
             id: item.id,
             category: 'cable-installation-material' as const,
+            description: item.type,
+            details: [item.description ?? item.purpose ?? '', item.material ?? '']
+              .filter(Boolean)
+              .join(' · '),
+            manufacturer: item.manufacturer ?? '',
+            partNumber: item.partNo ?? '',
+          })),
+          ...trayInstallation.trayInstallationMaterials.map((item) => ({
+            id: item.id,
+            category: 'tray-installation-material' as const,
             description: item.type,
             details: [item.description ?? item.purpose ?? '', item.material ?? '']
               .filter(Boolean)
@@ -193,6 +205,7 @@ export const ChangeOrderMaterialDialog = ({
                 >
                   <option value="cable-type">Cable material types</option>
                   <option value="cable-installation-material">Cable installation materials</option>
+                  <option value="tray-installation-material">Trays installation materials</option>
                   <option value="tray">Trays</option>
                   <option value="support">Supports</option>
                 </Select>

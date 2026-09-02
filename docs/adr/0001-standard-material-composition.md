@@ -6,21 +6,24 @@ Accepted.
 
 ## Decision
 
-The four physical master-material categories use separate assignment tables:
+The five physical master-material categories use separate assignment tables:
 
 - `material_cable_type_standard_materials`
 - `material_cable_installation_standard_materials`
+- `material_tray_installation_standard_materials`
 - `material_tray_standard_materials`
 - `material_support_standard_materials`
 
-Each owner column has a foreign key to its concrete owner table. Every assignment references
-`material_cable_installation_materials`, the existing canonical catalog for materials used as cable
-and project defaults. Owner deletion removes only its master composition. Referenced-material
-deletion is restricted while assignments exist.
+Each owner column has a foreign key to its concrete owner table. Tray Installation Material
+assignments reference `material_tray_installation_materials`; the other assignment categories
+reference `material_cable_installation_materials`, the canonical catalog for cable and project
+defaults. Owner deletion removes only its master composition. Referenced-material deletion is
+restricted while assignments exist.
 
-Cable Installation Materials may themselves own Standard Materials. Expansion is recursive,
-cycle-checked, deterministic, and multiplies quantities along each path. Units are retained from
-the child assignment; no general unit conversion is attempted.
+Cable and Tray Installation Materials may themselves own Standard Materials. Expansion is
+recursive within the corresponding installation-material catalog, cycle-checked, deterministic,
+and multiplies quantities along each path. Direct self-references are also rejected by database
+constraints. Units are retained from the child assignment; no general unit conversion is attempted.
 
 Project Cable Types and Change Orders store copied display fields and provenance. They never read
 live master composition data for reporting or export. Catalog edits therefore affect only future

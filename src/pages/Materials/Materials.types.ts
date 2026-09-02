@@ -3,11 +3,13 @@ export type MaterialsTab =
   | 'supports'
   | 'loadCurves'
   | 'cableTypes'
-  | 'cableInstallationMaterials';
+  | 'cableInstallationMaterials'
+  | 'trayInstallationMaterials';
 
 export const MATERIAL_TABS: MaterialsTab[] = [
   'cableTypes',
   'cableInstallationMaterials',
+  'trayInstallationMaterials',
   'trays',
   'supports',
   'loadCurves',

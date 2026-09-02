@@ -1,15 +1,20 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaterialCableInstallationMaterial } from '@/api/client';
-import { useCableInstallationMaterials } from './useCableInstallationMaterials';
+import {
+  useCableInstallationMaterials,
+  useTrayInstallationMaterials,
+} from './useCableInstallationMaterials';
 
 const apiMocks = vi.hoisted(() => ({
   fetchCableInstallationMaterials: vi.fn(),
+  fetchTrayInstallationMaterials: vi.fn(),
 }));
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   fetchMaterialCableInstallationMaterials: apiMocks.fetchCableInstallationMaterials,
+  fetchMaterialTrayInstallationMaterials: apiMocks.fetchTrayInstallationMaterials,
 }));
 
 const baseMaterial: MaterialCableInstallationMaterial = {
@@ -51,6 +56,12 @@ describe('useCableInstallationMaterials', () => {
     apiMocks.fetchCableInstallationMaterials.mockResolvedValue({
       cableInstallationMaterials: materials,
     });
+    apiMocks.fetchTrayInstallationMaterials.mockReset();
+    apiMocks.fetchTrayInstallationMaterials.mockResolvedValue({
+      trayInstallationMaterials: [
+        { ...baseMaterial, id: '00000000-0000-4000-8000-000000000004', type: 'Tray splice' },
+      ],
+    });
   });
 
   it('combines the Purpose dropdown filter with text search', async () => {
@@ -75,5 +86,20 @@ describe('useCableInstallationMaterials', () => {
     expect(result.current.pagedCableInstallationMaterials.map((item) => item.type)).toEqual([
       'Control cable marker',
     ]);
+  });
+
+  it('keeps tray installation materials in their own catalog state', async () => {
+    const { result } = renderHook(() =>
+      useTrayInstallationMaterials({
+        token: null,
+        isAdmin: false,
+        showToast: vi.fn(),
+      }),
+    );
+
+    await waitFor(() => expect(result.current.pagedCableInstallationMaterials).toHaveLength(1));
+    expect(result.current.pagedCableInstallationMaterials[0]?.type).toBe('Tray splice');
+    expect(apiMocks.fetchTrayInstallationMaterials).toHaveBeenCalledOnce();
+    expect(apiMocks.fetchCableInstallationMaterials).not.toHaveBeenCalled();
   });
 });

@@ -4,13 +4,21 @@ import type { ToastIntent } from '@fluentui/react-components';
 import {
   ApiError,
   MaterialCableInstallationMaterial,
+  type MaterialCableInstallationMaterialInput,
   createMaterialCableInstallationMaterial,
+  createMaterialTrayInstallationMaterial,
   deleteMaterialCableInstallationMaterial,
+  deleteMaterialTrayInstallationMaterial,
   exportMaterialCableInstallationMaterials,
+  exportMaterialTrayInstallationMaterials,
   fetchMaterialCableInstallationMaterials,
+  fetchMaterialTrayInstallationMaterials,
   getMaterialCableInstallationMaterialsTemplate,
+  getMaterialTrayInstallationMaterialsTemplate,
   importMaterialCableInstallationMaterials,
+  importMaterialTrayInstallationMaterials,
   updateMaterialCableInstallationMaterial,
+  updateMaterialTrayInstallationMaterial,
 } from '@/api/client';
 import { CABLE_TYPES_PER_PAGE } from '../../ProjectDetails.forms';
 import {
@@ -49,6 +57,75 @@ type UseCableInstallationMaterialsParams = {
   showToast: ShowToast;
 };
 
+type InstallationMaterialsCatalog = {
+  singularLabel: string;
+  singularTitle: string;
+  pluralLabel: string;
+  pluralTitle: string;
+  fileStem: string;
+  fetchAll: () => Promise<MaterialCableInstallationMaterial[]>;
+  create: (
+    token: string,
+    input: MaterialCableInstallationMaterialInput,
+  ) => Promise<MaterialCableInstallationMaterial>;
+  update: (
+    token: string,
+    id: string,
+    input: MaterialCableInstallationMaterialInput,
+  ) => Promise<MaterialCableInstallationMaterial>;
+  remove: (token: string, id: string) => Promise<void>;
+  import: (
+    token: string,
+    file: File,
+  ) => Promise<{
+    items: MaterialCableInstallationMaterial[];
+    summary: { inserted: number; updated: number; skipped: number };
+  }>;
+  export: (token: string) => Promise<Blob>;
+  getTemplate: (token: string) => Promise<Blob>;
+};
+
+const cableInstallationMaterialsCatalog: InstallationMaterialsCatalog = {
+  singularLabel: 'cable installation material',
+  singularTitle: 'Cable installation material',
+  pluralLabel: 'cable installation materials',
+  pluralTitle: 'Cable installation materials',
+  fileStem: 'materials-cable-installation-materials',
+  fetchAll: async () =>
+    (await fetchMaterialCableInstallationMaterials()).cableInstallationMaterials,
+  create: async (token, input) =>
+    (await createMaterialCableInstallationMaterial(token, input)).cableInstallationMaterial,
+  update: async (token, id, input) =>
+    (await updateMaterialCableInstallationMaterial(token, id, input)).cableInstallationMaterial,
+  remove: deleteMaterialCableInstallationMaterial,
+  import: async (token, file) => {
+    const response = await importMaterialCableInstallationMaterials(token, file);
+    return { items: response.cableInstallationMaterials, summary: response.summary };
+  },
+  export: exportMaterialCableInstallationMaterials,
+  getTemplate: getMaterialCableInstallationMaterialsTemplate,
+};
+
+const trayInstallationMaterialsCatalog: InstallationMaterialsCatalog = {
+  singularLabel: 'tray installation material',
+  singularTitle: 'Tray installation material',
+  pluralLabel: 'tray installation materials',
+  pluralTitle: 'Trays installation materials',
+  fileStem: 'materials-tray-installation-materials',
+  fetchAll: async () => (await fetchMaterialTrayInstallationMaterials()).trayInstallationMaterials,
+  create: async (token, input) =>
+    (await createMaterialTrayInstallationMaterial(token, input)).trayInstallationMaterial,
+  update: async (token, id, input) =>
+    (await updateMaterialTrayInstallationMaterial(token, id, input)).trayInstallationMaterial,
+  remove: deleteMaterialTrayInstallationMaterial,
+  import: async (token, file) => {
+    const response = await importMaterialTrayInstallationMaterials(token, file);
+    return { items: response.trayInstallationMaterials, summary: response.summary };
+  },
+  export: exportMaterialTrayInstallationMaterials,
+  getTemplate: getMaterialTrayInstallationMaterialsTemplate,
+};
+
 type UseCableInstallationMaterialsResult = {
   cableInstallationMaterials: MaterialCableInstallationMaterial[];
   cableInstallationMaterialsLoading: boolean;
@@ -83,11 +160,14 @@ type UseCableInstallationMaterialsResult = {
   cableInstallationMaterialDialog: CableInstallationMaterialDialogController;
 };
 
-export const useCableInstallationMaterials = ({
+const useInstallationMaterials = ({
   token,
   isAdmin,
   showToast,
-}: UseCableInstallationMaterialsParams): UseCableInstallationMaterialsResult => {
+  catalog,
+}: UseCableInstallationMaterialsParams & {
+  catalog: InstallationMaterialsCatalog;
+}): UseCableInstallationMaterialsResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [cableInstallationMaterials, setCableInstallationMaterials] = useState<
@@ -245,32 +325,30 @@ export const useCableInstallationMaterials = ({
       setError(null);
 
       try {
-        const response = await fetchMaterialCableInstallationMaterials();
-        setCableInstallationMaterials(
-          sortCableInstallationMaterials(response.cableInstallationMaterials),
-        );
+        const items = await catalog.fetchAll();
+        setCableInstallationMaterials(sortCableInstallationMaterials(items));
         setPage(1);
       } catch (err) {
-        console.error('Failed to load material cable installation materials', err);
+        console.error(`Failed to load ${catalog.pluralLabel}`, err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
             setCableInstallationMaterials([]);
             setPage(1);
             setError(
-              'Cable installation materials endpoint is unavailable. Ensure the server is running the latest version.',
+              `${catalog.pluralTitle} endpoint is unavailable. Ensure the server is running the latest version.`,
             );
           } else {
             setError(err.message);
           }
         } else {
-          setError('Failed to load cable installation materials.');
+          setError(`Failed to load ${catalog.pluralLabel}.`);
         }
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [sortCableInstallationMaterials],
+    [catalog, sortCableInstallationMaterials],
   );
 
   useEffect(() => {
@@ -364,7 +442,7 @@ export const useCableInstallationMaterials = ({
 
       if (!isAdmin || !token) {
         setDialogErrors({
-          general: 'You need to be signed in as an admin to manage cable installation materials.',
+          general: `You need to be signed in as an admin to manage ${catalog.pluralLabel}.`,
         });
         return;
       }
@@ -381,47 +459,41 @@ export const useCableInstallationMaterials = ({
 
       try {
         if (dialogMode === 'create') {
-          const response = await createMaterialCableInstallationMaterial(token, input);
+          const created = await catalog.create(token, input);
           setCableInstallationMaterials((previous) =>
-            sortCableInstallationMaterials([...previous, response.cableInstallationMaterial]),
+            sortCableInstallationMaterials([...previous, created]),
           );
           setPage(1);
-          showToast({ intent: 'success', title: 'Cable installation material created' });
+          showToast({ intent: 'success', title: `${catalog.singularTitle} created` });
         } else if (editingCableInstallationMaterialId) {
-          const response = await updateMaterialCableInstallationMaterial(
-            token,
-            editingCableInstallationMaterialId,
-            input,
-          );
+          const updated = await catalog.update(token, editingCableInstallationMaterialId, input);
           setCableInstallationMaterials((previous) =>
             sortCableInstallationMaterials(
               previous.map((item) =>
-                item.id === editingCableInstallationMaterialId
-                  ? response.cableInstallationMaterial
-                  : item,
+                item.id === editingCableInstallationMaterialId ? updated : item,
               ),
             ),
           );
-          showToast({ intent: 'success', title: 'Cable installation material updated' });
+          showToast({ intent: 'success', title: `${catalog.singularTitle} updated` });
         }
         resetDialog();
       } catch (err) {
-        console.error('Save material cable installation material failed', err);
+        console.error(`Save ${catalog.singularLabel} failed`, err);
         if (err instanceof ApiError) {
           setDialogErrors(parseCableInstallationMaterialApiErrors(err.payload));
           showToast({
             intent: 'error',
-            title: 'Failed to save cable installation material',
+            title: `Failed to save ${catalog.singularLabel}`,
             body: err.message,
           });
         } else {
-          const message = 'Failed to save cable installation material. Please try again.';
+          const message = `Failed to save ${catalog.singularLabel}. Please try again.`;
           setDialogErrors({
             general: message,
           });
           showToast({
             intent: 'error',
-            title: 'Failed to save cable installation material',
+            title: `Failed to save ${catalog.singularLabel}`,
             body: message,
           });
         }
@@ -433,6 +505,7 @@ export const useCableInstallationMaterials = ({
       dialogMode,
       dialogValues,
       editingCableInstallationMaterialId,
+      catalog,
       isAdmin,
       resetDialog,
       showToast,
@@ -447,13 +520,13 @@ export const useCableInstallationMaterials = ({
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete cable installation materials.',
+          body: `You need to be signed in as an admin to delete ${catalog.pluralLabel}.`,
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete cable installation material "${item.type}"? This action cannot be undone.`,
+        `Delete ${catalog.singularLabel} "${item.type}"? This action cannot be undone.`,
       );
 
       if (!confirmed) {
@@ -463,7 +536,7 @@ export const useCableInstallationMaterials = ({
       setPendingCableInstallationMaterialId(item.id);
 
       try {
-        await deleteMaterialCableInstallationMaterial(token, item.id);
+        await catalog.remove(token, item.id);
         setCableInstallationMaterials((previous) => {
           const next = previous.filter((existingItem) => existingItem.id !== item.id);
           const nextPages = Math.max(1, Math.ceil(next.length / CABLE_TYPES_PER_PAGE));
@@ -472,19 +545,19 @@ export const useCableInstallationMaterials = ({
           }
           return next;
         });
-        showToast({ intent: 'success', title: 'Cable installation material deleted' });
+        showToast({ intent: 'success', title: `${catalog.singularTitle} deleted` });
       } catch (err) {
-        console.error('Delete material cable installation material failed', err);
+        console.error(`Delete ${catalog.singularLabel} failed`, err);
         showToast({
           intent: 'error',
-          title: 'Failed to delete cable installation material',
+          title: `Failed to delete ${catalog.singularLabel}`,
           body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {
         setPendingCableInstallationMaterialId(null);
       }
     },
-    [isAdmin, page, showToast, token],
+    [catalog, isAdmin, page, showToast, token],
   );
 
   const handleImportCableInstallationMaterials = useCallback(
@@ -501,7 +574,7 @@ export const useCableInstallationMaterials = ({
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to import cable installation materials.',
+          body: `You need to be signed in as an admin to import ${catalog.pluralLabel}.`,
         });
         return;
       }
@@ -509,19 +582,17 @@ export const useCableInstallationMaterials = ({
       setIsImporting(true);
 
       try {
-        const response = await importMaterialCableInstallationMaterials(token, file);
-        setCableInstallationMaterials(
-          sortCableInstallationMaterials(response.cableInstallationMaterials),
-        );
+        const response = await catalog.import(token, file);
+        setCableInstallationMaterials(sortCableInstallationMaterials(response.items));
         setPage(1);
 
         showToast({
           intent: 'success',
-          title: 'Cable installation materials imported',
+          title: `${catalog.pluralTitle} imported`,
           body: `${response.summary.inserted} added, ${response.summary.updated} updated, ${response.summary.skipped} skipped.`,
         });
       } catch (err) {
-        console.error('Import material cable installation materials failed', err);
+        console.error(`Import ${catalog.pluralLabel} failed`, err);
         if (err instanceof ApiError && err.status === 404) {
           showToast({
             intent: 'error',
@@ -531,7 +602,7 @@ export const useCableInstallationMaterials = ({
         } else {
           showToast({
             intent: 'error',
-            title: 'Failed to import cable installation materials',
+            title: `Failed to import ${catalog.pluralLabel}`,
             body: err instanceof ApiError ? err.message : undefined,
           });
         }
@@ -539,7 +610,7 @@ export const useCableInstallationMaterials = ({
         setIsImporting(false);
       }
     },
-    [isAdmin, showToast, sortCableInstallationMaterials, token],
+    [catalog, isAdmin, showToast, sortCableInstallationMaterials, token],
   );
 
   const handleExportCableInstallationMaterials = useCallback(async () => {
@@ -547,7 +618,7 @@ export const useCableInstallationMaterials = ({
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export cable installation materials.',
+        body: `You need to be signed in as an admin to export ${catalog.pluralLabel}.`,
       });
       return;
     }
@@ -555,11 +626,11 @@ export const useCableInstallationMaterials = ({
     setIsExporting(true);
 
     try {
-      const blob = await exportMaterialCableInstallationMaterials(token);
-      downloadBlob(blob, buildTimestampedFileName('materials-cable-installation-materials'));
-      showToast({ intent: 'success', title: 'Cable installation materials exported' });
+      const blob = await catalog.export(token);
+      downloadBlob(blob, buildTimestampedFileName(catalog.fileStem));
+      showToast({ intent: 'success', title: `${catalog.pluralTitle} exported` });
     } catch (err) {
-      console.error('Export material cable installation materials failed', err);
+      console.error(`Export ${catalog.pluralLabel} failed`, err);
       if (err instanceof ApiError && err.status === 404) {
         showToast({
           intent: 'error',
@@ -569,14 +640,14 @@ export const useCableInstallationMaterials = ({
       } else {
         showToast({
           intent: 'error',
-          title: 'Failed to export cable installation materials',
+          title: `Failed to export ${catalog.pluralLabel}`,
           body: err instanceof ApiError ? err.message : undefined,
         });
       }
     } finally {
       setIsExporting(false);
     }
-  }, [isAdmin, showToast, token]);
+  }, [catalog, isAdmin, showToast, token]);
 
   const handleGetCableInstallationMaterialsTemplate = useCallback(async () => {
     if (!isAdmin || !token) {
@@ -591,14 +662,11 @@ export const useCableInstallationMaterials = ({
     setIsGettingTemplate(true);
 
     try {
-      const blob = await getMaterialCableInstallationMaterialsTemplate(token);
-      downloadBlob(
-        blob,
-        buildTimestampedFileName('materials-cable-installation-materials-template'),
-      );
+      const blob = await catalog.getTemplate(token);
+      downloadBlob(blob, buildTimestampedFileName(`${catalog.fileStem}-template`));
       showToast({ intent: 'success', title: 'Template downloaded' });
     } catch (err) {
-      console.error('Get material cable installation materials template failed', err);
+      console.error(`Get ${catalog.pluralLabel} template failed`, err);
       showToast({
         intent: 'error',
         title: 'Failed to get template',
@@ -607,7 +675,7 @@ export const useCableInstallationMaterials = ({
     } finally {
       setIsGettingTemplate(false);
     }
-  }, [isAdmin, showToast, token]);
+  }, [catalog, isAdmin, showToast, token]);
 
   return {
     cableInstallationMaterials,
@@ -655,3 +723,13 @@ export const useCableInstallationMaterials = ({
     },
   };
 };
+
+export const useCableInstallationMaterials = (
+  params: UseCableInstallationMaterialsParams,
+): UseCableInstallationMaterialsResult =>
+  useInstallationMaterials({ ...params, catalog: cableInstallationMaterialsCatalog });
+
+export const useTrayInstallationMaterials = (
+  params: UseCableInstallationMaterialsParams,
+): UseCableInstallationMaterialsResult =>
+  useInstallationMaterials({ ...params, catalog: trayInstallationMaterialsCatalog });

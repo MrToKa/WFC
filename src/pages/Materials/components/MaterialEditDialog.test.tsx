@@ -6,11 +6,13 @@ import { MaterialEditDialog } from './MaterialEditDialog';
 
 const apiMocks = vi.hoisted(() => ({
   updateCableInstallationMaterial: vi.fn(),
+  updateTrayInstallationMaterial: vi.fn(),
 }));
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   updateMaterialCableInstallationMaterial: apiMocks.updateCableInstallationMaterial,
+  updateMaterialTrayInstallationMaterial: apiMocks.updateTrayInstallationMaterial,
 }));
 
 const material: MaterialCableInstallationMaterial = {
@@ -36,6 +38,10 @@ describe('MaterialEditDialog', () => {
     apiMocks.updateCableInstallationMaterial.mockReset();
     apiMocks.updateCableInstallationMaterial.mockResolvedValue({
       cableInstallationMaterial: material,
+    });
+    apiMocks.updateTrayInstallationMaterial.mockReset();
+    apiMocks.updateTrayInstallationMaterial.mockResolvedValue({
+      trayInstallationMaterial: material,
     });
   });
 
@@ -71,5 +77,34 @@ describe('MaterialEditDialog', () => {
     );
     expect(onSaved).toHaveBeenCalledOnce();
     expect(onDismiss).toHaveBeenCalledOnce();
+  });
+
+  it('uses the tray installation catalog endpoint for tray installation materials', async () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <MaterialEditDialog
+          open
+          category="tray-installation-material"
+          material={material}
+          token="token"
+          onDismiss={vi.fn()}
+          onSaved={vi.fn().mockResolvedValue(undefined)}
+        />
+      </FluentProvider>,
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Manufacturer' }), {
+      target: { value: 'Tray supplier' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(apiMocks.updateTrayInstallationMaterial).toHaveBeenCalledWith(
+        'token',
+        material.id,
+        expect.objectContaining({ manufacturer: 'Tray supplier' }),
+      ),
+    );
+    expect(apiMocks.updateCableInstallationMaterial).not.toHaveBeenCalled();
   });
 });

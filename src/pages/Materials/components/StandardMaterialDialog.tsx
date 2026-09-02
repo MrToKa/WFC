@@ -14,6 +14,7 @@ import {
 } from '@fluentui/react-components';
 import type {
   MaterialCableInstallationMaterial,
+  MaterialTrayInstallationMaterial,
   StandardMaterialAssignment,
   StandardMaterialInput,
   StandardMaterialUnit,
@@ -22,7 +23,8 @@ import type {
 type StandardMaterialDialogProps = {
   open: boolean;
   assignment: StandardMaterialAssignment | null;
-  catalog: MaterialCableInstallationMaterial[];
+  catalog: Array<MaterialCableInstallationMaterial | MaterialTrayInstallationMaterial>;
+  catalogItemLabel?: string;
   ownerMaterialId: string;
   excludeOwnerFromCatalog: boolean;
   saving: boolean;
@@ -34,6 +36,7 @@ export const StandardMaterialDialog = ({
   open,
   assignment,
   catalog,
+  catalogItemLabel = 'Cable Installation Material',
   ownerMaterialId,
   excludeOwnerFromCatalog,
   saving,
@@ -102,7 +105,7 @@ export const StandardMaterialDialog = ({
     event.preventDefault();
     const numericQuantity = Number(quantity);
     if (!referencedMaterialId) {
-      setError('Select a Cable Installation Material.');
+      setError(`Select a ${catalogItemLabel}.`);
       return;
     }
     if (!Number.isFinite(numericQuantity) || numericQuantity <= 0) {
@@ -142,9 +145,9 @@ export const StandardMaterialDialog = ({
                   ))}
                 </Select>
               </Field>
-              <Field label="Cable Installation Material" required>
+              <Field label={catalogItemLabel} required>
                 <Select
-                  aria-label="Cable Installation Material"
+                  aria-label={catalogItemLabel}
                   value={referencedMaterialId}
                   onChange={(event) => setReferencedMaterialId(event.target.value)}
                   disabled={saving}
