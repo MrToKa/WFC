@@ -232,6 +232,11 @@ export const ChangeOrdersTab = ({
   const items = details?.items ?? [];
   const total = useMemo(() => items.reduce((sum, item) => sum + item.totalPrice, 0), [items]);
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const mainItems = useMemo(() => items.filter((item) => item.lineKind !== 'inherited'), [items]);
+  const mainItemIndexes = useMemo(
+    () => new Map(mainItems.map((item, index) => [item.id, index])),
+    [mainItems],
+  );
   const parentIdsWithInheritedItems = useMemo(
     () =>
       new Set(
@@ -366,6 +371,7 @@ export const ChangeOrdersTab = ({
         return next;
       });
       setMaterialDialogOpen(false);
+      setEditingItem(result.item);
       await loadList();
       showToast({ title: 'Material added', intent: 'success' });
     } catch (caught) {
@@ -450,12 +456,33 @@ export const ChangeOrdersTab = ({
     }
   };
 
-  const moveItem = async (index: number, direction: -1 | 1): Promise<void> => {
+  const moveItem = async (itemId: string, direction: -1 | 1): Promise<void> => {
     if (!token || !selectedId) return;
-    const target = index + direction;
-    if (target < 0 || target >= items.length) return;
-    const ids = items.map((item) => item.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
+    const mainItemIndex = mainItemIndexes.get(itemId);
+    if (mainItemIndex === undefined) return;
+    const targetMainItemIndex = mainItemIndex + direction;
+    if (targetMainItemIndex < 0 || targetMainItemIndex >= mainItems.length) return;
+
+    const reorderedMainItems = [...mainItems];
+    [reorderedMainItems[mainItemIndex], reorderedMainItems[targetMainItemIndex]] = [
+      reorderedMainItems[targetMainItemIndex],
+      reorderedMainItems[mainItemIndex],
+    ];
+
+    const groupedItemIds = new Set<string>();
+    const ids = reorderedMainItems.flatMap((mainItem) => {
+      const group = [
+        mainItem.id,
+        ...items
+          .filter((item) => item.lineKind === 'inherited' && item.parentItemId === mainItem.id)
+          .map((item) => item.id),
+      ];
+      group.forEach((id) => groupedItemIds.add(id));
+      return group;
+    });
+
+    // Keep any legacy orphaned rows in the request so the API still receives every item exactly once.
+    ids.push(...items.filter((item) => !groupedItemIds.has(item.id)).map((item) => item.id));
     setPendingAction(true);
     try {
       await reorderChangeOrderItems(token, project.id, selectedId, ids, collection);
@@ -672,6 +699,7 @@ export const ChangeOrdersTab = ({
 
                         const hasInheritedItems = parentIdsWithInheritedItems.has(item.id);
                         const inheritedItemsExpanded = expandedParentIds.has(item.id);
+                        const mainItemIndex = mainItemIndexes.get(item.id);
 
                         return (
                           <TableRow key={item.id}>
@@ -789,9 +817,11 @@ export const ChangeOrdersTab = ({
                                   aria-label={`Move item ${index + 1} up`}
                                   title="Move up"
                                   disabled={
-                                    index === 0 || pendingAction || item.lineKind === 'inherited'
+                                    mainItemIndex === undefined ||
+                                    mainItemIndex === 0 ||
+                                    pendingAction
                                   }
-                                  onClick={() => void moveItem(index, -1)}
+                                  onClick={() => void moveItem(item.id, -1)}
                                 />
                                 <Button
                                   size="small"
@@ -800,11 +830,12 @@ export const ChangeOrdersTab = ({
                                   aria-label={`Move item ${index + 1} down`}
                                   title="Move down"
                                   disabled={
-                                    index === items.length - 1 ||
+                                    mainItemIndex === undefined ||
+                                    mainItemIndex === mainItems.length - 1 ||
                                     pendingAction ||
-                                    item.lineKind === 'inherited'
+                                    mainItems.length === 0
                                   }
-                                  onClick={() => void moveItem(index, 1)}
+                                  onClick={() => void moveItem(item.id, 1)}
                                 />
                               </div>
                             </TableCell>
