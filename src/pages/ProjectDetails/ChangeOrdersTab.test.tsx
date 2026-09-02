@@ -284,6 +284,9 @@ describe('ChangeOrdersTab', () => {
       fireEvent.change(screen.getByRole('combobox', { name: 'Catalog category' }), {
         target: { value: 'tray-installation-material' },
       });
+      const purposeSelect = screen.getByRole('combobox', { name: 'Purpose' });
+      await screen.findByRole('option', { name: 'Tray joining' });
+      fireEvent.change(purposeSelect, { target: { value: 'Tray joining' } });
 
       const catalogRow = (await screen.findByText('Tray splice plate')).closest('tr');
       expect(catalogRow).not.toBeNull();

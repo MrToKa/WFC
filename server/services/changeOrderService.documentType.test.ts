@@ -114,6 +114,73 @@ describe('Change Order document type scoping', () => {
     ]);
   });
 
+  it('copies the current header revision when adding a material', async () => {
+    clientQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT id, revision FROM project_change_orders')) {
+        return { rows: [{ id: 'document-id', revision: '07' }] };
+      }
+      if (sql.includes('FROM material_supports WHERE id = $1')) {
+        return {
+          rows: [
+            {
+              id: 'material-id',
+              support_type: 'Support',
+              manufacturer: null,
+              height_mm: null,
+              width_mm: null,
+              length_mm: null,
+              weight_kg: null,
+              minimum_order_quantity: 1,
+              order_measurement: 'pcs',
+              packaging: 'pcs',
+            },
+          ],
+        };
+      }
+      if (sql.includes('SELECT COALESCE(MAX(sort_order)')) {
+        return { rows: [{ next_order: 1 }] };
+      }
+      if (sql.includes('INSERT INTO project_change_order_items')) {
+        return {
+          rows: [
+            {
+              id: 'item-id',
+              change_order_id: 'document-id',
+              sort_order: 1,
+              source_catalog: 'support',
+              source_material_id: 'material-id',
+              design_quantity: 0,
+              order_quantity: 0,
+              unit: 'pcs',
+              packaging: 'pcs',
+              packaging_quantity: 1,
+              packaging_unit: 'pcs',
+              ordered_quantity: 0,
+              ordered_unit: 'pcs',
+              description_en: 'Support',
+              unit_price: 0,
+              revision_number: '07',
+              created_at: '2026-09-02T00:00:00.000Z',
+              updated_at: '2026-09-02T00:00:00.000Z',
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+
+    await expect(
+      addChangeOrderItem('project-id', 'change-order', 'document-id', 'support', 'material-id'),
+    ).resolves.toMatchObject({ revisionNumber: '07' });
+
+    const insertCall = clientQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('INSERT INTO project_change_order_items'),
+    ) as [string, unknown[]] | undefined;
+    expect(insertCall).toBeDefined();
+    expect(insertCall?.[0]).toContain('revision_number');
+    expect(insertCall?.[1][26]).toBe('07');
+  });
+
   it('rejects duplicate-item access when the item belongs to another document type', async () => {
     clientQuery
       .mockResolvedValueOnce({})

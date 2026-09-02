@@ -428,6 +428,7 @@ const insertSnapshot = async (
     sourceAssignmentIds?: string[];
     designQuantity?: number;
     orderQuantity?: number;
+    revisionNumber?: string | null;
   },
 ): Promise<ChangeOrderItem> => {
   const designQuantity = provenance?.designQuantity ?? 0;
@@ -444,10 +445,10 @@ const insertSnapshot = async (
         manufacturer, manufacturer_part_no, line_kind, parent_item_id, quantity_per_parent,
         source_standard_material_assignment_ids, design_quantity, order_quantity,
         minimum_order_quantity, order_measurement, packaging, packaging_quantity,
-        packaging_unit, ordered_quantity, ordered_unit
+        packaging_unit, ordered_quantity, ordered_unit, revision_number
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17::uuid[], $18, $19, $20, $21, $22, $23, $24, $25, $26
+        $14, $15, $16, $17::uuid[], $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
       )
       RETURNING ${ITEM_COLUMNS}
     `,
@@ -478,6 +479,7 @@ const insertSnapshot = async (
       snapshot.orderMeasurement,
       minimumOrder.packageCount,
       snapshot.packaging,
+      normalizeText(provenance?.revisionNumber),
     ],
   );
   return mapChangeOrderItemRow(result.rows[0]);
@@ -493,8 +495,8 @@ export const addChangeOrderItem = async (
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const owner = await client.query<{ id: string }>(
-      `SELECT id FROM project_change_orders
+    const owner = await client.query<{ id: string; revision: string }>(
+      `SELECT id, revision FROM project_change_orders
        WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
       [changeOrderId, projectId, documentType],
     );
@@ -517,6 +519,7 @@ export const addChangeOrderItem = async (
       changeOrderId,
       orderResult.rows[0]?.next_order ?? 1,
       snapshot,
+      { lineKind: 'manual', revisionNumber: owner.rows[0].revision },
     );
     const expanded = await expandStandardMaterials(client, sourceCatalog, sourceMaterialId);
     let nextSortOrder = (orderResult.rows[0]?.next_order ?? 1) + 1;
@@ -540,6 +543,7 @@ export const addChangeOrderItem = async (
           sourceAssignmentIds: material.sourceAssignmentIds,
           designQuantity: inheritedQuantities.designQuantity,
           orderQuantity: inheritedQuantities.orderQuantity,
+          revisionNumber: owner.rows[0].revision,
         },
       );
       nextSortOrder += 1;

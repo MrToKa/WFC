@@ -33,6 +33,7 @@ import {
 type CatalogChoice = {
   id: string;
   category: ChangeOrderSourceCatalog;
+  purpose: string;
   description: string;
   details: string;
   manufacturer: string;
@@ -42,7 +43,7 @@ type CatalogChoice = {
 const useStyles = makeStyles({
   controls: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(180px, 1fr) minmax(240px, 2fr)',
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gap: tokens.spacingHorizontalM,
     marginBottom: tokens.spacingVerticalM,
   },
@@ -65,6 +66,7 @@ const loadAllSupports = async (): Promise<CatalogChoice[]> => {
   return supports.map((support) => ({
     id: support.id,
     category: 'support' as const,
+    purpose: '',
     description: support.type,
     details: [
       support.heightMm !== null ? `H ${support.heightMm}` : '',
@@ -95,6 +97,7 @@ export const ChangeOrderMaterialDialog = ({
 }: Props) => {
   const styles = useStyles();
   const [category, setCategory] = useState<ChangeOrderSourceCatalog>('cable-type');
+  const [purpose, setPurpose] = useState('');
   const [search, setSearch] = useState('');
   const [choices, setChoices] = useState<CatalogChoice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -118,6 +121,7 @@ export const ChangeOrderMaterialDialog = ({
           ...cables.cableTypes.map((item) => ({
             id: item.id,
             category: 'cable-type' as const,
+            purpose: item.purpose?.trim() ?? '',
             description: item.name,
             details: [
               item.diameterMm !== null ? `Ø ${item.diameterMm} mm` : '',
@@ -132,6 +136,7 @@ export const ChangeOrderMaterialDialog = ({
           ...cableInstallation.cableInstallationMaterials.map((item) => ({
             id: item.id,
             category: 'cable-installation-material' as const,
+            purpose: item.purpose?.trim() ?? '',
             description: item.type,
             details: [item.description ?? item.purpose ?? '', item.material ?? '']
               .filter(Boolean)
@@ -142,6 +147,7 @@ export const ChangeOrderMaterialDialog = ({
           ...trayInstallation.trayInstallationMaterials.map((item) => ({
             id: item.id,
             category: 'tray-installation-material' as const,
+            purpose: item.purpose?.trim() ?? '',
             description: item.type,
             details: [item.description ?? item.purpose ?? '', item.material ?? '']
               .filter(Boolean)
@@ -152,6 +158,7 @@ export const ChangeOrderMaterialDialog = ({
           ...trays.trays.map((item) => ({
             id: item.id,
             category: 'tray' as const,
+            purpose: '',
             description: item.type,
             details: [
               item.heightMm !== null ? `H ${item.heightMm}` : '',
@@ -179,17 +186,30 @@ export const ChangeOrderMaterialDialog = ({
     };
   }, [open]);
 
+  const purposeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          choices
+            .filter((choice) => choice.category === category && choice.purpose !== '')
+            .map((choice) => choice.purpose),
+        ),
+      ).sort((left, right) => left.localeCompare(right)),
+    [category, choices],
+  );
+
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return choices.filter(
       (choice) =>
         choice.category === category &&
+        (!purpose || choice.purpose === purpose) &&
         (!needle ||
           [choice.description, choice.details, choice.manufacturer, choice.partNumber].some(
             (value) => value.toLowerCase().includes(needle),
           )),
     );
-  }, [category, choices, search]);
+  }, [category, choices, purpose, search]);
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onDismiss()}>
@@ -201,13 +221,32 @@ export const ChangeOrderMaterialDialog = ({
               <Field label="Catalog category">
                 <Select
                   value={category}
-                  onChange={(event) => setCategory(event.target.value as ChangeOrderSourceCatalog)}
+                  onChange={(event) => {
+                    setCategory(event.target.value as ChangeOrderSourceCatalog);
+                    setPurpose('');
+                  }}
                 >
                   <option value="cable-type">Cable material types</option>
                   <option value="cable-installation-material">Cable installation materials</option>
                   <option value="tray-installation-material">Trays installation materials</option>
                   <option value="tray">Trays</option>
                   <option value="support">Supports</option>
+                </Select>
+              </Field>
+              <Field label="Purpose">
+                <Select
+                  value={purpose}
+                  disabled={loading || purposeOptions.length === 0}
+                  onChange={(event) => setPurpose(event.target.value)}
+                >
+                  <option value="">
+                    {purposeOptions.length === 0 ? 'No purposes available' : 'All purposes'}
+                  </option>
+                  {purposeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
                 </Select>
               </Field>
               <Field label="Search">
