@@ -31,6 +31,8 @@ export type StandardMaterialAssignmentRow = {
   referenced_material_purpose: string | null;
   referenced_material_material: string | null;
   referenced_material_description: string | null;
+  referenced_material_dimension_mm: string | null;
+  referenced_material_weight_kg: string | number | null;
   referenced_material_manufacturer: string | null;
   referenced_material_part_no: string | null;
   referenced_material_minimum_order_quantity: string | number;
@@ -55,6 +57,8 @@ export type StandardMaterialAssignment = {
     purpose: string | null;
     material: string | null;
     description: string | null;
+    dimensionMm: string | null;
+    weightKg: number | null;
     manufacturer: string | null;
     partNo: string | null;
     minimumOrderQuantity: number;
@@ -71,6 +75,12 @@ export type StandardMaterialAssignment = {
 const toIsoString = (value: Date | string): string =>
   typeof value === 'string' ? value : value.toISOString();
 
+const toNumberOrNull = (value: string | number | null): number | null => {
+  if (value === null) return null;
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
 export const mapStandardMaterialAssignmentRow = (
   row: StandardMaterialAssignmentRow,
 ): StandardMaterialAssignment => ({
@@ -85,6 +95,8 @@ export const mapStandardMaterialAssignmentRow = (
     purpose: row.referenced_material_purpose ?? null,
     material: row.referenced_material_material ?? null,
     description: row.referenced_material_description ?? null,
+    dimensionMm: row.referenced_material_dimension_mm ?? null,
+    weightKg: toNumberOrNull(row.referenced_material_weight_kg),
     manufacturer: row.referenced_material_manufacturer ?? null,
     partNo: row.referenced_material_part_no ?? null,
     minimumOrderQuantity: Number(row.referenced_material_minimum_order_quantity),
@@ -105,6 +117,8 @@ export type ExpandedStandardMaterial = {
   purpose: string | null;
   material: string | null;
   description: string | null;
+  dimensionMm: string | null;
+  weightKg: number | null;
   manufacturer: string | null;
   partNo: string | null;
   minimumOrderQuantity: number;

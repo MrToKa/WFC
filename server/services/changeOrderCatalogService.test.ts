@@ -53,6 +53,8 @@ describe('Change Order catalog snapshots', () => {
         purpose: 'Tray mounting',
         material: 'Steel',
         description: 'M8 tray fastener',
+        dimensionMm: '8 x 40',
+        weightKg: 0.04,
         manufacturer: 'Tray Co',
         partNo: 'TF-8',
         minimumOrderQuantity: 25,
@@ -68,6 +70,8 @@ describe('Change Order catalog snapshots', () => {
       sourceCatalog: 'tray-installation-material',
       sourceMaterialId: 'tray-fastener-id',
       descriptionEn: 'Tray fastener',
+      dimensionMm: '8 x 40',
+      weightKg: 0.04,
       manufacturerPartNo: 'TF-8',
     });
   });

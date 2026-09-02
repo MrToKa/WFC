@@ -181,6 +181,132 @@ describe('Change Order document type scoping', () => {
     expect(insertCall?.[1][26]).toBe('07');
   });
 
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'inherits Standard Material dimensions and weight for %s documents',
+    async (documentType) => {
+      clientQuery.mockImplementation(async (sql: string, values?: unknown[]) => {
+        if (sql.includes('SELECT id, revision FROM project_change_orders')) {
+          return { rows: [{ id: 'document-id', revision: '02' }] };
+        }
+        if (sql.includes('FROM material_supports WHERE id = $1')) {
+          return {
+            rows: [
+              {
+                id: 'support-id',
+                support_type: 'Support',
+                manufacturer: null,
+                height_mm: null,
+                width_mm: null,
+                length_mm: null,
+                weight_kg: null,
+                minimum_order_quantity: 1,
+                order_measurement: 'pcs',
+                packaging: 'pcs',
+              },
+            ],
+          };
+        }
+        if (sql.includes('SELECT COALESCE(MAX(sort_order)')) {
+          return { rows: [{ next_order: 1 }] };
+        }
+        if (sql.includes('UNION ALL')) {
+          expect(sql).toContain('child.dimension_mm AS referenced_material_dimension_mm');
+          expect(sql).toContain('child.weight_kg AS referenced_material_weight_kg');
+          return {
+            rows: [
+              {
+                id: '00000000-0000-4000-8000-000000000010',
+                owner_id: 'support-id',
+                owner_category: 'support',
+                referenced_material_id: '00000000-0000-4000-8000-000000000030',
+                referenced_material_category: 'cable-installation-material',
+                referenced_material_name: 'Cable gland M32',
+                referenced_material_purpose: null,
+                referenced_material_material: 'Brass',
+                referenced_material_description: 'Cable gland',
+                referenced_material_dimension_mm: '32 x 45',
+                referenced_material_weight_kg: '0.18',
+                referenced_material_manufacturer: 'Maker',
+                referenced_material_part_no: 'M32',
+                referenced_material_minimum_order_quantity: '1',
+                referenced_material_order_measurement: 'pcs',
+                referenced_material_packaging: 'pcs',
+                quantity: '2',
+                unit: 'pcs',
+                remarks: null,
+                created_at: '2026-01-01T00:00:00.000Z',
+                updated_at: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+          };
+        }
+        if (sql.includes('INSERT INTO project_change_order_items')) {
+          const input = values ?? [];
+          return {
+            rows: [
+              {
+                id: input[0],
+                change_order_id: input[1],
+                sort_order: input[2],
+                source_catalog: input[3],
+                source_material_id: input[4],
+                unit: input[5],
+                description_en: input[6],
+                clear_description: input[7],
+                dimension_mm: input[8],
+                material: input[9],
+                weight_kg: input[10],
+                manufacturer: input[11],
+                manufacturer_part_no: input[12],
+                line_kind: input[13],
+                parent_item_id: input[14],
+                quantity_per_parent: input[15],
+                source_standard_material_assignment_ids: input[16],
+                design_quantity: input[17],
+                order_quantity: input[18],
+                minimum_order_quantity: input[19],
+                order_measurement: input[20],
+                packaging: input[21],
+                packaging_quantity: input[22],
+                packaging_unit: input[23],
+                ordered_quantity: input[24],
+                ordered_unit: input[25],
+                revision_number: input[26],
+                unit_price: 0,
+                created_at: '2026-09-02T00:00:00.000Z',
+                updated_at: '2026-09-02T00:00:00.000Z',
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      });
+
+      await expect(
+        addChangeOrderItem('project-id', documentType, 'document-id', 'support', 'support-id'),
+      ).resolves.toMatchObject({ descriptionEn: 'Support' });
+
+      const itemInserts = clientQuery.mock.calls.filter(([sql]) =>
+        String(sql).includes('INSERT INTO project_change_order_items'),
+      ) as [string, unknown[]][];
+      expect(itemInserts).toHaveLength(2);
+      expect(itemInserts[1][1]).toMatchObject({
+        3: 'cable-installation-material',
+        6: 'Cable gland M32',
+        8: '32 x 45',
+        10: 0.18,
+        13: 'inherited',
+      });
+      expect(
+        clientQuery.mock.calls.some(
+          ([sql, values]) =>
+            String(sql).includes('SELECT id, revision FROM project_change_orders') &&
+            (values as unknown[])?.[2] === documentType,
+        ),
+      ).toBe(true);
+    },
+  );
+
   it('rejects duplicate-item access when the item belongs to another document type', async () => {
     clientQuery
       .mockResolvedValueOnce({})

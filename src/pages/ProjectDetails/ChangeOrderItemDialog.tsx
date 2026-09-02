@@ -43,6 +43,17 @@ type FormState = {
   remarks: string;
 };
 
+const EDITABLE_FIELDS: ReadonlySet<keyof FormState> = new Set([
+  'designQuantity',
+  'orderQuantity',
+  'unitPrice',
+  'countryOfOrigin',
+  'tagNo',
+  'drawingNo',
+  'revisionNumber',
+  'remarks',
+]);
+
 const useStyles = makeStyles({
   surface: {
     width: 'min(1000px, 96vw)',
@@ -94,11 +105,6 @@ const parseRequiredNumber = (input: string, label: string): number => {
   return number;
 };
 
-const parseOptionalNumber = (input: string, label: string): number | null => {
-  if (input.trim() === '') return null;
-  return parseRequiredNumber(input, label);
-};
-
 const nullable = (input: string): string | null => input.trim() || null;
 
 type Props = {
@@ -131,44 +137,20 @@ export const ChangeOrderItemDialog = ({
 
   const submit = async (): Promise<void> => {
     if (!form) return;
-    if (!form.descriptionEn.trim()) {
-      setError('Description (EN) is required');
-      return;
-    }
     try {
       const inherited = item?.lineKind === 'inherited';
-      const minimumOrderManaged = Boolean(item?.minimumOrderQuantity && item.orderMeasurement);
       const update: ChangeOrderItemUpdate = {
         ...(inherited
           ? {}
           : {
               designQuantity: parseRequiredNumber(form.designQuantity, 'Design quantity'),
               orderQuantity: parseRequiredNumber(form.orderQuantity, 'Order quantity'),
-              unit: nullable(form.unit),
               revisionNumber: nullable(form.revisionNumber),
             }),
-        ...(minimumOrderManaged
-          ? {}
-          : {
-              packaging: nullable(form.packaging),
-              packagingQuantity: parseOptionalNumber(form.packagingQuantity, 'Packaging quantity'),
-              packagingUnit: nullable(form.packagingUnit),
-              orderedQuantity: parseOptionalNumber(form.orderedQuantity, 'Ordered quantity'),
-              orderedUnit: nullable(form.orderedUnit),
-            }),
-        descriptionEn: form.descriptionEn.trim(),
-        dimensionMm: nullable(form.dimensionMm),
-        material: nullable(form.material),
-        weightKg: parseOptionalNumber(form.weightKg, 'Weight'),
-        clearDescription: nullable(form.clearDescription),
-        unitPrice: parseRequiredNumber(form.unitPrice, 'Unit price'),
+        unitPrice: parseRequiredNumber(form.unitPrice, 'Price'),
         countryOfOrigin: nullable(form.countryOfOrigin),
         tagNo: nullable(form.tagNo),
         drawingNo: nullable(form.drawingNo),
-        clientBarcode: nullable(form.clientBarcode),
-        manufacturer: nullable(form.manufacturer),
-        manufacturerPartNo: nullable(form.manufacturerPartNo),
-        acsBarcode: nullable(form.acsBarcode),
         remarks: nullable(form.remarks),
       };
       setError(null);
@@ -188,19 +170,11 @@ export const ChangeOrderItemDialog = ({
         onChange={(_, data) => set(field, data.value)}
         disabled={
           saving ||
+          !EDITABLE_FIELDS.has(field) ||
           (item?.lineKind === 'inherited' &&
             (field === 'designQuantity' ||
               field === 'orderQuantity' ||
-              field === 'unit' ||
-              field === 'revisionNumber')) ||
-          (Boolean(item?.minimumOrderQuantity) &&
-            [
-              'packaging',
-              'packagingQuantity',
-              'packagingUnit',
-              'orderedQuantity',
-              'orderedUnit',
-            ].includes(field))
+              field === 'revisionNumber'))
         }
       />
     </Field>
@@ -244,7 +218,7 @@ export const ChangeOrderItemDialog = ({
               {input('designQuantity', 'Design Qty', 'number')}
               {input('orderQuantity', 'Order Qty', 'number')}
               {input('unit', 'Unit')}
-              {input('unitPrice', 'Price/pcs', 'number')}
+              {input('unitPrice', 'Price', 'number')}
               {input('packaging', 'Packaging')}
               {input('packagingQuantity', 'Packaging Qty', 'number')}
               {input('packagingUnit', 'Packaging Unit')}
@@ -265,7 +239,7 @@ export const ChangeOrderItemDialog = ({
                 <Textarea
                   resize="vertical"
                   value={form?.clearDescription ?? ''}
-                  onChange={(_, data) => set('clearDescription', data.value)}
+                  disabled
                 />
               </Field>
               <Field label="Remarks" className={styles.wide}>
@@ -273,6 +247,7 @@ export const ChangeOrderItemDialog = ({
                   resize="vertical"
                   value={form?.remarks ?? ''}
                   onChange={(_, data) => set('remarks', data.value)}
+                  disabled={saving}
                 />
               </Field>
             </div>

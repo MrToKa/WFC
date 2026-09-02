@@ -251,6 +251,8 @@ export type StandardMaterialAssignment = {
     purpose: string | null;
     material: string | null;
     description: string | null;
+    dimensionMm: string | null;
+    weightKg: number | null;
     manufacturer: string | null;
     partNo: string | null;
     minimumOrderQuantity: number;

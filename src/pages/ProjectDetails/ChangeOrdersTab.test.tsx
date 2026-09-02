@@ -216,10 +216,75 @@ describe('ChangeOrdersTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
     expect(screen.getByText('Edit Internal NCR item')).toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'SAP number' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'Description (DE)' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'HS Code' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('textbox', { name: 'Shipping list' })).not.toBeInTheDocument();
+    const editableFields = [
+      'Design Qty',
+      'Order Qty',
+      'Price',
+      'Country of origin',
+      'Pos./TAG-No',
+      'Drawing No.',
+      'Revision number',
+      'Remarks',
+    ];
+    for (const field of editableFields) {
+      const control = screen.getByLabelText(field);
+      expect(control).toBeEnabled();
+      expect(control).not.toHaveAttribute('readonly');
+    }
+    const readOnlyFields = [
+      'Description (EN)',
+      'Unit',
+      'Packaging',
+      'Packaging Qty',
+      'Packaging Unit',
+      'Ordered Qty',
+      'Ordered Unit',
+      'Weight [kg]',
+      'Dimension [mm]',
+      'Material',
+      'Manufacturer',
+      'Manufacturer Part No.',
+      'Client Barcode',
+      'ACS barcode',
+      'Clear description',
+    ];
+    for (const field of readOnlyFields) {
+      expect(screen.getByLabelText(field)).toBeDisabled();
+    }
+    const excludedFields = ['SAP number', 'Description (DE)', 'HS Code', 'Shipping list'];
+    for (const field of excludedFields) {
+      expect(screen.queryByLabelText(field)).not.toBeInTheDocument();
+    }
+
+    fireEvent.change(screen.getByLabelText('Design Qty'), { target: { value: '15' } });
+    fireEvent.change(screen.getByLabelText('Order Qty'), { target: { value: '16' } });
+    fireEvent.change(screen.getByLabelText('Price'), { target: { value: '5.5' } });
+    fireEvent.change(screen.getByLabelText('Country of origin'), { target: { value: 'BG' } });
+    fireEvent.change(screen.getByLabelText('Pos./TAG-No'), { target: { value: 'TAG-1' } });
+    fireEvent.change(screen.getByLabelText('Drawing No.'), { target: { value: 'DWG-1' } });
+    fireEvent.change(screen.getByLabelText('Revision number'), { target: { value: '01' } });
+    fireEvent.change(screen.getByLabelText('Remarks'), { target: { value: 'Checked' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+
+    await waitFor(() =>
+      expect(api.updateChangeOrderItem).toHaveBeenCalledWith(
+        'token',
+        project.id,
+        details.id,
+        details.items[0].id,
+        {
+          designQuantity: 15,
+          orderQuantity: 16,
+          unitPrice: 5.5,
+          countryOfOrigin: 'BG',
+          tagNo: 'TAG-1',
+          drawingNo: 'DWG-1',
+          revisionNumber: '01',
+          remarks: 'Checked',
+        },
+        'internal-ncrs',
+      ),
+    );
   });
 
   it.each([
@@ -324,6 +389,12 @@ describe('ChangeOrdersTab', () => {
     await openExistingOrder();
     expect(screen.getByText('-2')).toBeInTheDocument();
     expect(screen.getByText(/Total: 40\.00/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
+    expect(screen.getByText('Edit Change Order item')).toBeInTheDocument();
+    expect(screen.getByLabelText('Price')).toBeEnabled();
+    expect(screen.getByLabelText('Description (EN)')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     const exportButton = screen.getByRole('button', { name: /export excel/i });
     expect(exportButton).toBeEnabled();
