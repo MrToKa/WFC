@@ -113,11 +113,6 @@ const useStyles = makeStyles({
     width: '20px',
     height: '20px',
   },
-  total: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    paddingTop: tokens.spacingVerticalM,
-  },
   warning: {
     color: tokens.colorPaletteRedForeground1,
   },
@@ -230,7 +225,6 @@ export const ChangeOrdersTab = ({
   }, [selectedId]);
 
   const items = details?.items ?? [];
-  const total = useMemo(() => items.reduce((sum, item) => sum + item.totalPrice, 0), [items]);
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const mainItems = useMemo(() => items.filter((item) => item.lineKind !== 'inherited'), [items]);
   const mainItemIndexes = useMemo(
@@ -845,9 +839,6 @@ export const ChangeOrdersTab = ({
                     </TableBody>
                   </Table>
                 </div>
-                <Body1 className={styles.total}>
-                  <strong>Total: {formatMoney(total)}</strong>
-                </Body1>
               </>
             )}
           </div>

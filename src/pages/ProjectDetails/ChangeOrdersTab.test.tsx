@@ -390,7 +390,7 @@ describe('ChangeOrdersTab', () => {
 
     await openExistingOrder();
     expect(screen.getByText('-2')).toBeInTheDocument();
-    expect(screen.getByText(/Total: 40\.00/)).toBeInTheDocument();
+    expect(screen.queryByText(/Total: 40\.00/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
     expect(screen.getByText('Edit Change Order item')).toBeInTheDocument();
@@ -660,13 +660,11 @@ describe('ChangeOrdersTab', () => {
     expect(expandButton).toHaveAttribute('aria-expanded', 'false');
     expect(standaloneItemCell).toHaveTextContent('3');
     expect(within(materialsTable).queryByText('Inherited cable cleat')).not.toBeInTheDocument();
-    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
 
     fireEvent.click(expandButton);
 
     expect(within(materialsTable).getByText('Inherited cable cleat')).toBeInTheDocument();
     expect(within(standaloneRow!).getAllByRole('cell')[0]).toHaveTextContent('3');
-    expect(screen.getByText(/Total: 120\.00/)).toBeInTheDocument();
 
     const collapseButton = within(cableTypeItemCell).getByRole('button', {
       name: 'Collapse inherited standard materials for item 1',
