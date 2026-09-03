@@ -176,6 +176,21 @@ export const CableTypeDialog = ({
                     <Input value={values.remarks} onChange={onFieldChange('remarks')} />
                   </Field>
                   <Field
+                    label="Price"
+                    required
+                    validationState={errors.unitPrice ? 'error' : undefined}
+                    validationMessage={errors.unitPrice}
+                  >
+                    <Input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={values.unitPrice}
+                      onChange={onFieldChange('unitPrice')}
+                      required
+                    />
+                  </Field>
+                  <Field
                     label="Minimum order quantity"
                     required
                     validationState={errors.minimumOrderQuantity ? 'error' : undefined}

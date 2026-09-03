@@ -144,6 +144,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       minimumOrderQuantity: String(tray.minimumOrderQuantity),
       orderMeasurement: tray.orderMeasurement,
       packaging: tray.packaging,
+      unitPrice: String(tray.unitPrice),
       imageTemplateId: tray.imageTemplateId,
       source: tray.source ?? ''
     });
@@ -316,12 +317,16 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         errors.weightKgPerM = weightResult.error;
       }
       const minimumOrderResult = parseNumberInput(trayForm.minimumOrderQuantity);
+      const unitPriceResult = parseNumberInput(trayForm.unitPrice);
       if (
         minimumOrderResult.error ||
         minimumOrderResult.numeric === null ||
         minimumOrderResult.numeric <= 0
       ) {
         errors.minimumOrderQuantity = 'Minimum order quantity must be greater than zero';
+      }
+      if (unitPriceResult.error || unitPriceResult.numeric === null) {
+        errors.unitPrice = 'Price must be a non-negative number';
       }
 
       if (Object.keys(errors).length > 0) {
@@ -348,6 +353,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: trayForm.orderMeasurement,
             packaging: trayForm.packaging,
+            unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
             source: trayForm.source.trim() || null
           });
@@ -369,6 +375,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: trayForm.orderMeasurement,
             packaging: trayForm.packaging,
+            unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
             source: trayForm.source.trim() || null
           });

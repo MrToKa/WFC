@@ -91,6 +91,7 @@ const toCableTypeFormState = (cableType: MaterialCableType): CableTypeFormState 
   minimumOrderQuantity: String(cableType.minimumOrderQuantity),
   orderMeasurement: cableType.orderMeasurement,
   packaging: cableType.packaging,
+  unitPrice: String(cableType.unitPrice),
   source: cableType.source ?? '',
 });
 

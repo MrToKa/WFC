@@ -115,6 +115,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       minimumOrderQuantity: String(support.minimumOrderQuantity),
       orderMeasurement: support.orderMeasurement,
       packaging: support.packaging,
+      unitPrice: String(support.unitPrice),
       imageTemplateId: support.imageTemplateId,
       source: support.source ?? ''
     });
@@ -185,12 +186,16 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         errors.weightKg = weightResult.error;
       }
       const minimumOrderResult = parseNumberInput(supportForm.minimumOrderQuantity);
+      const unitPriceResult = parseNumberInput(supportForm.unitPrice);
       if (
         minimumOrderResult.error ||
         minimumOrderResult.numeric === null ||
         minimumOrderResult.numeric <= 0
       ) {
         errors.minimumOrderQuantity = 'Minimum order quantity must be greater than zero';
+      }
+      if (unitPriceResult.error || unitPriceResult.numeric === null) {
+        errors.unitPrice = 'Price must be a non-negative number';
       }
 
       if (Object.keys(errors).length > 0) {
@@ -214,6 +219,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: supportForm.orderMeasurement,
             packaging: supportForm.packaging,
+            unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
             source: supportForm.source.trim() || null
           });
@@ -235,6 +241,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
             orderMeasurement: supportForm.orderMeasurement,
             packaging: supportForm.packaging,
+            unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
             source: supportForm.source.trim() || null
           });

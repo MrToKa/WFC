@@ -14,8 +14,8 @@ const assignment = (
   childName: string,
   quantity: number,
   unit: StandardMaterialAssignment['unit'],
-  referencedMaterialCategory: StandardMaterialAssignment['referencedMaterialCategory'] =
-    'cable-installation-material',
+  referencedMaterialCategory: StandardMaterialAssignment['referencedMaterialCategory'] = 'cable-installation-material',
+  unitPrice = 0,
 ): StandardMaterialAssignment => ({
   id,
   ownerCategory,
@@ -30,6 +30,7 @@ const assignment = (
     description: null,
     dimensionMm: null,
     weightKg: null,
+    unitPrice,
     manufacturer: null,
     partNo: null,
     minimumOrderQuantity: 1,
@@ -55,6 +56,7 @@ describe('Standard Material expansion', () => {
         4,
         'pcs',
         'tray-installation-material',
+        1.25,
       ),
       assignment(
         'a2',
@@ -65,6 +67,7 @@ describe('Standard Material expansion', () => {
         2,
         'pcs',
         'tray-installation-material',
+        0.1,
       ),
     ];
 
@@ -77,6 +80,7 @@ describe('Standard Material expansion', () => {
         name: 'Fastener',
         quantity: 4,
         unit: 'pcs',
+        unitPrice: 1.25,
         depth: 1,
       }),
       expect.objectContaining({
@@ -85,6 +89,7 @@ describe('Standard Material expansion', () => {
         name: 'Washer',
         quantity: 8,
         unit: 'pcs',
+        unitPrice: 0.1,
         depth: 2,
       }),
     ]);
@@ -93,15 +98,7 @@ describe('Standard Material expansion', () => {
   it('multiplies recursive quantities, retains child units, and orders deterministically', () => {
     const assignments = [
       assignment('a1', 'cable-type', 'cable', 'gland', 'Cable gland', 2, 'pcs'),
-      assignment(
-        'a2',
-        'cable-installation-material',
-        'gland',
-        'washer',
-        'Washer',
-        3,
-        'meters',
-      ),
+      assignment('a2', 'cable-installation-material', 'gland', 'washer', 'Washer', 3, 'meters'),
     ];
 
     expect(expandStandardMaterialsFromAssignments(assignments, 'cable-type', 'cable')).toEqual([
@@ -124,32 +121,12 @@ describe('Standard Material expansion', () => {
 
   it('detects cycles with a clear domain error', () => {
     const assignments = [
-      assignment(
-        'a1',
-        'cable-installation-material',
-        'first',
-        'second',
-        'Second',
-        1,
-        'pcs',
-      ),
-      assignment(
-        'a2',
-        'cable-installation-material',
-        'second',
-        'first',
-        'First',
-        1,
-        'pcs',
-      ),
+      assignment('a1', 'cable-installation-material', 'first', 'second', 'Second', 1, 'pcs'),
+      assignment('a2', 'cable-installation-material', 'second', 'first', 'First', 1, 'pcs'),
     ];
 
     expect(() =>
-      expandStandardMaterialsFromAssignments(
-        assignments,
-        'cable-installation-material',
-        'first',
-      ),
+      expandStandardMaterialsFromAssignments(assignments, 'cable-installation-material', 'first'),
     ).toThrowError(StandardMaterialDomainError);
   });
 
@@ -164,6 +141,7 @@ describe('Standard Material expansion', () => {
         description: null,
         dimensionMm: 'M32',
         weightKg: 0.12,
+        unitPrice: 3.5,
         manufacturer: null,
         partNo: null,
         minimumOrderQuantity: 1,
@@ -184,6 +162,7 @@ describe('Standard Material expansion', () => {
         description: null,
         dimensionMm: 'M32',
         weightKg: 0.12,
+        unitPrice: 3.5,
         manufacturer: null,
         partNo: null,
         minimumOrderQuantity: 1,

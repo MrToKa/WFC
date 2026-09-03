@@ -25,6 +25,7 @@ export const MaterialCableTypeDetails = () => (
         value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,
       },
       { label: 'Packaging', value: material.packaging },
+      { label: 'Price', value: material.unitPrice },
       { label: 'Source', value: <MaterialSourceLink source={material.source} /> },
     ]}
   />

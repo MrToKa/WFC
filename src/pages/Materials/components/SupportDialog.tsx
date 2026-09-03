@@ -145,6 +145,21 @@ export const SupportDialog = ({
                 />
               </Field>
               <Field
+                label='Price'
+                required
+                validationState={formErrors.unitPrice ? 'error' : undefined}
+                validationMessage={formErrors.unitPrice}
+              >
+                <Input
+                  type='number'
+                  min={0}
+                  step='any'
+                  value={form.unitPrice}
+                  onChange={onFieldChange('unitPrice')}
+                  required
+                />
+              </Field>
+              <Field
                 label='Minimum order quantity'
                   required
                   validationState={formErrors.minimumOrderQuantity ? 'error' : undefined}

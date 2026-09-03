@@ -302,6 +302,8 @@ describe('ChangeOrdersTab', () => {
         sourceCatalog: 'tray-installation-material',
         sourceMaterialId: trayInstallationMaterialId,
         descriptionEn: 'Tray splice plate',
+        unitPrice: 6.5,
+        totalPrice: 65,
       };
       vi.mocked(api.fetchMaterialTrayInstallationMaterials).mockResolvedValueOnce({
         trayInstallationMaterials: [
@@ -318,6 +320,7 @@ describe('ChangeOrdersTab', () => {
             minimumOrderQuantity: 10,
             orderMeasurement: 'pcs',
             packaging: 'Box',
+            unitPrice: 6.5,
             source: null,
             createdAt: details.createdAt,
             updatedAt: details.updatedAt,
@@ -375,6 +378,7 @@ describe('ChangeOrdersTab', () => {
       );
       expect(await screen.findByText(`Edit ${documentName} item`)).toBeInTheDocument();
       expect(screen.getByLabelText('Description (EN)')).toHaveValue('Tray splice plate');
+      expect(screen.getByLabelText('Price')).toHaveValue(6.5);
     },
     15_000,
   );
@@ -557,6 +561,7 @@ describe('ChangeOrdersTab', () => {
           minimumOrderQuantity: 1,
           orderMeasurement: 'pcs',
           packaging: 'pcs',
+          unitPrice: 4.25,
           createdAt: details.createdAt,
           updatedAt: details.updatedAt,
         },

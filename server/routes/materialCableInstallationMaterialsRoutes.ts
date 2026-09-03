@@ -35,6 +35,7 @@ const MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS = {
   partNo: 'Part No.',
   dimensionMm: 'Dimension [mm]',
   weightKg: 'Weight [kg]',
+  unitPrice: 'Price',
   minimumOrder: 'Minimum order quantity',
   orderMeasurement: 'Order measurement',
   packaging: 'Packaging',
@@ -50,6 +51,11 @@ const MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES = {
   partNo: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.partNo, 'Part No'],
   dimensionMm: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.dimensionMm, 'Dimension'],
   weightKg: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.weightKg, 'Weight'],
+  unitPrice: [
+    MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.unitPrice,
+    'Unit price',
+    'Unit Price',
+  ],
   minimumOrder: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder],
   orderMeasurement: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, 'Measurement'],
   packaging: [MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging],
@@ -76,6 +82,7 @@ const selectMaterialCableInstallationMaterialsQuery = `
     part_no,
     dimension_mm,
     weight_kg,
+    unit_price,
     minimum_order_quantity,
     order_measurement,
     packaging,
@@ -129,6 +136,7 @@ materialCableInstallationMaterialsRouter.post(
       partNo,
       dimensionMm,
       weightKg,
+      unitPrice,
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
@@ -165,12 +173,13 @@ materialCableInstallationMaterialsRouter.post(
             part_no
             ,dimension_mm
             ,weight_kg
+            ,unit_price
             ,minimum_order_quantity
             ,order_measurement
             ,packaging
             ,source
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           RETURNING
             id,
             type,
@@ -181,6 +190,7 @@ materialCableInstallationMaterialsRouter.post(
             part_no,
             dimension_mm,
             weight_kg,
+            unit_price,
             minimum_order_quantity,
             order_measurement,
             packaging,
@@ -198,6 +208,7 @@ materialCableInstallationMaterialsRouter.post(
           normalizeOptionalString(partNo ?? null),
           normalizeOptionalString(dimensionMm ?? null),
           weightKg ?? null,
+          unitPrice ?? 0,
           minimumOrderQuantity ?? 1,
           orderMeasurement ?? 'pcs',
           packaging ?? 'pcs',
@@ -243,6 +254,7 @@ materialCableInstallationMaterialsRouter.patch(
       partNo,
       dimensionMm,
       weightKg,
+      unitPrice,
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
@@ -317,6 +329,11 @@ materialCableInstallationMaterialsRouter.patch(
       values.push(weightKg);
     }
 
+    if (unitPrice !== undefined) {
+      updates.push(`unit_price = $${index++}`);
+      values.push(unitPrice);
+    }
+
     if (minimumOrderQuantity !== undefined) {
       updates.push(`minimum_order_quantity = $${index++}`);
       values.push(minimumOrderQuantity);
@@ -355,6 +372,7 @@ materialCableInstallationMaterialsRouter.patch(
             part_no,
             dimension_mm,
             weight_kg,
+            unit_price,
             minimum_order_quantity,
             order_measurement,
             packaging,
@@ -488,6 +506,7 @@ materialCableInstallationMaterialsRouter.post(
       partNo: string | null;
       dimensionMm: string | null;
       weightKg: number | null;
+      unitPrice: number | null;
       minimumOrderQuantity: number;
       orderMeasurement: 'pcs' | 'pack' | 'meters';
       packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -562,6 +581,9 @@ materialCableInstallationMaterialsRouter.post(
         ),
         weightKg: readNonNegativeNumber(
           readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.weightKg),
+        ),
+        unitPrice: readNonNegativeNumber(
+          readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.unitPrice),
         ),
         minimumOrderQuantity: readPositiveNumber(
           readCell(row, MATERIAL_CABLE_INSTALLATION_EXCEL_HEADER_ALIASES.minimumOrder),
@@ -648,12 +670,13 @@ materialCableInstallationMaterialsRouter.post(
                 part_no = $5,
                 dimension_mm = $6,
                 weight_kg = $7,
-                minimum_order_quantity = $8,
-                order_measurement = $9,
-                packaging = $10,
-                source = $11,
+                unit_price = COALESCE($8, unit_price),
+                minimum_order_quantity = $9,
+                order_measurement = $10,
+                packaging = $11,
+                source = $12,
                 updated_at = NOW()
-              WHERE id = $12;
+              WHERE id = $13;
             `,
             [
               row.purpose,
@@ -663,6 +686,7 @@ materialCableInstallationMaterialsRouter.post(
               row.partNo,
               row.dimensionMm,
               row.weightKg,
+              row.unitPrice,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -684,12 +708,13 @@ materialCableInstallationMaterialsRouter.post(
                 part_no
                 ,dimension_mm
                 ,weight_kg
+                ,unit_price
                 ,minimum_order_quantity
                 ,order_measurement
                 ,packaging
                 ,source
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
             `,
             [
               randomUUID(),
@@ -701,6 +726,7 @@ materialCableInstallationMaterialsRouter.post(
               row.partNo,
               row.dimensionMm,
               row.weightKg,
+              row.unitPrice ?? 0,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -763,6 +789,7 @@ materialCableInstallationMaterialsRouter.get(
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.partNo, width: 24 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.dimensionMm, width: 24 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.weightKg, width: 16 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.unitPrice, width: 16 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder, width: 22 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, width: 20 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging, width: 18 },
@@ -785,13 +812,16 @@ materialCableInstallationMaterialsRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: [['', '', '', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
+        rows: [['', '', '', '', '', '', '', '', 0, 1, 'pcs', 'pcs', '']],
       });
 
       table.commit();
 
       columns.forEach((column, index) => {
         worksheet.getColumn(index + 1).width = column.width;
+        if (column.name === MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.unitPrice) {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -840,6 +870,7 @@ materialCableInstallationMaterialsRouter.get(
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.partNo, width: 24 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.dimensionMm, width: 24 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.weightKg, width: 16 },
+        { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.unitPrice, width: 16 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.minimumOrder, width: 22 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.orderMeasurement, width: 20 },
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.packaging, width: 18 },
@@ -855,6 +886,7 @@ materialCableInstallationMaterialsRouter.get(
         row.part_no ?? '',
         row.dimension_mm ?? '',
         row.weight_kg === null ? '' : Number(row.weight_kg),
+        Number(row.unit_price),
         Number(row.minimum_order_quantity),
         row.order_measurement,
         row.packaging,
@@ -877,13 +909,19 @@ materialCableInstallationMaterialsRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '', '', 1, 'pcs', 'pcs', '']],
+        rows:
+          rows.length > 0
+            ? rows
+            : [['', '', '', '', '', '', '', '', 0, 1, 'pcs', 'pcs', '']],
       });
 
       table.commit();
 
       columns.forEach((column, index) => {
         worksheet.getColumn(index + 1).width = column.width;
+        if (column.name === MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.unitPrice) {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+        }
       });
 
       const buffer = await workbook.xlsx.writeBuffer();

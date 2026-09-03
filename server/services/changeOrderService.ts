@@ -13,10 +13,7 @@ import {
   type ChangeOrderSourceCatalog,
   type ChangeOrderSummary,
 } from '../models/changeOrder.js';
-import type {
-  ExpandedStandardMaterial,
-  StandardMaterialUnit,
-} from '../models/standardMaterial.js';
+import type { ExpandedStandardMaterial, StandardMaterialUnit } from '../models/standardMaterial.js';
 import {
   resolveChangeOrderCatalogSnapshot,
   type ChangeOrderItemSnapshot,
@@ -97,6 +94,7 @@ export const snapshotExpandedStandardMaterial = (
   dimensionMm: material.dimensionMm,
   material: material.material,
   weightKg: material.weightKg,
+  unitPrice: material.unitPrice,
   manufacturer: material.manufacturer,
   manufacturerPartNo: material.partNo,
   minimumOrderQuantity: material.minimumOrderQuantity,
@@ -441,14 +439,14 @@ const insertSnapshot = async (
     `
       INSERT INTO project_change_order_items (
         id, change_order_id, sort_order, source_catalog, source_material_id,
-        unit, description_en, clear_description, dimension_mm, material, weight_kg,
+        unit, description_en, clear_description, dimension_mm, material, weight_kg, unit_price,
         manufacturer, manufacturer_part_no, line_kind, parent_item_id, quantity_per_parent,
         source_standard_material_assignment_ids, design_quantity, order_quantity,
         minimum_order_quantity, order_measurement, packaging, packaging_quantity,
         packaging_unit, ordered_quantity, ordered_unit, revision_number
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17::uuid[], $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+        $15, $16, $17, $18::uuid[], $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
       )
       RETURNING ${ITEM_COLUMNS}
     `,
@@ -464,6 +462,7 @@ const insertSnapshot = async (
       snapshot.dimensionMm,
       snapshot.material,
       snapshot.weightKg,
+      snapshot.unitPrice,
       snapshot.manufacturer,
       snapshot.manufacturerPartNo,
       provenance?.lineKind ?? 'manual',
@@ -802,8 +801,7 @@ export const updateChangeOrderItem = async (
     }
     let normalizedUpdated = updated;
     const minimumOrderQuantity =
-      updated.minimum_order_quantity === null ||
-      updated.minimum_order_quantity === undefined
+      updated.minimum_order_quantity === null || updated.minimum_order_quantity === undefined
         ? null
         : Number(updated.minimum_order_quantity);
     if (minimumOrderQuantity && updated.order_measurement) {

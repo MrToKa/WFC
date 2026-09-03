@@ -92,6 +92,7 @@ export const SupportsTable = ({
               </th>
               <th className={styles.tableHeadCell}>Minimum order</th>
               <th className={styles.tableHeadCell}>Packaging</th>
+              <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>Price</th>
               <th className={styles.tableHeadCell}>Actions</th>
             </tr>
           </thead>
@@ -118,6 +119,9 @@ export const SupportsTable = ({
                     {support.minimumOrderQuantity} {support.orderMeasurement}
                   </td>
                   <td className={styles.tableCell}>{support.packaging}</td>
+                  <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                    {formatNumeric(support.unitPrice)}
+                  </td>
                   <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
                     <Button size="small" onClick={() => onDetails(support)}>
                       Details

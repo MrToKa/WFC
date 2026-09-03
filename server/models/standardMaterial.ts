@@ -8,8 +8,7 @@ export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
 
 export const STANDARD_MATERIAL_UNITS = ['pcs', 'meters', 'pcs/m'] as const;
 
-export type StandardMaterialOwnerCategory =
-  (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
+export type StandardMaterialOwnerCategory = (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
 
 export const STANDARD_MATERIAL_REFERENCE_CATEGORIES = [
   'cable-installation-material',
@@ -33,6 +32,7 @@ export type StandardMaterialAssignmentRow = {
   referenced_material_description: string | null;
   referenced_material_dimension_mm: string | null;
   referenced_material_weight_kg: string | number | null;
+  referenced_material_unit_price: string | number;
   referenced_material_manufacturer: string | null;
   referenced_material_part_no: string | null;
   referenced_material_minimum_order_quantity: string | number;
@@ -59,6 +59,7 @@ export type StandardMaterialAssignment = {
     description: string | null;
     dimensionMm: string | null;
     weightKg: number | null;
+    unitPrice: number;
     manufacturer: string | null;
     partNo: string | null;
     minimumOrderQuantity: number;
@@ -97,6 +98,7 @@ export const mapStandardMaterialAssignmentRow = (
     description: row.referenced_material_description ?? null,
     dimensionMm: row.referenced_material_dimension_mm ?? null,
     weightKg: toNumberOrNull(row.referenced_material_weight_kg),
+    unitPrice: toNumberOrNull(row.referenced_material_unit_price) ?? 0,
     manufacturer: row.referenced_material_manufacturer ?? null,
     partNo: row.referenced_material_part_no ?? null,
     minimumOrderQuantity: Number(row.referenced_material_minimum_order_quantity),
@@ -119,6 +121,7 @@ export type ExpandedStandardMaterial = {
   description: string | null;
   dimensionMm: string | null;
   weightKg: number | null;
+  unitPrice: number;
   manufacturer: string | null;
   partNo: string | null;
   minimumOrderQuantity: number;

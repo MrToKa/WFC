@@ -41,6 +41,7 @@ export type CableTypeFormState = {
   minimumOrderQuantity: string;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  unitPrice: string;
   source: string;
 };
 
@@ -61,6 +62,7 @@ export const emptyCableTypeForm: CableTypeFormState = {
   minimumOrderQuantity: '1',
   orderMeasurement: 'meters',
   packaging: 'm',
+  unitPrice: '0',
   source: '',
 };
 
@@ -77,6 +79,7 @@ export const toCableTypeFormState = (cableType: CableType): CableTypeFormState =
   minimumOrderQuantity: '1',
   orderMeasurement: 'meters',
   packaging: 'm',
+  unitPrice: '0',
   source: '',
 });
 
@@ -155,18 +158,23 @@ export const buildMaterialCableTypeInput = (
     minimumOrderQuantity: number;
     orderMeasurement: 'pcs' | 'pack' | 'meters';
     packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+    unitPrice: number;
     source: string | null;
   };
   errors: CableTypeFormErrors;
 } => {
   const { input, errors } = buildCableTypeInput(values);
   const minimumOrderResult = parseNumberInput(values.minimumOrderQuantity);
+  const unitPriceResult = parseNumberInput(values.unitPrice);
   if (
     minimumOrderResult.error ||
     minimumOrderResult.numeric === null ||
     minimumOrderResult.numeric <= 0
   ) {
     errors.minimumOrderQuantity = 'Minimum order quantity must be greater than zero';
+  }
+  if (unitPriceResult.error || unitPriceResult.numeric === null) {
+    errors.unitPrice = 'Price must be a non-negative number';
   }
 
   return {
@@ -183,6 +191,7 @@ export const buildMaterialCableTypeInput = (
       minimumOrderQuantity: minimumOrderResult.numeric ?? 1,
       orderMeasurement: values.orderMeasurement,
       packaging: values.packaging,
+      unitPrice: unitPriceResult.numeric ?? 0,
       source: toNullableString(values.source),
     },
     errors,

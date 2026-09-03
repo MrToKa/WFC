@@ -22,6 +22,7 @@ export const MaterialTrayDetails = () => (
         value: `${material.minimumOrderQuantity} ${material.orderMeasurement}`,
       },
       { label: 'Packaging', value: material.packaging },
+      { label: 'Price', value: material.unitPrice },
       { label: 'Load curve', value: material.loadCurveName ?? '—' },
       { label: 'Image template', value: material.imageTemplateFileName ?? '—' },
       { label: 'Source', value: <MaterialSourceLink source={material.source} /> },

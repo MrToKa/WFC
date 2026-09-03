@@ -20,14 +20,19 @@ describe('cable installation material form', () => {
       minimumOrderQuantity: 1,
       orderMeasurement: 'pcs',
       packaging: 'pcs',
+      unitPrice: 12.5,
       source: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
-    expect(form).toMatchObject({ dimensionMm: '32 × 45', weightKg: '0.18' });
+    expect(form).toMatchObject({
+      dimensionMm: '32 × 45',
+      weightKg: '0.18',
+      unitPrice: '12.5',
+    });
     expect(buildMaterialCableInstallationMaterialInput(form)).toMatchObject({
-      input: { dimensionMm: '32 × 45', weightKg: 0.18 },
+      input: { dimensionMm: '32 × 45', weightKg: 0.18, unitPrice: 12.5 },
       errors: {},
     });
   });
@@ -51,5 +56,21 @@ describe('cable installation material form', () => {
 
     expect(result.errors.weightKg).toBeUndefined();
     expect(result.input.weightKg).toBeNull();
+  });
+
+  it('rejects a negative or empty price', () => {
+    const negative = buildMaterialCableInstallationMaterialInput({
+      ...emptyCableInstallationMaterialForm,
+      type: 'Cable gland',
+      unitPrice: '-0.1',
+    });
+    const empty = buildMaterialCableInstallationMaterialInput({
+      ...emptyCableInstallationMaterialForm,
+      type: 'Cable gland',
+      unitPrice: '',
+    });
+
+    expect(negative.errors.unitPrice).toBe('Price must be a non-negative number');
+    expect(empty.errors.unitPrice).toBe('Price must be a non-negative number');
   });
 });

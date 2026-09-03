@@ -36,10 +36,7 @@ export class StandardMaterialDomainError extends Error {
   }
 }
 
-const assignmentSelect = (
-  category: StandardMaterialOwnerCategory,
-  whereClause: string,
-): string => {
+const assignmentSelect = (category: StandardMaterialOwnerCategory, whereClause: string): string => {
   const capability = getMaterialCapability(category);
   return `
     SELECT
@@ -54,6 +51,7 @@ const assignmentSelect = (
       child.description AS referenced_material_description,
       child.dimension_mm AS referenced_material_dimension_mm,
       child.weight_kg AS referenced_material_weight_kg,
+      child.unit_price AS referenced_material_unit_price,
       child.manufacturer AS referenced_material_manufacturer,
       child.part_no AS referenced_material_part_no,
       child.minimum_order_quantity AS referenced_material_minimum_order_quantity,
@@ -111,9 +109,7 @@ const referencedMaterialExists = async (
   return Boolean(result.rows[0]);
 };
 
-const loadAllAssignments = async (
-  queryable: Queryable,
-): Promise<StandardMaterialAssignment[]> => {
+const loadAllAssignments = async (queryable: Queryable): Promise<StandardMaterialAssignment[]> => {
   const categories: StandardMaterialOwnerCategory[] = [
     'cable-type',
     'cable-installation-material',
@@ -122,9 +118,7 @@ const loadAllAssignments = async (
     'support',
   ];
   const result = await queryable.query<StandardMaterialAssignmentRow>(
-    categories
-      .map((category) => `(${assignmentSelect(category, '')})`)
-      .join('\nUNION ALL\n'),
+    categories.map((category) => `(${assignmentSelect(category, '')})`).join('\nUNION ALL\n'),
   );
   return result.rows.map(mapStandardMaterialAssignmentRow);
 };
@@ -217,7 +211,10 @@ const expandFromGraph = (
     }
     const cached = memo.get(key);
     if (cached) {
-      return cached.map((item) => ({ ...item, sourceAssignmentIds: [...item.sourceAssignmentIds] }));
+      return cached.map((item) => ({
+        ...item,
+        sourceAssignmentIds: [...item.sourceAssignmentIds],
+      }));
     }
 
     const nextPath = new Set(path);
@@ -234,6 +231,7 @@ const expandFromGraph = (
         description: child.description,
         dimensionMm: child.dimensionMm,
         weightKg: child.weightKg,
+        unitPrice: child.unitPrice,
         manufacturer: child.manufacturer,
         partNo: child.partNo,
         minimumOrderQuantity: child.minimumOrderQuantity,
@@ -246,11 +244,7 @@ const expandFromGraph = (
         depth: 1,
       });
 
-      const descendants = expandOwner(
-        assignment.referencedMaterialCategory,
-        child.id,
-        nextPath,
-      );
+      const descendants = expandOwner(assignment.referencedMaterialCategory, child.id, nextPath);
       for (const descendant of descendants) {
         expanded.push({
           ...descendant,
@@ -272,8 +266,7 @@ export const expandStandardMaterialsFromAssignments = (
   assignments: StandardMaterialAssignment[],
   category: StandardMaterialOwnerCategory,
   ownerId: string,
-): ExpandedStandardMaterial[] =>
-  expandFromGraph(buildGraph(assignments), category, ownerId);
+): ExpandedStandardMaterial[] => expandFromGraph(buildGraph(assignments), category, ownerId);
 
 export const expandStandardMaterials = async (
   queryable: Queryable,
@@ -305,11 +298,11 @@ const assertAssignmentValid = async (
       `Referenced ${capability.referencedMaterialLabel} was not found.`,
     );
   }
-  if (category === capability.referencedMaterialCategory && ownerId === input.referencedMaterialId) {
-    throw new StandardMaterialDomainError(
-      'SELF_REFERENCE',
-      'A material cannot reference itself.',
-    );
+  if (
+    category === capability.referencedMaterialCategory &&
+    ownerId === input.referencedMaterialId
+  ) {
+    throw new StandardMaterialDomainError('SELF_REFERENCE', 'A material cannot reference itself.');
   }
 
   const duplicate = await queryable.query(
@@ -346,6 +339,7 @@ const assertAssignmentValid = async (
       description: null,
       dimensionMm: null,
       weightKg: null,
+      unitPrice: 0,
       manufacturer: null,
       partNo: null,
       minimumOrderQuantity: 1,

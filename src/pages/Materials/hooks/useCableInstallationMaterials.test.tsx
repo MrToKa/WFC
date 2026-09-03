@@ -30,6 +30,7 @@ const baseMaterial: MaterialCableInstallationMaterial = {
   minimumOrderQuantity: 1,
   orderMeasurement: 'pcs',
   packaging: 'Box',
+  unitPrice: 0,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

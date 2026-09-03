@@ -12,6 +12,7 @@ export type MaterialTray = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  unitPrice: number;
   source?: string | null;
   loadCurveId: string | null;
   loadCurveName: string | null;
@@ -36,6 +37,7 @@ export type MaterialCableType = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  unitPrice: number;
   source?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -54,6 +56,7 @@ export type MaterialCableInstallationMaterial = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  unitPrice: number;
   source?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -72,6 +75,7 @@ export type MaterialSupport = {
   minimumOrderQuantity: number;
   orderMeasurement: MaterialOrderMeasurement;
   packaging: MaterialPackaging;
+  unitPrice: number;
   source?: string | null;
   imageTemplateId: string | null;
   imageTemplateFileName: string | null;
@@ -169,6 +173,7 @@ export type MaterialCableTypeInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  unitPrice?: number;
   source?: string | null;
 };
 
@@ -184,6 +189,7 @@ export type MaterialCableInstallationMaterialInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  unitPrice?: number;
   source?: string | null;
 };
 
@@ -201,6 +207,7 @@ export type MaterialTrayInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  unitPrice?: number;
   source?: string | null;
 };
 
@@ -215,6 +222,7 @@ export type MaterialSupportInput = {
   minimumOrderQuantity?: number;
   orderMeasurement?: MaterialOrderMeasurement;
   packaging?: MaterialPackaging;
+  unitPrice?: number;
   source?: string | null;
 };
 
@@ -258,6 +266,7 @@ export type StandardMaterialAssignment = {
     minimumOrderQuantity: number;
     orderMeasurement: MaterialOrderMeasurement;
     packaging: MaterialPackaging;
+    unitPrice: number;
   };
   quantity: number;
   unit: StandardMaterialUnit;

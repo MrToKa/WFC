@@ -63,9 +63,9 @@ describe('Change Order document type scoping', () => {
     ]);
 
     databaseMocks.query.mockResolvedValueOnce({ rowCount: 0 });
-    await expect(
-      deleteChangeOrder('project-id', 'internal-ncr', 'document-id'),
-    ).resolves.toBe(false);
+    await expect(deleteChangeOrder('project-id', 'internal-ncr', 'document-id')).resolves.toBe(
+      false,
+    );
     expect(queryCall(databaseMocks.query, 3)[0]).toContain('document_type = $3');
     expect(queryCall(databaseMocks.query, 3)[1]).toEqual([
       'document-id',
@@ -73,9 +73,7 @@ describe('Change Order document type scoping', () => {
       'internal-ncr',
     ]);
 
-    databaseMocks.query
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [] });
+    databaseMocks.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
     await expect(
       createChangeOrder('project-id', 'internal-ncr', 'user-id', {
         title: 'NCR 1',
@@ -97,21 +95,11 @@ describe('Change Order document type scoping', () => {
       .mockResolvedValueOnce({});
 
     await expect(
-      addChangeOrderItem(
-        'project-id',
-        'internal-ncr',
-        'document-id',
-        'support',
-        'material-id',
-      ),
+      addChangeOrderItem('project-id', 'internal-ncr', 'document-id', 'support', 'material-id'),
     ).resolves.toBeNull();
 
     expect(queryCall(clientQuery, 1)[0]).toContain('document_type = $3');
-    expect(queryCall(clientQuery, 1)[1]).toEqual([
-      'document-id',
-      'project-id',
-      'internal-ncr',
-    ]);
+    expect(queryCall(clientQuery, 1)[1]).toEqual(['document-id', 'project-id', 'internal-ncr']);
   });
 
   it('copies the current header revision when adding a material', async () => {
@@ -130,6 +118,7 @@ describe('Change Order document type scoping', () => {
               width_mm: null,
               length_mm: null,
               weight_kg: null,
+              unit_price: '12.5',
               minimum_order_quantity: 1,
               order_measurement: 'pcs',
               packaging: 'pcs',
@@ -158,7 +147,7 @@ describe('Change Order document type scoping', () => {
               ordered_quantity: 0,
               ordered_unit: 'pcs',
               description_en: 'Support',
-              unit_price: 0,
+              unit_price: 12.5,
               revision_number: '07',
               created_at: '2026-09-02T00:00:00.000Z',
               updated_at: '2026-09-02T00:00:00.000Z',
@@ -171,14 +160,16 @@ describe('Change Order document type scoping', () => {
 
     await expect(
       addChangeOrderItem('project-id', 'change-order', 'document-id', 'support', 'material-id'),
-    ).resolves.toMatchObject({ revisionNumber: '07' });
+    ).resolves.toMatchObject({ revisionNumber: '07', unitPrice: 12.5 });
 
     const insertCall = clientQuery.mock.calls.find(([sql]) =>
       String(sql).includes('INSERT INTO project_change_order_items'),
     ) as [string, unknown[]] | undefined;
     expect(insertCall).toBeDefined();
+    expect(insertCall?.[0]).toContain('unit_price');
+    expect(insertCall?.[1][11]).toBe(12.5);
     expect(insertCall?.[0]).toContain('revision_number');
-    expect(insertCall?.[1][26]).toBe('07');
+    expect(insertCall?.[1][27]).toBe('07');
   });
 
   it.each(['change-order', 'internal-ncr'] as const)(
@@ -199,6 +190,7 @@ describe('Change Order document type scoping', () => {
                 width_mm: null,
                 length_mm: null,
                 weight_kg: null,
+                unit_price: '8',
                 minimum_order_quantity: 1,
                 order_measurement: 'pcs',
                 packaging: 'pcs',
@@ -212,6 +204,7 @@ describe('Change Order document type scoping', () => {
         if (sql.includes('UNION ALL')) {
           expect(sql).toContain('child.dimension_mm AS referenced_material_dimension_mm');
           expect(sql).toContain('child.weight_kg AS referenced_material_weight_kg');
+          expect(sql).toContain('child.unit_price AS referenced_material_unit_price');
           return {
             rows: [
               {
@@ -226,6 +219,7 @@ describe('Change Order document type scoping', () => {
                 referenced_material_description: 'Cable gland',
                 referenced_material_dimension_mm: '32 x 45',
                 referenced_material_weight_kg: '0.18',
+                referenced_material_unit_price: '2.75',
                 referenced_material_manufacturer: 'Maker',
                 referenced_material_part_no: 'M32',
                 referenced_material_minimum_order_quantity: '1',
@@ -256,23 +250,23 @@ describe('Change Order document type scoping', () => {
                 dimension_mm: input[8],
                 material: input[9],
                 weight_kg: input[10],
-                manufacturer: input[11],
-                manufacturer_part_no: input[12],
-                line_kind: input[13],
-                parent_item_id: input[14],
-                quantity_per_parent: input[15],
-                source_standard_material_assignment_ids: input[16],
-                design_quantity: input[17],
-                order_quantity: input[18],
-                minimum_order_quantity: input[19],
-                order_measurement: input[20],
-                packaging: input[21],
-                packaging_quantity: input[22],
-                packaging_unit: input[23],
-                ordered_quantity: input[24],
-                ordered_unit: input[25],
-                revision_number: input[26],
-                unit_price: 0,
+                unit_price: input[11],
+                manufacturer: input[12],
+                manufacturer_part_no: input[13],
+                line_kind: input[14],
+                parent_item_id: input[15],
+                quantity_per_parent: input[16],
+                source_standard_material_assignment_ids: input[17],
+                design_quantity: input[18],
+                order_quantity: input[19],
+                minimum_order_quantity: input[20],
+                order_measurement: input[21],
+                packaging: input[22],
+                packaging_quantity: input[23],
+                packaging_unit: input[24],
+                ordered_quantity: input[25],
+                ordered_unit: input[26],
+                revision_number: input[27],
                 created_at: '2026-09-02T00:00:00.000Z',
                 updated_at: '2026-09-02T00:00:00.000Z',
               },
@@ -295,7 +289,8 @@ describe('Change Order document type scoping', () => {
         6: 'Cable gland M32',
         8: '32 x 45',
         10: 0.18,
-        13: 'inherited',
+        11: 2.75,
+        14: 'inherited',
       });
       expect(
         clientQuery.mock.calls.some(
@@ -378,10 +373,6 @@ describe('Change Order document type scoping', () => {
     ).resolves.toBeNull();
 
     expect(queryCall(clientQuery, 1)[0]).toContain('document_type = $3');
-    expect(queryCall(clientQuery, 1)[1]).toEqual([
-      'document-id',
-      'project-id',
-      'internal-ncr',
-    ]);
+    expect(queryCall(clientQuery, 1)[1]).toEqual(['document-id', 'project-id', 'internal-ncr']);
   });
 });

@@ -513,6 +513,11 @@ const selectMaterialCableTypeDetailsQuery = `
     remarks,
     diameter_mm,
     weight_kg_per_m,
+    unit_price,
+    minimum_order_quantity,
+    order_measurement,
+    packaging,
+    source,
     created_at,
     updated_at
   FROM material_cable_types
@@ -533,6 +538,13 @@ const selectMaterialCableInstallationMaterialDetailsQuery = `
     description,
     manufacturer,
     part_no,
+    dimension_mm,
+    weight_kg,
+    unit_price,
+    minimum_order_quantity,
+    order_measurement,
+    packaging,
+    source,
     created_at,
     updated_at
   FROM material_cable_installation_materials

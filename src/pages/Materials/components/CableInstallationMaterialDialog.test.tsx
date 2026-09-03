@@ -51,8 +51,16 @@ describe('CableInstallationMaterialDialog', () => {
   it.each(['create', 'edit'] as const)('shows dimension and weight inputs in %s mode', (mode) => {
     render(<TestDialog mode={mode} />);
 
-      expect(screen.getByRole('textbox', { name: 'Dimension [mm]' })).toBeInTheDocument();
-      expect(screen.getByRole('spinbutton', { name: 'Weight [kg]' })).not.toBeRequired();
+    expect(screen.getByRole('textbox', { name: 'Dimension [mm]' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Weight [kg]' })).not.toBeRequired();
+  });
+
+  it.each(['create', 'edit'] as const)('shows a required Price input in %s mode', (mode) => {
+    render(<TestDialog mode={mode} />);
+
+    const priceInput = screen.getByRole('spinbutton', { name: 'Price' });
+    expect(priceInput).toHaveValue(0);
+    expect(priceInput).toBeRequired();
   });
 
   it.each(['create', 'edit'] as const)('allows a new purpose to be typed in %s mode', (mode) => {

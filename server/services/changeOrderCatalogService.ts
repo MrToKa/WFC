@@ -17,6 +17,7 @@ export type ChangeOrderItemSnapshot = {
   dimensionMm: string | null;
   material: string | null;
   weightKg: number | null;
+  unitPrice: number;
   manufacturer: string | null;
   manufacturerPartNo: string | null;
   minimumOrderQuantity: number;
@@ -34,6 +35,7 @@ export type CableTypeCatalogRecord = {
   part_no: string | null;
   diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  unit_price: string | number;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -49,6 +51,7 @@ export type CableInstallationMaterialCatalogRecord = {
   part_no: string | null;
   dimension_mm: string | null;
   weight_kg: string | number | null;
+  unit_price: string | number;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -64,6 +67,7 @@ export type TrayCatalogRecord = {
   rung_height_mm: string | number | null;
   width_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  unit_price: string | number;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -77,6 +81,7 @@ export type SupportCatalogRecord = {
   width_mm: string | number | null;
   length_mm: string | number | null;
   weight_kg: string | number | null;
+  unit_price: string | number;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -121,6 +126,7 @@ export const snapshotCableType = (record: CableTypeCatalogRecord): ChangeOrderIt
       : String(record.diameter_mm),
   material: firstText(record.material),
   weightKg: toNumberOrNull(record.weight_kg_per_m),
+  unitPrice: toNumberOrNull(record.unit_price) ?? 0,
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: firstText(record.part_no),
   minimumOrderQuantity: Number(record.minimum_order_quantity),
@@ -139,6 +145,7 @@ export const snapshotCableInstallationMaterial = (
   dimensionMm: firstText(record.dimension_mm),
   material: firstText(record.material),
   weightKg: toNumberOrNull(record.weight_kg),
+  unitPrice: toNumberOrNull(record.unit_price) ?? 0,
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: firstText(record.part_no),
   minimumOrderQuantity: Number(record.minimum_order_quantity),
@@ -157,6 +164,7 @@ export const snapshotTrayInstallationMaterial = (
   dimensionMm: firstText(record.dimension_mm),
   material: firstText(record.material),
   weightKg: toNumberOrNull(record.weight_kg),
+  unitPrice: toNumberOrNull(record.unit_price) ?? 0,
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: firstText(record.part_no),
   minimumOrderQuantity: Number(record.minimum_order_quantity),
@@ -177,6 +185,7 @@ export const snapshotTray = (record: TrayCatalogRecord): ChangeOrderItemSnapshot
   ]),
   material: null,
   weightKg: toNumberOrNull(record.weight_kg_per_m),
+  unitPrice: toNumberOrNull(record.unit_price) ?? 0,
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: null,
   minimumOrderQuantity: Number(record.minimum_order_quantity),
@@ -197,6 +206,7 @@ export const snapshotSupport = (record: SupportCatalogRecord): ChangeOrderItemSn
   ]),
   material: null,
   weightKg: toNumberOrNull(record.weight_kg),
+  unitPrice: toNumberOrNull(record.unit_price) ?? 0,
   manufacturer: firstText(record.manufacturer),
   manufacturerPartNo: null,
   minimumOrderQuantity: Number(record.minimum_order_quantity),
@@ -220,7 +230,8 @@ export const resolveChangeOrderCatalogSnapshot = async (
       const result = await queryable.query<CableTypeCatalogRecord>(
         `SELECT
            id, name, purpose, material, description, manufacturer, part_no,
-           diameter_mm, weight_kg_per_m, minimum_order_quantity, order_measurement, packaging
+           diameter_mm, weight_kg_per_m, unit_price,
+           minimum_order_quantity, order_measurement, packaging
          FROM material_cable_types WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );
@@ -230,7 +241,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
     case 'cable-installation-material': {
       const result = await queryable.query<CableInstallationMaterialCatalogRecord>(
         `SELECT id, type, purpose, material, description, manufacturer, part_no,
-                dimension_mm, weight_kg,
+                dimension_mm, weight_kg, unit_price,
                 minimum_order_quantity, order_measurement, packaging
          FROM material_cable_installation_materials WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
@@ -241,7 +252,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
     case 'tray-installation-material': {
       const result = await queryable.query<TrayInstallationMaterialCatalogRecord>(
         `SELECT id, type, purpose, material, description, manufacturer, part_no,
-                dimension_mm, weight_kg,
+                dimension_mm, weight_kg, unit_price,
                 minimum_order_quantity, order_measurement, packaging
          FROM material_tray_installation_materials WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
@@ -252,7 +263,8 @@ export const resolveChangeOrderCatalogSnapshot = async (
     case 'tray': {
       const result = await queryable.query<TrayCatalogRecord>(
         `SELECT id, tray_type, manufacturer, height_mm, rung_height_mm, width_mm,
-                weight_kg_per_m, minimum_order_quantity, order_measurement, packaging
+                weight_kg_per_m, unit_price,
+                minimum_order_quantity, order_measurement, packaging
          FROM material_trays WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );
@@ -262,7 +274,8 @@ export const resolveChangeOrderCatalogSnapshot = async (
     case 'support': {
       const result = await queryable.query<SupportCatalogRecord>(
         `SELECT id, support_type, manufacturer, height_mm, width_mm, length_mm,
-                weight_kg, minimum_order_quantity, order_measurement, packaging
+                weight_kg, unit_price,
+                minimum_order_quantity, order_measurement, packaging
          FROM material_supports WHERE id = $1 LIMIT 1`,
         [sourceMaterialId],
       );

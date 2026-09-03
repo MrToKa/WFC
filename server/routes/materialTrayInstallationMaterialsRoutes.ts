@@ -35,6 +35,7 @@ const EXCEL_HEADERS = {
   partNo: 'Part No.',
   dimensionMm: 'Dimension [mm]',
   weightKg: 'Weight [kg]',
+  unitPrice: 'Price',
   minimumOrder: 'Minimum order quantity',
   orderMeasurement: 'Order measurement',
   packaging: 'Packaging',
@@ -50,6 +51,7 @@ const EXCEL_HEADER_ALIASES = {
   partNo: [EXCEL_HEADERS.partNo, 'Part No'],
   dimensionMm: [EXCEL_HEADERS.dimensionMm, 'Dimension'],
   weightKg: [EXCEL_HEADERS.weightKg, 'Weight'],
+  unitPrice: [EXCEL_HEADERS.unitPrice, 'Unit price', 'Unit Price'],
   minimumOrder: [EXCEL_HEADERS.minimumOrder],
   orderMeasurement: [EXCEL_HEADERS.orderMeasurement, 'Measurement'],
   packaging: [EXCEL_HEADERS.packaging],
@@ -65,6 +67,7 @@ const EXCEL_COLUMNS = [
   { name: EXCEL_HEADERS.partNo, width: 24 },
   { name: EXCEL_HEADERS.dimensionMm, width: 24 },
   { name: EXCEL_HEADERS.weightKg, width: 16 },
+  { name: EXCEL_HEADERS.unitPrice, width: 16 },
   { name: EXCEL_HEADERS.minimumOrder, width: 22 },
   { name: EXCEL_HEADERS.orderMeasurement, width: 20 },
   { name: EXCEL_HEADERS.packaging, width: 18 },
@@ -80,6 +83,7 @@ const EMPTY_EXCEL_ROW: Array<string | number> = [
   '',
   '',
   '',
+  0,
   1,
   'pcs',
   'pcs',
@@ -103,6 +107,7 @@ const selectMaterialsQuery = `
     part_no,
     dimension_mm,
     weight_kg,
+    unit_price,
     minimum_order_quantity,
     order_measurement,
     packaging,
@@ -151,6 +156,9 @@ const buildWorkbook = async (
   table.commit();
   EXCEL_COLUMNS.forEach((column, index) => {
     worksheet.getColumn(index + 1).width = column.width;
+    if (column.name === EXCEL_HEADERS.unitPrice) {
+      worksheet.getColumn(index + 1).numFmt = '#,##0.00';
+    }
   });
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
@@ -198,9 +206,9 @@ materialTrayInstallationMaterialsRouter.post(
       const result = await pool.query<MaterialTrayInstallationMaterialRow>(
         `INSERT INTO material_tray_installation_materials (
            id, type, purpose, material, description, manufacturer, part_no,
-           dimension_mm, weight_kg, minimum_order_quantity, order_measurement,
+           dimension_mm, weight_kg, unit_price, minimum_order_quantity, order_measurement,
            packaging, source
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING *`,
         [
           randomUUID(),
@@ -212,6 +220,7 @@ materialTrayInstallationMaterialsRouter.post(
           normalizeOptionalString(data.partNo),
           normalizeOptionalString(data.dimensionMm),
           data.weightKg ?? null,
+          data.unitPrice ?? 0,
           data.minimumOrderQuantity ?? 1,
           data.orderMeasurement ?? 'pcs',
           data.packaging ?? 'pcs',
@@ -274,6 +283,7 @@ materialTrayInstallationMaterialsRouter.patch(
       add('dimension_mm', normalizeOptionalString(data.dimensionMm));
     }
     if (data.weightKg !== undefined) add('weight_kg', data.weightKg);
+    if (data.unitPrice !== undefined) add('unit_price', data.unitPrice);
     if (data.minimumOrderQuantity !== undefined) {
       add('minimum_order_quantity', data.minimumOrderQuantity);
     }
@@ -359,6 +369,7 @@ type PreparedImportRow = {
   partNo: string | null;
   dimensionMm: string | null;
   weightKg: number | null;
+  unitPrice: number | null;
   minimumOrderQuantity: number;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -438,6 +449,7 @@ const prepareImportRows = (
       partNo: readString(readCell(row, EXCEL_HEADER_ALIASES.partNo)),
       dimensionMm: readString(readCell(row, EXCEL_HEADER_ALIASES.dimensionMm)),
       weightKg: readNonNegativeNumber(readCell(row, EXCEL_HEADER_ALIASES.weightKg)),
+      unitPrice: readNonNegativeNumber(readCell(row, EXCEL_HEADER_ALIASES.unitPrice)),
       minimumOrderQuantity: readPositiveNumber(readCell(row, EXCEL_HEADER_ALIASES.minimumOrder)),
       orderMeasurement,
       packaging,
@@ -495,9 +507,10 @@ materialTrayInstallationMaterialsRouter.post(
             `UPDATE material_tray_installation_materials
              SET purpose = $1, material = $2, description = $3, manufacturer = $4,
                  part_no = $5, dimension_mm = $6, weight_kg = $7,
-                 minimum_order_quantity = $8, order_measurement = $9,
-                 packaging = $10, source = $11, updated_at = NOW()
-             WHERE id = $12`,
+                 unit_price = COALESCE($8, unit_price),
+                 minimum_order_quantity = $9, order_measurement = $10,
+                 packaging = $11, source = $12, updated_at = NOW()
+             WHERE id = $13`,
             [
               row.purpose,
               row.material,
@@ -506,6 +519,7 @@ materialTrayInstallationMaterialsRouter.post(
               row.partNo,
               row.dimensionMm,
               row.weightKg,
+              row.unitPrice,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -518,9 +532,9 @@ materialTrayInstallationMaterialsRouter.post(
           await client.query(
             `INSERT INTO material_tray_installation_materials (
                id, type, purpose, material, description, manufacturer, part_no,
-               dimension_mm, weight_kg, minimum_order_quantity, order_measurement,
+               dimension_mm, weight_kg, unit_price, minimum_order_quantity, order_measurement,
                packaging, source
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
             [
               randomUUID(),
               row.type,
@@ -531,6 +545,7 @@ materialTrayInstallationMaterialsRouter.post(
               row.partNo,
               row.dimensionMm,
               row.weightKg,
+              row.unitPrice ?? 0,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -601,6 +616,7 @@ materialTrayInstallationMaterialsRouter.get(
         row.part_no ?? '',
         row.dimension_mm ?? '',
         row.weight_kg === null ? '' : Number(row.weight_kg),
+        Number(row.unit_price),
         Number(row.minimum_order_quantity),
         row.order_measurement,
         row.packaging,

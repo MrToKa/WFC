@@ -6,6 +6,7 @@ export type MaterialTrayRow = {
   rung_height_mm: string | number | null;
   width_mm: string | number | null;
   weight_kg_per_m: string | number | null;
+  unit_price: string | number;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -39,6 +40,7 @@ export type PublicMaterialTray = {
   rungHeightMm: number | null;
   widthMm: number | null;
   weightKgPerM: number | null;
+  unitPrice: number;
   minimumOrderQuantity: number;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -60,6 +62,7 @@ export const mapMaterialTrayRow = (row: MaterialTrayRow): PublicMaterialTray => 
   rungHeightMm: toNumberOrNull(row.rung_height_mm),
   widthMm: toNumberOrNull(row.width_mm),
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
+  unitPrice: toNumberOrNull(row.unit_price) ?? 0,
   minimumOrderQuantity: toNumberOrNull(row.minimum_order_quantity) ?? 1,
   orderMeasurement: row.order_measurement,
   packaging: row.packaging,

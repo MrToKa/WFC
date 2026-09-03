@@ -127,6 +127,7 @@ const toMaterialCableTypeFormState = (
   minimumOrderQuantity: '1',
   orderMeasurement: 'meters',
   packaging: 'm',
+  unitPrice: '0',
   source: ''
 });
 

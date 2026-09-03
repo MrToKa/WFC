@@ -31,6 +31,7 @@ type CableTypesTabItem = Pick<
   minimumOrderQuantity?: number;
   orderMeasurement?: 'pcs' | 'pack' | 'meters';
   packaging?: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  unitPrice?: number;
 };
 
 type CableTypesTabProps<T extends CableTypesTabItem> = {
@@ -227,6 +228,9 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                   <>
                     <th className={styles.tableHeadCell}>Minimum order</th>
                     <th className={styles.tableHeadCell}>Packaging</th>
+                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                      Price
+                    </th>
                   </>
                 ) : null}
                 {showActions ? <th className={styles.tableHeadCell}>Actions</th> : null}
@@ -251,6 +255,9 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                           {cableType.minimumOrderQuantity} {cableType.orderMeasurement}
                         </td>
                         <td className={styles.tableCell}>{cableType.packaging ?? '—'}</td>
+                        <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                          {formatNumeric(cableType.unitPrice ?? null)}
+                        </td>
                       </>
                     ) : null}
                     {showActions ? (

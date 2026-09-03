@@ -192,6 +192,11 @@ const minimumOrderQuantityField = z
   .positive('Minimum order quantity must be greater than zero')
   .max(1_000_000)
   .optional();
+const materialUnitPriceField = z
+  .number({ invalid_type_error: 'Enter a unit price' })
+  .finite('Enter a finite unit price')
+  .nonnegative('Unit price must be non-negative')
+  .optional();
 const orderMeasurementField = z.enum(['pcs', 'pack', 'meters']).optional();
 const materialPackagingField = z.enum(['m', 'Package', 'Box', 'Drum', 'pcs']).optional();
 const materialSourceField = z
@@ -250,6 +255,7 @@ export const createMaterialCableTypeSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    unitPrice: materialUnitPriceField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
     packaging: materialPackagingField,
@@ -268,6 +274,7 @@ export const updateMaterialCableTypeSchema = z
     description: materialCableTypeStringField,
     manufacturer: materialCableTypeStringField,
     partNo: materialCableTypeStringField,
+    unitPrice: materialUnitPriceField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
     packaging: materialPackagingField,
@@ -285,6 +292,7 @@ export const updateMaterialCableTypeSchema = z
       value.description !== undefined ||
       value.manufacturer !== undefined ||
       value.partNo !== undefined ||
+      value.unitPrice !== undefined ||
       value.remarks !== undefined ||
       value.diameterMm !== undefined ||
       value.weightKgPerM !== undefined ||
@@ -305,6 +313,7 @@ export const createMaterialCableInstallationMaterialSchema = z
     partNo: materialCableTypeStringField,
     dimensionMm: z.string().trim().min(1).max(500).nullable().optional(),
     weightKg: cableTypeNumericField,
+    unitPrice: materialUnitPriceField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
     packaging: materialPackagingField,
@@ -322,6 +331,7 @@ export const updateMaterialCableInstallationMaterialSchema = z
     partNo: materialCableTypeStringField,
     dimensionMm: z.string().trim().min(1).max(500).nullable().optional(),
     weightKg: cableTypeNumericField,
+    unitPrice: materialUnitPriceField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
     packaging: materialPackagingField,
@@ -338,6 +348,7 @@ export const updateMaterialCableInstallationMaterialSchema = z
       value.partNo !== undefined ||
       value.dimensionMm !== undefined ||
       value.weightKg !== undefined ||
+      value.unitPrice !== undefined ||
       value.minimumOrderQuantity !== undefined ||
       value.orderMeasurement !== undefined ||
       value.packaging !== undefined ||
@@ -572,6 +583,7 @@ export const createMaterialTraySchema = z
     rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
     weightKgPerM: materialNumericField,
+    unitPrice: materialUnitPriceField,
     imageTemplateId: materialImageTemplateField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
@@ -588,6 +600,7 @@ export const createMaterialSupportSchema = z
     widthMm: materialNumericField,
     lengthMm: materialNumericField,
     weightKg: materialNumericField,
+    unitPrice: materialUnitPriceField,
     imageTemplateId: materialImageTemplateField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
@@ -604,6 +617,7 @@ export const updateMaterialTraySchema = z
     rungHeightMm: materialNumericField,
     widthMm: materialNumericField,
     weightKgPerM: materialNumericField,
+    unitPrice: materialUnitPriceField,
     loadCurveId: z.string().uuid().optional().nullable(),
     imageTemplateId: materialImageTemplateField,
     minimumOrderQuantity: minimumOrderQuantityField,
@@ -620,6 +634,7 @@ export const updateMaterialTraySchema = z
       value.rungHeightMm !== undefined ||
       value.widthMm !== undefined ||
       value.weightKgPerM !== undefined ||
+      value.unitPrice !== undefined ||
       value.loadCurveId !== undefined ||
       value.imageTemplateId !== undefined ||
       value.minimumOrderQuantity !== undefined ||
@@ -637,6 +652,7 @@ export const updateMaterialSupportSchema = z
     widthMm: materialNumericField,
     lengthMm: materialNumericField,
     weightKg: materialNumericField,
+    unitPrice: materialUnitPriceField,
     imageTemplateId: materialImageTemplateField,
     minimumOrderQuantity: minimumOrderQuantityField,
     orderMeasurement: orderMeasurementField,
@@ -652,6 +668,7 @@ export const updateMaterialSupportSchema = z
       value.widthMm !== undefined ||
       value.lengthMm !== undefined ||
       value.weightKg !== undefined ||
+      value.unitPrice !== undefined ||
       value.imageTemplateId !== undefined ||
       value.minimumOrderQuantity !== undefined ||
       value.orderMeasurement !== undefined ||

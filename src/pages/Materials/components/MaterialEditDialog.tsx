@@ -59,6 +59,7 @@ type FormState = {
   minimumOrderQuantity: string;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  unitPrice: string;
   source: string;
 };
 
@@ -82,6 +83,7 @@ const emptyForm: FormState = {
   minimumOrderQuantity: '1',
   orderMeasurement: 'pcs',
   packaging: 'pcs',
+  unitPrice: '0',
   source: '',
 };
 
@@ -97,6 +99,7 @@ const formFromMaterial = (
     minimumOrderQuantity: String(material.minimumOrderQuantity),
     orderMeasurement: material.orderMeasurement,
     packaging: material.packaging,
+    unitPrice: String(material.unitPrice),
     source: material.source ?? '',
   };
 
@@ -208,6 +211,12 @@ export const MaterialEditDialog = ({
       setError('Minimum order quantity must be greater than zero.');
       return;
     }
+    const normalizedUnitPrice = form.unitPrice.trim().replace(',', '.');
+    const unitPrice = Number(normalizedUnitPrice);
+    if (normalizedUnitPrice === '' || !Number.isFinite(unitPrice) || unitPrice < 0) {
+      setError('Price must be a non-negative number.');
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -228,6 +237,7 @@ export const MaterialEditDialog = ({
             minimumOrderQuantity,
             orderMeasurement: form.orderMeasurement,
             packaging: form.packaging,
+            unitPrice,
             source: nullableText(form.source),
           });
           break;
@@ -250,6 +260,7 @@ export const MaterialEditDialog = ({
             minimumOrderQuantity,
             orderMeasurement: form.orderMeasurement,
             packaging: form.packaging,
+            unitPrice,
             source: nullableText(form.source),
           });
           break;
@@ -265,6 +276,7 @@ export const MaterialEditDialog = ({
             minimumOrderQuantity,
             orderMeasurement: form.orderMeasurement,
             packaging: form.packaging,
+            unitPrice,
             source: nullableText(form.source),
           });
           break;
@@ -280,6 +292,7 @@ export const MaterialEditDialog = ({
             minimumOrderQuantity,
             orderMeasurement: form.orderMeasurement,
             packaging: form.packaging,
+            unitPrice,
             source: nullableText(form.source),
           });
           break;
@@ -297,10 +310,16 @@ export const MaterialEditDialog = ({
     }
   };
 
-  const textField = (label: string, field: keyof FormState, type: 'text' | 'url' = 'text') => (
+  const textField = (
+    label: string,
+    field: keyof FormState,
+    type: 'text' | 'url' | 'number' = 'text',
+  ) => (
     <Field label={label} required={field === 'name' || field === 'type'}>
       <Input
         type={type}
+        min={type === 'number' ? 0 : undefined}
+        step={type === 'number' ? 'any' : undefined}
         value={form[field]}
         onChange={(_, data) => setField(field, data.value)}
         required={field === 'name' || field === 'type'}
@@ -311,7 +330,7 @@ export const MaterialEditDialog = ({
   return (
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onDismiss()}>
       <DialogSurface>
-        <form onSubmit={(event) => void save(event)}>
+        <form noValidate onSubmit={(event) => void save(event)}>
           <DialogBody>
             <DialogTitle>Edit material</DialogTitle>
             <DialogContent className={styles.content}>
@@ -358,6 +377,7 @@ export const MaterialEditDialog = ({
                   {textField('Weight [kg]', 'weightKg')}
                 </>
               )}
+              {textField('Price', 'unitPrice', 'number')}
               <Field label="Minimum order quantity" required>
                 <Input
                   type="number"

@@ -17,13 +17,7 @@ import {
 describe('Change Order catalog snapshots', () => {
   it('multiplies inherited quantities for piece-based parent materials', () => {
     expect(
-      calculateInheritedChangeOrderQuantities(
-        'cable-installation-material',
-        4,
-        5,
-        2,
-        'pcs',
-      ),
+      calculateInheritedChangeOrderQuantities('cable-installation-material', 4, 5, 2, 'pcs'),
     ).toEqual({
       designQuantity: 8,
       orderQuantity: 10,
@@ -55,6 +49,7 @@ describe('Change Order catalog snapshots', () => {
         description: 'M8 tray fastener',
         dimensionMm: '8 x 40',
         weightKg: 0.04,
+        unitPrice: 1.25,
         manufacturer: 'Tray Co',
         partNo: 'TF-8',
         minimumOrderQuantity: 25,
@@ -72,6 +67,7 @@ describe('Change Order catalog snapshots', () => {
       descriptionEn: 'Tray fastener',
       dimensionMm: '8 x 40',
       weightKg: 0.04,
+      unitPrice: 1.25,
       manufacturerPartNo: 'TF-8',
     });
   });
@@ -130,6 +126,7 @@ describe('Change Order catalog snapshots', () => {
     expect(sql).not.toContain("AND item.line_kind = 'inherited'");
     expect(sql).toContain('FROM material_cable_installation_materials');
     expect(sql).toContain('FROM material_tray_installation_materials');
+    expect(sql).not.toContain('unit_price');
     expect(values).toEqual(['change-order-id', 'project-id', 'change-order']);
   });
 
@@ -144,6 +141,7 @@ describe('Change Order catalog snapshots', () => {
       part_no: 'C-1',
       diameter_mm: '12.5',
       weight_kg_per_m: '0.25',
+      unit_price: '7.5',
       minimum_order_quantity: '50',
       order_measurement: 'meters' as const,
       packaging: 'Drum' as const,
@@ -159,6 +157,7 @@ describe('Change Order catalog snapshots', () => {
       dimensionMm: '12.5',
       material: 'Copper',
       weightKg: 0.25,
+      unitPrice: 7.5,
       manufacturer: 'Cable Co',
       manufacturerPartNo: 'C-1',
       unit: 'meters',
@@ -180,6 +179,7 @@ describe('Change Order catalog snapshots', () => {
         part_no: null,
         dimension_mm: null,
         weight_kg: null,
+        unit_price: '0.35',
         minimum_order_quantity: 50,
         order_measurement: 'pcs',
         packaging: 'Package',
@@ -190,6 +190,7 @@ describe('Change Order catalog snapshots', () => {
       clearDescription: null,
       material: null,
       weightKg: null,
+      unitPrice: 0.35,
       manufacturer: null,
       manufacturerPartNo: null,
       unit: 'pcs',
@@ -211,6 +212,7 @@ describe('Change Order catalog snapshots', () => {
         part_no: 'TC-1',
         dimension_mm: '100 x 40',
         weight_kg: '0.25',
+        unit_price: '3.75',
         minimum_order_quantity: '10',
         order_measurement: 'pcs',
         packaging: 'Box',
@@ -223,6 +225,7 @@ describe('Change Order catalog snapshots', () => {
       dimensionMm: '100 x 40',
       material: 'Steel',
       weightKg: 0.25,
+      unitPrice: 3.75,
       manufacturer: 'Tray Co',
       manufacturerPartNo: 'TC-1',
       unit: 'pcs',
@@ -245,6 +248,7 @@ describe('Change Order catalog snapshots', () => {
           part_no: null,
           dimension_mm: null,
           weight_kg: null,
+          unit_price: '2.5',
           minimum_order_quantity: 1,
           order_measurement: 'pcs',
           packaging: 'pcs',
@@ -253,15 +257,12 @@ describe('Change Order catalog snapshots', () => {
     });
 
     await expect(
-      resolveChangeOrderCatalogSnapshot(
-        { query },
-        'tray-installation-material',
-        'tray-install-id',
-      ),
+      resolveChangeOrderCatalogSnapshot({ query }, 'tray-installation-material', 'tray-install-id'),
     ).resolves.toMatchObject({
       sourceCatalog: 'tray-installation-material',
       sourceMaterialId: 'tray-install-id',
       descriptionEn: 'Tray connector',
+      unitPrice: 2.5,
     });
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('FROM material_tray_installation_materials'),
@@ -279,6 +280,7 @@ describe('Change Order catalog snapshots', () => {
         rung_height_mm: null,
         width_mm: 300,
         weight_kg_per_m: 2.2,
+        unit_price: 12.5,
         minimum_order_quantity: 1,
         order_measurement: 'meters',
         packaging: 'm',
@@ -293,6 +295,7 @@ describe('Change Order catalog snapshots', () => {
         width_mm: 60,
         length_mm: 3000,
         weight_kg: 3.3,
+        unit_price: 8.75,
         minimum_order_quantity: 10,
         order_measurement: 'pcs',
         packaging: 'Box',
@@ -301,6 +304,7 @@ describe('Change Order catalog snapshots', () => {
       sourceCatalog: 'support',
       dimensionMm: 'H 40 × W 60 × L 3000',
       weightKg: 3.3,
+      unitPrice: 8.75,
       unit: 'pcs',
     });
   });

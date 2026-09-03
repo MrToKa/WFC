@@ -6,6 +6,11 @@ import {
   createMaterialTrayInstallationMaterialSchema,
   createMaterialTraySchema,
   createStandardMaterialSchema,
+  updateMaterialCableInstallationMaterialSchema,
+  updateMaterialCableTypeSchema,
+  updateMaterialSupportSchema,
+  updateMaterialTrayInstallationMaterialSchema,
+  updateMaterialTraySchema,
   updateStandardMaterialSchema,
 } from './validators.js';
 
@@ -39,7 +44,7 @@ describe('Standard Material validators', () => {
   });
 });
 
-describe('Material minimum order validators', () => {
+describe('Material catalog validators', () => {
   const materialInputs = [
     {
       schema: createMaterialCableTypeSchema,
@@ -64,11 +69,12 @@ describe('Material minimum order validators', () => {
   ] as const;
 
   it.each(materialInputs)(
-    'accepts a positive minimum and supported measurement',
+    'accepts a finite unit price, positive minimum, and supported measurement',
     ({ schema, input }) => {
       expect(
         schema.safeParse({
           ...input,
+          unitPrice: 12.5,
           minimumOrderQuantity: 50,
           orderMeasurement: 'pcs',
           packaging: 'Box',
@@ -77,19 +83,26 @@ describe('Material minimum order validators', () => {
     },
   );
 
-  it.each(materialInputs)(
-    'rejects an invalid minimum or measurement',
-    ({ schema, input }) => {
-      expect(
-        schema.safeParse({
-          ...input,
-          minimumOrderQuantity: 0,
-          orderMeasurement: 'boxes',
-          packaging: 'Bag',
-        }).success,
-      ).toBe(false);
-    },
-  );
+  it.each(materialInputs)('rejects an invalid minimum or measurement', ({ schema, input }) => {
+    expect(
+      schema.safeParse({
+        ...input,
+        minimumOrderQuantity: 0,
+        orderMeasurement: 'boxes',
+        packaging: 'Bag',
+      }).success,
+    ).toBe(false);
+  });
+
+  it.each(materialInputs)('accepts zero as a unit price', ({ schema, input }) => {
+    expect(schema.safeParse({ ...input, unitPrice: 0 }).success).toBe(true);
+  });
+
+  it.each(materialInputs)('rejects invalid unit prices', ({ schema, input }) => {
+    for (const unitPrice of [-1, Number.POSITIVE_INFINITY, Number.NaN]) {
+      expect(schema.safeParse({ ...input, unitPrice }).success).toBe(false);
+    }
+  });
 
   it.each(materialInputs)('accepts an HTTP source link', ({ schema, input }) => {
     expect(
@@ -107,5 +120,15 @@ describe('Material minimum order validators', () => {
         source: 'manufacturer.example/material',
       }).success,
     ).toBe(false);
+  });
+
+  it.each([
+    updateMaterialCableTypeSchema,
+    updateMaterialCableInstallationMaterialSchema,
+    updateMaterialTrayInstallationMaterialSchema,
+    updateMaterialTraySchema,
+    updateMaterialSupportSchema,
+  ])('accepts a price-only catalog update', (schema) => {
+    expect(schema.safeParse({ unitPrice: 8.75 }).success).toBe(true);
   });
 });

@@ -51,6 +51,7 @@ const TRAY_HEADERS = {
   width: 'Width [mm]',
   weight: 'Weight [kg/m]',
   loadCurve: 'Load curve',
+  unitPrice: 'Price',
   minimumOrder: 'Minimum order quantity',
   orderMeasurement: 'Order measurement',
   packaging: 'Packaging'
@@ -63,6 +64,7 @@ const SUPPORT_HEADERS = {
   width: 'Width [mm]',
   length: 'Length [mm]',
   weight: 'Weight [kg]',
+  unitPrice: 'Price',
   minimumOrder: 'Minimum order quantity',
   orderMeasurement: 'Order measurement',
   packaging: 'Packaging'
@@ -114,6 +116,11 @@ const toNullableNumber = (value: unknown): number | null => {
 const toMinimumOrderQuantity = (value: unknown): number => {
   const parsed = toNullableNumber(value);
   return parsed !== null && parsed > 0 ? parsed : 1;
+};
+
+const toUnitPrice = (value: unknown): number | undefined => {
+  const parsed = toNullableNumber(value);
+  return parsed !== null && parsed >= 0 ? parsed : undefined;
 };
 
 const toOrderMeasurement = (
@@ -315,6 +322,7 @@ const selectMaterialTraysQuery = `
     mt.rung_height_mm,
     mt.width_mm,
     mt.weight_kg_per_m,
+    mt.unit_price,
     mt.minimum_order_quantity,
     mt.order_measurement,
     mt.packaging,
@@ -340,6 +348,7 @@ const selectMaterialSupportsQuery = `
     ms.width_mm,
     ms.length_mm,
     ms.weight_kg,
+    ms.unit_price,
     ms.minimum_order_quantity,
     ms.order_measurement,
     ms.packaging,
@@ -547,13 +556,14 @@ materialsRouter.post(
             rung_height_mm,
             width_mm,
             weight_kg_per_m,
+            unit_price,
             minimum_order_quantity,
             order_measurement,
             packaging,
             source,
             load_curve_id,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, $12);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL, $13);
         `,
         [
           trayId,
@@ -563,6 +573,7 @@ materialsRouter.post(
           data.rungHeightMm ?? null,
           data.widthMm ?? null,
           data.weightKgPerM ?? null,
+          data.unitPrice ?? 0,
           data.minimumOrderQuantity ?? 1,
           data.orderMeasurement ?? 'pcs',
           data.packaging ?? 'pcs',
@@ -683,6 +694,12 @@ materialsRouter.patch(
     if (data.weightKgPerM !== undefined) {
       setClauses.push(`weight_kg_per_m = $${parameterIndex}`);
       values.push(data.weightKgPerM ?? null);
+      parameterIndex += 1;
+    }
+
+    if (data.unitPrice !== undefined) {
+      setClauses.push(`unit_price = $${parameterIndex}`);
+      values.push(data.unitPrice);
       parameterIndex += 1;
     }
 
@@ -898,6 +915,7 @@ materialsRouter.post(
           const widthRaw = row[TRAY_HEADERS.width];
           const weightRaw = row[TRAY_HEADERS.weight];
           const loadCurveRaw = row[TRAY_HEADERS.loadCurve];
+          const unitPriceRaw = row[TRAY_HEADERS.unitPrice];
           const minimumOrderRaw = row[TRAY_HEADERS.minimumOrder];
           const orderMeasurementRaw = row[TRAY_HEADERS.orderMeasurement];
           const packagingRaw = row[TRAY_HEADERS.packaging];
@@ -958,6 +976,7 @@ materialsRouter.post(
             rungHeightMm,
             widthMm,
             weightKgPerM,
+            unitPrice: toUnitPrice(unitPriceRaw),
             minimumOrderQuantity: toMinimumOrderQuantity(minimumOrderRaw),
             orderMeasurement: toOrderMeasurement(orderMeasurementRaw),
             packaging: toPackaging(packagingRaw)
@@ -990,12 +1009,13 @@ materialsRouter.post(
                   rung_height_mm = $4,
                   width_mm = $5,
                   weight_kg_per_m = $6,
-                  load_curve_id = $7,
-                  minimum_order_quantity = $8,
-                  order_measurement = $9,
-                  packaging = $10,
+                  unit_price = COALESCE($7, unit_price),
+                  load_curve_id = $8,
+                  minimum_order_quantity = $9,
+                  order_measurement = $10,
+                  packaging = $11,
                   updated_at = NOW()
-                WHERE id = $11;
+                WHERE id = $12;
               `,
               [
                 data.type,
@@ -1004,6 +1024,7 @@ materialsRouter.post(
                 data.rungHeightMm ?? null,
                 data.widthMm ?? null,
                 data.weightKgPerM ?? null,
+                data.unitPrice ?? null,
                 loadCurveId,
                 data.minimumOrderQuantity ?? 1,
                 data.orderMeasurement ?? 'pcs',
@@ -1023,11 +1044,12 @@ materialsRouter.post(
                   rung_height_mm,
                   width_mm,
                   weight_kg_per_m,
+                  unit_price,
                   load_curve_id,
                   minimum_order_quantity,
                   order_measurement,
                   packaging
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
               `,
               [
                 randomUUID(),
@@ -1037,6 +1059,7 @@ materialsRouter.post(
                 data.rungHeightMm ?? null,
                 data.widthMm ?? null,
                 data.weightKgPerM ?? null,
+                data.unitPrice ?? 0,
                 loadCurveId,
                 data.minimumOrderQuantity ?? 1,
                 data.orderMeasurement ?? 'pcs',
@@ -1102,6 +1125,7 @@ materialsRouter.get(
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
         { name: TRAY_HEADERS.weight, key: 'weight', width: 18 },
         { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 },
+        { name: TRAY_HEADERS.unitPrice, key: 'unitPrice', width: 16 },
         { name: TRAY_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
         { name: TRAY_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
         { name: TRAY_HEADERS.packaging, key: 'packaging', width: 18 }
@@ -1117,6 +1141,7 @@ materialsRouter.get(
           ? Number(row.weight_kg_per_m)
           : '',
         row.load_curve_name ?? '',
+        Number(row.unit_price),
         Number(row.minimum_order_quantity),
         row.order_measurement,
         row.packaging
@@ -1151,6 +1176,9 @@ materialsRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'unitPrice') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
         if (column.key === 'minimumOrder') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.###';
@@ -1193,6 +1221,7 @@ materialsRouter.get(
         { name: TRAY_HEADERS.width, key: 'width', width: 18 },
         { name: TRAY_HEADERS.weight, key: 'weight', width: 18 },
         { name: TRAY_HEADERS.loadCurve, key: 'loadCurve', width: 26 },
+        { name: TRAY_HEADERS.unitPrice, key: 'unitPrice', width: 16 },
         { name: TRAY_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
         { name: TRAY_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
         { name: TRAY_HEADERS.packaging, key: 'packaging', width: 18 }
@@ -1212,7 +1241,7 @@ materialsRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: [[...Array.from({ length: columns.length - 3 }, () => ''), 1, 'pcs', 'pcs']]
+        rows: [[...Array.from({ length: columns.length - 4 }, () => ''), 0, 1, 'pcs', 'pcs']]
       });
 
       table.commit();
@@ -1224,6 +1253,9 @@ materialsRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'unitPrice') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
         if (column.key === 'minimumOrder') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.###';
@@ -1323,12 +1355,13 @@ materialsRouter.post(
             width_mm,
             length_mm,
             weight_kg,
+            unit_price,
             minimum_order_quantity,
             order_measurement,
             packaging,
             source,
             image_template_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
         `,
         [
           supportId,
@@ -1338,6 +1371,7 @@ materialsRouter.post(
           data.widthMm ?? null,
           data.lengthMm ?? null,
           data.weightKg ?? null,
+          data.unitPrice ?? 0,
           data.minimumOrderQuantity ?? 1,
           data.orderMeasurement ?? 'pcs',
           data.packaging ?? 'pcs',
@@ -1459,6 +1493,12 @@ materialsRouter.patch(
   if (data.weightKg !== undefined) {
     setClauses.push(`weight_kg = $${parameterIndex}`);
     values.push(data.weightKg ?? null);
+    parameterIndex += 1;
+  }
+
+  if (data.unitPrice !== undefined) {
+    setClauses.push(`unit_price = $${parameterIndex}`);
+    values.push(data.unitPrice);
     parameterIndex += 1;
   }
 
@@ -1646,6 +1686,7 @@ materialsRouter.post(
           const widthRaw = row[SUPPORT_HEADERS.width];
           const lengthRaw = row[SUPPORT_HEADERS.length];
           const weightRaw = row[SUPPORT_HEADERS.weight];
+          const unitPriceRaw = row[SUPPORT_HEADERS.unitPrice];
           const minimumOrderRaw = row[SUPPORT_HEADERS.minimumOrder];
           const orderMeasurementRaw = row[SUPPORT_HEADERS.orderMeasurement];
           const packagingRaw = row[SUPPORT_HEADERS.packaging];
@@ -1686,6 +1727,7 @@ materialsRouter.post(
             widthMm: widthValue,
             lengthMm: lengthValue,
             weightKg: weightValue,
+            unitPrice: toUnitPrice(unitPriceRaw),
             minimumOrderQuantity: toMinimumOrderQuantity(minimumOrderRaw),
             orderMeasurement: toOrderMeasurement(orderMeasurementRaw),
             packaging: toPackaging(packagingRaw)
@@ -1718,11 +1760,12 @@ materialsRouter.post(
                   width_mm = $4,
                   length_mm = $5,
                   weight_kg = $6,
-                  minimum_order_quantity = $7,
-                  order_measurement = $8,
-                  packaging = $9,
+                  unit_price = COALESCE($7, unit_price),
+                  minimum_order_quantity = $8,
+                  order_measurement = $9,
+                  packaging = $10,
                   updated_at = NOW()
-                WHERE id = $10;
+                WHERE id = $11;
               `,
               [
                 data.type,
@@ -1731,6 +1774,7 @@ materialsRouter.post(
                 data.widthMm ?? null,
                 data.lengthMm ?? null,
                 data.weightKg ?? null,
+                data.unitPrice ?? null,
                 data.minimumOrderQuantity ?? 1,
                 data.orderMeasurement ?? 'pcs',
                 data.packaging ?? 'pcs',
@@ -1749,10 +1793,11 @@ materialsRouter.post(
                   width_mm,
                   length_mm,
                   weight_kg,
+                  unit_price,
                   minimum_order_quantity,
                   order_measurement,
                   packaging
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
               `,
               [
                 randomUUID(),
@@ -1762,6 +1807,7 @@ materialsRouter.post(
                 data.widthMm ?? null,
                 data.lengthMm ?? null,
                 data.weightKg ?? null,
+                data.unitPrice ?? 0,
                 data.minimumOrderQuantity ?? 1,
                 data.orderMeasurement ?? 'pcs',
                 data.packaging ?? 'pcs'
@@ -1825,6 +1871,7 @@ materialsRouter.get(
         { name: SUPPORT_HEADERS.width, key: 'width', width: 18 },
         { name: SUPPORT_HEADERS.length, key: 'length', width: 18 },
         { name: SUPPORT_HEADERS.weight, key: 'weight', width: 18 },
+        { name: SUPPORT_HEADERS.unitPrice, key: 'unitPrice', width: 16 },
         { name: SUPPORT_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
         { name: SUPPORT_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
         { name: SUPPORT_HEADERS.packaging, key: 'packaging', width: 18 }
@@ -1837,6 +1884,7 @@ materialsRouter.get(
         row.width_mm !== null && row.width_mm !== '' ? Number(row.width_mm) : '',
         row.length_mm !== null && row.length_mm !== '' ? Number(row.length_mm) : '',
         row.weight_kg !== null && row.weight_kg !== '' ? Number(row.weight_kg) : '',
+        Number(row.unit_price),
         Number(row.minimum_order_quantity),
         row.order_measurement,
         row.packaging
@@ -1868,6 +1916,8 @@ materialsRouter.get(
         worksheet.getColumn(index + 1).width = column.width;
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        } else if (column.key === 'unitPrice') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         } else if (
           column.key === 'height' ||
           column.key === 'width' ||
@@ -1915,6 +1965,7 @@ materialsRouter.get(
         { name: SUPPORT_HEADERS.width, key: 'width', width: 18 },
         { name: SUPPORT_HEADERS.length, key: 'length', width: 18 },
         { name: SUPPORT_HEADERS.weight, key: 'weight', width: 18 },
+        { name: SUPPORT_HEADERS.unitPrice, key: 'unitPrice', width: 16 },
         { name: SUPPORT_HEADERS.minimumOrder, key: 'minimumOrder', width: 22 },
         { name: SUPPORT_HEADERS.orderMeasurement, key: 'orderMeasurement', width: 20 },
         { name: SUPPORT_HEADERS.packaging, key: 'packaging', width: 18 }
@@ -1934,7 +1985,7 @@ materialsRouter.get(
           name: column.name,
           filterButton: true
         })),
-        rows: [[...Array.from({ length: columns.length - 3 }, () => ''), 1, 'pcs', 'pcs']]
+        rows: [[...Array.from({ length: columns.length - 4 }, () => ''), 0, 1, 'pcs', 'pcs']]
       });
 
       table.commit();
@@ -1950,6 +2001,9 @@ materialsRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'unitPrice') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
         if (column.key === 'minimumOrder') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.###';

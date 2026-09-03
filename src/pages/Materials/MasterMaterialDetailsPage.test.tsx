@@ -42,6 +42,7 @@ const material = (id: string, type: string): MaterialCableInstallationMaterial =
   minimumOrderQuantity: 1,
   orderMeasurement: 'pcs',
   packaging: 'pcs',
+  unitPrice: 0,
   source: null,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',

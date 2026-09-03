@@ -6,6 +6,7 @@ export type MaterialSupportRow = {
   width_mm: string | number | null;
   length_mm: string | number | null;
   weight_kg: string | number | null;
+  unit_price: string | number;
   minimum_order_quantity: string | number;
   order_measurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -37,6 +38,7 @@ export type PublicMaterialSupport = {
   widthMm: number | null;
   lengthMm: number | null;
   weightKg: number | null;
+  unitPrice: number;
   minimumOrderQuantity: number;
   orderMeasurement: 'pcs' | 'pack' | 'meters';
   packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -56,6 +58,7 @@ export const mapMaterialSupportRow = (row: MaterialSupportRow): PublicMaterialSu
   widthMm: toNumberOrNull(row.width_mm),
   lengthMm: toNumberOrNull(row.length_mm),
   weightKg: toNumberOrNull(row.weight_kg),
+  unitPrice: toNumberOrNull(row.unit_price) ?? 0,
   minimumOrderQuantity: toNumberOrNull(row.minimum_order_quantity) ?? 1,
   orderMeasurement: row.order_measurement,
   packaging: row.packaging,

@@ -26,6 +26,7 @@ const MATERIAL_CABLE_EXCEL_HEADERS = {
   diameter: 'Diameter [mm]',
   material: 'Material',
   weight: 'Weight [kg/m]',
+  unitPrice: 'Price',
   description: 'Description',
   manufacturer: 'Manufacturer',
   partNo: 'Part No.',
@@ -41,6 +42,7 @@ const MATERIAL_CABLE_EXCEL_HEADER_ALIASES = {
   diameter: [MATERIAL_CABLE_EXCEL_HEADERS.diameter],
   material: [MATERIAL_CABLE_EXCEL_HEADERS.material],
   weight: [MATERIAL_CABLE_EXCEL_HEADERS.weight],
+  unitPrice: [MATERIAL_CABLE_EXCEL_HEADERS.unitPrice, 'Unit price', 'Unit Price'],
   description: [MATERIAL_CABLE_EXCEL_HEADERS.description],
   manufacturer: [MATERIAL_CABLE_EXCEL_HEADERS.manufacturer],
   partNo: [MATERIAL_CABLE_EXCEL_HEADERS.partNo, 'Part No'],
@@ -71,6 +73,7 @@ const selectMaterialCableTypesQuery = `
     remarks,
     diameter_mm,
     weight_kg_per_m,
+    unit_price,
     minimum_order_quantity,
     order_measurement,
     packaging,
@@ -120,6 +123,7 @@ materialCableTypesRouter.post(
       remarks,
       diameterMm,
       weightKgPerM,
+      unitPrice,
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
@@ -157,12 +161,13 @@ materialCableTypesRouter.post(
             remarks,
             diameter_mm,
             weight_kg_per_m
+            ,unit_price
             ,minimum_order_quantity
             ,order_measurement
             ,packaging
             ,source
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
           RETURNING
             id,
             name,
@@ -174,6 +179,7 @@ materialCableTypesRouter.post(
             remarks,
             diameter_mm,
             weight_kg_per_m,
+            unit_price,
             minimum_order_quantity,
             order_measurement,
             packaging,
@@ -192,6 +198,7 @@ materialCableTypesRouter.post(
           normalizeOptionalString(remarks ?? null),
           diameterMm ?? null,
           weightKgPerM ?? null,
+          unitPrice ?? 0,
           minimumOrderQuantity ?? 1,
           orderMeasurement ?? 'meters',
           packaging ?? 'm',
@@ -236,6 +243,7 @@ materialCableTypesRouter.patch(
       remarks,
       diameterMm,
       weightKgPerM,
+      unitPrice,
       minimumOrderQuantity,
       orderMeasurement,
       packaging,
@@ -315,6 +323,11 @@ materialCableTypesRouter.patch(
       values.push(weightKgPerM ?? null);
     }
 
+    if (unitPrice !== undefined) {
+      updates.push(`unit_price = $${index++}`);
+      values.push(unitPrice);
+    }
+
     if (minimumOrderQuantity !== undefined) {
       updates.push(`minimum_order_quantity = $${index++}`);
       values.push(minimumOrderQuantity);
@@ -354,6 +367,7 @@ materialCableTypesRouter.patch(
             remarks,
             diameter_mm,
             weight_kg_per_m,
+            unit_price,
             minimum_order_quantity,
             order_measurement,
             packaging,
@@ -473,6 +487,7 @@ materialCableTypesRouter.post(
       remarks: string | null;
       diameter: number | null;
       weight: number | null;
+      unitPrice: number | null;
       minimumOrderQuantity: number;
       orderMeasurement: 'pcs' | 'pack' | 'meters';
       packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
@@ -542,6 +557,12 @@ materialCableTypesRouter.post(
         remarks: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.remarks)),
         diameter: readNumeric(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.diameter)),
         weight: readNumeric(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.weight)),
+        unitPrice: (() => {
+          const parsed = readNumeric(
+            readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.unitPrice),
+          );
+          return parsed !== null && parsed >= 0 ? parsed : null;
+        })(),
         minimumOrderQuantity: (() => {
           const parsed = readNumeric(
             readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.minimumOrder),
@@ -625,11 +646,12 @@ materialCableTypesRouter.post(
                 remarks = $6,
                 diameter_mm = $7,
                 weight_kg_per_m = $8,
-                minimum_order_quantity = $9,
-                order_measurement = $10,
-                packaging = $11,
+                unit_price = COALESCE($9, unit_price),
+                minimum_order_quantity = $10,
+                order_measurement = $11,
+                packaging = $12,
                 updated_at = NOW()
-              WHERE id = $12;
+              WHERE id = $13;
             `,
             [
               row.purpose,
@@ -640,6 +662,7 @@ materialCableTypesRouter.post(
               row.remarks,
               row.diameter,
               row.weight,
+              row.unitPrice,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -661,11 +684,12 @@ materialCableTypesRouter.post(
                 remarks,
                 diameter_mm,
                 weight_kg_per_m
+                ,unit_price
                 ,minimum_order_quantity
                 ,order_measurement
                 ,packaging
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
             `,
             [
               randomUUID(),
@@ -678,6 +702,7 @@ materialCableTypesRouter.post(
               row.remarks,
               row.diameter,
               row.weight,
+              row.unitPrice ?? 0,
               row.minimumOrderQuantity,
               row.orderMeasurement,
               row.packaging,
@@ -736,6 +761,7 @@ materialCableTypesRouter.get(
         { name: MATERIAL_CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.material, key: 'material', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.unitPrice, key: 'unitPrice', width: 16 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.description, key: 'description', width: 36 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.manufacturer, key: 'manufacturer', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.partNo, key: 'partNo', width: 24 },
@@ -765,7 +791,7 @@ materialCableTypesRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: [['', '', '', '', '', '', '', '', '', 1, 'meters', 'm']],
+        rows: [['', '', '', '', '', 0, '', '', '', '', 1, 'meters', 'm']],
       });
 
       table.commit();
@@ -777,6 +803,9 @@ materialCableTypesRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'unitPrice') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
       });
 
@@ -823,6 +852,7 @@ materialCableTypesRouter.get(
         { name: MATERIAL_CABLE_EXCEL_HEADERS.diameter, key: 'diameter', width: 18 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.material, key: 'material', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.weight, key: 'weight', width: 18 },
+        { name: MATERIAL_CABLE_EXCEL_HEADERS.unitPrice, key: 'unitPrice', width: 16 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.description, key: 'description', width: 36 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.manufacturer, key: 'manufacturer', width: 24 },
         { name: MATERIAL_CABLE_EXCEL_HEADERS.partNo, key: 'partNo', width: 24 },
@@ -844,6 +874,7 @@ materialCableTypesRouter.get(
         row.weight_kg_per_m !== null && row.weight_kg_per_m !== ''
           ? Number(row.weight_kg_per_m)
           : '',
+        Number(row.unit_price),
         row.description ?? '',
         row.manufacturer ?? '',
         row.part_no ?? '',
@@ -869,7 +900,10 @@ materialCableTypesRouter.get(
           name: column.name,
           filterButton: true,
         })),
-        rows: rows.length > 0 ? rows : [['', '', '', '', '', '', '', '', '', 1, 'meters', 'm']],
+        rows:
+          rows.length > 0
+            ? rows
+            : [['', '', '', '', '', 0, '', '', '', '', 1, 'meters', 'm']],
       });
 
       table.commit();
@@ -881,6 +915,9 @@ materialCableTypesRouter.get(
         }
         if (column.key === 'weight') {
           worksheet.getColumn(index + 1).numFmt = '#,##0.000';
+        }
+        if (column.key === 'unitPrice') {
+          worksheet.getColumn(index + 1).numFmt = '#,##0.00';
         }
       });
 

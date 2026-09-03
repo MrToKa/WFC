@@ -270,6 +270,7 @@ export async function initializeDatabase(): Promise<void> {
       remarks TEXT,
       diameter_mm NUMERIC,
       weight_kg_per_m NUMERIC,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -316,6 +317,7 @@ export async function initializeDatabase(): Promise<void> {
       part_no TEXT,
       dimension_mm TEXT,
       weight_kg NUMERIC,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -372,6 +374,7 @@ export async function initializeDatabase(): Promise<void> {
       part_no TEXT,
       dimension_mm TEXT,
       weight_kg NUMERIC,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
       minimum_order_quantity NUMERIC NOT NULL DEFAULT 1,
       order_measurement TEXT NOT NULL DEFAULT 'pcs',
       packaging TEXT NOT NULL DEFAULT 'pcs',
@@ -794,6 +797,7 @@ export async function initializeDatabase(): Promise<void> {
       rung_height_mm NUMERIC,
       width_mm NUMERIC,
       weight_kg_per_m NUMERIC,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
       load_curve_id UUID,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -860,6 +864,7 @@ export async function initializeDatabase(): Promise<void> {
       width_mm NUMERIC,
       length_mm NUMERIC,
       weight_kg NUMERIC,
+      unit_price NUMERIC NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
@@ -977,6 +982,70 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE material_supports
     ADD COLUMN IF NOT EXISTS image_template_id UUID REFERENCES template_files(id) ON DELETE SET NULL;
+  `);
+
+  await pool.query(`
+    ALTER TABLE material_cable_types
+      ADD COLUMN IF NOT EXISTS unit_price NUMERIC NOT NULL DEFAULT 0;
+    ALTER TABLE material_cable_installation_materials
+      ADD COLUMN IF NOT EXISTS unit_price NUMERIC NOT NULL DEFAULT 0;
+    ALTER TABLE material_tray_installation_materials
+      ADD COLUMN IF NOT EXISTS unit_price NUMERIC NOT NULL DEFAULT 0;
+    ALTER TABLE material_trays
+      ADD COLUMN IF NOT EXISTS unit_price NUMERIC NOT NULL DEFAULT 0;
+    ALTER TABLE material_supports
+      ADD COLUMN IF NOT EXISTS unit_price NUMERIC NOT NULL DEFAULT 0;
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_types'
+          AND constraint_name = 'material_cable_types_unit_price_check'
+      ) THEN
+        ALTER TABLE material_cable_types
+          ADD CONSTRAINT material_cable_types_unit_price_check
+          CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_cable_installation_materials'
+          AND constraint_name = 'material_cable_installation_materials_unit_price_check'
+      ) THEN
+        ALTER TABLE material_cable_installation_materials
+          ADD CONSTRAINT material_cable_installation_materials_unit_price_check
+          CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_tray_installation_materials'
+          AND constraint_name = 'material_tray_installation_materials_unit_price_check'
+      ) THEN
+        ALTER TABLE material_tray_installation_materials
+          ADD CONSTRAINT material_tray_installation_materials_unit_price_check
+          CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_trays'
+          AND constraint_name = 'material_trays_unit_price_check'
+      ) THEN
+        ALTER TABLE material_trays
+          ADD CONSTRAINT material_trays_unit_price_check
+          CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric);
+      END IF;
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'material_supports'
+          AND constraint_name = 'material_supports_unit_price_check'
+      ) THEN
+        ALTER TABLE material_supports
+          ADD CONSTRAINT material_supports_unit_price_check
+          CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric);
+      END IF;
+    END $$;
   `);
 
   await pool.query(`

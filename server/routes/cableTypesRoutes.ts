@@ -186,6 +186,11 @@ const selectMaterialCableTypeDetailsForProjectQuery = `
     remarks,
     diameter_mm,
     weight_kg_per_m,
+    unit_price,
+    minimum_order_quantity,
+    order_measurement,
+    packaging,
+    source,
     created_at,
     updated_at
   FROM material_cable_types

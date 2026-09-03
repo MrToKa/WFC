@@ -28,6 +28,7 @@ const material: MaterialCableInstallationMaterial = {
   minimumOrderQuantity: 10,
   orderMeasurement: 'pcs',
   packaging: 'Box',
+  unitPrice: 7.5,
   source: 'https://example.com/original',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -66,13 +67,17 @@ describe('MaterialEditDialog', () => {
     });
     expect(screen.getByRole('textbox', { name: 'Dimension [mm]' })).toHaveValue('32 × 45');
     expect(screen.getByRole('textbox', { name: 'Weight [kg]' })).toHaveValue('0.18');
+    expect(screen.getByRole('spinbutton', { name: 'Price' })).toHaveValue(7.5);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Price' }), {
+      target: { value: '8.25' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
       expect(apiMocks.updateCableInstallationMaterial).toHaveBeenCalledWith(
         'token',
         material.id,
-        expect.objectContaining({ manufacturer: 'Updated manufacturer' }),
+        expect.objectContaining({ manufacturer: 'Updated manufacturer', unitPrice: 8.25 }),
       ),
     );
     expect(onSaved).toHaveBeenCalledOnce();
@@ -105,6 +110,29 @@ describe('MaterialEditDialog', () => {
         expect.objectContaining({ manufacturer: 'Tray supplier' }),
       ),
     );
+    expect(apiMocks.updateCableInstallationMaterial).not.toHaveBeenCalled();
+  });
+
+  it('does not save a negative price', async () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <MaterialEditDialog
+          open
+          category="cable-installation-material"
+          material={material}
+          token="token"
+          onDismiss={vi.fn()}
+          onSaved={vi.fn().mockResolvedValue(undefined)}
+        />
+      </FluentProvider>,
+    );
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Price' }), {
+      target: { value: '-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText('Price must be a non-negative number.')).toBeInTheDocument();
     expect(apiMocks.updateCableInstallationMaterial).not.toHaveBeenCalled();
   });
 });
