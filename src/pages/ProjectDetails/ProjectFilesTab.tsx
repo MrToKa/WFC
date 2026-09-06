@@ -312,37 +312,34 @@ export const ProjectFilesTab = ({
                     <td className={styles.tableCell}>
                     {formatProjectFileTimestamp(file.uploadedAt)}
                     </td>
-                    <td
-                      className={mergeClasses(
-                        styles.tableCell,
-                        styles.actionsCell
-                      )}
-                    >
-                      <Button
-                        size="small"
-                        appearance="secondary"
-                        onClick={() => onOpenVersions(file)}
-                      >
-                        Versions
-                      </Button>
-                      <Button
-                        size="small"
-                        appearance="secondary"
-                        onClick={() => void onDownload(file)}
-                        disabled={isDownloading}
-                      >
-                        {isDownloading ? 'Downloading...' : 'Download'}
-                      </Button>
-                      {file.canDelete ? (
+                    <td className={styles.tableCell}>
+                      <div className={styles.actionsCell}>
                         <Button
                           size="small"
-                          appearance="outline"
-                          onClick={() => void onDelete(file.id)}
-                          disabled={isDeleting}
+                          appearance="secondary"
+                          onClick={() => onOpenVersions(file)}
                         >
-                          {isDeleting ? 'Deleting...' : 'Delete'}
+                          Versions
                         </Button>
-                      ) : null}
+                        <Button
+                          size="small"
+                          appearance="secondary"
+                          onClick={() => void onDownload(file)}
+                          disabled={isDownloading}
+                        >
+                          {isDownloading ? 'Downloading...' : 'Download'}
+                        </Button>
+                        {file.canDelete ? (
+                          <Button
+                            size="small"
+                            appearance="outline"
+                            onClick={() => void onDelete(file.id)}
+                            disabled={isDeleting}
+                          >
+                            {isDeleting ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -487,28 +484,25 @@ export const ProjectFilesTab = ({
                           <td className={styles.tableCell}>
                             {formatProjectFileTimestamp(version.uploadedAt)}
                           </td>
-                          <td
-                            className={mergeClasses(
-                              styles.tableCell,
-                              styles.actionsCell
-                            )}
-                          >
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => void onDownloadVersion(version)}
-                            >
-                              Download
-                            </Button>
-                            {canUpload ? (
+                          <td className={styles.tableCell}>
+                            <div className={styles.actionsCell}>
                               <Button
                                 size="small"
-                                appearance="outline"
-                                onClick={() => void onDeleteVersion(version)}
+                                appearance="secondary"
+                                onClick={() => void onDownloadVersion(version)}
                               >
-                                Delete
+                                Download
                               </Button>
-                            ) : null}
+                              {canUpload ? (
+                                <Button
+                                  size="small"
+                                  appearance="outline"
+                                  onClick={() => void onDeleteVersion(version)}
+                                >
+                                  Delete
+                                </Button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );

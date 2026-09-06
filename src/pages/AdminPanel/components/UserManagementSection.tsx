@@ -178,36 +178,38 @@ export const UserManagementSection = ({
                       </td>
                       <td className={styles.tableCell}>{formatDateTime(user.createdAt)}</td>
                       <td className={styles.tableCell}>{formatDateTime(user.updatedAt)}</td>
-                      <td className={`${styles.tableCell} ${styles.actionCell}`}>
-                        {!isCurrentUser ? (
-                          <Button
-                            size="small"
-                            onClick={() => handleStartEditUser(user)}
-                            disabled={disableActions}
-                          >
-                            {isEditing ? 'Editing...' : 'Edit'}
-                          </Button>
-                        ) : null}
-                        {!user.isAdmin ? (
-                          <Button
-                            size="small"
-                            appearance="primary"
-                            onClick={() => void handlePromoteUser(user.id)}
-                            disabled={disableActions}
-                          >
-                            {isBusy ? 'Promoting...' : 'Promote to admin'}
-                          </Button>
-                        ) : null}
-                        {!isCurrentUser ? (
-                          <Button
-                            size="small"
-                            appearance="secondary"
-                            onClick={() => void handleDeleteUser(user.id)}
-                            disabled={disableActions}
-                          >
-                            {isBusy ? 'Deleting...' : 'Delete'}
-                          </Button>
-                        ) : null}
+                      <td className={styles.tableCell}>
+                        <div className={styles.actionCell}>
+                          {!isCurrentUser ? (
+                            <Button
+                              size="small"
+                              onClick={() => handleStartEditUser(user)}
+                              disabled={disableActions}
+                            >
+                              {isEditing ? 'Editing...' : 'Edit'}
+                            </Button>
+                          ) : null}
+                          {!user.isAdmin ? (
+                            <Button
+                              size="small"
+                              appearance="primary"
+                              onClick={() => void handlePromoteUser(user.id)}
+                              disabled={disableActions}
+                            >
+                              {isBusy ? 'Promoting...' : 'Promote to admin'}
+                            </Button>
+                          ) : null}
+                          {!isCurrentUser ? (
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => void handleDeleteUser(user.id)}
+                              disabled={disableActions}
+                            >
+                              {isBusy ? 'Deleting...' : 'Delete'}
+                            </Button>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   );

@@ -5,6 +5,7 @@ export const useStyles = makeStyles({
     width: '100%',
     maxWidth: '100%',
     minWidth: 0,
+    boxSizing: 'border-box',
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
@@ -18,6 +19,12 @@ export const useStyles = makeStyles({
   tabs: {
     flexWrap: 'wrap',
   },
+  tabPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+    minWidth: 0,
+  },
   actionsRow: {
     display: 'flex',
     gap: '0.75rem',
@@ -29,6 +36,7 @@ export const useStyles = makeStyles({
   },
   tableWrapper: {
     width: '100%',
+    minWidth: 0,
     overflowX: 'auto',
   },
   table: {
@@ -46,6 +54,7 @@ export const useStyles = makeStyles({
   tableCell: {
     padding: '0.75rem 1rem',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+    verticalAlign: 'middle',
   },
   numericCell: {
     textAlign: 'right',
@@ -53,7 +62,10 @@ export const useStyles = makeStyles({
   },
   actionsCell: {
     display: 'flex',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    maxWidth: '26rem',
     gap: '0.5rem',
     whiteSpace: 'nowrap',
   },
@@ -105,7 +117,6 @@ export const useStyles = makeStyles({
     justifyContent: 'space-between',
     gap: '1rem',
     flexWrap: 'wrap',
-    marginTop: '1rem',
   },
   dialogActions: {
     display: 'flex',

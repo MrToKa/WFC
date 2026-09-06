@@ -309,30 +309,32 @@ export const ProjectManagementSection = ({
                       <td className={styles.tableCell}>{project.manager ?? 'N/A'}</td>
                       <td className={styles.tableCell}>{formatDateTime(project.createdAt)}</td>
                       <td className={styles.tableCell}>{formatDateTime(project.updatedAt)}</td>
-                      <td className={`${styles.tableCell} ${styles.actionCell}`}>
-                        <Button
-                          size="small"
-                          onClick={() => handleStartEditProject(project)}
-                          disabled={disableActions}
-                        >
-                          {isEditing ? 'Editing...' : 'Edit'}
-                        </Button>
-                        <Button
-                          size="small"
-                          appearance="secondary"
-                          onClick={() => handleOpenClearDataDialog(project)}
-                          disabled={disableActions}
-                        >
-                          {isClearing ? 'Clearing...' : 'Clear data'}
-                        </Button>
-                        <Button
-                          size="small"
-                          appearance="secondary"
-                          onClick={() => void handleDeleteProject(project.id)}
-                          disabled={disableActions}
-                        >
-                          {isDeleting ? 'Deleting...' : 'Delete'}
-                        </Button>
+                      <td className={styles.tableCell}>
+                        <div className={styles.actionCell}>
+                          <Button
+                            size="small"
+                            onClick={() => handleStartEditProject(project)}
+                            disabled={disableActions}
+                          >
+                            {isEditing ? 'Editing...' : 'Edit'}
+                          </Button>
+                          <Button
+                            size="small"
+                            appearance="secondary"
+                            onClick={() => handleOpenClearDataDialog(project)}
+                            disabled={disableActions}
+                          >
+                            {isClearing ? 'Clearing...' : 'Clear data'}
+                          </Button>
+                          <Button
+                            size="small"
+                            appearance="secondary"
+                            onClick={() => void handleDeleteProject(project.id)}
+                            disabled={disableActions}
+                          >
+                            {isDeleting ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

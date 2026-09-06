@@ -1587,22 +1587,24 @@ export const CableDetails = () => {
                       </td>
                       <td className={styles.tableCell}>{formatOptionalText(material.remarks)}</td>
                       {canManageMaterials ? (
-                        <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                          <Button
-                            size="small"
-                            onClick={() => openEditDialog(material)}
-                            disabled={isBusy || syncingBaseMaterials}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="small"
-                            appearance="secondary"
-                            onClick={() => void handleDeleteCableMaterial(material)}
-                            disabled={isBusy || syncingBaseMaterials}
-                          >
-                            Delete
-                          </Button>
+                        <td className={styles.tableCell}>
+                          <div className={styles.actionsCell}>
+                            <Button
+                              size="small"
+                              onClick={() => openEditDialog(material)}
+                              disabled={isBusy || syncingBaseMaterials}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => void handleDeleteCableMaterial(material)}
+                              disabled={isBusy || syncingBaseMaterials}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </td>
                       ) : null}
                     </tr>

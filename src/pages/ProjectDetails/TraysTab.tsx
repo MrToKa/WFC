@@ -288,29 +288,26 @@ export const TraysTab = ({
                   >
                     {freeSpaceDisplay}
                   </td>
-                  <td
-                    className={mergeClasses(
-                      styles.tableCell,
-                      styles.actionsCell
-                    )}
-                  >
-                    <Button
-                      size="small"
-                      onClick={() => onDetails(tray)}
-                      disabled={isBusy}
-                    >
-                      Details
-                    </Button>
-                    {isAdmin ? (
+                  <td className={styles.tableCell}>
+                    <div className={styles.actionsCell}>
                       <Button
                         size="small"
-                        appearance="secondary"
-                        onClick={() => onDelete(tray)}
+                        onClick={() => onDetails(tray)}
                         disabled={isBusy}
                       >
-                        Delete
+                        Details
                       </Button>
-                    ) : null}
+                      {isAdmin ? (
+                        <Button
+                          size="small"
+                          appearance="secondary"
+                          onClick={() => onDelete(tray)}
+                          disabled={isBusy}
+                        >
+                          Delete
+                        </Button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               );

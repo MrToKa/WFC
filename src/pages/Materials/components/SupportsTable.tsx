@@ -122,37 +122,39 @@ export const SupportsTable = ({
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(support.unitPrice)}
                   </td>
-                  <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                    <Button size="small" onClick={() => onDetails(support)}>
-                      Details
-                    </Button>
-                    {isAdmin ? (
-                      <>
-                      {support.imageTemplateId ? (
-                        <TemplateImagePreview
-                          token={token}
-                          templateId={support.imageTemplateId}
-                          fileName={support.imageTemplateFileName}
-                          contentType={support.imageTemplateContentType}
-                        />
+                  <td className={styles.tableCell}>
+                    <div className={styles.actionsCell}>
+                      <Button size="small" onClick={() => onDetails(support)}>
+                        Details
+                      </Button>
+                      {isAdmin ? (
+                        <>
+                        {support.imageTemplateId ? (
+                          <TemplateImagePreview
+                            token={token}
+                            templateId={support.imageTemplateId}
+                            fileName={support.imageTemplateFileName}
+                            contentType={support.imageTemplateContentType}
+                          />
+                        ) : null}
+                        <Button
+                          size='small'
+                          onClick={() => onEdit(support)}
+                          disabled={isBusy || isSubmitting}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size='small'
+                          appearance='secondary'
+                          onClick={() => onDelete(support)}
+                          disabled={isBusy}
+                        >
+                          {isBusy ? 'Deleting...' : 'Delete'}
+                        </Button>
+                        </>
                       ) : null}
-                      <Button
-                        size='small'
-                        onClick={() => onEdit(support)}
-                        disabled={isBusy || isSubmitting}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size='small'
-                        appearance='secondary'
-                        onClick={() => onDelete(support)}
-                        disabled={isBusy}
-                      >
-                        {isBusy ? 'Deleting...' : 'Delete'}
-                      </Button>
-                      </>
-                    ) : null}
+                    </div>
                   </td>
                 </tr>
               );

@@ -187,7 +187,7 @@ export const Materials = () => {
         <Tab value="loadCurves">Load curves</Tab>
       </TabList>
 
-      <div role="tabpanel" aria-label={selectedTabLabel}>
+      <div className={styles.tabPanel} role="tabpanel" aria-label={selectedTabLabel}>
         {selectedCatalog && catalogHook ? (
           <CableInstallationMaterialsTab
             styles={cableTypesStyles}

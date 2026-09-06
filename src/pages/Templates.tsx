@@ -865,32 +865,34 @@ export const Templates = () => {
                     </td>
                     <td className={styles.cell}>{uploader}</td>
                     <td className={styles.cell}>{formatDateTime(file.uploadedAt)}</td>
-                    <td className={mergeClasses(styles.cell, styles.actionsCell)}>
-                      <Button
-                        size="small"
-                        appearance="secondary"
-                        onClick={() => openVersionsDialog(file)}
-                      >
-                        Versions
-                      </Button>
-                      <Button
-                        size="small"
-                        appearance="secondary"
-                        onClick={() => void handleDownload(file)}
-                        disabled={isDownloading}
-                      >
-                        {isDownloading ? 'Downloading...' : 'Download'}
-                      </Button>
-                      {file.canDelete ? (
+                    <td className={styles.cell}>
+                      <div className={styles.actionsCell}>
                         <Button
                           size="small"
-                          appearance="outline"
-                          disabled={isDeleting}
-                          onClick={() => void handleDelete(file.id)}
+                          appearance="secondary"
+                          onClick={() => openVersionsDialog(file)}
                         >
-                          {isDeleting ? 'Deleting...' : 'Delete'}
+                          Versions
                         </Button>
-                      ) : null}
+                        <Button
+                          size="small"
+                          appearance="secondary"
+                          onClick={() => void handleDownload(file)}
+                          disabled={isDownloading}
+                        >
+                          {isDownloading ? 'Downloading...' : 'Download'}
+                        </Button>
+                        {file.canDelete ? (
+                          <Button
+                            size="small"
+                            appearance="outline"
+                            disabled={isDeleting}
+                            onClick={() => void handleDelete(file.id)}
+                          >
+                            {isDeleting ? 'Deleting...' : 'Delete'}
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -990,23 +992,25 @@ export const Templates = () => {
                           </td>
                           <td className={styles.cell}>{versionUploader}</td>
                           <td className={styles.cell}>{formatDateTime(version.uploadedAt)}</td>
-                          <td className={mergeClasses(styles.cell, styles.actionsCell)}>
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => void handleDownloadVersion(version)}
-                            >
-                              Download
-                            </Button>
-                            {isAdmin ? (
+                          <td className={styles.cell}>
+                            <div className={styles.actionsCell}>
                               <Button
                                 size="small"
-                                appearance="outline"
-                                onClick={() => void handleDeleteVersion(version)}
+                                appearance="secondary"
+                                onClick={() => void handleDownloadVersion(version)}
                               >
-                                Delete
+                                Download
                               </Button>
-                            ) : null}
+                              {isAdmin ? (
+                                <Button
+                                  size="small"
+                                  appearance="outline"
+                                  onClick={() => void handleDeleteVersion(version)}
+                                >
+                                  Delete
+                                </Button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );

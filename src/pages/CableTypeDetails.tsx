@@ -980,22 +980,24 @@ export const CableTypeDetails = () => {
                           : 'Project default'}
                       </td>
                       {isAdmin ? (
-                        <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                          <Button
-                            size="small"
-                            onClick={() => openEditDialog(material)}
-                            disabled={isBusy || isImportingDefaultMaterials}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="small"
-                            appearance="secondary"
-                            onClick={() => void handleDeleteDefaultMaterial(material)}
-                            disabled={isBusy || isImportingDefaultMaterials}
-                          >
-                            Delete
-                          </Button>
+                        <td className={styles.tableCell}>
+                          <div className={styles.actionsCell}>
+                            <Button
+                              size="small"
+                              onClick={() => openEditDialog(material)}
+                              disabled={isBusy || isImportingDefaultMaterials}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => void handleDeleteDefaultMaterial(material)}
+                              disabled={isBusy || isImportingDefaultMaterials}
+                            >
+                              Delete
+                            </Button>
+                          </div>
                         </td>
                       ) : null}
                     </tr>

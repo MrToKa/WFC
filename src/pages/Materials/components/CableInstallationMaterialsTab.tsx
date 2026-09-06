@@ -246,25 +246,27 @@ export const CableInstallationMaterialsTab = ({
                     <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                       {item.unitPrice}
                     </td>
-                    <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                      <Button size="small" onClick={() => onDetails(item)}>
-                        Details
-                      </Button>
-                      {isAdmin ? (
-                        <>
-                          <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>
-                            Edit
-                          </Button>
-                          <Button
-                            size="small"
-                            appearance="secondary"
-                            onClick={() => onDelete(item)}
-                            disabled={isBusy}
-                          >
-                            Delete
-                          </Button>
-                        </>
-                      ) : null}
+                    <td className={styles.tableCell}>
+                      <div className={styles.actionsCell}>
+                        <Button size="small" onClick={() => onDetails(item)}>
+                          Details
+                        </Button>
+                        {isAdmin ? (
+                          <>
+                            <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>
+                              Edit
+                            </Button>
+                            <Button
+                              size="small"
+                              appearance="secondary"
+                              onClick={() => onDelete(item)}
+                              disabled={isBusy}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );

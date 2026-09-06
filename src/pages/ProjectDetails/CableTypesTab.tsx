@@ -261,27 +261,29 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                       </>
                     ) : null}
                     {showActions ? (
-                      <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                        {onDetails ? (
-                          <Button size="small" onClick={() => onDetails(cableType)}>
-                            Details
-                          </Button>
-                        ) : null}
-                        {isAdmin ? (
-                          <>
-                            <Button size="small" onClick={() => onEdit(cableType)} disabled={isBusy}>
-                              Edit
+                      <td className={styles.tableCell}>
+                        <div className={styles.actionsCell}>
+                          {onDetails ? (
+                            <Button size="small" onClick={() => onDetails(cableType)}>
+                              Details
                             </Button>
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => onDelete(cableType)}
-                              disabled={isBusy}
-                            >
-                              Delete
-                            </Button>
-                          </>
-                        ) : null}
+                          ) : null}
+                          {isAdmin ? (
+                            <>
+                              <Button size="small" onClick={() => onEdit(cableType)} disabled={isBusy}>
+                                Edit
+                              </Button>
+                              <Button
+                                size="small"
+                                appearance="secondary"
+                                onClick={() => onDelete(cableType)}
+                                disabled={isBusy}
+                              >
+                                Delete
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
                       </td>
                     ) : null}
                   </tr>

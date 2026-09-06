@@ -131,45 +131,47 @@ export const TraysTable = ({
                   <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                     {formatNumeric(tray.unitPrice)}
                   </td>
-                  <td className={mergeClasses(styles.tableCell, styles.actionsCell)}>
-                    <Button size="small" onClick={() => onDetails(tray)}>
-                      Details
-                    </Button>
-                    {isAdmin ? (
-                      <>
-                      <Button
-                        size='small'
-                        appearance='secondary'
-                        onClick={() => onAssignLoadCurve(tray)}
-                        disabled={isBusy || isSubmitting || isAssigning}
-                      >
-                        {isAssigning ? 'Updating...' : 'Assign load curve'}
+                  <td className={styles.tableCell}>
+                    <div className={styles.actionsCell}>
+                      <Button size="small" onClick={() => onDetails(tray)}>
+                        Details
                       </Button>
-                      {tray.imageTemplateId ? (
-                        <TemplateImagePreview
-                          token={token}
-                          templateId={tray.imageTemplateId}
-                          fileName={tray.imageTemplateFileName}
-                          contentType={tray.imageTemplateContentType}
-                        />
+                      {isAdmin ? (
+                        <>
+                        <Button
+                          size='small'
+                          appearance='secondary'
+                          onClick={() => onAssignLoadCurve(tray)}
+                          disabled={isBusy || isSubmitting || isAssigning}
+                        >
+                          {isAssigning ? 'Updating...' : 'Assign load curve'}
+                        </Button>
+                        {tray.imageTemplateId ? (
+                          <TemplateImagePreview
+                            token={token}
+                            templateId={tray.imageTemplateId}
+                            fileName={tray.imageTemplateFileName}
+                            contentType={tray.imageTemplateContentType}
+                          />
+                        ) : null}
+                        <Button
+                          size='small'
+                          onClick={() => onEdit(tray)}
+                          disabled={isBusy || isSubmitting}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size='small'
+                          appearance='secondary'
+                          onClick={() => onDelete(tray)}
+                          disabled={isBusy}
+                        >
+                          {isBusy ? 'Deleting...' : 'Delete'}
+                        </Button>
+                        </>
                       ) : null}
-                      <Button
-                        size='small'
-                        onClick={() => onEdit(tray)}
-                        disabled={isBusy || isSubmitting}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        size='small'
-                        appearance='secondary'
-                        onClick={() => onDelete(tray)}
-                        disabled={isBusy}
-                      >
-                        {isBusy ? 'Deleting...' : 'Delete'}
-                      </Button>
-                      </>
-                    ) : null}
+                    </div>
                   </td>
                 </tr>
               );
