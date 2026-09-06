@@ -1310,6 +1310,25 @@ materialsRouter.get(
   }
 );
 
+materialsRouter.get(
+  '/supports/all',
+  async (_req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await pool.query<MaterialSupportRow>(
+        `
+          ${selectMaterialSupportsQuery}
+          ORDER BY ms.support_type ASC;
+        `
+      );
+
+      res.json({ supports: result.rows.map(mapMaterialSupportRow) });
+    } catch (error) {
+      console.error('List all material supports error', error);
+      res.status(500).json({ error: 'Failed to fetch supports' });
+    }
+  }
+);
+
 materialsRouter.post(
   '/supports',
   authenticate,

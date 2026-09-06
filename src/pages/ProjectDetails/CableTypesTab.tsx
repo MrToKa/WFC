@@ -50,8 +50,11 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
   fileInputRef: RefObject<HTMLInputElement | null>;
   searchText: string;
   searchCriteria: CableTypeSearchCriteria;
+  purposeFilter?: string;
+  purposeOptions?: string[];
   onSearchTextChange: (value: string) => void;
   onSearchCriteriaChange: (value: CableTypeSearchCriteria) => void;
+  onPurposeFilterChange?: (value: string) => void;
   error: string | null;
   isLoading: boolean;
   items: T[];
@@ -89,8 +92,11 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
   fileInputRef,
   searchText,
   searchCriteria,
+  purposeFilter = '',
+  purposeOptions = [],
   onSearchTextChange,
   onSearchCriteriaChange,
+  onPurposeFilterChange,
   error,
   isLoading,
   items,
@@ -118,10 +124,12 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
   );
 
   const resolvedEmptyStateBody =
-    emptyStateBody ??
-    (isAdmin
-      ? 'Use the buttons above to add or import cable types for this project.'
-      : 'There are no cable types recorded for this project yet.');
+    searchText.trim() || purposeFilter
+      ? 'Try adjusting or clearing your filters.'
+      : (emptyStateBody ??
+        (isAdmin
+          ? 'Use the buttons above to add or import cable types for this project.'
+          : 'There are no cable types recorded for this project yet.'));
 
   const panelProps = includeTabPanelRole
     ? {
@@ -200,6 +208,21 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
           <Option value="diameter">Diameter</Option>
           <Option value="weight">Weight</Option>
         </Dropdown>
+        {onPurposeFilterChange ? (
+          <Dropdown
+            selectedOptions={purposeFilter ? [purposeFilter] : []}
+            value={purposeFilter || 'All purposes'}
+            onOptionSelect={(_, data) => onPurposeFilterChange(data.optionValue ?? '')}
+            aria-label="Filter by purpose"
+          >
+            <Option value="">All purposes</Option>
+            {purposeOptions.map((purposeOption) => (
+              <Option key={purposeOption.toLocaleLowerCase()} value={purposeOption}>
+                {purposeOption}
+              </Option>
+            ))}
+          </Dropdown>
+        ) : null}
       </div>
 
       {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
@@ -212,85 +235,91 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
           <Body1>{resolvedEmptyStateBody}</Body1>
         </div>
       ) : (
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.tableHeadCell}>Type</th>
-                <th className={styles.tableHeadCell}>Purpose</th>
-                <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                  Diameter [mm]
-                </th>
-                <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                  Weight [kg/m]
-                </th>
-                {showOrderFields ? (
-                  <>
-                    <th className={styles.tableHeadCell}>Minimum order</th>
-                    <th className={styles.tableHeadCell}>Packaging</th>
-                    <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                      Price
-                    </th>
-                  </>
-                ) : null}
-                {showActions ? <th className={styles.tableHeadCell}>Actions</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((cableType) => {
-                const isBusy = pendingId === cableType.id;
-                return (
-                  <tr key={cableType.id}>
-                    <td className={styles.tableCell}>{cableType.name}</td>
-                    <td className={styles.tableCell}>{cableType.purpose ?? '-'}</td>
-                    <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                      {formatNumeric(cableType.diameterMm)}
-                    </td>
-                    <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                      {formatNumeric(cableType.weightKgPerM)}
-                    </td>
-                    {showOrderFields ? (
-                      <>
-                        <td className={styles.tableCell}>
-                          {cableType.minimumOrderQuantity} {cableType.orderMeasurement}
-                        </td>
-                        <td className={styles.tableCell}>{cableType.packaging ?? '—'}</td>
-                        <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                          {formatNumeric(cableType.unitPrice ?? null)}
-                        </td>
-                      </>
-                    ) : null}
-                    {showActions ? (
-                      <td className={styles.tableCell}>
-                        <div className={styles.actionsCell}>
-                          {onDetails ? (
-                            <Button size="small" onClick={() => onDetails(cableType)}>
-                              Details
-                            </Button>
-                          ) : null}
-                          {isAdmin ? (
-                            <>
-                              <Button size="small" onClick={() => onEdit(cableType)} disabled={isBusy}>
-                                Edit
-                              </Button>
-                              <Button
-                                size="small"
-                                appearance="secondary"
-                                onClick={() => onDelete(cableType)}
-                                disabled={isBusy}
-                              >
-                                Delete
-                              </Button>
-                            </>
-                          ) : null}
-                        </div>
+        <>
+          <div className={styles.tableContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.tableHeadCell}>Type</th>
+                  <th className={styles.tableHeadCell}>Purpose</th>
+                  <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                    Diameter [mm]
+                  </th>
+                  <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                    Weight [kg/m]
+                  </th>
+                  {showOrderFields ? (
+                    <>
+                      <th className={styles.tableHeadCell}>Minimum order</th>
+                      <th className={styles.tableHeadCell}>Packaging</th>
+                      <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
+                        Price
+                      </th>
+                    </>
+                  ) : null}
+                  {showActions ? <th className={styles.tableHeadCell}>Actions</th> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((cableType) => {
+                  const isBusy = pendingId === cableType.id;
+                  return (
+                    <tr key={cableType.id}>
+                      <td className={styles.tableCell}>{cableType.name}</td>
+                      <td className={styles.tableCell}>{cableType.purpose ?? '-'}</td>
+                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                        {formatNumeric(cableType.diameterMm)}
                       </td>
-                    ) : null}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                        {formatNumeric(cableType.weightKgPerM)}
+                      </td>
+                      {showOrderFields ? (
+                        <>
+                          <td className={styles.tableCell}>
+                            {cableType.minimumOrderQuantity} {cableType.orderMeasurement}
+                          </td>
+                          <td className={styles.tableCell}>{cableType.packaging ?? '—'}</td>
+                          <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                            {formatNumeric(cableType.unitPrice ?? null)}
+                          </td>
+                        </>
+                      ) : null}
+                      {showActions ? (
+                        <td className={styles.tableCell}>
+                          <div className={styles.actionsCell}>
+                            {onDetails ? (
+                              <Button size="small" onClick={() => onDetails(cableType)}>
+                                Details
+                              </Button>
+                            ) : null}
+                            {isAdmin ? (
+                              <>
+                                <Button
+                                  size="small"
+                                  onClick={() => onEdit(cableType)}
+                                  disabled={isBusy}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="small"
+                                  appearance="secondary"
+                                  onClick={() => onDelete(cableType)}
+                                  disabled={isBusy}
+                                >
+                                  Delete
+                                </Button>
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {showPagination ? (
             <TablePagination
               styles={styles}
@@ -302,7 +331,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
               dropdownAriaLabel="Select cable types page"
             />
           ) : null}
-        </div>
+        </>
       )}
     </div>
   );

@@ -107,10 +107,12 @@ export const CableInstallationMaterialsTab = ({
   const catalogLabelLower = catalogLabel.toLocaleLowerCase();
   const resolvedEmptyStateTitle = emptyStateTitle ?? `No ${catalogLabelLower} found`;
   const resolvedEmptyStateBody =
-    emptyStateBody ??
-    (isAdmin
-      ? `Use the buttons above to add or import ${catalogLabelLower}.`
-      : `There are no ${catalogLabelLower} recorded yet.`);
+    searchText.trim() || purposeFilter
+      ? 'Try adjusting or clearing your filters.'
+      : (emptyStateBody ??
+        (isAdmin
+          ? `Use the buttons above to add or import ${catalogLabelLower}.`
+          : `There are no ${catalogLabelLower} recorded yet.`));
 
   const panelProps = includeTabPanelRole
     ? {
@@ -212,67 +214,69 @@ export const CableInstallationMaterialsTab = ({
           <Body1>{resolvedEmptyStateBody}</Body1>
         </div>
       ) : (
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.tableHeadCell}>Type</th>
-                <th className={styles.tableHeadCell}>Purpose</th>
-                <th className={styles.tableHeadCell}>Material</th>
-                <th className={styles.tableHeadCell}>Description</th>
-                <th className={styles.tableHeadCell}>Manufacturer</th>
-                <th className={styles.tableHeadCell}>Part No.</th>
-                <th className={styles.tableHeadCell}>Minimum order</th>
-                <th className={styles.tableHeadCell}>Packaging</th>
-                <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>Price</th>
-                <th className={styles.tableHeadCell}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => {
-                const isBusy = pendingId === item.id;
-                return (
-                  <tr key={item.id}>
-                    <td className={styles.tableCell}>{item.type}</td>
-                    <td className={styles.tableCell}>{item.purpose ?? '-'}</td>
-                    <td className={styles.tableCell}>{item.material ?? '-'}</td>
-                    <td className={styles.tableCell}>{item.description ?? '-'}</td>
-                    <td className={styles.tableCell}>{item.manufacturer ?? '-'}</td>
-                    <td className={styles.tableCell}>{item.partNo ?? '-'}</td>
-                    <td className={styles.tableCell}>
-                      {item.minimumOrderQuantity} {item.orderMeasurement}
-                    </td>
-                    <td className={styles.tableCell}>{item.packaging}</td>
-                    <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
-                      {item.unitPrice}
-                    </td>
-                    <td className={styles.tableCell}>
-                      <div className={styles.actionsCell}>
-                        <Button size="small" onClick={() => onDetails(item)}>
-                          Details
-                        </Button>
-                        {isAdmin ? (
-                          <>
-                            <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>
-                              Edit
-                            </Button>
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => onDelete(item)}
-                              disabled={isBusy}
-                            >
-                              Delete
-                            </Button>
-                          </>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <>
+          <div className={styles.tableContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.tableHeadCell}>Type</th>
+                  <th className={styles.tableHeadCell}>Purpose</th>
+                  <th className={styles.tableHeadCell}>Material</th>
+                  <th className={styles.tableHeadCell}>Description</th>
+                  <th className={styles.tableHeadCell}>Manufacturer</th>
+                  <th className={styles.tableHeadCell}>Part No.</th>
+                  <th className={styles.tableHeadCell}>Minimum order</th>
+                  <th className={styles.tableHeadCell}>Packaging</th>
+                  <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>Price</th>
+                  <th className={styles.tableHeadCell}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const isBusy = pendingId === item.id;
+                  return (
+                    <tr key={item.id}>
+                      <td className={styles.tableCell}>{item.type}</td>
+                      <td className={styles.tableCell}>{item.purpose ?? '-'}</td>
+                      <td className={styles.tableCell}>{item.material ?? '-'}</td>
+                      <td className={styles.tableCell}>{item.description ?? '-'}</td>
+                      <td className={styles.tableCell}>{item.manufacturer ?? '-'}</td>
+                      <td className={styles.tableCell}>{item.partNo ?? '-'}</td>
+                      <td className={styles.tableCell}>
+                        {item.minimumOrderQuantity} {item.orderMeasurement}
+                      </td>
+                      <td className={styles.tableCell}>{item.packaging}</td>
+                      <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
+                        {item.unitPrice}
+                      </td>
+                      <td className={styles.tableCell}>
+                        <div className={styles.actionsCell}>
+                          <Button size="small" onClick={() => onDetails(item)}>
+                            Details
+                          </Button>
+                          {isAdmin ? (
+                            <>
+                              <Button size="small" onClick={() => onEdit(item)} disabled={isBusy}>
+                                Edit
+                              </Button>
+                              <Button
+                                size="small"
+                                appearance="secondary"
+                                onClick={() => onDelete(item)}
+                                disabled={isBusy}
+                              >
+                                Delete
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           {showPagination ? (
             <TablePagination
               styles={styles}
@@ -284,7 +288,7 @@ export const CableInstallationMaterialsTab = ({
               dropdownAriaLabel={`Select ${catalogLabelLower} page`}
             />
           ) : null}
-        </div>
+        </>
       )}
     </div>
   );

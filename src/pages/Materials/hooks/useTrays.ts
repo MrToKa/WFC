@@ -5,18 +5,18 @@ import {
   ApiError,
   MaterialLoadCurveSummary,
   MaterialTray,
-  PaginationMeta,
   createMaterialTray,
   deleteMaterialTray,
   exportMaterialTrays,
-  fetchMaterialTrays,
+  fetchAllMaterialTrays,
   fetchMaterialLoadCurveSummaries,
   importMaterialTrays,
   getMaterialTrayTemplate,
   updateMaterialTray
 } from '@/api/client';
-import { TrayFormErrors, TrayFormState, initialTrayForm, PAGE_SIZE } from '../Materials.types';
-import { buildTimestampedFileName, downloadBlob, normalizePagination, parseNumberInput, toFormValue } from '../Materials.utils';
+import { TrayFormErrors, TrayFormState, initialTrayForm } from '../Materials.types';
+import { buildTimestampedFileName, downloadBlob, parseNumberInput, toFormValue } from '../Materials.utils';
+import { useMaterialCatalogFilter } from './useMaterialCatalogFilter';
 
 type ShowToast = (props: {
   intent: 'success' | 'error' | 'warning' | 'info';
@@ -31,9 +31,15 @@ type UseTraysParams = {
 };
 
 export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
-  const [trays, setTrays] = useState<MaterialTray[]>([]);
-  const [trayPagination, setTrayPagination] = useState<PaginationMeta | null>(null);
-  const [trayPage, setTrayPage] = useState<number>(1);
+  const [allTrays, setAllTrays] = useState<MaterialTray[]>([]);
+  const {
+    pagedItems: trays,
+    pagination: trayPagination,
+    page: trayPage,
+    setPage: setTrayPage,
+    ...filters
+  } = useMaterialCatalogFilter(allTrays);
+  const loadRequestId = useRef(0);
   const [traysError, setTraysError] = useState<string | null>(null);
   const [isLoadingTrays, setIsLoadingTrays] = useState<boolean>(true);
   const [isRefreshingTrays, setIsRefreshingTrays] = useState<boolean>(false);
@@ -63,40 +69,23 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   const trayFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadTrays = useCallback(
-    async (page: number, options?: { silent?: boolean }) => {
-      if (options?.silent) {
-        setIsRefreshingTrays(true);
-      } else {
-        setIsLoadingTrays(true);
-      }
+    async (_page: number, options?: { silent?: boolean }) => {
+      const requestId = ++loadRequestId.current;
+      setIsRefreshingTrays(Boolean(options?.silent));
+      setIsLoadingTrays(!options?.silent);
       setTraysError(null);
 
       try {
-        const result = await fetchMaterialTrays({ page, pageSize: PAGE_SIZE });
-
-        if (result.pagination.totalItems === 0 && page !== 1) {
-          setTrayPage(1);
-          return;
-        }
-
-        if (
-          result.pagination.totalItems > 0 &&
-          result.pagination.totalPages > 0 &&
-          page > result.pagination.totalPages
-        ) {
-          setTrayPage(result.pagination.totalPages);
-          return;
-        }
-
-        setTrays(result.trays);
-        setTrayPagination(normalizePagination(result.pagination));
+        const result = await fetchAllMaterialTrays();
+        if (requestId !== loadRequestId.current) return;
+        setAllTrays(result.trays);
       } catch (error) {
+        if (requestId !== loadRequestId.current) return;
         console.error('Fetch material trays failed', error);
         setTraysError('Failed to load trays. Please try again.');
       } finally {
-        if (options?.silent) {
+        if (requestId === loadRequestId.current) {
           setIsRefreshingTrays(false);
-        } else {
           setIsLoadingTrays(false);
         }
       }
@@ -105,8 +94,9 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   );
 
   useEffect(() => {
-    void loadTrays(trayPage);
-  }, [trayPage, loadTrays]);
+    void loadTrays(1);
+    return () => { loadRequestId.current += 1; };
+  }, [loadTrays]);
 
   const loadTrayLoadCurves = useCallback(async () => {
     setTrayLoadCurveError(null);
@@ -359,11 +349,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
           });
           showToast({ intent: 'success', title: 'Tray added' });
 
-          if (trayPage !== 1) {
-            setTrayPage(1);
-          } else {
-            await loadTrays(trayPage, { silent: true });
-          }
+          setTrayPage(1);
+          await loadTrays(1, { silent: true });
         } else if (editingTray) {
           await updateMaterialTray(token, editingTray.id, {
             type,
@@ -566,16 +553,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         await deleteMaterialTray(token, tray.id);
         showToast({ intent: 'success', title: 'Tray deleted' });
 
-        if (
-          trays.length === 1 &&
-          trayPagination &&
-          trayPagination.totalItems > 0 &&
-          trayPagination.page > 1
-        ) {
-          setTrayPage(trayPagination.page - 1);
-        } else {
-          await loadTrays(trayPage, { silent: true });
-        }
+        await loadTrays(trayPage, { silent: true });
       } catch (error) {
         console.error('Delete material tray failed', error);
         showToast({
@@ -587,10 +565,11 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         setTrayPendingId(null);
       }
     },
-    [isAdmin, loadTrays, showToast, token, trayPage, trayPagination, trays]
+    [isAdmin, loadTrays, showToast, token, trayPage]
   );
 
   return {
+    ...filters,
     trays,
     trayPagination,
     trayPage,

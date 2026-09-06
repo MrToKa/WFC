@@ -3,17 +3,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
   MaterialSupport,
-  PaginationMeta,
   createMaterialSupport,
   deleteMaterialSupport,
   exportMaterialSupports,
-  fetchMaterialSupports,
+  fetchAllMaterialSupports,
   getMaterialSupportTemplate,
   importMaterialSupports,
   updateMaterialSupport
 } from '@/api/client';
-import { SupportFormErrors, SupportFormState, initialSupportForm, PAGE_SIZE } from '../Materials.types';
-import { buildTimestampedFileName, downloadBlob, normalizePagination, parseNumberInput, toFormValue } from '../Materials.utils';
+import { SupportFormErrors, SupportFormState, initialSupportForm } from '../Materials.types';
+import { buildTimestampedFileName, downloadBlob, parseNumberInput, toFormValue } from '../Materials.utils';
+import { useMaterialCatalogFilter } from './useMaterialCatalogFilter';
 
 type ShowToast = (props: {
   intent: 'success' | 'error' | 'warning' | 'info';
@@ -28,9 +28,15 @@ type UseSupportsParams = {
 };
 
 export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) => {
-  const [supports, setSupports] = useState<MaterialSupport[]>([]);
-  const [supportPagination, setSupportPagination] = useState<PaginationMeta | null>(null);
-  const [supportPage, setSupportPage] = useState<number>(1);
+  const [allSupports, setAllSupports] = useState<MaterialSupport[]>([]);
+  const {
+    pagedItems: supports,
+    pagination: supportPagination,
+    page: supportPage,
+    setPage: setSupportPage,
+    ...filters
+  } = useMaterialCatalogFilter(allSupports);
+  const loadRequestId = useRef(0);
   const [supportsError, setSupportsError] = useState<string | null>(null);
   const [isLoadingSupports, setIsLoadingSupports] = useState<boolean>(true);
   const [isRefreshingSupports, setIsRefreshingSupports] = useState<boolean>(false);
@@ -49,40 +55,23 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
   const supportFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadSupports = useCallback(
-    async (page: number, options?: { silent?: boolean }) => {
-      if (options?.silent) {
-        setIsRefreshingSupports(true);
-      } else {
-        setIsLoadingSupports(true);
-      }
+    async (_page: number, options?: { silent?: boolean }) => {
+      const requestId = ++loadRequestId.current;
+      setIsRefreshingSupports(Boolean(options?.silent));
+      setIsLoadingSupports(!options?.silent);
       setSupportsError(null);
 
       try {
-        const result = await fetchMaterialSupports({ page, pageSize: PAGE_SIZE });
-
-        if (result.pagination.totalItems === 0 && page !== 1) {
-          setSupportPage(1);
-          return;
-        }
-
-        if (
-          result.pagination.totalItems > 0 &&
-          result.pagination.totalPages > 0 &&
-          page > result.pagination.totalPages
-        ) {
-          setSupportPage(result.pagination.totalPages);
-          return;
-        }
-
-        setSupports(result.supports);
-        setSupportPagination(normalizePagination(result.pagination));
+        const result = await fetchAllMaterialSupports();
+        if (requestId !== loadRequestId.current) return;
+        setAllSupports(result.supports);
       } catch (error) {
+        if (requestId !== loadRequestId.current) return;
         console.error('Fetch material supports failed', error);
         setSupportsError('Failed to load supports. Please try again.');
       } finally {
-        if (options?.silent) {
+        if (requestId === loadRequestId.current) {
           setIsRefreshingSupports(false);
-        } else {
           setIsLoadingSupports(false);
         }
       }
@@ -91,8 +80,9 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
   );
 
   useEffect(() => {
-    void loadSupports(supportPage);
-  }, [supportPage, loadSupports]);
+    void loadSupports(1);
+    return () => { loadRequestId.current += 1; };
+  }, [loadSupports]);
 
   const openSupportCreateDialog = useCallback(() => {
     setSupportDialogMode('create');
@@ -225,11 +215,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
           });
           showToast({ intent: 'success', title: 'Support added' });
 
-          if (supportPage !== 1) {
-            setSupportPage(1);
-          } else {
-            await loadSupports(supportPage, { silent: true });
-          }
+          setSupportPage(1);
+          await loadSupports(1, { silent: true });
         } else if (editingSupport) {
           await updateMaterialSupport(token, editingSupport.id, {
             type,
@@ -432,16 +419,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         await deleteMaterialSupport(token, support.id);
         showToast({ intent: 'success', title: 'Support deleted' });
 
-        if (
-          supports.length === 1 &&
-          supportPagination &&
-          supportPagination.totalItems > 0 &&
-          supportPagination.page > 1
-        ) {
-          setSupportPage(supportPagination.page - 1);
-        } else {
-          await loadSupports(supportPage, { silent: true });
-        }
+        await loadSupports(supportPage, { silent: true });
       } catch (error) {
         console.error('Delete material support failed', error);
         showToast({
@@ -453,10 +431,11 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         setSupportPendingId(null);
       }
     },
-    [isAdmin, loadSupports, showToast, supportPage, supportPagination, supports, token]
+    [isAdmin, loadSupports, showToast, supportPage, token]
   );
 
   return {
+    ...filters,
     supports,
     supportPagination,
     supportPage,

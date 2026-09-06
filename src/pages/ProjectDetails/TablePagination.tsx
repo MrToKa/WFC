@@ -5,7 +5,7 @@ import { Body1, Button, Dropdown, Option } from '@fluentui/react-components';
 import type { FilterableTableSectionStyles } from '../ProjectDetails.styles';
 
 type TablePaginationProps = {
-  styles: FilterableTableSectionStyles;
+  styles: Pick<FilterableTableSectionStyles, 'pagination' | 'paginationDropdown'>;
   page: number;
   totalPages: number;
   onPrevious: () => void;

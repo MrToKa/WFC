@@ -63,8 +63,11 @@ type UseCableTypesResult = {
   fileInputRef: RefObject<HTMLInputElement | null>;
   searchText: string;
   searchCriteria: CableTypeSearchCriteria;
+  purposeFilter: string;
+  purposeFilterOptions: string[];
   setSearchText: (value: string) => void;
   setSearchCriteria: (value: CableTypeSearchCriteria) => void;
+  setPurposeFilter: (value: string) => void;
   reloadCableTypes: (options?: { showSpinner?: boolean }) => Promise<void>;
   goToPreviousPage: () => void;
   goToNextPage: () => void;
@@ -121,6 +124,7 @@ export const useCableTypes = ({
 
   const [searchText, setSearchText] = useState<string>('');
   const [searchCriteria, setSearchCriteria] = useState<CableTypeSearchCriteria>('all');
+  const [purposeFilter, setPurposeFilter] = useState<string>('');
 
   const sortCableTypes = useCallback(
     (types: MaterialCableType[]) =>
@@ -128,12 +132,35 @@ export const useCableTypes = ({
     [],
   );
 
+  const purposeFilterOptions = useMemo(() => {
+    const uniqueOptions = new Map<string, string>();
+
+    for (const cableType of cableTypes) {
+      const purpose = cableType.purpose?.trim();
+      if (purpose) {
+        uniqueOptions.set(purpose.toLocaleLowerCase(), purpose);
+      }
+    }
+
+    return [...uniqueOptions.values()].sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: 'base' }),
+    );
+  }, [cableTypes]);
+
   const filteredCableTypes = useMemo(() => {
     const normalizedFilter = searchText.trim().toLowerCase();
-    if (!normalizedFilter) {
-      return cableTypes;
-    }
+    const normalizedPurpose = purposeFilter.trim().toLocaleLowerCase();
+
     return cableTypes.filter((cableType) => {
+      if (
+        normalizedPurpose &&
+        cableType.purpose?.trim().toLocaleLowerCase() !== normalizedPurpose
+      ) {
+        return false;
+      }
+
+      if (!normalizedFilter) return true;
+
       if (searchCriteria === 'all') {
         const values = [
           cableType.name,
@@ -161,7 +188,7 @@ export const useCableTypes = ({
       }
       return value.toLowerCase().includes(normalizedFilter);
     });
-  }, [searchText, searchCriteria, cableTypes]);
+  }, [searchText, searchCriteria, cableTypes, purposeFilter]);
 
   const totalPages = useMemo(() => {
     if (filteredCableTypes.length === 0) {
@@ -248,6 +275,11 @@ export const useCableTypes = ({
 
   const handleSearchCriteriaChange = useCallback((value: CableTypeSearchCriteria) => {
     setSearchCriteria(value);
+    setPage(1);
+  }, []);
+
+  const handlePurposeFilterChange = useCallback((value: string) => {
+    setPurposeFilter(value);
     setPage(1);
   }, []);
 
@@ -545,8 +577,11 @@ export const useCableTypes = ({
     fileInputRef,
     searchText,
     searchCriteria,
+    purposeFilter,
+    purposeFilterOptions,
     setSearchText: handleSearchTextChange,
     setSearchCriteria: handleSearchCriteriaChange,
+    setPurposeFilter: handlePurposeFilterChange,
     reloadCableTypes,
     goToPreviousPage,
     goToNextPage,

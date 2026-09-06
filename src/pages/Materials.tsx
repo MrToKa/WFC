@@ -23,6 +23,7 @@ import { TrayLoadCurveDialog } from './Materials/components/TrayLoadCurveDialog'
 import { SupportDialog } from './Materials/components/SupportDialog';
 import { TraysTable } from './Materials/components/TraysTable';
 import { SupportsTable } from './Materials/components/SupportsTable';
+import { MaterialCatalogFilters } from './Materials/components/MaterialCatalogFilters';
 import { LoadCurvesGrid } from './Materials/components/LoadCurvesGrid';
 import { LoadCurveDialog } from './Materials/components/LoadCurveDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
@@ -284,6 +285,17 @@ export const Materials = () => {
               </Button>
             </div>
 
+            <MaterialCatalogFilters
+              className={cableTypesStyles.filtersRow}
+              catalog="trays"
+              searchText={traysHook.searchText}
+              searchCriteria={traysHook.searchCriteria}
+              manufacturerFilter={traysHook.manufacturerFilter}
+              manufacturerOptions={traysHook.manufacturerFilterOptions}
+              onSearchTextChange={traysHook.setSearchText}
+              onSearchCriteriaChange={traysHook.setSearchCriteria}
+              onManufacturerFilterChange={traysHook.setManufacturerFilter}
+            />
             <TraysTable
               trays={traysHook.trays}
               isLoading={traysHook.isLoadingTrays}
@@ -302,6 +314,8 @@ export const Materials = () => {
               page={traysHook.trayPage}
               totalPages={trayTotalPages}
               onSetPage={traysHook.setTrayPage}
+              hasFilters={Boolean(traysHook.searchText.trim() || traysHook.manufacturerFilter)}
+              paginationStyles={cableTypesStyles}
               styles={styles}
             />
           </>
@@ -353,6 +367,17 @@ export const Materials = () => {
               </Button>
             </div>
 
+            <MaterialCatalogFilters
+              className={cableTypesStyles.filtersRow}
+              catalog="supports"
+              searchText={supportsHook.searchText}
+              searchCriteria={supportsHook.searchCriteria}
+              manufacturerFilter={supportsHook.manufacturerFilter}
+              manufacturerOptions={supportsHook.manufacturerFilterOptions}
+              onSearchTextChange={supportsHook.setSearchText}
+              onSearchCriteriaChange={supportsHook.setSearchCriteria}
+              onManufacturerFilterChange={supportsHook.setManufacturerFilter}
+            />
             <SupportsTable
               supports={supportsHook.supports}
               isLoading={supportsHook.isLoadingSupports}
@@ -371,6 +396,10 @@ export const Materials = () => {
               page={supportsHook.supportPage}
               totalPages={supportTotalPages}
               onSetPage={supportsHook.setSupportPage}
+              hasFilters={Boolean(
+                supportsHook.searchText.trim() || supportsHook.manufacturerFilter,
+              )}
+              paginationStyles={cableTypesStyles}
               styles={styles}
             />
           </>
@@ -430,8 +459,11 @@ export const Materials = () => {
             fileInputRef={cableTypesHook.fileInputRef}
             searchText={cableTypesHook.searchText}
             searchCriteria={cableTypesHook.searchCriteria}
+            purposeFilter={cableTypesHook.purposeFilter}
+            purposeOptions={cableTypesHook.purposeFilterOptions}
             onSearchTextChange={cableTypesHook.setSearchText}
             onSearchCriteriaChange={cableTypesHook.setSearchCriteria}
+            onPurposeFilterChange={cableTypesHook.setPurposeFilter}
             error={cableTypesHook.cableTypesError}
             isLoading={cableTypesHook.cableTypesLoading}
             items={cableTypesHook.pagedCableTypes}

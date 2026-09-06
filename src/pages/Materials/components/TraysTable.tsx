@@ -1,6 +1,8 @@
 import { Body1, Button, Caption1, Spinner, mergeClasses } from '@fluentui/react-components';
 import { MaterialTray } from '@/api/client';
 import { TemplateImagePreview } from './TemplateImagePreview';
+import { TablePagination } from '../../ProjectDetails/TablePagination';
+import type { FilterableTableSectionStyles } from '../../ProjectDetails.styles';
 
 type TraysTableProps = {
   trays: MaterialTray[];
@@ -20,6 +22,8 @@ type TraysTableProps = {
   page: number;
   totalPages: number;
   onSetPage: (page: number) => void;
+  hasFilters?: boolean;
+  paginationStyles: Pick<FilterableTableSectionStyles, 'pagination' | 'paginationDropdown'>;
   styles: {
     emptyState: string;
     errorText: string;
@@ -29,7 +33,6 @@ type TraysTableProps = {
     tableCell: string;
     numericCell: string;
     actionsCell: string;
-    pagination: string;
   };
 };
 
@@ -51,14 +54,16 @@ export const TraysTable = ({
   page,
   totalPages,
   onSetPage,
-  styles
+  hasFilters = false,
+  paginationStyles,
+  styles,
 }: TraysTableProps) => {
   if (error) {
     return <Body1 className={styles.errorText}>{error}</Body1>;
   }
 
   if (isLoading) {
-    return <Spinner label='Loading trays...' />;
+    return <Spinner label="Loading trays..." />;
   }
 
   if (trays.length === 0) {
@@ -66,9 +71,11 @@ export const TraysTable = ({
       <div className={styles.emptyState}>
         <Caption1>No trays found</Caption1>
         <Body1>
-          {isAdmin
-            ? 'Use the actions above to add or import tray definitions.'
-            : 'Trays will appear here once an administrator adds them.'}
+          {hasFilters
+            ? 'Try adjusting or clearing your filters.'
+            : isAdmin
+              ? 'Use the actions above to add or import tray definitions.'
+              : 'Trays will appear here once an administrator adds them.'}
         </Body1>
       </div>
     );
@@ -88,9 +95,7 @@ export const TraysTable = ({
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Rung height [mm]
               </th>
-              <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
-                Width [mm]
-              </th>
+              <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>Width [mm]</th>
               <th className={mergeClasses(styles.tableHeadCell, styles.numericCell)}>
                 Weight [kg/m]
               </th>
@@ -138,37 +143,37 @@ export const TraysTable = ({
                       </Button>
                       {isAdmin ? (
                         <>
-                        <Button
-                          size='small'
-                          appearance='secondary'
-                          onClick={() => onAssignLoadCurve(tray)}
-                          disabled={isBusy || isSubmitting || isAssigning}
-                        >
-                          {isAssigning ? 'Updating...' : 'Assign load curve'}
-                        </Button>
-                        {tray.imageTemplateId ? (
-                          <TemplateImagePreview
-                            token={token}
-                            templateId={tray.imageTemplateId}
-                            fileName={tray.imageTemplateFileName}
-                            contentType={tray.imageTemplateContentType}
-                          />
-                        ) : null}
-                        <Button
-                          size='small'
-                          onClick={() => onEdit(tray)}
-                          disabled={isBusy || isSubmitting}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size='small'
-                          appearance='secondary'
-                          onClick={() => onDelete(tray)}
-                          disabled={isBusy}
-                        >
-                          {isBusy ? 'Deleting...' : 'Delete'}
-                        </Button>
+                          <Button
+                            size="small"
+                            appearance="secondary"
+                            onClick={() => onAssignLoadCurve(tray)}
+                            disabled={isBusy || isSubmitting || isAssigning}
+                          >
+                            {isAssigning ? 'Updating...' : 'Assign load curve'}
+                          </Button>
+                          {tray.imageTemplateId ? (
+                            <TemplateImagePreview
+                              token={token}
+                              templateId={tray.imageTemplateId}
+                              fileName={tray.imageTemplateFileName}
+                              contentType={tray.imageTemplateContentType}
+                            />
+                          ) : null}
+                          <Button
+                            size="small"
+                            onClick={() => onEdit(tray)}
+                            disabled={isBusy || isSubmitting}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="small"
+                            appearance="secondary"
+                            onClick={() => onDelete(tray)}
+                            disabled={isBusy}
+                          >
+                            {isBusy ? 'Deleting...' : 'Delete'}
+                          </Button>
                         </>
                       ) : null}
                     </div>
@@ -179,27 +184,17 @@ export const TraysTable = ({
           </tbody>
         </table>
       </div>
-      <div className={styles.pagination}>
-        <Button
-          size='small'
-          onClick={() => onSetPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-        >
-          Previous
-        </Button>
-        <Body1>
-          Page {Math.max(1, Math.min(page, Math.max(1, totalPages)))} of {Math.max(1, totalPages)}
-        </Body1>
-        <Button
-          size='small'
-          onClick={() =>
-            onSetPage(totalPages > 0 ? Math.min(totalPages, page + 1) : page)
-          }
-          disabled={totalPages > 0 ? page >= totalPages : true}
-        >
-          Next
-        </Button>
-      </div>
+      {totalPages > 1 ? (
+        <TablePagination
+          styles={paginationStyles}
+          page={page}
+          totalPages={totalPages}
+          onPrevious={() => onSetPage(Math.max(1, page - 1))}
+          onNext={() => onSetPage(Math.min(totalPages, page + 1))}
+          onPageSelect={onSetPage}
+          dropdownAriaLabel="Select trays page"
+        />
+      ) : null}
     </>
   );
 };

@@ -1052,6 +1052,12 @@ export async function fetchMaterialSupports(options?: {
   );
 }
 
+export async function fetchAllMaterialSupports(): Promise<{
+  supports: MaterialSupport[];
+}> {
+  return request<{ supports: MaterialSupport[] }>('/api/materials/supports/all');
+}
+
 export async function createMaterialSupport(
   token: string,
   data: MaterialSupportInput,
