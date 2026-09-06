@@ -9,7 +9,6 @@ const lazyPage = <Name extends string>(
 ) => lazy(async () => ({ default: (await load())[name] }));
 
 const Account = lazyPage(() => import('@/pages/Account'), 'Account');
-const Assemblies = lazyPage(() => import('@/pages/Assemblies'), 'Assemblies');
 const Materials = lazyPage(() => import('@/pages/Materials'), 'Materials');
 const Templates = lazyPage(() => import('@/pages/Templates'), 'Templates');
 const AdminPanel = lazyPage(() => import('@/pages/AdminPanel'), 'AdminPanel');
@@ -69,14 +68,6 @@ export const routes: RouteObject[] = [
         element: (
           <RequireAuth>
             <Templates />
-          </RequireAuth>
-        ),
-      },
-      {
-        path: 'assemblies',
-        element: (
-          <RequireAuth>
-            <Assemblies />
           </RequireAuth>
         ),
       },

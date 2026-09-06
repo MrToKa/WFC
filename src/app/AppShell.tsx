@@ -27,7 +27,6 @@ const PUBLIC_LINKS: NavLinkConfig[] = [
 
 const AUTH_LINKS: NavLinkConfig[] = [
   ...PUBLIC_LINKS,
-  { to: '/assemblies', label: 'Assemblies' },
   { to: '/templates', label: 'Templates' },
 ] as const;
 
