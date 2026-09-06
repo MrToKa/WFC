@@ -7,6 +7,7 @@ export const useProjectDetailsStyles = makeStyles({
     gap: '1.5rem',
     maxWidth: '100%',
     width: '100%',
+    minWidth: 0,
     margin: '0 auto',
     ...shorthands.padding('0', '0', '2rem'),
   },
@@ -29,10 +30,15 @@ export const useProjectDetailsStyles = makeStyles({
   },
   metadata: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 12rem), 1fr))',
     gap: '0.75rem',
   },
   panel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
@@ -40,8 +46,12 @@ export const useProjectDetailsStyles = makeStyles({
   },
   tabList: {
     alignSelf: 'flex-start',
+    maxWidth: '100%',
+    overflowX: 'auto',
+    flexShrink: 0,
   },
   tabPanel: {
+    minWidth: 0,
     display: 'flex',
     flexDirection: 'column',
     gap: '1rem',
@@ -53,6 +63,9 @@ export const useProjectDetailsStyles = makeStyles({
   },
   numericField: {
     flex: '1 1 14rem',
+    overflowWrap: 'anywhere',
+    minWidth: 0,
+    boxSizing: 'border-box',
     maxWidth: '18rem',
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
@@ -73,6 +86,11 @@ export const useProjectDetailsStyles = makeStyles({
   },
   numericFieldInput: {
     flex: '1 1 auto',
+    minWidth: 0,
+    maxWidth: '100%',
+    '& .fui-Dropdown': {
+      minWidth: 0,
+    },
   },
   supportOverridesNote: {
     marginTop: '0.5rem',
@@ -95,6 +113,8 @@ export const useProjectDetailsStyles = makeStyles({
   },
   tableContainer: {
     width: '100%',
+    minWidth: 0,
+    overflowX: 'auto',
   },
   table: {
     width: '100%',

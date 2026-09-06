@@ -6,7 +6,7 @@ export type AuthenticatedRequest = Request;
 
 export function authenticate(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
   const authHeader = req.header('authorization') ?? '';
-  const [, token] = authHeader.split(' ');
+  const token = /^Bearer\s+(\S+)$/i.exec(authHeader.trim())?.[1];
 
   if (!token) {
     res.status(401).json({ error: 'Authentication required' });
@@ -29,15 +29,6 @@ export async function requireAdmin(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  if (
-    typeof req.originalUrl === 'string' &&
-    req.originalUrl.includes('/api/projects/') &&
-    req.originalUrl.includes('/cables')
-  ) {
-    next();
-    return;
-  }
-
   if (!req.userId) {
     res.status(401).json({ error: 'Authentication required' });
     return;

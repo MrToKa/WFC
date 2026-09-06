@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
@@ -2132,9 +2133,10 @@ materialsRouter.post(
     const trayId = normalizeOptionalUuid(data.trayId);
     const points = normalizeLoadCurvePoints(data.points);
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const loadCurveId = randomUUID();
@@ -2192,7 +2194,7 @@ materialsRouter.post(
 
       res.status(201).json({ loadCurve });
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
 
       if (
         error &&
@@ -2207,7 +2209,7 @@ materialsRouter.post(
       console.error('Create material load curve error', error);
       res.status(500).json({ error: 'Failed to create load curve' });
     } finally {
-      client.release();
+      client?.release();
     }
   }
 );
@@ -2262,9 +2264,10 @@ materialsRouter.patch(
     const points =
       data.points !== undefined ? normalizeLoadCurvePoints(data.points) : undefined;
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const updateResult = await client.query<MaterialLoadCurveRow>(
@@ -2341,7 +2344,7 @@ materialsRouter.patch(
 
       res.json({ loadCurve });
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
 
       if (
         error &&
@@ -2356,7 +2359,7 @@ materialsRouter.patch(
       console.error('Update material load curve error', error);
       res.status(500).json({ error: 'Failed to update load curve' });
     } finally {
-      client.release();
+      client?.release();
     }
   }
 );

@@ -9,11 +9,12 @@ import {
   Title3,
   makeStyles,
   shorthands,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, ApiErrorPayload } from '@/api/client';
+import { ApiError } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
+import { parseFormErrors } from './formErrors';
 
 const useStyles = makeStyles({
   root: {
@@ -22,49 +23,52 @@ const useStyles = makeStyles({
     gap: '1.5rem',
     alignItems: 'center',
     textAlign: 'center',
-    ...shorthands.padding('0', '0', '2rem')
+    ...shorthands.padding('0', '0', '2rem'),
   },
   section: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem'
+    gap: '0.5rem',
   },
   profileSection: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '0.75rem',
-    textAlign: 'center'
+    textAlign: 'center',
   },
   persona: {
-    maxWidth: '22rem'
+    maxWidth: '22rem',
   },
   form: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1rem'
+    gap: '1rem',
+    width: '100%',
+    maxWidth: '28rem',
+    textAlign: 'left',
   },
   actions: {
     display: 'flex',
     gap: '0.75rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   dangerText: {
-    color: tokens.colorStatusDangerForeground1
+    color: tokens.colorStatusDangerForeground1,
   },
   successText: {
-    color: tokens.colorStatusSuccessForeground1
+    color: tokens.colorStatusSuccessForeground1,
   },
   dangerButton: {
     backgroundColor: tokens.colorStatusDangerBackground3,
     color: tokens.colorStatusDangerForeground1,
     ':hover': {
-      backgroundColor: tokens.colorStatusDangerBackground2
+      backgroundColor: tokens.colorStatusDangerBackground2,
     },
     ':focus-visible': {
-      outlineColor: tokens.colorStatusDangerBorder1
-    }
-  }
+      outlineColor: tokens.colorStatusDangerBorder1,
+    },
+  },
 });
 
 type FormState = {
@@ -79,7 +83,7 @@ type FormErrors = Partial<Record<keyof FormState, string>> & { general?: string 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
   }).format(new Date(value));
 
 export const Account = () => {
@@ -91,7 +95,7 @@ export const Account = () => {
     email: user?.email ?? '',
     firstName: user?.firstName ?? '',
     lastName: user?.lastName ?? '',
-    password: ''
+    password: '',
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -107,7 +111,7 @@ export const Account = () => {
       email: user.email,
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
-      password: ''
+      password: '',
     });
   }, [user]);
 
@@ -125,50 +129,33 @@ export const Account = () => {
     }
     return {
       created: formatDateTime(user.createdAt),
-      updated: formatDateTime(user.updatedAt)
+      updated: formatDateTime(user.updatedAt),
     };
   }, [user]);
 
-  const handleChange =
-    (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
-      setValues((prev) => ({ ...prev, [field]: event.target.value }));
-      setErrors((prev) => ({ ...prev, [field]: undefined, general: undefined }));
-      setSuccessMessage(null);
-    };
-
-  const parseApiError = (payload: ApiErrorPayload): FormErrors => {
-    if (typeof payload === 'string') {
-      return { general: payload };
-    }
-
-    const fieldErrors = Object.entries(payload.fieldErrors ?? {}).reduce<FormErrors>(
-      (acc, [field, messages]) => {
-        if (messages.length > 0) {
-          acc[field as keyof FormState] = messages[0];
-        }
-        return acc;
-      },
-      {}
-    );
-
-    if (payload.formErrors && payload.formErrors.length > 0) {
-      fieldErrors.general = payload.formErrors[0];
-    }
-
-    return fieldErrors;
+  const handleChange = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
+    setValues((prev) => ({ ...prev, [field]: event.target.value }));
+    setErrors((prev) => ({ ...prev, [field]: undefined, general: undefined }));
+    setSuccessMessage(null);
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!user) {
+    if (!user || isSubmitting || isDeleting) {
+      return;
+    }
+
+    const email = values.email.trim();
+    if (!email) {
+      setErrors({ email: 'Email is required.' });
       return;
     }
 
     const payload: Record<string, string> = {};
 
-    if (values.email.trim() && values.email !== user.email) {
-      payload.email = values.email.trim();
+    if (email !== user.email) {
+      payload.email = email;
     }
 
     if (values.firstName.trim() !== (user.firstName ?? '')) {
@@ -198,7 +185,7 @@ export const Account = () => {
       setValues((prev) => ({ ...prev, password: '' }));
     } catch (error) {
       if (error instanceof ApiError) {
-        setErrors(parseApiError(error.payload));
+        setErrors(parseFormErrors(error.payload, ['email', 'password', 'firstName', 'lastName']));
       } else {
         setErrors({ general: 'Failed to update profile. Please try again.' });
       }
@@ -255,37 +242,61 @@ export const Account = () => {
       </div>
 
       <form className={styles.form} onSubmit={handleSubmit} noValidate aria-label="Update profile">
-        <Field label="Email" required validationState={errors.email ? 'error' : undefined}>
-          <Input type="email" value={values.email} onChange={handleChange('email')} required />
-          {errors.email ? <Body1 className={styles.dangerText}>{errors.email}</Body1> : null}
+        <Field
+          label="Email"
+          required
+          validationState={errors.email ? 'error' : undefined}
+          validationMessage={errors.email}
+        >
+          <Input
+            type="email"
+            autoComplete="email"
+            value={values.email}
+            onChange={handleChange('email')}
+            required
+          />
         </Field>
-        <Field label="First name" validationState={errors.firstName ? 'error' : undefined}>
+        <Field
+          label="First name"
+          validationState={errors.firstName ? 'error' : undefined}
+          validationMessage={errors.firstName}
+        >
           <Input value={values.firstName} onChange={handleChange('firstName')} />
-          {errors.firstName ? <Body1 className={styles.dangerText}>{errors.firstName}</Body1> : null}
         </Field>
-        <Field label="Last name" validationState={errors.lastName ? 'error' : undefined}>
+        <Field
+          label="Last name"
+          validationState={errors.lastName ? 'error' : undefined}
+          validationMessage={errors.lastName}
+        >
           <Input value={values.lastName} onChange={handleChange('lastName')} />
-          {errors.lastName ? <Body1 className={styles.dangerText}>{errors.lastName}</Body1> : null}
         </Field>
-        <Field label="New password" validationState={errors.password ? 'error' : undefined}>
+        <Field
+          label="New password"
+          validationState={errors.password ? 'error' : undefined}
+          validationMessage={errors.password}
+        >
           <Input
             type="password"
+            autoComplete="new-password"
             value={values.password}
             onChange={handleChange('password')}
             placeholder="Leave blank to keep current password"
           />
-          {errors.password ? <Body1 className={styles.dangerText}>{errors.password}</Body1> : null}
         </Field>
 
         {errors.general ? (
-          <Body1 className={styles.dangerText}>{errors.general}</Body1>
+          <Body1 role="alert" className={styles.dangerText}>
+            {errors.general}
+          </Body1>
         ) : null}
         {successMessage ? (
-          <Body1 className={styles.successText}>{successMessage}</Body1>
+          <Body1 role="status" className={styles.successText}>
+            {successMessage}
+          </Body1>
         ) : null}
 
         <div className={styles.actions}>
-          <Button appearance="primary" type="submit" disabled={isSubmitting}>
+          <Button appearance="primary" type="submit" disabled={isSubmitting || isDeleting}>
             {isSubmitting ? 'Saving changes...' : 'Save changes'}
           </Button>
           <Button appearance="secondary" onClick={() => navigate('/')}>
@@ -303,7 +314,7 @@ export const Account = () => {
           appearance="secondary"
           className={styles.dangerButton}
           onClick={() => void handleDeleteAccount()}
-          disabled={isDeleting}
+          disabled={isDeleting || isSubmitting}
         >
           {isDeleting ? 'Deleting...' : 'Delete account'}
         </Button>

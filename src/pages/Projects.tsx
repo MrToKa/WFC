@@ -9,7 +9,7 @@ import {
   Title3,
   makeStyles,
   shorthands,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, Project, fetchProjects } from '@/api/client';
@@ -21,35 +21,37 @@ const useStyles = makeStyles({
     gap: '1.5rem',
     width: '100%',
     maxWidth: 'none',
-    ...shorthands.padding('0', '0', '2rem')
+    ...shorthands.padding('0', '0', '2rem'),
   },
   header: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem'
+    gap: '0.5rem',
   },
   controls: {
     display: 'flex',
-    gap: '0.75rem'
+    flexWrap: 'wrap',
+    gap: '0.75rem',
   },
   filterInput: {
-    width: '18rem'
+    width: '18rem',
+    maxWidth: '100%',
   },
   tableWrapper: {
     width: '100%',
-    overflowX: 'auto'
+    overflowX: 'auto',
   },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    minWidth: '32rem'
+    minWidth: '32rem',
   },
   tableHeadCell: {
     textAlign: 'left',
     padding: '0.75rem 1rem',
     backgroundColor: tokens.colorNeutralBackground2,
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    whiteSpace: 'nowrap'
+    whiteSpace: 'nowrap',
   },
   sortButton: {
     display: 'inline-flex',
@@ -60,31 +62,31 @@ const useStyles = makeStyles({
     padding: 0,
     cursor: 'pointer',
     color: tokens.colorNeutralForeground1,
-    font: 'inherit'
+    font: 'inherit',
   },
   tableCell: {
     padding: '0.75rem 1rem',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    verticalAlign: 'top'
+    verticalAlign: 'top',
   },
   actionsCell: {
     display: 'flex',
     gap: '0.5rem',
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
   },
   projectInfo: {
     display: 'flex',
-    flexDirection: 'column'
+    flexDirection: 'column',
   },
   emptyState: {
     padding: '1rem',
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
-    backgroundColor: tokens.colorNeutralBackground2
+    backgroundColor: tokens.colorNeutralBackground2,
   },
   errorText: {
-    color: tokens.colorStatusDangerForeground1
-  }
+    color: tokens.colorStatusDangerForeground1,
+  },
 });
 
 export const Projects = () => {
@@ -97,9 +99,7 @@ export const Projects = () => {
   const [search, setSearch] = useState<string>('');
   const [sortField, setSortField] = useState<
     'projectNumber' | 'name' | 'customer' | 'manager' | 'createdAt'
-  >(
-    'createdAt'
-  );
+  >('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const loadProjects = async (showSpinner: boolean) => {
@@ -156,9 +156,7 @@ export const Projects = () => {
         }
         case 'createdAt':
         default:
-          return (
-            (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * direction
-          );
+          return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * direction;
       }
     });
 
@@ -199,14 +197,13 @@ export const Projects = () => {
         <Input
           className={styles.filterInput}
           placeholder="Filter projects..."
+          aria-label="Filter projects"
           value={search}
           onChange={(_, data) => setSearch(data.value)}
         />
       </div>
 
-      {error ? (
-        <Body1 className={styles.errorText}>{error}</Body1>
-      ) : null}
+      {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
 
       {filteredProjects.length === 0 ? (
         <div className={styles.emptyState}>
@@ -229,8 +226,7 @@ export const Projects = () => {
                         : 'ascending'
                     }`}
                   >
-                    Project #
-                    {sortIndicator('projectNumber')}
+                    Project #{sortIndicator('projectNumber')}
                   </button>
                 </th>
                 <th className={styles.tableHeadCell}>
@@ -301,16 +297,14 @@ export const Projects = () => {
                   <td className={styles.tableCell}>
                     <div className={styles.projectInfo}>
                       <Subtitle2>{project.name}</Subtitle2>
-                      {project.description ? (
-                        <Caption1>{project.description}</Caption1>
-                      ) : null}
+                      {project.description ? <Caption1>{project.description}</Caption1> : null}
                     </div>
                   </td>
                   <td className={styles.tableCell}>{project.customer}</td>
                   <td className={styles.tableCell}>{project.manager ?? 'N/A'}</td>
                   <td className={styles.tableCell}>
                     {new Intl.DateTimeFormat(undefined, {
-                      dateStyle: 'medium'
+                      dateStyle: 'medium',
                     }).format(new Date(project.createdAt))}
                   </td>
                   <td className={styles.tableCell}>
@@ -333,6 +327,3 @@ export const Projects = () => {
     </section>
   );
 };
-
-
-

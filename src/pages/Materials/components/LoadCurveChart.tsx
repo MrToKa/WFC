@@ -47,6 +47,7 @@ const CHART_WIDTH = 500;
 const CHART_HEIGHT = 310;
 const MARGIN = 75;
 const GRID_STEP = 0.5;
+const MAX_TICK_INTERVALS = 8;
 
 const formatTick = (value: number): string => {
   if (Math.abs(value) >= 100) {
@@ -58,21 +59,16 @@ const formatTick = (value: number): string => {
   return value.toFixed(2);
 };
 
+const tickStep = (range: number): number => {
+  const minimumStep = Math.max(GRID_STEP, range / MAX_TICK_INTERVALS);
+  const magnitude = 10 ** Math.floor(Math.log10(minimumStep));
+  const multiplier = [1, 2, 5, 10].find((value) => value * magnitude >= minimumStep) ?? 10;
+  return multiplier * magnitude;
+};
+
 const buildTicks = (min: number, max: number, step: number): number[] => {
-  if (step <= 0) {
-    return [min];
-  }
-
-  const ticks: number[] = [];
-  const start = Math.floor(min / step) * step;
-  const end = Math.ceil(max / step) * step;
-
-  for (let current = start; current <= end + 1e-8; current += step) {
-    const rounded = Number(current.toFixed(10));
-    ticks.push(rounded);
-  }
-
-  return ticks;
+  const count = Math.min(MAX_TICK_INTERVALS + 2, Math.round((max - min) / step) + 1);
+  return Array.from({ length: count }, (_, index) => Number((min + index * step).toPrecision(12)));
 };
 
 export const LoadCurveChart = memo(
@@ -87,25 +83,35 @@ export const LoadCurveChart = memo(
     summaryColor
   }: LoadCurveChartProps) => {
   const processed = useMemo(() => {
-    if (points.length === 0) {
+    const sorted = points
+      .filter(
+        (point) =>
+          Number.isFinite(point.spanM) &&
+          point.spanM >= 0 &&
+          Number.isFinite(point.loadKnPerM) &&
+          point.loadKnPerM >= 0,
+      )
+      .sort((a, b) => a.spanM - b.spanM);
+    if (sorted.length === 0) {
       return null;
     }
 
-    const sorted = [...points].sort((a, b) => a.spanM - b.spanM);
-    const minSpan = Math.min(...sorted.map((point) => point.spanM));
-    const maxSpan = Math.max(...sorted.map((point) => point.spanM));
-    const maxLoad = Math.max(...sorted.map((point) => point.loadKnPerM));
+    const minSpan = sorted[0].spanM;
+    const maxSpan = sorted[sorted.length - 1].spanM;
+    const maxLoad = sorted.reduce((maximum, point) => Math.max(maximum, point.loadKnPerM), 0);
+    const spanStep = tickStep(Math.max(maxSpan - minSpan, maxSpan * Number.EPSILON));
+    const loadStep = tickStep(maxLoad);
 
-    const domainSpanMin = Math.max(0, Math.floor(minSpan / GRID_STEP) * GRID_STEP);
-    const domainSpanMax = Math.max(GRID_STEP, Math.ceil(maxSpan / GRID_STEP) * GRID_STEP);
-    const domainLoadMin = 0;
-    const domainLoadMax = Math.max(
-      GRID_STEP,
-      Math.ceil(maxLoad / GRID_STEP) * GRID_STEP
+    const domainSpanMin = Math.max(0, Math.floor(minSpan / spanStep) * spanStep);
+    const domainSpanMax = Math.max(
+      domainSpanMin + spanStep,
+      Math.ceil(maxSpan / spanStep) * spanStep,
     );
+    const domainLoadMin = 0;
+    const domainLoadMax = Math.max(loadStep, Math.ceil(maxLoad / loadStep) * loadStep);
 
-    const spanTicks = buildTicks(domainSpanMin, domainSpanMax, GRID_STEP);
-    const loadTicks = buildTicks(domainLoadMin, domainLoadMax, GRID_STEP);
+    const spanTicks = buildTicks(domainSpanMin, domainSpanMax, spanStep);
+    const loadTicks = buildTicks(domainLoadMin, domainLoadMax, loadStep);
 
     const width = CHART_WIDTH - MARGIN * 2;
     const height = CHART_HEIGHT - MARGIN * 2;
@@ -114,10 +120,7 @@ export const LoadCurveChart = memo(
       if (domainSpanMax === domainSpanMin) {
         return MARGIN;
       }
-      return (
-        MARGIN +
-        ((value - domainSpanMin) / (domainSpanMax - domainSpanMin)) * width
-      );
+      return MARGIN + ((value - domainSpanMin) / (domainSpanMax - domainSpanMin)) * width;
     };
 
     const yScale = (value: number): number => {
@@ -144,7 +147,7 @@ export const LoadCurveChart = memo(
       domainSpanMin,
       domainSpanMax,
       domainLoadMin,
-      domainLoadMax
+      domainLoadMax,
     };
   }, [points]);
 
@@ -394,24 +397,18 @@ export const LoadCurveChart = memo(
             {formatTick(tick)}
           </text>
         );
-      })}        {loadTicks.map((tick, idx) => {
+      })}        {loadTicks.map((tick) => {
           const y = yScale(tick);
-          // Swap the text of the 35th <text> (idx === 34) with the <text> inside the 37th <g>
-          let textContent = formatTick(tick);
-          if (idx === 34 && verticalLinesData.length >= 37) {
-            // Swap with the label of the 37th vertical line
-            textContent = verticalLinesData[36].label || textContent;
-          }
           return (
             <text
               key={`ytick-${tick}`}
               x={MARGIN - 32}
               y={y + 4}
-              textAnchor='end'
-              fontSize='11'
+              textAnchor="end"
+              fontSize="11"
               fill={tokens.colorNeutralForeground2}
             >
-              {textContent}
+              {formatTick(tick)}
             </text>
           );
         })}
@@ -501,7 +498,7 @@ export const LoadCurveChart = memo(
         const baseY = yScale(domainLoadMin);
         const targetY = yScale(line.load);
         const offsetDirection = index % 2 === 0 ? -1 : 1;
-        let labelContent = line.label;
+        const labelContent = line.label;
         return (
           <g key={line.key}>
             <line

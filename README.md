@@ -6,12 +6,12 @@ served by Node.js with PostgreSQL for persistence.
 
 ## Prerequisites
 
-- Node.js 18 or later
+- Node.js 20.19+ or 22.12+ (required by Vite 7)
 - npm 9 or later
 - PostgreSQL 14 or later (or a compatible hosted instance)
 - Docker (for running MinIO via `docker compose`)
 
-Create a `.env` file in the project root with the variables referenced by `server/config.ts` (for
+Create a `server/.env` file with the variables referenced by `server/config.ts` (for
 example `DATABASE_URL`, `JWT_SECRET`, `CLIENT_ORIGIN`, and optional port overrides).
 
 MinIO requires the following environment variables inside `server/.env` (defaults shown):
@@ -48,8 +48,8 @@ npm run server:dev
 docker compose up -d minio
 ```
 
-The client runs on `http://localhost:5173` and proxies API requests to `http://localhost:4000` by
-default.
+The client runs on `http://localhost:5173` and sends API requests directly to the same hostname on
+port `4000` by default. Set `VITE_API_URL` in a root `.env` file to use a different API endpoint.
 
 ### Common Scripts
 
@@ -63,7 +63,7 @@ default.
 | `npm run test`       | Executes unit/component tests with Vitest.            |
 | `npm run lint`       | Runs ESLint over the repository.                      |
 | `npm run format`     | Formats files using Prettier.                         |
-| `npm run typecheck`  | Performs TypeScript type checking (`tsc --noEmit`).   |
+| `npm run typecheck`  | Checks TypeScript in both the client and server.     |
 
 ### Object Storage (MinIO)
 
@@ -121,4 +121,4 @@ npm run preview
 
 Deploy the contents of `dist` behind your preferred hosting solution. The Express API in `server/`
 should be deployed separately (e.g., on a managed Node.js host or container). Ensure both
-deployments share consistent environment configuration.*** End Patch
+deployments share consistent environment configuration.

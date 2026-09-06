@@ -8,11 +8,12 @@ import {
   Title3,
   makeStyles,
   shorthands,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, ApiErrorPayload } from '@/api/client';
+import { ApiError } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
+import { parseFormErrors } from './formErrors';
 
 const useStyles = makeStyles({
   root: {
@@ -24,22 +25,22 @@ const useStyles = makeStyles({
     maxWidth: '28rem',
     marginLeft: 'auto',
     marginRight: 'auto',
-    ...shorthands.padding('0', '0', '2rem')
+    ...shorthands.padding('0', '0', '2rem'),
   },
   form: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '1rem'
+    gap: '1rem',
   },
   actions: {
     display: 'flex',
     gap: '0.75rem',
     flexWrap: 'wrap',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   error: {
-    color: tokens.colorStatusDangerForeground1
-  }
+    color: tokens.colorStatusDangerForeground1,
+  },
 });
 
 type FormState = {
@@ -55,7 +56,7 @@ const initialFormState: FormState = {
   email: '',
   password: '',
   firstName: '',
-  lastName: ''
+  lastName: '',
 };
 
 export const Register = () => {
@@ -67,32 +68,9 @@ export const Register = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleChange =
-    (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
-      setValues((prev) => ({ ...prev, [field]: event.target.value }));
-      setErrors((prev) => ({ ...prev, [field]: undefined, general: undefined }));
-    };
-
-  const parseApiError = (payload: ApiErrorPayload): FormErrors => {
-    if (typeof payload === 'string') {
-      return { general: payload };
-    }
-
-    const fieldErrors = Object.entries(payload.fieldErrors ?? {}).reduce<FormErrors>(
-      (acc, [field, messages]) => {
-        if (messages.length > 0) {
-          acc[field as keyof FormState] = messages[0];
-        }
-        return acc;
-      },
-      {}
-    );
-
-    if (payload.formErrors && payload.formErrors.length > 0) {
-      fieldErrors.general = payload.formErrors[0];
-    }
-
-    return fieldErrors;
+  const handleChange = (field: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) => {
+    setValues((prev) => ({ ...prev, [field]: event.target.value }));
+    setErrors((prev) => ({ ...prev, [field]: undefined, general: undefined }));
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -102,15 +80,15 @@ export const Register = () => {
 
     try {
       await signUp({
-        email: values.email,
+        email: values.email.trim(),
         password: values.password,
-        firstName: values.firstName || undefined,
-        lastName: values.lastName || undefined
+        firstName: values.firstName.trim() || undefined,
+        lastName: values.lastName.trim() || undefined,
       });
       navigate('/account', { replace: true });
     } catch (error) {
       if (error instanceof ApiError) {
-        setErrors(parseApiError(error.payload));
+        setErrors(parseFormErrors(error.payload, ['email', 'password', 'firstName', 'lastName']));
       } else {
         setErrors({ general: 'Registration failed. Please try again.' });
       }
@@ -122,48 +100,62 @@ export const Register = () => {
   return (
     <section className={styles.root} aria-labelledby="register-heading">
       <Title3 id="register-heading">Create your account</Title3>
-      <Body1>
-        Register to access personalised features. Your information is stored securely in PostgreSQL.
-      </Body1>
+      <Body1>Create an account to access projects, materials, and your profile.</Body1>
       <form className={styles.form} onSubmit={handleSubmit} noValidate>
-        <Field label="Email" required validationState={errors.email ? 'error' : undefined}>
+        <Field
+          label="Email"
+          required
+          validationState={errors.email ? 'error' : undefined}
+          validationMessage={errors.email}
+        >
           <Input
             type="email"
+            autoComplete="email"
             value={values.email}
             onChange={handleChange('email')}
             placeholder="you@example.com"
             required
           />
-          {errors.email ? <Body1 className={styles.error}>{errors.email}</Body1> : null}
         </Field>
-        <Field label="Password" required validationState={errors.password ? 'error' : undefined}>
+        <Field
+          label="Password"
+          required
+          validationState={errors.password ? 'error' : undefined}
+          validationMessage={errors.password}
+        >
           <Input
             type="password"
+            autoComplete="new-password"
             value={values.password}
             onChange={handleChange('password')}
             placeholder="At least 8 characters"
             required
           />
-          {errors.password ? <Body1 className={styles.error}>{errors.password}</Body1> : null}
         </Field>
-        <Field label="First name" validationState={errors.firstName ? 'error' : undefined}>
-          <Input
-            value={values.firstName}
-            onChange={handleChange('firstName')}
-            placeholder="Ada"
-          />
-          {errors.firstName ? <Body1 className={styles.error}>{errors.firstName}</Body1> : null}
+        <Field
+          label="First name"
+          validationState={errors.firstName ? 'error' : undefined}
+          validationMessage={errors.firstName}
+        >
+          <Input value={values.firstName} onChange={handleChange('firstName')} placeholder="Ada" />
         </Field>
-        <Field label="Last name" validationState={errors.lastName ? 'error' : undefined}>
+        <Field
+          label="Last name"
+          validationState={errors.lastName ? 'error' : undefined}
+          validationMessage={errors.lastName}
+        >
           <Input
             value={values.lastName}
             onChange={handleChange('lastName')}
             placeholder="Lovelace"
           />
-          {errors.lastName ? <Body1 className={styles.error}>{errors.lastName}</Body1> : null}
         </Field>
 
-        {errors.general ? <Body1 className={styles.error}>{errors.general}</Body1> : null}
+        {errors.general ? (
+          <Body1 role="alert" className={styles.error}>
+            {errors.general}
+          </Body1>
+        ) : null}
 
         <div className={styles.actions}>
           <Button appearance="primary" type="submit" disabled={isSubmitting}>

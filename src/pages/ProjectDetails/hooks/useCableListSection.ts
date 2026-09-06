@@ -177,6 +177,7 @@ export const useCableListSection = ({
   showToast
 }: UseCableListSectionParams): UseCableListSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const latestRequest = useRef(0);
   const projectSnapshot = defaultProjectSnapshot(project);
 
   const [cables, setCables] = useState<Cable[]>([]);
@@ -329,7 +330,11 @@ export const useCableListSection = ({
 
   const reloadCables = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
+      const request = ++latestRequest.current;
       if (!projectId) {
+        setCables([]);
+        setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
@@ -343,9 +348,11 @@ export const useCableListSection = ({
 
       try {
         const response = await fetchCables(projectId);
+        if (request !== latestRequest.current) return;
         setCables(sortCables(response.cables));
         setPage(1);
       } catch (err) {
+        if (request !== latestRequest.current) return;
         console.error('Failed to load cables', err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
@@ -361,18 +368,22 @@ export const useCableListSection = ({
           setError('Failed to load cables.');
         }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (request === latestRequest.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
     [projectId, sortCables]
   );
 
   useEffect(() => {
-    if (!projectId) {
-      return;
-    }
+    setCables([]);
+    setPage(1);
     void reloadCables({ showSpinner: true });
+    return () => {
+      latestRequest.current += 1;
+    };
   }, [projectId, reloadCables]);
 
   const loadCableVersions = useCallback(

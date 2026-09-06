@@ -1,27 +1,55 @@
+import { lazy, type ComponentType } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppShell } from '@/app/AppShell';
 import { RedirectIfAuthenticated, RequireAdmin, RequireAuth } from '@/components/AuthGuards';
-import { Account } from '@/pages/Account';
-import { Assemblies } from '@/pages/Assemblies';
-import { Materials } from '@/pages/Materials';
-import { Templates } from '@/pages/Templates';
-import { AdminPanel } from '@/pages/AdminPanel';
-import { CableDetails } from '@/pages/CableDetails';
-import { CableTypeDetails } from '@/pages/CableTypeDetails';
-import { ProjectDetails } from '@/pages/ProjectDetails';
-import { RoxtecDetails } from '@/pages/RoxtecDetails';
-import { TrayDetails } from '@/pages/TrayDetails';
-import { Projects } from '@/pages/Projects';
-import { Login } from '@/pages/Login';
-import { Register } from '@/pages/Register';
-import { LoadCurveDetails } from '@/pages/LoadCurveDetails';
-import { MaterialCableTypeDetails } from '@/pages/MaterialCableTypeDetails';
-import { MaterialCableInstallationMaterialDetails } from '@/pages/MaterialCableInstallationMaterialDetails';
-import { MaterialTrayInstallationMaterialDetails } from '@/pages/MaterialTrayInstallationMaterialDetails';
-import { MaterialInstrumentDetails } from '@/pages/MaterialInstrumentDetails';
-import { MaterialInstrumentInstallationMaterialDetails } from '@/pages/MaterialInstrumentInstallationMaterialDetails';
-import { MaterialTrayDetails } from '@/pages/MaterialTrayDetails';
-import { MaterialSupportDetails } from '@/pages/MaterialSupportDetails';
+
+const lazyPage = <Name extends string>(
+  load: () => Promise<Record<Name, ComponentType>>,
+  name: Name,
+) => lazy(async () => ({ default: (await load())[name] }));
+
+const Account = lazyPage(() => import('@/pages/Account'), 'Account');
+const Assemblies = lazyPage(() => import('@/pages/Assemblies'), 'Assemblies');
+const Materials = lazyPage(() => import('@/pages/Materials'), 'Materials');
+const Templates = lazyPage(() => import('@/pages/Templates'), 'Templates');
+const AdminPanel = lazyPage(() => import('@/pages/AdminPanel'), 'AdminPanel');
+const CableDetails = lazyPage(() => import('@/pages/CableDetails'), 'CableDetails');
+const CableTypeDetails = lazyPage(() => import('@/pages/CableTypeDetails'), 'CableTypeDetails');
+const ProjectDetails = lazyPage(() => import('@/pages/ProjectDetails'), 'ProjectDetails');
+const RoxtecDetails = lazyPage(() => import('@/pages/RoxtecDetails'), 'RoxtecDetails');
+const TrayDetails = lazyPage(() => import('@/pages/TrayDetails'), 'TrayDetails');
+const Projects = lazyPage(() => import('@/pages/Projects'), 'Projects');
+const Login = lazyPage(() => import('@/pages/Login'), 'Login');
+const Register = lazyPage(() => import('@/pages/Register'), 'Register');
+const LoadCurveDetails = lazyPage(() => import('@/pages/LoadCurveDetails'), 'LoadCurveDetails');
+const MaterialCableTypeDetails = lazyPage(
+  () => import('@/pages/MaterialCableTypeDetails'),
+  'MaterialCableTypeDetails',
+);
+const MaterialCableInstallationMaterialDetails = lazyPage(
+  () => import('@/pages/MaterialCableInstallationMaterialDetails'),
+  'MaterialCableInstallationMaterialDetails',
+);
+const MaterialTrayInstallationMaterialDetails = lazyPage(
+  () => import('@/pages/MaterialTrayInstallationMaterialDetails'),
+  'MaterialTrayInstallationMaterialDetails',
+);
+const MaterialInstrumentDetails = lazyPage(
+  () => import('@/pages/MaterialInstrumentDetails'),
+  'MaterialInstrumentDetails',
+);
+const MaterialInstrumentInstallationMaterialDetails = lazyPage(
+  () => import('@/pages/MaterialInstrumentInstallationMaterialDetails'),
+  'MaterialInstrumentInstallationMaterialDetails',
+);
+const MaterialTrayDetails = lazyPage(
+  () => import('@/pages/MaterialTrayDetails'),
+  'MaterialTrayDetails',
+);
+const MaterialSupportDetails = lazyPage(
+  () => import('@/pages/MaterialSupportDetails'),
+  'MaterialSupportDetails',
+);
 
 export const routes: RouteObject[] = [
   {

@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Project, Tray, Cable, fetchProject, fetchTray, fetchTrays, fetchCables } from '../../../api/client';
+import {
+  Project,
+  Tray,
+  Cable,
+  fetchProject,
+  fetchTray,
+  fetchTrays,
+  fetchCables,
+} from '../../../api/client';
 import { ApiError } from '../../../api/client';
 import { filterCablesByTray, sortTrays } from '../TrayDetails.utils';
 
@@ -14,6 +22,11 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+    setProject(null);
+    setTray(null);
+    setTrays([]);
+    setCablesError(null);
     const load = async () => {
       if (!projectId || !trayId) {
         setError('Tray not found.');
@@ -33,24 +46,27 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
       try {
         const [projectResponse, trayResponse] = await Promise.all([
           fetchProject(projectId),
-          fetchTray(projectId, trayId)
+          fetchTray(projectId, trayId),
         ]);
+
+        if (!active) return;
 
         setProject(projectResponse.project);
         setTray(trayResponse.tray);
 
         try {
           const cablesResponse = await fetchCables(projectId);
+          if (!active) return;
           setProjectCables(cablesResponse.cables);
-          setTrayCables(
-            filterCablesByTray(cablesResponse.cables, trayResponse.tray.name)
-          );
+          setTrayCables(filterCablesByTray(cablesResponse.cables, trayResponse.tray.name));
         } catch (cableError) {
+          if (!active) return;
           console.error('Failed to load tray cables', cableError);
           setCablesError('Failed to load cables for this tray.');
           setProjectCables([]);
         }
       } catch (err) {
+        if (!active) return;
         console.error('Failed to load tray details', err);
         if (err instanceof ApiError && err.status === 404) {
           setError('Tray not found.');
@@ -66,15 +82,20 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
 
       try {
         const traysResponse = await fetchTrays(projectId);
+        if (!active) return;
         setTrays(sortTrays(traysResponse.trays));
       } catch (err) {
+        if (!active) return;
         console.error('Failed to load trays for navigation', err);
       } finally {
-        setIsLoading(false);
+        if (active) setIsLoading(false);
       }
     };
 
     void load();
+    return () => {
+      active = false;
+    };
   }, [projectId, trayId]);
 
   return {
@@ -88,6 +109,6 @@ export const useTrayData = (projectId: string | undefined, trayId: string | unde
     error,
     setTray,
     setTrays,
-    setTrayCables
+    setTrayCables,
   };
 };

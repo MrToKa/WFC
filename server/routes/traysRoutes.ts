@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
@@ -922,9 +923,10 @@ traysRouter.post(
       }
     }
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const existingResult = await client.query<TrayRow>(
@@ -998,12 +1000,12 @@ traysRouter.post(
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import trays error', error);
       res.status(500).json({ error: 'Failed to import trays' });
       return;
     } finally {
-      client.release();
+      client?.release();
     }
 
     try {

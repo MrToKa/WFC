@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Accordion,
@@ -332,6 +332,8 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
 const useStyles = makeStyles({
   root: {
     display: 'grid',
+    minWidth: 0,
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gap: '1.5rem',
     ...shorthands.padding('2rem', '1.5rem', '4rem'),
   },
@@ -348,17 +350,19 @@ const useStyles = makeStyles({
   layout: {
     display: 'grid',
     gap: '1rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
   },
   card: {
     display: 'grid',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
     gap: '0.75rem',
     alignContent: 'start',
   },
   cardGrid: {
     display: 'grid',
     gap: '0.75rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 12rem), 1fr))',
   },
   field: {
     display: 'grid',
@@ -369,6 +373,8 @@ const useStyles = makeStyles({
   },
   fullWidthCard: {
     display: 'grid',
+    minWidth: 0,
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gap: '1rem',
   },
   accordionPanelContent: {
@@ -391,7 +397,7 @@ const useStyles = makeStyles({
   compareControls: {
     display: 'grid',
     gap: '0.75rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 16rem), 1fr))',
   },
   compareSummary: {
     display: 'grid',
@@ -399,6 +405,7 @@ const useStyles = makeStyles({
   },
   tableContainer: {
     width: '100%',
+    minWidth: 0,
     overflowX: 'auto',
   },
   table: {
@@ -500,7 +507,11 @@ export const CableDetails = () => {
   const [cableEditDialogErrors, setCableEditDialogErrors] = useState<CableFormErrors>({});
   const [cableEditDialogSubmitting, setCableEditDialogSubmitting] = useState<boolean>(false);
 
+  const detailsRequestId = useRef(0);
+  const versionsRequestId = useRef(0);
+
   const loadDetails = useCallback(async () => {
+    const requestId = ++detailsRequestId.current;
     if (!projectId || !cableId) {
       setError('Cable identifier is missing.');
       setIsLoading(false);
@@ -512,11 +523,13 @@ export const CableDetails = () => {
 
     try {
       const response = await fetchCableDetails(projectId, cableId);
+      if (requestId !== detailsRequestId.current) return;
       setDetails({
         ...response,
         cableMaterials: sortMaterials(response.cableMaterials),
       });
     } catch (err) {
+      if (requestId !== detailsRequestId.current) return;
       console.error('Failed to load cable details', err);
       if (err instanceof ApiError && err.status === 404) {
         setError('Cable not found.');
@@ -525,15 +538,20 @@ export const CableDetails = () => {
       }
       setDetails(null);
     } finally {
-      setIsLoading(false);
+      if (requestId === detailsRequestId.current) setIsLoading(false);
     }
   }, [cableId, projectId]);
 
   useEffect(() => {
+    setDetails(null);
     void loadDetails();
+    return () => {
+      detailsRequestId.current += 1;
+    };
   }, [loadDetails]);
 
   const loadVersions = useCallback(async () => {
+    const requestId = ++versionsRequestId.current;
     if (!projectId || !cableId) {
       setVersionsError('Cable identifier is missing.');
       setVersionsLoading(false);
@@ -545,8 +563,10 @@ export const CableDetails = () => {
 
     try {
       const response = await fetchCableVersions(projectId, cableId);
+      if (requestId !== versionsRequestId.current) return;
       setCableVersions(response.versions);
     } catch (err) {
+      if (requestId !== versionsRequestId.current) return;
       console.error('Failed to load cable revisions', err);
       if (err instanceof ApiError && err.status === 404) {
         setVersionsError('Cable revisions are not available.');
@@ -555,12 +575,16 @@ export const CableDetails = () => {
       }
       setCableVersions([]);
     } finally {
-      setVersionsLoading(false);
+      if (requestId === versionsRequestId.current) setVersionsLoading(false);
     }
   }, [cableId, projectId]);
 
   useEffect(() => {
+    setCableVersions([]);
     void loadVersions();
+    return () => {
+      versionsRequestId.current += 1;
+    };
   }, [loadVersions]);
 
   useEffect(() => {

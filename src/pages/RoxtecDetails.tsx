@@ -32,6 +32,7 @@ import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsD
 const useStyles = makeStyles({
   root: {
     display: 'flex',
+    minWidth: 0,
     flexDirection: 'column',
     gap: '1.5rem',
     width: '100%',
@@ -43,6 +44,7 @@ const useStyles = makeStyles({
     gap: '0.5rem'
   },
   panel: {
+    minWidth: 0,
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
@@ -58,8 +60,12 @@ const useStyles = makeStyles({
   },
   fieldList: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(10rem, 16rem) 1fr',
-    gap: '0.75rem 1rem'
+    gridTemplateColumns: 'minmax(10rem, 16rem) minmax(0, 1fr)',
+    overflowWrap: 'anywhere',
+    gap: '0.75rem 1rem',
+    '@media (max-width: 600px)': {
+      gridTemplateColumns: 'minmax(0, 1fr)',
+    },
   },
   fieldName: {
     fontWeight: tokens.fontWeightSemibold
@@ -78,7 +84,8 @@ const useStyles = makeStyles({
     marginTop: '1rem'
   },
   routingInput: {
-    minWidth: '16rem'
+    minWidth: 0,
+    width: 'min(100%, 16rem)',
   },
   routingList: {
     display: 'flex',
@@ -97,6 +104,7 @@ const useStyles = makeStyles({
   },
   tableContainer: {
     width: '100%',
+    minWidth: 0,
     overflowX: 'auto'
   },
   table: {

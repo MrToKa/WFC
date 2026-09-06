@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ApiError, Project, fetchProject } from '@/api/client';
 
@@ -15,13 +15,15 @@ type UseProjectDetailsDataResult = {
 };
 
 export const useProjectDetailsData = ({
-  projectId
+  projectId,
 }: UseProjectDetailsDataParams): UseProjectDetailsDataResult => {
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const latestRequest = useRef(0);
 
   const loadProject = useCallback(async () => {
+    const request = ++latestRequest.current;
     if (!projectId) {
       setError('Project not found.');
       setProject(null);
@@ -34,8 +36,10 @@ export const useProjectDetailsData = ({
 
     try {
       const response = await fetchProject(projectId);
+      if (request !== latestRequest.current) return;
       setProject(response.project);
     } catch (err) {
+      if (request !== latestRequest.current) return;
       console.error('Failed to load project', err);
       const message =
         err instanceof ApiError
@@ -46,12 +50,16 @@ export const useProjectDetailsData = ({
       setError(message);
       setProject(null);
     } finally {
-      setIsLoading(false);
+      if (request === latestRequest.current) setIsLoading(false);
     }
   }, [projectId]);
 
   useEffect(() => {
+    setProject(null);
     void loadProject();
+    return () => {
+      latestRequest.current += 1;
+    };
   }, [loadProject]);
 
   const formattedDates = useMemo(() => {
@@ -62,12 +70,12 @@ export const useProjectDetailsData = ({
     const format = (value: string) =>
       new Intl.DateTimeFormat(undefined, {
         dateStyle: 'medium',
-        timeStyle: 'short'
+        timeStyle: 'short',
       }).format(new Date(value));
 
     return {
       created: format(project.createdAt),
-      updated: format(project.updatedAt)
+      updated: format(project.updatedAt),
     };
   }, [project]);
 
@@ -76,7 +84,6 @@ export const useProjectDetailsData = ({
     projectLoading: isLoading,
     projectError: error,
     formattedDates,
-    reloadProject: loadProject
+    reloadProject: loadProject,
   };
 };
-

@@ -1,14 +1,16 @@
 import { pool } from '../db.js';
+import type { PoolClient } from 'pg';
 import type { ProjectRow } from '../models/project.js';
 
 export const ensureProjectExists = async (
-  projectId: string
+  projectId: string,
+  database: Pick<PoolClient, 'query'> = pool,
 ): Promise<ProjectRow | null> => {
   if (!projectId) {
     return null;
   }
 
-  const result = await pool.query<ProjectRow>(
+  const result = await database.query<ProjectRow>(
     `
       SELECT
         p.id,
@@ -59,7 +61,7 @@ export const ensureProjectExists = async (
       FROM projects p
       WHERE p.id = $1;
     `,
-    [projectId]
+    [projectId],
   );
 
   return result.rows[0] ?? null;

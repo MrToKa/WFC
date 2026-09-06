@@ -8,55 +8,56 @@ export const useAdminPanelStyles = makeStyles({
     width: '100%',
     maxWidth: '80rem',
     margin: '0 auto',
-    ...shorthands.padding('0', '0', '2rem')
+    ...shorthands.padding('0', '0', '2rem'),
   },
   header: {
     display: 'flex',
     flexDirection: 'column',
     gap: '0.5rem',
-    textAlign: 'center'
+    textAlign: 'center',
   },
   section: {
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
-    width: '100%'
+    width: '100%',
   },
   controls: {
     display: 'flex',
     gap: '0.75rem',
     justifyContent: 'center',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   filterInput: {
-    width: '18rem'
+    width: '18rem',
+    maxWidth: '100%',
   },
   statusMessage: {
     padding: '0.5rem 0.75rem',
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
-    alignSelf: 'center'
+    alignSelf: 'center',
   },
   errorText: {
-    color: tokens.colorStatusDangerForeground1
+    color: tokens.colorStatusDangerForeground1,
   },
   successText: {
-    color: tokens.colorStatusSuccessForeground1
+    color: tokens.colorStatusSuccessForeground1,
   },
   tableContainer: {
     width: '100%',
-    overflowX: 'auto'
+    overflowX: 'auto',
   },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    minWidth: '48rem'
+    minWidth: '48rem',
   },
   tableHeadCell: {
     textAlign: 'left',
     padding: '0.75rem 1rem',
     backgroundColor: tokens.colorNeutralBackground2,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
   },
   sortButton: {
     display: 'inline-flex',
@@ -67,44 +68,43 @@ export const useAdminPanelStyles = makeStyles({
     padding: 0,
     cursor: 'pointer',
     color: tokens.colorNeutralForeground1,
-    font: 'inherit'
+    font: 'inherit',
   },
   tableCell: {
     padding: '0.75rem 1rem',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    verticalAlign: 'top'
+    verticalAlign: 'top',
   },
   actionCell: {
     display: 'flex',
     gap: '0.5rem',
     flexWrap: 'wrap',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   pagination: {
     display: 'flex',
     gap: '0.5rem',
     justifyContent: 'center',
     alignItems: 'center',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   form: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem'
+    gap: '0.75rem',
   },
   formActions: {
     display: 'flex',
     gap: '0.5rem',
     flexWrap: 'wrap',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   textarea: {
-    minHeight: '6rem'
+    minHeight: '6rem',
   },
   emptyState: {
-    textAlign: 'center'
-  }
+    textAlign: 'center',
+  },
 });
 
 export type AdminPanelStyles = ReturnType<typeof useAdminPanelStyles>;
-

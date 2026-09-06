@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
@@ -636,9 +637,10 @@ materialCableInstallationMaterialsRouter.post(
       return;
     }
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const existingResult = await client.query<MaterialCableInstallationMaterialRow>(
@@ -739,12 +741,12 @@ materialCableInstallationMaterialsRouter.post(
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import material cable installation materials error', error);
       res.status(500).json({ error: 'Failed to import cable installation materials' });
       return;
     } finally {
-      client.release();
+      client?.release();
     }
 
     try {

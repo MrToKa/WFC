@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchChangeOrder,
   fetchChangeOrders,
@@ -28,54 +28,79 @@ export const useChangeOrders = (
   const [loading, setLoading] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const listRequest = useRef(0);
+  const detailsRequest = useRef(0);
+  const currentSelection = useRef<string | null>(null);
 
   const loadList = useCallback(async (): Promise<ChangeOrderSummary[]> => {
+    const request = ++listRequest.current;
     if (!token) {
       setChangeOrders([]);
+      setLoading(false);
       return [];
     }
     setLoading(true);
     setError(null);
     try {
       const response = await fetchChangeOrders(token, projectId, collection);
+      if (request !== listRequest.current) return [];
       setChangeOrders(response.changeOrders);
       return response.changeOrders;
     } catch (caught) {
+      if (request !== listRequest.current) return [];
       setError(caught instanceof Error ? caught.message : `Failed to load ${pluralLabel}`);
       return [];
     } finally {
-      setLoading(false);
+      if (request === listRequest.current) setLoading(false);
     }
   }, [collection, pluralLabel, projectId, token]);
 
   const selectChangeOrder = useCallback(
     async (id: string | null): Promise<void> => {
+      const request = ++detailsRequest.current;
+      currentSelection.current = id;
       setSelectedId(id);
       setDetails(null);
-      if (!id || !token) return;
+      if (!id || !token) {
+        setDetailsLoading(false);
+        return;
+      }
       setDetailsLoading(true);
       setError(null);
       try {
         const response = await fetchChangeOrder(token, projectId, id, collection);
+        if (request !== detailsRequest.current) return;
         setDetails(response.changeOrder);
       } catch (caught) {
+        if (request !== detailsRequest.current) return;
         setError(caught instanceof Error ? caught.message : `Failed to load ${singularLabel}`);
       } finally {
-        setDetailsLoading(false);
+        if (request === detailsRequest.current) setDetailsLoading(false);
       }
     },
     [collection, projectId, singularLabel, token],
   );
 
   const refreshCurrent = useCallback(async (): Promise<void> => {
+    const request = listRequest.current + 1;
     await loadList();
-    if (selectedId) {
-      await selectChangeOrder(selectedId);
+    if (request === listRequest.current && currentSelection.current) {
+      await selectChangeOrder(currentSelection.current);
     }
-  }, [loadList, selectChangeOrder, selectedId]);
+  }, [loadList, selectChangeOrder]);
 
   useEffect(() => {
+    currentSelection.current = null;
+    setSelectedId(null);
+    setDetails(null);
+    setDetailsLoading(false);
+    setChangeOrders([]);
+    setError(null);
     void loadList();
+    return () => {
+      listRequest.current += 1;
+      detailsRequest.current += 1;
+    };
   }, [loadList]);
 
   return {

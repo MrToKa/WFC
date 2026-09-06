@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Body1, Button, Spinner, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -232,18 +232,15 @@ export const ProjectDetails = () => {
     [findMaterialTrayByType],
   );
 
-  const [selectedTab, setSelectedTab] = useState<ProjectDetailsTab>(() => {
-    const tabParam = searchParams.get('tab');
-    const initial =
-      tabParam && VALID_TABS.includes(tabParam as ProjectDetailsTab)
-        ? (tabParam as ProjectDetailsTab)
-        : 'details';
-    // Prevent non-admin users from landing on Variables API via deep link
-    return initial === 'variables-api' && !isAdmin ? 'details' : initial;
-  });
+  const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
+  const selectedTab: ProjectDetailsTab =
+    tabParam && VALID_TABS.includes(tabParam) && (tabParam !== 'variables-api' || isAdmin)
+      ? tabParam
+      : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
 
   const [trayTemplateSaving, setTrayTemplateSaving] = useState<Record<string, boolean>>({});
+  const trayTemplateSaveOperation = useRef<object | null>(null);
   const [trayTemplateErrors, setTrayTemplateErrors] = useState<Record<string, string | null>>({});
   const [trayTemplateOverrides, setTrayTemplateOverrides] = useState<Record<
     string,
@@ -1291,27 +1288,11 @@ export const ProjectDetails = () => {
   const variablesTabLoading =
     projectFilesLoading || cableTypesLoading || cablesLoading || traysLoading;
 
-  useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    let nextTab =
-      tabParam && VALID_TABS.includes(tabParam as ProjectDetailsTab)
-        ? (tabParam as ProjectDetailsTab)
-        : 'details';
-    // Block navigation to Variables API for non-admin users
-    if (nextTab === 'variables-api' && !isAdmin) {
-      nextTab = 'details';
-    }
-    if (nextTab !== selectedTab) {
-      setSelectedTab(nextTab);
-    }
-  }, [searchParams, selectedTab, isAdmin]);
-
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
       const requested = data.value as ProjectDetailsTab;
       // Ignore clicks on Variables API for non-admin users (should not render, but defensive)
       const tab = requested === 'variables-api' && !isAdmin ? selectedTab : requested;
-      setSelectedTab(tab);
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
         if (tab === 'details') {
@@ -1376,9 +1357,19 @@ export const ProjectDetails = () => {
   }, [reloadCableReportSummary, reloadCables]);
 
   useEffect(() => {
+    trayTemplateSaveOperation.current = null;
     setTrayTemplateSaving({});
     setTrayTemplateErrors({});
-    setTrayTemplateOverrides(project?.trayPurposeTemplates ?? null);
+    setTrayTemplateOverrides(null);
+    return () => {
+      trayTemplateSaveOperation.current = null;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!trayTemplateSaveOperation.current) {
+      setTrayTemplateOverrides(project?.trayPurposeTemplates ?? null);
+    }
   }, [project?.id, project?.trayPurposeTemplates]);
 
   const handleTrayTemplateChange = useCallback(
@@ -1403,10 +1394,13 @@ export const ProjectDetails = () => {
         return;
       }
 
-      if (normalizedPurpose === '') {
+      if (normalizedPurpose === '' || trayTemplateSaveOperation.current) {
         return;
       }
 
+      // The API replaces the entire mapping, so only one save may be in flight.
+      const operation = {};
+      trayTemplateSaveOperation.current = operation;
       setTrayTemplateSaving((previous) => ({
         ...previous,
         [normalizedPurpose]: true,
@@ -1437,12 +1431,14 @@ export const ProjectDetails = () => {
         const response = await updateProject(token, project.id, {
           trayPurposeTemplates: payload,
         });
+        if (trayTemplateSaveOperation.current !== operation) return;
         setTrayTemplateOverrides(response.project.trayPurposeTemplates ?? {});
         showToast({
           intent: 'success',
           title: 'Tray report template updated',
         });
       } catch (error) {
+        if (trayTemplateSaveOperation.current !== operation) return;
         console.error('Failed to update tray report template', error);
         const message =
           error instanceof ApiError ? error.message : 'Failed to update tray report template.';
@@ -1456,10 +1452,13 @@ export const ProjectDetails = () => {
           body: message,
         });
       } finally {
-        setTrayTemplateSaving((previous) => ({
-          ...previous,
-          [normalizedPurpose]: false,
-        }));
+        if (trayTemplateSaveOperation.current === operation) {
+          trayTemplateSaveOperation.current = null;
+          setTrayTemplateSaving((previous) => ({
+            ...previous,
+            [normalizedPurpose]: false,
+          }));
+        }
       }
     },
     [isAdmin, project, showToast, token, trayTemplateOverrides],

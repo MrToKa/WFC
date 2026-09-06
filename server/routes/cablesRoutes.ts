@@ -3545,9 +3545,10 @@ cablesRouter.post(
 
     type ExistingCable = CableVersionSourceRow;
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const typeKeys = Array.from(new Set(prepared.map((row) => row.typeKey)));
@@ -3791,12 +3792,12 @@ cablesRouter.post(
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import cables error', error);
       res.status(500).json({ error: 'Failed to import cables' });
       return;
     } finally {
-      client.release();
+      client?.release();
     }
 
     try {

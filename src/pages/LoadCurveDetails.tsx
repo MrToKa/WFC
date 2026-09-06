@@ -1,11 +1,4 @@
-﻿import {
-  type ChangeEvent,
-  type FormEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState
-} from 'react';
+﻿import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Body1,
@@ -24,14 +17,14 @@ import {
   makeStyles,
   mergeClasses,
   shorthands,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 import {
   ApiError,
   MaterialLoadCurve,
   fetchMaterialLoadCurve,
   importMaterialLoadCurvePoints,
-  updateMaterialLoadCurve
+  updateMaterialLoadCurve,
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -53,94 +46,99 @@ type DetailsFormErrors = Partial<Record<keyof DetailsFormState, string>>;
 const useStyles = makeStyles({
   root: {
     display: 'grid',
+    minWidth: 0,
     gap: '1.5rem',
-    ...shorthands.padding('2rem', '1.5rem', '4rem')
+    ...shorthands.padding('2rem', '1.5rem', '4rem'),
   },
   header: {
     display: 'grid',
-    gap: '0.75rem'
+    gap: '0.75rem',
   },
   headerActions: {
     display: 'flex',
     gap: '0.75rem',
     flexWrap: 'wrap',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   layout: {
     display: 'grid',
     gap: '1.5rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
     justifyContent: 'center',
-    justifyItems: 'center'
+    justifyItems: 'center',
   },
   detailCard: {
     display: 'grid',
     gap: '0.75rem',
     alignContent: 'start',
-    width: '360px',
-    maxWidth: '100%'
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
   },
   detailCardContent: {
     width: '100%',
     display: 'grid',
-    gap: '1rem'
+    gap: '1rem',
   },
   detailCardFooter: {
     width: '100%',
     display: 'flex',
     justifyContent: 'center',
     gap: '0.75rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   curvePreviewCard: {
     display: 'grid',
     gap: '0.75rem',
     alignContent: 'start',
-    width: '700px',
-    maxWidth: '100%'
+    width: '100%',
+    minWidth: 0,
+    maxWidth: '100%',
   },
   curvePreviewHeaderDescription: {
-    color: tokens.colorNeutralForeground3
+    color: tokens.colorNeutralForeground3,
   },
   curvePreviewChart: {
-    width: '600px',
-    height: '310px',
-    margin: '0 auto'
+    display: 'block',
+    width: '100%',
+    maxWidth: '600px',
+    height: 'auto',
+    margin: '0 auto',
   },
   curvePreviewMeta: {
     color: tokens.colorNeutralForeground3,
     textAlign: 'center',
-    marginTop: '0.5rem'
+    marginTop: '0.5rem',
   },
   readOnlyNotice: {
-    color: tokens.colorNeutralForeground3
+    color: tokens.colorNeutralForeground3,
   },
   pointsSection: {
     display: 'grid',
-    gap: '1rem'
+    gap: '1rem',
   },
   pointsHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: '0.75rem'
+    gap: '0.75rem',
   },
   pointsActions: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: '0.5rem'
+    gap: '0.5rem',
   },
   hiddenInput: {
-    display: 'none'
+    display: 'none',
   },
   pointsTableWrapper: {
     width: '100%',
-    overflowX: 'auto'
+    overflowX: 'auto',
   },
   pointsTable: {
     width: '100%',
-    borderCollapse: 'collapse'
+    borderCollapse: 'collapse',
   },
   pointsHeadCell: {
     padding: '0.75rem 1rem',
@@ -148,23 +146,23 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     whiteSpace: 'nowrap',
-    fontWeight: tokens.fontWeightSemibold
+    fontWeight: tokens.fontWeightSemibold,
   },
   pointsCell: {
     padding: '0.75rem 1rem',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
   },
   numericCell: {
-    textAlign: 'right'
+    textAlign: 'right',
   },
   errorText: {
-    color: tokens.colorStatusDangerForeground1
+    color: tokens.colorStatusDangerForeground1,
   },
   spinnerWrapper: {
     display: 'grid',
     placeItems: 'center',
-    minHeight: '240px'
-  }
+    minHeight: '240px',
+  },
 });
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
@@ -172,7 +170,7 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
-  minute: '2-digit'
+  minute: '2-digit',
 });
 
 const parsePointValue = (value: string): { value?: number; error?: string } => {
@@ -203,7 +201,7 @@ export const LoadCurveDetails = () => {
 
   const [detailsForm, setDetailsForm] = useState<DetailsFormState>({
     name: '',
-    description: ''
+    description: '',
   });
   const [detailsErrors, setDetailsErrors] = useState<DetailsFormErrors>({});
   const [isSavingDetails, setIsSavingDetails] = useState<boolean>(false);
@@ -215,20 +213,31 @@ export const LoadCurveDetails = () => {
 
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  const applyLoadCurve = useCallback((curve: MaterialLoadCurve) => {
-    setLoadCurve(curve);
-    setDetailsForm({
-      name: curve.name,
-      description: curve.description ?? ''
-    });
-    setPointsForm(
-      curve.points.map((point) => ({
-        id: point.id,
-        spanM: String(point.spanM),
-        loadKnPerM: String(point.loadKnPerM)
-      }))
-    );
-  }, []);
+  const isMutating = isSavingDetails || isSavingPoints || isImportingPoints;
+
+  const applyLoadCurve = useCallback(
+    (curve: MaterialLoadCurve, section: 'all' | 'details' | 'points' = 'all') => {
+      setLoadCurve(curve);
+      if (section !== 'points') {
+        setDetailsForm({
+          name: curve.name,
+          description: curve.description ?? '',
+        });
+        setDetailsErrors({});
+      }
+      if (section !== 'details') {
+        setPointsForm(
+          curve.points.map((point) => ({
+            id: point.id,
+            spanM: String(point.spanM),
+            loadKnPerM: String(point.loadKnPerM),
+          })),
+        );
+        setPointsError(null);
+      }
+    },
+    [],
+  );
 
   const loadData = useCallback(async () => {
     if (!loadCurveId) {
@@ -267,7 +276,7 @@ export const LoadCurveDetails = () => {
 
   const handleDetailsSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!loadCurve || !loadCurveId) {
+    if (!loadCurve || !loadCurveId || isMutating) {
       return;
     }
 
@@ -275,7 +284,7 @@ export const LoadCurveDetails = () => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to update load curves.'
+        body: 'You need to be signed in as an admin to update load curves.',
       });
       return;
     }
@@ -294,9 +303,9 @@ export const LoadCurveDetails = () => {
     try {
       const response = await updateMaterialLoadCurve(token, loadCurveId, {
         name: detailsForm.name.trim(),
-        description: detailsForm.description.trim() === '' ? null : detailsForm.description.trim()
+        description: detailsForm.description.trim() === '' ? null : detailsForm.description.trim(),
       });
-      applyLoadCurve(response.loadCurve);
+      applyLoadCurve(response.loadCurve, 'details');
       showToast({ intent: 'success', title: 'Load curve updated' });
     } catch (err) {
       console.error('Failed to update load curve details', err);
@@ -306,7 +315,7 @@ export const LoadCurveDetails = () => {
         showToast({
           intent: 'error',
           title: 'Failed to update details',
-          body: 'Please try again.'
+          body: 'Please try again.',
         });
       }
     } finally {
@@ -315,8 +324,7 @@ export const LoadCurveDetails = () => {
   };
 
   const handlePointFieldChange =
-    (index: number, field: keyof PointFormRow) =>
-    (event: ChangeEvent<HTMLInputElement>) => {
+    (index: number, field: keyof PointFormRow) => (event: ChangeEvent<HTMLInputElement>) => {
       const value = event.target.value;
       setPointsForm((previous) => {
         const next = [...previous];
@@ -331,8 +339,8 @@ export const LoadCurveDetails = () => {
       ...previous,
       {
         spanM: '',
-        loadKnPerM: ''
-      }
+        loadKnPerM: '',
+      },
     ]);
   };
 
@@ -348,14 +356,14 @@ export const LoadCurveDetails = () => {
       loadCurve.points.map((point) => ({
         id: point.id,
         spanM: String(point.spanM),
-        loadKnPerM: String(point.loadKnPerM)
-      }))
+        loadKnPerM: String(point.loadKnPerM),
+      })),
     );
     setPointsError(null);
   };
 
   const handlePointsSave = async () => {
-    if (!loadCurveId) {
+    if (!loadCurveId || isMutating) {
       return;
     }
 
@@ -363,7 +371,7 @@ export const LoadCurveDetails = () => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to update load curve points.'
+        body: 'You need to be signed in as an admin to update load curve points.',
       });
       return;
     }
@@ -389,7 +397,7 @@ export const LoadCurveDetails = () => {
       }
       parsedPoints.push({
         spanM: spanResult.value ?? 0,
-        loadKnPerM: loadResult.value ?? 0
+        loadKnPerM: loadResult.value ?? 0,
       });
     }
 
@@ -403,16 +411,16 @@ export const LoadCurveDetails = () => {
     setIsSavingPoints(true);
     try {
       const response = await updateMaterialLoadCurve(token, loadCurveId, {
-        points: parsedPoints
+        points: parsedPoints,
       });
-      applyLoadCurve(response.loadCurve);
+      applyLoadCurve(response.loadCurve, 'points');
       showToast({ intent: 'success', title: 'Curve points updated' });
     } catch (err) {
       console.error('Failed to update load curve points', err);
       showToast({
         intent: 'error',
         title: 'Failed to update points',
-        body: 'Please try again.'
+        body: 'Please try again.',
       });
     } finally {
       setIsSavingPoints(false);
@@ -424,7 +432,7 @@ export const LoadCurveDetails = () => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be an admin to import curve points.'
+        body: 'You need to be an admin to import curve points.',
       });
       return;
     }
@@ -434,7 +442,7 @@ export const LoadCurveDetails = () => {
   const handleImportChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     event.target.value = '';
-    if (!file || !loadCurveId) {
+    if (!file || !loadCurveId || isMutating) {
       return;
     }
 
@@ -442,7 +450,7 @@ export const LoadCurveDetails = () => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to import curve points.'
+        body: 'You need to be signed in as an admin to import curve points.',
       });
       return;
     }
@@ -450,12 +458,12 @@ export const LoadCurveDetails = () => {
     setIsImportingPoints(true);
     try {
       const response = await importMaterialLoadCurvePoints(token, loadCurveId, file);
-      applyLoadCurve(response.loadCurve);
+      applyLoadCurve(response.loadCurve, 'points');
       setPointsError(null);
       showToast({
         intent: 'success',
         title: 'Curve points imported',
-        body: `Imported ${response.summary.importedPoints} points.`
+        body: `Imported ${response.summary.importedPoints} points.`,
       });
     } catch (err) {
       console.error('Failed to import curve points', err);
@@ -463,13 +471,13 @@ export const LoadCurveDetails = () => {
         showToast({
           intent: 'error',
           title: 'Invalid file format',
-          body: 'Ensure the Excel file contains a CurveData sheet with numeric values.'
+          body: 'Ensure the Excel file contains a CurveData sheet with numeric values.',
         });
       } else {
         showToast({
           intent: 'error',
           title: 'Import failed',
-          body: 'Please verify the file and try again.'
+          body: 'Please verify the file and try again.',
         });
       }
     } finally {
@@ -487,9 +495,9 @@ export const LoadCurveDetails = () => {
 
   if (isLoading) {
     return (
-      <section className={styles.root} aria-labelledby='load-curve-heading'>
+      <section className={styles.root} aria-labelledby="load-curve-heading">
         <div className={styles.spinnerWrapper}>
-          <Spinner label='Loading load curve...' />
+          <Spinner label="Loading load curve..." />
         </div>
       </section>
     );
@@ -497,15 +505,12 @@ export const LoadCurveDetails = () => {
 
   if (error) {
     return (
-      <section className={styles.root} aria-labelledby='load-curve-heading'>
+      <section className={styles.root} aria-labelledby="load-curve-heading">
         <div className={styles.header}>
-          <Title2 id='load-curve-heading'>Load curve details</Title2>
+          <Title2 id="load-curve-heading">Load curve details</Title2>
           <Body1 className={styles.errorText}>{error}</Body1>
           <div className={styles.headerActions}>
-            <Button
-              appearance='primary'
-              onClick={() => navigate('/materials?tab=loadCurves')}
-            >
+            <Button appearance="primary" onClick={() => navigate('/materials?tab=loadCurves')}>
               Back to materials
             </Button>
             <Button onClick={() => loadData()}>Retry</Button>
@@ -523,40 +528,43 @@ export const LoadCurveDetails = () => {
   const assignedTrayNames = loadCurve.assignedTrayTypes.slice(0, maxAssignedTraysToDisplay);
   const remainingAssignedTrays = Math.max(
     0,
-    loadCurve.assignedTrayCount - assignedTrayNames.length
+    loadCurve.assignedTrayCount - assignedTrayNames.length,
   );
   const assignedTraysSummary =
     loadCurve.assignedTrayCount === 0
       ? 'No trays assigned'
       : loadCurve.assignedTrayCount === 1
-      ? `Used by ${assignedTrayNames[0]}`
-      : `Used by ${loadCurve.assignedTrayCount} trays`;
+        ? `Used by ${assignedTrayNames[0] ?? '1 tray'}`
+        : `Used by ${loadCurve.assignedTrayCount} trays`;
   const assignedTraysDetail =
     loadCurve.assignedTrayCount === 0
       ? null
       : remainingAssignedTrays > 0
-      ? `${assignedTrayNames.join(', ')} (+${remainingAssignedTrays} more)`
-      : assignedTrayNames.join(', ');
+        ? `${assignedTrayNames.join(', ')} (+${remainingAssignedTrays} more)`
+        : assignedTrayNames.join(', ');
 
   return (
-    <section className={styles.root} aria-labelledby='load-curve-heading'>
+    <section className={styles.root} aria-labelledby="load-curve-heading">
       <div className={styles.header}>
         <div className={styles.headerActions}>
-          <Button
-            appearance='secondary'
-            onClick={() => navigate('/materials?tab=loadCurves')}
-          >
+          <Button appearance="secondary" onClick={() => navigate('/materials?tab=loadCurves')}>
             Back to materials
           </Button>
-          <Button onClick={() => loadData()}>Refresh</Button>
+          <Button onClick={() => loadData()} disabled={isMutating}>
+            Refresh
+          </Button>
         </div>
         <Caption1>Load curve</Caption1>
-        <Title2 id='load-curve-heading'>{pageTitle}</Title2>
-        {createdAt && updatedAt ? <Caption1>{createdAt} · {updatedAt}</Caption1> : null}
+        <Title2 id="load-curve-heading">{pageTitle}</Title2>
+        {createdAt && updatedAt ? (
+          <Caption1>
+            {createdAt} · {updatedAt}
+          </Caption1>
+        ) : null}
       </div>
 
       <div className={styles.layout}>
-        <Card appearance='outline' className={styles.detailCard}>
+        <Card appearance="outline" className={styles.detailCard}>
           <Title3>General information</Title3>
           <Caption1 className={styles.readOnlyNotice}>
             {assignedTraysDetail
@@ -565,7 +573,7 @@ export const LoadCurveDetails = () => {
           </Caption1>
           <form onSubmit={handleDetailsSubmit} className={styles.detailCardContent}>
             <Field
-              label='Name'
+              label="Name"
               required
               validationState={detailsErrors.name ? 'error' : undefined}
               validationMessage={detailsErrors.name}
@@ -573,24 +581,28 @@ export const LoadCurveDetails = () => {
               <Input
                 value={detailsForm.name}
                 onChange={handleDetailsChange('name')}
-                disabled={!isAdmin}
+                disabled={!isAdmin || isMutating}
                 required
               />
             </Field>
-            <Field label='Description (optional)'>
+            <Field label="Description (optional)">
               <Textarea
                 value={detailsForm.description}
                 onChange={handleDetailsChange('description')}
                 rows={4}
-                disabled={!isAdmin}
+                disabled={!isAdmin || isMutating}
               />
             </Field>
             {isAdmin ? (
               <div className={styles.detailCardFooter}>
-                <Button appearance='primary' type='submit' disabled={isSavingDetails}>
+                <Button appearance="primary" type="submit" disabled={isMutating}>
                   {isSavingDetails ? 'Saving...' : 'Save details'}
                 </Button>
-                <Button type='button' onClick={loadData} disabled={isSavingDetails}>
+                <Button
+                  type="button"
+                  onClick={() => applyLoadCurve(loadCurve, 'details')}
+                  disabled={isMutating}
+                >
                   Reset
                 </Button>
               </div>
@@ -603,7 +615,7 @@ export const LoadCurveDetails = () => {
         </Card>
 
         <Card
-          appearance='outline'
+          appearance="outline"
           className={mergeClasses(styles.detailCard, styles.curvePreviewCard)}
         >
           <CardHeader
@@ -619,8 +631,7 @@ export const LoadCurveDetails = () => {
           </CardPreview>
           <Caption1 className={styles.curvePreviewMeta}>
             {loadCurve.points.length} {loadCurve.points.length === 1 ? 'point' : 'points'}{' '}
-            {'\u2022'}{' '}
-            {updatedAt ?? 'Last updated information unavailable'}
+            {'\u2022'} {updatedAt ?? 'Last updated information unavailable'}
           </Caption1>
         </Card>
       </div>
@@ -631,23 +642,21 @@ export const LoadCurveDetails = () => {
           <div className={styles.pointsActions}>
             {isAdmin ? (
               <>
-                <Button onClick={handleAddPoint}>Add point</Button>
-                <Button onClick={handleResetPoints} disabled={isSavingPoints}>
+                <Button onClick={handleAddPoint} disabled={isMutating}>
+                  Add point
+                </Button>
+                <Button onClick={handleResetPoints} disabled={isMutating}>
                   Reset to saved points
                 </Button>
-                <Button
-                  appearance='primary'
-                  onClick={handleImportClick}
-                  disabled={isImportingPoints}
-                >
+                <Button appearance="primary" onClick={handleImportClick} disabled={isMutating}>
                   {isImportingPoints ? 'Importing...' : 'Import from Excel'}
                 </Button>
               </>
             ) : null}
             <input
               ref={importInputRef}
-              type='file'
-              accept='.xlsx'
+              type="file"
+              accept=".xlsx"
               className={styles.hiddenInput}
               onChange={handleImportChange}
             />
@@ -678,22 +687,25 @@ export const LoadCurveDetails = () => {
                     <td className={styles.pointsCell}>
                       <Input
                         value={row.spanM}
+                        aria-label={`Support spacing for point ${index + 1}`}
                         onChange={handlePointFieldChange(index, 'spanM')}
-                        disabled={!isAdmin}
+                        disabled={!isAdmin || isMutating}
                       />
                     </td>
                     <td className={styles.pointsCell}>
                       <Input
                         value={row.loadKnPerM}
+                        aria-label={`Load for point ${index + 1}`}
                         onChange={handlePointFieldChange(index, 'loadKnPerM')}
-                        disabled={!isAdmin}
+                        disabled={!isAdmin || isMutating}
                       />
                     </td>
                     {isAdmin ? (
                       <td className={styles.pointsCell}>
                         <Button
-                          appearance='secondary'
+                          appearance="secondary"
                           onClick={() => handleRemovePoint(index)}
+                          disabled={isMutating}
                         >
                           Remove
                         </Button>
@@ -709,9 +721,9 @@ export const LoadCurveDetails = () => {
         {isAdmin ? (
           <div className={styles.headerActions}>
             <Button
-              appearance='primary'
+              appearance="primary"
               onClick={handlePointsSave}
-              disabled={isSavingPoints || pointsForm.length === 0}
+              disabled={isMutating || pointsForm.length === 0}
             >
               {isSavingPoints ? 'Saving...' : 'Save points'}
             </Button>

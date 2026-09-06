@@ -116,6 +116,7 @@ export const useTraysSection = ({
   showToast
 }: UseTraysSectionParams): UseTraysSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const latestRequest = useRef(0);
   const projectSnapshot = defaultProjectSnapshot(project);
 
   const [trays, setTrays] = useState<Tray[]>([]);
@@ -208,15 +209,18 @@ export const useTraysSection = ({
   }, [filteredTrays, page]);
 
   useEffect(() => {
-    const nextPage = Math.max(1, Math.ceil(trays.length / TRAYS_PER_PAGE));
-    if (page > nextPage) {
-      setPage(nextPage);
+    if (page > totalPages) {
+      setPage(totalPages);
     }
-  }, [page, trays.length]);
+  }, [page, totalPages]);
 
   const reloadTrays = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
+      const request = ++latestRequest.current;
       if (!projectId) {
+        setTrays([]);
+        setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
@@ -230,9 +234,11 @@ export const useTraysSection = ({
 
       try {
         const response = await fetchTrays(projectId);
+        if (request !== latestRequest.current) return;
         setTrays(sortTrays(response.trays));
         setPage(1);
       } catch (err) {
+        if (request !== latestRequest.current) return;
         console.error('Failed to load trays', err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
@@ -248,18 +254,22 @@ export const useTraysSection = ({
           setError('Failed to load trays.');
         }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (request === latestRequest.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
     [projectId, sortTrays]
   );
 
   useEffect(() => {
-    if (!projectId) {
-      return;
-    }
+    setTrays([]);
+    setPage(1);
     void reloadTrays({ showSpinner: true });
+    return () => {
+      latestRequest.current += 1;
+    };
   }, [projectId, reloadTrays]);
 
   // Fetch material trays

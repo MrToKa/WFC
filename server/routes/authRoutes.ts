@@ -1,41 +1,31 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import {
-  createUserId,
-  hashPassword,
-  signAccessToken,
-  verifyPassword
-} from '../auth.js';
+import { createUserId, hashPassword, signAccessToken, verifyPassword } from '../auth.js';
 import { pool } from '../db.js';
 import type { PublicUser, UserRow } from '../models/user.js';
 import { mapUserRow } from '../models/user.js';
 import { loginSchema, registerSchema } from '../validators.js';
+import { withTransaction } from '../utils/transaction.js';
 
 const authRouter = Router();
 
-authRouter.post(
-  '/register',
-  async (req: Request, res: Response): Promise<void> => {
-    const parseResult = registerSchema.safeParse(req.body);
+authRouter.post('/register', async (req: Request, res: Response): Promise<void> => {
+  const parseResult = registerSchema.safeParse(req.body);
 
-    if (!parseResult.success) {
-      res.status(400).json({ error: parseResult.error.flatten() });
-      return;
-    }
+  if (!parseResult.success) {
+    res.status(400).json({ error: parseResult.error.flatten() });
+    return;
+  }
 
-    const { email, password, firstName, lastName } = parseResult.data;
+  const { email, password, firstName, lastName } = parseResult.data;
+  try {
     const passwordHash = await hashPassword(password);
     const userId = createUserId();
-    const client = await pool.connect();
-    let transactionActive = false;
-
-    try {
-      await client.query('BEGIN');
-      transactionActive = true;
+    const userRow = await withTransaction(async (client) => {
       await client.query('LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE');
 
       const existingUsersResult = await client.query<{ count: string }>(
-        `SELECT COUNT(*)::text AS count FROM users`
+        `SELECT COUNT(*)::text AS count FROM users`,
       );
 
       const existingUsers = Number(existingUsersResult.rows[0]?.count ?? '0');
@@ -60,50 +50,32 @@ authRouter.post(
           passwordHash,
           firstName ?? null,
           lastName ?? null,
-          isFirstUser
-        ]
+          isFirstUser,
+        ],
       );
 
-      await client.query('COMMIT');
-      transactionActive = false;
+      return result.rows[0];
+    });
 
-      const user = mapUserRow(result.rows[0]);
-      const { token, expiresInSeconds } = signAccessToken(
-        user.id,
-        user.email,
-        user.isAdmin
-      );
+    const user = mapUserRow(userRow);
+    const { token, expiresInSeconds } = signAccessToken(user.id, user.email, user.isAdmin);
 
-      res.status(201).json({ user, token, expiresInSeconds });
-    } catch (error) {
-      if (transactionActive) {
-        try {
-          await client.query('ROLLBACK');
-        } catch (rollbackError) {
-          console.error(
-            'Failed to rollback register transaction',
-            rollbackError
-          );
-        }
-      }
-
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === '23505'
-      ) {
-        res.status(409).json({ error: 'Email already in use' });
-        return;
-      }
-
-      console.error('Register error', error);
-      res.status(500).json({ error: 'Failed to register user' });
-    } finally {
-      client.release();
+    res.status(201).json({ user, token, expiresInSeconds });
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === '23505'
+    ) {
+      res.status(409).json({ error: 'Email already in use' });
+      return;
     }
+
+    console.error('Register error', error);
+    res.status(500).json({ error: 'Failed to register user' });
   }
-);
+});
 
 authRouter.post(
   '/login',

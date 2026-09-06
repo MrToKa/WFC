@@ -1,12 +1,14 @@
 import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
+import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import { mapProjectRow } from '../models/project.js';
 import type { ProjectRow } from '../models/project.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { clearProjectDataSchema, createProjectSchema, updateProjectSchema } from '../validators.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import { withTransaction } from '../utils/transaction.js';
 import { cableTypesRouter } from './cableTypesRoutes.js';
 import { cablesRouter } from './cablesRoutes.js';
 import { roxtecEntriesRouter } from './roxtecEntriesRoutes.js';
@@ -33,6 +35,7 @@ type NormalizedTrayPurposeTemplates = Record<
 >;
 
 const syncSupportDistances = async (
+  client: PoolClient,
   projectId: string,
   overrides: NormalizedSupportOverrides,
 ): Promise<void> => {
@@ -43,15 +46,11 @@ const syncSupportDistances = async (
         trayType !== '' && (value.distance !== null || value.supportId !== null),
     );
 
-  const client = await pool.connect();
+  await client.query(`DELETE FROM project_support_distances WHERE project_id = $1;`, [projectId]);
 
-  try {
-    await client.query('BEGIN');
-    await client.query(`DELETE FROM project_support_distances WHERE project_id = $1;`, [projectId]);
-
-    for (const [trayType, value] of entries) {
-      await client.query(
-        `
+  for (const [trayType, value] of entries) {
+    await client.query(
+      `
           INSERT INTO project_support_distances (
             project_id,
             tray_type,
@@ -68,20 +67,13 @@ const syncSupportDistances = async (
             support_id = EXCLUDED.support_id,
             updated_at = NOW();
         `,
-        [projectId, trayType, value.distance, value.supportId],
-      );
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+      [projectId, trayType, value.distance, value.supportId],
+    );
   }
 };
 
 const syncTrayPurposeTemplates = async (
+  client: PoolClient,
   projectId: string,
   templates: NormalizedTrayPurposeTemplates,
 ): Promise<void> => {
@@ -89,35 +81,31 @@ const syncTrayPurposeTemplates = async (
     .map(([purpose, value]) => [purpose.trim(), value] as const)
     .filter(([purpose]) => purpose !== '');
 
-  const client = await pool.connect();
+  await client.query(`DELETE FROM project_tray_purpose_templates WHERE project_id = $1;`, [
+    projectId,
+  ]);
 
-  try {
-    await client.query('BEGIN');
-    await client.query(`DELETE FROM project_tray_purpose_templates WHERE project_id = $1;`, [
-      projectId,
-    ]);
-
-    if (entries.length > 0) {
-      const fileIds = Array.from(new Set(entries.map(([, value]) => value.fileId)));
-      if (fileIds.length > 0) {
-        const { rows } = await client.query<{ id: string }>(
-          `
+  if (entries.length > 0) {
+    const fileIds = Array.from(new Set(entries.map(([, value]) => value.fileId)));
+    if (fileIds.length > 0) {
+      const { rows } = await client.query<{ id: string }>(
+        `
             SELECT id
             FROM project_files
             WHERE project_id = $1
               AND id = ANY($2::uuid[])
           `,
-          [projectId, fileIds],
-        );
-        if (rows.length !== fileIds.length) {
-          throw new Error(INVALID_TRAY_TEMPLATE_FILE);
-        }
+        [projectId, fileIds],
+      );
+      if (rows.length !== fileIds.length) {
+        throw new Error(INVALID_TRAY_TEMPLATE_FILE);
       }
     }
+  }
 
-    for (const [purpose, value] of entries) {
-      await client.query(
-        `
+  for (const [purpose, value] of entries) {
+    await client.query(
+      `
           INSERT INTO project_tray_purpose_templates (
             project_id,
             tray_purpose,
@@ -132,16 +120,8 @@ const syncTrayPurposeTemplates = async (
             project_file_id = EXCLUDED.project_file_id,
             updated_at = NOW();
         `,
-        [projectId, purpose, value.fileId],
-      );
-    }
-
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+      [projectId, purpose, value.fileId],
+    );
   }
 };
 
@@ -586,6 +566,7 @@ projectsRouter.post(
       trayLoadSafetyFactor,
       cableLayout,
       supportDistances,
+      trayPurposeTemplates,
     } = parseResult.data;
     const projectId = randomUUID();
     const normalizedDescription = description === undefined ? undefined : description.trim();
@@ -593,8 +574,9 @@ projectsRouter.post(
     const normalizedCableLayout = normalizeCableLayout(cableLayout);
 
     try {
-      await pool.query<{ id: string }>(
-        `
+      const projectRow = await withTransaction(async (client) => {
+        await client.query<{ id: string }>(
+          `
           INSERT INTO projects (
             id,
             project_number,
@@ -611,33 +593,45 @@ projectsRouter.post(
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
           RETURNING id;
         `,
-        [
-          projectId,
-          projectNumber.trim(),
-          name.trim(),
-          customer.trim(),
-          normalizedManager === undefined || normalizedManager === '' ? null : normalizedManager,
-          normalizedDescription === undefined || normalizedDescription === ''
-            ? null
-            : normalizedDescription,
-          secondaryTrayLength ?? null,
-          supportDistance ?? null,
-          supportWeight ?? null,
-          trayLoadSafetyFactor ?? null,
-          normalizedCableLayout,
-        ],
-      );
+          [
+            projectId,
+            projectNumber.trim(),
+            name.trim(),
+            customer.trim(),
+            normalizedManager === undefined || normalizedManager === '' ? null : normalizedManager,
+            normalizedDescription === undefined || normalizedDescription === ''
+              ? null
+              : normalizedDescription,
+            secondaryTrayLength ?? null,
+            supportDistance ?? null,
+            supportWeight ?? null,
+            trayLoadSafetyFactor ?? null,
+            normalizedCableLayout,
+          ],
+        );
 
-      if (supportDistances !== undefined) {
-        await syncSupportDistances(projectId, normalizeSupportDistances(supportDistances));
-      }
+        if (supportDistances !== undefined) {
+          await syncSupportDistances(
+            client,
+            projectId,
+            normalizeSupportDistances(supportDistances),
+          );
+        }
 
-      const projectRow = await ensureProjectExists(projectId);
+        if (trayPurposeTemplates !== undefined) {
+          await syncTrayPurposeTemplates(
+            client,
+            projectId,
+            normalizeTrayPurposeTemplates(trayPurposeTemplates),
+          );
+        }
 
-      if (!projectRow) {
-        res.status(500).json({ error: 'Failed to create project' });
-        return;
-      }
+        const createdProject = await ensureProjectExists(projectId, client);
+        if (!createdProject) {
+          throw new Error('Created project could not be loaded');
+        }
+        return createdProject;
+      });
 
       res.status(201).json({ project: mapProjectRow(projectRow) });
     } catch (error) {
@@ -757,33 +751,39 @@ projectsRouter.patch(
     fields.push(`updated_at = NOW()`);
 
     try {
-      const result = await pool.query<{ id: string }>(
-        `
+      const projectRow = await withTransaction(async (client) => {
+        const result = await client.query<{ id: string }>(
+          `
           UPDATE projects
           SET ${fields.join(', ')}
           WHERE id = $${index}
           RETURNING id;
         `,
-        [...values, projectId],
-      );
-
-      if (result.rowCount === 0) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      if (supportDistances !== undefined) {
-        await syncSupportDistances(projectId, normalizeSupportDistances(supportDistances));
-      }
-
-      if (trayPurposeTemplates !== undefined) {
-        await syncTrayPurposeTemplates(
-          projectId,
-          normalizeTrayPurposeTemplates(trayPurposeTemplates),
+          [...values, projectId],
         );
-      }
 
-      const projectRow = await ensureProjectExists(projectId);
+        if (result.rowCount === 0) {
+          return null;
+        }
+
+        if (supportDistances !== undefined) {
+          await syncSupportDistances(
+            client,
+            projectId,
+            normalizeSupportDistances(supportDistances),
+          );
+        }
+
+        if (trayPurposeTemplates !== undefined) {
+          await syncTrayPurposeTemplates(
+            client,
+            projectId,
+            normalizeTrayPurposeTemplates(trayPurposeTemplates),
+          );
+        }
+
+        return ensureProjectExists(projectId, client);
+      });
 
       if (!projectRow) {
         res.status(404).json({ error: 'Project not found' });
@@ -792,6 +792,13 @@ projectsRouter.patch(
 
       res.json({ project: mapProjectRow(projectRow) });
     } catch (error) {
+      if (error instanceof Error && error.message === INVALID_TRAY_TEMPLATE_FILE) {
+        res.status(400).json({
+          error: 'Tray report template must reference a file attached to this project.',
+        });
+        return;
+      }
+
       if (
         typeof error === 'object' &&
         error !== null &&
@@ -829,9 +836,10 @@ projectsRouter.post(
 
     const { cableTypes = false, cables = false, trays = false } = parseResult.data;
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const projectResult = await client.query<{ id: string }>(
@@ -888,11 +896,11 @@ projectsRouter.post(
         },
       });
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Clear project data error', error);
       res.status(500).json({ error: 'Failed to clear project data' });
     } finally {
-      client.release();
+      client?.release();
     }
   },
 );

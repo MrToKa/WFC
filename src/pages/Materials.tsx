@@ -1,10 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Body1, Button, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useStyles } from './Materials/Materials.styles';
-import { parseMaterialsTab, type MaterialsTab } from './Materials/Materials.types';
+import { parseMaterialsTab } from './Materials/Materials.types';
 import { useTrays } from './Materials/hooks/useTrays';
 import { useSupports } from './Materials/hooks/useSupports';
 import { useLoadCurves } from './Materials/hooks/useLoadCurves';
@@ -39,8 +39,7 @@ export const Materials = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const isAdmin = Boolean(user?.isAdmin);
-  const initialTab = parseMaterialsTab(searchParams.get('tab'));
-  const [selectedTab, setSelectedTab] = useState<MaterialsTab>(initialTab);
+  const selectedTab = parseMaterialsTab(searchParams.get('tab'));
 
   const numberFormatter = useMemo(
     () =>
@@ -133,8 +132,14 @@ export const Materials = () => {
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
       const nextTab = parseMaterialsTab(String(data.value));
-      setSelectedTab(nextTab);
-      setSearchParams({ tab: nextTab }, { replace: true });
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          next.set('tab', nextTab);
+          return next;
+        },
+        { replace: true },
+      );
     },
     [setSearchParams],
   );
@@ -167,6 +172,7 @@ export const Materials = () => {
       </div>
 
       <TabList
+        className={styles.tabs}
         selectedValue={selectedTab}
         onTabSelect={handleTabSelect}
         aria-label="Materials categories"

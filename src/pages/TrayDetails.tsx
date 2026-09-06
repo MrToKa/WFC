@@ -606,6 +606,7 @@ const buildBundleCategorySettingsFromFormState = (
 const useStyles = makeStyles({
   root: {
     display: 'flex',
+    minWidth: 0,
     flexDirection: 'column',
     gap: '1.5rem',
     width: '100%',
@@ -669,11 +670,13 @@ const useStyles = makeStyles({
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 16rem), 1fr))',
     gap: '0.75rem'
   },
   field: {
     display: 'flex',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
     flexDirection: 'column',
     gap: '0.25rem'
   },
@@ -717,7 +720,7 @@ const useStyles = makeStyles({
   chartMeta: {
     display: 'grid',
     gap: '0.75rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))'
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 16rem), 1fr))'
   },
   chartStatus: {
     fontWeight: tokens.fontWeightSemibold

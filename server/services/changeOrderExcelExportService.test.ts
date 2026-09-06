@@ -505,7 +505,7 @@ describe('Change Order workbook export', () => {
       if (fill.type !== 'pattern') throw new Error('Expected a pattern fill');
       expect(fill.pattern).toBe('solid');
       expect(fill.fgColor?.theme).toBe(4);
-      expect(fill.fgColor?.tint).toBeCloseTo(0.5999938962981048, 12);
+      expect(fill.fgColor).toMatchObject({ tint: expect.closeTo(0.5999938962981048, 12) });
     }
     for (const address of ['P8', 'Q8']) {
       const cell = worksheet.getCell(address);

@@ -184,6 +184,8 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
 const useStyles = makeStyles({
   root: {
     display: 'grid',
+    minWidth: 0,
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gap: '1.5rem',
     ...shorthands.padding('2rem', '1.5rem', '4rem'),
   },
@@ -200,17 +202,19 @@ const useStyles = makeStyles({
   layout: {
     display: 'grid',
     gap: '1rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))',
   },
   card: {
     display: 'grid',
+    minWidth: 0,
+    overflowWrap: 'anywhere',
     gap: '0.75rem',
     alignContent: 'start',
   },
   cardGrid: {
     display: 'grid',
     gap: '0.75rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 12rem), 1fr))',
   },
   field: {
     display: 'grid',
@@ -221,6 +225,8 @@ const useStyles = makeStyles({
   },
   fullWidthCard: {
     display: 'grid',
+    minWidth: 0,
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gap: '1rem',
   },
   sectionHeader: {
@@ -240,6 +246,7 @@ const useStyles = makeStyles({
   },
   tableContainer: {
     width: '100%',
+    minWidth: 0,
     overflowX: 'auto',
   },
   table: {
@@ -328,7 +335,10 @@ export const CableTypeDetails = () => {
   const [isImportingDefaultMaterials, setIsImportingDefaultMaterials] = useState<boolean>(false);
   const [isExportingDefaultMaterials, setIsExportingDefaultMaterials] = useState<boolean>(false);
 
+  const detailsRequestId = useRef(0);
+
   const loadDetails = useCallback(async () => {
+    const requestId = ++detailsRequestId.current;
     if (!projectId || !cableTypeId) {
       setError('Cable type identifier is missing.');
       setIsLoading(false);
@@ -340,11 +350,13 @@ export const CableTypeDetails = () => {
 
     try {
       const response = await fetchCableTypeDetails(projectId, cableTypeId);
+      if (requestId !== detailsRequestId.current) return;
       setDetails({
         ...response,
         defaultMaterials: sortDefaultMaterials(response.defaultMaterials),
       });
     } catch (err) {
+      if (requestId !== detailsRequestId.current) return;
       console.error('Failed to load cable type details', err);
       if (err instanceof ApiError && err.status === 404) {
         setError('Cable type not found.');
@@ -353,12 +365,16 @@ export const CableTypeDetails = () => {
       }
       setDetails(null);
     } finally {
-      setIsLoading(false);
+      if (requestId === detailsRequestId.current) setIsLoading(false);
     }
   }, [cableTypeId, projectId]);
 
   useEffect(() => {
+    setDetails(null);
     void loadDetails();
+    return () => {
+      detailsRequestId.current += 1;
+    };
   }, [loadDetails]);
 
   useEffect(() => {

@@ -5,17 +5,17 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState
+  useRef,
+  useState,
 } from 'react';
 import {
   ApiError,
-  AuthSuccess,
   User,
   deleteCurrentUser,
   fetchCurrentUser,
   loginUser,
   registerUser,
-  updateCurrentUser
+  updateCurrentUser,
 } from '@/api/client';
 
 type Credentials = {
@@ -69,35 +69,31 @@ const persistToken = (token: string | null): void => {
   }
 };
 
-const applyAuthResult = (
-  setUser: (user: User) => void,
-  setToken: (token: string) => void,
-  result: AuthSuccess
-): void => {
-  setUser(result.user);
-  setToken(result.token);
-  persistToken(result.token);
-};
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setTokenState] = useState<string | null>(() => readStoredToken());
   const [initializing, setInitializing] = useState(true);
+  const currentToken = useRef(token);
+  const authOperation = useRef(0);
 
   const setToken = useCallback((value: string | null) => {
+    currentToken.current = value;
     setTokenState(value);
     persistToken(value);
   }, []);
 
   const refreshUser = useCallback(async () => {
+    const operation = authOperation.current;
     if (!token) {
       setUser(null);
       return;
     }
     try {
       const response = await fetchCurrentUser(token);
+      if (currentToken.current !== token || authOperation.current !== operation) return;
       setUser(response.user);
     } catch (error) {
+      if (currentToken.current !== token || authOperation.current !== operation) return;
       if (error instanceof ApiError && error.status === 401) {
         setUser(null);
         setToken(null);
@@ -109,6 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     let isMounted = true;
+    const operation = authOperation.current;
 
     const initialise = async (): Promise<void> => {
       if (!token) {
@@ -118,12 +115,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       try {
         const response = await fetchCurrentUser(token);
-        if (isMounted) {
+        if (isMounted && currentToken.current === token && authOperation.current === operation) {
           setUser(response.user);
         }
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
-          if (isMounted) {
+          if (isMounted && currentToken.current === token && authOperation.current === operation) {
             setToken(null);
             setUser(null);
           }
@@ -146,52 +143,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = useCallback(
     async (credentials: Credentials) => {
+      const operation = ++authOperation.current;
       const result = await loginUser(credentials);
-      applyAuthResult(
-        (value: User) => setUser(value),
-        (value: string) => setToken(value),
-        result
-      );
+      if (authOperation.current !== operation) return;
+      setUser(result.user);
+      setToken(result.token);
     },
-    [setToken]
+    [setToken],
   );
 
   const signUp = useCallback(
     async (input: Registration) => {
+      const operation = ++authOperation.current;
       const result = await registerUser(input);
-      applyAuthResult(
-        (value: User) => setUser(value),
-        (value: string) => setToken(value),
-        result
-      );
+      if (authOperation.current !== operation) return;
+      setUser(result.user);
+      setToken(result.token);
     },
-    [setToken]
+    [setToken],
   );
 
   const signOut = useCallback(() => {
+    authOperation.current += 1;
     setUser(null);
     setToken(null);
   }, [setToken]);
 
   const updateProfileAction = useCallback(
     async (input: ProfileUpdate) => {
+      const operation = authOperation.current;
       if (!token) {
         throw new Error('Not authenticated');
       }
 
       const response = await updateCurrentUser(token, input);
+      if (currentToken.current !== token || authOperation.current !== operation) return;
       setUser(response.user);
     },
-    [token]
+    [token],
   );
 
   const deleteAccountAction = useCallback(async () => {
+    const operation = authOperation.current;
     if (!token) {
       return;
     }
 
     await deleteCurrentUser(token);
-    signOut();
+    if (currentToken.current === token && authOperation.current === operation) signOut();
   }, [token, signOut]);
 
   const value = useMemo<AuthContextValue>(
@@ -204,7 +203,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signOut,
       refreshUser,
       updateProfile: updateProfileAction,
-      deleteAccount: deleteAccountAction
+      deleteAccount: deleteAccountAction,
     }),
     [
       user,
@@ -215,8 +214,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signOut,
       refreshUser,
       updateProfileAction,
-      deleteAccountAction
-    ]
+      deleteAccountAction,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

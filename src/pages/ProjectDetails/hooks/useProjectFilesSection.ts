@@ -118,6 +118,7 @@ export const useProjectFilesSection = ({
   showToast
 }: UseProjectFilesSectionParams): UseProjectFilesSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const latestRequest = useRef(0);
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -155,6 +156,7 @@ export const useProjectFilesSection = ({
 
   const reloadFiles = useCallback(
     async (options?: { showSpinner?: boolean }) => {
+      const request = ++latestRequest.current;
       if (!projectId || !token) {
         setFiles([]);
         setIsLoading(false);
@@ -172,20 +174,29 @@ export const useProjectFilesSection = ({
 
       try {
         const response = await fetchProjectFiles(projectId, token);
+        if (request !== latestRequest.current) return;
         setFiles(response.files);
       } catch (err) {
+        if (request !== latestRequest.current) return;
         console.error('Failed to load project files', err);
         setError(formatApiError(err, 'Failed to load project files.'));
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (request === latestRequest.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
     [projectId, token]
   );
 
   useEffect(() => {
+    setFiles([]);
+    setError(null);
     void reloadFiles({ showSpinner: true });
+    return () => {
+      latestRequest.current += 1;
+    };
   }, [reloadFiles]);
 
   const resetReplaceState = useCallback(() => {

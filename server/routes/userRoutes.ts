@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
-import { hashPassword } from '../auth.js';
 import { pool } from '../db.js';
 import type { UserRow } from '../models/user.js';
 import { mapUserRow } from '../models/user.js';
 import { authenticate } from '../middleware.js';
 import { updateProfileSchema } from '../validators.js';
+import { updateUserProfile } from '../services/userService.js';
 
 const userRouter = Router();
 
@@ -67,55 +67,8 @@ userRouter.patch(
       return;
     }
 
-    const { email, firstName, lastName, password } = parseResult.data;
-
-    const fields: string[] = [];
-    const values: Array<string | null> = [];
-    let index = 1;
-
-    if (email !== undefined) {
-      fields.push(`email = $${index++}`);
-      values.push(email.toLowerCase());
-    }
-
-    if (firstName !== undefined) {
-      fields.push(`first_name = $${index++}`);
-      values.push(firstName);
-    }
-
-    if (lastName !== undefined) {
-      fields.push(`last_name = $${index++}`);
-      values.push(lastName);
-    }
-
-    if (password !== undefined) {
-      const hashed = await hashPassword(password);
-      fields.push(`password_hash = $${index++}`);
-      values.push(hashed);
-    }
-
-    fields.push(`updated_at = NOW()`);
-
     try {
-      const result = await pool.query<UserRow>(
-        `
-          UPDATE users
-          SET ${fields.join(', ')}
-          WHERE id = $${index}
-          RETURNING
-            id,
-            email,
-            password_hash,
-            first_name,
-            last_name,
-            is_admin,
-            created_at,
-            updated_at;
-        `,
-        [...values, req.userId]
-      );
-
-      const userRow = result.rows[0];
+      const userRow = await updateUserProfile(req.userId, parseResult.data);
 
       if (!userRow) {
         res.status(404).json({ error: 'User not found' });

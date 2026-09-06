@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
@@ -611,9 +612,10 @@ materialCableTypesRouter.post(
       return;
     }
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const existingResult = await client.query<MaterialCableTypeRow>(
@@ -714,12 +716,12 @@ materialCableTypesRouter.post(
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import material cable types error', error);
       res.status(500).json({ error: 'Failed to import cable types' });
       return;
     } finally {
-      client.release();
+      client?.release();
     }
 
     try {

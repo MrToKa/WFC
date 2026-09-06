@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
@@ -505,8 +506,9 @@ export const createInstallationMaterialCatalogRouter = (
 
       const { prepared, skipped } = prepareImportRows(rows);
       const summary = { inserted: 0, updated: 0, skipped };
-      const client = await pool.connect();
+      let client: PoolClient | undefined;
       try {
+        client = await pool.connect();
         await client.query('BEGIN');
         for (const row of prepared) {
           const existing = await client.query<{ id: string }>(
@@ -569,12 +571,12 @@ export const createInstallationMaterialCatalogRouter = (
         }
         await client.query('COMMIT');
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined);
+        await client?.query('ROLLBACK').catch(() => undefined);
         console.error(`Import material ${config.label.toLowerCase()}s error`, error);
         res.status(500).json({ error: `Failed to import ${config.label.toLowerCase()}s` });
         return;
       } finally {
-        client.release();
+        client?.release();
       }
 
       try {

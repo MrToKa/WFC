@@ -1,3 +1,4 @@
+import type { PoolClient } from 'pg';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { pool } from '../db.js';
@@ -50,13 +51,12 @@ export const roxtecEntriesRouter = (() => {
       return;
     }
 
-    const project = await ensureProjectExists(projectId);
-    if (!project) {
-      res.status(404).json({ error: 'Project not found' });
-      return;
-    }
-
     try {
+      const project = await ensureProjectExists(projectId);
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
       const result = await pool.query<RoxtecEntryRow>(
         `
           SELECT
@@ -96,13 +96,12 @@ export const roxtecEntriesRouter = (() => {
       return;
     }
 
-    const project = await ensureProjectExists(projectId);
-    if (!project) {
-      res.status(404).json({ error: 'Project not found' });
-      return;
-    }
-
     try {
+      const project = await ensureProjectExists(projectId);
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
       const result = await pool.query<RoxtecEntryRow>(
         `
           SELECT
@@ -149,25 +148,25 @@ export const roxtecEntriesRouter = (() => {
         return;
       }
 
-      const project = await ensureProjectExists(projectId);
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      const revision = normalizeOptionalString(req.body?.revision);
-      const tag = normalizeOptionalString(req.body?.tag);
-      const type = normalizeOptionalString(req.body?.type);
-      const description = normalizeOptionalString(req.body?.description);
-
-      if (!revision || !tag || !type) {
-        res.status(400).json({ error: 'Revision, tag, and type are required' });
-        return;
-      }
-
-      const client = await pool.connect();
+      let client: PoolClient | undefined;
 
       try {
+        const project = await ensureProjectExists(projectId);
+        if (!project) {
+          res.status(404).json({ error: 'Project not found' });
+          return;
+        }
+
+        const revision = normalizeOptionalString(req.body?.revision);
+        const tag = normalizeOptionalString(req.body?.tag);
+        const type = normalizeOptionalString(req.body?.type);
+        const description = normalizeOptionalString(req.body?.description);
+
+        if (!revision || !tag || !type) {
+          res.status(400).json({ error: 'Revision, tag, and type are required' });
+          return;
+        }
+        client = await pool.connect();
         await client.query('BEGIN');
         await client.query('LOCK TABLE project_roxtec_entries IN EXCLUSIVE MODE');
 
@@ -218,11 +217,11 @@ export const roxtecEntriesRouter = (() => {
 
         res.status(201).json({ entry: mapRoxtecEntryRow(entry) });
       } catch (error) {
-        await client.query('ROLLBACK');
+        await client?.query('ROLLBACK').catch(() => undefined);
         console.error('Failed to create Roxtec entry', error);
         res.status(500).json({ error: 'Failed to create Roxtec entry' });
       } finally {
-        client.release();
+        client?.release();
       }
     }
   );
@@ -246,23 +245,22 @@ export const roxtecEntriesRouter = (() => {
       return;
     }
 
-    const project = await ensureProjectExists(projectId);
-    if (!project) {
-      res.status(404).json({ error: 'Project not found' });
-      return;
-    }
-
-    const revision = normalizeOptionalString(req.body?.revision);
-    const tag = normalizeOptionalString(req.body?.tag);
-    const type = normalizeOptionalString(req.body?.type);
-    const description = normalizeOptionalString(req.body?.description);
-
-    if (!revision || !tag || !type) {
-      res.status(400).json({ error: 'Revision, tag, and type are required' });
-      return;
-    }
-
     try {
+      const project = await ensureProjectExists(projectId);
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      const revision = normalizeOptionalString(req.body?.revision);
+      const tag = normalizeOptionalString(req.body?.tag);
+      const type = normalizeOptionalString(req.body?.type);
+      const description = normalizeOptionalString(req.body?.description);
+
+      if (!revision || !tag || !type) {
+        res.status(400).json({ error: 'Revision, tag, and type are required' });
+        return;
+      }
       const result = await pool.query<RoxtecEntryRow>(
         `
           UPDATE project_roxtec_entries
@@ -318,13 +316,12 @@ export const roxtecEntriesRouter = (() => {
       return;
     }
 
-    const project = await ensureProjectExists(projectId);
-    if (!project) {
-      res.status(404).json({ error: 'Project not found' });
-      return;
-    }
-
     try {
+      const project = await ensureProjectExists(projectId);
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
       const result = await pool.query(
         `
           DELETE FROM project_roxtec_entries

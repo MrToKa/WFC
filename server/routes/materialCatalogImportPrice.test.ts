@@ -2,7 +2,7 @@
 
 import type { Request, Response, Router } from 'express';
 import * as XLSX from 'xlsx';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const databaseMocks = vi.hoisted(() => ({
   pool: {
@@ -236,4 +236,25 @@ describe('material catalog import prices', () => {
       expect(mutation.values[catalog.insertPriceIndex]).toBe(0);
     });
   }
+});
+
+describe('material catalog import connection failures', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each(catalogCases)('returns a JSON error for $name when a connection fails', async (catalog) => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    databaseMocks.pool.query.mockResolvedValue({ rowCount: 0, rows: [] });
+    databaseMocks.pool.connect.mockRejectedValue(new Error('Database unavailable'));
+    const { response, status, json } = responseStub();
+    const request = {
+      file: { buffer: workbookBuffer(catalog.row), originalname: 'materials.xlsx' },
+    } as unknown as Request;
+
+    await findImportHandler(catalog.router, catalog.path)(request, response);
+
+    expect(databaseMocks.pool.connect).toHaveBeenCalledOnce();
+    expect(status).toHaveBeenCalledWith(500);
+    expect(json).toHaveBeenCalledWith({ error: expect.any(String) });
+  });
 });

@@ -433,9 +433,10 @@ cableTypesRouter.post(
     }
 
     const { name, sourceMaterialCableTypeId } = parseResult.data;
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
       const materialCableType = await findMaterialCableTypeByName(
         client,
@@ -528,11 +529,11 @@ cableTypesRouter.post(
       await client.query('COMMIT');
       res.status(201).json({ cableType: mapCableTypeRow(result.rows[0]) });
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Create cable type error', error);
       res.status(500).json({ error: 'Failed to create cable type' });
     } finally {
-      client.release();
+      client?.release();
     }
   },
 );
@@ -570,9 +571,10 @@ cableTypesRouter.patch(
     }
 
     const { name, sourceMaterialCableTypeId } = parseResult.data;
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
       const existingCableTypeResult = await client.query<ProjectCableTypeNameRow>(
         `
@@ -696,11 +698,11 @@ cableTypesRouter.patch(
       await client.query('COMMIT');
       res.json({ cableType: mapCableTypeRow(cableType) });
     } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Update cable type error', error);
       res.status(500).json({ error: 'Failed to update cable type' });
     } finally {
-      client.release();
+      client?.release();
     }
   },
 );
@@ -878,9 +880,10 @@ cableTypesRouter.post(
       return;
     }
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       const materialCableTypes = await findMaterialCableTypesByKeys(
@@ -1012,12 +1015,12 @@ cableTypesRouter.post(
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import cable types error', error);
       res.status(500).json({ error: 'Failed to import cable types' });
       return;
     } finally {
-      client.release();
+      client?.release();
     }
 
     try {
@@ -1578,9 +1581,10 @@ cableTypesRouter.post(
       return;
     }
 
-    const client = await pool.connect();
+    let client: PoolClient | undefined;
 
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
 
       await client.query(
@@ -1629,12 +1633,12 @@ cableTypesRouter.post(
 
       await client.query('COMMIT');
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Import cable type default materials error', error);
       res.status(500).json({ error: 'Failed to import default materials' });
       return;
     } finally {
-      client.release();
+      client?.release();
     }
 
     try {

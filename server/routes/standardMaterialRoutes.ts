@@ -1,6 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
-import { pool } from '../db.js';
+import { withTransaction } from '../utils/transaction.js';
 import type { StandardMaterialOwnerCategory } from '../models/standardMaterial.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import {
@@ -9,10 +9,7 @@ import {
   StandardMaterialDomainError,
   updateStandardMaterialAssignment,
 } from '../services/standardMaterialService.js';
-import {
-  createStandardMaterialSchema,
-  updateStandardMaterialSchema,
-} from '../validators.js';
+import { createStandardMaterialSchema, updateStandardMaterialSchema } from '../validators.js';
 
 const uuidSchema = z.string().uuid();
 
@@ -67,19 +64,12 @@ export const registerStandardMaterialMutationRoutes = (
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const client = await pool.connect();
       try {
-        await client.query('BEGIN');
-        const standardMaterial = await createStandardMaterialAssignment(
-          client,
-          category,
-          ids.ownerId,
-          parsed.data,
+        const standardMaterial = await withTransaction((client) =>
+          createStandardMaterialAssignment(client, category, ids.ownerId, parsed.data),
         );
-        await client.query('COMMIT');
         res.status(201).json({ standardMaterial });
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined);
         if (respondForDomainError(error, res)) return;
         if (
           typeof error === 'object' &&
@@ -92,8 +82,6 @@ export const registerStandardMaterialMutationRoutes = (
         }
         console.error('Create Standard Material assignment error', error);
         res.status(500).json({ error: 'Failed to create Standard Material assignment' });
-      } finally {
-        client.release();
       }
     },
   );
@@ -105,25 +93,24 @@ export const registerStandardMaterialMutationRoutes = (
     async (req: Request, res: Response): Promise<void> => {
       const ids = validateRouteIds(req, res, ownerParam, true);
       if (!ids?.assignmentId) return;
+      const { ownerId, assignmentId } = ids;
       const parsed = updateStandardMaterialSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const client = await pool.connect();
       try {
-        await client.query('BEGIN');
-        const standardMaterial = await updateStandardMaterialAssignment(
-          client,
-          category,
-          ids.ownerId,
-          ids.assignmentId,
-          parsed.data,
+        const standardMaterial = await withTransaction((client) =>
+          updateStandardMaterialAssignment(
+            client,
+            category,
+            ownerId,
+            assignmentId,
+            parsed.data,
+          ),
         );
-        await client.query('COMMIT');
         res.json({ standardMaterial });
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined);
         if (respondForDomainError(error, res)) return;
         if (
           typeof error === 'object' &&
@@ -136,8 +123,6 @@ export const registerStandardMaterialMutationRoutes = (
         }
         console.error('Update Standard Material assignment error', error);
         res.status(500).json({ error: 'Failed to update Standard Material assignment' });
-      } finally {
-        client.release();
       }
     },
   );
@@ -149,24 +134,16 @@ export const registerStandardMaterialMutationRoutes = (
     async (req: Request, res: Response): Promise<void> => {
       const ids = validateRouteIds(req, res, ownerParam, true);
       if (!ids?.assignmentId) return;
-      const client = await pool.connect();
+      const { ownerId, assignmentId } = ids;
       try {
-        await client.query('BEGIN');
-        await deleteStandardMaterialAssignment(
-          client,
-          category,
-          ids.ownerId,
-          ids.assignmentId,
+        await withTransaction((client) =>
+          deleteStandardMaterialAssignment(client, category, ownerId, assignmentId),
         );
-        await client.query('COMMIT');
         res.status(204).send();
       } catch (error) {
-        await client.query('ROLLBACK').catch(() => undefined);
         if (respondForDomainError(error, res)) return;
         console.error('Delete Standard Material assignment error', error);
         res.status(500).json({ error: 'Failed to delete Standard Material assignment' });
-      } finally {
-        client.release();
       }
     },
   );

@@ -1,11 +1,13 @@
+import { Suspense } from 'react';
 import {
   Button,
   Persona,
+  Spinner,
   Text,
   makeStyles,
   mergeClasses,
   shorthands,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { SignOut20Regular } from '@fluentui/react-icons';
@@ -20,33 +22,31 @@ type NavLinkConfig = {
 
 const PUBLIC_LINKS: NavLinkConfig[] = [
   { to: '/', label: 'Projects', end: true },
-  { to: '/materials', label: 'Materials' }
+  { to: '/materials', label: 'Materials' },
 ] as const;
 
 const AUTH_LINKS: NavLinkConfig[] = [
-  { to: '/', label: 'Projects', end: true },
-  { to: '/materials', label: 'Materials' },
+  ...PUBLIC_LINKS,
   { to: '/assemblies', label: 'Assemblies' },
-  { to: '/templates', label: 'Templates' }
+  { to: '/templates', label: 'Templates' },
 ] as const;
 
 const ADMIN_LINKS: NavLinkConfig[] = [{ to: '/admin', label: 'Admin' }];
 
 const GUEST_LINKS: NavLinkConfig[] = [
   { to: '/login', label: 'Log in' },
-  { to: '/register', label: 'Register' }
+  { to: '/register', label: 'Register' },
 ];
 
 const useStyles = makeStyles({
   root: {
     minHeight: '100vh',
+    minWidth: 0,
     display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gridTemplateRows: 'auto 1fr',
     backgroundColor: tokens.colorNeutralBackground1,
     color: tokens.colorNeutralForeground1,
-    '@media (max-width: 768px)': {
-      gridTemplateRows: 'auto 1fr'
-    }
   },
   header: {
     gridColumn: '1 / -1',
@@ -54,17 +54,19 @@ const useStyles = makeStyles({
     top: 0,
     zIndex: 10,
     backgroundColor: tokens.colorNeutralBackground2,
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
   },
   headerContent: {
     display: 'flex',
+    minWidth: 0,
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: '1rem',
     ...shorthands.padding('0.75rem', '1.5rem'),
     '@media (max-width: 768px)': {
-      flexWrap: 'wrap'
-    }
+      ...shorthands.padding('0.75rem', '1rem'),
+    },
   },
   brandLink: {
     textDecoration: 'none',
@@ -72,25 +74,31 @@ const useStyles = makeStyles({
     ':focus-visible': {
       outlineStyle: 'solid',
       outlineWidth: '2px',
-      outlineColor: tokens.colorStrokeFocus2
-    }
+      outlineColor: tokens.colorStrokeFocus2,
+    },
   },
   brandText: {
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeHero700,
-    lineHeight: tokens.lineHeightHero700
+    lineHeight: tokens.lineHeightHero700,
   },
   headerNav: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
+    minWidth: 0,
+    '@media (max-width: 768px)': {
+      order: 3,
+      flexBasis: '100%',
+      gap: '0.25rem',
+    },
   },
   headerActions: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   personaLink: {
     textDecoration: 'none',
@@ -99,22 +107,22 @@ const useStyles = makeStyles({
     ':focus-visible': {
       outlineStyle: 'solid',
       outlineWidth: '2px',
-      outlineColor: tokens.colorStrokeFocus2
-    }
+      outlineColor: tokens.colorStrokeFocus2,
+    },
   },
   personaCompact: {
     ':global(.fui-Persona__primaryText)': {
-      display: 'none'
+      display: 'none',
     },
     ':global(.fui-Persona__secondaryText)': {
-      display: 'none'
+      display: 'none',
     },
     ':global(.fui-Persona__tertiaryText)': {
-      display: 'none'
+      display: 'none',
     },
     ':global(.fui-Persona__quaternaryText)': {
-      display: 'none'
-    }
+      display: 'none',
+    },
   },
   navLink: {
     textDecoration: 'none',
@@ -126,25 +134,29 @@ const useStyles = makeStyles({
     transitionDuration: tokens.durationFaster,
     ':hover': {
       color: tokens.colorNeutralForeground1,
-      backgroundColor: tokens.colorNeutralBackground3
+      backgroundColor: tokens.colorNeutralBackground3,
     },
     ':focus-visible': {
       outlineStyle: 'solid',
       outlineWidth: '2px',
-      outlineColor: tokens.colorStrokeFocus2
-    }
+      outlineColor: tokens.colorStrokeFocus2,
+    },
   },
   navLinkActive: {
     color: tokens.colorBrandForegroundLink,
     backgroundColor: tokens.colorBrandBackground2,
     ':hover': {
-      color: tokens.colorBrandForeground1
-    }
+      color: tokens.colorBrandForeground1,
+    },
   },
   main: {
+    minWidth: 0,
     overflow: 'auto',
-    ...shorthands.padding('1.5rem')
-  }
+    ...shorthands.padding('1.5rem'),
+    '@media (max-width: 768px)': {
+      ...shorthands.padding('1rem'),
+    },
+  },
 });
 
 export const AppShell = () => {
@@ -212,12 +224,14 @@ export const AppShell = () => {
                   title="Sign out"
                 />
               </>
-            ) : null}            
+            ) : null}
           </div>
         </div>
       </header>
       <main id="app-root" className={styles.main} role="main" tabIndex={-1}>
-        <Outlet />
+        <Suspense fallback={<Spinner label="Loading page..." />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

@@ -28,11 +28,12 @@ const useStyles = makeStyles({
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
     gap: tokens.spacingHorizontalM,
   },
   property: {
     display: 'grid',
+    minWidth: 0,
     gap: tokens.spacingVerticalXXS,
   },
   value: {

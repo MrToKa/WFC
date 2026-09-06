@@ -109,6 +109,7 @@ export const DetailsTab = ({
 }: DetailsTabProps) => {
   const supportsErrorMessage =
     supportDistanceOverrides.find((override) => override.supportsError)?.supportsError ?? null;
+  const isSavingTrayTemplate = Object.values(trayTemplateSaving).some(Boolean);
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Details">
@@ -569,7 +570,7 @@ export const DetailsTab = ({
 
         {/* Custom Bundle Size Ranges Section */}
         {isAdmin ? (
-          <div style={{ marginTop: '1.5rem' }}>
+          <div className={styles.variablesIntro} style={{ marginTop: '1.5rem' }}>
             <Caption1>Custom bundle size ranges</Caption1>
             <Body1 style={{ marginBottom: '1rem' }}>
               Define custom cable diameter ranges for grouping cables into bundles. When defined,
@@ -596,6 +597,7 @@ export const DetailsTab = ({
                           key={range.id}
                           style={{
                             display: 'flex',
+                            flexWrap: 'wrap',
                             alignItems: 'center',
                             gap: '0.5rem',
                             marginBottom: '0.5rem',
@@ -606,6 +608,7 @@ export const DetailsTab = ({
                             value={range.min}
                             type="number"
                             placeholder="Min"
+                            aria-label={`${config.label} bundle minimum diameter`}
                             min={0}
                             step={0.1}
                             disabled={customBundleRanges.saving}
@@ -619,6 +622,7 @@ export const DetailsTab = ({
                             value={range.max}
                             type="number"
                             placeholder="Max"
+                            aria-label={`${config.label} bundle maximum diameter`}
                             min={0}
                             step={0.1}
                             disabled={customBundleRanges.saving}
@@ -720,7 +724,7 @@ export const DetailsTab = ({
                             placeholder="Select template"
                             selectedOptions={[selectedOptionValue]}
                             value={selectedLabel}
-                            disabled={!canEditTrayTemplates || isSaving}
+                            disabled={!canEditTrayTemplates || isSavingTrayTemplate}
                             onOptionSelect={(_, data) => {
                               const optionValue = data.optionValue;
                               if (!optionValue) {

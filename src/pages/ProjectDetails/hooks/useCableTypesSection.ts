@@ -139,6 +139,7 @@ export const useCableTypesSection = ({
   onMutate
 }: UseCableTypesSectionParams): UseCableTypesSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const latestRequest = useRef(0);
   const projectSnapshot = defaultProjectSnapshot(project);
 
   const [cableTypes, setCableTypes] = useState<CableType[]>([]);
@@ -282,7 +283,11 @@ export const useCableTypesSection = ({
 
   const reloadCableTypes = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
+      const request = ++latestRequest.current;
       if (!projectId) {
+        setCableTypes([]);
+        setIsLoading(false);
+        setIsRefreshing(false);
         return;
       }
 
@@ -296,9 +301,11 @@ export const useCableTypesSection = ({
 
       try {
         const response = await fetchCableTypes(projectId);
+        if (request !== latestRequest.current) return;
         setCableTypes(sortCableTypes(response.cableTypes));
         setPage(1);
       } catch (err) {
+        if (request !== latestRequest.current) return;
         console.error('Failed to load cable types', err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
@@ -314,18 +321,22 @@ export const useCableTypesSection = ({
           setError('Failed to load cable types.');
         }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (request === latestRequest.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
     [projectId, sortCableTypes]
   );
 
   useEffect(() => {
-    if (!projectId) {
-      return;
-    }
+    setCableTypes([]);
+    setPage(1);
     void reloadCableTypes({ showSpinner: true });
+    return () => {
+      latestRequest.current += 1;
+    };
   }, [projectId, reloadCableTypes]);
 
   useEffect(() => {
