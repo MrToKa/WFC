@@ -3,6 +3,16 @@ import type { StandardMaterialOwnerCategory } from '../models/standardMaterial.j
 import { MATERIAL_CAPABILITIES } from './materialCapabilities.js';
 
 describe('Standard Material catalog capabilities', () => {
+  it.each<StandardMaterialOwnerCategory>(['instrument', 'instrument-installation-material'])(
+    'uses Instrument Installation Materials as children of %s',
+    (category) => {
+      expect(MATERIAL_CAPABILITIES[category]).toMatchObject({
+        referencedMaterialCategory: 'instrument-installation-material',
+        referencedMaterialTable: 'material_instrument_installation_materials',
+      });
+    },
+  );
+
   it('uses Tray Installation Materials as children of the matching owner category', () => {
     expect(MATERIAL_CAPABILITIES['tray-installation-material']).toMatchObject({
       referencedMaterialCategory: 'tray-installation-material',

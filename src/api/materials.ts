@@ -6,6 +6,12 @@ import type {
   MaterialTrayInstallationMaterial,
   MaterialTrayInstallationMaterialImportSummary,
   MaterialTrayInstallationMaterialInput,
+  MaterialInstrument,
+  MaterialInstrumentInput,
+  MaterialInstrumentImportSummary,
+  MaterialInstrumentInstallationMaterial,
+  MaterialInstrumentInstallationMaterialInput,
+  MaterialInstrumentInstallationMaterialImportSummary,
   MaterialCableType,
   MaterialCableTypeImportSummary,
   MaterialCableTypeInput,
@@ -51,6 +57,10 @@ const standardMaterialOwnerPath = (
       return `/api/materials/cable-installation-materials/${ownerId}`;
     case 'tray-installation-material':
       return `/api/materials/tray-installation-materials/${ownerId}`;
+    case 'instrument':
+      return `/api/materials/instruments/${ownerId}`;
+    case 'instrument-installation-material':
+      return `/api/materials/instrument-installation-materials/${ownerId}`;
     case 'tray':
       return `/api/materials/trays/${ownerId}`;
     case 'support':
@@ -523,6 +533,301 @@ export async function exportMaterialTrayInstallationMaterials(token: string): Pr
 export async function getMaterialTrayInstallationMaterialsTemplate(token: string): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/materials/tray-installation-materials/template`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse errors to rethrow generic message
+    }
+
+    throw new ApiError(
+      response.status,
+      extractErrorMessage(payload, 'Failed to generate template'),
+    );
+  }
+
+  return response.blob();
+}
+
+// Material Instruments
+export async function fetchMaterialInstruments(): Promise<{
+  instruments: MaterialInstrument[];
+}> {
+  return request<{
+    instruments: MaterialInstrument[];
+  }>('/api/materials/instruments');
+}
+
+export async function createMaterialInstrument(
+  token: string,
+  data: MaterialInstrumentInput,
+): Promise<{ instrument: MaterialInstrument }> {
+  return request<{ instrument: MaterialInstrument }>('/api/materials/instruments', {
+    method: 'POST',
+    token,
+    body: data,
+  });
+}
+
+export async function updateMaterialInstrument(
+  token: string,
+  instrumentId: string,
+  data: Partial<MaterialInstrumentInput>,
+): Promise<{ instrument: MaterialInstrument }> {
+  return request<{ instrument: MaterialInstrument }>(`/api/materials/instruments/${instrumentId}`, {
+    method: 'PATCH',
+    token,
+    body: data,
+  });
+}
+
+export async function deleteMaterialInstrument(token: string, instrumentId: string): Promise<void> {
+  await request<void>(`/api/materials/instruments/${instrumentId}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+export async function importMaterialInstruments(
+  token: string,
+  file: File,
+): Promise<{
+  summary: MaterialInstrumentImportSummary;
+  instruments: MaterialInstrument[];
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/instruments/import`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import instruments';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    summary: MaterialInstrumentImportSummary;
+    instruments: MaterialInstrument[];
+  };
+}
+
+export async function exportMaterialInstruments(token: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/instruments/export`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export instruments';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function getMaterialInstrumentsTemplate(token: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/materials/instruments/template`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse errors to rethrow generic message
+    }
+
+    throw new ApiError(
+      response.status,
+      extractErrorMessage(payload, 'Failed to generate template'),
+    );
+  }
+
+  return response.blob();
+}
+
+// Material Instrument Installation Materials
+export async function fetchMaterialInstrumentInstallationMaterials(): Promise<{
+  instrumentInstallationMaterials: MaterialInstrumentInstallationMaterial[];
+}> {
+  return request<{
+    instrumentInstallationMaterials: MaterialInstrumentInstallationMaterial[];
+  }>('/api/materials/instrument-installation-materials');
+}
+
+export async function createMaterialInstrumentInstallationMaterial(
+  token: string,
+  data: MaterialInstrumentInstallationMaterialInput,
+): Promise<{ instrumentInstallationMaterial: MaterialInstrumentInstallationMaterial }> {
+  return request<{ instrumentInstallationMaterial: MaterialInstrumentInstallationMaterial }>(
+    '/api/materials/instrument-installation-materials',
+    {
+      method: 'POST',
+      token,
+      body: data,
+    },
+  );
+}
+
+export async function updateMaterialInstrumentInstallationMaterial(
+  token: string,
+  instrumentInstallationMaterialId: string,
+  data: Partial<MaterialInstrumentInstallationMaterialInput>,
+): Promise<{ instrumentInstallationMaterial: MaterialInstrumentInstallationMaterial }> {
+  return request<{ instrumentInstallationMaterial: MaterialInstrumentInstallationMaterial }>(
+    `/api/materials/instrument-installation-materials/${instrumentInstallationMaterialId}`,
+    {
+      method: 'PATCH',
+      token,
+      body: data,
+    },
+  );
+}
+
+export async function deleteMaterialInstrumentInstallationMaterial(
+  token: string,
+  instrumentInstallationMaterialId: string,
+): Promise<void> {
+  await request<void>(
+    `/api/materials/instrument-installation-materials/${instrumentInstallationMaterialId}`,
+    {
+      method: 'DELETE',
+      token,
+    },
+  );
+}
+
+export async function importMaterialInstrumentInstallationMaterials(
+  token: string,
+  file: File,
+): Promise<{
+  summary: MaterialInstrumentInstallationMaterialImportSummary;
+  instrumentInstallationMaterials: MaterialInstrumentInstallationMaterial[];
+}> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/instrument-installation-materials/import`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    },
+  );
+
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) {
+      throw new Error('Received unexpected response from import endpoint');
+    }
+  }
+
+  if (!response.ok) {
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to import instrument installation materials';
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return payload as {
+    summary: MaterialInstrumentInstallationMaterialImportSummary;
+    instrumentInstallationMaterials: MaterialInstrumentInstallationMaterial[];
+  };
+}
+
+export async function exportMaterialInstrumentInstallationMaterials(token: string): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/instrument-installation-materials/export`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      // ignore parse error
+    }
+
+    const errorPayload =
+      payload && typeof payload === 'object' && 'error' in payload
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (payload as any).error
+        : 'Failed to export instrument installation materials';
+
+    throw new ApiError(response.status, errorPayload);
+  }
+
+  return response.blob();
+}
+
+export async function getMaterialInstrumentInstallationMaterialsTemplate(
+  token: string,
+): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/materials/instrument-installation-materials/template`,
     {
       method: 'GET',
       headers: {

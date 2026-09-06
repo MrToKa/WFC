@@ -12,6 +12,8 @@ import { useCableTypes } from './Materials/hooks/useCableTypes';
 import {
   useCableInstallationMaterials,
   useTrayInstallationMaterials,
+  useInstruments,
+  useInstrumentInstallationMaterials,
 } from './Materials/hooks/useCableInstallationMaterials';
 import { useTemplateImages } from './Materials/hooks/useTemplateImages';
 import { CableInstallationMaterialDialog } from './Materials/components/CableInstallationMaterialDialog';
@@ -91,6 +93,41 @@ export const Materials = () => {
     isAdmin,
     showToast,
   });
+  const instrumentsHook = useInstruments({ token, isAdmin, showToast });
+  const instrumentInstallationMaterialsHook = useInstrumentInstallationMaterials({
+    token,
+    isAdmin,
+    showToast,
+  });
+  const catalogs = {
+    cableInstallationMaterials: {
+      hook: cableInstallationMaterialsHook,
+      category: 'cable-installation-material',
+      label: 'Cable installation materials',
+      itemLabel: 'cable installation material',
+    },
+    trayInstallationMaterials: {
+      hook: trayInstallationMaterialsHook,
+      category: 'tray-installation-material',
+      label: 'Trays installation materials',
+      itemLabel: 'tray installation material',
+    },
+    instruments: {
+      hook: instrumentsHook,
+      category: 'instrument',
+      label: 'Instruments',
+      itemLabel: 'instrument',
+    },
+    instrumentInstallationMaterials: {
+      hook: instrumentInstallationMaterialsHook,
+      category: 'instrument-installation-material',
+      label: 'Instruments installation materials',
+      itemLabel: 'instrument installation material',
+    },
+  } as const;
+  const selectedCatalog =
+    selectedTab in catalogs ? catalogs[selectedTab as keyof typeof catalogs] : null;
+  const catalogHook = selectedCatalog?.hook;
   const templateImagesHook = useTemplateImages({ token, showToast });
 
   const handleTabSelect = useCallback(
@@ -110,24 +147,21 @@ export const Materials = () => {
     ? loadCurvesHook.loadCurvePagination.totalPages
     : 1;
   const selectedTabLabel =
-    selectedTab === 'cableInstallationMaterials'
-      ? 'Cable installation materials'
-      : selectedTab === 'trayInstallationMaterials'
-        ? 'Trays installation materials'
-        : selectedTab === 'trays'
-          ? 'Trays'
-          : selectedTab === 'supports'
-            ? 'Supports'
-            : selectedTab === 'loadCurves'
-              ? 'Load curves'
-              : 'Cable types';
+    selectedCatalog?.label ??
+    (selectedTab === 'trays'
+      ? 'Trays'
+      : selectedTab === 'supports'
+        ? 'Supports'
+        : selectedTab === 'loadCurves'
+          ? 'Load curves'
+          : 'Cable types');
 
   return (
     <section className={styles.root} aria-labelledby="materials-heading">
       <div className={styles.header}>
         <Title3 id="materials-heading">Materials</Title3>
         <Body1>
-          Reference cable types, cable and tray installation materials, trays, supports, and load
+          Reference cable types, trays, instruments, installation materials, supports, and load
           curves that can be reused across projects.
         </Body1>
       </div>
@@ -139,135 +173,66 @@ export const Materials = () => {
       >
         <Tab value="cableTypes">Cable types</Tab>
         <Tab value="cableInstallationMaterials">Cable installation materials</Tab>
-        <Tab value="trayInstallationMaterials">Trays installation materials</Tab>
         <Tab value="trays">Trays</Tab>
+        <Tab value="trayInstallationMaterials">Trays installation materials</Tab>
+        <Tab value="instruments">Instruments</Tab>
+        <Tab value="instrumentInstallationMaterials">Instruments installation materials</Tab>
         <Tab value="supports">Supports</Tab>
         <Tab value="loadCurves">Load curves</Tab>
       </TabList>
 
       <div role="tabpanel" aria-label={selectedTabLabel}>
-        {selectedTab === 'cableInstallationMaterials' ? (
+        {selectedCatalog && catalogHook ? (
           <CableInstallationMaterialsTab
             styles={cableTypesStyles}
             isAdmin={isAdmin}
-            isRefreshing={cableInstallationMaterialsHook.cableInstallationMaterialsRefreshing}
+            isRefreshing={catalogHook.cableInstallationMaterialsRefreshing}
             onRefresh={() =>
-              void cableInstallationMaterialsHook.reloadCableInstallationMaterials({
+              void catalogHook.reloadCableInstallationMaterials({
                 showSpinner: false,
               })
             }
-            onCreate={cableInstallationMaterialsHook.openCreateCableInstallationMaterialDialog}
-            onImportClick={() => cableInstallationMaterialsHook.fileInputRef.current?.click()}
-            onExport={() =>
-              void cableInstallationMaterialsHook.handleExportCableInstallationMaterials()
-            }
-            onGetTemplate={() =>
-              void cableInstallationMaterialsHook.handleGetCableInstallationMaterialsTemplate()
-            }
-            onImportFileChange={
-              cableInstallationMaterialsHook.handleImportCableInstallationMaterials
-            }
-            isImporting={cableInstallationMaterialsHook.cableInstallationMaterialsImporting}
-            isExporting={cableInstallationMaterialsHook.cableInstallationMaterialsExporting}
-            isGettingTemplate={
-              cableInstallationMaterialsHook.cableInstallationMaterialsGettingTemplate
-            }
-            fileInputRef={cableInstallationMaterialsHook.fileInputRef}
-            searchText={cableInstallationMaterialsHook.searchText}
-            searchCriteria={cableInstallationMaterialsHook.searchCriteria}
-            purposeFilter={cableInstallationMaterialsHook.purposeFilter}
-            purposeOptions={cableInstallationMaterialsHook.purposeFilterOptions}
-            onSearchTextChange={cableInstallationMaterialsHook.setSearchText}
-            onSearchCriteriaChange={cableInstallationMaterialsHook.setSearchCriteria}
-            onPurposeFilterChange={cableInstallationMaterialsHook.setPurposeFilter}
-            error={cableInstallationMaterialsHook.cableInstallationMaterialsError}
-            isLoading={cableInstallationMaterialsHook.cableInstallationMaterialsLoading}
-            items={cableInstallationMaterialsHook.pagedCableInstallationMaterials}
-            pendingId={cableInstallationMaterialsHook.pendingCableInstallationMaterialId}
+            onCreate={catalogHook.openCreateCableInstallationMaterialDialog}
+            onImportClick={() => catalogHook.fileInputRef.current?.click()}
+            onExport={() => void catalogHook.handleExportCableInstallationMaterials()}
+            onGetTemplate={() => void catalogHook.handleGetCableInstallationMaterialsTemplate()}
+            onImportFileChange={catalogHook.handleImportCableInstallationMaterials}
+            isImporting={catalogHook.cableInstallationMaterialsImporting}
+            isExporting={catalogHook.cableInstallationMaterialsExporting}
+            isGettingTemplate={catalogHook.cableInstallationMaterialsGettingTemplate}
+            fileInputRef={catalogHook.fileInputRef}
+            searchText={catalogHook.searchText}
+            searchCriteria={catalogHook.searchCriteria}
+            purposeFilter={catalogHook.purposeFilter}
+            purposeOptions={catalogHook.purposeFilterOptions}
+            onSearchTextChange={catalogHook.setSearchText}
+            onSearchCriteriaChange={catalogHook.setSearchCriteria}
+            onPurposeFilterChange={catalogHook.setPurposeFilter}
+            error={catalogHook.cableInstallationMaterialsError}
+            isLoading={catalogHook.cableInstallationMaterialsLoading}
+            items={catalogHook.pagedCableInstallationMaterials}
+            pendingId={catalogHook.pendingCableInstallationMaterialId}
             onDetails={(item) =>
-              navigate(MATERIAL_DETAILS_CAPABILITIES['cable-installation-material'].route(item.id))
+              navigate(MATERIAL_DETAILS_CAPABILITIES[selectedCatalog.category].route(item.id))
             }
-            onEdit={cableInstallationMaterialsHook.openEditCableInstallationMaterialDialog}
-            onDelete={(item) =>
-              void cableInstallationMaterialsHook.handleDeleteCableInstallationMaterial(item)
-            }
-            showPagination={cableInstallationMaterialsHook.showCableInstallationMaterialPagination}
-            page={cableInstallationMaterialsHook.cableInstallationMaterialPage}
-            totalPages={cableInstallationMaterialsHook.totalCableInstallationMaterialPages}
+            onEdit={catalogHook.openEditCableInstallationMaterialDialog}
+            onDelete={(item) => void catalogHook.handleDeleteCableInstallationMaterial(item)}
+            showPagination={catalogHook.showCableInstallationMaterialPagination}
+            page={catalogHook.cableInstallationMaterialPage}
+            totalPages={catalogHook.totalCableInstallationMaterialPages}
             paginationHandlers={{
-              onPrevious: cableInstallationMaterialsHook.goToPreviousPage,
-              onNext: cableInstallationMaterialsHook.goToNextPage,
-              onPageSelect: cableInstallationMaterialsHook.goToPage,
+              onPrevious: catalogHook.goToPreviousPage,
+              onNext: catalogHook.goToNextPage,
+              onPageSelect: catalogHook.goToPage,
             }}
             includeTabPanelRole={false}
-            emptyStateTitle="No cable installation materials found"
+            catalogLabel={selectedCatalog.label}
+            itemLabel={selectedCatalog.itemLabel}
+            emptyStateTitle={`No ${selectedCatalog.itemLabel}s found`}
             emptyStateBody={
               isAdmin
-                ? 'Use the buttons above to add or import cable installation materials.'
-                : 'There are no cable installation materials recorded for materials yet.'
-            }
-          />
-        ) : selectedTab === 'trayInstallationMaterials' ? (
-          <CableInstallationMaterialsTab
-            styles={cableTypesStyles}
-            isAdmin={isAdmin}
-            isRefreshing={trayInstallationMaterialsHook.cableInstallationMaterialsRefreshing}
-            onRefresh={() =>
-              void trayInstallationMaterialsHook.reloadCableInstallationMaterials({
-                showSpinner: false,
-              })
-            }
-            onCreate={trayInstallationMaterialsHook.openCreateCableInstallationMaterialDialog}
-            onImportClick={() => trayInstallationMaterialsHook.fileInputRef.current?.click()}
-            onExport={() =>
-              void trayInstallationMaterialsHook.handleExportCableInstallationMaterials()
-            }
-            onGetTemplate={() =>
-              void trayInstallationMaterialsHook.handleGetCableInstallationMaterialsTemplate()
-            }
-            onImportFileChange={
-              trayInstallationMaterialsHook.handleImportCableInstallationMaterials
-            }
-            isImporting={trayInstallationMaterialsHook.cableInstallationMaterialsImporting}
-            isExporting={trayInstallationMaterialsHook.cableInstallationMaterialsExporting}
-            isGettingTemplate={
-              trayInstallationMaterialsHook.cableInstallationMaterialsGettingTemplate
-            }
-            fileInputRef={trayInstallationMaterialsHook.fileInputRef}
-            searchText={trayInstallationMaterialsHook.searchText}
-            searchCriteria={trayInstallationMaterialsHook.searchCriteria}
-            purposeFilter={trayInstallationMaterialsHook.purposeFilter}
-            purposeOptions={trayInstallationMaterialsHook.purposeFilterOptions}
-            onSearchTextChange={trayInstallationMaterialsHook.setSearchText}
-            onSearchCriteriaChange={trayInstallationMaterialsHook.setSearchCriteria}
-            onPurposeFilterChange={trayInstallationMaterialsHook.setPurposeFilter}
-            error={trayInstallationMaterialsHook.cableInstallationMaterialsError}
-            isLoading={trayInstallationMaterialsHook.cableInstallationMaterialsLoading}
-            items={trayInstallationMaterialsHook.pagedCableInstallationMaterials}
-            pendingId={trayInstallationMaterialsHook.pendingCableInstallationMaterialId}
-            onDetails={(item) =>
-              navigate(MATERIAL_DETAILS_CAPABILITIES['tray-installation-material'].route(item.id))
-            }
-            onEdit={trayInstallationMaterialsHook.openEditCableInstallationMaterialDialog}
-            onDelete={(item) =>
-              void trayInstallationMaterialsHook.handleDeleteCableInstallationMaterial(item)
-            }
-            showPagination={trayInstallationMaterialsHook.showCableInstallationMaterialPagination}
-            page={trayInstallationMaterialsHook.cableInstallationMaterialPage}
-            totalPages={trayInstallationMaterialsHook.totalCableInstallationMaterialPages}
-            paginationHandlers={{
-              onPrevious: trayInstallationMaterialsHook.goToPreviousPage,
-              onNext: trayInstallationMaterialsHook.goToNextPage,
-              onPageSelect: trayInstallationMaterialsHook.goToPage,
-            }}
-            includeTabPanelRole={false}
-            catalogLabel="Trays installation materials"
-            itemLabel="tray installation material"
-            emptyStateTitle="No tray installation materials found"
-            emptyStateBody={
-              isAdmin
-                ? 'Use the buttons above to add or import tray installation materials.'
-                : 'There are no tray installation materials recorded for materials yet.'
+                ? `Use the buttons above to add or import ${selectedCatalog.itemLabel}s.`
+                : `There are no ${selectedCatalog.itemLabel}s recorded for materials yet.`
             }
           />
         ) : selectedTab === 'trays' ? (
@@ -562,49 +527,23 @@ export const Materials = () => {
         onSubmit={(event) => void cableTypesHook.cableTypeDialog.handleSubmit(event)}
         onDismiss={cableTypesHook.cableTypeDialog.reset}
       />
-      <CableInstallationMaterialDialog
-        styles={cableTypesStyles}
-        open={cableInstallationMaterialsHook.cableInstallationMaterialDialog.open}
-        mode={cableInstallationMaterialsHook.cableInstallationMaterialDialog.mode}
-        values={cableInstallationMaterialsHook.cableInstallationMaterialDialog.values}
-        errors={cableInstallationMaterialsHook.cableInstallationMaterialDialog.errors}
-        submitting={cableInstallationMaterialsHook.cableInstallationMaterialDialog.submitting}
-        purposeOptions={
-          cableInstallationMaterialsHook.cableInstallationMaterialDialog.purposeOptions
-        }
-        onFieldChange={
-          cableInstallationMaterialsHook.cableInstallationMaterialDialog.handleFieldChange
-        }
-        onPurposeSelect={
-          cableInstallationMaterialsHook.cableInstallationMaterialDialog.handlePurposeSelect
-        }
-        onSubmit={(event) =>
-          void cableInstallationMaterialsHook.cableInstallationMaterialDialog.handleSubmit(event)
-        }
-        onDismiss={cableInstallationMaterialsHook.cableInstallationMaterialDialog.reset}
-      />
-      <CableInstallationMaterialDialog
-        styles={cableTypesStyles}
-        open={trayInstallationMaterialsHook.cableInstallationMaterialDialog.open}
-        mode={trayInstallationMaterialsHook.cableInstallationMaterialDialog.mode}
-        values={trayInstallationMaterialsHook.cableInstallationMaterialDialog.values}
-        errors={trayInstallationMaterialsHook.cableInstallationMaterialDialog.errors}
-        submitting={trayInstallationMaterialsHook.cableInstallationMaterialDialog.submitting}
-        purposeOptions={
-          trayInstallationMaterialsHook.cableInstallationMaterialDialog.purposeOptions
-        }
-        itemLabel="tray installation material"
-        onFieldChange={
-          trayInstallationMaterialsHook.cableInstallationMaterialDialog.handleFieldChange
-        }
-        onPurposeSelect={
-          trayInstallationMaterialsHook.cableInstallationMaterialDialog.handlePurposeSelect
-        }
-        onSubmit={(event) =>
-          void trayInstallationMaterialsHook.cableInstallationMaterialDialog.handleSubmit(event)
-        }
-        onDismiss={trayInstallationMaterialsHook.cableInstallationMaterialDialog.reset}
-      />
+      {Object.values(catalogs).map(({ category, hook, itemLabel }) => (
+        <CableInstallationMaterialDialog
+          key={category}
+          styles={cableTypesStyles}
+          open={hook.cableInstallationMaterialDialog.open}
+          mode={hook.cableInstallationMaterialDialog.mode}
+          values={hook.cableInstallationMaterialDialog.values}
+          errors={hook.cableInstallationMaterialDialog.errors}
+          submitting={hook.cableInstallationMaterialDialog.submitting}
+          purposeOptions={hook.cableInstallationMaterialDialog.purposeOptions}
+          itemLabel={itemLabel}
+          onFieldChange={hook.cableInstallationMaterialDialog.handleFieldChange}
+          onPurposeSelect={hook.cableInstallationMaterialDialog.handlePurposeSelect}
+          onSubmit={(event) => void hook.cableInstallationMaterialDialog.handleSubmit(event)}
+          onDismiss={hook.cableInstallationMaterialDialog.reset}
+        />
+      ))}
     </section>
   );
 };

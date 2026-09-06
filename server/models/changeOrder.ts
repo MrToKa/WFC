@@ -2,6 +2,8 @@ export const CHANGE_ORDER_SOURCE_CATALOGS = [
   'cable-type',
   'cable-installation-material',
   'tray-installation-material',
+  'instrument',
+  'instrument-installation-material',
   'tray',
   'support',
 ] as const;

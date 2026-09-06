@@ -63,6 +63,8 @@ export type MaterialCableInstallationMaterial = {
 };
 
 export type MaterialTrayInstallationMaterial = MaterialCableInstallationMaterial;
+export type MaterialInstrument = MaterialCableInstallationMaterial;
+export type MaterialInstrumentInstallationMaterial = MaterialCableInstallationMaterial;
 
 export type MaterialSupport = {
   id: string;
@@ -159,6 +161,9 @@ export type MaterialCableInstallationMaterialImportSummary = {
 
 export type MaterialTrayInstallationMaterialImportSummary =
   MaterialCableInstallationMaterialImportSummary;
+export type MaterialInstrumentImportSummary = MaterialCableInstallationMaterialImportSummary;
+export type MaterialInstrumentInstallationMaterialImportSummary =
+  MaterialCableInstallationMaterialImportSummary;
 
 export type MaterialCableTypeInput = {
   name: string;
@@ -194,6 +199,8 @@ export type MaterialCableInstallationMaterialInput = {
 };
 
 export type MaterialTrayInstallationMaterialInput = MaterialCableInstallationMaterialInput;
+export type MaterialInstrumentInput = MaterialCableInstallationMaterialInput;
+export type MaterialInstrumentInstallationMaterialInput = MaterialCableInstallationMaterialInput;
 
 export type MaterialTrayInput = {
   type: string;
@@ -230,6 +237,8 @@ export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
   'cable-type',
   'cable-installation-material',
   'tray-installation-material',
+  'instrument',
+  'instrument-installation-material',
   'tray',
   'support',
 ] as const;
@@ -239,7 +248,8 @@ export type MaterialDetailsCategory = StandardMaterialOwnerCategory | 'load-curv
 export type StandardMaterialUnit = 'pcs' | 'meters' | 'pcs/m';
 export type StandardMaterialReferenceCategory =
   | 'cable-installation-material'
-  | 'tray-installation-material';
+  | 'tray-installation-material'
+  | 'instrument-installation-material';
 
 export type MaterialCategoryMetadata = {
   key: MaterialDetailsCategory;
@@ -286,6 +296,8 @@ export type StandardMaterialOwner =
   | MaterialCableType
   | MaterialCableInstallationMaterial
   | MaterialTrayInstallationMaterial
+  | MaterialInstrument
+  | MaterialInstrumentInstallationMaterial
   | MaterialTray
   | MaterialSupport;
 

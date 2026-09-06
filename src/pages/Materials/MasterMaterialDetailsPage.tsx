@@ -7,6 +7,7 @@ import {
   fetchMaterialCableInstallationMaterials,
   fetchMaterialDetails,
   fetchMaterialTrayInstallationMaterials,
+  fetchMaterialInstrumentInstallationMaterials,
   updateStandardMaterial,
   type MaterialCableInstallationMaterial,
   type MaterialTrayInstallationMaterial,
@@ -66,9 +67,13 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   const isAdmin = Boolean(user?.isAdmin);
   const backPath = materialsBackPath(capability.tab);
   const usesTrayInstallationCatalog = category === 'tray-installation-material';
-  const standardMaterialCatalogItemLabel = usesTrayInstallationCatalog
-    ? 'Tray Installation Material'
-    : 'Cable Installation Material';
+  const usesInstrumentInstallationCatalog =
+    category === 'instrument' || category === 'instrument-installation-material';
+  const standardMaterialCatalogItemLabel = usesInstrumentInstallationCatalog
+    ? 'Instrument Installation Material'
+    : usesTrayInstallationCatalog
+      ? 'Tray Installation Material'
+      : 'Cable Installation Material';
 
   const loadDetails = useCallback(
     async (silent = false): Promise<void> => {
@@ -103,7 +108,10 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
     if (!isAdmin) return;
     setCatalogLoading(true);
     try {
-      if (usesTrayInstallationCatalog) {
+      if (usesInstrumentInstallationCatalog) {
+        const response = await fetchMaterialInstrumentInstallationMaterials();
+        setCatalog(response.instrumentInstallationMaterials);
+      } else if (usesTrayInstallationCatalog) {
         const response = await fetchMaterialTrayInstallationMaterials();
         setCatalog(response.trayInstallationMaterials);
       } else {
@@ -118,7 +126,13 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
     } finally {
       setCatalogLoading(false);
     }
-  }, [isAdmin, showToast, standardMaterialCatalogItemLabel, usesTrayInstallationCatalog]);
+  }, [
+    isAdmin,
+    showToast,
+    standardMaterialCatalogItemLabel,
+    usesTrayInstallationCatalog,
+    usesInstrumentInstallationCatalog,
+  ]);
 
   useEffect(() => {
     void loadDetails();
@@ -237,7 +251,9 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
         catalogItemLabel={standardMaterialCatalogItemLabel}
         ownerMaterialId={ownerId}
         excludeOwnerFromCatalog={
-          category === 'cable-installation-material' || category === 'tray-installation-material'
+          category === 'cable-installation-material' ||
+          category === 'tray-installation-material' ||
+          category === 'instrument-installation-material'
         }
         saving={saving}
         onDismiss={() => setDialogOpen(false)}

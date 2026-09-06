@@ -172,19 +172,47 @@ describe('Change Order document type scoping', () => {
     expect(insertCall?.[1][27]).toBe('07');
   });
 
-  it.each(['change-order', 'internal-ncr'] as const)(
-    'inherits Standard Material dimensions and weight for %s documents',
-    async (documentType) => {
+  it.each(
+    (['change-order', 'internal-ncr'] as const).flatMap((documentType) =>
+      (
+        [
+          {
+            category: 'support',
+            table: 'material_supports',
+            childCategory: 'cable-installation-material',
+          },
+          {
+            category: 'instrument',
+            table: 'material_instruments',
+            childCategory: 'instrument-installation-material',
+          },
+          {
+            category: 'instrument-installation-material',
+            table: 'material_instrument_installation_materials',
+            childCategory: 'instrument-installation-material',
+          },
+        ] as const
+      ).map((catalog) => ({ ...catalog, documentType })),
+    ),
+  )(
+    'inherits Standard Materials from $category for $documentType documents',
+    async ({ documentType, category, table, childCategory }) => {
       clientQuery.mockImplementation(async (sql: string, values?: unknown[]) => {
         if (sql.includes('SELECT id, revision FROM project_change_orders')) {
           return { rows: [{ id: 'document-id', revision: '02' }] };
         }
-        if (sql.includes('FROM material_supports WHERE id = $1')) {
+        if (sql.includes(`FROM ${table} WHERE id = $1`)) {
           return {
             rows: [
               {
                 id: 'support-id',
                 support_type: 'Support',
+                type: 'Support',
+                purpose: null,
+                material: null,
+                description: null,
+                part_no: null,
+                dimension_mm: null,
                 manufacturer: null,
                 height_mm: null,
                 width_mm: null,
@@ -210,9 +238,9 @@ describe('Change Order document type scoping', () => {
               {
                 id: '00000000-0000-4000-8000-000000000010',
                 owner_id: 'support-id',
-                owner_category: 'support',
+                owner_category: category,
                 referenced_material_id: '00000000-0000-4000-8000-000000000030',
-                referenced_material_category: 'cable-installation-material',
+                referenced_material_category: childCategory,
                 referenced_material_name: 'Cable gland M32',
                 referenced_material_purpose: null,
                 referenced_material_material: 'Brass',
@@ -277,15 +305,16 @@ describe('Change Order document type scoping', () => {
       });
 
       await expect(
-        addChangeOrderItem('project-id', documentType, 'document-id', 'support', 'support-id'),
+        addChangeOrderItem('project-id', documentType, 'document-id', category, 'support-id'),
       ).resolves.toMatchObject({ descriptionEn: 'Support' });
 
       const itemInserts = clientQuery.mock.calls.filter(([sql]) =>
         String(sql).includes('INSERT INTO project_change_order_items'),
       ) as [string, unknown[]][];
       expect(itemInserts).toHaveLength(2);
+      expect(itemInserts[0][1][3]).toBe(category);
       expect(itemInserts[1][1]).toMatchObject({
-        3: 'cable-installation-material',
+        3: childCategory,
         6: 'Cable gland M32',
         8: '32 x 45',
         10: 0.18,

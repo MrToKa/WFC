@@ -100,6 +100,10 @@ vi.mock('@/api/client', () => ({
   fetchMaterialTrayInstallationMaterials: vi.fn(async () => ({
     trayInstallationMaterials: [],
   })),
+  fetchMaterialInstruments: vi.fn(async () => ({ instruments: [] })),
+  fetchMaterialInstrumentInstallationMaterials: vi.fn(async () => ({
+    instrumentInstallationMaterials: [],
+  })),
   fetchAllMaterialTrays: vi.fn(async () => ({ trays: [] })),
   fetchMaterialSupports: vi.fn(async () => ({
     supports: [],
@@ -287,46 +291,96 @@ describe('ChangeOrdersTab', () => {
     );
   });
 
-  it.each([
-    ['change-orders', 'All Change Orders', 'Change Order'],
-    ['internal-ncrs', 'All Internal NCRs', 'Internal NCR'],
-  ] as const)(
-    'adds a Trays installation material and opens its editor through the %s collection',
-    async (collection, collectionTableName, documentName) => {
+  it.each(
+    (
+      [
+        ['change-orders', 'All Change Orders', 'Change Order'],
+        ['internal-ncrs', 'All Internal NCRs', 'Internal NCR'],
+      ] as const
+    ).flatMap(([collection, collectionTableName, documentName]) =>
+      (
+        [
+          ['tray-installation-material', 'Trays installation materials', 'Tray splice plate'],
+          ['instrument', 'Instruments', 'Pressure transmitter'],
+          [
+            'instrument-installation-material',
+            'Instruments installation materials',
+            'Instrument bracket',
+          ],
+        ] as const
+      ).map(([sourceCatalog, catalogLabel, materialType]) => ({
+        collection,
+        collectionTableName,
+        documentName,
+        sourceCatalog,
+        catalogLabel,
+        materialType,
+      })),
+    ),
+  )(
+    'adds $catalogLabel and opens its editor through the $collection collection',
+    async ({
+      collection,
+      collectionTableName,
+      documentName,
+      sourceCatalog,
+      catalogLabel,
+      materialType,
+    }) => {
       const api = await import('@/api/client');
-      const trayInstallationMaterialId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      const materialId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
       const addedItem: ChangeOrderDetails['items'][number] = {
         ...details.items[0],
         id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
         sortOrder: 2,
-        sourceCatalog: 'tray-installation-material',
-        sourceMaterialId: trayInstallationMaterialId,
-        descriptionEn: 'Tray splice plate',
+        sourceCatalog,
+        sourceMaterialId: materialId,
+        descriptionEn: materialType,
         unitPrice: 6.5,
         totalPrice: 65,
       };
-      vi.mocked(api.fetchMaterialTrayInstallationMaterials).mockResolvedValueOnce({
-        trayInstallationMaterials: [
-          {
-            id: trayInstallationMaterialId,
-            type: 'Tray splice plate',
-            purpose: 'Tray joining',
-            material: 'Stainless steel',
-            description: 'Joining plate for tray sections',
-            manufacturer: 'Tray Co',
-            partNo: 'TSP-1',
-            dimensionMm: '100 × 40',
-            weightKg: 0.2,
-            minimumOrderQuantity: 10,
-            orderMeasurement: 'pcs',
-            packaging: 'Box',
-            unitPrice: 6.5,
-            source: null,
-            createdAt: details.createdAt,
-            updatedAt: details.updatedAt,
-          },
-        ],
-      });
+      const catalogMaterials = [
+        {
+          id: materialId,
+          type: materialType,
+          purpose: 'Field installation',
+          material: 'Stainless steel',
+          description: 'Material for field installation',
+          manufacturer: 'Installation Co',
+          partNo: 'FIELD-1',
+          dimensionMm: '100 × 40',
+          weightKg: 0.2,
+          minimumOrderQuantity: 10,
+          orderMeasurement: 'pcs' as const,
+          packaging: 'Box' as const,
+          unitPrice: 6.5,
+          source: null,
+          createdAt: details.createdAt,
+          updatedAt: details.updatedAt,
+        },
+      ];
+      const materialsWithOtherPurpose = [
+        ...catalogMaterials,
+        {
+          ...catalogMaterials[0],
+          id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          type: 'Other purpose material',
+          purpose: 'Workshop installation',
+        },
+      ];
+      if (sourceCatalog === 'tray-installation-material') {
+        vi.mocked(api.fetchMaterialTrayInstallationMaterials).mockResolvedValueOnce({
+          trayInstallationMaterials: materialsWithOtherPurpose,
+        });
+      } else if (sourceCatalog === 'instrument') {
+        vi.mocked(api.fetchMaterialInstruments).mockResolvedValueOnce({
+          instruments: materialsWithOtherPurpose,
+        });
+      } else {
+        vi.mocked(api.fetchMaterialInstrumentInstallationMaterials).mockResolvedValueOnce({
+          instrumentInstallationMaterials: materialsWithOtherPurpose,
+        });
+      }
       vi.mocked(api.addChangeOrderItem).mockResolvedValueOnce({
         item: addedItem,
         changeOrder: {
@@ -353,14 +407,24 @@ describe('ChangeOrdersTab', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
       await screen.findByRole('cell', { name: 'Widget support' });
       fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
+      expect(screen.getByRole('option', { name: catalogLabel })).toBeInTheDocument();
       fireEvent.change(screen.getByRole('combobox', { name: 'Catalog category' }), {
-        target: { value: 'tray-installation-material' },
+        target: { value: sourceCatalog },
       });
       const purposeSelect = screen.getByRole('combobox', { name: 'Purpose' });
-      await screen.findByRole('option', { name: 'Tray joining' });
-      fireEvent.change(purposeSelect, { target: { value: 'Tray joining' } });
+      await screen.findByRole('option', { name: 'Field installation' });
+      expect(screen.getByText('Other purpose material')).toBeInTheDocument();
+      fireEvent.change(purposeSelect, { target: { value: 'Field installation' } });
+      expect(screen.queryByText('Other purpose material')).not.toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Search'), {
+        target: { value: 'missing-part' },
+      });
+      expect(screen.getByText('No matching materials found.')).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Search'), {
+        target: { value: 'field-1' },
+      });
 
-      const catalogRow = (await screen.findByText('Tray splice plate')).closest('tr');
+      const catalogRow = (await screen.findByText(materialType)).closest('tr');
       expect(catalogRow).not.toBeNull();
       fireEvent.click(within(catalogRow!).getByText('Add'));
 
@@ -370,14 +434,14 @@ describe('ChangeOrdersTab', () => {
           project.id,
           details.id,
           {
-            sourceCatalog: 'tray-installation-material',
-            sourceMaterialId: trayInstallationMaterialId,
+            sourceCatalog,
+            sourceMaterialId: materialId,
           },
           collection,
         ),
       );
       expect(await screen.findByText(`Edit ${documentName} item`)).toBeInTheDocument();
-      expect(screen.getByLabelText('Description (EN)')).toHaveValue('Tray splice plate');
+      expect(screen.getByLabelText('Description (EN)')).toHaveValue(materialType);
       expect(screen.getByLabelText('Price')).toHaveValue(6.5);
     },
     15_000,

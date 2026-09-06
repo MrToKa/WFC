@@ -7,12 +7,16 @@ import { MaterialEditDialog } from './MaterialEditDialog';
 const apiMocks = vi.hoisted(() => ({
   updateCableInstallationMaterial: vi.fn(),
   updateTrayInstallationMaterial: vi.fn(),
+  updateInstrument: vi.fn(),
+  updateInstrumentInstallationMaterial: vi.fn(),
 }));
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   updateMaterialCableInstallationMaterial: apiMocks.updateCableInstallationMaterial,
   updateMaterialTrayInstallationMaterial: apiMocks.updateTrayInstallationMaterial,
+  updateMaterialInstrument: apiMocks.updateInstrument,
+  updateMaterialInstrumentInstallationMaterial: apiMocks.updateInstrumentInstallationMaterial,
 }));
 
 const material: MaterialCableInstallationMaterial = {
@@ -43,6 +47,10 @@ describe('MaterialEditDialog', () => {
     apiMocks.updateTrayInstallationMaterial.mockReset();
     apiMocks.updateTrayInstallationMaterial.mockResolvedValue({
       trayInstallationMaterial: material,
+    });
+    apiMocks.updateInstrument.mockReset().mockResolvedValue({ instrument: material });
+    apiMocks.updateInstrumentInstallationMaterial.mockReset().mockResolvedValue({
+      instrumentInstallationMaterial: material,
     });
   });
 
@@ -112,6 +120,53 @@ describe('MaterialEditDialog', () => {
     );
     expect(apiMocks.updateCableInstallationMaterial).not.toHaveBeenCalled();
   });
+
+  it.each(['instrument', 'instrument-installation-material'] as const)(
+    'saves all installation-style fields to the %s endpoint',
+    async (category) => {
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <MaterialEditDialog
+            open
+            category={category}
+            material={material}
+            token="token"
+            onDismiss={vi.fn()}
+            onSaved={vi.fn().mockResolvedValue(undefined)}
+          />
+        </FluentProvider>,
+      );
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Purpose' }), {
+        target: { value: 'Measurement' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      const update =
+        category === 'instrument'
+          ? apiMocks.updateInstrument
+          : apiMocks.updateInstrumentInstallationMaterial;
+      const otherUpdate =
+        category === 'instrument'
+          ? apiMocks.updateInstrumentInstallationMaterial
+          : apiMocks.updateInstrument;
+      await waitFor(() =>
+        expect(update).toHaveBeenCalledWith(
+          'token',
+          material.id,
+          expect.objectContaining({
+            type: material.type,
+            purpose: 'Measurement',
+            dimensionMm: material.dimensionMm,
+            weightKg: material.weightKg,
+            unitPrice: material.unitPrice,
+          }),
+        ),
+      );
+      expect(otherUpdate).not.toHaveBeenCalled();
+      expect(apiMocks.updateTrayInstallationMaterial).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not save a negative price', async () => {
     render(

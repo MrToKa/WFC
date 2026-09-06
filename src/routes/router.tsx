@@ -18,6 +18,8 @@ import { LoadCurveDetails } from '@/pages/LoadCurveDetails';
 import { MaterialCableTypeDetails } from '@/pages/MaterialCableTypeDetails';
 import { MaterialCableInstallationMaterialDetails } from '@/pages/MaterialCableInstallationMaterialDetails';
 import { MaterialTrayInstallationMaterialDetails } from '@/pages/MaterialTrayInstallationMaterialDetails';
+import { MaterialInstrumentDetails } from '@/pages/MaterialInstrumentDetails';
+import { MaterialInstrumentInstallationMaterialDetails } from '@/pages/MaterialInstrumentInstallationMaterialDetails';
 import { MaterialTrayDetails } from '@/pages/MaterialTrayDetails';
 import { MaterialSupportDetails } from '@/pages/MaterialSupportDetails';
 
@@ -61,6 +63,14 @@ export const routes: RouteObject[] = [
       {
         path: 'materials/tray-installation-materials/:trayInstallationMaterialId',
         element: <MaterialTrayInstallationMaterialDetails />,
+      },
+      {
+        path: 'materials/instruments/:instrumentId',
+        element: <MaterialInstrumentDetails />,
+      },
+      {
+        path: 'materials/instrument-installation-materials/:instrumentInstallationMaterialId',
+        element: <MaterialInstrumentInstallationMaterialDetails />,
       },
       {
         path: 'materials/trays/:trayId',

@@ -16,10 +16,7 @@ type MaterialCapability = {
   referencedMaterialLabel: string;
 };
 
-export const MATERIAL_CAPABILITIES: Record<
-  StandardMaterialOwnerCategory,
-  MaterialCapability
-> = {
+export const MATERIAL_CAPABILITIES: Record<StandardMaterialOwnerCategory, MaterialCapability> = {
   'cable-type': {
     category: 'cable-type',
     label: 'Cable type',
@@ -55,6 +52,30 @@ export const MATERIAL_CAPABILITIES: Record<
     referencedMaterialCategory: 'tray-installation-material',
     referencedMaterialTable: 'material_tray_installation_materials',
     referencedMaterialLabel: 'Tray Installation Material',
+  },
+  instrument: {
+    category: 'instrument',
+    label: 'Instrument',
+    ownerTable: 'material_instruments',
+    ownerIdColumn: 'id',
+    ownerNameColumn: 'type',
+    assignmentTable: 'material_instrument_standard_materials',
+    assignmentOwnerColumn: 'instrument_id',
+    referencedMaterialCategory: 'instrument-installation-material',
+    referencedMaterialTable: 'material_instrument_installation_materials',
+    referencedMaterialLabel: 'Instrument Installation Material',
+  },
+  'instrument-installation-material': {
+    category: 'instrument-installation-material',
+    label: 'Instrument installation material',
+    ownerTable: 'material_instrument_installation_materials',
+    ownerIdColumn: 'id',
+    ownerNameColumn: 'type',
+    assignmentTable: 'material_instrument_installation_standard_materials',
+    assignmentOwnerColumn: 'instrument_installation_material_id',
+    referencedMaterialCategory: 'instrument-installation-material',
+    referencedMaterialTable: 'material_instrument_installation_materials',
+    referencedMaterialLabel: 'Instrument Installation Material',
   },
   tray: {
     category: 'tray',

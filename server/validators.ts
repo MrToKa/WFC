@@ -364,6 +364,13 @@ export const createMaterialTrayInstallationMaterialSchema =
 export const updateMaterialTrayInstallationMaterialSchema =
   updateMaterialCableInstallationMaterialSchema;
 
+export const createMaterialInstrumentSchema = createMaterialTrayInstallationMaterialSchema;
+export const updateMaterialInstrumentSchema = updateMaterialTrayInstallationMaterialSchema;
+export const createMaterialInstrumentInstallationMaterialSchema =
+  createMaterialTrayInstallationMaterialSchema;
+export const updateMaterialInstrumentInstallationMaterialSchema =
+  updateMaterialTrayInstallationMaterialSchema;
+
 export const createCableTypeDefaultMaterialSchema = z
   .object({
     name: cableTypeDefaultMaterialNameField,

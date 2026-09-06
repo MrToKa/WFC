@@ -395,6 +395,74 @@ export async function initializeDatabase(): Promise<void> {
       ON material_tray_installation_materials (LOWER(type));
   `);
 
+  // These catalogs have the same fields as Tray Installation Materials, with
+  // separate tables so identifiers and references remain scoped to each catalog.
+  for (const table of ['material_instruments', 'material_instrument_installation_materials']) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${table} (
+        id UUID PRIMARY KEY,
+        type TEXT NOT NULL,
+        purpose TEXT,
+        material TEXT,
+        description TEXT,
+        manufacturer TEXT,
+        part_no TEXT,
+        dimension_mm TEXT,
+        weight_kg NUMERIC,
+        unit_price NUMERIC NOT NULL DEFAULT 0
+          CHECK (unit_price >= 0 AND unit_price < 'Infinity'::numeric),
+        minimum_order_quantity NUMERIC NOT NULL DEFAULT 1
+          CHECK (minimum_order_quantity > 0 AND minimum_order_quantity < 'Infinity'::numeric),
+        order_measurement TEXT NOT NULL DEFAULT 'pcs'
+          CHECK (order_measurement IN ('pcs', 'pack', 'meters')),
+        packaging TEXT NOT NULL DEFAULT 'pcs'
+          CHECK (packaging IN ('m', 'Package', 'Box', 'Drum', 'pcs')),
+        source TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS ${table}_type_lower_idx ON ${table} (LOWER(type));
+    `);
+  }
+
+  for (const definition of [
+    {
+      table: 'material_instrument_standard_materials',
+      ownerTable: 'material_instruments',
+      ownerColumn: 'instrument_id',
+      indexPrefix: 'material_instrument_std',
+      selfCheck: '',
+    },
+    {
+      table: 'material_instrument_installation_standard_materials',
+      ownerTable: 'material_instrument_installation_materials',
+      ownerColumn: 'instrument_installation_material_id',
+      indexPrefix: 'material_instrument_installation_std',
+      selfCheck: 'CHECK (instrument_installation_material_id <> referenced_material_id),',
+    },
+  ]) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${definition.table} (
+        id UUID PRIMARY KEY,
+        ${definition.ownerColumn} UUID NOT NULL
+          REFERENCES ${definition.ownerTable}(id) ON DELETE CASCADE,
+        referenced_material_id UUID NOT NULL
+          REFERENCES material_instrument_installation_materials(id) ON DELETE RESTRICT,
+        quantity NUMERIC NOT NULL CHECK (quantity > 0 AND quantity < 'Infinity'::numeric),
+        unit TEXT NOT NULL CHECK (unit IN ('pcs', 'meters', 'pcs/m')),
+        remarks TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ${definition.selfCheck}
+        UNIQUE (${definition.ownerColumn}, referenced_material_id)
+      );
+      CREATE INDEX IF NOT EXISTS ${definition.indexPrefix}_owner_idx
+        ON ${definition.table} (${definition.ownerColumn});
+      CREATE INDEX IF NOT EXISTS ${definition.indexPrefix}_reference_idx
+        ON ${definition.table} (referenced_material_id);
+    `);
+  }
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS cables (
       id UUID PRIMARY KEY,
@@ -1820,6 +1888,8 @@ export async function initializeDatabase(): Promise<void> {
           'cable-type',
           'cable-installation-material',
           'tray-installation-material',
+          'instrument',
+          'instrument-installation-material',
           'tray',
           'support'
         )),
@@ -1856,6 +1926,8 @@ export async function initializeDatabase(): Promise<void> {
         WHERE conname = 'project_change_order_items_source_catalog_check'
           AND conrelid = 'project_change_order_items'::regclass
           AND pg_get_constraintdef(oid) LIKE '%tray-installation-material%'
+          AND pg_get_constraintdef(oid) LIKE '%''instrument''%'
+          AND pg_get_constraintdef(oid) LIKE '%instrument-installation-material%'
       ) THEN
         ALTER TABLE project_change_order_items
           DROP CONSTRAINT IF EXISTS project_change_order_items_source_catalog_check;
@@ -1865,6 +1937,8 @@ export async function initializeDatabase(): Promise<void> {
             'cable-type',
             'cable-installation-material',
             'tray-installation-material',
+            'instrument',
+            'instrument-installation-material',
             'tray',
             'support'
           ));
@@ -2008,6 +2082,22 @@ export async function initializeDatabase(): Promise<void> {
         order_measurement,
         packaging
       FROM material_tray_installation_materials
+      UNION ALL
+      SELECT
+        'instrument'::text,
+        id,
+        minimum_order_quantity,
+        order_measurement,
+        packaging
+      FROM material_instruments
+      UNION ALL
+      SELECT
+        'instrument-installation-material'::text,
+        id,
+        minimum_order_quantity,
+        order_measurement,
+        packaging
+      FROM material_instrument_installation_materials
       UNION ALL
       SELECT
         'tray'::text,

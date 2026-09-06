@@ -172,6 +172,20 @@ export const snapshotTrayInstallationMaterial = (
   packaging: record.packaging,
 });
 
+export const snapshotInstrument = (
+  record: CableInstallationMaterialCatalogRecord,
+): ChangeOrderItemSnapshot => ({
+  ...snapshotCableInstallationMaterial(record),
+  sourceCatalog: 'instrument',
+});
+
+export const snapshotInstrumentInstallationMaterial = (
+  record: CableInstallationMaterialCatalogRecord,
+): ChangeOrderItemSnapshot => ({
+  ...snapshotCableInstallationMaterial(record),
+  sourceCatalog: 'instrument-installation-material',
+});
+
 export const snapshotTray = (record: TrayCatalogRecord): ChangeOrderItemSnapshot => ({
   sourceCatalog: 'tray',
   sourceMaterialId: record.id,
@@ -259,6 +273,24 @@ export const resolveChangeOrderCatalogSnapshot = async (
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
       return snapshotTrayInstallationMaterial(result.rows[0]);
+    }
+    case 'instrument':
+    case 'instrument-installation-material': {
+      const table =
+        sourceCatalog === 'instrument'
+          ? 'material_instruments'
+          : 'material_instrument_installation_materials';
+      const result = await queryable.query<CableInstallationMaterialCatalogRecord>(
+        `SELECT id, type, purpose, material, description, manufacturer, part_no,
+                dimension_mm, weight_kg, unit_price,
+                minimum_order_quantity, order_measurement, packaging
+         FROM ${table} WHERE id = $1 LIMIT 1`,
+        [sourceMaterialId],
+      );
+      if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
+      return sourceCatalog === 'instrument'
+        ? snapshotInstrument(result.rows[0])
+        : snapshotInstrumentInstallationMaterial(result.rows[0]);
     }
     case 'tray': {
       const result = await queryable.query<TrayCatalogRecord>(

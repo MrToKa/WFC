@@ -2,13 +2,18 @@ import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MaterialCableInstallationMaterial } from '@/api/client';
+import type {
+  MaterialCableInstallationMaterial,
+  StandardMaterialOwnerCategory,
+} from '@/api/client';
 import { MasterMaterialDetailsPage } from './MasterMaterialDetailsPage';
+import { MATERIAL_DETAILS_CAPABILITIES } from './materialCapabilities';
 
 const mocks = vi.hoisted(() => ({
   fetchDetails: vi.fn(),
   fetchCableInstallationMaterials: vi.fn(),
   fetchTrayInstallationMaterials: vi.fn(),
+  fetchInstrumentInstallationMaterials: vi.fn(),
   showToast: vi.fn(),
 }));
 
@@ -17,6 +22,7 @@ vi.mock('@/api/client', async (importOriginal) => ({
   fetchMaterialDetails: mocks.fetchDetails,
   fetchMaterialCableInstallationMaterials: mocks.fetchCableInstallationMaterials,
   fetchMaterialTrayInstallationMaterials: mocks.fetchTrayInstallationMaterials,
+  fetchMaterialInstrumentInstallationMaterials: mocks.fetchInstrumentInstallationMaterials,
 }));
 
 vi.mock('@/context/AuthContext', () => ({
@@ -51,17 +57,16 @@ const material = (id: string, type: string): MaterialCableInstallationMaterial =
 const ownerMaterial = material(ownerId, 'Owner material');
 const otherMaterial = material(otherId, 'Selectable material');
 
-const renderDetails = (category: 'cable-installation-material' | 'tray-installation-material') => {
-  const isTray = category === 'tray-installation-material';
-  const segment = isTray ? 'tray-installation-materials' : 'cable-installation-materials';
-  const idParam = isTray ? 'trayInstallationMaterialId' : 'cableInstallationMaterialId';
+const renderDetails = (category: StandardMaterialOwnerCategory) => {
+  const route = MATERIAL_DETAILS_CAPABILITIES[category].route;
+  const idParam = 'materialId';
 
   return render(
     <FluentProvider theme={webLightTheme}>
-      <MemoryRouter initialEntries={[`/materials/${segment}/${ownerId}`]}>
+      <MemoryRouter initialEntries={[route(ownerId)]}>
         <Routes>
           <Route
-            path={`/materials/${segment}/:${idParam}`}
+            path={route(`:${idParam}`)}
             element={
               <MasterMaterialDetailsPage<MaterialCableInstallationMaterial>
                 category={category}
@@ -82,6 +87,7 @@ describe('MasterMaterialDetailsPage Standard Material catalogs', () => {
     mocks.fetchDetails.mockReset();
     mocks.fetchCableInstallationMaterials.mockReset();
     mocks.fetchTrayInstallationMaterials.mockReset();
+    mocks.fetchInstrumentInstallationMaterials.mockReset();
     mocks.showToast.mockReset();
     mocks.fetchDetails.mockResolvedValue({
       category: {
@@ -97,6 +103,9 @@ describe('MasterMaterialDetailsPage Standard Material catalogs', () => {
     });
     mocks.fetchTrayInstallationMaterials.mockResolvedValue({
       trayInstallationMaterials: [ownerMaterial, otherMaterial],
+    });
+    mocks.fetchInstrumentInstallationMaterials.mockResolvedValue({
+      instrumentInstallationMaterials: [ownerMaterial, otherMaterial],
     });
   });
 
@@ -127,4 +136,31 @@ describe('MasterMaterialDetailsPage Standard Material catalogs', () => {
     ).toHaveValue(otherId);
     expect(screen.queryByRole('option', { name: 'Owner material' })).not.toBeInTheDocument();
   });
+
+  it.each(['instrument', 'instrument-installation-material'] as const)(
+    'uses instrument installation materials for %s Standard Materials',
+    async (category) => {
+      renderDetails(category);
+
+      await waitFor(() =>
+        expect(mocks.fetchInstrumentInstallationMaterials).toHaveBeenCalledOnce(),
+      );
+      expect(mocks.fetchCableInstallationMaterials).not.toHaveBeenCalled();
+      expect(mocks.fetchTrayInstallationMaterials).not.toHaveBeenCalled();
+      expect(mocks.fetchDetails).toHaveBeenCalledWith(category, ownerId);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Add Standard Material' }));
+
+      const picker = await screen.findByRole('combobox', {
+        name: 'Instrument Installation Material',
+      });
+      expect(picker).toHaveValue(category === 'instrument' ? ownerId : otherId);
+      if (category === 'instrument') {
+        // The catalogs are separate: a matching ID is still a valid reference.
+        expect(screen.getByRole('option', { name: 'Owner material' })).toBeInTheDocument();
+      } else {
+        expect(screen.queryByRole('option', { name: 'Owner material' })).not.toBeInTheDocument();
+      }
+    },
+  );
 });

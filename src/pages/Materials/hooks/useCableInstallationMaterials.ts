@@ -7,18 +7,32 @@ import {
   type MaterialCableInstallationMaterialInput,
   createMaterialCableInstallationMaterial,
   createMaterialTrayInstallationMaterial,
+  createMaterialInstrument,
+  createMaterialInstrumentInstallationMaterial,
   deleteMaterialCableInstallationMaterial,
   deleteMaterialTrayInstallationMaterial,
+  deleteMaterialInstrument,
+  deleteMaterialInstrumentInstallationMaterial,
   exportMaterialCableInstallationMaterials,
   exportMaterialTrayInstallationMaterials,
+  exportMaterialInstruments,
+  exportMaterialInstrumentInstallationMaterials,
   fetchMaterialCableInstallationMaterials,
   fetchMaterialTrayInstallationMaterials,
+  fetchMaterialInstruments,
+  fetchMaterialInstrumentInstallationMaterials,
   getMaterialCableInstallationMaterialsTemplate,
   getMaterialTrayInstallationMaterialsTemplate,
+  getMaterialInstrumentsTemplate,
+  getMaterialInstrumentInstallationMaterialsTemplate,
   importMaterialCableInstallationMaterials,
   importMaterialTrayInstallationMaterials,
+  importMaterialInstruments,
+  importMaterialInstrumentInstallationMaterials,
   updateMaterialCableInstallationMaterial,
   updateMaterialTrayInstallationMaterial,
+  updateMaterialInstrument,
+  updateMaterialInstrumentInstallationMaterial,
 } from '@/api/client';
 import { CABLE_TYPES_PER_PAGE } from '../../ProjectDetails.forms';
 import {
@@ -124,6 +138,47 @@ const trayInstallationMaterialsCatalog: InstallationMaterialsCatalog = {
   },
   export: exportMaterialTrayInstallationMaterials,
   getTemplate: getMaterialTrayInstallationMaterialsTemplate,
+};
+
+const instrumentsCatalog: InstallationMaterialsCatalog = {
+  singularLabel: 'instrument',
+  singularTitle: 'Instrument',
+  pluralLabel: 'instruments',
+  pluralTitle: 'Instruments',
+  fileStem: 'materials-instruments',
+  fetchAll: async () => (await fetchMaterialInstruments()).instruments,
+  create: async (token, input) => (await createMaterialInstrument(token, input)).instrument,
+  update: async (token, id, input) => (await updateMaterialInstrument(token, id, input)).instrument,
+  remove: deleteMaterialInstrument,
+  import: async (token, file) => {
+    const response = await importMaterialInstruments(token, file);
+    return { items: response.instruments, summary: response.summary };
+  },
+  export: exportMaterialInstruments,
+  getTemplate: getMaterialInstrumentsTemplate,
+};
+
+const instrumentInstallationMaterialsCatalog: InstallationMaterialsCatalog = {
+  singularLabel: 'instrument installation material',
+  singularTitle: 'Instrument installation material',
+  pluralLabel: 'instrument installation materials',
+  pluralTitle: 'Instruments installation materials',
+  fileStem: 'materials-instrument-installation-materials',
+  fetchAll: async () =>
+    (await fetchMaterialInstrumentInstallationMaterials()).instrumentInstallationMaterials,
+  create: async (token, input) =>
+    (await createMaterialInstrumentInstallationMaterial(token, input))
+      .instrumentInstallationMaterial,
+  update: async (token, id, input) =>
+    (await updateMaterialInstrumentInstallationMaterial(token, id, input))
+      .instrumentInstallationMaterial,
+  remove: deleteMaterialInstrumentInstallationMaterial,
+  import: async (token, file) => {
+    const response = await importMaterialInstrumentInstallationMaterials(token, file);
+    return { items: response.instrumentInstallationMaterials, summary: response.summary };
+  },
+  export: exportMaterialInstrumentInstallationMaterials,
+  getTemplate: getMaterialInstrumentInstallationMaterialsTemplate,
 };
 
 type UseCableInstallationMaterialsResult = {
@@ -733,3 +788,13 @@ export const useTrayInstallationMaterials = (
   params: UseCableInstallationMaterialsParams,
 ): UseCableInstallationMaterialsResult =>
   useInstallationMaterials({ ...params, catalog: trayInstallationMaterialsCatalog });
+
+export const useInstruments = (
+  params: UseCableInstallationMaterialsParams,
+): UseCableInstallationMaterialsResult =>
+  useInstallationMaterials({ ...params, catalog: instrumentsCatalog });
+
+export const useInstrumentInstallationMaterials = (
+  params: UseCableInstallationMaterialsParams,
+): UseCableInstallationMaterialsResult =>
+  useInstallationMaterials({ ...params, catalog: instrumentInstallationMaterialsCatalog });

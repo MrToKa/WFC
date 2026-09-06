@@ -45,6 +45,100 @@ const assignment = (
 });
 
 describe('Standard Material expansion', () => {
+  it('expands an instrument through nested installation materials with their own prices and units', () => {
+    const assignments = [
+      assignment(
+        'i1',
+        'instrument',
+        'sensor',
+        'bracket',
+        'Bracket',
+        2,
+        'pcs',
+        'instrument-installation-material',
+        10,
+      ),
+      assignment(
+        'i2',
+        'instrument-installation-material',
+        'bracket',
+        'bolt',
+        'Bolt',
+        4,
+        'pcs',
+        'instrument-installation-material',
+        0.5,
+      ),
+      // Another catalog can contain the same ID without contributing descendants.
+      assignment(
+        't1',
+        'tray-installation-material',
+        'bracket',
+        'washer',
+        'Washer',
+        100,
+        'pcs',
+        'tray-installation-material',
+      ),
+    ];
+    expect(expandStandardMaterialsFromAssignments(assignments, 'instrument', 'sensor')).toEqual([
+      expect.objectContaining({
+        referencedMaterialId: 'bolt',
+        referencedMaterialCategory: 'instrument-installation-material',
+        quantity: 8,
+        unit: 'pcs',
+        unitPrice: 0.5,
+        depth: 2,
+      }),
+      expect.objectContaining({
+        referencedMaterialId: 'bracket',
+        referencedMaterialCategory: 'instrument-installation-material',
+        quantity: 2,
+        unit: 'pcs',
+        unitPrice: 10,
+        depth: 1,
+      }),
+    ]);
+  });
+
+  it('rejects instrument installation cycles reached through an instrument', () => {
+    const assignments = [
+      assignment(
+        'i1',
+        'instrument',
+        'sensor',
+        'first',
+        'First',
+        1,
+        'pcs',
+        'instrument-installation-material',
+      ),
+      assignment(
+        'i2',
+        'instrument-installation-material',
+        'first',
+        'second',
+        'Second',
+        1,
+        'pcs',
+        'instrument-installation-material',
+      ),
+      assignment(
+        'i3',
+        'instrument-installation-material',
+        'second',
+        'first',
+        'First',
+        1,
+        'pcs',
+        'instrument-installation-material',
+      ),
+    ];
+    expect(() =>
+      expandStandardMaterialsFromAssignments(assignments, 'instrument', 'sensor'),
+    ).toThrowError(StandardMaterialDomainError);
+  });
+
   it('recursively expands Tray Installation Materials within their own catalog', () => {
     const assignments = [
       assignment(

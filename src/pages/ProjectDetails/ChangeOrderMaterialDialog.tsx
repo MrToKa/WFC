@@ -25,6 +25,8 @@ import {
   fetchAllMaterialTrays,
   fetchMaterialCableInstallationMaterials,
   fetchMaterialCableTypes,
+  fetchMaterialInstruments,
+  fetchMaterialInstrumentInstallationMaterials,
   fetchMaterialSupports,
   fetchMaterialTrayInstallationMaterials,
   type ChangeOrderSourceCatalog,
@@ -112,10 +114,21 @@ export const ChangeOrderMaterialDialog = ({
       fetchMaterialCableTypes(),
       fetchMaterialCableInstallationMaterials(),
       fetchMaterialTrayInstallationMaterials(),
+      fetchMaterialInstruments(),
+      fetchMaterialInstrumentInstallationMaterials(),
       fetchAllMaterialTrays(),
       loadAllSupports(),
     ])
-      .then(([cables, cableInstallation, trayInstallation, trays, supports]) => {
+      .then((catalogs) => {
+        const [
+          cables,
+          cableInstallation,
+          trayInstallation,
+          instruments,
+          instrumentInstallation,
+          trays,
+          supports,
+        ] = catalogs;
         if (!active) return;
         setChoices([
           ...cables.cableTypes.map((item) => ({
@@ -147,6 +160,28 @@ export const ChangeOrderMaterialDialog = ({
           ...trayInstallation.trayInstallationMaterials.map((item) => ({
             id: item.id,
             category: 'tray-installation-material' as const,
+            purpose: item.purpose?.trim() ?? '',
+            description: item.type,
+            details: [item.description ?? item.purpose ?? '', item.material ?? '']
+              .filter(Boolean)
+              .join(' · '),
+            manufacturer: item.manufacturer ?? '',
+            partNumber: item.partNo ?? '',
+          })),
+          ...instruments.instruments.map((item) => ({
+            id: item.id,
+            category: 'instrument' as const,
+            purpose: item.purpose?.trim() ?? '',
+            description: item.type,
+            details: [item.description ?? item.purpose ?? '', item.material ?? '']
+              .filter(Boolean)
+              .join(' · '),
+            manufacturer: item.manufacturer ?? '',
+            partNumber: item.partNo ?? '',
+          })),
+          ...instrumentInstallation.instrumentInstallationMaterials.map((item) => ({
+            id: item.id,
+            category: 'instrument-installation-material' as const,
             purpose: item.purpose?.trim() ?? '',
             description: item.type,
             details: [item.description ?? item.purpose ?? '', item.material ?? '']
@@ -230,6 +265,10 @@ export const ChangeOrderMaterialDialog = ({
                   <option value="cable-installation-material">Cable installation materials</option>
                   <option value="tray-installation-material">Trays installation materials</option>
                   <option value="tray">Trays</option>
+                  <option value="instrument">Instruments</option>
+                  <option value="instrument-installation-material">
+                    Instruments installation materials
+                  </option>
                   <option value="support">Supports</option>
                 </Select>
               </Field>

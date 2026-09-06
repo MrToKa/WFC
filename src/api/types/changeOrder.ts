@@ -2,6 +2,8 @@ export type ChangeOrderSourceCatalog =
   | 'cable-type'
   | 'cable-installation-material'
   | 'tray-installation-material'
+  | 'instrument'
+  | 'instrument-installation-material'
   | 'tray'
   | 'support';
 

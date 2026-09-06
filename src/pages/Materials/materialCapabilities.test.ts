@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MATERIAL_DETAILS_CAPABILITIES, materialsBackPath } from './materialCapabilities';
-import { parseMaterialsTab } from './Materials.types';
+import { MATERIAL_TABS, parseMaterialsTab } from './Materials.types';
 
 describe('Material Details navigation', () => {
   it.each([
@@ -16,6 +16,12 @@ describe('Material Details navigation', () => {
       'trayInstallationMaterials',
     ],
     ['tray', '/materials/trays/id', 'trays'],
+    ['instrument', '/materials/instruments/id', 'instruments'],
+    [
+      'instrument-installation-material',
+      '/materials/instrument-installation-materials/id',
+      'instrumentInstallationMaterials',
+    ],
     ['support', '/materials/supports/id', 'supports'],
   ] as const)(
     'builds the %s details route and tab-preserving Back route',
@@ -31,5 +37,18 @@ describe('Material Details navigation', () => {
     expect(parseMaterialsTab(null)).toBe('cableTypes');
     expect(parseMaterialsTab('supports')).toBe('supports');
     expect(parseMaterialsTab('trayInstallationMaterials')).toBe('trayInstallationMaterials');
+    expect(parseMaterialsTab('instruments')).toBe('instruments');
+    expect(parseMaterialsTab('instrumentInstallationMaterials')).toBe(
+      'instrumentInstallationMaterials',
+    );
+  });
+
+  it('places the instrument tabs after trays and tray installation materials', () => {
+    expect(MATERIAL_TABS.slice(2, 6)).toEqual([
+      'trays',
+      'trayInstallationMaterials',
+      'instruments',
+      'instrumentInstallationMaterials',
+    ]);
   });
 });

@@ -15,6 +15,10 @@ import { materialCableInstallationMaterialsRouter } from './materialCableInstall
 import { materialCableTypesRouter } from './materialCableTypesRoutes.js';
 import { materialsRouter } from './materialsRoutes.js';
 import { materialTrayInstallationMaterialsRouter } from './materialTrayInstallationMaterialsRoutes.js';
+import {
+  materialInstrumentsRouter,
+  materialInstrumentInstallationMaterialsRouter,
+} from './materialInstrumentsRoutes.js';
 
 type PatchHandler = (req: Request, res: Response) => Promise<void>;
 
@@ -96,6 +100,52 @@ const catalogCases: CatalogCase[] = [
     row: {
       id,
       type: 'Tray connector',
+      purpose: null,
+      material: null,
+      description: null,
+      manufacturer: null,
+      part_no: null,
+      dimension_mm: null,
+      weight_kg: null,
+      unit_price: '1.98',
+      minimum_order_quantity: '1',
+      order_measurement: 'pcs',
+      packaging: 'pcs',
+      source: null,
+      ...timestamps,
+    },
+  },
+  {
+    name: 'instrument',
+    router: materialInstrumentsRouter,
+    path: '/:instrumentId',
+    paramName: 'instrumentId',
+    row: {
+      id,
+      type: 'Sensor',
+      purpose: null,
+      material: null,
+      description: null,
+      manufacturer: null,
+      part_no: null,
+      dimension_mm: null,
+      weight_kg: null,
+      unit_price: '1.98',
+      minimum_order_quantity: '1',
+      order_measurement: 'pcs',
+      packaging: 'pcs',
+      source: null,
+      ...timestamps,
+    },
+  },
+  {
+    name: 'instrument installation material',
+    router: materialInstrumentInstallationMaterialsRouter,
+    path: '/:instrumentInstallationMaterialId',
+    paramName: 'instrumentInstallationMaterialId',
+    row: {
+      id,
+      type: 'Sensor bracket',
       purpose: null,
       material: null,
       description: null,
@@ -194,17 +244,19 @@ describe('material catalog price PATCH routes', () => {
 
   it.each(catalogCases)('accepts and persists a price for $name', async (catalog) => {
     let mutation: { sql: string; values: unknown[] } | undefined;
-    databaseMocks.pool.query.mockImplementation(async (sqlValue: unknown, values: unknown[] = []) => {
-      const sql = String(sqlValue);
-      if (/UPDATE material_/.test(sql)) {
-        mutation = { sql, values };
-        return {
-          rowCount: 1,
-          rows: /RETURNING/.test(sql) ? [catalog.row] : [],
-        };
-      }
-      return { rowCount: 1, rows: [catalog.row] };
-    });
+    databaseMocks.pool.query.mockImplementation(
+      async (sqlValue: unknown, values: unknown[] = []) => {
+        const sql = String(sqlValue);
+        if (/UPDATE material_/.test(sql)) {
+          mutation = { sql, values };
+          return {
+            rowCount: 1,
+            rows: /RETURNING/.test(sql) ? [catalog.row] : [],
+          };
+        }
+        return { rowCount: 1, rows: [catalog.row] };
+      },
+    );
 
     const { response, json, status } = responseStub();
     const request = {

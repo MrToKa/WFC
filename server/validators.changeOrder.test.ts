@@ -38,13 +38,16 @@ describe('Change Order validation', () => {
     expect(updateChangeOrderItemSchema.safeParse({ orderQuantity: -0.1 }).success).toBe(false);
   });
 
+  it.each(['tray-installation-material', 'instrument', 'instrument-installation-material'])(
+    'accepts %s as a document material source',
+    (sourceCatalog) => {
+      expect(
+        addChangeOrderItemSchema.safeParse({ sourceCatalog, sourceMaterialId: validId }).success,
+      ).toBe(true);
+    },
+  );
+
   it('rejects invalid UUIDs, unsupported catalogs, and invalid reorder lists', () => {
-    expect(
-      addChangeOrderItemSchema.safeParse({
-        sourceCatalog: 'tray-installation-material',
-        sourceMaterialId: validId,
-      }).success,
-    ).toBe(true);
     expect(
       addChangeOrderItemSchema.safeParse({
         sourceCatalog: 'tray',

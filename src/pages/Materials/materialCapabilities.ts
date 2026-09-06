@@ -36,6 +36,18 @@ export const MATERIAL_DETAILS_CAPABILITIES: Record<
     tab: 'trays',
     route: (id) => `/materials/trays/${id}`,
   },
+  instrument: {
+    category: 'instrument',
+    label: 'Instrument',
+    tab: 'instruments',
+    route: (id) => `/materials/instruments/${id}`,
+  },
+  'instrument-installation-material': {
+    category: 'instrument-installation-material',
+    label: 'Instrument installation material',
+    tab: 'instrumentInstallationMaterials',
+    route: (id) => `/materials/instrument-installation-materials/${id}`,
+  },
   support: {
     category: 'support',
     label: 'Support',

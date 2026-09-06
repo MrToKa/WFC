@@ -5,6 +5,10 @@ import { adminUsersRouter } from './routes/adminUserRoutes.js';
 import { authRouter } from './routes/authRoutes.js';
 import { materialCableInstallationMaterialsRouter } from './routes/materialCableInstallationMaterialsRoutes.js';
 import { materialCableTypesRouter } from './routes/materialCableTypesRoutes.js';
+import {
+  materialInstrumentsRouter,
+  materialInstrumentInstallationMaterialsRouter,
+} from './routes/materialInstrumentsRoutes.js';
 import { materialTrayInstallationMaterialsRouter } from './routes/materialTrayInstallationMaterialsRoutes.js';
 import { materialsRouter } from './routes/materialsRoutes.js';
 import { projectsRouter } from './routes/projectsRoutes.js';
@@ -31,6 +35,11 @@ export const createApp = (): Express => {
   app.use('/api/admin', adminUsersRouter);
   app.use('/api/materials/cable-installation-materials', materialCableInstallationMaterialsRouter);
   app.use('/api/materials/tray-installation-materials', materialTrayInstallationMaterialsRouter);
+  app.use('/api/materials/instruments', materialInstrumentsRouter);
+  app.use(
+    '/api/materials/instrument-installation-materials',
+    materialInstrumentInstallationMaterialsRouter,
+  );
   app.use('/api/materials/cable-types', materialCableTypesRouter);
   app.use('/api/materials', materialsRouter);
   app.use('/api/templates', templateFilesRouter);

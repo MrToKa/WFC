@@ -17,6 +17,10 @@ import { materialCableInstallationMaterialsRouter } from './materialCableInstall
 import { materialCableTypesRouter } from './materialCableTypesRoutes.js';
 import { materialsRouter } from './materialsRoutes.js';
 import { materialTrayInstallationMaterialsRouter } from './materialTrayInstallationMaterialsRoutes.js';
+import {
+  materialInstrumentsRouter,
+  materialInstrumentInstallationMaterialsRouter,
+} from './materialInstrumentsRoutes.js';
 
 type ImportHandler = (req: Request, res: Response) => Promise<void>;
 
@@ -67,6 +71,29 @@ const catalogCases: CatalogCase[] = [
     table: 'material_tray_installation_materials',
     row: { Type: 'Legacy tray installation material' },
     existingRow: { id: 'tray-installation-id', type: 'Legacy tray installation material' },
+    updatePriceIndex: 7,
+    insertPriceIndex: 9,
+  },
+  {
+    name: 'instrument',
+    router: materialInstrumentsRouter,
+    path: '/import',
+    table: 'material_instruments',
+    row: { Type: 'Legacy instrument' },
+    existingRow: { id: 'instrument-id', type: 'Legacy instrument' },
+    updatePriceIndex: 7,
+    insertPriceIndex: 9,
+  },
+  {
+    name: 'instrument installation material',
+    router: materialInstrumentInstallationMaterialsRouter,
+    path: '/import',
+    table: 'material_instrument_installation_materials',
+    row: { Type: 'Legacy instrument installation material' },
+    existingRow: {
+      id: 'instrument-installation-id',
+      type: 'Legacy instrument installation material',
+    },
     updatePriceIndex: 7,
     insertPriceIndex: 9,
   },

@@ -191,6 +191,22 @@ export const synchronizeChangeOrderMaterialOrdering = async (
        FROM material_tray_installation_materials
        UNION ALL
        SELECT
+         'instrument'::text,
+         id,
+         minimum_order_quantity,
+         order_measurement,
+         packaging
+       FROM material_instruments
+       UNION ALL
+       SELECT
+         'instrument-installation-material'::text,
+         id,
+         minimum_order_quantity,
+         order_measurement,
+         packaging
+       FROM material_instrument_installation_materials
+       UNION ALL
+       SELECT
          'tray'::text,
          id,
          minimum_order_quantity,

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   resolveChangeOrderCatalogSnapshot,
+  CatalogMaterialNotFoundError,
   snapshotCableInstallationMaterial,
   snapshotCableType,
   snapshotSupport,
@@ -23,6 +24,16 @@ describe('Change Order catalog snapshots', () => {
       orderQuantity: 10,
     });
   });
+
+  it.each(['instrument', 'instrument-installation-material'] as const)(
+    'multiplies inherited quantities for %s parents',
+    (category) => {
+      expect(calculateInheritedChangeOrderQuantities(category, 4, 5, 2, 'pcs')).toEqual({
+        designQuantity: 8,
+        orderQuantity: 10,
+      });
+    },
+  );
 
   it('counts Cable Type Standard Materials per cable line rather than per metre', () => {
     expect(calculateInheritedChangeOrderQuantities('cable-type', 200, 240, 4, 'pcs')).toEqual({
@@ -126,6 +137,8 @@ describe('Change Order catalog snapshots', () => {
     expect(sql).not.toContain("AND item.line_kind = 'inherited'");
     expect(sql).toContain('FROM material_cable_installation_materials');
     expect(sql).toContain('FROM material_tray_installation_materials');
+    expect(sql).toContain('FROM material_instruments');
+    expect(sql).toContain('FROM material_instrument_installation_materials');
     expect(sql).not.toContain('unit_price');
     expect(values).toEqual(['change-order-id', 'project-id', 'change-order']);
   });
@@ -268,6 +281,98 @@ describe('Change Order catalog snapshots', () => {
       expect.stringContaining('FROM material_tray_installation_materials'),
       ['tray-install-id'],
     );
+  });
+
+  it.each([
+    ['instrument', 'material_instruments'],
+    ['instrument-installation-material', 'material_instrument_installation_materials'],
+  ] as const)(
+    'resolves %s with its own catalog and a complete independent snapshot',
+    async (category, table) => {
+      const source = {
+        id: 'instrument-material-id',
+        type: ' Pressure transmitter ',
+        purpose: 'Pressure measurement',
+        material: ' Stainless steel ',
+        description: ' Process pressure ',
+        manufacturer: ' Instrument Co ',
+        part_no: ' PT-1 ',
+        dimension_mm: ' 50 x 100 ',
+        weight_kg: '0.75',
+        unit_price: '125.5',
+        minimum_order_quantity: '5',
+        order_measurement: 'pcs',
+        packaging: 'Box',
+      };
+      const query = vi.fn().mockResolvedValue({ rows: [source] });
+
+      const snapshot = await resolveChangeOrderCatalogSnapshot({ query }, category, source.id);
+      source.type = 'Renamed';
+      source.unit_price = '999';
+
+      expect(snapshot).toEqual({
+        sourceCatalog: category,
+        sourceMaterialId: 'instrument-material-id',
+        unit: 'pcs',
+        descriptionEn: 'Pressure transmitter',
+        clearDescription: 'Process pressure',
+        dimensionMm: '50 x 100',
+        material: 'Stainless steel',
+        weightKg: 0.75,
+        unitPrice: 125.5,
+        manufacturer: 'Instrument Co',
+        manufacturerPartNo: 'PT-1',
+        minimumOrderQuantity: 5,
+        orderMeasurement: 'pcs',
+        packaging: 'Box',
+      });
+      expect(query).toHaveBeenCalledWith(expect.stringContaining(`FROM ${table} WHERE id = $1`), [
+        'instrument-material-id',
+      ]);
+    },
+  );
+
+  it.each(['instrument', 'instrument-installation-material'] as const)(
+    'rejects a missing %s without falling back to another catalog',
+    async (category) => {
+      const query = vi.fn().mockResolvedValue({ rows: [] });
+      await expect(
+        resolveChangeOrderCatalogSnapshot({ query }, category, 'missing'),
+      ).rejects.toBeInstanceOf(CatalogMaterialNotFoundError);
+      expect(query).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('keeps inherited instrument installation materials in their catalog', () => {
+    expect(
+      snapshotExpandedStandardMaterial({
+        referencedMaterialCategory: 'instrument-installation-material',
+        referencedMaterialId: 'bracket-id',
+        name: 'Instrument bracket',
+        purpose: 'Mounting',
+        material: 'Steel',
+        description: 'Instrument mounting bracket',
+        dimensionMm: '40 x 80',
+        weightKg: 0.2,
+        unitPrice: 12,
+        manufacturer: 'Instrument Co',
+        partNo: 'IB-1',
+        minimumOrderQuantity: 5,
+        orderMeasurement: 'pcs',
+        packaging: 'Box',
+        quantity: 2,
+        unit: 'pcs',
+        remarks: null,
+        sourceAssignmentIds: ['assignment-id'],
+        depth: 1,
+      }),
+    ).toMatchObject({
+      sourceCatalog: 'instrument-installation-material',
+      sourceMaterialId: 'bracket-id',
+      descriptionEn: 'Instrument bracket',
+      unitPrice: 12,
+      manufacturerPartNo: 'IB-1',
+    });
   });
 
   it('maps only the available tray and support dimensions', () => {

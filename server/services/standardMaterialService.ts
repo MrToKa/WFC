@@ -114,6 +114,8 @@ const loadAllAssignments = async (queryable: Queryable): Promise<StandardMateria
     'cable-type',
     'cable-installation-material',
     'tray-installation-material',
+    'instrument',
+    'instrument-installation-material',
     'tray',
     'support',
   ];

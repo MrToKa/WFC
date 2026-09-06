@@ -2,6 +2,8 @@ export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
   'cable-type',
   'cable-installation-material',
   'tray-installation-material',
+  'instrument',
+  'instrument-installation-material',
   'tray',
   'support',
 ] as const;
@@ -13,6 +15,7 @@ export type StandardMaterialOwnerCategory = (typeof STANDARD_MATERIAL_OWNER_CATE
 export const STANDARD_MATERIAL_REFERENCE_CATEGORIES = [
   'cable-installation-material',
   'tray-installation-material',
+  'instrument-installation-material',
 ] as const;
 
 export type StandardMaterialReferenceCategory =

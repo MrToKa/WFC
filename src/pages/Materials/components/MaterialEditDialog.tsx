@@ -18,6 +18,8 @@ import {
   ApiError,
   updateMaterialCableInstallationMaterial,
   updateMaterialTrayInstallationMaterial,
+  updateMaterialInstrument,
+  updateMaterialInstrumentInstallationMaterial,
   updateMaterialCableType,
   updateMaterialSupport,
   updateMaterialTray,
@@ -120,7 +122,9 @@ const formFromMaterial = (
       };
     }
     case 'cable-installation-material':
-    case 'tray-installation-material': {
+    case 'tray-installation-material':
+    case 'instrument':
+    case 'instrument-installation-material': {
       const item = material as MaterialCableInstallationMaterial;
       return {
         ...common,
@@ -243,12 +247,15 @@ export const MaterialEditDialog = ({
           break;
         case 'cable-installation-material':
         case 'tray-installation-material':
+        case 'instrument':
+        case 'instrument-installation-material':
           if (!form.type.trim()) throw new Error('Type is required.');
-          await (
-            category === 'cable-installation-material'
-              ? updateMaterialCableInstallationMaterial
-              : updateMaterialTrayInstallationMaterial
-          )(token, material.id, {
+          await {
+            'cable-installation-material': updateMaterialCableInstallationMaterial,
+            'tray-installation-material': updateMaterialTrayInstallationMaterial,
+            instrument: updateMaterialInstrument,
+            'instrument-installation-material': updateMaterialInstrumentInstallationMaterial,
+          }[category](token, material.id, {
             type: form.type.trim(),
             purpose: nullableText(form.purpose),
             material: nullableText(form.material),
@@ -347,7 +354,9 @@ export const MaterialEditDialog = ({
                   {textField('Weight [kg/m]', 'weightKgPerM')}
                 </>
               ) : category === 'cable-installation-material' ||
-                category === 'tray-installation-material' ? (
+                category === 'tray-installation-material' ||
+                category === 'instrument' ||
+                category === 'instrument-installation-material' ? (
                 <>
                   {textField('Type', 'type')}
                   {textField('Purpose', 'purpose')}
