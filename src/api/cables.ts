@@ -1,4 +1,4 @@
-import { request, ApiError, getApiBaseUrl } from './http';
+import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
 import type {
   CableType,
   Cable,
@@ -70,37 +70,12 @@ export async function importCableTypes(
   projectId: string,
   file: File,
 ): Promise<{ summary: CableImportSummary; cableTypes: CableType[] }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/cable-types/import`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import cable types';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as { summary: CableImportSummary; cableTypes: CableType[] };
+  return uploadExcelFile(
+    `/api/projects/${projectId}/cable-types/import`,
+    token,
+    file,
+    'Failed to import cable types',
+  );
 }
 
 export async function exportCableTypes(token: string, projectId: string): Promise<Blob> {
@@ -231,43 +206,12 @@ export async function importCableTypeDefaultMaterials(
   summary: CableTypeDefaultMaterialImportSummary;
   defaultMaterials: CableTypeDefaultMaterial[];
 }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    },
+  return uploadExcelFile(
+    `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/import`,
+    token,
+    file,
+    'Failed to import default materials',
   );
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import default materials';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    summary: CableTypeDefaultMaterialImportSummary;
-    defaultMaterials: CableTypeDefaultMaterial[];
-  };
 }
 
 export async function exportCableTypeDefaultMaterials(
@@ -473,37 +417,12 @@ export async function importCables(
   projectId: string,
   file: File,
 ): Promise<{ summary: CableImportSummary; cables: Cable[] }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/cables/import`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import cables';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as { summary: CableImportSummary; cables: Cable[] };
+  return uploadExcelFile(
+    `/api/projects/${projectId}/cables/import`,
+    token,
+    file,
+    'Failed to import cables',
+  );
 }
 
 export async function exportCables(

@@ -1,3 +1,4 @@
+import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ToastIntent } from '@fluentui/react-components';
@@ -470,26 +471,10 @@ export const useCableTypes = ({
         setCableTypes(sortCableTypes(response.cableTypes));
         setPage(1);
 
-        showToast({
-          intent: 'success',
-          title: 'Cable types imported',
-          body: `${response.summary.inserted} added, ${response.summary.updated} updated, ${response.summary.skipped} skipped.`,
-        });
+        showToast(excelImportSuccessToast(file.name, response.summary, 'Cable types'));
       } catch (err) {
         console.error('Import material cable types failed', err);
-        if (err instanceof ApiError && err.status === 404) {
-          showToast({
-            intent: 'error',
-            title: 'Import endpoint unavailable',
-            body: 'Please restart the API server after updating it.',
-          });
-        } else {
-          showToast({
-            intent: 'error',
-            title: 'Failed to import cable types',
-            body: err instanceof ApiError ? err.message : undefined,
-          });
-        }
+        showToast(excelImportErrorToast(err, file.name));
       } finally {
         setIsImporting(false);
       }

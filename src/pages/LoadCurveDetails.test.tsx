@@ -2,7 +2,7 @@ import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MaterialLoadCurve } from '@/api/client';
+import { ApiError, type MaterialLoadCurve } from '@/api/client';
 import { LoadCurveDetails } from './LoadCurveDetails';
 
 const mocks = vi.hoisted(() => ({
@@ -143,5 +143,31 @@ describe('LoadCurveDetails independent editing sections', () => {
     finishImport({ loadCurve: curve, summary: { importedPoints: 2 } });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save details' })).toBeEnabled());
     expect(name).toHaveValue('Unsaved name');
+  });
+
+  it('shows the actual workbook validation error and retains unsaved points after a rejected import', async () => {
+    const { container } = await renderDetails();
+    const pointInput = screen.getByRole('textbox', { name: 'Support spacing for point 1' });
+    fireEvent.change(pointInput, { target: { value: '1.25' } });
+    const error = new ApiError(400, 'Invalid CurveData sheet. No data was changed.');
+    error.issues = [{ row: 6, column: 'span_m', message: 'Must be a positive number.' }];
+    mocks.importPoints.mockRejectedValue(error);
+    const input = container.querySelector('input[type="file"]')!;
+    fireEvent.change(input, { target: { files: [new File(['points'], 'curve.xlsx')] } });
+
+    await waitFor(() =>
+      expect(mocks.showToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          intent: 'error',
+          title: 'Excel import rejected',
+          body: expect.stringContaining('Row 6, span_m: Must be a positive number.'),
+        }),
+      ),
+    );
+    expect(mocks.showToast.mock.lastCall![0].body).toContain('"curve.xlsx"');
+    expect(mocks.showToast.mock.lastCall![0].body).toContain('Correct the workbook');
+    expect(pointInput).toHaveValue('1.25');
+    expect(screen.getByRole('button', { name: 'Import from Excel' })).toBeEnabled();
+    expect(input).toHaveValue('');
   });
 });

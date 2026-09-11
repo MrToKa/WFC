@@ -1,10 +1,12 @@
+import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
+import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
 import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
-import multer from 'multer';
+import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import { pool } from '../db.js';
@@ -14,12 +16,6 @@ import { listStandardMaterialAssignments } from '../services/standardMaterialSer
 import { createMaterialCableTypeSchema, updateMaterialCableTypeSchema } from '../validators.js';
 import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
 
-const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
-});
 
 const MATERIAL_CABLE_EXCEL_HEADERS = {
   name: 'Type',
@@ -432,7 +428,7 @@ materialCableTypesRouter.post(
   '/import',
   authenticate,
   requireAdmin,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     if (!req.file) {
       res.status(400).json({ error: 'An .xlsx file is required' });
@@ -464,12 +460,13 @@ materialCableTypesRouter.post(
       return;
     }
 
-    type CableImportRow = Record<string, unknown>;
+    const issues = validateMaterialExcelImport(worksheet, MATERIAL_CABLE_EXCEL_HEADER_ALIASES, 'cable-type');
+    if (issues.length > 0) {
+      res.status(400).json(excelImportError(issues));
+      return;
+    }
 
-    const rows = XLSX.utils.sheet_to_json<CableImportRow>(worksheet, {
-      defval: '',
-      raw: false,
-    });
+    const rows = readExcelImportRows(worksheet, [...MATERIAL_CABLE_EXCEL_HEADER_ALIASES.diameter, ...MATERIAL_CABLE_EXCEL_HEADER_ALIASES.weight, ...MATERIAL_CABLE_EXCEL_HEADER_ALIASES.unitPrice, ...MATERIAL_CABLE_EXCEL_HEADER_ALIASES.minimumOrder]);
 
     const summary = {
       inserted: 0,
@@ -519,7 +516,7 @@ materialCableTypesRouter.post(
     const readString = (raw: unknown): string | null =>
       raw === undefined || raw === null ? null : normalizeOptionalString(String(raw));
 
-    const readCell = (row: CableImportRow, headers: readonly string[]): unknown => {
+    const readCell = (row: Record<string, unknown>, headers: readonly string[]): unknown => {
       for (const header of headers) {
         if (header in row) {
           return row[header];

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
-import multer from 'multer';
+import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import { pool } from '../db.js';
@@ -28,6 +28,14 @@ import {
 import { authenticate, requireAdmin } from '../middleware.js';
 import { listStandardMaterialAssignments } from '../services/standardMaterialService.js';
 import {
+  excelImportError,
+  getExcelRowNumber,
+  readExcelImportRows,
+  validateExcelImport,
+  type ExcelImportColumn,
+  type ExcelImportIssue
+} from '../utils/excelImport.js';
+import {
   createMaterialLoadCurveSchema,
   createMaterialSupportSchema,
   createMaterialTraySchema,
@@ -37,12 +45,6 @@ import {
 } from '../validators.js';
 import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
 
-const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE }
-});
 
 const TRAY_HEADERS = {
   manufacturer: 'Manufacturer',
@@ -78,6 +80,42 @@ const LOAD_CURVE_HEADERS = {
 
 const LOAD_CURVE_SHEET_NAME = 'CurveData';
 const MAX_LOAD_CURVE_POINTS = 2000;
+
+const materialImportColumns = (
+  headers: typeof TRAY_HEADERS | typeof SUPPORT_HEADERS
+): ExcelImportColumn[] => [
+  { headers: [headers.type], required: true, maxLength: 200, unique: true, normalizeWhitespace: true },
+  { headers: [headers.manufacturer], maxLength: 200 },
+  ...('loadCurve' in headers ? [{ headers: [headers.loadCurve], maxLength: 200 }] : []),
+  ...[
+    headers.height,
+    headers.width,
+    'rungHeight' in headers ? headers.rungHeight : headers.length,
+    headers.weight
+  ].map((header): ExcelImportColumn => ({
+    headers: [header], type: 'number', min: 0, max: 1_000_000
+  })),
+  { headers: [headers.unitPrice], type: 'number', min: 0 },
+  {
+    headers: [headers.minimumOrder], type: 'number', min: 0,
+    exclusiveMin: true, max: 1_000_000
+  },
+  { headers: [headers.orderMeasurement], values: ['pcs', 'pack', 'meters'], caseInsensitive: true },
+  { headers: [headers.packaging], values: ['m', 'Package', 'Box', 'Drum', 'pcs'] }
+];
+
+const readImportWorkbook = (buffer: Buffer, res: Response): XLSX.WorkBook | null => {
+  try {
+    return XLSX.read(buffer, { type: 'buffer' });
+  } catch {
+    res.status(400).json(excelImportError([{
+      row: 1,
+      column: 'File',
+      message: 'Could not read the Excel workbook. Upload a valid .xlsx file.'
+    }]));
+    return null;
+  }
+};
 
 type Queryable = {
   query: <T = unknown>(
@@ -842,7 +880,7 @@ materialsRouter.post(
   '/trays/import',
   authenticate,
   requireAdmin,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const file = req.file;
 
@@ -852,7 +890,8 @@ materialsRouter.post(
     }
 
     try {
-      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const workbook = readImportWorkbook(file.buffer, res);
+      if (!workbook) return;
       const sheetName = workbook.SheetNames[0];
 
       if (!sheetName) {
@@ -861,29 +900,15 @@ materialsRouter.post(
       }
 
       const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-        defval: null
-      });
-
-      if (rows.length === 0) {
-        const listResult = await pool.query<MaterialTrayRow>(
-          `
-            ${selectMaterialTraysQuery}
-            ORDER BY mt.tray_type ASC;
-          `
-        );
-
-        res.json({
-          summary: {
-            totalRows: 0,
-            created: 0,
-            updated: 0,
-            skipped: 0
-          },
-          trays: listResult.rows.map(mapMaterialTrayRow)
-        });
+      const issues = validateExcelImport(sheet, materialImportColumns(TRAY_HEADERS));
+      if (issues.length > 0) {
+        res.status(400).json(excelImportError(issues));
         return;
       }
+      const rows = readExcelImportRows(sheet, [
+        TRAY_HEADERS.height, TRAY_HEADERS.rungHeight, TRAY_HEADERS.width, TRAY_HEADERS.weight,
+        TRAY_HEADERS.unitPrice, TRAY_HEADERS.minimumOrder
+      ]);
 
       const loadCurveResult = await pool.query<{ id: string; name: string | null }>(`
         SELECT id, name
@@ -899,97 +924,71 @@ materialsRouter.post(
         }
       }
 
+      const preparedRows: {
+        data: z.infer<typeof createMaterialTraySchema>;
+        loadCurveId: string | null;
+      }[] = [];
+      const fieldHeaders: Record<string, string> = {
+        type: TRAY_HEADERS.type,
+        manufacturer: TRAY_HEADERS.manufacturer,
+        heightMm: TRAY_HEADERS.height,
+        rungHeightMm: TRAY_HEADERS.rungHeight,
+        widthMm: TRAY_HEADERS.width,
+        weightKgPerM: TRAY_HEADERS.weight,
+        unitPrice: TRAY_HEADERS.unitPrice,
+        minimumOrderQuantity: TRAY_HEADERS.minimumOrder,
+        orderMeasurement: TRAY_HEADERS.orderMeasurement,
+        packaging: TRAY_HEADERS.packaging
+      };
+      rows.forEach((row, index) => {
+        const rowNumber = getExcelRowNumber(row, index);
+        const loadCurveName = normalizeOptionalText(String(row[TRAY_HEADERS.loadCurve] ?? ''));
+        const loadCurveId = loadCurveName
+          ? loadCurveLookup.get(normalizeLookupKey(loadCurveName)) ?? null
+          : null;
+        if (loadCurveName && !loadCurveId) {
+          issues.push({
+            row: rowNumber,
+            column: TRAY_HEADERS.loadCurve,
+            message: `Load curve "${loadCurveName}" was not found. Use an existing load curve name or leave this cell blank.`
+          });
+        }
+        const parseResult = createMaterialTraySchema.safeParse({
+          type: normalizeType(String(row[TRAY_HEADERS.type])),
+          manufacturer: normalizeOptionalText(String(row[TRAY_HEADERS.manufacturer] ?? '')),
+          heightMm: toNullableNumber(row[TRAY_HEADERS.height]),
+          rungHeightMm: toNullableNumber(row[TRAY_HEADERS.rungHeight]),
+          widthMm: toNullableNumber(row[TRAY_HEADERS.width]),
+          weightKgPerM: toNullableNumber(row[TRAY_HEADERS.weight]),
+          unitPrice: toUnitPrice(row[TRAY_HEADERS.unitPrice]),
+          minimumOrderQuantity: toMinimumOrderQuantity(row[TRAY_HEADERS.minimumOrder]),
+          orderMeasurement: toOrderMeasurement(row[TRAY_HEADERS.orderMeasurement]),
+          packaging: toPackaging(row[TRAY_HEADERS.packaging])
+        });
+        if (!parseResult.success) {
+          issues.push(...parseResult.error.issues.map((issue): ExcelImportIssue => ({
+            row: rowNumber,
+            column: fieldHeaders[String(issue.path[0])] ?? 'Row',
+            message: issue.message
+          })));
+        } else {
+          preparedRows.push({ data: parseResult.data, loadCurveId });
+        }
+      });
+      if (issues.length > 0) {
+        res.status(400).json(excelImportError(issues));
+        return;
+      }
+
       const client = await pool.connect();
 
       let created = 0;
       let updated = 0;
-      let skipped = 0;
 
       try {
         await client.query('BEGIN');
 
-        for (const row of rows) {
-          const typeRaw = row[TRAY_HEADERS.type];
-          const manufacturerRaw = row[TRAY_HEADERS.manufacturer];
-          const heightRaw = row[TRAY_HEADERS.height];
-          const rungRaw = row[TRAY_HEADERS.rungHeight];
-          const widthRaw = row[TRAY_HEADERS.width];
-          const weightRaw = row[TRAY_HEADERS.weight];
-          const loadCurveRaw = row[TRAY_HEADERS.loadCurve];
-          const unitPriceRaw = row[TRAY_HEADERS.unitPrice];
-          const minimumOrderRaw = row[TRAY_HEADERS.minimumOrder];
-          const orderMeasurementRaw = row[TRAY_HEADERS.orderMeasurement];
-          const packagingRaw = row[TRAY_HEADERS.packaging];
-
-          if (typeRaw === null || typeRaw === undefined || String(typeRaw).trim() === '') {
-            skipped += 1;
-            continue;
-          }
-
-          const manufacturer = normalizeOptionalText(
-            manufacturerRaw === null || manufacturerRaw === undefined
-              ? null
-              : String(manufacturerRaw)
-          );
-          if (!manufacturer) {
-            skipped += 1;
-            continue;
-          }
-
-          const heightMm = toNullableNumber(heightRaw);
-          if (heightMm === null) {
-            skipped += 1;
-            continue;
-          }
-
-          const rungHeightMm = toNullableNumber(rungRaw);
-          if (rungHeightMm === null) {
-            skipped += 1;
-            continue;
-          }
-
-          const widthMm = toNullableNumber(widthRaw);
-          if (widthMm === null) {
-            skipped += 1;
-            continue;
-          }
-
-          const weightKgPerM = toNullableNumber(weightRaw);
-          if (weightKgPerM === null) {
-            skipped += 1;
-            continue;
-          }
-
-          const loadCurveName = normalizeOptionalText(
-            loadCurveRaw === null || loadCurveRaw === undefined
-              ? null
-              : String(loadCurveRaw)
-          );
-          const loadCurveId =
-            loadCurveName && loadCurveLookup.size > 0
-              ? loadCurveLookup.get(normalizeLookupKey(loadCurveName)) ?? null
-              : null;
-
-          const parseResult = createMaterialTraySchema.safeParse({
-            type: normalizeType(String(typeRaw)),
-            manufacturer,
-            heightMm,
-            rungHeightMm,
-            widthMm,
-            weightKgPerM,
-            unitPrice: toUnitPrice(unitPriceRaw),
-            minimumOrderQuantity: toMinimumOrderQuantity(minimumOrderRaw),
-            orderMeasurement: toOrderMeasurement(orderMeasurementRaw),
-            packaging: toPackaging(packagingRaw)
-          });
-
-          if (!parseResult.success) {
-            skipped += 1;
-            continue;
-          }
-
-          const data = parseResult.data;
-
+        for (const { data, loadCurveId } of preparedRows) {
           const existing = await client.query<{ id: string }>(
             `
               SELECT id FROM material_trays
@@ -1091,7 +1090,7 @@ materialsRouter.post(
           totalRows: rows.length,
           created,
           updated,
-          skipped
+          skipped: 0
         },
         trays: listResult.rows.map(mapMaterialTrayRow)
       });
@@ -1647,7 +1646,7 @@ materialsRouter.post(
   '/supports/import',
   authenticate,
   requireAdmin,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const file = req.file;
 
@@ -1657,7 +1656,8 @@ materialsRouter.post(
     }
 
     try {
-      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const workbook = readImportWorkbook(file.buffer, res);
+      if (!workbook) return;
       const sheetName = workbook.SheetNames[0];
 
       if (!sheetName) {
@@ -1666,27 +1666,54 @@ materialsRouter.post(
       }
 
       const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-        defval: null
-      });
+      const issues = validateExcelImport(sheet, materialImportColumns(SUPPORT_HEADERS));
+      if (issues.length > 0) {
+        res.status(400).json(excelImportError(issues));
+        return;
+      }
+      const rows = readExcelImportRows(sheet, [
+        SUPPORT_HEADERS.height, SUPPORT_HEADERS.width, SUPPORT_HEADERS.length, SUPPORT_HEADERS.weight,
+        SUPPORT_HEADERS.unitPrice, SUPPORT_HEADERS.minimumOrder
+      ]);
 
-      if (rows.length === 0) {
-        const listResult = await pool.query<MaterialSupportRow>(
-          `
-            ${selectMaterialSupportsQuery}
-            ORDER BY ms.support_type ASC;
-          `
-        );
-
-        res.json({
-          summary: {
-            totalRows: 0,
-            created: 0,
-            updated: 0,
-            skipped: 0
-          },
-          supports: listResult.rows.map(mapMaterialSupportRow)
+      const preparedRows: z.infer<typeof createMaterialSupportSchema>[] = [];
+      const fieldHeaders: Record<string, string> = {
+        type: SUPPORT_HEADERS.type,
+        manufacturer: SUPPORT_HEADERS.manufacturer,
+        heightMm: SUPPORT_HEADERS.height,
+        widthMm: SUPPORT_HEADERS.width,
+        lengthMm: SUPPORT_HEADERS.length,
+        weightKg: SUPPORT_HEADERS.weight,
+        unitPrice: SUPPORT_HEADERS.unitPrice,
+        minimumOrderQuantity: SUPPORT_HEADERS.minimumOrder,
+        orderMeasurement: SUPPORT_HEADERS.orderMeasurement,
+        packaging: SUPPORT_HEADERS.packaging
+      };
+      rows.forEach((row, index) => {
+        const parseResult = createMaterialSupportSchema.safeParse({
+          type: normalizeType(String(row[SUPPORT_HEADERS.type])),
+          manufacturer: normalizeOptionalText(String(row[SUPPORT_HEADERS.manufacturer] ?? '')),
+          heightMm: toNullableNumber(row[SUPPORT_HEADERS.height]),
+          widthMm: toNullableNumber(row[SUPPORT_HEADERS.width]),
+          lengthMm: toNullableNumber(row[SUPPORT_HEADERS.length]),
+          weightKg: toNullableNumber(row[SUPPORT_HEADERS.weight]),
+          unitPrice: toUnitPrice(row[SUPPORT_HEADERS.unitPrice]),
+          minimumOrderQuantity: toMinimumOrderQuantity(row[SUPPORT_HEADERS.minimumOrder]),
+          orderMeasurement: toOrderMeasurement(row[SUPPORT_HEADERS.orderMeasurement]),
+          packaging: toPackaging(row[SUPPORT_HEADERS.packaging])
         });
+        if (!parseResult.success) {
+          issues.push(...parseResult.error.issues.map((issue): ExcelImportIssue => ({
+            row: getExcelRowNumber(row, index),
+            column: fieldHeaders[String(issue.path[0])] ?? 'Row',
+            message: issue.message
+          })));
+        } else {
+          preparedRows.push(parseResult.data);
+        }
+      });
+      if (issues.length > 0) {
+        res.status(400).json(excelImportError(issues));
         return;
       }
 
@@ -1694,72 +1721,11 @@ materialsRouter.post(
 
       let created = 0;
       let updated = 0;
-      let skipped = 0;
 
       try {
         await client.query('BEGIN');
 
-        for (const row of rows) {
-          const typeRaw = row[SUPPORT_HEADERS.type];
-          const manufacturerRaw = row[SUPPORT_HEADERS.manufacturer];
-          const heightRaw = row[SUPPORT_HEADERS.height];
-          const widthRaw = row[SUPPORT_HEADERS.width];
-          const lengthRaw = row[SUPPORT_HEADERS.length];
-          const weightRaw = row[SUPPORT_HEADERS.weight];
-          const unitPriceRaw = row[SUPPORT_HEADERS.unitPrice];
-          const minimumOrderRaw = row[SUPPORT_HEADERS.minimumOrder];
-          const orderMeasurementRaw = row[SUPPORT_HEADERS.orderMeasurement];
-          const packagingRaw = row[SUPPORT_HEADERS.packaging];
-
-          if (typeRaw === null || typeRaw === undefined || String(typeRaw).trim() === '') {
-            skipped += 1;
-            continue;
-          }
-
-          const manufacturerValue =
-            manufacturerRaw === null || manufacturerRaw === undefined
-              ? null
-              : normalizeOptionalText(String(manufacturerRaw));
-          if (!manufacturerValue) {
-            skipped += 1;
-            continue;
-          }
-
-          const heightValue = toNullableNumber(heightRaw);
-          const widthValue = toNullableNumber(widthRaw);
-          const lengthValue = toNullableNumber(lengthRaw);
-          const weightValue = toNullableNumber(weightRaw);
-
-          if (
-            heightValue === null ||
-            widthValue === null ||
-            lengthValue === null ||
-            weightValue === null
-          ) {
-            skipped += 1;
-            continue;
-          }
-
-          const parseResult = createMaterialSupportSchema.safeParse({
-            type: normalizeType(String(typeRaw)),
-            manufacturer: manufacturerValue,
-            heightMm: heightValue,
-            widthMm: widthValue,
-            lengthMm: lengthValue,
-            weightKg: weightValue,
-            unitPrice: toUnitPrice(unitPriceRaw),
-            minimumOrderQuantity: toMinimumOrderQuantity(minimumOrderRaw),
-            orderMeasurement: toOrderMeasurement(orderMeasurementRaw),
-            packaging: toPackaging(packagingRaw)
-          });
-
-          if (!parseResult.success) {
-            skipped += 1;
-            continue;
-          }
-
-          const data = parseResult.data;
-
+        for (const data of preparedRows) {
           const existing = await client.query<{ id: string }>(
             `
               SELECT id FROM material_supports
@@ -1857,7 +1823,7 @@ materialsRouter.post(
           totalRows: rows.length,
           created,
           updated,
-          skipped
+          skipped: 0
         },
         supports: listResult.rows.map(mapMaterialSupportRow)
       });
@@ -2421,12 +2387,16 @@ materialsRouter.post(
   '/load-curves/:loadCurveId/import',
   authenticate,
   requireAdmin,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const { loadCurveId } = req.params;
 
     if (!loadCurveId) {
       res.status(400).json({ error: 'Load curve ID is required' });
+      return;
+    }
+    if (!z.string().uuid().safeParse(loadCurveId).success) {
+      res.status(400).json({ error: 'Invalid load curve ID' });
       return;
     }
 
@@ -2437,57 +2407,42 @@ materialsRouter.post(
     }
 
     try {
-      const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+      const workbook = readImportWorkbook(file.buffer, res);
+      if (!workbook) return;
       const sheet = workbook.Sheets[LOAD_CURVE_SHEET_NAME];
 
       if (!sheet) {
-        res.status(400).json({
-          error: `Sheet '${LOAD_CURVE_SHEET_NAME}' not found in workbook`
-        });
+        res.status(400).json(excelImportError([{
+          row: 1,
+          column: 'Workbook',
+          message: `Sheet '${LOAD_CURVE_SHEET_NAME}' was not found. Use the load curve import template.`
+        }]));
         return;
       }
 
-      const rows = XLSX.utils.sheet_to_json<(unknown | null)[]>(sheet, {
-        header: 1,
-        raw: true,
+      const issues = validateExcelImport(sheet, [
+        { headers: [LOAD_CURVE_HEADERS.span], required: true, type: 'number', min: 0, unique: true },
+        { headers: [LOAD_CURVE_HEADERS.load], required: true, type: 'number', min: 0 }
+      ]);
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
         defval: null
-      });
-
-      const [, ...dataRows] = rows;
-      const points = dataRows
-        .map((row) => {
-          if (!Array.isArray(row) || row.length < 2) {
-            return null;
-          }
-
-          const span = toNullableNumber(row[0]);
-          const load = toNullableNumber(row[1]);
-
-          if (span === null || load === null) {
-            return null;
-          }
-
-          return {
-            spanM: span,
-            loadKnPerM: load
-          };
-        })
-        .filter(
-          (point): point is { spanM: number; loadKnPerM: number } =>
-            point !== null
-        );
-
-      if (points.length === 0) {
-        res.status(400).json({ error: 'No valid curve points found in file' });
+      }).filter((row) => Object.values(row).some((value) => value != null && String(value).trim() !== ''));
+      if (rows.length > MAX_LOAD_CURVE_POINTS) {
+        issues.push({
+          row: getExcelRowNumber(rows[MAX_LOAD_CURVE_POINTS], MAX_LOAD_CURVE_POINTS),
+          column: 'Workbook',
+          message: `A load curve can contain at most ${MAX_LOAD_CURVE_POINTS} points. Remove the additional rows.`
+        });
+      }
+      if (issues.length > 0) {
+        res.status(400).json(excelImportError(issues));
         return;
       }
 
-      const normalizedPoints = normalizeLoadCurvePoints(points);
-
-      if (normalizedPoints.length === 0) {
-        res.status(400).json({ error: 'No valid curve points to import' });
-        return;
-      }
+      const normalizedPoints = normalizeLoadCurvePoints(rows.map((row) => ({
+        spanM: Number(toNullableNumber(row[LOAD_CURVE_HEADERS.span])),
+        loadKnPerM: Number(toNullableNumber(row[LOAD_CURVE_HEADERS.load]))
+      })));
 
       const client = await pool.connect();
 

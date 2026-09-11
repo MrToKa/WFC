@@ -1,4 +1,4 @@
-import { request, ApiError, getApiBaseUrl } from './http';
+import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
 import type {
   MaterialCableInstallationMaterial,
   MaterialCableInstallationMaterialImportSummary,
@@ -157,40 +157,12 @@ export async function importMaterialCableTypes(
   summary: MaterialCableTypeImportSummary;
   cableTypes: MaterialCableType[];
 }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${getApiBaseUrl()}/api/materials/cable-types/import`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import cable types';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    summary: MaterialCableTypeImportSummary;
-    cableTypes: MaterialCableType[];
-  };
+  return uploadExcelFile(
+    `/api/materials/cable-types/import`,
+    token,
+    file,
+    'Failed to import cable types',
+  );
 }
 
 export async function exportMaterialCableTypes(token: string): Promise<Blob> {
@@ -305,43 +277,12 @@ export async function importMaterialCableInstallationMaterials(
   summary: MaterialCableInstallationMaterialImportSummary;
   cableInstallationMaterials: MaterialCableInstallationMaterial[];
 }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/materials/cable-installation-materials/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    },
+  return uploadExcelFile(
+    `/api/materials/cable-installation-materials/import`,
+    token,
+    file,
+    'Failed to import cable installation materials',
   );
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import cable installation materials';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    summary: MaterialCableInstallationMaterialImportSummary;
-    cableInstallationMaterials: MaterialCableInstallationMaterial[];
-  };
 }
 
 export async function exportMaterialCableInstallationMaterials(token: string): Promise<Blob> {
@@ -459,43 +400,12 @@ export async function importMaterialTrayInstallationMaterials(
   summary: MaterialTrayInstallationMaterialImportSummary;
   trayInstallationMaterials: MaterialTrayInstallationMaterial[];
 }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/materials/tray-installation-materials/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    },
+  return uploadExcelFile(
+    `/api/materials/tray-installation-materials/import`,
+    token,
+    file,
+    'Failed to import tray installation materials',
   );
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import tray installation materials';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    summary: MaterialTrayInstallationMaterialImportSummary;
-    trayInstallationMaterials: MaterialTrayInstallationMaterial[];
-  };
 }
 
 export async function exportMaterialTrayInstallationMaterials(token: string): Promise<Blob> {
@@ -604,40 +514,12 @@ export async function importMaterialInstruments(
   summary: MaterialInstrumentImportSummary;
   instruments: MaterialInstrument[];
 }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${getApiBaseUrl()}/api/materials/instruments/import`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import instruments';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    summary: MaterialInstrumentImportSummary;
-    instruments: MaterialInstrument[];
-  };
+  return uploadExcelFile(
+    `/api/materials/instruments/import`,
+    token,
+    file,
+    'Failed to import instruments',
+  );
 }
 
 export async function exportMaterialInstruments(token: string): Promise<Blob> {
@@ -752,43 +634,12 @@ export async function importMaterialInstrumentInstallationMaterials(
   summary: MaterialInstrumentInstallationMaterialImportSummary;
   instrumentInstallationMaterials: MaterialInstrumentInstallationMaterial[];
 }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/materials/instrument-installation-materials/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    },
+  return uploadExcelFile(
+    `/api/materials/instrument-installation-materials/import`,
+    token,
+    file,
+    'Failed to import instrument installation materials',
   );
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import instrument installation materials';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    summary: MaterialInstrumentInstallationMaterialImportSummary;
-    instrumentInstallationMaterials: MaterialInstrumentInstallationMaterial[];
-  };
 }
 
 export async function exportMaterialInstrumentInstallationMaterials(token: string): Promise<Blob> {
@@ -915,37 +766,12 @@ export async function importMaterialTrays(
   token: string,
   file: File,
 ): Promise<{ summary: MaterialImportSummary; trays: MaterialTray[] }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${getApiBaseUrl()}/api/materials/trays/import`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import trays';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as { summary: MaterialImportSummary; trays: MaterialTray[] };
+  return uploadExcelFile(
+    `/api/materials/trays/import`,
+    token,
+    file,
+    'Failed to import trays',
+  );
 }
 
 export async function exportMaterialTrays(token?: string): Promise<Blob> {
@@ -1092,40 +918,12 @@ export async function importMaterialSupports(
   token: string,
   file: File,
 ): Promise<{ summary: MaterialImportSummary; supports: MaterialSupport[] }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(`${getApiBaseUrl()}/api/materials/supports/import`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import supports';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    summary: MaterialImportSummary;
-    supports: MaterialSupport[];
-  };
+  return uploadExcelFile(
+    `/api/materials/supports/import`,
+    token,
+    file,
+    'Failed to import supports',
+  );
 }
 
 export async function exportMaterialSupports(token?: string): Promise<Blob> {
@@ -1233,41 +1031,10 @@ export async function importMaterialLoadCurvePoints(
   loadCurve: MaterialLoadCurve;
   summary: MaterialLoadCurveImportSummary;
 }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/materials/load-curves/${loadCurveId}/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    },
+  return uploadExcelFile(
+    `/api/materials/load-curves/${loadCurveId}/import`,
+    token,
+    file,
+    'Failed to import load curve points',
   );
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import load curve points';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as {
-    loadCurve: MaterialLoadCurve;
-    summary: MaterialLoadCurveImportSummary;
-  };
 }

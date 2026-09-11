@@ -1,0 +1,1 @@
+const c=(e,f,i="Request failed. Please try again.")=>{if(typeof e=="string")return{general:e.trim()?e:i};const r={},t=e.formErrors?.filter(s=>s.trim())??[];for(const[s,o]of Object.entries(e.fieldErrors??{})){const n=o.find(g=>g.trim());n&&(f.includes(s)?r[s]=n:t.push(n))}return t.length>0?r.general=t[0]:Object.keys(r).length===0&&(r.general=i),r};export{c as p};

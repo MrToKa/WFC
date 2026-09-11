@@ -98,6 +98,12 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
   the new Templates navigation item.
 - **Notifications** – Toast-based feedback for success and error states throughout the UI.
 
+Excel imports accept `.xlsx` workbooks up to 5 MB. Use the template for the selected list;
+load curve points belong in the `CurveData` sheet. The complete workbook is validated before
+records are changed. Invalid values, duplicate identifiers, missing required columns, or unknown
+referenced materials reject the import. Blank optional cells remain supported. Import notifications
+include the file name, row and column details, correction guidance, and the number of saved records.
+
 ## Project Structure (high level)
 
 - `src/app` – Application shell, Fluent provider, shared contexts (auth, toasts).

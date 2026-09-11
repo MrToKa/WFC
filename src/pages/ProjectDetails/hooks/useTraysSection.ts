@@ -1,3 +1,4 @@
+import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent, RefObject } from 'react';
 import {
   useCallback,
@@ -11,7 +12,6 @@ import type { ToastIntent } from '@fluentui/react-components';
 
 import {
   ApiError,
-  CableImportSummary,
   MaterialTray,
   Tray,
   createTray,
@@ -518,27 +518,10 @@ export const useTraysSection = ({
         setTrays(sortTrays(response.trays));
         setPage(1);
 
-        const summary: CableImportSummary = response.summary;
-        showToast({
-          intent: 'success',
-          title: 'Trays imported',
-          body: `${summary.inserted} added, ${summary.updated} updated, ${summary.skipped} skipped.`
-        });
+        showToast(excelImportSuccessToast(file.name, response.summary, 'Trays'));
       } catch (err) {
         console.error('Import trays failed', err);
-        if (err instanceof ApiError && err.status === 404) {
-          showToast({
-            intent: 'error',
-            title: 'Import endpoint unavailable',
-            body: 'Please restart the API server after updating it.'
-          });
-        } else {
-          showToast({
-            intent: 'error',
-            title: 'Failed to import trays',
-            body: err instanceof ApiError ? err.message : undefined
-          });
-        }
+        showToast(excelImportErrorToast(err, file.name));
       } finally {
         setIsImporting(false);
       }

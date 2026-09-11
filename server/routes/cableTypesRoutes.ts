@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
-import multer from 'multer';
+import { uploadExcelFile } from '../utils/excelUpload.js';
 import type { PoolClient } from 'pg';
 import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
@@ -16,6 +16,12 @@ import type { CableTypeRow } from '../models/cableType.js';
 import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import {
+  excelImportError,
+  getExcelRowNumber,
+  readExcelImportRows,
+  validateExcelImport,
+} from '../utils/excelImport.js';
 import { snapshotStandardMaterialsToProjectCableType } from '../services/projectCableTypeSnapshotService.js';
 import {
   buildNamedCatalogLookup,
@@ -28,13 +34,6 @@ import {
   updateCableTypeDefaultMaterialSchema,
   updateCableTypeSchema,
 } from '../validators.js';
-
-const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
-});
 
 const CABLE_EXCEL_HEADERS = {
   name: 'Type',
@@ -213,16 +212,6 @@ const createMaterialCableInstallationMaterialNotFoundPayload = (name: string) =>
     name: [`Cable installation material "${name}" was not found in materials.`],
   },
 });
-
-const formatMissingMaterialCableTypesError = (names: string[]): string => {
-  const label = names.length === 1 ? 'Cable type' : 'Cable types';
-  return `${label} not found in materials: ${names.join(', ')}.`;
-};
-
-const formatMissingMaterialCableInstallationMaterialsError = (names: string[]): string => {
-  const label = names.length === 1 ? 'Cable installation material' : 'Cable installation materials';
-  return `${label} not found in materials: ${names.join(', ')}.`;
-};
 
 const findMaterialCableTypeByName = async (
   queryable: Queryable,
@@ -759,7 +748,7 @@ cableTypesRouter.post(
   '/import',
   authenticate,
   requireAdmin,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -811,12 +800,16 @@ cableTypesRouter.post(
       return;
     }
 
-    type CableImportRow = Record<string, unknown>;
+    const rows = readExcelImportRows(worksheet, []);
 
-    const rows = XLSX.utils.sheet_to_json<CableImportRow>(worksheet, {
-      defval: '',
-      raw: false,
-    });
+    const issues = validateExcelImport(worksheet, [
+      { headers: [CABLE_EXCEL_HEADERS.name], required: true, maxLength: 200, unique: true },
+    ]);
+
+    if (issues.length > 0) {
+      res.status(400).json(excelImportError(issues));
+      return;
+    }
 
     const summary = {
       inserted: 0,
@@ -825,13 +818,14 @@ cableTypesRouter.post(
     };
 
     const prepared: Array<{
+      rowNumber: number;
       key: string;
       name: string;
     }> = [];
 
     const seenKeys = new Set<string>();
 
-    for (const row of rows) {
+    for (const [index, row] of rows.entries()) {
       const rawName = row[CABLE_EXCEL_HEADERS.name] as unknown;
       const name = typeof rawName === 'number' ? String(rawName) : String(rawName ?? '').trim();
 
@@ -850,6 +844,7 @@ cableTypesRouter.post(
       seenKeys.add(key);
 
       prepared.push({
+        rowNumber: getExcelRowNumber(row, index),
         key,
         name,
       });
@@ -893,13 +888,41 @@ cableTypesRouter.post(
 
       const missingMaterialCableTypes = prepared
         .filter((row) => !materialCableTypes.has(row.key))
-        .map((row) => row.name);
+        .map((row) => ({
+          row: row.rowNumber,
+          column: CABLE_EXCEL_HEADERS.name,
+          message: `Cable type "${row.name}" was not found in the material catalog. Add it to Materials first.`,
+        }));
 
       if (missingMaterialCableTypes.length > 0) {
         await client.query('ROLLBACK');
-        res.status(400).json({
-          error: formatMissingMaterialCableTypesError(missingMaterialCableTypes),
-        });
+        res.status(400).json(excelImportError(missingMaterialCableTypes));
+        return;
+      }
+
+      // Different spellings may resolve to the same catalog entry. Reject these
+      // before an insert can violate the project's unique cable type name.
+      const seenMaterialIds = new Map<string, number>();
+      for (const row of prepared) {
+        const material = materialCableTypes.get(row.key)!;
+        const firstRow = seenMaterialIds.get(material.id);
+        if (firstRow !== undefined) {
+          issues.push({
+            row: row.rowNumber,
+            column: CABLE_EXCEL_HEADERS.name,
+            message: `Cable type "${material.name}" is already present in row ${firstRow}.`,
+          });
+        } else {
+          seenMaterialIds.set(material.id, row.rowNumber);
+        }
+        // Use the catalog's canonical name for existing-row lookup as well as
+        // inserts, so an imported alias updates the existing project type.
+        row.key = material.name.toLowerCase();
+        materialCableTypes.set(row.key, material);
+      }
+      if (issues.length > 0) {
+        await client.query('ROLLBACK');
+        res.status(400).json(excelImportError(issues));
         return;
       }
 
@@ -1362,7 +1385,7 @@ cableTypesRouter.post(
   '/:cableTypeId/default-materials/import',
   authenticate,
   requireAdmin,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId } = req.params;
 
@@ -1423,7 +1446,7 @@ cableTypesRouter.post(
 
     const rawRows = XLSX.utils.sheet_to_json<(unknown | null)[]>(worksheet, {
       header: 1,
-      raw: false,
+      raw: true,
       defval: null,
     });
     const headerRow = Array.isArray(rawRows[0]) ? rawRows[0] : [];
@@ -1439,18 +1462,49 @@ cableTypesRouter.post(
     ].filter((header) => !normalizedHeaders.has(normalizeExcelHeader(header)));
 
     if (missingHeaders.length > 0) {
-      res.status(400).json({
-        error: `Required columns are missing: ${missingHeaders.join(', ')}.`,
-      });
+      res.status(400).json(
+        excelImportError(
+          missingHeaders.map((column) => ({
+            row: worksheet['!ref'] ? XLSX.utils.decode_range(worksheet['!ref']).s.r + 1 : 1,
+            column,
+            message: 'Required column is missing. Use the import template.',
+          })),
+        ),
+      );
       return;
     }
 
     type CableTypeDefaultMaterialImportRow = Record<string, unknown>;
 
-    const rows = XLSX.utils.sheet_to_json<CableTypeDefaultMaterialImportRow>(worksheet, {
-      defval: '',
-      raw: false,
-    });
+    // Default material templates historically accept trimmed, case-insensitive headers.
+    const aliases = (name: string) => [
+      name,
+      ...headerRow
+        .map((value) => String(value ?? ''))
+        .filter((header) => normalizeExcelHeader(header) === normalizeExcelHeader(name)),
+    ];
+    const rows = readExcelImportRows(
+      worksheet,
+      aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity),
+    );
+    const issues = validateExcelImport(worksheet, [
+      {
+        headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material),
+        required: true,
+        maxLength: 200,
+      },
+      {
+        headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity),
+        type: 'number',
+        min: 0,
+        max: 1_000_000,
+      },
+      {
+        headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.unit),
+        values: ['pcs', 'meters', 'pcs/m'],
+      },
+      { headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.remarks), maxLength: 2000 },
+    ]);
 
     const readCell = (
       row: CableTypeDefaultMaterialImportRow,
@@ -1472,6 +1526,7 @@ cableTypesRouter.post(
       null;
 
     const prepared: Array<{
+      rowNumber: number;
       name: string;
       quantity: number | null;
       unit: string | null;
@@ -1483,7 +1538,7 @@ cableTypesRouter.post(
       const quantityRaw = readCell(row, CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES.quantity);
       const unitRaw = readCell(row, CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES.unit);
       const remarksRaw = readCell(row, CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES.remarks);
-      const rowNumber = index + 2;
+      const rowNumber = getExcelRowNumber(row, index);
       const hasAnyValue = [materialRaw, quantityRaw, unitRaw, remarksRaw].some(hasCellValue);
 
       if (!hasAnyValue) {
@@ -1494,8 +1549,7 @@ cableTypesRouter.post(
         typeof materialRaw === 'number' ? String(materialRaw) : String(materialRaw ?? '').trim();
 
       if (name === '') {
-        res.status(400).json({ error: `Row ${rowNumber}: Material is required.` });
-        return;
+        continue;
       }
 
       const quantityText =
@@ -1503,17 +1557,11 @@ cableTypesRouter.post(
       const quantity = toNullableNumber(quantityRaw);
 
       if (quantityText !== '' && quantity === null) {
-        res.status(400).json({
-          error: `Row ${rowNumber}: Quantity must be a valid non-negative number.`,
-        });
-        return;
+        continue;
       }
 
       if (quantity !== null && quantity < 0) {
-        res.status(400).json({
-          error: `Row ${rowNumber}: Quantity must be a valid non-negative number.`,
-        });
-        return;
+        continue;
       }
 
       const unit = normalizeOptionalString(
@@ -1521,18 +1569,23 @@ cableTypesRouter.post(
       );
 
       if (quantity !== null && unit === null) {
-        res.status(400).json({ error: `Row ${rowNumber}: Unit is required when quantity is set.` });
-        return;
+        issues.push({
+          row: rowNumber,
+          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.unit,
+          message: 'Unit is required when quantity is set.',
+        });
       }
 
       if (quantity === null && unit !== null) {
-        res.status(400).json({
-          error: `Row ${rowNumber}: Quantity is required when unit is set.`,
+        issues.push({
+          row: rowNumber,
+          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity,
+          message: 'Quantity is required when unit is set.',
         });
-        return;
       }
 
       prepared.push({
+        rowNumber,
         name,
         quantity,
         unit,
@@ -1542,8 +1595,21 @@ cableTypesRouter.post(
       });
     }
 
+    if (issues.length > 0) {
+      res.status(400).json(excelImportError(issues));
+      return;
+    }
+
     if (prepared.length === 0) {
-      res.status(400).json({ error: 'No default materials found in the workbook.' });
+      res.status(400).json(
+        excelImportError([
+          {
+            row: worksheet['!ref'] ? XLSX.utils.decode_range(worksheet['!ref']).s.r + 2 : 2,
+            column: 'Workbook',
+            message: 'No default materials found in the workbook. Add at least one material row.',
+          },
+        ]),
+      );
       return;
     }
 
@@ -1558,13 +1624,15 @@ cableTypesRouter.post(
       return;
     }
 
-    const missingMaterials = new Set<string>();
-
     const normalizedRows = prepared.map((row) => {
       const matchedMaterial = findNamedCatalogMatch(materialLookup, row.name);
 
       if (!matchedMaterial) {
-        missingMaterials.add(row.name);
+        issues.push({
+          row: row.rowNumber,
+          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material,
+          message: `Cable installation material "${row.name}" was not found in the material catalog. Add it to Materials first.`,
+        });
         return row;
       }
 
@@ -1574,10 +1642,23 @@ cableTypesRouter.post(
       };
     });
 
-    if (missingMaterials.size > 0) {
-      res.status(400).json({
-        error: formatMissingMaterialCableInstallationMaterialsError([...missingMaterials]),
-      });
+    const seenRows = new Map<string, number>();
+    for (const row of normalizedRows) {
+      const key = JSON.stringify([row.name.toLowerCase(), row.quantity, row.unit, row.remarks]);
+      const firstRow = seenRows.get(key);
+      if (firstRow !== undefined) {
+        issues.push({
+          row: row.rowNumber,
+          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material,
+          message: `Duplicate material row; it already appears on row ${firstRow}.`,
+        });
+      } else {
+        seenRows.set(key, row.rowNumber);
+      }
+    }
+
+    if (issues.length > 0) {
+      res.status(400).json(excelImportError(issues));
       return;
     }
 

@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
-import multer from 'multer';
+import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { pool } from '../db.js';
 import { mapTrayRow } from '../models/tray.js';
@@ -16,14 +16,15 @@ import {
 } from '../utils/trayFreeSpace.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import {
+  excelImportError,
+  getExcelRowNumber,
+  parseExcelNumber,
+  readExcelImportRows,
+  validateExcelImport,
+} from '../utils/excelImport.js';
 import { createTraySchema, updateTraySchema } from '../validators.js';
 
-const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
-});
 
 const TRAY_EXCEL_HEADERS = {
   name: 'Name',
@@ -78,8 +79,7 @@ const toNumberOrNull = (value: string | number | null): number | null => {
     normalized = normalized.replace(',', '.');
   }
 
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+  return parseExcelNumber(normalized);
 };
 
 const selectTraysQuery = `
@@ -742,7 +742,7 @@ traysRouter.post(
   '/import',
   authenticate,
   requireAdmin,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: TrayImportRequest, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -794,12 +794,21 @@ traysRouter.post(
       return;
     }
 
-    type TrayImportRow = Record<string, unknown>;
+    const rows = readExcelImportRows(worksheet, [
+      TRAY_EXCEL_HEADERS.width,
+      TRAY_EXCEL_HEADERS.height,
+      TRAY_EXCEL_HEADERS.length,
+    ]);
 
-    const rows = XLSX.utils.sheet_to_json<TrayImportRow>(worksheet, {
-      defval: '',
-      raw: false,
-    });
+    const issues = validateExcelImport(worksheet, [
+      { headers: [TRAY_EXCEL_HEADERS.name], required: true, maxLength: 200, unique: true },
+      { headers: [TRAY_EXCEL_HEADERS.type], maxLength: 500 },
+      { headers: [TRAY_EXCEL_HEADERS.purpose], maxLength: 500 },
+      // Numeric limits are checked below after the existing localized dimension parser.
+      ...[TRAY_EXCEL_HEADERS.width, TRAY_EXCEL_HEADERS.height, TRAY_EXCEL_HEADERS.length].map(
+        (header) => ({ headers: [header] }),
+      ),
+    ]);
 
     const summary = {
       inserted: 0,
@@ -820,7 +829,7 @@ traysRouter.post(
 
     const seenNames = new Set<string>();
 
-    for (const row of rows) {
+    for (const [index, row] of rows.entries()) {
       const rawName = row[TRAY_EXCEL_HEADERS.name] as unknown;
       const name = typeof rawName === 'number' ? String(rawName) : String(rawName ?? '').trim();
 
@@ -838,22 +847,39 @@ traysRouter.post(
 
       seenNames.add(key);
 
-      const typeValue = normalizeOptionalString(
-        row[TRAY_EXCEL_HEADERS.type] as string | null | undefined,
-      );
+      const typeValue = normalizeOptionalString(String(row[TRAY_EXCEL_HEADERS.type] ?? ''));
+
+      const dimension = (header: string): number | null => {
+        const value = row[header];
+        const parsed = toNumberOrNull(typeof value === 'number' ? value : String(value ?? ''));
+        if (
+          String(value ?? '').trim() !== '' &&
+          (typeof value === 'boolean' || parsed === null || parsed < 0 || parsed > 1_000_000)
+        ) {
+          issues.push({
+            row: getExcelRowNumber(row, index),
+            column: header,
+            message: 'Enter a valid number between 0 and 1000000.',
+          });
+        }
+        return parsed;
+      };
 
       prepared.push({
         key,
         name,
         type: typeValue,
         typeKey: typeValue ? typeValue.toLowerCase() : null,
-        purpose: normalizeOptionalString(
-          row[TRAY_EXCEL_HEADERS.purpose] as string | null | undefined,
-        ),
-        width: toNumberOrNull(row[TRAY_EXCEL_HEADERS.width] as string | number | null),
-        height: toNumberOrNull(row[TRAY_EXCEL_HEADERS.height] as string | number | null),
-        length: toNumberOrNull(row[TRAY_EXCEL_HEADERS.length] as string | number | null),
+        purpose: normalizeOptionalString(String(row[TRAY_EXCEL_HEADERS.purpose] ?? '')),
+        width: dimension(TRAY_EXCEL_HEADERS.width),
+        height: dimension(TRAY_EXCEL_HEADERS.height),
+        length: dimension(TRAY_EXCEL_HEADERS.length),
       });
+    }
+
+    if (issues.length > 0) {
+      res.status(400).json(excelImportError(issues));
+      return;
     }
 
     if (prepared.length === 0) {

@@ -1,3 +1,4 @@
+import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { OptionOnSelectData } from '@fluentui/react-components';
@@ -442,26 +443,10 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       try {
         const result = await importMaterialTrays(token, file);
         await loadTrays(trayPage, { silent: true });
-        showToast({
-          intent: 'success',
-          title: 'Tray import complete',
-          body: `Created ${result.summary.created}, updated ${result.summary.updated}, skipped ${result.summary.skipped}.`
-        });
+        showToast(excelImportSuccessToast(file.name, result.summary, 'Trays'));
       } catch (error) {
         console.error('Import material trays failed', error);
-        if (error instanceof ApiError && error.status === 404) {
-          showToast({
-            intent: 'error',
-            title: 'Import endpoint unavailable',
-            body: 'Please restart the API server after updating it.'
-          });
-        } else {
-          showToast({
-            intent: 'error',
-            title: 'Failed to import trays',
-            body: 'Please check your file and try again.'
-          });
-        }
+        showToast(excelImportErrorToast(error, file.name));
       } finally {
         setIsImportingTrays(false);
       }

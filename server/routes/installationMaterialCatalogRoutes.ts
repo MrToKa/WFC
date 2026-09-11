@@ -1,10 +1,12 @@
+import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
+import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
 import type { PoolClient } from 'pg';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
-import multer from 'multer';
+import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
 import { pool } from '../db.js';
@@ -20,12 +22,6 @@ import {
 } from '../validators.js';
 import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
 
-const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024;
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
-});
 
 const EXCEL_HEADERS = {
   type: 'Type',
@@ -477,7 +473,7 @@ export const createInstallationMaterialCatalogRouter = (
     '/import',
     authenticate,
     requireAdmin,
-    upload.single('file'),
+    uploadExcelFile,
     async (req: Request, res: Response): Promise<void> => {
       if (!req.file) {
         res.status(400).json({ error: 'An .xlsx file is required' });
@@ -497,7 +493,12 @@ export const createInstallationMaterialCatalogRouter = (
           res.status(400).json({ error: 'The workbook does not contain any sheets' });
           return;
         }
-        rows = XLSX.utils.sheet_to_json<ImportRow>(worksheet, { defval: '', raw: false });
+        const issues = validateMaterialExcelImport(worksheet, EXCEL_HEADER_ALIASES, 'installation-material');
+        if (issues.length > 0) {
+          res.status(400).json(excelImportError(issues));
+          return;
+        }
+        rows = readExcelImportRows(worksheet, [...EXCEL_HEADER_ALIASES.weightKg, ...EXCEL_HEADER_ALIASES.unitPrice, ...EXCEL_HEADER_ALIASES.minimumOrder]);
       } catch (error) {
         console.error(`Read material ${config.label.toLowerCase()} import workbook error`, error);
         res.status(400).json({ error: 'Failed to read Excel workbook' });

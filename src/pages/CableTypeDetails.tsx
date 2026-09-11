@@ -1,3 +1,4 @@
+import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -680,29 +681,10 @@ export const CableTypeDetails = () => {
             : previous,
         );
 
-        showToast({
-          intent: 'success',
-          title: 'Default materials imported',
-          body: `Imported ${response.summary.imported} ${
-            response.summary.imported === 1 ? 'material' : 'materials'
-          }.`,
-        });
+        showToast(excelImportSuccessToast(file.name, response.summary, 'Default materials'));
       } catch (err) {
         console.error('Failed to import default materials', err);
-
-        if (err instanceof ApiError && err.status === 404) {
-          showToast({
-            intent: 'error',
-            title: 'Import endpoint unavailable',
-            body: 'Please restart the API server after updating it.',
-          });
-        } else {
-          showToast({
-            intent: 'error',
-            title: 'Failed to import default materials',
-            body: err instanceof ApiError ? err.message : undefined,
-          });
-        }
+        showToast(excelImportErrorToast(err, file.name));
       } finally {
         setIsImportingDefaultMaterials(false);
       }

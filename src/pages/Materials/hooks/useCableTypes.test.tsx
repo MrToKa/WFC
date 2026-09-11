@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChangeEvent } from 'react';
 import type { MaterialCableType } from '@/api/client';
 import { CABLE_TYPES_PER_PAGE } from '../../ProjectDetails.forms';
 import { useCableTypes } from './useCableTypes';
@@ -7,12 +8,14 @@ import { useCableTypes } from './useCableTypes';
 const apiMocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   remove: vi.fn(),
+  import: vi.fn(),
 }));
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   fetchMaterialCableTypes: apiMocks.fetch,
   deleteMaterialCableType: apiMocks.remove,
+  importMaterialCableTypes: apiMocks.import,
 }));
 
 const makeCableType = (index: number, purpose: string | null): MaterialCableType => ({
@@ -42,6 +45,7 @@ describe('material cable types filtering and pagination', () => {
   beforeEach(() => {
     apiMocks.fetch.mockReset();
     apiMocks.remove.mockReset().mockResolvedValue(undefined);
+    apiMocks.import.mockReset();
     showToast.mockClear();
   });
 
@@ -133,5 +137,43 @@ describe('material cable types filtering and pagination', () => {
     expect(result.current.pagedCableTypes).toHaveLength(CABLE_TYPES_PER_PAGE);
     expect(result.current.pagedCableTypes.every((item) => item.purpose === 'Power')).toBe(true);
     expect(result.current.showCableTypePagination).toBe(false);
+  });
+
+  it.each([
+    {
+      summary: { inserted: 2, updated: 1, skipped: 0 },
+      intent: 'success',
+      title: 'Excel import complete',
+    },
+    {
+      summary: { inserted: 2, updated: 0, skipped: 1 },
+      intent: 'warning',
+      title: 'Excel import completed with skipped rows',
+    },
+    {
+      summary: { inserted: 0, updated: 0, skipped: 2 },
+      intent: 'warning',
+      title: 'No rows imported',
+    },
+  ])('reports $title after upload', async ({ summary, intent, title }) => {
+    apiMocks.fetch.mockResolvedValue({ cableTypes: [] });
+    apiMocks.import.mockResolvedValue({ cableTypes: [], summary });
+    const { result } = renderCatalog();
+    await waitFor(() => expect(result.current.cableTypesLoading).toBe(false));
+    const target = { files: [new File(['workbook'], 'catalog.xlsx')], value: 'catalog.xlsx' };
+    await act(() =>
+      result.current.handleImportCableTypes({ target } as unknown as ChangeEvent<HTMLInputElement>),
+    );
+    expect(showToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent,
+        title,
+        body: expect.stringContaining(
+          `"catalog.xlsx" — Cable types: ${summary.inserted} added, ${summary.updated} updated, ${summary.skipped} skipped.`,
+        ),
+      }),
+    );
+    expect(target.value).toBe('');
+    expect(result.current.cableTypesImporting).toBe(false);
   });
 });

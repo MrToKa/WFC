@@ -1,3 +1,4 @@
+import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -308,26 +309,10 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       try {
         const result = await importMaterialSupports(token, file);
         await loadSupports(supportPage, { silent: true });
-        showToast({
-          intent: 'success',
-          title: 'Support import complete',
-          body: `Created ${result.summary.created}, updated ${result.summary.updated}, skipped ${result.summary.skipped}.`
-        });
+        showToast(excelImportSuccessToast(file.name, result.summary, 'Supports'));
       } catch (error) {
         console.error('Import material supports failed', error);
-        if (error instanceof ApiError && error.status === 404) {
-          showToast({
-            intent: 'error',
-            title: 'Import endpoint unavailable',
-            body: 'Please restart the API server after updating it.'
-          });
-        } else {
-          showToast({
-            intent: 'error',
-            title: 'Failed to import supports',
-            body: 'Please check your file and try again.'
-          });
-        }
+        showToast(excelImportErrorToast(error, file.name));
       } finally {
         setIsImportingSupports(false);
       }

@@ -1,10 +1,13 @@
-import type { ApiErrorPayload } from './types';
+import type { ApiErrorPayload, ExcelImportIssue, ExcelImportSummary } from './types';
 
 export class ApiError extends Error {
   status: number;
   payload: ApiErrorPayload;
   templateId?: string;
   fileId?: string;
+  issues?: ExcelImportIssue[];
+  totalIssues?: number;
+  summary?: ExcelImportSummary;
 
   constructor(status: number, payload: ApiErrorPayload) {
     const message =
@@ -75,6 +78,36 @@ const responseError = (status: number, payload: unknown, fallback: string): ApiE
   if (isRecord(payload)) {
     if (typeof payload.fileId === 'string') apiError.fileId = payload.fileId;
     if (typeof payload.templateId === 'string') apiError.templateId = payload.templateId;
+    if (Array.isArray(payload.issues)) {
+      apiError.issues = payload.issues.filter(
+        (issue): issue is ExcelImportIssue =>
+          isRecord(issue) &&
+          typeof issue.row === 'number' &&
+          Number.isInteger(issue.row) &&
+          issue.row >= 1 &&
+          typeof issue.column === 'string' &&
+          typeof issue.message === 'string',
+      );
+    }
+    if (typeof payload.totalIssues === 'number' && Number.isInteger(payload.totalIssues)) {
+      apiError.totalIssues = Math.max(payload.totalIssues, apiError.issues?.length ?? 0);
+    }
+    if (isRecord(payload.summary)) {
+      const summary: ExcelImportSummary = {};
+      for (const field of [
+        'inserted',
+        'created',
+        'updated',
+        'skipped',
+        'imported',
+        'importedPoints',
+      ] as const) {
+        const count = payload.summary[field];
+        if (typeof count === 'number' && Number.isInteger(count) && count >= 0)
+          summary[field] = count;
+      }
+      if (Object.keys(summary).length) apiError.summary = summary;
+    }
   }
   return apiError;
 };
@@ -141,6 +174,24 @@ export async function uploadFile<T>(
   const payload = await readJson(response);
   if (!response.ok) throw responseError(response.status, payload, fallback);
   return payload as T;
+}
+
+export async function uploadExcelFile<T>(
+  path: string,
+  token: string,
+  file: File,
+  fallback: string,
+): Promise<T> {
+  if (!/\.xlsx$/i.test(file.name)) {
+    throw new ApiError(400, 'Select an Excel workbook saved as .xlsx.');
+  }
+  if (file.size === 0) {
+    throw new ApiError(400, 'The selected file is empty. Save a workbook containing data.');
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new ApiError(413, 'The Excel workbook exceeds the 5 MB upload limit.');
+  }
+  return uploadFile<T>(path, token, file, fallback);
 }
 
 export async function downloadFile(

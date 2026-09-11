@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { Request as ExpressRequest, Response } from 'express';
 import { Router } from 'express';
 import ExcelJS from 'exceljs';
-import multer from 'multer';
+import { uploadExcelFile } from '../utils/excelUpload.js';
 import type { PoolClient } from 'pg';
 import * as XLSX from 'xlsx';
 
@@ -40,6 +40,13 @@ import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/ma
 import { authenticate } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
+  excelImportError,
+  getExcelRowNumber,
+  parseExcelNumber,
+  readExcelImportRows,
+  validateExcelImport,
+} from '../utils/excelImport.js';
+import {
   buildNamedCatalogLookup,
   findNamedCatalogMatch,
   normalizeComparableCatalogName,
@@ -52,12 +59,6 @@ import {
   updateCableSchema,
 } from '../validators.js';
 
-const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_IMPORT_FILE_SIZE },
-});
 
 const INPUT_HEADERS = {
   cableId: 'Cable Id',
@@ -259,31 +260,6 @@ const normalizeDateForComparison = (value: string | Date | null | undefined): st
   }
 
   return null;
-};
-
-const parseCableId = (value: unknown): number | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
-      return null;
-    }
-    return value;
-  }
-
-  const trimmed = String(value).trim();
-  if (trimmed === '') {
-    return null;
-  }
-
-  const numeric = Number(trimmed);
-  if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
-    return null;
-  }
-
-  return numeric;
 };
 
 const parseInstallLength = (value: unknown): number | null => {
@@ -3265,7 +3241,7 @@ cablesRouter.delete(
 cablesRouter.post(
   '/import',
   authenticate,
-  upload.single('file'),
+  uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -3319,10 +3295,39 @@ cablesRouter.post(
 
     type CableImportRow = Record<string, unknown>;
 
-    const rows = XLSX.utils.sheet_to_json<CableImportRow>(worksheet, {
-      defval: '',
-      raw: false,
-    });
+    const rows = readExcelImportRows(worksheet, [
+      INPUT_HEADERS.cableId,
+      INPUT_HEADERS.designLength,
+    ]);
+
+    const issues = validateExcelImport(worksheet, [
+      {
+        headers: [INPUT_HEADERS.cableId],
+        required: true,
+        type: 'number',
+        integer: true,
+        min: 0,
+        max: 2_147_483_647,
+        unique: true,
+      },
+      { headers: [INPUT_HEADERS.type], required: true, maxLength: 200 },
+      { headers: REVISION_INPUT_HEADERS, maxLength: 500 },
+      { headers: [INPUT_HEADERS.mto], values: CABLE_MTO_VALUES, caseInsensitive: true },
+      ...[
+        INPUT_HEADERS.tag,
+        INPUT_HEADERS.fromLocation,
+        INPUT_HEADERS.toLocation,
+        LIST_OUTPUT_HEADERS.routing,
+        INPUT_HEADERS.delivery,
+      ].map((header) => ({ headers: [header], maxLength: 500 })),
+      {
+        headers: [INPUT_HEADERS.designLength],
+        type: 'number',
+        integer: true,
+        min: 0,
+        max: 1_000_000,
+      },
+    ]);
 
     const summary = {
       inserted: 0,
@@ -3342,6 +3347,7 @@ cablesRouter.post(
     };
 
     type PreparedCableRow = {
+      rowNumber: number;
       cableId: number;
       cableKey: number;
       typeName: string;
@@ -3353,17 +3359,10 @@ cablesRouter.post(
 
     const seenCableIds = new Set<number>();
 
-    const availableColumns = new Set<string>();
-    for (const row of rows) {
-      for (const key of Object.keys(row)) {
-        if (key.trim() !== '') {
-          availableColumns.add(key);
-        }
-      }
-    }
+    const headerRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, raw: true });
+    const availableColumns = new Set((headerRows[0] ?? []).map((value) => String(value ?? '')));
 
-    const hasColumn = (header: string): boolean =>
-      rows.length === 0 || availableColumns.has(header);
+    const hasColumn = (header: string): boolean => availableColumns.has(header);
     const hasAnyColumn = (headers: readonly string[]): boolean => headers.some(hasColumn);
     const getCellValue = (row: CableImportRow, headers: readonly string[]): unknown => {
       for (const header of headers) {
@@ -3386,13 +3385,18 @@ cablesRouter.post(
 
     const missingColumns = requiredColumns.filter((header) => !hasColumn(header));
 
-    if (missingColumns.length > 0) {
-      const columnList = missingColumns.join(', ');
-      res.status(400).json({
-        error: `Import cancelled. Missing required column${
-          missingColumns.length === 1 ? '' : 's'
-        }: ${columnList}.`,
-      });
+    for (const column of missingColumns) {
+      if (!issues.some((issue) => issue.column === column)) {
+        issues.push({
+          row: worksheet['!ref'] ? XLSX.utils.decode_range(worksheet['!ref']).s.r + 1 : 1,
+          column,
+          message: 'Required column is missing.',
+        });
+      }
+    }
+
+    if (issues.length > 0) {
+      res.status(400).json(excelImportError(issues));
       return;
     }
 
@@ -3408,9 +3412,9 @@ cablesRouter.post(
       designLength: hasColumn(INPUT_HEADERS.designLength),
     };
 
-    for (const row of rows) {
+    for (const [index, row] of rows.entries()) {
       const rawCableId = row[INPUT_HEADERS.cableId] as unknown;
-      const cableId = parseCableId(rawCableId);
+      const cableId = parseExcelNumber(rawCableId);
 
       if (cableId === null) {
         summary.skipped += 1;
@@ -3503,10 +3507,11 @@ cablesRouter.post(
       }
 
       if (columnAvailability.designLength) {
-        fields.designLength = parseInstallLength(row[INPUT_HEADERS.designLength] as unknown);
+        fields.designLength = parseExcelNumber(row[INPUT_HEADERS.designLength]);
       }
 
       prepared.push({
+        rowNumber: getExcelRowNumber(row, index),
         cableId,
         cableKey,
         typeName,
@@ -3572,6 +3577,20 @@ cablesRouter.post(
 
       for (const type of typeResult.rows) {
         typeMap.set(type.name.toLowerCase(), type);
+      }
+
+      const missingTypes = prepared
+        .filter((row) => !typeMap.has(row.typeKey))
+        .map((row) => ({
+          row: row.rowNumber,
+          column: INPUT_HEADERS.type,
+          message: `Cable type "${row.typeName}" was not found in this project. Add it to Cable Types first.`,
+        }));
+
+      if (missingTypes.length > 0) {
+        await client.query('ROLLBACK');
+        res.status(400).json(excelImportError(missingTypes));
+        return;
       }
 
       const existingResult = await client.query<ExistingCable>(

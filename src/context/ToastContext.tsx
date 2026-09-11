@@ -6,7 +6,7 @@ import {
   Toaster,
   useId,
   useToastController,
-  type ToastIntent
+  type ToastIntent,
 } from '@fluentui/react-components';
 import { createContext, useContext, useMemo } from 'react';
 
@@ -14,6 +14,7 @@ type ShowToastOptions = {
   title: string;
   body?: string;
   intent?: ToastIntent;
+  timeout?: number;
 };
 
 type ToastContextValue = {
@@ -28,17 +29,21 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
 
   const value = useMemo(
     () => ({
-      showToast: ({ title, body, intent = 'info' }: ShowToastOptions) => {
+      showToast: ({ title, body, intent = 'info', timeout }: ShowToastOptions) => {
         dispatchToast(
           <Toast>
             <ToastTitle>{title}</ToastTitle>
-            {body ? <ToastBody>{body}</ToastBody> : null}
+            {body ? (
+              <ToastBody style={{ whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
+                {body}
+              </ToastBody>
+            ) : null}
           </Toast>,
-          { intent }
+          { intent, ...(timeout === undefined ? {} : { timeout }) },
         );
-      }
+      },
     }),
-    [dispatchToast]
+    [dispatchToast],
   );
 
   return (

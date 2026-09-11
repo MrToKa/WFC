@@ -1,4 +1,4 @@
-import { request, ApiError, getApiBaseUrl } from './http';
+import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
 import type { Tray, TrayInput, CableImportSummary } from './types';
 
 export async function fetchTrays(
@@ -60,40 +60,12 @@ export async function importTrays(
   projectId: string,
   file: File
 ): Promise<{ summary: CableImportSummary; trays: Tray[] }> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/trays/import`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      },
-      body: formData
-    }
+  return uploadExcelFile(
+    `/api/projects/${projectId}/trays/import`,
+    token,
+    file,
+    'Failed to import trays',
   );
-
-  let payload: unknown = null;
-
-  try {
-    payload = await response.json();
-  } catch {
-    if (response.ok) {
-      throw new Error('Received unexpected response from import endpoint');
-    }
-  }
-
-  if (!response.ok) {
-    const errorPayload =
-      payload && typeof payload === 'object' && 'error' in payload
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (payload as any).error
-        : 'Failed to import trays';
-    throw new ApiError(response.status, errorPayload);
-  }
-
-  return payload as { summary: CableImportSummary; trays: Tray[] };
 }
 
 export async function exportTrays(

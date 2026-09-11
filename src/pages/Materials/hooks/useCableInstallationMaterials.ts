@@ -1,3 +1,4 @@
+import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ToastIntent } from '@fluentui/react-components';
@@ -641,26 +642,10 @@ const useInstallationMaterials = ({
         setCableInstallationMaterials(sortCableInstallationMaterials(response.items));
         setPage(1);
 
-        showToast({
-          intent: 'success',
-          title: `${catalog.pluralTitle} imported`,
-          body: `${response.summary.inserted} added, ${response.summary.updated} updated, ${response.summary.skipped} skipped.`,
-        });
+        showToast(excelImportSuccessToast(file.name, response.summary, catalog.pluralTitle));
       } catch (err) {
         console.error(`Import ${catalog.pluralLabel} failed`, err);
-        if (err instanceof ApiError && err.status === 404) {
-          showToast({
-            intent: 'error',
-            title: 'Import endpoint unavailable',
-            body: 'Please restart the API server after updating it.',
-          });
-        } else {
-          showToast({
-            intent: 'error',
-            title: `Failed to import ${catalog.pluralLabel}`,
-            body: err instanceof ApiError ? err.message : undefined,
-          });
-        }
+        showToast(excelImportErrorToast(err, file.name));
       } finally {
         setIsImporting(false);
       }

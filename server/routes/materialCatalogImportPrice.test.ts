@@ -214,7 +214,6 @@ describe('material catalog import prices', () => {
   const missingPriceCases = [
     { label: 'an absent Price column', price: undefined },
     { label: 'a blank Price cell', price: '' },
-    { label: 'an invalid negative Price', price: -1 },
   ] as const;
 
   for (const catalog of catalogCases) {

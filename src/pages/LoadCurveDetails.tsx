@@ -1,4 +1,5 @@
-﻿import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Body1,
@@ -460,26 +461,10 @@ export const LoadCurveDetails = () => {
       const response = await importMaterialLoadCurvePoints(token, loadCurveId, file);
       applyLoadCurve(response.loadCurve, 'points');
       setPointsError(null);
-      showToast({
-        intent: 'success',
-        title: 'Curve points imported',
-        body: `Imported ${response.summary.importedPoints} points.`,
-      });
+      showToast(excelImportSuccessToast(file.name, response.summary, 'Curve points'));
     } catch (err) {
       console.error('Failed to import curve points', err);
-      if (err instanceof ApiError && err.status === 400) {
-        showToast({
-          intent: 'error',
-          title: 'Invalid file format',
-          body: 'Ensure the Excel file contains a CurveData sheet with numeric values.',
-        });
-      } else {
-        showToast({
-          intent: 'error',
-          title: 'Import failed',
-          body: 'Please verify the file and try again.',
-        });
-      }
+      showToast(excelImportErrorToast(err, file.name));
     } finally {
       setIsImportingPoints(false);
     }
