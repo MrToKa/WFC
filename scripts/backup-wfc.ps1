@@ -15,10 +15,21 @@ $PostgresContainerPath = "/tmp/$PostgresFileName"
 $MinioBackupDir = Join-Path $BackupDir "minio-data"
 $ConfigurationDir = Join-Path $BackupDir "configuration"
 
+# List names once: a missing candidate is normal during auto-detection.
+# Probing it with docker inspect writes stderr, which Windows PowerShell 5.1
+# turns into a terminating NativeCommandError under ErrorActionPreference=Stop.
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    throw "Docker was not found. Install and start Docker Desktop first."
+}
+
+$AvailableContainers = @(docker container ls --all --format '{{.Names}}')
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not list Docker containers. Check that Docker Desktop is running."
+}
+
 function Test-ContainerExists {
     param([string]$Name)
-    docker inspect $Name *> $null
-    return $LASTEXITCODE -eq 0
+    return $AvailableContainers -ccontains $Name
 }
 
 if (-not $PostgresContainer) {
