@@ -128,3 +128,22 @@ npm run preview
 Deploy the contents of `dist` behind your preferred hosting solution. The Express API in `server/`
 should be deployed separately (e.g., on a managed Node.js host or container). Ensure both
 deployments share consistent environment configuration.
+
+## Portable Docker deployment
+
+The repository now includes a complete Docker stack for the React web app, Express API,
+PostgreSQL 18, and MinIO. On a Windows desktop, generate local secrets and start everything with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-wfc.ps1 -Start
+```
+
+Create a complete PostgreSQL + MinIO + configuration backup with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\backup-wfc.ps1
+```
+
+See [Portable WFC deployment and migration](docs/PORTABLE-DEPLOYMENT.md) for first installation,
+VPN/LAN access, backup, and restore instructions. Real secrets belong only in the ignored `.env`
+file; credentials from earlier repository revisions must not be reused.

@@ -1,4 +1,10 @@
-node_modules
+node_modules/
+dist/
+coverage/
+*.log
+
 .env
 server/.env
 .data/
+backups/
+

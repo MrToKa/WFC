@@ -2,28 +2,98 @@ name: wfc
 
 services:
   postgres:
-    image: postgres:latest
+    image: ${POSTGRES_IMAGE:-postgres:18}
     container_name: wfc-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Todo123!
-      POSTGRES_DB: wfc_app
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-wfc_app}
     ports:
-      - "5434:5432"
+      - "${POSTGRES_HOST_PORT:-5434}:5432"
     volumes:
       - ./.data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - wfc-internal
 
   minio:
-    image: minio/minio:latest
+    image: ${MINIO_IMAGE:-minio/minio:latest}
     container_name: wfc-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: wfcminio
-      MINIO_ROOT_PASSWORD: wfcminio123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_API_HOST_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"
     volumes:
       - ./.data/minio:/data
+    networks:
+      - wfc-internal
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api-runtime
+    image: wfc-api:local
+    container_name: wfc-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-wfc_app}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-true}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_USE_SSL: "false"
+      MINIO_BUCKET_PROJECTS: ${MINIO_BUCKET_PROJECTS:-wfc-project-files}
+      MINIO_BUCKET_TEMPLATES: ${MINIO_BUCKET_TEMPLATES:-wfc-template-files}
+      MINIO_URL_EXPIRY_SECONDS: ${MINIO_URL_EXPIRY_SECONDS:-900}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks:
+      - wfc-internal
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web-runtime
+      args:
+        VITE_API_URL: /
+    image: wfc-web:local
+    container_name: wfc-web
+    restart: unless-stopped
+    ports:
+      - "${WFC_HTTP_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - wfc-internal
+
+networks:
+  wfc-internal:
+    name: wfc-internal
+
