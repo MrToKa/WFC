@@ -2,7 +2,11 @@
 param(
     [string]$DestinationRoot = [Environment]::GetFolderPath("Desktop"),
     [string]$PostgresContainer,
-    [string]$MinioContainer
+    [string]$MinioContainer,
+    [ValidateNotNullOrEmpty()]
+    [string]$PostgresUser = "postgres",
+    [ValidateNotNullOrEmpty()]
+    [string]$PostgresDatabase = "wfc_app"
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,16 +76,33 @@ $MinioContainer = Resolve-BackupContainer -ExplicitName $MinioContainer -Service
 Write-Host "PostgreSQL container: $PostgresContainer"
 Write-Host "MinIO container: $MinioContainer"
 
+# Fail before creating a backup or stopping MinIO if the connection is invalid.
+Write-Host "Checking database '$PostgresDatabase' as '$PostgresUser'..."
+docker exec $PostgresContainer psql --no-password `
+    "--username=$PostgresUser" "--dbname=$PostgresDatabase" `
+    --set=ON_ERROR_STOP=1 --tuples-only --no-align --command='SELECT 1;'
+if ($LASTEXITCODE -ne 0) {
+    throw "Database connection failed. Check -PostgresUser and -PostgresDatabase."
+}
+
 Push-Location $ProjectRoot
 try {
     New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
     New-Item -ItemType Directory -Path $ConfigurationDir -Force | Out-Null
 
     Write-Host "[1/3] Backing up PostgreSQL..."
-    docker exec $PostgresContainer sh -c `
-        "pg_dump -U `$POSTGRES_USER -d `$POSTGRES_DB -F c -f '$PostgresContainerPath'"
+    # Pass arguments directly; POSTGRES_USER/POSTGRES_DB need not exist in
+    # containers created with the official image's initialization defaults.
+    docker exec $PostgresContainer pg_dump --no-password `
+        "--username=$PostgresUser" "--dbname=$PostgresDatabase" `
+        --format=custom "--file=$PostgresContainerPath"
     if ($LASTEXITCODE -ne 0) {
         throw "PostgreSQL backup failed."
+    }
+
+    docker exec $PostgresContainer pg_restore --list $PostgresContainerPath | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "The PostgreSQL archive could not be read. Backup aborted."
     }
 
     docker cp "${PostgresContainer}:${PostgresContainerPath}" $PostgresHostPath
@@ -92,6 +113,7 @@ try {
 
     Write-Host "[2/3] Backing up MinIO..."
     docker stop $MinioContainer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Could not stop MinIO; backup aborted." }
     try {
         docker cp "${MinioContainer}:/data/." $MinioBackupDir
         if ($LASTEXITCODE -ne 0) {
@@ -100,6 +122,7 @@ try {
     }
     finally {
         docker start $MinioContainer | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not restart MinIO. Start it manually." }
     }
 
     Write-Host "[3/3] Backing up configuration..."
@@ -132,6 +155,8 @@ Git commit: $Commit
 PostgreSQL file: $PostgresFileName
 PostgreSQL SHA256: $DatabaseHash
 PostgreSQL container: $PostgresContainer
+PostgreSQL user: $PostgresUser
+PostgreSQL database: $PostgresDatabase
 MinIO container: $MinioContainer
 MinIO data: minio-data
 Configuration: configuration
