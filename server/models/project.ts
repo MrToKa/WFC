@@ -1,7 +1,9 @@
 import { toNumberOrNull } from './cableType.js';
+import type { PublicMaterialSupport } from './materialSupport.js';
 
 export type ProjectRow = {
   id: string;
+  mutation_revision?: number | string;
   project_number: string;
   name: string;
   customer: string;
@@ -20,6 +22,7 @@ export type ProjectRow = {
 
 export type PublicProject = {
   id: string;
+  mutationRevision?: number;
   projectNumber: string;
   name: string;
   customer: string;
@@ -57,6 +60,8 @@ export type PublicTraySupportOverride = {
   distance: number | null;
   supportId: string | null;
   supportType: string | null;
+  supportSnapshot?: PublicMaterialSupport | null;
+  snapshotStatus?: 'captured' | 'unknown';
 };
 
 export type PublicTrayPurposeTemplate = {
@@ -95,7 +100,7 @@ export type CustomBundleRange = {
 };
 
 const toSupportDistanceOverrides = (
-  value: Record<string, unknown> | null
+  value: Record<string, unknown> | null,
 ): Record<string, PublicTraySupportOverride> => {
   if (!value) {
     return {};
@@ -113,7 +118,7 @@ const toSupportDistanceOverrides = (
           acc[trayType] = {
             distance: parsed,
             supportId: null,
-            supportType: null
+            supportType: null,
           };
         }
         return acc;
@@ -135,19 +140,24 @@ const toSupportDistanceOverrides = (
           acc[trayType] = {
             distance,
             supportId,
-            supportType
+            supportType,
+            supportSnapshot:
+              rawRecord.supportSnapshot && typeof rawRecord.supportSnapshot === 'object'
+                ? (rawRecord.supportSnapshot as PublicMaterialSupport)
+                : null,
+            snapshotStatus: rawRecord.supportSnapshot ? 'captured' : 'unknown',
           };
         }
       }
 
       return acc;
     },
-    {}
+    {},
   );
 };
 
 const toTrayPurposeTemplates = (
-  value: Record<string, unknown> | null
+  value: Record<string, unknown> | null,
 ): Record<string, PublicTrayPurposeTemplate> => {
   if (!value) {
     return {};
@@ -182,12 +192,12 @@ const toTrayPurposeTemplates = (
       acc[trimmedPurpose] = {
         fileId,
         fileName,
-        contentType
+        contentType,
       };
 
       return acc;
     },
-    {}
+    {},
   );
 };
 
@@ -282,9 +292,7 @@ const parseFreeSpacePercent = (value: unknown): number | null => {
   return numeric;
 };
 
-const parseCategorySettings = (
-  value: unknown
-): PublicCableCategorySettings | null => {
+const parseCategorySettings = (value: unknown): PublicCableCategorySettings | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
@@ -296,9 +304,9 @@ const parseCategorySettings = (
     bundleSpacing: parseBundleSpacing(record.bundleSpacing),
     trefoil: parseTrefoil(record.trefoil),
     trefoilSpacingBetweenBundles: parseTrefoilSpacingBetweenBundles(
-      record.trefoilSpacingBetweenBundles
+      record.trefoilSpacingBetweenBundles,
     ),
-    applyPhaseRotation: parseApplyPhaseRotation(record.applyPhaseRotation)
+    applyPhaseRotation: parseApplyPhaseRotation(record.applyPhaseRotation),
   };
 
   if (
@@ -332,9 +340,7 @@ const parseCustomBundleRange = (value: unknown): CustomBundleRange | null => {
   return { id, min, max };
 };
 
-const parseCustomBundleRanges = (
-  value: unknown
-): Record<string, CustomBundleRange[]> | null => {
+const parseCustomBundleRanges = (value: unknown): Record<string, CustomBundleRange[]> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
@@ -378,7 +384,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
       power: null,
       vfd: null,
       control: null,
-      customBundleRanges: null
+      customBundleRanges: null,
     };
   }
 
@@ -387,7 +393,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
   return {
     cableSpacing: parseCableSpacing(record.cableSpacing),
     considerBundleSpacingAsFree: parseConsiderBundleSpacingAsFree(
-      record.considerBundleSpacingAsFree
+      record.considerBundleSpacingAsFree,
     ),
     minFreeSpacePercent: parseFreeSpacePercent(record.minFreeSpacePercent),
     maxFreeSpacePercent: parseFreeSpacePercent(record.maxFreeSpacePercent),
@@ -395,12 +401,13 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
     power: parseCategorySettings(record.power),
     vfd: parseCategorySettings(record.vfd),
     control: parseCategorySettings(record.control),
-    customBundleRanges: parseCustomBundleRanges(record.customBundleRanges)
+    customBundleRanges: parseCustomBundleRanges(record.customBundleRanges),
   };
 };
 
 export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   id: row.id,
+  mutationRevision: Number(row.mutation_revision ?? 0),
   projectNumber: row.project_number,
   name: row.name,
   customer: row.customer,
@@ -413,12 +420,6 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   supportDistanceOverrides: toSupportDistanceOverrides(row.support_distances),
   trayPurposeTemplates: toTrayPurposeTemplates(row.tray_purpose_templates),
   cableLayout: toCableLayoutSettings(row.cable_layout_settings),
-  createdAt:
-    typeof row.created_at === 'string'
-      ? row.created_at
-      : row.created_at.toISOString(),
-  updatedAt:
-    typeof row.updated_at === 'string'
-      ? row.updated_at
-      : row.updated_at.toISOString()
+  createdAt: typeof row.created_at === 'string' ? row.created_at : row.created_at.toISOString(),
+  updatedAt: typeof row.updated_at === 'string' ? row.updated_at : row.updated_at.toISOString(),
 });

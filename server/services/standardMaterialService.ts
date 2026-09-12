@@ -20,6 +20,20 @@ export type StandardMaterialInput = {
 export type StandardMaterialUpdateInput = Partial<StandardMaterialInput>;
 type Queryable = Pick<PoolClient, 'query'> | Pick<Pool, 'query'>;
 
+// A single graph scope serializes edges across different owners: A -> B and
+// B -> A must never both validate against the graph before the other commits.
+export const STANDARD_MATERIAL_MUTATION_SCOPE = {
+  resourceType: 'standard-materials',
+  resourceId: '00000000-0000-4000-8000-000000000001',
+};
+
+export const lockCompositionGraph = async (client: PoolClient): Promise<void> => {
+  const { resourceType, resourceId } = STANDARD_MATERIAL_MUTATION_SCOPE;
+  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+    `wfc:mutation:${resourceType}:${resourceId}`,
+  ]);
+};
+
 export class StandardMaterialDomainError extends Error {
   constructor(
     public readonly code:
@@ -57,6 +71,7 @@ const assignmentSelect = (category: StandardMaterialOwnerCategory, whereClause: 
       child.minimum_order_quantity AS referenced_material_minimum_order_quantity,
       child.order_measurement AS referenced_material_order_measurement,
       child.packaging AS referenced_material_packaging,
+      child.obsolete_at AS referenced_material_obsolete_at,
       a.quantity,
       a.unit,
       a.remarks,
@@ -91,7 +106,7 @@ const ownerExists = async (
   const capability = getMaterialCapability(category);
   const result = await queryable.query(
     `SELECT 1 FROM ${capability.ownerTable}
-     WHERE ${capability.ownerIdColumn} = $1 LIMIT 1`,
+     WHERE ${capability.ownerIdColumn} = $1 AND obsolete_at IS NULL LIMIT 1`,
     [ownerId],
   );
   return Boolean(result.rows[0]);
@@ -103,7 +118,7 @@ const referencedMaterialExists = async (
   referencedMaterialId: string,
 ): Promise<boolean> => {
   const result = await queryable.query(
-    `SELECT 1 FROM ${referencedMaterialTable} WHERE id = $1 LIMIT 1`,
+    `SELECT 1 FROM ${referencedMaterialTable} WHERE id = $1 AND obsolete_at IS NULL LIMIT 1`,
     [referencedMaterialId],
   );
   return Boolean(result.rows[0]);
@@ -123,6 +138,29 @@ const loadAllAssignments = async (queryable: Queryable): Promise<StandardMateria
     categories.map((category) => `(${assignmentSelect(category, '')})`).join('\nUNION ALL\n'),
   );
   return result.rows.map(mapStandardMaterialAssignmentRow);
+};
+
+export const captureStandardMaterialGraph = async (client: PoolClient): Promise<unknown> => {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('wfc:project-snapshot-images'))");
+  const categories: StandardMaterialOwnerCategory[] = [
+    'cable-type', 'cable-installation-material', 'tray-installation-material',
+    'instrument', 'instrument-installation-material', 'tray', 'support',
+  ];
+  // Store full copied rows and edges. Historical reconstruction never needs a
+  // later lookup of mutable catalog fields.
+  const query = categories.map((category) => {
+    const capability = getMaterialCapability(category);
+    const ownerSnapshot = category === 'tray' || category === 'support'
+      ? `to_jsonb(owner_row) || jsonb_build_object('imageObjectKey',
+          (SELECT tf.object_key FROM template_files tf WHERE tf.id = owner_row.image_template_id))`
+      : 'to_jsonb(owner_row)';
+    return `SELECT '${category}'::text AS category,
+      COALESCE((SELECT jsonb_agg(${ownerSnapshot} ORDER BY owner_row.${capability.ownerIdColumn})
+        FROM ${capability.ownerTable} owner_row), '[]'::jsonb) AS owners,
+      COALESCE((SELECT jsonb_agg(to_jsonb(edge_row) ORDER BY edge_row.id)
+        FROM ${capability.assignmentTable} edge_row), '[]'::jsonb) AS assignments`;
+  }).join(' UNION ALL ');
+  return { categories: (await client.query(query)).rows };
 };
 
 type ExpansionGraph = Map<string, StandardMaterialAssignment[]>;
@@ -224,6 +262,10 @@ const expandFromGraph = (
     const expanded: ExpandedStandardMaterial[] = [];
     for (const assignment of graph.get(key) ?? []) {
       const child = assignment.referencedMaterial;
+      if (child.obsoleteAt) throw new StandardMaterialDomainError(
+        'INTEGRITY_CONFLICT',
+        `The composition contains obsolete material ${child.type}. Update the catalog composition before making a new copy. Existing project values are preserved.`,
+      );
       expanded.push({
         referencedMaterialId: child.id,
         referencedMaterialCategory: assignment.referencedMaterialCategory,
@@ -363,6 +405,7 @@ export const createStandardMaterialAssignment = async (
   ownerId: string,
   input: StandardMaterialInput,
 ): Promise<StandardMaterialAssignment> => {
+  await lockCompositionGraph(client);
   await assertAssignmentValid(client, category, ownerId, input);
   const capability = getMaterialCapability(category);
   const id = randomUUID();
@@ -392,6 +435,7 @@ export const updateStandardMaterialAssignment = async (
   assignmentId: string,
   input: StandardMaterialUpdateInput,
 ): Promise<StandardMaterialAssignment> => {
+  await lockCompositionGraph(client);
   const capability = getMaterialCapability(category);
   const currentResult = await client.query<{
     referenced_material_id: string;
@@ -444,6 +488,7 @@ export const deleteStandardMaterialAssignment = async (
   ownerId: string,
   assignmentId: string,
 ): Promise<void> => {
+  await lockCompositionGraph(client);
   const capability = getMaterialCapability(category);
   const result = await client.query(
     `DELETE FROM ${capability.assignmentTable}

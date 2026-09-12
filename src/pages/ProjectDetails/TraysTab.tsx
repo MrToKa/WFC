@@ -21,6 +21,7 @@ import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 type TraysTabProps = {
   styles: ProjectDetailsStyles;
   isAdmin: boolean;
+  canExport?: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
   onCreate: () => void;
@@ -57,6 +58,7 @@ type TraysTabProps = {
 export const TraysTab = ({
   styles,
   isAdmin,
+  canExport = false,
   isRefreshing,
   onRefresh,
   onCreate,
@@ -117,6 +119,19 @@ export const TraysTab = ({
           <Button onClick={onImportClick} disabled={isImporting}>
             {isImporting ? 'Importing...' : 'Import from Excel'}
           </Button>
+
+
+          <input
+            ref={fileInputRef}
+            className={styles.hiddenInput}
+            type="file"
+            accept=".xlsx"
+            onChange={onImportFileChange}
+          />
+        </>
+      ) : null}
+
+      {canExport ? (<>
           <Button
             appearance="secondary"
             onClick={onExport}
@@ -131,15 +146,7 @@ export const TraysTab = ({
           >
             {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
           </Button>
-          <input
-            ref={fileInputRef}
-            className={styles.hiddenInput}
-            type="file"
-            accept=".xlsx"
-            onChange={onImportFileChange}
-          />
-        </>
-      ) : null}
+      </>) : null}
     </div>
 
     <div className={styles.filtersRow}>

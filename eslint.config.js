@@ -31,6 +31,8 @@ const typedLanguageOptions = (project) => ({
 export default [
   {
     ignores: ['**/node_modules/**', 'dist/**', 'coverage/**', '.data/**'],
+  },
+  {
     linterOptions: {
       reportUnusedDisableDirectives: 'off',
     },

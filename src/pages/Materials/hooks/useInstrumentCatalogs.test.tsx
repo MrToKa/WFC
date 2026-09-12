@@ -45,6 +45,7 @@ vi.mock('../Materials.utils', async (importOriginal) => ({
 }));
 
 const material: MaterialInstrument = {
+  mutationRevision: 5,
   id: 'material-1',
   type: 'Pressure transmitter',
   purpose: 'Measurement',
@@ -92,20 +93,43 @@ describe.each(configs)(
     beforeEach(() => {
       vi.clearAllMocks();
       api.fetch.mockResolvedValue({ [pluralKey]: [material] });
-      api.create.mockResolvedValue({
-        [singularKey]: { ...material, id: 'created', type: 'New material' },
+      api.create.mockImplementation(async () => {
+        const created = { ...material, id: 'created', type: 'New material' };
+        api.fetch.mockResolvedValue({ [pluralKey]: [material, created] });
+        return { [singularKey]: created };
       });
       api.update.mockResolvedValue({ [singularKey]: { ...material, type: 'Updated material' } });
       api.remove.mockResolvedValue(undefined);
-      api.import.mockResolvedValue({
-        [pluralKey]: [{ ...material, id: 'imported', type: 'Imported material' }],
-        summary: { inserted: 1, updated: 0, skipped: 0 },
+      api.import.mockImplementation(async () => {
+        const imported = [{ ...material, id: 'imported', type: 'Imported material' }];
+        api.fetch.mockResolvedValue({ [pluralKey]: imported });
+        return { [pluralKey]: imported, summary: { inserted: 1, updated: 0, skipped: 0 } };
       });
       api.export.mockResolvedValue(new Blob(['export']));
       api.template.mockResolvedValue(new Blob(['template']));
     });
 
     afterEach(() => vi.restoreAllMocks());
+
+    it.each([['token', true], ['token', false], [null, true]] as const)('requires sign-in and catalog export permission: %s / %s', async (token, canExport) => {
+      const { result } = renderHook(() =>
+        useCatalog({ token, isAdmin: false, canExport, showToast: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.cableInstallationMaterialsLoading).toBe(false));
+      await act(async () => result.current.handleExportCableInstallationMaterials());
+      await act(async () => result.current.handleGetCableInstallationMaterialsTemplate());
+      if (token && canExport) {
+        expect(api.export).toHaveBeenCalledWith(token);
+        expect(api.template).toHaveBeenCalledWith(token);
+        expect(mocks.download).toHaveBeenCalledTimes(2);
+      } else {
+        expect(api.export).not.toHaveBeenCalled();
+        expect(api.template).not.toHaveBeenCalled();
+      }
+      expect(api.create).not.toHaveBeenCalled();
+      expect(api.update).not.toHaveBeenCalled();
+      expect(api.import).not.toHaveBeenCalled();
+    });
 
     it('loads, filters and pages its own catalog', async () => {
       api.fetch.mockResolvedValue({
@@ -182,7 +206,7 @@ describe.each(configs)(
       ).toBe('Updated material');
 
       await act(async () => result.current.handleDeleteCableInstallationMaterial(material));
-      expect(api.remove).toHaveBeenCalledWith('token', material.id);
+      expect(api.remove).toHaveBeenCalledWith('token', material.id, 5);
       expect(result.current.cableInstallationMaterials.map((item) => item.id)).toEqual(['created']);
       expect(other.create).not.toHaveBeenCalled();
       expect(other.update).not.toHaveBeenCalled();

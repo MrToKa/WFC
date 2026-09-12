@@ -1,3 +1,5 @@
+import { catalogOwnerDeleteHandler, catalogObsoleteListHandler } from './catalogOwnerRoutes.js';
+import { readCatalogSnapshot } from '../services/catalogCompositionService.js';
 import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
@@ -438,6 +440,7 @@ const selectMaterialLoadCurvePointsQuery = `
 `;
 
 const materialsRouter = Router();
+materialsRouter.get('/obsolete', authenticate, catalogObsoleteListHandler);
 
 const mapLoadCurvesWithPoints = async (
   db: Queryable,
@@ -505,24 +508,15 @@ materialsRouter.get(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { page, pageSize, offset } = parsePaginationParams(req);
-
-      const countResult = await pool.query<{ count: string }>(`
-        SELECT COUNT(*)::int AS count FROM material_trays;
-      `);
-      const totalItems = Number(countResult.rows[0]?.count ?? 0);
-
-      const result = await pool.query<MaterialTrayRow>(
-        `
-          ${selectMaterialTraysQuery}
-          ORDER BY mt.tray_type ASC
-          LIMIT $1 OFFSET $2;
-        `,
-        [pageSize, offset]
-      );
-
+      const snapshot = await readCatalogSnapshot(async (client) => {
+        const count = await client.query<{ count: number }>('SELECT COUNT(*)::int AS count FROM material_trays WHERE obsolete_at IS NULL');
+        const result = await client.query<MaterialTrayRow>(
+          `${selectMaterialTraysQuery} WHERE mt.obsolete_at IS NULL ORDER BY mt.tray_type ASC LIMIT $1 OFFSET $2`, [pageSize, offset]);
+        return { rows: result.rows, totalItems: Number(count.rows[0]?.count ?? 0) };
+      });
       res.json({
-        trays: result.rows.map(mapMaterialTrayRow),
-        pagination: buildPaginationMeta(totalItems, page, pageSize)
+        trays: snapshot.value.rows.map((row) => ({ ...mapMaterialTrayRow(row), mutationRevision: snapshot.mutationRevision })),
+        pagination: buildPaginationMeta(snapshot.value.totalItems, page, pageSize)
       });
     } catch (error) {
       console.error('List material trays error', error);
@@ -535,14 +529,11 @@ materialsRouter.get(
   '/trays/all',
   async (_req: Request, res: Response): Promise<void> => {
     try {
-      const result = await pool.query<MaterialTrayRow>(
-        `
-          ${selectMaterialTraysQuery}
-          ORDER BY mt.tray_type ASC;
-        `
-      );
-
-      res.json({ trays: result.rows.map(mapMaterialTrayRow) });
+      const snapshot = await readCatalogSnapshot((client) => client.query<MaterialTrayRow>(
+        `${selectMaterialTraysQuery} WHERE mt.obsolete_at IS NULL ORDER BY mt.tray_type ASC`));
+      res.json({ trays: snapshot.value.rows.map((row) => ({
+        ...mapMaterialTrayRow(row), mutationRevision: snapshot.mutationRevision,
+      })) });
     } catch (error) {
       console.error('List all material trays error', error);
       res.status(500).json({ error: 'Failed to fetch trays' });
@@ -845,35 +836,7 @@ materialsRouter.delete(
   '/trays/:trayId',
   authenticate,
   requireAdmin,
-  async (req: Request, res: Response): Promise<void> => {
-    const { trayId } = req.params;
-
-    if (!trayId) {
-      res.status(400).json({ error: 'Tray ID is required' });
-      return;
-    }
-
-    try {
-      const result = await pool.query(
-        `
-          DELETE FROM material_trays
-          WHERE id = $1
-          RETURNING id;
-        `,
-        [trayId]
-      );
-
-      if (result.rowCount === 0) {
-        res.status(404).json({ error: 'Tray not found' });
-        return;
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      console.error('Delete material tray error', error);
-      res.status(500).json({ error: 'Failed to delete tray' });
-    }
-  }
+  catalogOwnerDeleteHandler('tray', 'trayId'),
 );
 
 materialsRouter.post(
@@ -1081,7 +1044,7 @@ materialsRouter.post(
       const listResult = await pool.query<MaterialTrayRow>(
         `
           ${selectMaterialTraysQuery}
-          ORDER BY mt.tray_type ASC;
+          WHERE mt.obsolete_at IS NULL ORDER BY mt.tray_type ASC;
         `
       );
 
@@ -1103,12 +1066,13 @@ materialsRouter.post(
 
 materialsRouter.get(
   '/trays/export',
+  authenticate,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const result = await pool.query<MaterialTrayRow>(
         `
           ${selectMaterialTraysQuery}
-          ORDER BY mt.tray_type ASC;
+          WHERE mt.obsolete_at IS NULL ORDER BY mt.tray_type ASC;
         `
       );
 
@@ -1205,7 +1169,6 @@ materialsRouter.get(
 materialsRouter.get(
   '/trays/template',
   authenticate,
-  requireAdmin,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const workbook = new ExcelJS.Workbook();
@@ -1283,24 +1246,15 @@ materialsRouter.get(
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { page, pageSize, offset } = parsePaginationParams(req);
-
-      const countResult = await pool.query<{ count: string }>(`
-        SELECT COUNT(*)::int AS count FROM material_supports;
-      `);
-      const totalItems = Number(countResult.rows[0]?.count ?? 0);
-
-      const result = await pool.query<MaterialSupportRow>(
-        `
-          ${selectMaterialSupportsQuery}
-          ORDER BY ms.support_type ASC
-          LIMIT $1 OFFSET $2;
-        `,
-        [pageSize, offset]
-      );
-
+      const snapshot = await readCatalogSnapshot(async (client) => {
+        const count = await client.query<{ count: number }>('SELECT COUNT(*)::int AS count FROM material_supports WHERE obsolete_at IS NULL');
+        const result = await client.query<MaterialSupportRow>(
+          `${selectMaterialSupportsQuery} WHERE ms.obsolete_at IS NULL ORDER BY ms.support_type ASC LIMIT $1 OFFSET $2`, [pageSize, offset]);
+        return { rows: result.rows, totalItems: Number(count.rows[0]?.count ?? 0) };
+      });
       res.json({
-        supports: result.rows.map(mapMaterialSupportRow),
-        pagination: buildPaginationMeta(totalItems, page, pageSize)
+        supports: snapshot.value.rows.map((row) => ({ ...mapMaterialSupportRow(row), mutationRevision: snapshot.mutationRevision })),
+        pagination: buildPaginationMeta(snapshot.value.totalItems, page, pageSize)
       });
     } catch (error) {
       console.error('List material supports error', error);
@@ -1313,14 +1267,11 @@ materialsRouter.get(
   '/supports/all',
   async (_req: Request, res: Response): Promise<void> => {
     try {
-      const result = await pool.query<MaterialSupportRow>(
-        `
-          ${selectMaterialSupportsQuery}
-          ORDER BY ms.support_type ASC;
-        `
-      );
-
-      res.json({ supports: result.rows.map(mapMaterialSupportRow) });
+      const snapshot = await readCatalogSnapshot((client) => client.query<MaterialSupportRow>(
+        `${selectMaterialSupportsQuery} WHERE ms.obsolete_at IS NULL ORDER BY ms.support_type ASC`));
+      res.json({ supports: snapshot.value.rows.map((row) => ({
+        ...mapMaterialSupportRow(row), mutationRevision: snapshot.mutationRevision,
+      })) });
     } catch (error) {
       console.error('List all material supports error', error);
       res.status(500).json({ error: 'Failed to fetch supports' });
@@ -1611,35 +1562,7 @@ materialsRouter.delete(
   '/supports/:supportId',
   authenticate,
   requireAdmin,
-  async (req: Request, res: Response): Promise<void> => {
-    const { supportId } = req.params;
-
-    if (!supportId) {
-      res.status(400).json({ error: 'Support ID is required' });
-      return;
-    }
-
-    try {
-      const result = await pool.query(
-        `
-          DELETE FROM material_supports
-          WHERE id = $1
-          RETURNING id;
-        `,
-        [supportId]
-      );
-
-      if (result.rowCount === 0) {
-        res.status(404).json({ error: 'Support not found' });
-        return;
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      console.error('Delete material support error', error);
-      res.status(500).json({ error: 'Failed to delete support' });
-    }
-  }
+  catalogOwnerDeleteHandler('support', 'supportId'),
 );
 
 materialsRouter.post(
@@ -1814,7 +1737,7 @@ materialsRouter.post(
       const listResult = await pool.query<MaterialSupportRow>(
         `
           ${selectMaterialSupportsQuery}
-          ORDER BY ms.support_type ASC;
+          WHERE ms.obsolete_at IS NULL ORDER BY ms.support_type ASC;
         `
       );
 
@@ -1836,12 +1759,13 @@ materialsRouter.post(
 
 materialsRouter.get(
   '/supports/export',
+  authenticate,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const result = await pool.query<MaterialSupportRow>(
         `
           ${selectMaterialSupportsQuery}
-          ORDER BY ms.support_type ASC;
+          WHERE ms.obsolete_at IS NULL ORDER BY ms.support_type ASC;
         `
       );
 
@@ -1936,7 +1860,6 @@ materialsRouter.get(
 materialsRouter.get(
   '/supports/template',
   authenticate,
-  requireAdmin,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const workbook = new ExcelJS.Workbook();

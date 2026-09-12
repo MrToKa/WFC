@@ -108,7 +108,7 @@ describe.each([
     await act(async () => {
       await result.current.remove();
     });
-    expect(deleteItem).toHaveBeenCalledWith('token', items[20].id);
+    expect(deleteItem).toHaveBeenCalledWith('token', items[20].id, 5);
     expect(fetchAll).toHaveBeenCalledTimes(2);
     expect(result.current.page).toBe(2);
     expect(result.current.items).toEqual(items.slice(10, 20));

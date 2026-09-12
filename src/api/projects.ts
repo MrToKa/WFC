@@ -69,11 +69,13 @@ export async function updateProject(
 
 export async function deleteProject(
   token: string,
-  projectId: string
+  projectId: string,
+  expectedRevision?: number,
 ): Promise<void> {
   await request<void>(`/api/projects/${projectId}`, {
     method: 'DELETE',
-    token
+    token,
+    expectedRevision,
   });
 }
 
@@ -84,7 +86,8 @@ export async function clearProjectData(
     cableTypes?: boolean;
     cables?: boolean;
     trays?: boolean;
-  }
+  },
+  expectedRevision?: number,
 ): Promise<{
   deleted: {
     cableTypes: number;
@@ -101,6 +104,7 @@ export async function clearProjectData(
   }>(`/api/projects/${projectId}/clear-data`, {
     method: 'POST',
     token,
-    body: data
+    body: data,
+    expectedRevision,
   });
 }

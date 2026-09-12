@@ -72,7 +72,12 @@ export async function fetchMaterialDetails<T extends StandardMaterialOwner>(
   category: StandardMaterialOwnerCategory,
   ownerId: string,
 ): Promise<MaterialDetailsResponse<T>> {
-  return request<MaterialDetailsResponse<T>>(standardMaterialOwnerPath(category, ownerId));
+  const path = standardMaterialOwnerPath(category, ownerId);
+  const [details, composition] = await Promise.all([
+    request<MaterialDetailsResponse<T>>(path),
+    request<{ standardMaterials: StandardMaterialAssignment[]; mutationRevision: number; obsoleteAt?: string | null }>(`${path}/standard-materials`),
+  ]);
+  return { ...details, ...composition };
 }
 
 export async function createStandardMaterial(
@@ -80,11 +85,13 @@ export async function createStandardMaterial(
   category: StandardMaterialOwnerCategory,
   ownerId: string,
   data: StandardMaterialInput,
+  expectedRevision?: number,
 ): Promise<{ standardMaterial: StandardMaterialAssignment }> {
   return request(`${standardMaterialOwnerPath(category, ownerId)}/standard-materials`, {
     method: 'POST',
     token,
     body: data,
+    expectedRevision,
   });
 }
 
@@ -94,10 +101,11 @@ export async function updateStandardMaterial(
   ownerId: string,
   assignmentId: string,
   data: Partial<StandardMaterialInput>,
+  expectedRevision?: number,
 ): Promise<{ standardMaterial: StandardMaterialAssignment }> {
   return request(
     `${standardMaterialOwnerPath(category, ownerId)}/standard-materials/${assignmentId}`,
-    { method: 'PATCH', token, body: data },
+    { method: 'PATCH', token, body: data, expectedRevision },
   );
 }
 
@@ -106,10 +114,11 @@ export async function deleteStandardMaterial(
   category: StandardMaterialOwnerCategory,
   ownerId: string,
   assignmentId: string,
+  expectedRevision?: number,
 ): Promise<void> {
   await request(
     `${standardMaterialOwnerPath(category, ownerId)}/standard-materials/${assignmentId}`,
-    { method: 'DELETE', token },
+    { method: 'DELETE', token, expectedRevision },
   );
 }
 
@@ -143,10 +152,11 @@ export async function updateMaterialCableType(
   });
 }
 
-export async function deleteMaterialCableType(token: string, cableTypeId: string): Promise<void> {
-  await request<void>(`/api/materials/cable-types/${cableTypeId}`, {
+export async function deleteMaterialCableType(token: string, cableTypeId: string, expectedRevision?: number): Promise<{ mutationRevision: number }> {
+  return request<{ mutationRevision: number }>(`/api/materials/cable-types/${cableTypeId}`, {
     method: 'DELETE',
     token,
+    expectedRevision,
   });
 }
 
@@ -260,12 +270,14 @@ export async function updateMaterialCableInstallationMaterial(
 export async function deleteMaterialCableInstallationMaterial(
   token: string,
   cableInstallationMaterialId: string,
-): Promise<void> {
-  await request<void>(
+  expectedRevision?: number,
+): Promise<{ mutationRevision: number }> {
+  return request<{ mutationRevision: number }>(
     `/api/materials/cable-installation-materials/${cableInstallationMaterialId}`,
     {
       method: 'DELETE',
       token,
+      expectedRevision,
     },
   );
 }
@@ -386,10 +398,12 @@ export async function updateMaterialTrayInstallationMaterial(
 export async function deleteMaterialTrayInstallationMaterial(
   token: string,
   trayInstallationMaterialId: string,
-): Promise<void> {
-  await request<void>(`/api/materials/tray-installation-materials/${trayInstallationMaterialId}`, {
+  expectedRevision?: number,
+): Promise<{ mutationRevision: number }> {
+  return request<{ mutationRevision: number }>(`/api/materials/tray-installation-materials/${trayInstallationMaterialId}`, {
     method: 'DELETE',
     token,
+    expectedRevision,
   });
 }
 
@@ -500,10 +514,11 @@ export async function updateMaterialInstrument(
   });
 }
 
-export async function deleteMaterialInstrument(token: string, instrumentId: string): Promise<void> {
-  await request<void>(`/api/materials/instruments/${instrumentId}`, {
+export async function deleteMaterialInstrument(token: string, instrumentId: string, expectedRevision?: number): Promise<{ mutationRevision: number }> {
+  return request<{ mutationRevision: number }>(`/api/materials/instruments/${instrumentId}`, {
     method: 'DELETE',
     token,
+    expectedRevision,
   });
 }
 
@@ -617,12 +632,14 @@ export async function updateMaterialInstrumentInstallationMaterial(
 export async function deleteMaterialInstrumentInstallationMaterial(
   token: string,
   instrumentInstallationMaterialId: string,
-): Promise<void> {
-  await request<void>(
+  expectedRevision?: number,
+): Promise<{ mutationRevision: number }> {
+  return request<{ mutationRevision: number }>(
     `/api/materials/instrument-installation-materials/${instrumentInstallationMaterialId}`,
     {
       method: 'DELETE',
       token,
+      expectedRevision,
     },
   );
 }
@@ -755,10 +772,11 @@ export async function updateMaterialTray(
   });
 }
 
-export async function deleteMaterialTray(token: string, trayId: string): Promise<void> {
-  await request<null>(`/api/materials/trays/${trayId}`, {
+export async function deleteMaterialTray(token: string, trayId: string, expectedRevision?: number): Promise<{ mutationRevision: number }> {
+  return request<{ mutationRevision: number }>(`/api/materials/trays/${trayId}`, {
     method: 'DELETE',
     token,
+    expectedRevision,
   });
 }
 
@@ -907,10 +925,11 @@ export async function updateMaterialSupport(
   });
 }
 
-export async function deleteMaterialSupport(token: string, supportId: string): Promise<void> {
-  await request<null>(`/api/materials/supports/${supportId}`, {
+export async function deleteMaterialSupport(token: string, supportId: string, expectedRevision?: number): Promise<{ mutationRevision: number }> {
+  return request<{ mutationRevision: number }>(`/api/materials/supports/${supportId}`, {
     method: 'DELETE',
     token,
+    expectedRevision,
   });
 }
 

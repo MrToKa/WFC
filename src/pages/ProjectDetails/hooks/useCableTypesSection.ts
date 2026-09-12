@@ -1,12 +1,6 @@
 import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent, RefObject } from 'react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ToastIntent } from '@fluentui/react-components';
 
@@ -21,7 +15,7 @@ import {
   fetchMaterialCableTypes,
   getCableTypesTemplate,
   importCableTypes,
-  updateCableType
+  updateCableType,
 } from '@/api/client';
 
 import {
@@ -31,17 +25,13 @@ import {
   buildCableTypeInput,
   emptyCableTypeForm,
   parseCableTypeApiErrors,
-  toCableTypeFormState
+  toCableTypeFormState,
 } from '../../ProjectDetails.forms';
 import { sanitizeFileSegment } from '../../ProjectDetails.utils';
 
 export type CableTypeSearchCriteria = 'all' | 'name' | 'purpose' | 'diameter' | 'weight';
 
-type ShowToast = (options: {
-  title: string;
-  body?: string;
-  intent?: ToastIntent;
-}) => void;
+type ShowToast = (options: { title: string; body?: string; intent?: ToastIntent }) => void;
 
 type UseCableTypesSectionParams = {
   projectId?: string;
@@ -61,11 +51,8 @@ type CableTypeDialogController = {
   submitting: boolean;
   materialCableTypeNames: string[];
   handleFieldChange: (
-    field: keyof CableTypeFormState
-  ) => (
-    event: ChangeEvent<HTMLInputElement>,
-    data: { value: string }
-  ) => void;
+    field: keyof CableTypeFormState,
+  ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
   handleNameSelect: (_event: unknown, data: { optionValue?: string }) => void;
   handlePurposeSelect: (_event: unknown, data: { optionValue?: string }) => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
@@ -97,22 +84,16 @@ type UseCableTypesSectionResult = {
   openCreateCableTypeDialog: () => void;
   openEditCableTypeDialog: (cableType: CableType) => void;
   handleDeleteCableType: (cableType: CableType) => Promise<void>;
-  handleImportCableTypes: (
-    event: ChangeEvent<HTMLInputElement>
-  ) => Promise<void>;
+  handleImportCableTypes: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleExportCableTypes: () => Promise<void>;
   handleGetCableTypesTemplate: () => Promise<void>;
   cableTypeDialog: CableTypeDialogController;
 };
 
 const defaultProjectSnapshot = (project: { id: string; projectNumber: string } | null) =>
-  project
-    ? { id: project.id, projectNumber: project.projectNumber }
-    : null;
+  project ? { id: project.id, projectNumber: project.projectNumber } : null;
 
-const toMaterialCableTypeFormState = (
-  cableType: MaterialCableType
-): CableTypeFormState => ({
+const toMaterialCableTypeFormState = (cableType: MaterialCableType): CableTypeFormState => ({
   name: cableType.name,
   purpose: cableType.purpose ?? '',
   material: '',
@@ -120,15 +101,13 @@ const toMaterialCableTypeFormState = (
   manufacturer: '',
   partNo: '',
   remarks: '',
-  diameterMm:
-    cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
-  weightKgPerM:
-    cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '',
+  diameterMm: cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
+  weightKgPerM: cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '',
   minimumOrderQuantity: '1',
   orderMeasurement: 'meters',
   packaging: 'm',
   unitPrice: '0',
-  source: ''
+  source: '',
 });
 
 export const useCableTypesSection = ({
@@ -136,12 +115,13 @@ export const useCableTypesSection = ({
   project,
   token,
   showToast,
-  onMutate
+  onMutate,
 }: UseCableTypesSectionParams): UseCableTypesSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const latestRequest = useRef(0);
   const projectSnapshot = defaultProjectSnapshot(project);
 
+  const [mutationRevision, setMutationRevision] = useState<number | undefined>();
   const [cableTypes, setCableTypes] = useState<CableType[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -149,61 +129,46 @@ export const useCableTypesSection = ({
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [isGettingTemplate, setIsGettingTemplate] = useState<boolean>(false);
-  const [pendingCableTypeId, setPendingCableTypeId] = useState<string | null>(
-    null
-  );
+  const [pendingCableTypeId, setPendingCableTypeId] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
   const [materialCableTypes, setMaterialCableTypes] = useState<MaterialCableType[]>([]);
-  const [materialCableTypesLoading, setMaterialCableTypesLoading] =
-    useState<boolean>(true);
-  const [materialCableTypesError, setMaterialCableTypesError] =
-    useState<string | null>(null);
+  const [materialCableTypesLoading, setMaterialCableTypesLoading] = useState<boolean>(true);
+  const [materialCableTypesError, setMaterialCableTypesError] = useState<string | null>(null);
 
+  const [dialogRevision, setDialogRevision] = useState<number | undefined>();
   const [isDialogOpen, setDialogOpen] = useState<boolean>(false);
   const [dialogMode, setDialogMode] = useState<CableTypeDialogMode>('create');
-  const [dialogValues, setDialogValues] =
-    useState<CableTypeFormState>(emptyCableTypeForm);
-  const [dialogErrors, setDialogErrors] =
-    useState<CableTypeFormErrors>({});
-  const [dialogSubmitting, setDialogSubmitting] =
-    useState<boolean>(false);
-  const [editingCableTypeId, setEditingCableTypeId] = useState<string | null>(
-    null
-  );
+  const [dialogValues, setDialogValues] = useState<CableTypeFormState>(emptyCableTypeForm);
+  const [dialogErrors, setDialogErrors] = useState<CableTypeFormErrors>({});
+  const [dialogSubmitting, setDialogSubmitting] = useState<boolean>(false);
+  const [editingCableTypeId, setEditingCableTypeId] = useState<string | null>(null);
 
   const [searchText, setSearchText] = useState<string>('');
   const [searchCriteria, setSearchCriteria] = useState<CableTypeSearchCriteria>('all');
 
   const sortCableTypes = useCallback(
     (types: CableType[]) =>
-      [...types].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      ),
-    []
+      [...types].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+    [],
   );
 
   const sortMaterialCableTypes = useCallback(
     (types: MaterialCableType[]) =>
-      [...types].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      ),
-    []
+      [...types].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+    [],
   );
 
   const materialCableTypesByName = useMemo(
     () =>
       new Map(
-        materialCableTypes.map((cableType) => [
-          cableType.name.trim().toLowerCase(),
-          cableType
-        ])
+        materialCableTypes.map((cableType) => [cableType.name.trim().toLowerCase(), cableType]),
       ),
-    [materialCableTypes]
+    [materialCableTypes],
   );
 
   const materialCableTypeNames = useMemo(
     () => materialCableTypes.map((cableType) => cableType.name),
-    [materialCableTypes]
+    [materialCableTypes],
   );
 
   const findMaterialCableTypeByName = useCallback(
@@ -215,7 +180,7 @@ export const useCableTypesSection = ({
 
       return materialCableTypesByName.get(normalizedName) ?? null;
     },
-    [materialCableTypesByName]
+    [materialCableTypesByName],
   );
 
   const filteredCableTypes = useMemo(() => {
@@ -229,13 +194,11 @@ export const useCableTypesSection = ({
           cableType.name,
           cableType.purpose,
           cableType.diameterMm !== null ? String(cableType.diameterMm) : '',
-          cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : ''
+          cableType.weightKgPerM !== null ? String(cableType.weightKgPerM) : '',
         ];
-        return values.some((value) =>
-          (value ?? '').toLowerCase().includes(normalizedFilter)
-        );
+        return values.some((value) => (value ?? '').toLowerCase().includes(normalizedFilter));
       }
-      
+
       // Filter by specific criteria
       let value = '';
       switch (searchCriteria) {
@@ -272,10 +235,7 @@ export const useCableTypesSection = ({
   }, [filteredCableTypes, page]);
 
   useEffect(() => {
-    const nextPage = Math.max(
-      1,
-      Math.ceil(filteredCableTypes.length / CABLE_TYPES_PER_PAGE)
-    );
+    const nextPage = Math.max(1, Math.ceil(filteredCableTypes.length / CABLE_TYPES_PER_PAGE));
     if (page > nextPage) {
       setPage(nextPage);
     }
@@ -301,6 +261,7 @@ export const useCableTypesSection = ({
 
       try {
         const response = await fetchCableTypes(projectId);
+        setMutationRevision(response.mutationRevision);
         if (request !== latestRequest.current) return;
         setCableTypes(sortCableTypes(response.cableTypes));
         setPage(1);
@@ -312,7 +273,7 @@ export const useCableTypesSection = ({
             setCableTypes([]);
             setPage(1);
             setError(
-              'Cable types endpoint is unavailable. Ensure the server is running the latest version.'
+              'Cable types endpoint is unavailable. Ensure the server is running the latest version.',
             );
           } else {
             setError(err.message);
@@ -327,7 +288,7 @@ export const useCableTypesSection = ({
         }
       }
     },
-    [projectId, sortCableTypes]
+    [projectId, sortCableTypes],
   );
 
   useEffect(() => {
@@ -363,9 +324,7 @@ export const useCableTypesSection = ({
 
         setMaterialCableTypes([]);
         setMaterialCableTypesError(
-          err instanceof ApiError
-            ? err.message
-            : 'Failed to load material cable types.'
+          err instanceof ApiError ? err.message : 'Failed to load material cable types.',
         );
       } finally {
         if (active) {
@@ -391,11 +350,9 @@ export const useCableTypesSection = ({
 
   const goToPage = useCallback(
     (nextPage: number) => {
-      setPage(() =>
-        Math.min(Math.max(1, nextPage), totalPages)
-      );
+      setPage(() => Math.min(Math.max(1, nextPage), totalPages));
     },
-    [totalPages]
+    [totalPages],
   );
 
   const handleSearchTextChange = useCallback((value: string) => {
@@ -413,7 +370,7 @@ export const useCableTypesSection = ({
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
       setDialogValues((previous: CableTypeFormState) => ({
         ...previous,
-        [field]: data.value
+        [field]: data.value,
       }));
     };
 
@@ -429,21 +386,18 @@ export const useCableTypesSection = ({
 
       setDialogValues((previous: CableTypeFormState) => ({
         ...previous,
-        name: selectedName
+        name: selectedName,
       }));
     },
-    [findMaterialCableTypeByName]
+    [findMaterialCableTypeByName],
   );
 
-  const handlePurposeSelect = useCallback(
-    (_event: unknown, data: { optionValue?: string }) => {
-      setDialogValues((previous: CableTypeFormState) => ({
-        ...previous,
-        purpose: data.optionValue ?? ''
-      }));
-    },
-    []
-  );
+  const handlePurposeSelect = useCallback((_event: unknown, data: { optionValue?: string }) => {
+    setDialogValues((previous: CableTypeFormState) => ({
+      ...previous,
+      purpose: data.optionValue ?? '',
+    }));
+  }, []);
 
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
@@ -460,7 +414,7 @@ export const useCableTypesSection = ({
         title: 'No material cable types available',
         body:
           materialCableTypesError ??
-          'Add cable types in Materials before adding them to a project.'
+          'Add cable types in Materials before adding them to a project.',
       });
       return;
     }
@@ -468,28 +422,28 @@ export const useCableTypesSection = ({
     setDialogMode('create');
     setDialogValues(emptyCableTypeForm);
     setDialogErrors({});
+    setDialogRevision(mutationRevision);
     setDialogOpen(true);
     setEditingCableTypeId(null);
   }, [
     materialCableTypes.length,
     materialCableTypesError,
     materialCableTypesLoading,
-    showToast
+    showToast,
+    mutationRevision,
   ]);
 
-  const openEditCableTypeDialog = useCallback((cableType: CableType) => {
-    const materialCableType = findMaterialCableTypeByName(cableType.name);
-
-    setDialogMode('edit');
-    setDialogValues(
-      materialCableType
-        ? toMaterialCableTypeFormState(materialCableType)
-        : toCableTypeFormState(cableType)
-    );
-    setDialogErrors({});
-    setDialogOpen(true);
-    setEditingCableTypeId(cableType.id);
-  }, [findMaterialCableTypeByName]);
+  const openEditCableTypeDialog = useCallback(
+    (cableType: CableType) => {
+      setDialogMode('edit');
+      setDialogValues(toCableTypeFormState(cableType));
+      setDialogErrors({});
+      setDialogRevision(mutationRevision);
+      setDialogOpen(true);
+      setEditingCableTypeId(cableType.id);
+    },
+    [mutationRevision],
+  );
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -497,7 +451,7 @@ export const useCableTypesSection = ({
 
       if (!projectSnapshot || !token) {
         setDialogErrors({
-          general: 'You need to be signed in as an admin to manage cable types.'
+          general: 'You need to be signed in as an admin to manage cable types.',
         });
         return;
       }
@@ -511,7 +465,11 @@ export const useCableTypesSection = ({
 
       setDialogSubmitting(true);
       setDialogErrors({});
-      const sourceMaterialCableTypeId = findMaterialCableTypeByName(input.name)?.id;
+      const existing = cableTypes.find((row) => row.id === editingCableTypeId);
+      const sourceMaterialCableTypeId =
+        existing?.name === input.name
+          ? existing.sourceMaterialCableTypeId
+          : findMaterialCableTypeByName(input.name)?.id;
       const snapshotInput = {
         ...input,
         ...(sourceMaterialCableTypeId ? { sourceMaterialCableTypeId } : {}),
@@ -522,10 +480,12 @@ export const useCableTypesSection = ({
           const response = await createCableType(
             token,
             projectSnapshot.id,
-            snapshotInput
+            snapshotInput,
+            dialogRevision,
           );
+          setMutationRevision(response.mutationRevision);
           setCableTypes((previous: CableType[]) =>
-            sortCableTypes([...previous, response.cableType])
+            sortCableTypes([...previous, response.cableType]),
           );
           setPage(1);
           showToast({ intent: 'success', title: 'Cable type created' });
@@ -534,14 +494,14 @@ export const useCableTypesSection = ({
             token,
             projectSnapshot.id,
             editingCableTypeId,
-            snapshotInput
+            snapshotInput,
+            dialogRevision,
           );
-        setCableTypes((previous: CableType[]) =>
-          sortCableTypes(
-            previous.map((item) =>
-              item.id === editingCableTypeId ? response.cableType : item
-            )
-          )
+          setMutationRevision(response.mutationRevision);
+          setCableTypes((previous: CableType[]) =>
+            sortCableTypes(
+              previous.map((item) => (item.id === editingCableTypeId ? response.cableType : item)),
+            ),
           );
           showToast({ intent: 'success', title: 'Cable type updated' });
         }
@@ -554,17 +514,17 @@ export const useCableTypesSection = ({
           showToast({
             intent: 'error',
             title: 'Failed to save cable type',
-            body: err.message
+            body: err.message,
           });
         } else {
           const message = 'Failed to save cable type. Please try again.';
           setDialogErrors({
-            general: message
+            general: message,
           });
           showToast({
             intent: 'error',
             title: 'Failed to save cable type',
-            body: message
+            body: message,
           });
         }
       } finally {
@@ -575,14 +535,17 @@ export const useCableTypesSection = ({
       dialogMode,
       dialogValues,
       editingCableTypeId,
+      cableTypes,
       findMaterialCableTypeByName,
       onMutate,
       projectSnapshot,
       resetDialog,
       showToast,
       sortCableTypes,
-      token
-    ]
+      token,
+      mutationRevision,
+      dialogRevision,
+    ],
   );
 
   const handleDeleteCableType = useCallback(
@@ -591,13 +554,13 @@ export const useCableTypesSection = ({
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete cable types.'
+          body: 'You need to be signed in as an admin to delete cable types.',
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete cable type "${cableType.name}"? This action cannot be undone.`
+        `Delete cable type "${cableType.name}"? This action cannot be undone.`,
       );
 
       if (!confirmed) {
@@ -607,13 +570,16 @@ export const useCableTypesSection = ({
       setPendingCableTypeId(cableType.id);
 
       try {
-        await deleteCableType(token, projectSnapshot.id, cableType.id);
+        const response = await deleteCableType(
+          token,
+          projectSnapshot.id,
+          cableType.id,
+          mutationRevision,
+        );
+        setMutationRevision(response.mutationRevision);
         setCableTypes((previous: CableType[]) => {
           const next = previous.filter((item) => item.id !== cableType.id);
-          const nextPages = Math.max(
-            1,
-            Math.ceil(next.length / CABLE_TYPES_PER_PAGE)
-          );
+          const nextPages = Math.max(1, Math.ceil(next.length / CABLE_TYPES_PER_PAGE));
           if (page > nextPages) {
             setPage(nextPages);
           }
@@ -626,13 +592,13 @@ export const useCableTypesSection = ({
         showToast({
           intent: 'error',
           title: 'Failed to delete cable type',
-          body: err instanceof ApiError ? err.message : undefined
+          body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {
         setPendingCableTypeId(null);
       }
     },
-    [onMutate, page, projectSnapshot, showToast, token]
+    [onMutate, page, projectSnapshot, showToast, token, mutationRevision],
   );
 
   const handleImportCableTypes = useCallback(
@@ -649,7 +615,7 @@ export const useCableTypesSection = ({
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to import cable types.'
+          body: 'You need to be signed in as an admin to import cable types.',
         });
         return;
       }
@@ -657,11 +623,8 @@ export const useCableTypesSection = ({
       setIsImporting(true);
 
       try {
-        const response = await importCableTypes(
-          token,
-          projectSnapshot.id,
-          file
-        );
+        const response = await importCableTypes(token, projectSnapshot.id, file, mutationRevision);
+        setMutationRevision(response.mutationRevision);
         setCableTypes(sortCableTypes(response.cableTypes));
         setPage(1);
         void onMutate?.();
@@ -674,15 +637,15 @@ export const useCableTypesSection = ({
         setIsImporting(false);
       }
     },
-    [onMutate, projectSnapshot, showToast, sortCableTypes, token]
+    [onMutate, projectSnapshot, showToast, sortCableTypes, token, mutationRevision],
   );
 
   const handleExportCableTypes = useCallback(async () => {
     if (!projectSnapshot || !token) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export cable types.'
+        title: 'Sign-in required',
+        body: 'You need to be signed in to export cable types.',
       });
       return;
     }
@@ -693,9 +656,7 @@ export const useCableTypesSection = ({
       const blob = await exportCableTypes(token, projectSnapshot.id);
       const link = document.createElement('a');
       const url = window.URL.createObjectURL(blob);
-      const fileName = `${sanitizeFileSegment(
-        projectSnapshot.projectNumber
-      )}-cables.xlsx`;
+      const fileName = `${sanitizeFileSegment(projectSnapshot.projectNumber)}-cables.xlsx`;
 
       link.href = url;
       link.download = fileName;
@@ -711,13 +672,13 @@ export const useCableTypesSection = ({
         showToast({
           intent: 'error',
           title: 'Export endpoint unavailable',
-          body: 'Please restart the API server after updating it.'
+          body: 'Please restart the API server after updating it.',
         });
       } else {
         showToast({
           intent: 'error',
           title: 'Failed to export cable types',
-          body: err instanceof ApiError ? err.message : undefined
+          body: err instanceof ApiError ? err.message : undefined,
         });
       }
     } finally {
@@ -729,8 +690,8 @@ export const useCableTypesSection = ({
     if (!projectSnapshot || !token) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.'
+        title: 'Sign-in required',
+        body: 'You need to be signed in to get the template.',
       });
       return;
     }
@@ -756,7 +717,7 @@ export const useCableTypesSection = ({
       showToast({
         intent: 'error',
         title: 'Failed to get template',
-        body: err instanceof ApiError ? err.message : undefined
+        body: err instanceof ApiError ? err.message : undefined,
       });
     } finally {
       setIsGettingTemplate(false);
@@ -802,7 +763,7 @@ export const useCableTypesSection = ({
       handleNameSelect,
       handlePurposeSelect,
       handleSubmit,
-      reset: resetDialog
-    }
+      reset: resetDialog,
+    },
   };
 };

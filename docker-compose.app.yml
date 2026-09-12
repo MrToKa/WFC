@@ -1,0 +1,59 @@
+name: wfc-app
+
+x-backend: &backend
+  image: wfc/backend:${WFC_APP_TAG:-local}
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile.backend
+  env_file:
+    - ./server/.env
+    - ./.data/deployment/app.env
+  environment:
+    NODE_ENV: production
+    API_HOST: 0.0.0.0
+    API_PORT: 4000
+    API_USE_HTTPS: "false"
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  networks: [application]
+  init: true
+
+services:
+  backend:
+    <<: *backend
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  frontend:
+    image: wfc/frontend:${WFC_APP_TAG:-local}
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+    ports:
+      - "127.0.0.1:${WFC_FRONTEND_PORT:-5173}:8080"
+    networks: [application]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  migrations:
+    <<: *backend
+    profiles: [operations]
+    entrypoint: [node, server/migrations/cli.js]
+    command: []
+    restart: "no"
+
+  storage-init:
+    <<: *backend
+    profiles: [operations]
+    entrypoint: [node, server/storageInit.js]
+    command: []
+    restart: "no"
+
+networks:
+  application:

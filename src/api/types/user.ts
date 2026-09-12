@@ -4,6 +4,7 @@ export type User = {
   firstName: string | null;
   lastName: string | null;
   isAdmin: boolean;
+  engineerProjectIds?: string[];
   createdAt: string;
   updatedAt: string;
 };

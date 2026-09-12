@@ -69,6 +69,7 @@ type CableInstallationMaterialDialogController = {
 type UseCableInstallationMaterialsParams = {
   token: string | null;
   isAdmin: boolean;
+  canExport?: boolean;
   showToast: ShowToast;
 };
 
@@ -88,7 +89,7 @@ type InstallationMaterialsCatalog = {
     id: string,
     input: MaterialCableInstallationMaterialInput,
   ) => Promise<MaterialCableInstallationMaterial>;
-  remove: (token: string, id: string) => Promise<void>;
+  remove: (token: string, id: string, expectedRevision?: number) => Promise<{ mutationRevision: number }>;
   import: (
     token: string,
     file: File,
@@ -219,6 +220,7 @@ type UseCableInstallationMaterialsResult = {
 const useInstallationMaterials = ({
   token,
   isAdmin,
+  canExport = isAdmin,
   showToast,
   catalog,
 }: UseCableInstallationMaterialsParams & {
@@ -521,12 +523,14 @@ const useInstallationMaterials = ({
           );
           setPage(1);
           showToast({ intent: 'success', title: `${catalog.singularTitle} created` });
+          await reloadCableInstallationMaterials({ showSpinner: false });
         } else if (editingCableInstallationMaterialId) {
           const updated = await catalog.update(token, editingCableInstallationMaterialId, input);
           setCableInstallationMaterials((previous) =>
             sortCableInstallationMaterials(
               previous.map((item) =>
-                item.id === editingCableInstallationMaterialId ? updated : item,
+                item.id === editingCableInstallationMaterialId
+                  ? { ...updated, mutationRevision: updated.mutationRevision ?? item.mutationRevision } : item,
               ),
             ),
           );
@@ -582,7 +586,7 @@ const useInstallationMaterials = ({
       }
 
       const confirmed = window.confirm(
-        `Delete ${catalog.singularLabel} "${item.type}"? This action cannot be undone.`,
+        `Mark ${catalog.singularLabel} obsolete: "${item.type}"? The catalog record and its project and Change Order references will be preserved.`,
       );
 
       if (!confirmed) {
@@ -592,18 +596,19 @@ const useInstallationMaterials = ({
       setPendingCableInstallationMaterialId(item.id);
 
       try {
-        await catalog.remove(token, item.id);
+        const deletion = await catalog.remove(token, item.id, item.mutationRevision);
         setCableInstallationMaterials((previous) => {
-          const next = previous.filter((existingItem) => existingItem.id !== item.id);
+          const next = previous.filter((existingItem) => existingItem.id !== item.id).map((remaining) =>
+            deletion?.mutationRevision === undefined ? remaining : { ...remaining, mutationRevision: deletion.mutationRevision });
           const nextPages = Math.max(1, Math.ceil(next.length / CABLE_TYPES_PER_PAGE));
           if (page > nextPages) {
             setPage(nextPages);
           }
           return next;
         });
-        showToast({ intent: 'success', title: `${catalog.singularTitle} deleted` });
+        showToast({ intent: 'success', title: `${catalog.singularTitle} marked obsolete` });
       } catch (err) {
-        console.error(`Delete ${catalog.singularLabel} failed`, err);
+        console.error(`Mark ${catalog.singularLabel} obsolete: failed`, err);
         showToast({
           intent: 'error',
           title: `Failed to delete ${catalog.singularLabel}`,
@@ -641,6 +646,7 @@ const useInstallationMaterials = ({
         const response = await catalog.import(token, file);
         setCableInstallationMaterials(sortCableInstallationMaterials(response.items));
         setPage(1);
+        await reloadCableInstallationMaterials({ showSpinner: false });
 
         showToast(excelImportSuccessToast(file.name, response.summary, catalog.pluralTitle));
       } catch (err) {
@@ -654,11 +660,11 @@ const useInstallationMaterials = ({
   );
 
   const handleExportCableInstallationMaterials = useCallback(async () => {
-    if (!isAdmin || !token) {
+    if (!token || !canExport) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: `You need to be signed in as an admin to export ${catalog.pluralLabel}.`,
+        title: 'Export access required',
+        body: `You need to be signed in to export ${catalog.pluralLabel}.`,
       });
       return;
     }
@@ -687,14 +693,14 @@ const useInstallationMaterials = ({
     } finally {
       setIsExporting(false);
     }
-  }, [catalog, isAdmin, showToast, token]);
+  }, [canExport, catalog, showToast, token]);
 
   const handleGetCableInstallationMaterialsTemplate = useCallback(async () => {
-    if (!isAdmin || !token) {
+    if (!token || !canExport) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.',
+        title: 'Export access required',
+        body: 'Catalog templates require administrator or engineer access.',
       });
       return;
     }
@@ -715,7 +721,7 @@ const useInstallationMaterials = ({
     } finally {
       setIsGettingTemplate(false);
     }
-  }, [catalog, isAdmin, showToast, token]);
+  }, [canExport, catalog, showToast, token]);
 
   return {
     cableInstallationMaterials,

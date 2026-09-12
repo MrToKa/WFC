@@ -4,7 +4,9 @@ import type { Request, Response, Router } from 'express';
 import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const database = vi.hoisted(() => ({ query: vi.fn() }));
+const database = vi.hoisted(() => ({
+  query: vi.fn(), connect: vi.fn(), transactionQuery: vi.fn(), release: vi.fn(),
+}));
 vi.mock('../db.js', () => ({ pool: database }));
 
 import { authenticate, requireAdmin } from '../middleware.js';
@@ -38,7 +40,11 @@ const invoke = async (router: Router, method: string, path: string, input: objec
   };
   const route = routeFor(router, method, path);
   await route.stack[route.stack.length - 1].handle(
-    { params: {}, ...input } as Request,
+    {
+      params: {}, userId: '00000000-0000-4000-8000-000000000002',
+      header: (name: string) => name === 'If-Match' ? '"4"' : 'catalog-test-operation',
+      ...input,
+    } as unknown as Request,
     response as unknown as Response,
   );
   return response;
@@ -89,8 +95,17 @@ const catalogs = [
 
 describe.each(catalogs)('$category catalog', (catalog) => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     database.query.mockResolvedValue({ rowCount: 1, rows: [row] });
+    database.transactionQuery.mockImplementation(async (sql: string, parameters?: unknown[]) => {
+      if (/^(BEGIN|SET TRANSACTION|COMMIT|ROLLBACK)/.test(sql) || sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+      if (sql.startsWith('SELECT request_hash, result, revision')) return { rows: [] };
+      if (sql.startsWith('SELECT revision FROM mutation_revisions')) return { rows: [{ revision: 4 }] };
+      if (/^(INSERT INTO mutation_|UPDATE mutation_revisions)/.test(sql.trim())) return { rows: [] };
+      if (sql.startsWith("SELECT 'cable-type'::text AS category")) return { rows: [] };
+      return parameters === undefined ? database.query(sql) : database.query(sql, parameters);
+    });
+    database.connect.mockResolvedValue({ query: database.transactionQuery, release: database.release });
   });
 
   it('lists catalog rows using its own response key and mapped numeric metadata', async () => {
@@ -98,9 +113,10 @@ describe.each(catalogs)('$category catalog', (catalog) => {
     expect(database.query).toHaveBeenCalledWith(expect.stringContaining(`FROM ${catalog.table}`));
     expect(response.json).toHaveBeenCalledWith({
       [catalog.collectionKey]: [
-        expect.objectContaining({ id, unitPrice: 12.5, weightKg: 0.1, minimumOrderQuantity: 4 }),
+        expect.objectContaining({ id, unitPrice: 12.5, weightKg: 0.1, minimumOrderQuantity: 4, mutationRevision: 4 }),
       ],
     });
+    expect(database.transactionQuery).toHaveBeenCalledWith('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
   });
 
   it('creates items with catalog defaults and returns its own response key', async () => {
@@ -167,11 +183,19 @@ describe.each(catalogs)('$category catalog', (catalog) => {
   it('deletes catalog entries and reports referenced materials as conflicts', async () => {
     const input = { params: { [catalog.idParam]: id } };
     const response = await invoke(catalog.router, 'delete', `/:${catalog.idParam}`, input);
-    expect(database.query).toHaveBeenCalledWith(`DELETE FROM ${catalog.table} WHERE id = $1`, [id]);
-    expect(response.status).toHaveBeenCalledWith(204);
-    database.query.mockRejectedValueOnce({ code: '23503' });
+    expect(database.query).toHaveBeenCalledWith(expect.stringContaining(`UPDATE ${catalog.table} SET obsolete_at = NOW()`), expect.arrayContaining([id]));
+    expect(database.query.mock.calls.some(([sql]) => String(sql).includes(`DELETE FROM ${catalog.table}`))).toBe(false);
+    expect(response.json).toHaveBeenCalledWith({ obsolete: true, mutationRevision: 5 });
+    expect(response.setHeader).toHaveBeenCalledWith('ETag', '"5"');
+    expect(database.transactionQuery).toHaveBeenCalledWith('COMMIT');
+    expect(database.transactionQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO mutation_history'), expect.any(Array));
+    database.query.mockImplementation(async (sql: string) => {
+      if (sql.startsWith('UPDATE ') && sql.includes('obsolete_at')) throw { code: '23503' };
+      return { rowCount: 1, rows: [row] };
+    });
     const conflict = await invoke(catalog.router, 'delete', `/:${catalog.idParam}`, input);
     expect(conflict.status).toHaveBeenCalledWith(409);
+    expect(database.transactionQuery).toHaveBeenCalledWith('ROLLBACK');
   });
 
   it.each(['template', 'export'])(
@@ -207,15 +231,13 @@ describe.each(catalogs)('$category catalog', (catalog) => {
     },
   );
 
-  it('requires admin authentication for every mutation and workbook operation', () => {
+  it('requires admin authentication for every mutation and signed-in access for workbooks', () => {
     const ownerPath = `/:${catalog.idParam}`;
     for (const [method, path] of [
       ['post', '/'],
       ['patch', ownerPath],
       ['delete', ownerPath],
       ['post', '/import'],
-      ['get', '/template'],
-      ['get', '/export'],
       ['post', `${ownerPath}/standard-materials`],
       ['patch', `${ownerPath}/standard-materials/:assignmentId`],
       ['delete', `${ownerPath}/standard-materials/:assignmentId`],
@@ -225,6 +247,11 @@ describe.each(catalogs)('$category catalog', (catalog) => {
         authenticate,
         requireAdmin,
       ]);
+    }
+    for (const path of ['/template', '/export']) {
+      const route = routeFor(catalog.router, 'get', path);
+      expect(route.stack[0].handle).toBe(authenticate);
+      expect(route.stack.map((layer) => layer.handle)).not.toContain(requireAdmin);
     }
   });
 });

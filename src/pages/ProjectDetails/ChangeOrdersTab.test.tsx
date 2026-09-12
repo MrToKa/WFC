@@ -6,6 +6,7 @@ import { ToastProvider } from '@/context/ToastContext';
 import { ChangeOrdersTab } from './ChangeOrdersTab';
 
 const details: ChangeOrderDetails = {
+  mutationRevision: 4,
   id: '11111111-1111-4111-8111-111111111111',
   projectId: '22222222-2222-4222-8222-222222222222',
   title: 'Existing order',
@@ -144,7 +145,7 @@ const user: User = {
   email: 'test@example.com',
   firstName: 'Test',
   lastName: 'User',
-  isAdmin: false,
+  isAdmin: true,
   createdAt: '2026-07-29T00:00:00.000Z',
   updatedAt: '2026-07-29T00:00:00.000Z',
 };
@@ -166,7 +167,37 @@ describe('ChangeOrdersTab', () => {
     await screen.findByRole('table', { name: 'All Change Orders' });
     fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
     await screen.findByRole('cell', { name: 'Widget support' });
+    // The item table appears before the selected document's header effect settles.
+    await waitFor(() => expect(screen.getByLabelText('Date')).toHaveValue(details.reportDate));
   };
+
+  it('keeps ordinary users read-only while leaving viewing and export available', async () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab
+            project={project}
+            token="token"
+            currentUser={{ ...user, isAdmin: false }}
+          />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+    await openExistingOrder();
+    for (const name of [
+      'New Change Order',
+      'Delete Change Order',
+      'Add material',
+      'Edit item 1',
+      'Duplicate item 1',
+      'Delete item 1',
+      'Save',
+    ]) {
+      expect(screen.getByRole('button', { name })).toBeDisabled();
+    }
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'Export Excel' })).toBeEnabled();
+  });
 
   it('shows all Change Orders in a table until one is selected', async () => {
     render(
@@ -287,6 +318,7 @@ describe('ChangeOrdersTab', () => {
           remarks: 'Checked',
         },
         'internal-ncrs',
+        { expectedRevision: 4 },
       ),
     );
   });
@@ -438,6 +470,7 @@ describe('ChangeOrdersTab', () => {
             sourceMaterialId: materialId,
           },
           collection,
+          { expectedRevision: 4 },
         ),
       );
       expect(await screen.findByText(`Edit ${documentName} item`)).toBeInTheDocument();
@@ -510,6 +543,7 @@ describe('ChangeOrdersTab', () => {
         details.id,
         expect.objectContaining({ reportDate: '2099-12-31' }),
         'change-orders',
+        { expectedRevision: 4 },
       ),
     );
   });
@@ -534,6 +568,7 @@ describe('ChangeOrdersTab', () => {
         details.id,
         details.items[0].id,
         'change-orders',
+        { expectedRevision: 4 },
       ),
     );
   }, 15_000);
@@ -830,6 +865,7 @@ describe('ChangeOrdersTab', () => {
           details.id,
           [secondMainId, thirdChildId, firstMainId, firstChildId, secondChildId],
           collection,
+          { expectedRevision: 4 },
         ),
       );
     },

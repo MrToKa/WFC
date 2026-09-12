@@ -6,6 +6,8 @@ import multer from 'multer';
 import type { AuthenticatedRequest } from '../middleware.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { pool } from '../db.js';
+import { withTransaction } from '../utils/transaction.js';
+import { removeTemplateMetadata } from '../services/templateSnapshotRetentionService.js';
 import {
   deleteObject,
   getObjectStream,
@@ -408,54 +410,22 @@ export const templateFilesRouter = (() => {
     }
 
     try {
-      const result = await pool.query<{
-        object_key: string;
-      }>(
-        `
-            SELECT object_key
-            FROM template_files
-            WHERE id = $1;
-          `,
-        [templateId],
-      );
-
-      const fileRow = result.rows[0];
-
-      if (!fileRow) {
+      const removableKeys = await withTransaction((client) => removeTemplateMetadata(client, templateId));
+      if (removableKeys === null) {
         res.status(404).json({ error: 'Template file not found' });
         return;
       }
 
-      const versions = await pool.query<{ object_key: string }>(
-        `
-            SELECT object_key
-            FROM template_file_versions
-            WHERE template_id = $1;
-          `,
-        [templateId],
-      );
-
-      try {
-        await deleteObject(getTemplateBucket(), fileRow.object_key);
-      } catch (error) {
-        console.warn(
-          `Failed to delete template file object "${fileRow.object_key}" from storage`,
-          error,
-        );
-      }
-
-      for (const version of versions.rows) {
+      for (const objectKey of removableKeys) {
         try {
-          await deleteObject(getTemplateBucket(), version.object_key);
+          await deleteObject(getTemplateBucket(), objectKey);
         } catch (error) {
           console.warn(
-            `Failed to delete template file version object "${version.object_key}" from storage`,
+            `Failed to delete template object "${objectKey}" from storage`,
             error,
           );
         }
       }
-
-      await pool.query(`DELETE FROM template_files WHERE id = $1;`, [templateId]);
 
       res.status(204).send();
     } catch (error) {
@@ -667,38 +637,19 @@ export const templateFilesRouter = (() => {
       }
 
       try {
-        const result = await pool.query<{
-          object_key: string;
-        }>(
-          `
-            SELECT object_key
-            FROM template_file_versions
-            WHERE template_id = $1 AND id = $2
-            LIMIT 1;
-          `,
-          [templateId, versionId],
-        );
-
-        const versionRow = result.rows[0];
-
-        if (!versionRow) {
+        const removableKeys = await withTransaction((client) => removeTemplateMetadata(client, templateId, versionId));
+        if (removableKeys === null) {
           res.status(404).json({ error: 'Template version not found' });
           return;
         }
 
-        try {
-          await deleteObject(getTemplateBucket(), versionRow.object_key);
-        } catch (error) {
-          console.warn(
-            `Failed to delete template version object "${versionRow.object_key}" from storage`,
-            error,
-          );
+        for (const objectKey of removableKeys) {
+          try {
+            await deleteObject(getTemplateBucket(), objectKey);
+          } catch (error) {
+            console.warn(`Failed to delete template version object "${objectKey}" from storage`, error);
+          }
         }
-
-        await pool.query(`DELETE FROM template_file_versions WHERE template_id = $1 AND id = $2;`, [
-          templateId,
-          versionId,
-        ]);
 
         res.status(204).send();
       } catch (error) {

@@ -3,15 +3,16 @@ import path from 'node:path';
 import https from 'node:https';
 import { createApp } from './app.js';
 import { config } from './config.js';
-import { initializeDatabase } from './db.js';
-import { initializeObjectStorage } from './services/objectStorageService.js';
+import { pool } from './db.js';
+import { assertDatabaseCompatible } from './migrations/runner.js';
+import { assertObjectStorageReady } from './services/objectStorageService.js';
 
 const app = createApp();
 
 const startServer = async (): Promise<void> => {
   try {
-    await initializeDatabase();
-    await initializeObjectStorage();
+    await assertDatabaseCompatible(pool);
+    await assertObjectStorageReady();
     if (config.https.enabled) {
       const resolvePath = (value: string): string =>
         path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);

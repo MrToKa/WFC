@@ -19,6 +19,7 @@ import {
   type ChangeOrderItemSnapshot,
 } from './changeOrderCatalogService.js';
 import { expandStandardMaterials } from './standardMaterialService.js';
+import { getMutationRevision } from './mutationService.js';
 
 export type ChangeOrderHeaderInput = {
   title: string;
@@ -154,133 +155,6 @@ const normalizeText = (value: string | null | undefined): string | null => {
   return trimmed === '' ? null : trimmed;
 };
 
-export const synchronizeChangeOrderMaterialOrdering = async (
-  queryable: Pick<PoolClient, 'query'> | typeof pool,
-  projectId: string,
-  documentType: ChangeOrderDocumentType,
-  changeOrderId: string,
-): Promise<void> => {
-  // Keep commercial ordering fields aligned with the referenced catalog row.
-  // An inherited row's unit is its Standard Material consumption unit (pcs or
-  // pcs/m). A manual row follows order_measurement unless its unit was explicitly
-  // customized in the Change Order.
-  await queryable.query(
-    `WITH source AS (
-       SELECT
-         'cable-type'::text AS source_catalog,
-         id,
-         minimum_order_quantity,
-         order_measurement,
-         packaging
-       FROM material_cable_types
-       UNION ALL
-       SELECT
-         'cable-installation-material'::text,
-         id,
-         minimum_order_quantity,
-         order_measurement,
-         packaging
-       FROM material_cable_installation_materials
-       UNION ALL
-       SELECT
-         'tray-installation-material'::text,
-         id,
-         minimum_order_quantity,
-         order_measurement,
-         packaging
-       FROM material_tray_installation_materials
-       UNION ALL
-       SELECT
-         'instrument'::text,
-         id,
-         minimum_order_quantity,
-         order_measurement,
-         packaging
-       FROM material_instruments
-       UNION ALL
-       SELECT
-         'instrument-installation-material'::text,
-         id,
-         minimum_order_quantity,
-         order_measurement,
-         packaging
-       FROM material_instrument_installation_materials
-       UNION ALL
-       SELECT
-         'tray'::text,
-         id,
-         minimum_order_quantity,
-         order_measurement,
-         packaging
-       FROM material_trays
-       UNION ALL
-       SELECT
-         'support'::text,
-         id,
-         minimum_order_quantity,
-         order_measurement,
-         packaging
-       FROM material_supports
-     )
-     UPDATE project_change_order_items item
-     SET
-       unit = CASE
-         WHEN item.line_kind = 'manual'
-           AND (
-             item.order_measurement IS NULL OR
-             item.unit IS NOT DISTINCT FROM item.order_measurement
-           )
-         THEN source.order_measurement
-         ELSE item.unit
-       END,
-       minimum_order_quantity = source.minimum_order_quantity,
-       order_measurement = source.order_measurement,
-       packaging = source.packaging,
-       packaging_quantity = source.minimum_order_quantity,
-       packaging_unit = source.order_measurement,
-       ordered_quantity = CASE
-         WHEN item.order_quantity > 0
-         THEN CEIL(item.order_quantity / source.minimum_order_quantity)
-         ELSE 0
-       END,
-       ordered_unit = source.packaging,
-       updated_at = NOW()
-     FROM source
-      WHERE item.change_order_id = $1
-        AND EXISTS (
-          SELECT 1
-          FROM project_change_orders change_order
-          WHERE change_order.id = item.change_order_id
-            AND change_order.project_id = $2
-            AND change_order.document_type = $3
-        )
-        AND item.source_catalog = source.source_catalog
-       AND item.source_material_id = source.id
-       AND (
-         (
-           item.line_kind = 'manual' AND
-           (
-             item.order_measurement IS NULL OR
-             item.unit IS NOT DISTINCT FROM item.order_measurement
-           ) AND
-           item.unit IS DISTINCT FROM source.order_measurement
-         ) OR
-         item.minimum_order_quantity IS DISTINCT FROM source.minimum_order_quantity OR
-         item.order_measurement IS DISTINCT FROM source.order_measurement OR
-         item.packaging IS DISTINCT FROM source.packaging OR
-         item.packaging_quantity IS DISTINCT FROM source.minimum_order_quantity OR
-         item.packaging_unit IS DISTINCT FROM source.order_measurement OR
-         item.ordered_quantity IS DISTINCT FROM CASE
-           WHEN item.order_quantity > 0
-           THEN CEIL(item.order_quantity / source.minimum_order_quantity)
-           ELSE 0
-         END OR
-         item.ordered_unit IS DISTINCT FROM source.packaging
-       )`,
-    [changeOrderId, projectId, documentType],
-  );
-};
-
 export const listChangeOrders = async (
   projectId: string,
   documentType: ChangeOrderDocumentType,
@@ -299,7 +173,12 @@ export const listChangeOrders = async (
     `,
     [projectId, documentType],
   );
-  return result.rows.map(mapChangeOrderSummaryRow);
+  return Promise.all(
+    result.rows.map(async (row) => ({
+      ...mapChangeOrderSummaryRow(row),
+      mutationRevision: await getMutationRevision(pool, 'change-order', row.id),
+    })),
+  );
 };
 
 export const getChangeOrder = async (
@@ -308,14 +187,23 @@ export const getChangeOrder = async (
   changeOrderId: string,
   queryable: Pick<PoolClient, 'query'> | typeof pool = pool,
 ): Promise<ChangeOrderDetails | null> => {
-  const headerResult = await queryable.query<ChangeOrderRow>(
+  const headerResult = await queryable.query<
+    ChangeOrderRow & {
+      items_snapshot: ChangeOrderItemRow[];
+      mutation_revision: string | number;
+    }
+  >(
     `
       SELECT
         co.*,
         p.name AS project_name,
         p.customer AS project_customer,
         COUNT(i.id)::int AS item_count,
-        COALESCE(SUM(i.order_quantity * i.unit_price), 0) AS total_price
+        COALESCE(SUM(i.order_quantity * i.unit_price), 0) AS total_price,
+        COALESCE(jsonb_agg(to_jsonb(i) ORDER BY i.sort_order, i.created_at)
+          FILTER (WHERE i.id IS NOT NULL), '[]'::jsonb) AS items_snapshot,
+        COALESCE((SELECT revision FROM mutation_revisions
+          WHERE resource_type = 'change-order' AND resource_id = co.id), 0) AS mutation_revision
       FROM project_change_orders co
       JOIN projects p ON p.id = co.project_id
       LEFT JOIN project_change_order_items i ON i.change_order_id = co.id
@@ -327,23 +215,14 @@ export const getChangeOrder = async (
   const row = headerResult.rows[0];
   if (!row) return null;
 
-  await synchronizeChangeOrderMaterialOrdering(queryable, projectId, documentType, changeOrderId);
-
-  const itemResult = await queryable.query<ChangeOrderItemRow>(
-    `SELECT ${qualifiedItemColumns('item')}
-     FROM project_change_order_items item
-     JOIN project_change_orders change_order ON change_order.id = item.change_order_id
-     WHERE item.change_order_id = $1
-       AND change_order.project_id = $2
-       AND change_order.document_type = $3
-     ORDER BY item.sort_order ASC, item.created_at ASC`,
-    [changeOrderId, projectId, documentType],
-  );
+  // One statement captures values and their revision together. Reads never
+  // refresh catalog values or pair old items with a newer mutation revision.
   const summary = mapChangeOrderSummaryRow(row);
-  const items = itemResult.rows.map(mapChangeOrderItemRow);
+  const items = row.items_snapshot.map(mapChangeOrderItemRow);
 
   return {
     ...summary,
+    mutationRevision: Number(row.mutation_revision),
     projectName: row.project_name ?? '',
     projectCustomer: row.project_customer ?? '',
     createdBy: row.created_by ?? null,
@@ -357,9 +236,10 @@ export const createChangeOrder = async (
   documentType: ChangeOrderDocumentType,
   createdBy: string,
   input: ChangeOrderHeaderInput,
+  client?: PoolClient,
 ): Promise<ChangeOrderDetails> => {
   const id = randomUUID();
-  await pool.query(
+  await (client ?? pool).query(
     `
       INSERT INTO project_change_orders (
         id, project_id, document_type, title, project_reference, prepared_by, report_date,
@@ -378,7 +258,7 @@ export const createChangeOrder = async (
       createdBy,
     ],
   );
-  const created = await getChangeOrder(projectId, documentType, id);
+  const created = await getChangeOrder(projectId, documentType, id, client ?? pool);
   const documentName = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
   if (!created) throw new Error(`Created ${documentName} could not be loaded`);
   return created;
@@ -397,6 +277,7 @@ export const updateChangeOrder = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   input: ChangeOrderHeaderUpdate,
+  client?: PoolClient,
 ): Promise<ChangeOrderDetails | null> => {
   const assignments: string[] = [];
   const values: unknown[] = [];
@@ -405,7 +286,7 @@ export const updateChangeOrder = async (
     assignments.push(`${HEADER_COLUMN_MAP[key]} = $${values.length}`);
   }
   values.push(changeOrderId, projectId, documentType);
-  const result = await pool.query(
+  const result = await (client ?? pool).query(
     `UPDATE project_change_orders
      SET ${assignments.join(', ')}, updated_at = NOW()
      WHERE id = $${values.length - 2}
@@ -414,15 +295,16 @@ export const updateChangeOrder = async (
     values,
   );
   if (result.rowCount === 0) return null;
-  return getChangeOrder(projectId, documentType, changeOrderId);
+  return getChangeOrder(projectId, documentType, changeOrderId, client ?? pool);
 };
 
 export const deleteChangeOrder = async (
   projectId: string,
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
+  client?: PoolClient,
 ): Promise<boolean> => {
-  const result = await pool.query(
+  const result = await (client ?? pool).query(
     `DELETE FROM project_change_orders
      WHERE id = $1 AND project_id = $2 AND document_type = $3`,
     [changeOrderId, projectId, documentType],
@@ -506,17 +388,18 @@ export const addChangeOrderItem = async (
   changeOrderId: string,
   sourceCatalog: ChangeOrderSourceCatalog,
   sourceMaterialId: string,
+  transactionClient?: PoolClient,
 ): Promise<ChangeOrderItem | null> => {
-  const client = await pool.connect();
+  const client = transactionClient ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!transactionClient) await client.query('BEGIN');
     const owner = await client.query<{ id: string; revision: string }>(
       `SELECT id, revision FROM project_change_orders
        WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
       [changeOrderId, projectId, documentType],
     );
     if (!owner.rows[0]) {
-      await client.query('ROLLBACK');
+      if (!transactionClient) await client.query('ROLLBACK');
       return null;
     }
     const snapshot = await resolveChangeOrderCatalogSnapshot(
@@ -569,13 +452,13 @@ export const addChangeOrderItem = async (
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!transactionClient) await client.query('COMMIT');
     return item;
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!transactionClient) await client.query('ROLLBACK');
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
 };
 
@@ -631,10 +514,11 @@ export const duplicateChangeOrderItem = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   itemId: string,
+  transactionClient?: PoolClient,
 ): Promise<ChangeOrderItem | null> => {
-  const client = await pool.connect();
+  const client = transactionClient ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!transactionClient) await client.query('BEGIN');
     const sourceResult = await client.query<{ id: string }>(
       `SELECT item.id
        FROM project_change_order_items item
@@ -648,7 +532,7 @@ export const duplicateChangeOrderItem = async (
       [itemId, changeOrderId, projectId, documentType],
     );
     if (!sourceResult.rows[0]) {
-      await client.query('ROLLBACK');
+      if (!transactionClient) await client.query('ROLLBACK');
       return null;
     }
 
@@ -705,13 +589,13 @@ export const duplicateChangeOrderItem = async (
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!transactionClient) await client.query('COMMIT');
     return duplicatedItem;
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
+    if (!transactionClient) await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
 };
 
@@ -774,6 +658,7 @@ export const updateChangeOrderItem = async (
   changeOrderId: string,
   itemId: string,
   input: ChangeOrderItemUpdate,
+  transactionClient?: PoolClient,
 ): Promise<ChangeOrderItem | null> => {
   const assignments: string[] = [];
   const values: unknown[] = [];
@@ -792,9 +677,9 @@ export const updateChangeOrderItem = async (
     assignments.push(`${ITEM_COLUMN_MAP[key]} = $${values.length}`);
   }
   values.push(itemId, changeOrderId, projectId, documentType);
-  const client = await pool.connect();
+  const client = transactionClient ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!transactionClient) await client.query('BEGIN');
     const result = await client.query<ChangeOrderItemRow>(
       `
         UPDATE project_change_order_items i
@@ -812,46 +697,48 @@ export const updateChangeOrderItem = async (
     );
     const updated = result.rows[0];
     if (!updated) {
-      await client.query('ROLLBACK');
+      if (!transactionClient) await client.query('ROLLBACK');
       return null;
     }
     let normalizedUpdated = updated;
-    const minimumOrderQuantity =
-      updated.minimum_order_quantity === null || updated.minimum_order_quantity === undefined
+    // Recalculate derived amounts from this item's current local package size,
+    // never from the original catalog minimum or a live catalog lookup.
+    const packageSize =
+      updated.packaging_quantity === null || updated.packaging_quantity === undefined
         ? null
-        : Number(updated.minimum_order_quantity);
-    if (minimumOrderQuantity && updated.order_measurement) {
+        : Number(updated.packaging_quantity);
+    const recalculateOrdering =
+      input.designQuantity !== undefined ||
+      input.orderQuantity !== undefined ||
+      input.packagingQuantity !== undefined;
+    if (recalculateOrdering && packageSize && Number.isFinite(packageSize) && packageSize > 0) {
       const minimumOrder = calculateMinimumOrder(
         Number(updated.design_quantity),
         Number(updated.order_quantity),
-        minimumOrderQuantity,
+        packageSize,
       );
       const normalizedResult = await client.query<ChangeOrderItemRow>(
         `UPDATE project_change_order_items
          SET
            order_quantity = $2,
-           packaging = $3,
-           packaging_quantity = $4,
-           packaging_unit = $5,
-           ordered_quantity = $6,
-           ordered_unit = $7,
+           ordered_quantity = $3,
            updated_at = NOW()
-         WHERE id = $1
+         WHERE id = $1 AND change_order_id = $4
          RETURNING ${ITEM_COLUMNS}`,
         [
           itemId,
           minimumOrder.orderQuantity,
-          updated.packaging,
-          minimumOrderQuantity,
-          updated.order_measurement,
-          minimumOrder.packageCount,
-          updated.packaging,
+          input.orderedQuantity === undefined
+            ? minimumOrder.packageCount
+            : updated.ordered_quantity,
+          changeOrderId,
         ],
       );
       normalizedUpdated = normalizedResult.rows[0] ?? updated;
     }
-    await client.query(
-      `WITH required AS (
+    if (updatesInheritedManagedFields)
+      await client.query(
+        `WITH required AS (
          SELECT
            child.id,
            CASE
@@ -874,43 +761,41 @@ export const updateChangeOrderItem = async (
          revision_number = $5,
          design_quantity = required.design_quantity,
          order_quantity = GREATEST(required.design_quantity, required.raw_order_quantity),
-         packaging_quantity = child.minimum_order_quantity,
-         packaging_unit = child.order_measurement,
          ordered_quantity = CASE
-           WHEN child.minimum_order_quantity IS NOT NULL
+           WHEN child.packaging_quantity IS NOT NULL
+             AND child.packaging_quantity > 0
              AND GREATEST(required.design_quantity, required.raw_order_quantity) > 0
            THEN CEIL(
              GREATEST(required.design_quantity, required.raw_order_quantity) /
-             child.minimum_order_quantity
+             child.packaging_quantity
            )
            ELSE GREATEST(required.design_quantity, required.raw_order_quantity)
          END,
-         ordered_unit = COALESCE(child.packaging, child.order_measurement),
          updated_at = NOW()
        FROM required
        WHERE child.id = required.id`,
-      [
-        itemId,
-        normalizedUpdated.design_quantity,
-        normalizedUpdated.order_quantity,
-        normalizedUpdated.source_catalog,
-        normalizedUpdated.revision_number,
-        changeOrderId,
-      ],
-    );
+        [
+          itemId,
+          normalizedUpdated.design_quantity,
+          normalizedUpdated.order_quantity,
+          normalizedUpdated.source_catalog,
+          normalizedUpdated.revision_number,
+          changeOrderId,
+        ],
+      );
     await client.query(
       `UPDATE project_change_orders
        SET updated_at = NOW()
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!transactionClient) await client.query('COMMIT');
     return mapChangeOrderItemRow(normalizedUpdated);
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
+    if (!transactionClient) await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
 };
 
@@ -919,10 +804,11 @@ export const deleteChangeOrderItem = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   itemId: string,
+  transactionClient?: PoolClient,
 ): Promise<boolean> => {
-  const client = await pool.connect();
+  const client = transactionClient ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!transactionClient) await client.query('BEGIN');
     const deleted = await client.query(
       `
         DELETE FROM project_change_order_items i
@@ -935,7 +821,7 @@ export const deleteChangeOrderItem = async (
       [itemId, changeOrderId, projectId, documentType],
     );
     if (deleted.rowCount === 0) {
-      await client.query('ROLLBACK');
+      if (!transactionClient) await client.query('ROLLBACK');
       return false;
     }
     await client.query(
@@ -956,13 +842,13 @@ export const deleteChangeOrderItem = async (
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!transactionClient) await client.query('COMMIT');
     return true;
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!transactionClient) await client.query('ROLLBACK');
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
 };
 
@@ -973,17 +859,18 @@ export const reorderChangeOrderItems = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   orderedItemIds: string[],
+  transactionClient?: PoolClient,
 ): Promise<ChangeOrderItem[] | null> => {
-  const client = await pool.connect();
+  const client = transactionClient ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!transactionClient) await client.query('BEGIN');
     const owner = await client.query<{ id: string }>(
       `SELECT id FROM project_change_orders
        WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
       [changeOrderId, projectId, documentType],
     );
     if (!owner.rows[0]) {
-      await client.query('ROLLBACK');
+      if (!transactionClient) await client.query('ROLLBACK');
       return null;
     }
     const current = await client.query<{ id: string }>(
@@ -1021,12 +908,12 @@ export const reorderChangeOrderItems = async (
        ORDER BY item.sort_order`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!transactionClient) await client.query('COMMIT');
     return reordered.rows.map(mapChangeOrderItemRow);
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!transactionClient) await client.query('ROLLBACK');
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
 };

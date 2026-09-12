@@ -1,3 +1,5 @@
+import { catalogOwnerDeleteHandler } from './catalogOwnerRoutes.js';
+import { readCatalogSnapshot } from '../services/catalogCompositionService.js';
 import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
 import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
 import type { PoolClient } from 'pg';
@@ -84,14 +86,16 @@ const materialCableTypesRouter = Router();
 
 materialCableTypesRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const result = await pool.query<MaterialCableTypeRow>(
+    const snapshot = await readCatalogSnapshot((client) => client.query<MaterialCableTypeRow>(
       `
           ${selectMaterialCableTypesQuery}
-          ORDER BY name ASC;
+          WHERE obsolete_at IS NULL ORDER BY name ASC;
         `,
-    );
+    ));
 
-    res.json({ cableTypes: result.rows.map(mapMaterialCableTypeRow) });
+    res.json({ cableTypes: snapshot.value.rows.map((row) => ({
+      ...mapMaterialCableTypeRow(row), mutationRevision: snapshot.mutationRevision,
+    })) });
   } catch (error) {
     console.error('List material cable types error', error);
     res.status(500).json({ error: 'Failed to fetch cable types' });
@@ -394,34 +398,7 @@ materialCableTypesRouter.delete(
   '/:cableTypeId',
   authenticate,
   requireAdmin,
-  async (req: Request, res: Response): Promise<void> => {
-    const { cableTypeId } = req.params;
-
-    if (!cableTypeId) {
-      res.status(400).json({ error: 'Cable type ID is required' });
-      return;
-    }
-
-    try {
-      const result = await pool.query(
-        `
-          DELETE FROM material_cable_types
-          WHERE id = $1;
-        `,
-        [cableTypeId],
-      );
-
-      if (result.rowCount === 0) {
-        res.status(404).json({ error: 'Cable type not found' });
-        return;
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      console.error('Delete material cable type error', error);
-      res.status(500).json({ error: 'Failed to delete cable type' });
-    }
-  },
+  catalogOwnerDeleteHandler('cable-type', 'cableTypeId'),
 );
 
 materialCableTypesRouter.post(
@@ -591,7 +568,7 @@ materialCableTypesRouter.post(
         const existing = await pool.query<MaterialCableTypeRow>(
           `
             ${selectMaterialCableTypesQuery}
-            ORDER BY name ASC;
+            WHERE obsolete_at IS NULL ORDER BY name ASC;
           `,
         );
 
@@ -725,7 +702,7 @@ materialCableTypesRouter.post(
       const refreshed = await pool.query<MaterialCableTypeRow>(
         `
           ${selectMaterialCableTypesQuery}
-          ORDER BY name ASC;
+          WHERE obsolete_at IS NULL ORDER BY name ASC;
         `,
       );
 
@@ -746,7 +723,6 @@ materialCableTypesRouter.post(
 materialCableTypesRouter.get(
   '/template',
   authenticate,
-  requireAdmin,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const workbook = new ExcelJS.Workbook();
@@ -830,13 +806,12 @@ materialCableTypesRouter.get(
 materialCableTypesRouter.get(
   '/export',
   authenticate,
-  requireAdmin,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const result = await pool.query<MaterialCableTypeRow>(
         `
           ${selectMaterialCableTypesQuery}
-          ORDER BY name ASC;
+          WHERE obsolete_at IS NULL ORDER BY name ASC;
         `,
       );
 

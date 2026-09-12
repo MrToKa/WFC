@@ -1,3 +1,5 @@
+import { catalogOwnerDeleteHandler } from './catalogOwnerRoutes.js';
+import { readCatalogSnapshot } from '../services/catalogCompositionService.js';
 import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
 import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
 import type { PoolClient } from 'pg';
@@ -95,15 +97,17 @@ materialCableInstallationMaterialsRouter.get(
   '/',
   async (_req: Request, res: Response): Promise<void> => {
     try {
-      const result = await pool.query<MaterialCableInstallationMaterialRow>(
+      const snapshot = await readCatalogSnapshot((client) => client.query<MaterialCableInstallationMaterialRow>(
         `
           ${selectMaterialCableInstallationMaterialsQuery}
-          ORDER BY type ASC;
+          WHERE obsolete_at IS NULL ORDER BY type ASC;
         `,
-      );
+      ));
 
       res.json({
-        cableInstallationMaterials: result.rows.map(mapMaterialCableInstallationMaterialRow),
+        cableInstallationMaterials: snapshot.value.rows.map((row) => ({
+          ...mapMaterialCableInstallationMaterialRow(row), mutationRevision: snapshot.mutationRevision,
+        })),
       });
     } catch (error) {
       console.error('List material cable installation materials error', error);
@@ -402,46 +406,7 @@ materialCableInstallationMaterialsRouter.delete(
   '/:cableInstallationMaterialId',
   authenticate,
   requireAdmin,
-  async (req: Request, res: Response): Promise<void> => {
-    const { cableInstallationMaterialId } = req.params;
-
-    if (!cableInstallationMaterialId) {
-      res.status(400).json({ error: 'Cable installation material ID is required' });
-      return;
-    }
-
-    try {
-      const result = await pool.query(
-        `
-          DELETE FROM material_cable_installation_materials
-          WHERE id = $1;
-        `,
-        [cableInstallationMaterialId],
-      );
-
-      if (result.rowCount === 0) {
-        res.status(404).json({ error: 'Cable installation material not found' });
-        return;
-      }
-
-      res.status(204).send();
-    } catch (error) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        error.code === '23503'
-      ) {
-        res.status(409).json({
-          error:
-            'Cable installation material is used by a Standard Material assignment. Remove the assignment first.',
-        });
-        return;
-      }
-      console.error('Delete material cable installation material error', error);
-      res.status(500).json({ error: 'Failed to delete cable installation material' });
-    }
-  },
+  catalogOwnerDeleteHandler('cable-installation-material', 'cableInstallationMaterialId'),
 );
 
 materialCableInstallationMaterialsRouter.post(
@@ -613,7 +578,7 @@ materialCableInstallationMaterialsRouter.post(
         const existing = await pool.query<MaterialCableInstallationMaterialRow>(
           `
             ${selectMaterialCableInstallationMaterialsQuery}
-            ORDER BY type ASC;
+            WHERE obsolete_at IS NULL ORDER BY type ASC;
           `,
         );
 
@@ -750,7 +715,7 @@ materialCableInstallationMaterialsRouter.post(
       const refreshed = await pool.query<MaterialCableInstallationMaterialRow>(
         `
           ${selectMaterialCableInstallationMaterialsQuery}
-          ORDER BY type ASC;
+          WHERE obsolete_at IS NULL ORDER BY type ASC;
         `,
       );
 
@@ -771,7 +736,6 @@ materialCableInstallationMaterialsRouter.post(
 materialCableInstallationMaterialsRouter.get(
   '/template',
   authenticate,
-  requireAdmin,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const workbook = new ExcelJS.Workbook();
@@ -845,13 +809,12 @@ materialCableInstallationMaterialsRouter.get(
 materialCableInstallationMaterialsRouter.get(
   '/export',
   authenticate,
-  requireAdmin,
   async (_req: Request, res: Response): Promise<void> => {
     try {
       const result = await pool.query<MaterialCableInstallationMaterialRow>(
         `
           ${selectMaterialCableInstallationMaterialsQuery}
-          ORDER BY type ASC;
+          WHERE obsolete_at IS NULL ORDER BY type ASC;
         `,
       );
 

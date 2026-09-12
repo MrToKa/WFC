@@ -34,8 +34,19 @@ describe('Project Cable Type Standard Material snapshots', () => {
           },
         ]);
       }
+      if (sql.includes('SELECT * FROM material_cable_installation_materials'))
+        return queryResult([
+          {
+            id: '00000000-0000-4000-8000-000000000030',
+            type: 'Cable gland M32',
+            purpose: 'Captured purpose',
+            description: 'Historical gland description',
+            manufacturer: 'Maker',
+            material: 'Brass',
+          },
+        ]);
       if (sql.includes('INSERT INTO cable_type_default_materials')) {
-        expect(values?.slice(2)).toEqual([
+        expect(values?.slice(2, 8)).toEqual([
           'Cable gland M32',
           2,
           'pcs',
@@ -43,6 +54,16 @@ describe('Project Cable Type Standard Material snapshots', () => {
           '00000000-0000-4000-8000-000000000030',
           ['00000000-0000-4000-8000-000000000010'],
         ]);
+        expect(JSON.parse(String(values?.[8]))).toMatchObject({
+          schemaVersion: 1,
+          originMaterialId: '00000000-0000-4000-8000-000000000030',
+          values: {
+            purpose: 'Captured purpose',
+            description: 'Historical gland description',
+            manufacturer: 'Maker',
+            material: 'Brass',
+          },
+        });
       }
       return queryResult([]);
     });
@@ -55,7 +76,7 @@ describe('Project Cable Type Standard Material snapshots', () => {
     );
 
     expect(count).toBe(1);
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(query).toHaveBeenCalledTimes(3);
   });
 
   it('removes inherited defaults only during source replacement', async () => {
@@ -67,6 +88,9 @@ describe('Project Cable Type Standard Material snapshots', () => {
       { replaceInherited: true },
     );
     expect(String(query.mock.calls[0][0])).toContain("source_kind = 'standard-material'");
-    expect(String(query.mock.calls[0][0])).not.toContain("source_kind = 'manual'");
+    const deletion = query.mock.calls.find(([sql]) => sql.includes('DELETE FROM'));
+    expect(String(deletion?.[0])).toContain("source_kind = 'standard-material'");
+    expect(String(deletion?.[0])).toContain('inherited_override = FALSE');
+    expect(String(deletion?.[0])).not.toContain("source_kind = 'manual'");
   });
 });

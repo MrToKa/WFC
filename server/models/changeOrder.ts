@@ -121,6 +121,7 @@ export type ChangeOrderItem = {
 };
 
 export type ChangeOrderSummary = {
+  mutationRevision?: number;
   id: string;
   projectId: string;
   title: string;

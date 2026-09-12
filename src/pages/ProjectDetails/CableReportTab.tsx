@@ -28,7 +28,7 @@ import { formatNumeric } from '../ProjectDetails.utils';
 
 type CableReportTabProps = {
   styles: ProjectDetailsStyles;
-  canManageCables: boolean;
+  canExport: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
   onExport: (mto: CableMtoOption | null) => void;
@@ -57,6 +57,7 @@ const formatCountLabel = (count: number, singular: string, plural: string): stri
   `${count} ${count === 1 ? singular : plural}`;
 
 type CableReportMaterialRow = {
+  materialKey: string;
   name: string;
   unit: string;
   totalQuantity: number;
@@ -71,7 +72,7 @@ const buildMaterialRows = (
 
   for (const cableTypeSummary of cableTypeSummaries) {
     for (const material of cableTypeSummary.materials) {
-      const key = `${material.name.toLowerCase()}::${material.unit}`;
+      const key = material.materialKey ?? `${material.name.toLowerCase()}::${material.unit}`;
       const existing = grouped.get(key);
 
       if (existing) {
@@ -82,6 +83,7 @@ const buildMaterialRows = (
       }
 
       grouped.set(key, {
+        materialKey: key,
         name: material.name,
         unit: material.unit,
         totalQuantity: material.totalQuantity,
@@ -113,7 +115,7 @@ const buildMaterialRows = (
 
 export const CableReportTab = ({
   styles,
-  canManageCables,
+  canExport,
   isRefreshing,
   onRefresh,
   onExport,
@@ -187,7 +189,7 @@ export const CableReportTab = ({
         <Button onClick={onRefresh} disabled={isRefreshing}>
           {isRefreshing ? 'Refreshing' : 'Refresh'}
         </Button>
-        {canManageCables ? (
+        {canExport ? (
           <>
             <Button onClick={() => onExport(selectedMto)} disabled={isExporting}>
               {isExporting ? 'Exporting' : 'Export to Excel'}
@@ -349,7 +351,7 @@ export const CableReportTab = ({
                       </thead>
                       <tbody>
                         {deliverySummary.materialRows.map((material) => (
-                          <tr key={`${material.name}:${material.unit}`}>
+                          <tr key={material.materialKey}>
                             <td className={styles.tableCell}>{material.name}</td>
                             <td className={mergeClasses(styles.tableCell, styles.numericCell)}>
                               {formatNumeric(material.totalQuantity)}

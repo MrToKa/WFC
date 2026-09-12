@@ -2,7 +2,7 @@ import { Tray, Cable, TrayInput, ProjectCableLayout } from '../../api/client';
 import {
   CABLE_CATEGORY_ORDER,
   DEFAULT_CATEGORY_SETTINGS,
-  type CableCategoryKey
+  type CableCategoryKey,
 } from '../ProjectDetails/hooks/cableLayoutDefaults';
 import { determineCableDiameterGroup, type TrayLayoutSummary } from './trayDrawingService';
 import { TrayFormState, TrayFormErrors } from './TrayDetails.types';
@@ -22,7 +22,7 @@ export const toTrayFormState = (tray: Tray): TrayFormState => ({
   widthMm: tray.widthMm !== null ? String(tray.widthMm) : '',
   heightMm: tray.heightMm !== null ? String(tray.heightMm) : '',
   lengthMm: tray.lengthMm !== null ? String(tray.lengthMm) : '',
-  weightKgPerM: ''
+  weightKgPerM: formatWeightValue(tray.materialSnapshot?.material.weightKgPerM),
 });
 
 export const parseNumberInput = (value: string): { numeric: number | null; error?: string } => {
@@ -66,7 +66,9 @@ export const formatDimensionValue = (value: number | null | undefined): string =
 export const formatWeightValue = (value: number | null | undefined): string =>
   value === null || value === undefined || Number.isNaN(value) ? '' : value.toFixed(3);
 
-export const buildTrayInput = (values: TrayFormState): { input: TrayInput; errors: TrayFormErrors } => {
+export const buildTrayInput = (
+  values: TrayFormState,
+): { input: TrayInput; errors: TrayFormErrors } => {
   const errors: TrayFormErrors = {};
 
   const name = values.name.trim();
@@ -95,16 +97,14 @@ export const buildTrayInput = (values: TrayFormState): { input: TrayInput; error
     purpose: toNullableString(values.purpose),
     widthMm: widthResult.numeric,
     heightMm: heightResult.numeric,
-    lengthMm: lengthResult.numeric
+    lengthMm: lengthResult.numeric,
   };
 
   return { input, errors };
 };
 
 export const sortTrays = (items: Tray[]): Tray[] =>
-  [...items].sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-  );
+  [...items].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
 const MV_TYPE_A_PURPOSE = 'type a (pink color) for mv cables';
 
@@ -126,12 +126,12 @@ export type TrayFreeSpaceMetrics = {
 const resolveBundleSpacingValue = (
   bundleSpacing: string | null | undefined,
   maxDiameter: number,
-  spacingBetweenCablesMm: number
+  spacingBetweenCablesMm: number,
 ): number => {
   const normalizedSpacing = Math.max(spacingBetweenCablesMm, 0);
   const baseSpacing = Math.max(
     Number.isFinite(maxDiameter) && maxDiameter > 0 ? maxDiameter : 0,
-    normalizedSpacing
+    normalizedSpacing,
   );
 
   if (bundleSpacing === '0') {
@@ -196,7 +196,7 @@ export const calculateTrayFreeSpaceMetrics = ({
   layout,
   spacingBetweenCablesMm,
   considerBundleSpacingAsFree,
-  layoutSummary
+  layoutSummary,
 }: FreeSpaceCalculationParams): TrayFreeSpaceMetrics => {
   if (!tray) {
     return { occupiedWidthMm: null, freeWidthPercent: null, calculationAvailable: false };
@@ -220,31 +220,35 @@ export const calculateTrayFreeSpaceMetrics = ({
       return {
         occupiedWidthMm,
         freeWidthPercent: null,
-        calculationAvailable: true
+        calculationAvailable: true,
       };
     }
 
-    const freeWidthPercent = trayWidthValue > 0
-      ? Math.max(0, ((trayWidthValue - occupiedWidthMm) / trayWidthValue) * 100)
-      : null;
+    const freeWidthPercent =
+      trayWidthValue > 0
+        ? Math.max(0, ((trayWidthValue - occupiedWidthMm) / trayWidthValue) * 100)
+        : null;
 
     return {
       occupiedWidthMm,
       freeWidthPercent,
-      calculationAvailable: true
+      calculationAvailable: true,
     };
   }
 
-  const normalizedSpacing = Number.isFinite(spacingBetweenCablesMm) && spacingBetweenCablesMm >= 0
-    ? spacingBetweenCablesMm
-    : 0;
+  const normalizedSpacing =
+    Number.isFinite(spacingBetweenCablesMm) && spacingBetweenCablesMm >= 0
+      ? spacingBetweenCablesMm
+      : 0;
 
-  const categoryGroups = CABLE_CATEGORY_ORDER.reduce<Record<CableCategoryKey, Record<string, number[]>>>(
+  const categoryGroups = CABLE_CATEGORY_ORDER.reduce<
+    Record<CableCategoryKey, Record<string, number[]>>
+  >(
     (acc, key) => {
       acc[key] = {};
       return acc;
     },
-    {} as Record<CableCategoryKey, Record<string, number[]>>
+    {} as Record<CableCategoryKey, Record<string, number[]>>,
   );
 
   let hasDiameters = false;
@@ -257,7 +261,9 @@ export const calculateTrayFreeSpaceMetrics = ({
     }
 
     const diameter =
-      typeof cable.diameterMm === 'number' && Number.isFinite(cable.diameterMm) && cable.diameterMm > 0
+      typeof cable.diameterMm === 'number' &&
+      Number.isFinite(cable.diameterMm) &&
+      cable.diameterMm > 0
         ? cable.diameterMm
         : null;
 
@@ -299,10 +305,13 @@ export const calculateTrayFreeSpaceMetrics = ({
 
     const defaults = DEFAULT_CATEGORY_SETTINGS[key];
     const layoutSettings = layout?.[key] ?? null;
-    const maxRows = ensurePositiveInteger(layoutSettings?.maxRows, ensurePositiveInteger(defaults.maxRows, 1));
+    const maxRows = ensurePositiveInteger(
+      layoutSettings?.maxRows,
+      ensurePositiveInteger(defaults.maxRows, 1),
+    );
     const maxColumns = ensurePositiveInteger(
       layoutSettings?.maxColumns,
-      ensurePositiveInteger(defaults.maxColumns, 1)
+      ensurePositiveInteger(defaults.maxColumns, 1),
     );
     const bundleSpacingSetting = layoutSettings?.bundleSpacing ?? defaults.bundleSpacing;
     const bundleCapacity = Math.max(1, maxRows * maxColumns);
@@ -318,7 +327,7 @@ export const calculateTrayFreeSpaceMetrics = ({
       const bundleSpacingValue = resolveBundleSpacingValue(
         bundleSpacingSetting,
         sortedDiameters[0] ?? 0,
-        normalizedSpacing
+        normalizedSpacing,
       );
 
       const subBundles: number[][] = [];
@@ -352,13 +361,14 @@ export const calculateTrayFreeSpaceMetrics = ({
     return { occupiedWidthMm, freeWidthPercent: null, calculationAvailable: true };
   }
 
-  const freeWidthPercent = trayWidthValue > 0
-    ? Math.max(0, ((trayWidthValue - occupiedWidthMm) / trayWidthValue) * 100)
-    : null;
+  const freeWidthPercent =
+    trayWidthValue > 0
+      ? Math.max(0, ((trayWidthValue - occupiedWidthMm) / trayWidthValue) * 100)
+      : null;
 
   return {
     occupiedWidthMm,
     freeWidthPercent,
-    calculationAvailable: true
+    calculationAvailable: true,
   };
 };

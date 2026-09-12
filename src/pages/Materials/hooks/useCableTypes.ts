@@ -45,6 +45,7 @@ type CableTypeDialogController = {
 type UseCableTypesParams = {
   token: string | null;
   isAdmin: boolean;
+  canExport?: boolean;
   showToast: ShowToast;
 };
 
@@ -102,6 +103,7 @@ const toCableTypeFormState = (cableType: MaterialCableType): CableTypeFormState 
 export const useCableTypes = ({
   token,
   isAdmin,
+  canExport = isAdmin,
   showToast,
 }: UseCableTypesParams): UseCableTypesResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -353,11 +355,13 @@ export const useCableTypes = ({
           );
           setPage(1);
           showToast({ intent: 'success', title: 'Cable type created' });
+          await reloadCableTypes({ showSpinner: false });
         } else if (editingCableTypeId) {
           const response = await updateMaterialCableType(token, editingCableTypeId, input);
           setCableTypes((previous: MaterialCableType[]) =>
             sortCableTypes(
-              previous.map((item) => (item.id === editingCableTypeId ? response.cableType : item)),
+              previous.map((item) => (item.id === editingCableTypeId
+                ? { ...response.cableType, mutationRevision: response.cableType.mutationRevision ?? item.mutationRevision } : item)),
             ),
           );
           showToast({ intent: 'success', title: 'Cable type updated' });
@@ -411,7 +415,7 @@ export const useCableTypes = ({
       }
 
       const confirmed = window.confirm(
-        `Delete cable type "${cableType.name}"? This action cannot be undone.`,
+        `Mark cable type obsolete: "${cableType.name}"? The catalog record and its project and Change Order references will be preserved.`,
       );
 
       if (!confirmed) {
@@ -421,16 +425,17 @@ export const useCableTypes = ({
       setPendingCableTypeId(cableType.id);
 
       try {
-        await deleteMaterialCableType(token, cableType.id);
+        const deletion = await deleteMaterialCableType(token, cableType.id, cableType.mutationRevision);
         setCableTypes((previous: MaterialCableType[]) => {
-          const next = previous.filter((item) => item.id !== cableType.id);
+          const next = previous.filter((item) => item.id !== cableType.id).map((item) =>
+            deletion?.mutationRevision === undefined ? item : { ...item, mutationRevision: deletion.mutationRevision });
           const nextPages = Math.max(1, Math.ceil(next.length / CABLE_TYPES_PER_PAGE));
           if (page > nextPages) {
             setPage(nextPages);
           }
           return next;
         });
-        showToast({ intent: 'success', title: 'Cable type deleted' });
+        showToast({ intent: 'success', title: 'Cable type marked obsolete' });
       } catch (err) {
         console.error('Delete material cable type failed', err);
         showToast({
@@ -470,6 +475,7 @@ export const useCableTypes = ({
         const response = await importMaterialCableTypes(token, file);
         setCableTypes(sortCableTypes(response.cableTypes));
         setPage(1);
+        await reloadCableTypes({ showSpinner: false });
 
         showToast(excelImportSuccessToast(file.name, response.summary, 'Cable types'));
       } catch (err) {
@@ -483,11 +489,11 @@ export const useCableTypes = ({
   );
 
   const handleExportCableTypes = useCallback(async () => {
-    if (!isAdmin || !token) {
+    if (!token || !canExport) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export cable types.',
+        title: 'Export access required',
+        body: 'You need to be signed in to export cable types.',
       });
       return;
     }
@@ -516,14 +522,14 @@ export const useCableTypes = ({
     } finally {
       setIsExporting(false);
     }
-  }, [isAdmin, showToast, token]);
+  }, [canExport, showToast, token]);
 
   const handleGetCableTypesTemplate = useCallback(async () => {
-    if (!isAdmin || !token) {
+    if (!token || !canExport) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.',
+        title: 'Export access required',
+        body: 'Catalog templates require administrator or engineer access.',
       });
       return;
     }
@@ -544,7 +550,7 @@ export const useCableTypes = ({
     } finally {
       setIsGettingTemplate(false);
     }
-  }, [isAdmin, showToast, token]);
+  }, [canExport, showToast, token]);
 
   return {
     cableTypes,

@@ -24,6 +24,7 @@ type PaginationHandlers = {
 type CableInstallationMaterialsTabProps = {
   styles: FilterableTableSectionStyles;
   isAdmin: boolean;
+  canExport?: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
   onCreate: () => void;
@@ -63,6 +64,7 @@ type CableInstallationMaterialsTabProps = {
 export const CableInstallationMaterialsTab = ({
   styles,
   isAdmin,
+  canExport = false,
   isRefreshing,
   onRefresh,
   onCreate,
@@ -135,12 +137,8 @@ export const CableInstallationMaterialsTab = ({
             <Button onClick={onImportClick} disabled={isImporting}>
               {isImporting ? 'Importing...' : 'Import from Excel'}
             </Button>
-            <Button appearance="secondary" onClick={onExport} disabled={isExporting}>
-              {isExporting ? 'Exporting...' : 'Export to Excel'}
-            </Button>
-            <Button appearance="secondary" onClick={onGetTemplate} disabled={isGettingTemplate}>
-              {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
-            </Button>
+
+
             <input
               ref={fileInputRef}
               className={styles.hiddenInput}
@@ -150,7 +148,16 @@ export const CableInstallationMaterialsTab = ({
             />
           </>
         ) : null}
-      </div>
+
+      {canExport ? (<>
+            <Button appearance="secondary" onClick={onExport} disabled={isExporting}>
+              {isExporting ? 'Exporting...' : 'Export to Excel'}
+            </Button>
+            <Button appearance="secondary" onClick={onGetTemplate} disabled={isGettingTemplate}>
+              {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
+            </Button>
+      </>) : null}
+    </div>
 
       <div className={styles.filtersRow}>
         <Input
@@ -265,7 +272,7 @@ export const CableInstallationMaterialsTab = ({
                                 onClick={() => onDelete(item)}
                                 disabled={isBusy}
                               >
-                                Delete
+                                Mark obsolete
                               </Button>
                             </>
                           ) : null}

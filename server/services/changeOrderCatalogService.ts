@@ -246,7 +246,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
            id, name, purpose, material, description, manufacturer, part_no,
            diameter_mm, weight_kg_per_m, unit_price,
            minimum_order_quantity, order_measurement, packaging
-         FROM material_cable_types WHERE id = $1 LIMIT 1`,
+         FROM material_cable_types WHERE id = $1 AND obsolete_at IS NULL LIMIT 1`,
         [sourceMaterialId],
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
@@ -257,7 +257,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
         `SELECT id, type, purpose, material, description, manufacturer, part_no,
                 dimension_mm, weight_kg, unit_price,
                 minimum_order_quantity, order_measurement, packaging
-         FROM material_cable_installation_materials WHERE id = $1 LIMIT 1`,
+         FROM material_cable_installation_materials WHERE id = $1 AND obsolete_at IS NULL LIMIT 1`,
         [sourceMaterialId],
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
@@ -268,7 +268,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
         `SELECT id, type, purpose, material, description, manufacturer, part_no,
                 dimension_mm, weight_kg, unit_price,
                 minimum_order_quantity, order_measurement, packaging
-         FROM material_tray_installation_materials WHERE id = $1 LIMIT 1`,
+         FROM material_tray_installation_materials WHERE id = $1 AND obsolete_at IS NULL LIMIT 1`,
         [sourceMaterialId],
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
@@ -284,7 +284,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
         `SELECT id, type, purpose, material, description, manufacturer, part_no,
                 dimension_mm, weight_kg, unit_price,
                 minimum_order_quantity, order_measurement, packaging
-         FROM ${table} WHERE id = $1 LIMIT 1`,
+         FROM ${table} WHERE id = $1 AND obsolete_at IS NULL LIMIT 1`,
         [sourceMaterialId],
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
@@ -297,7 +297,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
         `SELECT id, tray_type, manufacturer, height_mm, rung_height_mm, width_mm,
                 weight_kg_per_m, unit_price,
                 minimum_order_quantity, order_measurement, packaging
-         FROM material_trays WHERE id = $1 LIMIT 1`,
+         FROM material_trays WHERE id = $1 AND obsolete_at IS NULL LIMIT 1`,
         [sourceMaterialId],
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();
@@ -308,7 +308,7 @@ export const resolveChangeOrderCatalogSnapshot = async (
         `SELECT id, support_type, manufacturer, height_mm, width_mm, length_mm,
                 weight_kg, unit_price,
                 minimum_order_quantity, order_measurement, packaging
-         FROM material_supports WHERE id = $1 LIMIT 1`,
+         FROM material_supports WHERE id = $1 AND obsolete_at IS NULL LIMIT 1`,
         [sourceMaterialId],
       );
       if (!result.rows[0]) throw new CatalogMaterialNotFoundError();

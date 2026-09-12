@@ -1,3 +1,5 @@
+import { catalogOwnerDeleteHandler } from './catalogOwnerRoutes.js';
+import { readCatalogSnapshot } from '../services/catalogCompositionService.js';
 import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
 import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
 import type { PoolClient } from 'pg';
@@ -191,11 +193,13 @@ export const createInstallationMaterialCatalogRouter = (
 
   router.get('/', async (_req: Request, res: Response): Promise<void> => {
     try {
-      const result = await pool.query<MaterialTrayInstallationMaterialRow>(
-        `${selectMaterialsQuery} ORDER BY type ASC`,
-      );
+      const snapshot = await readCatalogSnapshot((client) => client.query<MaterialTrayInstallationMaterialRow>(
+        `${selectMaterialsQuery} WHERE obsolete_at IS NULL ORDER BY type ASC`,
+      ));
       res.json({
-        [config.collectionKey]: result.rows.map(mapMaterialTrayInstallationMaterialRow),
+        [config.collectionKey]: snapshot.value.rows.map((row) => ({
+          ...mapMaterialTrayInstallationMaterialRow(row), mutationRevision: snapshot.mutationRevision,
+        })),
       });
     } catch (error) {
       console.error(`List material ${config.label.toLowerCase()}s error`, error);
@@ -340,31 +344,7 @@ export const createInstallationMaterialCatalogRouter = (
     `/:${config.idParam}`,
     authenticate,
     requireAdmin,
-    async (req: Request, res: Response): Promise<void> => {
-      const materialId = req.params[config.idParam];
-      if (!materialId) {
-        res.status(400).json({ error: `${config.label} ID is required` });
-        return;
-      }
-
-      try {
-        const result = await pool.query(`DELETE FROM ${config.table} WHERE id = $1`, [materialId]);
-        if (result.rowCount === 0) {
-          res.status(404).json({ error: `${config.label} not found` });
-          return;
-        }
-        res.status(204).send();
-      } catch (error) {
-        if (isPostgresError(error, '23503')) {
-          res.status(409).json({
-            error: `${config.label} is in use and cannot be deleted until its references are removed.`,
-          });
-          return;
-        }
-        console.error(`Delete material ${config.label.toLowerCase()} error`, error);
-        res.status(500).json({ error: `Failed to delete ${config.label.toLowerCase()}` });
-      }
-    },
+    catalogOwnerDeleteHandler(config.category, config.idParam),
   );
 
   type ImportRow = Record<string, unknown>;
@@ -582,7 +562,7 @@ export const createInstallationMaterialCatalogRouter = (
 
       try {
         const refreshed = await pool.query<MaterialTrayInstallationMaterialRow>(
-          `${selectMaterialsQuery} ORDER BY type ASC`,
+          `${selectMaterialsQuery} WHERE obsolete_at IS NULL ORDER BY type ASC`,
         );
         res.json({
           summary,
@@ -601,7 +581,6 @@ export const createInstallationMaterialCatalogRouter = (
   router.get(
     '/template',
     authenticate,
-    requireAdmin,
     async (_req: Request, res: Response): Promise<void> => {
       try {
         const buffer = await buildWorkbook([], `${config.excelTableName}Template`);
@@ -616,11 +595,10 @@ export const createInstallationMaterialCatalogRouter = (
   router.get(
     '/export',
     authenticate,
-    requireAdmin,
     async (_req: Request, res: Response): Promise<void> => {
       try {
         const result = await pool.query<MaterialTrayInstallationMaterialRow>(
-          `${selectMaterialsQuery} ORDER BY type ASC`,
+          `${selectMaterialsQuery} WHERE obsolete_at IS NULL ORDER BY type ASC`,
         );
         const rows = result.rows.map((row) => [
           row.type ?? '',

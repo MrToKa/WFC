@@ -41,6 +41,7 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
                     first_name,
                     last_name,
                     is_admin,
+                    ARRAY(SELECT pe.project_id FROM project_engineers pe WHERE pe.user_id=users.id ORDER BY pe.project_id) AS engineer_project_ids,
                     created_at,
                     updated_at;
         `,
@@ -99,6 +100,7 @@ authRouter.post(
             first_name,
             last_name,
             is_admin,
+            ARRAY(SELECT pe.project_id FROM project_engineers pe WHERE pe.user_id=users.id ORDER BY pe.project_id) AS engineer_project_ids,
             created_at,
             updated_at
           FROM users

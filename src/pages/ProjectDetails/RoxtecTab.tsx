@@ -25,6 +25,7 @@ import {
   updateRoxtecEntry
 } from '@/api/roxtec';
 import type { RoxtecEntry } from '@/api/types';
+import { useAuth } from '@/context/AuthContext';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
@@ -52,6 +53,7 @@ type RoxtecTabProps = {
 };
 
 export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [entries, setEntries] = useState<RoxtecEntry[]>([]);
   const [draft, setDraft] = useState<RoxtecDraft>(emptyDraft);
@@ -65,7 +67,7 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   const [deleteTarget, setDeleteTarget] = useState<RoxtecEntry | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const canManageRoxtec = Boolean(token);
+  const canManageRoxtec = Boolean(token && user?.isAdmin);
 
   const loadEntries = useCallback(async () => {
     if (!projectId) {

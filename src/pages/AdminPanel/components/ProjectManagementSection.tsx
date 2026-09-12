@@ -398,7 +398,7 @@ export const ProjectManagementSection = ({
                   onChange={(_event, data) =>
                     handleClearDataSelectionChange('cables', data.checked === true)
                   }
-                  disabled={isClearDataInProgress || clearDataSelection.cableTypes}
+                  disabled={isClearDataInProgress}
                 />
                 <Checkbox
                   label="Trays"
@@ -410,7 +410,7 @@ export const ProjectManagementSection = ({
                 />
                 {clearDataSelection.cableTypes ? (
                   <Body1>
-                    Deleting cable types also removes cables linked to those types.
+                    Used cable types cannot be deleted while their cables remain. Select cables separately only if you intend to delete them too.
                   </Body1>
                 ) : null}
                 {clearDataError ? (

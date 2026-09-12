@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MaterialSupportRow } from '../models/materialSupport.js';
 
-const database = vi.hoisted(() => ({ query: vi.fn() }));
+const database = vi.hoisted(() => ({ query: vi.fn(), connect: vi.fn(), transactionQuery: vi.fn(), release: vi.fn() }));
 vi.mock('../db.js', () => ({ pool: database }));
 
 import { materialsRouter } from './materialsRoutes.js';
@@ -56,6 +56,12 @@ const supportRow: MaterialSupportRow = {
 describe('material supports catalog listing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    database.transactionQuery.mockImplementation(async (sql: string, parameters?: unknown[]) => {
+      if (/^(BEGIN|SET TRANSACTION|COMMIT|ROLLBACK)/.test(sql)) return { rows: [] };
+      if (sql.startsWith('SELECT revision FROM mutation_revisions')) return { rows: [{ revision: 4 }] };
+      return parameters === undefined ? database.query(sql) : database.query(sql, parameters);
+    });
+    database.connect.mockResolvedValue({ query: database.transactionQuery, release: database.release });
   });
 
   it('returns the complete public catalog with mapped dimensions and image metadata', async () => {
@@ -76,6 +82,7 @@ describe('material supports catalog listing', () => {
     const payload = response.json.mock.calls[0][0];
     expect(payload.supports).toHaveLength(51);
     expect(payload.supports[50]).toEqual({
+      mutationRevision: 4,
       id: 'support-50',
       type: 'Bracket 50',
       manufacturer: 'ACME',
@@ -94,6 +101,9 @@ describe('material supports catalog listing', () => {
       createdAt: '2026-09-06T00:00:00.000Z',
       updatedAt: '2026-09-06T01:00:00.000Z',
     });
+    expect(database.transactionQuery).toHaveBeenCalledWith('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    expect(database.transactionQuery.mock.calls.some(([sql]) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+    expect(database.release).toHaveBeenCalledOnce();
 
     const allRouteIndex = routes.findIndex((layer) => layer.route?.path === '/supports/all');
     const detailsRouteIndex = routes.findIndex(

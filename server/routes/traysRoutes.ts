@@ -14,7 +14,7 @@ import {
   computeTrayFreeSpaceByTrayId,
   type TrayCableForFreeSpace,
 } from '../utils/trayFreeSpace.js';
-import { authenticate, requireAdmin } from '../middleware.js';
+import { authenticate, requireProjectEditor } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   excelImportError,
@@ -24,7 +24,12 @@ import {
   validateExcelImport,
 } from '../utils/excelImport.js';
 import { createTraySchema, updateTraySchema } from '../validators.js';
-
+import { withTransaction } from '../utils/transaction.js';
+import {
+  captureTrayMaterialSnapshot,
+  sameTraySelection,
+} from '../services/projectCatalogSnapshotService.js';
+import { getObjectStream, getTemplateBucket } from '../services/objectStorageService.js';
 
 const TRAY_EXCEL_HEADERS = {
   name: 'Name',
@@ -94,6 +99,7 @@ const selectTraysQuery = `
     length_mm,
     include_grounding_cable,
     grounding_cable_type_id,
+    material_snapshot,
     created_at,
     updated_at
   FROM trays
@@ -131,6 +137,37 @@ type TrayExportBody = {
 
 const traysRouter = Router({ mergeParams: true });
 
+traysRouter.get(
+  '/:trayId/material-image',
+  authenticate,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const result = await pool.query<TrayRow>(
+        `${selectTraysQuery} WHERE id = $1 AND project_id = $2`,
+        [req.params.trayId, req.params.projectId],
+      );
+      const snapshot = result.rows[0]?.material_snapshot;
+      if (!snapshot?.imageObjectKey) {
+        res.status(404).json({ error: 'No captured tray material image is available' });
+        return;
+      }
+      const stream = await getObjectStream(getTemplateBucket(), snapshot.imageObjectKey);
+      res.setHeader(
+        'Content-Type',
+        snapshot.material.imageTemplateContentType ?? 'application/octet-stream',
+      );
+      stream.on('error', () => {
+        if (!res.headersSent) res.status(404).end();
+        else res.destroy();
+      });
+      stream.pipe(res);
+    } catch (error) {
+      console.error('Read captured tray image error', error);
+      res.status(500).json({ error: 'Failed to read captured tray material image' });
+    }
+  },
+);
+
 traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   const { projectId } = req.params;
 
@@ -166,7 +203,6 @@ traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 traysRouter.get(
   '/template',
   authenticate,
-  requireAdmin,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -249,7 +285,6 @@ traysRouter.get(
 traysRouter.post(
   '/export',
   authenticate,
-  requireAdmin,
   async (
     req: Request<{ projectId?: string }, unknown, TrayExportBody>,
     res: Response,
@@ -458,7 +493,7 @@ traysRouter.get('/:trayId', async (req: Request, res: Response): Promise<void> =
 traysRouter.post(
   '/',
   authenticate,
-  requireAdmin,
+  requireProjectEditor,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -490,8 +525,10 @@ traysRouter.post(
     const { name, type, purpose, widthMm, heightMm, lengthMm } = parseResult.data;
 
     try {
-      const result = await pool.query<TrayRow>(
-        `
+      const result = await withTransaction(async (client) => {
+        const snapshot = await captureTrayMaterialSnapshot(client, normalizeOptionalString(type));
+        return client.query<TrayRow>(
+          `
           INSERT INTO trays (
             id,
             project_id,
@@ -500,9 +537,10 @@ traysRouter.post(
             purpose,
             width_mm,
             height_mm,
-            length_mm
+            length_mm,
+            material_snapshot
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           RETURNING
             id,
             project_id,
@@ -514,20 +552,23 @@ traysRouter.post(
             length_mm,
             include_grounding_cable,
             grounding_cable_type_id,
+            material_snapshot,
             created_at,
             updated_at;
         `,
-        [
-          randomUUID(),
-          projectId,
-          name.trim(),
-          normalizeOptionalString(type ?? null),
-          normalizeOptionalString(purpose ?? null),
-          widthMm ?? null,
-          heightMm ?? null,
-          lengthMm ?? null,
-        ],
-      );
+          [
+            randomUUID(),
+            projectId,
+            name.trim(),
+            normalizeOptionalString(type ?? null),
+            normalizeOptionalString(purpose ?? null),
+            widthMm ?? null,
+            heightMm ?? null,
+            lengthMm ?? null,
+            snapshot,
+          ],
+        );
+      });
 
       res.status(201).json({ tray: mapTrayRow(result.rows[0]) });
     } catch (error) {
@@ -550,7 +591,7 @@ traysRouter.post(
 traysRouter.patch(
   '/:trayId',
   authenticate,
-  requireAdmin,
+  requireProjectEditor,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, trayId } = req.params;
 
@@ -665,8 +706,23 @@ traysRouter.patch(
     fields.push(`updated_at = NOW()`);
 
     try {
-      const result = await pool.query<TrayRow>(
-        `
+      const result = await withTransaction(async (client) => {
+        const existing = await client.query<TrayRow>(
+          `${selectTraysQuery} WHERE id = $1 AND project_id = $2 FOR UPDATE`,
+          [trayId, projectId],
+        );
+        const previous = existing.rows[0];
+        if (
+          previous &&
+          type !== undefined &&
+          !sameTraySelection(previous.tray_type, normalizeOptionalString(type))
+        ) {
+          const snapshot = await captureTrayMaterialSnapshot(client, normalizeOptionalString(type));
+          fields.push(`material_snapshot = $${index++}`);
+          values.push(snapshot ? JSON.stringify(snapshot) : null);
+        }
+        return client.query<TrayRow>(
+          `
           UPDATE trays
           SET ${fields.join(', ')}
           WHERE id = $${index}
@@ -682,11 +738,13 @@ traysRouter.patch(
             length_mm,
             include_grounding_cable,
             grounding_cable_type_id,
+            material_snapshot,
             created_at,
             updated_at;
         `,
-        [...values, trayId, projectId],
-      );
+          [...values, trayId, projectId],
+        );
+      });
 
       const tray = result.rows[0];
 
@@ -706,7 +764,7 @@ traysRouter.patch(
 traysRouter.delete(
   '/:trayId',
   authenticate,
-  requireAdmin,
+  requireProjectEditor,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, trayId } = req.params;
 
@@ -741,7 +799,7 @@ traysRouter.delete(
 traysRouter.post(
   '/import',
   authenticate,
-  requireAdmin,
+  requireProjectEditor,
   uploadExcelFile,
   async (req: TrayImportRequest, res: Response): Promise<void> => {
     const { projectId } = req.params;
@@ -907,48 +965,6 @@ traysRouter.post(
       return;
     }
 
-    const materialDimensionsByType = new Map<
-      string,
-      { width: number | null; height: number | null }
-    >();
-
-    const materialTypeKeys = Array.from(
-      new Set(
-        prepared.map((row) => row.typeKey).filter((typeKey): typeKey is string => Boolean(typeKey)),
-      ),
-    );
-
-    if (materialTypeKeys.length > 0) {
-      // Enrich tray imports with catalog dimensions when a matching type exists.
-      try {
-        const result = await pool.query<{
-          tray_type: string;
-          width_mm: string | number | null;
-          height_mm: string | number | null;
-        }>(
-          `
-            SELECT
-              tray_type,
-              width_mm,
-              height_mm
-            FROM material_trays
-            WHERE LOWER(tray_type) = ANY($1::text[]);
-          `,
-          [materialTypeKeys],
-        );
-
-        for (const row of result.rows) {
-          const key = row.tray_type.toLowerCase();
-          materialDimensionsByType.set(key, {
-            width: toNumberOrNull(row.width_mm),
-            height: toNumberOrNull(row.height_mm),
-          });
-        }
-      } catch (error) {
-        console.error('Fetch material tray dimensions error', error);
-      }
-    }
-
     let client: PoolClient | undefined;
 
     try {
@@ -959,7 +975,7 @@ traysRouter.post(
         `
           ${selectTraysQuery}
           WHERE project_id = $1
-            AND lower(name) = ANY($2::text[]);
+            AND lower(name) = ANY($2::text[]) FOR UPDATE;
         `,
         [projectId, prepared.map((row) => row.key)],
       );
@@ -971,12 +987,17 @@ traysRouter.post(
       }
 
       for (const row of prepared) {
-        const dimensions =
-          row.typeKey !== null ? materialDimensionsByType.get(row.typeKey) : undefined;
-        const widthMm = dimensions?.width ?? row.width ?? null;
-        const heightMm = dimensions?.height ?? row.height ?? null;
-
         const existing = existingMap.get(row.key);
+        const unchanged = existing && sameTraySelection(existing.tray_type, row.type);
+        const snapshot = unchanged
+          ? (existing.material_snapshot ?? null)
+          : await captureTrayMaterialSnapshot(client, row.type);
+        const widthMm = unchanged
+          ? (row.width ?? toNumberOrNull(existing.width_mm))
+          : (snapshot?.material.widthMm ?? row.width);
+        const heightMm = unchanged
+          ? (row.height ?? toNumberOrNull(existing.height_mm))
+          : (snapshot?.material.heightMm ?? row.height);
 
         if (existing) {
           await client.query(
@@ -988,10 +1009,11 @@ traysRouter.post(
                 width_mm = $3,
                 height_mm = $4,
                 length_mm = $5,
+                material_snapshot = $7,
                 updated_at = NOW()
               WHERE id = $6;
             `,
-            [row.type, row.purpose, widthMm, heightMm, row.length, existing.id],
+            [row.type, row.purpose, widthMm, heightMm, row.length, existing.id, snapshot],
           );
           summary.updated += 1;
         } else {
@@ -1005,9 +1027,10 @@ traysRouter.post(
                 purpose,
                 width_mm,
                 height_mm,
-                length_mm
+                length_mm,
+                material_snapshot
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
             `,
             [
               randomUUID(),
@@ -1018,6 +1041,7 @@ traysRouter.post(
               widthMm,
               heightMm,
               row.length,
+              snapshot,
             ],
           );
           summary.inserted += 1;

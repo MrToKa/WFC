@@ -37,6 +37,7 @@ type CableTypesTabItem = Pick<
 type CableTypesTabProps<T extends CableTypesTabItem> = {
   styles: FilterableTableSectionStyles;
   isAdmin: boolean;
+  canExport?: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
   onCreate: () => void;
@@ -62,6 +63,7 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
   onDetails?: (cableType: T) => void;
   onEdit: (cableType: T) => void;
   onDelete: (cableType: T) => void;
+  deleteLabel?: string;
   formatNumeric: (value: number | null) => string;
   showPagination: boolean;
   page: number;
@@ -79,6 +81,7 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
 export const CableTypesTab = <T extends CableTypesTabItem>({
   styles,
   isAdmin,
+  canExport = false,
   isRefreshing,
   onRefresh,
   onCreate,
@@ -104,6 +107,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
   onDetails,
   onEdit,
   onDelete,
+  deleteLabel = 'Delete',
   formatNumeric,
   showPagination,
   page,
@@ -152,6 +156,19 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
             <Button onClick={onImportClick} disabled={isImporting || disableImportAction}>
               {isImporting ? 'Importing...' : 'Import from Excel'}
             </Button>
+
+
+            <input
+              ref={fileInputRef}
+              className={styles.hiddenInput}
+              type="file"
+              accept=".xlsx"
+              onChange={onImportFileChange}
+            />
+          </>
+        ) : null}
+
+      {canExport ? (<>
             <Button
               appearance="secondary"
               onClick={onExport}
@@ -166,16 +183,8 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
             >
               {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
             </Button>
-            <input
-              ref={fileInputRef}
-              className={styles.hiddenInput}
-              type="file"
-              accept=".xlsx"
-              onChange={onImportFileChange}
-            />
-          </>
-        ) : null}
-      </div>
+      </>) : null}
+    </div>
 
       <div className={styles.filtersRow}>
         <Input
@@ -307,7 +316,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                                   onClick={() => onDelete(cableType)}
                                   disabled={isBusy}
                                 >
-                                  Delete
+                                  {deleteLabel}
                                 </Button>
                               </>
                             ) : null}

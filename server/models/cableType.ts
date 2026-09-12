@@ -1,6 +1,4 @@
-export const toNumberOrNull = (
-  value: string | number | null
-): number | null => {
+export const toNumberOrNull = (value: string | number | null): number | null => {
   if (value === null || value === undefined) {
     return null;
   }
@@ -22,6 +20,7 @@ export type CableTypeRow = {
   diameter_mm: string | number | null;
   weight_kg_per_m: string | number | null;
   source_material_cable_type_id?: string | null;
+  material_snapshot?: Record<string, unknown> | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -46,12 +45,6 @@ export const mapCableTypeRow = (row: CableTypeRow): PublicCableType => ({
   diameterMm: toNumberOrNull(row.diameter_mm),
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
   sourceMaterialCableTypeId: row.source_material_cable_type_id ?? null,
-  createdAt:
-    typeof row.created_at === 'string'
-      ? row.created_at
-      : row.created_at.toISOString(),
-  updatedAt:
-    typeof row.updated_at === 'string'
-      ? row.updated_at
-      : row.updated_at.toISOString()
+  createdAt: typeof row.created_at === 'string' ? row.created_at : row.created_at.toISOString(),
+  updatedAt: typeof row.updated_at === 'string' ? row.updated_at : row.updated_at.toISOString(),
 });

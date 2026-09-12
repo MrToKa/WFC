@@ -27,6 +27,9 @@ describe('standard material mutations', () => {
         ?.route?.stack.at(-1)?.handle;
       if (!handler) throw new Error(`Missing ${method} handler`);
       const request = {
+        method: method.toUpperCase(),
+        userId: '00000000-0000-4000-8000-000000000004',
+        header: (name: string) => name === 'If-Match' ? '"0"' : 'test-operation',
         params: {
           trayId: '00000000-0000-4000-8000-000000000001',
           assignmentId: '00000000-0000-4000-8000-000000000002',

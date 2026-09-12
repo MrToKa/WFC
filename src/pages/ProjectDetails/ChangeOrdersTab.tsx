@@ -1,3 +1,4 @@
+import { canEditProjectContent } from '@/utils/projectPermissions';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AddRegular,
@@ -184,8 +185,10 @@ export const ChangeOrdersTab = ({
   const styles = useStyles();
   const { showToast } = useToast();
   const labels = DOCUMENT_LABELS[collection];
+  const canEdit = canEditProjectContent(currentUser, project.id);
   const {
     changeOrders,
+    collectionMutationRevision,
     selectedId,
     details,
     loading,
@@ -290,12 +293,22 @@ export const ChangeOrdersTab = ({
     setSavingHeader(true);
     try {
       if (newMode) {
-        const response = await createChangeOrder(token, project.id, header, collection);
+        const response = await createChangeOrder(token, project.id, header, collection, {
+          expectedRevision: collectionMutationRevision,
+        });
         await loadList();
         await selectChangeOrder(response.changeOrder.id);
         showToast({ title: `${labels.singular} created`, intent: 'success' });
       } else if (selectedId) {
-        const response = await updateChangeOrder(token, project.id, selectedId, header, collection);
+        const response = await updateChangeOrder(
+          token,
+          project.id,
+          selectedId,
+          header,
+          collection,
+          { expectedRevision: details?.mutationRevision ?? 0 },
+        );
+        setDetails(response.changeOrder);
         setHeader(toHeader(response.changeOrder));
         setHeaderDirty(false);
         await loadList();
@@ -321,7 +334,9 @@ export const ChangeOrdersTab = ({
       return;
     setPendingAction(true);
     try {
-      await deleteChangeOrder(token, project.id, selectedId, collection);
+      await deleteChangeOrder(token, project.id, selectedId, collection, {
+        expectedRevision: details?.mutationRevision ?? 0,
+      });
       const remaining = await loadList();
       await selectChangeOrder(remaining[0]?.id ?? null);
       showToast({ title: `${labels.singular} deleted`, intent: 'success' });
@@ -357,6 +372,7 @@ export const ChangeOrdersTab = ({
           sourceMaterialId: choice.id,
         },
         collection,
+        { expectedRevision: details?.mutationRevision ?? 0 },
       );
       setDetails(result.changeOrder);
       setExpandedParentIds((current) => {
@@ -390,6 +406,7 @@ export const ChangeOrdersTab = ({
         editingItem.id,
         update,
         collection,
+        { expectedRevision: details?.mutationRevision ?? 0 },
       );
       setEditingItem(null);
       await reloadActive();
@@ -405,7 +422,9 @@ export const ChangeOrdersTab = ({
     if (!token || !selectedId || !window.confirm(`Remove "${item.descriptionEn}"?`)) return;
     setPendingAction(true);
     try {
-      await deleteChangeOrderItem(token, project.id, selectedId, item.id, collection);
+      await deleteChangeOrderItem(token, project.id, selectedId, item.id, collection, {
+        expectedRevision: details?.mutationRevision ?? 0,
+      });
       await reloadActive();
       showToast({ title: 'Item removed', intent: 'success' });
     } catch (caught) {
@@ -429,6 +448,7 @@ export const ChangeOrdersTab = ({
         selectedId,
         item.id,
         collection,
+        { expectedRevision: details?.mutationRevision ?? 0 },
       );
       setDetails(result.changeOrder);
       setExpandedParentIds((current) => {
@@ -479,7 +499,9 @@ export const ChangeOrdersTab = ({
     ids.push(...items.filter((item) => !groupedItemIds.has(item.id)).map((item) => item.id));
     setPendingAction(true);
     try {
-      await reorderChangeOrderItems(token, project.id, selectedId, ids, collection);
+      await reorderChangeOrderItems(token, project.id, selectedId, ids, collection, {
+        expectedRevision: details?.mutationRevision ?? 0,
+      });
       await reloadActive();
     } catch (caught) {
       showToast({
@@ -551,12 +573,20 @@ export const ChangeOrdersTab = ({
             ))}
           </Select>
         </Field>
-        <Button icon={<AddRegular />} onClick={() => void startNew()}>
+        <Button
+          disabled={pendingAction || savingHeader || savingItem || loading || detailsLoading}
+          onClick={() => {
+            if (canLeave()) void reloadActive();
+          }}
+        >
+          Reload
+        </Button>
+        <Button icon={<AddRegular />} disabled={!canEdit} onClick={() => void startNew()}>
           New {labels.singular}
         </Button>
         <Button
           icon={<DeleteRegular />}
-          disabled={!selectedId || newMode || pendingAction}
+          disabled={!canEdit || !selectedId || newMode || pendingAction}
           onClick={() => void removeChangeOrder()}
         >
           Delete {labels.singular}
@@ -586,18 +616,21 @@ export const ChangeOrdersTab = ({
             <div className={styles.headerGrid}>
               <Field label="Title" required>
                 <Input
+                  readOnly={!canEdit}
                   value={header.title}
                   onChange={(_, data) => setHeaderField('title', data.value)}
                 />
               </Field>
               <Field label="Project reference">
                 <Input
+                  readOnly={!canEdit}
                   value={header.projectReference ?? ''}
                   onChange={(_, data) => setHeaderField('projectReference', data.value)}
                 />
               </Field>
               <Field label="Prepared by" required>
                 <Input
+                  readOnly={!canEdit}
                   value={header.preparedBy}
                   onChange={(_, data) => setHeaderField('preparedBy', data.value)}
                 />
@@ -606,12 +639,14 @@ export const ChangeOrdersTab = ({
                 <Input
                   aria-label="Date"
                   type="date"
+                  readOnly={!canEdit}
                   value={header.reportDate}
                   onChange={(_, data) => setHeaderField('reportDate', data.value)}
                 />
               </Field>
               <Field label="Revision" required>
                 <Input
+                  readOnly={!canEdit}
                   value={header.revision}
                   onChange={(_, data) => setHeaderField('revision', data.value)}
                 />
@@ -621,7 +656,7 @@ export const ChangeOrdersTab = ({
               <Button
                 appearance="primary"
                 icon={<SaveRegular />}
-                disabled={savingHeader || (!newMode && !headerDirty)}
+                disabled={!canEdit || savingHeader || (!newMode && !headerDirty)}
                 onClick={() => void saveHeader()}
               >
                 {savingHeader ? 'Saving…' : 'Save'}
@@ -635,7 +670,7 @@ export const ChangeOrdersTab = ({
               <Title3>Materials</Title3>
               <Button
                 icon={<AddRegular />}
-                disabled={newMode || !selectedId || headerDirty || pendingAction}
+                disabled={!canEdit || newMode || !selectedId || headerDirty || pendingAction}
                 onClick={() => setMaterialDialogOpen(true)}
               >
                 Add material
@@ -784,6 +819,7 @@ export const ChangeOrdersTab = ({
                                   icon={<EditRegular />}
                                   aria-label={`Edit item ${index + 1}`}
                                   title="Edit"
+                                  disabled={!canEdit}
                                   onClick={() => setEditingItem(item)}
                                 />
                                 <Button
@@ -792,7 +828,9 @@ export const ChangeOrdersTab = ({
                                   icon={<CopyRegular />}
                                   aria-label={`Duplicate item ${index + 1}`}
                                   title="Duplicate"
-                                  disabled={pendingAction || item.lineKind === 'inherited'}
+                                  disabled={
+                                    !canEdit || pendingAction || item.lineKind === 'inherited'
+                                  }
                                   onClick={() => void duplicateItem(item)}
                                 />
                                 <Button
@@ -801,7 +839,9 @@ export const ChangeOrdersTab = ({
                                   icon={<DeleteRegular />}
                                   aria-label={`Delete item ${index + 1}`}
                                   title="Delete"
-                                  disabled={pendingAction || item.lineKind === 'inherited'}
+                                  disabled={
+                                    !canEdit || pendingAction || item.lineKind === 'inherited'
+                                  }
                                   onClick={() => void removeItem(item)}
                                 />
                                 <Button
@@ -811,6 +851,7 @@ export const ChangeOrdersTab = ({
                                   aria-label={`Move item ${index + 1} up`}
                                   title="Move up"
                                   disabled={
+                                    !canEdit ||
                                     mainItemIndex === undefined ||
                                     mainItemIndex === 0 ||
                                     pendingAction
@@ -824,6 +865,7 @@ export const ChangeOrdersTab = ({
                                   aria-label={`Move item ${index + 1} down`}
                                   title="Move down"
                                   disabled={
+                                    !canEdit ||
                                     mainItemIndex === undefined ||
                                     mainItemIndex === mainItems.length - 1 ||
                                     pendingAction ||

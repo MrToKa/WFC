@@ -14,6 +14,7 @@ import { materialsRouter } from './routes/materialsRoutes.js';
 import { projectsRouter } from './routes/projectsRoutes.js';
 import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
+import { authenticateExports, protectDomainMutations } from './middleware.js';
 
 export const createApp = (): Express => {
   const app = express();
@@ -21,7 +22,7 @@ export const createApp = (): Express => {
   app.use(
     cors({
       origin: config.clientOrigin,
-      exposedHeaders: ['Content-Disposition'],
+      exposedHeaders: ['Content-Disposition', 'ETag'],
     }),
   );
   app.use(express.json());
@@ -33,6 +34,8 @@ export const createApp = (): Express => {
   app.use('/api/auth', authRouter);
   app.use('/api/users', userRouter);
   app.use('/api/admin', adminUsersRouter);
+  app.use(['/api/materials', '/api/templates', '/api/projects', '/api/material-compositions'],
+    authenticateExports, protectDomainMutations);
   app.use('/api/materials/cable-installation-materials', materialCableInstallationMaterialsRouter);
   app.use('/api/materials/tray-installation-materials', materialTrayInstallationMaterialsRouter);
   app.use('/api/materials/instruments', materialInstrumentsRouter);

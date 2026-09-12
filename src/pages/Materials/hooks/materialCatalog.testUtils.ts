@@ -1,6 +1,7 @@
 import type { MaterialSupport, MaterialTray } from '@/api/client';
 
 export const makeSupport = (index: number): MaterialSupport => ({
+  mutationRevision: 5,
   id: `support-${index}`,
   type: `Support ${String(index).padStart(2, '0')}`,
   manufacturer: index % 2 === 0 ? 'Alpha' : 'Beta',

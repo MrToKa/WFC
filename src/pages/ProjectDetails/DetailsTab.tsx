@@ -71,6 +71,7 @@ type DetailsTabProps = {
   project: Project;
   formattedDates: FormattedDates;
   isAdmin: boolean;
+  canEditSupports?: boolean;
   cableSpacingField: CableSpacingController;
   cableCategoryCards: CableCategoryController[];
   customBundleRanges: CustomBundleRangesController;
@@ -95,6 +96,7 @@ export const DetailsTab = ({
   project,
   formattedDates,
   isAdmin,
+  canEditSupports = isAdmin,
   cableSpacingField,
   cableCategoryCards,
   customBundleRanges,
@@ -232,7 +234,7 @@ export const DetailsTab = ({
                         : 'No supports available.'}
                     </Caption1>
                   ) : null}
-                  {isAdmin ? (
+                  {canEditSupports ? (
                     <div className={styles.numericFieldControls}>
                       <Field
                         className={styles.numericFieldInput}
@@ -308,7 +310,7 @@ export const DetailsTab = ({
               );
             })}
           </div>
-          {isAdmin ? (
+          {canEditSupports ? (
             <Caption1 className={styles.supportOverridesNote}>
               Leave the distance empty and clear the support selection to use the defaults.
             </Caption1>

@@ -1,12 +1,6 @@
 import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent, RefObject } from 'react';
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ToastIntent } from '@fluentui/react-components';
 
@@ -23,7 +17,7 @@ import {
   fetchCableVersions,
   getCablesTemplate,
   importCables,
-  updateCable
+  updateCable,
 } from '@/api/client';
 
 import {
@@ -33,11 +27,9 @@ import {
   buildCableInput,
   emptyCableForm,
   parseCableFormErrors,
-  toCableFormState
+  toCableFormState,
 } from '../../ProjectDetails.forms';
-import {
-  sanitizeFileSegment
-} from '../../ProjectDetails.utils';
+import { sanitizeFileSegment } from '../../ProjectDetails.utils';
 
 export type CableSearchCriteria =
   | 'all'
@@ -48,11 +40,7 @@ export type CableSearchCriteria =
   | 'routing'
   | 'delivery';
 
-type ShowToast = (options: {
-  title: string;
-  body?: string;
-  intent?: ToastIntent;
-}) => void;
+type ShowToast = (options: { title: string; body?: string; intent?: ToastIntent }) => void;
 
 type UseCableListSectionParams = {
   projectId?: string;
@@ -70,19 +58,10 @@ type CableDialogController = {
   errors: CableFormErrors;
   submitting: boolean;
   handleFieldChange: (
-    field: keyof CableFormState
-  ) => (
-    event: ChangeEvent<HTMLInputElement>,
-    data: { value: string }
-  ) => void;
-  handleCableTypeSelect: (
-    event: unknown,
-    data: { optionValue?: string }
-  ) => void;
-  handleMtoSelect: (
-    event: unknown,
-    data: { optionValue?: string }
-  ) => void;
+    field: keyof CableFormState,
+  ) => (event: ChangeEvent<HTMLInputElement>, data: { value: string }) => void;
+  handleCableTypeSelect: (event: unknown, data: { optionValue?: string }) => void;
+  handleMtoSelect: (event: unknown, data: { optionValue?: string }) => void;
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   reset: () => void;
 };
@@ -123,26 +102,13 @@ type UseCableListSectionResult = {
   handleImportCables: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleExportCables: (
     view?: 'list' | 'report' | 'change-tracker',
-    mto?: CableMtoOption | null
+    mto?: CableMtoOption | null,
   ) => Promise<void>;
   handleGetCablesTemplate: (view?: 'list' | 'report') => Promise<void>;
-  handleCableDraftChange: (
-    cableId: string,
-    field: keyof CableFormState,
-    value: string
-  ) => void;
-  handleCableTextFieldBlur: (
-    cable: Cable,
-    field: keyof CableFormState
-  ) => Promise<void>;
-  handleInlineMtoChange: (
-    cable: Cable,
-    nextMto: string
-  ) => Promise<void>;
-  handleInlineCableTypeChange: (
-    cable: Cable,
-    nextCableTypeId: string
-  ) => Promise<void>;
+  handleCableDraftChange: (cableId: string, field: keyof CableFormState, value: string) => void;
+  handleCableTextFieldBlur: (cable: Cable, field: keyof CableFormState) => Promise<void>;
+  handleInlineMtoChange: (cable: Cable, nextMto: string) => Promise<void>;
+  handleInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => Promise<void>;
   openCableVersionsDialog: (cable: Cable) => void;
   closeCableVersionsDialog: () => void;
   cableVersionsDialog: CableVersionsDialogState;
@@ -154,9 +120,7 @@ type UseCableListSectionResult = {
 };
 
 const defaultProjectSnapshot = (project: { id: string; projectNumber: string } | null) =>
-  project
-    ? { id: project.id, projectNumber: project.projectNumber }
-    : null;
+  project ? { id: project.id, projectNumber: project.projectNumber } : null;
 
 const formatApiError = (error: unknown, fallback: string): string => {
   if (error instanceof ApiError) {
@@ -174,12 +138,13 @@ export const useCableListSection = ({
   projectId,
   project,
   token,
-  showToast
+  showToast,
 }: UseCableListSectionParams): UseCableListSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const latestRequest = useRef(0);
   const projectSnapshot = defaultProjectSnapshot(project);
 
+  const [mutationRevision, setMutationRevision] = useState<number | undefined>();
   const [cables, setCables] = useState<Cable[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -190,38 +155,32 @@ export const useCableListSection = ({
   const [pendingCableId, setPendingCableId] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
 
+  const [dialogRevision, setDialogRevision] = useState<number | undefined>();
   const [isDialogOpen, setDialogOpen] = useState<boolean>(false);
   const [dialogMode, setDialogMode] = useState<CableDialogMode>('create');
-  const [dialogValues, setDialogValues] =
-    useState<CableFormState>(emptyCableForm);
-  const [dialogErrors, setDialogErrors] =
-    useState<CableFormErrors>({});
-  const [dialogSubmitting, setDialogSubmitting] =
-    useState<boolean>(false);
+  const [dialogValues, setDialogValues] = useState<CableFormState>(emptyCableForm);
+  const [dialogErrors, setDialogErrors] = useState<CableFormErrors>({});
+  const [dialogSubmitting, setDialogSubmitting] = useState<boolean>(false);
   const [editingCableId, setEditingCableId] = useState<string | null>(null);
-  const [cableVersionsDialog, setCableVersionsDialog] =
-    useState<CableVersionsDialogState>({
-      open: false,
-      cable: null,
-      versions: [],
-      loading: false,
-      error: null
-    });
+  const [cableVersionsDialog, setCableVersionsDialog] = useState<CableVersionsDialogState>({
+    open: false,
+    cable: null,
+    versions: [],
+    loading: false,
+    error: null,
+  });
 
-  const [inlineEditingEnabled, setInlineEditingEnabledState] =
-    useState<boolean>(false);
-  const [inlineUpdatingIds, setInlineUpdatingIds] = useState<Set<string>>(
-    new Set()
-  );
-  const [cableDrafts, setCableDrafts] = useState<
-    Record<string, CableFormState>
-  >({});
+  const dirtyDraftIds = useRef(new Set<string>());
+  const draftRevisions = useRef(new Map<string, number | undefined>());
+  const [inlineEditingEnabled, setInlineEditingEnabledState] = useState<boolean>(false);
+  const [inlineUpdatingIds, setInlineUpdatingIds] = useState<Set<string>>(new Set());
+  const [cableDrafts, setCableDrafts] = useState<Record<string, CableFormState>>({});
   const [filterText, setFilterText] = useState<string>('');
   const [filterCriteria, setFilterCriteria] = useState<CableSearchCriteria>('all');
 
   const sortCables = useCallback(
     (items: Cable[]) => [...items].sort((a, b) => a.cableId - b.cableId),
-    []
+    [],
   );
 
   const getNextFreeCableId = useCallback((): number => {
@@ -247,7 +206,7 @@ export const useCableListSection = ({
       if (!normalizedFilter) {
         return true;
       }
-      
+
       if (filterCriteria === 'all') {
         const values = [
           cable.revision,
@@ -258,13 +217,11 @@ export const useCableListSection = ({
           cable.toLocation,
           cable.routing,
           cable.delivery,
-          cable.designLength !== null ? String(cable.designLength) : ''
+          cable.designLength !== null ? String(cable.designLength) : '',
         ];
-        return values.some((value) =>
-          (value ?? '').toLowerCase().includes(normalizedFilter)
-        );
+        return values.some((value) => (value ?? '').toLowerCase().includes(normalizedFilter));
       }
-      
+
       // Filter by specific criteria
       let value = '';
       switch (filterCriteria) {
@@ -295,10 +252,7 @@ export const useCableListSection = ({
     if (filteredCables.length === 0) {
       return 1;
     }
-    return Math.max(
-      1,
-      Math.ceil(filteredCables.length / CABLE_LIST_PER_PAGE)
-    );
+    return Math.max(1, Math.ceil(filteredCables.length / CABLE_LIST_PER_PAGE));
   }, [filteredCables.length]);
 
   const pagedCables = useMemo(() => {
@@ -306,10 +260,7 @@ export const useCableListSection = ({
       return [];
     }
     const startIndex = (page - 1) * CABLE_LIST_PER_PAGE;
-    return filteredCables.slice(
-      startIndex,
-      startIndex + CABLE_LIST_PER_PAGE
-    );
+    return filteredCables.slice(startIndex, startIndex + CABLE_LIST_PER_PAGE);
   }, [page, filteredCables]);
 
   useEffect(() => {
@@ -348,6 +299,7 @@ export const useCableListSection = ({
 
       try {
         const response = await fetchCables(projectId);
+        setMutationRevision(response.mutationRevision);
         if (request !== latestRequest.current) return;
         setCables(sortCables(response.cables));
         setPage(1);
@@ -359,7 +311,7 @@ export const useCableListSection = ({
             setCables([]);
             setPage(1);
             setError(
-              'Cables endpoint is unavailable. Ensure the server is running the latest version.'
+              'Cables endpoint is unavailable. Ensure the server is running the latest version.',
             );
           } else {
             setError(err.message);
@@ -374,7 +326,7 @@ export const useCableListSection = ({
         }
       }
     },
-    [projectId, sortCables]
+    [projectId, sortCables],
   );
 
   useEffect(() => {
@@ -395,7 +347,7 @@ export const useCableListSection = ({
       setCableVersionsDialog((previous) =>
         previous.cable && previous.cable.id === cableId
           ? { ...previous, loading: true, error: null }
-          : previous
+          : previous,
       );
 
       try {
@@ -406,28 +358,25 @@ export const useCableListSection = ({
                 ...previous,
                 versions: response.versions,
                 loading: false,
-                error: null
+                error: null,
               }
-            : previous
+            : previous,
         );
       } catch (error) {
         console.error('Failed to load cable versions', error);
-        const message = formatApiError(
-          error,
-          'Failed to load cable revisions.'
-        );
+        const message = formatApiError(error, 'Failed to load cable revisions.');
         setCableVersionsDialog((previous) =>
           previous.cable && previous.cable.id === cableId
             ? {
                 ...previous,
                 loading: false,
-                error: message
+                error: message,
               }
-            : previous
+            : previous,
         );
       }
     },
-    [projectId]
+    [projectId],
   );
 
   const openCableVersionsDialog = useCallback(
@@ -441,12 +390,12 @@ export const useCableListSection = ({
         cable,
         versions: [],
         loading: true,
-        error: null
+        error: null,
       });
 
       void loadCableVersions(cable.id);
     },
-    [loadCableVersions, projectId]
+    [loadCableVersions, projectId],
   );
 
   const closeCableVersionsDialog = useCallback(() => {
@@ -455,7 +404,7 @@ export const useCableListSection = ({
       cable: null,
       versions: [],
       loading: false,
-      error: null
+      error: null,
     });
   }, []);
 
@@ -469,11 +418,9 @@ export const useCableListSection = ({
 
   const goToPage = useCallback(
     (nextPage: number) => {
-      setPage(() =>
-        Math.min(Math.max(1, nextPage), totalPages)
-      );
+      setPage(() => Math.min(Math.max(1, nextPage), totalPages));
     },
-    [totalPages]
+    [totalPages],
   );
 
   const handleFieldChange =
@@ -481,33 +428,27 @@ export const useCableListSection = ({
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
       setDialogValues((previous: CableFormState) => ({
         ...previous,
-        [field]: data.value
+        [field]: data.value,
       }));
     };
 
-  const handleCableTypeSelect = (
-    _event: unknown,
-    data: { optionValue?: string }
-  ) => {
+  const handleCableTypeSelect = (_event: unknown, data: { optionValue?: string }) => {
     setDialogValues((previous: CableFormState) => ({
       ...previous,
-      cableTypeId: data.optionValue ?? ''
+      cableTypeId: data.optionValue ?? '',
     }));
   };
 
-  const handleMtoSelect = (
-    _event: unknown,
-    data: { optionValue?: string }
-  ) => {
+  const handleMtoSelect = (_event: unknown, data: { optionValue?: string }) => {
     setDialogValues((previous: CableFormState) => ({
       ...previous,
-      mto: data.optionValue ?? ''
+      mto: data.optionValue ?? '',
     }));
   };
 
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
-    setDialogErrors({ });
+    setDialogErrors({});
     setDialogValues(emptyCableForm);
     setDialogSubmitting(false);
     setEditingCableId(null);
@@ -521,32 +462,43 @@ export const useCableListSection = ({
       setDialogValues({
         ...emptyCableForm,
         cableId: String(nextCableId),
-        cableTypeId: defaultCableTypeId ?? ''
+        cableTypeId: defaultCableTypeId ?? '',
       });
+      setDialogRevision(mutationRevision);
       setDialogOpen(true);
       setEditingCableId(null);
     },
-    [getNextFreeCableId]
+    [getNextFreeCableId, mutationRevision],
   );
 
-  const openEditCableDialog = useCallback((cable: Cable) => {
-    setDialogMode('edit');
-    setDialogErrors({});
-    setDialogValues(toCableFormState(cable));
-    setDialogOpen(true);
-    setEditingCableId(cable.id);
-  }, []);
+  const openEditCableDialog = useCallback(
+    (cable: Cable) => {
+      setDialogMode('edit');
+      setDialogErrors({});
+      setDialogValues(toCableFormState(cable));
+      setDialogRevision(mutationRevision);
+      setDialogOpen(true);
+      setEditingCableId(cable.id);
+    },
+    [mutationRevision],
+  );
 
   const setInlineEditingEnabled = useCallback((value: boolean) => {
     setInlineEditingEnabledState(value);
   }, []);
 
   const rebuildCableDrafts = useCallback(() => {
-    setCableDrafts(
-      cables.reduce((acc, cable) => {
-        acc[cable.id] = toCableFormState(cable);
-        return acc;
-      }, {} as Record<string, CableFormState>)
+    setCableDrafts((previous) =>
+      cables.reduce(
+        (acc, cable) => {
+          acc[cable.id] =
+            dirtyDraftIds.current.has(cable.id) && previous[cable.id]
+              ? previous[cable.id]
+              : toCableFormState(cable);
+          return acc;
+        },
+        {} as Record<string, CableFormState>,
+      ),
     );
   }, [cables]);
 
@@ -556,12 +508,17 @@ export const useCableListSection = ({
 
   useEffect(() => {
     if (!inlineEditingEnabled) {
+      dirtyDraftIds.current.clear();
+      draftRevisions.current.clear();
       rebuildCableDrafts();
     }
   }, [inlineEditingEnabled, rebuildCableDrafts]);
 
   const handleCableDraftChange = useCallback(
     (cableId: string, field: keyof CableFormState, value: string) => {
+      if (!dirtyDraftIds.current.has(cableId))
+        draftRevisions.current.set(cableId, mutationRevision);
+      dirtyDraftIds.current.add(cableId);
       setCableDrafts((previous: Record<string, CableFormState>) => {
         const baseDraft =
           previous[cableId] ??
@@ -574,12 +531,12 @@ export const useCableListSection = ({
           ...previous,
           [cableId]: {
             ...baseDraft,
-            [field]: value
-          }
+            [field]: value,
+          },
         };
       });
     },
-    [cables]
+    [cables, mutationRevision],
   );
 
   const updateCableInline = useCallback(
@@ -588,7 +545,7 @@ export const useCableListSection = ({
         showToast({
           intent: 'error',
           title: 'Sign-in required',
-          body: 'You need to be signed in to update cables.'
+          body: 'You need to be signed in to update cables.',
         });
         return;
       }
@@ -608,18 +565,20 @@ export const useCableListSection = ({
           token,
           projectSnapshot.id,
           cable.id,
-          changes
+          changes,
+          draftRevisions.current.has(cable.id)
+            ? draftRevisions.current.get(cable.id)
+            : mutationRevision,
         );
+        dirtyDraftIds.current.delete(cable.id);
+        draftRevisions.current.delete(cable.id);
+        setMutationRevision(response.mutationRevision);
         setCables((previous: Cable[]) =>
-          sortCables(
-            previous.map((item) =>
-              item.id === cable.id ? response.cable : item
-            )
-          )
+          sortCables(previous.map((item) => (item.id === cable.id ? response.cable : item))),
         );
         setCableDrafts((previous: Record<string, CableFormState>) => ({
           ...previous,
-          [cable.id]: toCableFormState(response.cable)
+          [cable.id]: toCableFormState(response.cable),
         }));
 
         if (
@@ -630,7 +589,7 @@ export const useCableListSection = ({
           setCableVersionsDialog((previous) =>
             previous.cable && previous.cable.id === cable.id
               ? { ...previous, cable: response.cable }
-              : previous
+              : previous,
           );
           void loadCableVersions(cable.id);
         }
@@ -639,7 +598,7 @@ export const useCableListSection = ({
         showToast({
           intent: 'error',
           title: 'Failed to update cable',
-          body: err instanceof ApiError ? err.message : undefined
+          body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {
         setInlineUpdatingIds((previous: Set<string>) => {
@@ -656,8 +615,9 @@ export const useCableListSection = ({
       projectSnapshot,
       showToast,
       sortCables,
-      token
-    ]
+      token,
+      mutationRevision,
+    ],
   );
 
   const handleInlineCableTypeChange = useCallback(
@@ -667,7 +627,7 @@ export const useCableListSection = ({
       }
       await updateCableInline(cable, { cableTypeId: nextCableTypeId });
     },
-    [updateCableInline]
+    [updateCableInline],
   );
 
   const handleInlineMtoChange = useCallback(
@@ -680,13 +640,10 @@ export const useCableListSection = ({
       }
 
       await updateCableInline(cable, {
-        mto:
-          normalizedMto === ''
-            ? null
-            : (normalizedMto as NonNullable<CableInput['mto']>)
+        mto: normalizedMto === '' ? null : (normalizedMto as NonNullable<CableInput['mto']>),
       });
     },
-    [updateCableInline]
+    [updateCableInline],
   );
 
   const handleCableTextFieldBlur = useCallback(
@@ -726,16 +683,12 @@ export const useCableListSection = ({
             changes = { [field]: null } as Partial<CableInput>;
           } else {
             const parsed = Number(trimmed);
-            if (
-              !Number.isFinite(parsed) ||
-              !Number.isInteger(parsed) ||
-              parsed < 0
-            ) {
+            if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
               const label = 'Design length';
               showToast({
                 intent: 'error',
                 title: `Invalid ${label.toLowerCase()}`,
-                body: `${label} must be a non-negative integer.`
+                body: `${label} must be a non-negative integer.`,
               });
               return;
             }
@@ -758,7 +711,7 @@ export const useCableListSection = ({
 
       await updateCableInline(cable, changes);
     },
-    [cableDrafts, showToast, updateCableInline]
+    [cableDrafts, showToast, updateCableInline],
   );
 
   const handleSubmit = useCallback(
@@ -767,7 +720,7 @@ export const useCableListSection = ({
 
       if (!projectSnapshot || !token) {
         setDialogErrors({
-          general: 'You need to be signed in to manage cables.'
+          general: 'You need to be signed in to manage cables.',
         });
         return;
       }
@@ -784,10 +737,9 @@ export const useCableListSection = ({
 
       try {
         if (dialogMode === 'create') {
-          const response = await createCable(token, projectSnapshot.id, input);
-          setCables((previous: Cable[]) =>
-            sortCables([...previous, response.cable])
-          );
+          const response = await createCable(token, projectSnapshot.id, input, dialogRevision);
+          setMutationRevision(response.mutationRevision);
+          setCables((previous: Cable[]) => sortCables([...previous, response.cable]));
           setPage(1);
           showToast({ intent: 'success', title: 'Cable added' });
         } else if (editingCableId) {
@@ -795,18 +747,18 @@ export const useCableListSection = ({
             token,
             projectSnapshot.id,
             editingCableId,
-            input
+            input,
+            dialogRevision,
           );
+          setMutationRevision(response.mutationRevision);
           setCables((previous: Cable[]) =>
             sortCables(
-              previous.map((item) =>
-                item.id === editingCableId ? response.cable : item
-              )
-            )
+              previous.map((item) => (item.id === editingCableId ? response.cable : item)),
+            ),
           );
           setCableDrafts((previous: Record<string, CableFormState>) => ({
             ...previous,
-            [editingCableId]: toCableFormState(response.cable)
+            [editingCableId]: toCableFormState(response.cable),
           }));
           if (
             cableVersionsDialog.open &&
@@ -816,7 +768,7 @@ export const useCableListSection = ({
             setCableVersionsDialog((previous) =>
               previous.cable && previous.cable.id === editingCableId
                 ? { ...previous, cable: response.cable }
-                : previous
+                : previous,
             );
             await loadCableVersions(editingCableId);
           }
@@ -830,17 +782,17 @@ export const useCableListSection = ({
           showToast({
             intent: 'error',
             title: 'Failed to save cable',
-            body: err.message
+            body: err.message,
           });
         } else {
           const message = 'Failed to save cable. Please try again.';
           setDialogErrors({
-            general: message
+            general: message,
           });
           showToast({
             intent: 'error',
             title: 'Failed to save cable',
-            body: message
+            body: message,
           });
         }
       } finally {
@@ -858,8 +810,10 @@ export const useCableListSection = ({
       resetDialog,
       showToast,
       sortCables,
-      token
-    ]
+      token,
+      mutationRevision,
+      dialogRevision,
+    ],
   );
 
   const handleDeleteCable = useCallback(
@@ -868,13 +822,13 @@ export const useCableListSection = ({
         showToast({
           intent: 'error',
           title: 'Sign-in required',
-          body: 'You need to be signed in to delete cables.'
+          body: 'You need to be signed in to delete cables.',
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete cable "${cable.cableId}"? This action cannot be undone.`
+        `Delete cable "${cable.cableId}"? This action cannot be undone.`,
       );
 
       if (!confirmed) {
@@ -884,13 +838,11 @@ export const useCableListSection = ({
       setPendingCableId(cable.id);
 
       try {
-        await deleteCable(token, projectSnapshot.id, cable.id);
+        const response = await deleteCable(token, projectSnapshot.id, cable.id, mutationRevision);
+        setMutationRevision(response.mutationRevision);
         setCables((previous: Cable[]) => {
           const next = previous.filter((item) => item.id !== cable.id);
-          const nextPages = Math.max(
-            1,
-            Math.ceil(next.length / CABLE_LIST_PER_PAGE)
-          );
+          const nextPages = Math.max(1, Math.ceil(next.length / CABLE_LIST_PER_PAGE));
           if (page > nextPages) {
             setPage(nextPages);
           }
@@ -909,7 +861,7 @@ export const useCableListSection = ({
         showToast({
           intent: 'error',
           title: 'Failed to delete cable',
-          body: err instanceof ApiError ? err.message : undefined
+          body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {
         setPendingCableId(null);
@@ -922,8 +874,9 @@ export const useCableListSection = ({
       page,
       projectSnapshot,
       showToast,
-      token
-    ]
+      token,
+      mutationRevision,
+    ],
   );
 
   const handleImportCables = useCallback(
@@ -940,7 +893,7 @@ export const useCableListSection = ({
         showToast({
           intent: 'error',
           title: 'Sign-in required',
-          body: 'You need to be signed in to import cables.'
+          body: 'You need to be signed in to import cables.',
         });
         return;
       }
@@ -948,19 +901,19 @@ export const useCableListSection = ({
       setIsImporting(true);
 
       try {
-        const response = await importCables(token, projectSnapshot.id, file);
+        const response = await importCables(token, projectSnapshot.id, file, mutationRevision);
+        setMutationRevision(response.mutationRevision);
         setCables(sortCables(response.cables));
         setPage(1);
 
         if (cableVersionsDialog.open && cableVersionsDialog.cable) {
           const refreshedCable =
-            response.cables.find(
-              (item) => item.id === cableVersionsDialog.cable?.id
-            ) ?? cableVersionsDialog.cable;
+            response.cables.find((item) => item.id === cableVersionsDialog.cable?.id) ??
+            cableVersionsDialog.cable;
           setCableVersionsDialog((previous) =>
             previous.cable && previous.cable.id === refreshedCable.id
               ? { ...previous, cable: refreshedCable }
-              : previous
+              : previous,
           );
           void loadCableVersions(cableVersionsDialog.cable.id);
         }
@@ -980,20 +933,21 @@ export const useCableListSection = ({
       projectSnapshot,
       showToast,
       sortCables,
-      token
-    ]
+      token,
+      mutationRevision,
+    ],
   );
 
   const handleExportCables = useCallback(
     async (
       view: 'list' | 'report' | 'change-tracker' = 'list',
-      mto: CableMtoOption | null = null
+      mto: CableMtoOption | null = null,
     ) => {
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
           title: 'Sign-in required',
-          body: 'You need to be signed in to export cables.'
+          body: 'You need to be signed in to export cables.',
         });
         return;
       }
@@ -1005,7 +959,7 @@ export const useCableListSection = ({
           filterText,
           criteria: filterCriteria,
           view,
-          mto
+          mto,
         });
         const link = document.createElement('a');
         const url = window.URL.createObjectURL(blob);
@@ -1016,10 +970,8 @@ export const useCableListSection = ({
               : 'cables-report'
             : view === 'change-tracker'
               ? 'change-tracker'
-            : 'cable-list';
-        const fileName = `${sanitizeFileSegment(
-          projectSnapshot.projectNumber
-        )}-${suffix}.xlsx`;
+              : 'cable-list';
+        const fileName = `${sanitizeFileSegment(projectSnapshot.projectNumber)}-${suffix}.xlsx`;
 
         link.href = url;
         link.download = fileName;
@@ -1035,20 +987,20 @@ export const useCableListSection = ({
           showToast({
             intent: 'error',
             title: 'Export endpoint unavailable',
-            body: 'Please restart the API server after updating it.'
+            body: 'Please restart the API server after updating it.',
           });
         } else {
           showToast({
             intent: 'error',
             title: 'Failed to export cables',
-            body: err instanceof ApiError ? err.message : undefined
+            body: err instanceof ApiError ? err.message : undefined,
           });
         }
       } finally {
         setIsExporting(false);
       }
     },
-    [filterCriteria, filterText, projectSnapshot, showToast, token]
+    [filterCriteria, filterText, projectSnapshot, showToast, token],
   );
 
   const handleGetCablesTemplate = useCallback(
@@ -1056,8 +1008,8 @@ export const useCableListSection = ({
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
-          title: 'Admin access required',
-          body: 'You need to be signed in as an admin to get the template.'
+          title: 'Sign-in required',
+          body: 'You need to be signed in to get the template.',
         });
         return;
       }
@@ -1084,13 +1036,13 @@ export const useCableListSection = ({
         showToast({
           intent: 'error',
           title: 'Failed to get template',
-          body: err instanceof ApiError ? err.message : undefined
+          body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {
         setIsGettingTemplate(false);
       }
     },
-    [projectSnapshot, showToast, token]
+    [projectSnapshot, showToast, token],
   );
 
   return {
@@ -1142,8 +1094,7 @@ export const useCableListSection = ({
       handleCableTypeSelect,
       handleMtoSelect,
       handleSubmit,
-      reset: resetDialog
-    }
+      reset: resetDialog,
+    },
   };
 };
-

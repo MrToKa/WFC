@@ -1,3 +1,5 @@
+import type { TrayMaterialSnapshot } from '../services/projectCatalogSnapshotService.js';
+
 export type TrayRow = {
   id: string;
   project_id: string;
@@ -9,6 +11,7 @@ export type TrayRow = {
   length_mm: string | number | null;
   include_grounding_cable: boolean | null;
   grounding_cable_type_id: string | null;
+  material_snapshot?: TrayMaterialSnapshot | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -36,6 +39,10 @@ export type PublicTray = {
   lengthMm: number | null;
   includeGroundingCable: boolean;
   groundingCableTypeId: string | null;
+  materialSnapshot?:
+    | (Omit<TrayMaterialSnapshot, 'imageObjectKey'> & { imageAvailable: boolean })
+    | null;
+  materialSnapshotStatus?: 'captured' | 'unknown';
   createdAt: string;
   updatedAt: string;
 };
@@ -51,6 +58,16 @@ export const mapTrayRow = (row: TrayRow): PublicTray => ({
   lengthMm: toNumberOrNull(row.length_mm),
   includeGroundingCable: Boolean(row.include_grounding_cable),
   groundingCableTypeId: row.grounding_cable_type_id ?? null,
+  materialSnapshot: row.material_snapshot
+    ? {
+        schemaVersion: row.material_snapshot.schemaVersion,
+        capturedAt: row.material_snapshot.capturedAt,
+        material: row.material_snapshot.material,
+        loadCurve: row.material_snapshot.loadCurve,
+        imageAvailable: Boolean(row.material_snapshot.imageObjectKey),
+      }
+    : null,
+  materialSnapshotStatus: row.material_snapshot ? 'captured' : 'unknown',
   createdAt: toIsoString(row.created_at),
-  updatedAt: toIsoString(row.updated_at)
+  updatedAt: toIsoString(row.updated_at),
 });

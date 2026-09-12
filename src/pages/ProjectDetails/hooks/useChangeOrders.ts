@@ -23,6 +23,7 @@ export const useChangeOrders = (
   }: UseChangeOrdersOptions = {},
 ) => {
   const [changeOrders, setChangeOrders] = useState<ChangeOrderSummary[]>([]);
+  const [collectionMutationRevision, setCollectionMutationRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [details, setDetails] = useState<ChangeOrderDetails | null>(null);
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,7 @@ export const useChangeOrders = (
       const response = await fetchChangeOrders(token, projectId, collection);
       if (request !== listRequest.current) return [];
       setChangeOrders(response.changeOrders);
+      setCollectionMutationRevision(response.mutationRevision ?? 0);
       return response.changeOrders;
     } catch (caught) {
       if (request !== listRequest.current) return [];
@@ -105,6 +107,7 @@ export const useChangeOrders = (
 
   return {
     changeOrders,
+    collectionMutationRevision,
     selectedId,
     details,
     loading,

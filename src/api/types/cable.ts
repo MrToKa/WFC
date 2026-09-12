@@ -79,6 +79,7 @@ export type CableVersion = {
 
 export type CableTypeInput = {
   name: string;
+  sourceMaterialCableTypeId?: string;
   tag?: string | null;
   purpose?: string | null;
   diameterMm?: number | null;
@@ -132,12 +133,16 @@ export type CableTypeDefaultMaterial = {
   sourceKind: 'manual' | 'standard-material' | null;
   sourceMasterMaterialId: string | null;
   sourceStandardMaterialAssignmentIds: string[];
+  currentMaterialId?: string | null;
+  materialSnapshot?: InstallationMaterialSnapshot | null;
+  inheritedOverride?: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
 export type CableTypeDefaultMaterialInput = {
   name: string;
+  currentMaterialId?: string | null;
   quantity?: number | null;
   unit?: string | null;
   remarks?: string | null;
@@ -158,27 +163,47 @@ export type CableMaterial = {
   remarks: string | null;
   source: CableMaterialSource | null;
   cableTypeDefaultMaterialId: string | null;
+  currentMaterialId?: string | null;
+  materialSnapshot?: InstallationMaterialSnapshot | null;
+  originKind?: 'catalog-inherited' | 'project-added' | 'cable-added' | null;
+  inheritedOverride?: boolean;
+  isVirtual?: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
 export type CableMaterialInput = {
   name: string;
+  currentMaterialId?: string | null;
   quantity?: number | null;
   unit?: string | null;
   remarks?: string | null;
 };
 
+export type InstallationMaterialSnapshot = {
+  schemaVersion: 1;
+  originMaterialId: string | null;
+  capturedAt: string;
+  values: Record<string, unknown>;
+};
+
+export type CapturedCableTypeDetails = Pick<
+  MaterialCableType,
+  'material' | 'manufacturer' | 'partNo' | 'description' | 'remarks'
+>;
+
 export type CableTypeDetails = {
   cableType: CableType;
-  materialCableType: MaterialCableType | null;
+  materialCableType: CapturedCableTypeDetails | null;
+  mutationRevision?: number;
   defaultMaterials: CableTypeDefaultMaterial[];
   cableCount: number;
 };
 
 export type CableDetails = {
   cable: Cable;
-  materialCableType: MaterialCableType | null;
+  materialCableType: CapturedCableTypeDetails | null;
+  mutationRevision?: number;
   cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
   cableMaterials: CableMaterial[];
 };
@@ -191,6 +216,8 @@ export type CableMaterialSyncSummary = {
 };
 
 export type CableReportMaterialSummary = {
+  materialKey?: string;
+  snapshotValues?: Record<string, unknown> | null;
   name: string;
   unit: string;
   totalQuantity: number;

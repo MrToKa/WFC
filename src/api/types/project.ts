@@ -1,5 +1,8 @@
+import type { MaterialSupport } from './material';
+
 export type Project = {
   id: string;
+  mutationRevision?: number;
   projectNumber: string;
   name: string;
   customer: string;
@@ -20,6 +23,8 @@ export type ProjectSupportOverride = {
   distance: number | null;
   supportId: string | null;
   supportType: string | null;
+  supportSnapshot?: MaterialSupport | null;
+  snapshotStatus?: 'captured' | 'unknown';
 };
 
 export type ProjectTrayPurposeTemplate = {
@@ -79,9 +84,7 @@ export type ProjectCableLayout = {
   customBundleRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null;
 };
 
-export type ProjectCableCategorySettingsInput =
-  | Partial<ProjectCableCategorySettings>
-  | null;
+export type ProjectCableCategorySettingsInput = Partial<ProjectCableCategorySettings> | null;
 
 export type ProjectCableLayoutInput = {
   cableSpacing?: number | null;

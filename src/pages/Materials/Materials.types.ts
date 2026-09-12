@@ -1,4 +1,5 @@
 export type MaterialsTab =
+  | 'obsolete'
   | 'trays'
   | 'supports'
   | 'loadCurves'
@@ -17,6 +18,7 @@ export const MATERIAL_TABS: MaterialsTab[] = [
   'instrumentInstallationMaterials',
   'supports',
   'loadCurves',
+  'obsolete',
 ];
 
 export const parseMaterialsTab = (value: string | null): MaterialsTab =>

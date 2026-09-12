@@ -18,6 +18,15 @@ vi.mock('../services/projectCableTypeSnapshotService.js', () => ({
   snapshotStandardMaterialsToProjectCableType: mocks.snapshot,
 }));
 
+// These cases isolate workbook validation and write values. Mutation locking/receipts have their own tests.
+vi.mock('../services/projectMaterialMutationService.js', () => ({
+  beginProjectMaterialMutation: vi.fn(async () => ({})),
+  completeProjectMaterialMutation: vi.fn(async (client, _mutation, _projectId, response, value) => {
+    await client.query('COMMIT');
+    response.json({ ...value, mutationRevision: 1 });
+  }),
+}));
+
 import { cablesRouter } from './cablesRoutes.js';
 import { cableTypesRouter } from './cableTypesRoutes.js';
 import { traysRouter } from './traysRoutes.js';
@@ -101,6 +110,10 @@ beforeEach(() => {
       if (sql.includes('source_material_cable_type_id')) return { rows: [], rowCount: 0 };
       return { rows: [{ id, name: 'Cable type' }], rowCount: 1 };
     }
+    if (sql.includes('FROM cable_types') && sql.includes('LIMIT 1'))
+      return { rows: [{ id, name: 'Cable type' }], rowCount: 1 };
+    if (sql.includes('FROM material_cable_installation_materials'))
+      return { rows: [{ id, type: 'Connector', name: 'Connector' }], rowCount: 1 };
     if (sql.includes('FROM material_cable_types')) {
       return {
         rows: [{ id, name: 'Cable type', diameter_mm: 12, weight_kg_per_m: 2 }],
@@ -255,7 +268,7 @@ describe('project cable type Excel validation', () => {
     expect(mocks.snapshot).toHaveBeenCalledOnce();
   });
 
-  it('updates an existing project type when the workbook uses a catalog alias', async () => {
+  it('preserves an existing captured type when an alias resolves to its same catalog identity', async () => {
     const defaultQuery = client.query.getMockImplementation()!;
     client.query.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM cable_types') && sql.includes('lower(name) = ANY')) {
@@ -272,7 +285,7 @@ describe('project cable type Excel validation', () => {
       client.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO cable_types')),
     ).toBe(false);
     expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ summary: { inserted: 0, updated: 1, skipped: 0 } }),
+      expect.objectContaining({ summary: { inserted: 0, updated: 0, skipped: 1 } }),
     );
   });
 });
@@ -310,7 +323,15 @@ describe('project tray Excel validation', () => {
     const insert = client.query.mock.calls.find(([sql]) =>
       String(sql).includes('INSERT INTO trays'),
     );
-    expect(insert?.[1].slice(2)).toEqual(['Tray 001', 'Custom type', null, 300, 1200.5, 3000]);
+    expect(insert?.[1].slice(2)).toEqual([
+      'Tray 001',
+      'Custom type',
+      null,
+      300,
+      1200.5,
+      3000,
+      null,
+    ]);
   });
 });
 

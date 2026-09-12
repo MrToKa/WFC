@@ -2,6 +2,7 @@ export type MaterialOrderMeasurement = 'pcs' | 'pack' | 'meters';
 export type MaterialPackaging = 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
 
 export type MaterialTray = {
+  mutationRevision?: number;
   id: string;
   type: string;
   manufacturer: string | null;
@@ -24,6 +25,7 @@ export type MaterialTray = {
 };
 
 export type MaterialCableType = {
+  mutationRevision?: number;
   id: string;
   name: string;
   purpose: string | null;
@@ -44,6 +46,7 @@ export type MaterialCableType = {
 };
 
 export type MaterialCableInstallationMaterial = {
+  mutationRevision?: number;
   id: string;
   type: string;
   purpose: string | null;
@@ -67,6 +70,7 @@ export type MaterialInstrument = MaterialCableInstallationMaterial;
 export type MaterialInstrumentInstallationMaterial = MaterialCableInstallationMaterial;
 
 export type MaterialSupport = {
+  mutationRevision?: number;
   id: string;
   type: string;
   manufacturer: string | null;
@@ -302,7 +306,9 @@ export type StandardMaterialOwner =
   | MaterialSupport;
 
 export type MaterialDetailsResponse<T extends StandardMaterialOwner = StandardMaterialOwner> = {
+  obsoleteAt?: string | null;
   category: MaterialCategoryMetadata;
   material: T;
   standardMaterials: StandardMaterialAssignment[];
+  mutationRevision?: number;
 };

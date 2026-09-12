@@ -6,14 +6,8 @@ import {
   type Project,
   clearProjectData,
   createProject,
-  deleteCable,
-  deleteCableType,
   deleteProject,
-  deleteTray,
-  fetchCables,
-  fetchCableTypes,
   fetchProjects,
-  fetchTrays,
   updateProject
 } from '@/api/client';
 
@@ -146,6 +140,7 @@ export const useAdminProjectsSection = ({
   const [pendingProjectClearAction, setPendingProjectClearAction] =
     useState<string | null>(null);
   const [clearDataProjectId, setClearDataProjectId] = useState<string | null>(null);
+  const [clearDataRevision, setClearDataRevision] = useState<number | undefined>();
   const [clearDataSelection, setClearDataSelection] =
     useState<ProjectClearDataSelection>(emptyProjectClearDataSelection);
   const [clearDataError, setClearDataError] = useState<string | null>(null);
@@ -469,6 +464,7 @@ export const useAdminProjectsSection = ({
   };
 
   const handleOpenClearDataDialog = (project: Project) => {
+    setClearDataRevision(project.mutationRevision);
     setClearDataProjectId(project.id);
     setClearDataSelection(emptyProjectClearDataSelection);
     setClearDataError(null);
@@ -486,24 +482,7 @@ export const useAdminProjectsSection = ({
     field: keyof ProjectClearDataSelection,
     checked: boolean
   ) => {
-    setClearDataSelection((previous) => {
-      if (field === 'cableTypes') {
-        return {
-          ...previous,
-          cableTypes: checked,
-          cables: checked ? true : previous.cables
-        };
-      }
-
-      if (field === 'cables' && previous.cableTypes && !checked) {
-        return previous;
-      }
-
-      return {
-        ...previous,
-        [field]: checked
-      };
-    });
+    setClearDataSelection((previous) => ({ ...previous, [field]: checked }));
     setClearDataError(null);
   };
 
@@ -528,9 +507,9 @@ export const useAdminProjectsSection = ({
       return;
     }
 
-    if (clearDataSelection.cableTypes) {
+    if (clearDataSelection.cableTypes && clearDataSelection.cables) {
       const confirmed = window.confirm(
-        'Deleting cable types also removes cables linked to those types. Continue?'
+        'Delete the selected cables and cable types from this project?'
       );
       if (!confirmed) {
         return;
@@ -543,76 +522,12 @@ export const useAdminProjectsSection = ({
     setClearDataError(null);
 
     try {
-      let response: {
-        deleted: {
-          cableTypes: number;
-          cables: number;
-          trays: number;
-        };
-      };
-
-      try {
-        response = await clearProjectData(token, clearDataProject.id, {
+      const response = await clearProjectData(token, clearDataProject.id, {
           cableTypes: clearDataSelection.cableTypes,
           cables: clearDataSelection.cables,
           trays: clearDataSelection.trays
-        });
-      } catch (error) {
-        const shouldUseFallback =
-          error instanceof ApiError &&
-          ![400, 401, 403].includes(error.status);
-
-        if (!shouldUseFallback) {
-          throw error;
-        }
-
-        let deletedCableTypes = 0;
-        let deletedCables = 0;
-        let deletedTrays = 0;
-
-        if (clearDataSelection.trays) {
-          const traysResponse = await fetchTrays(clearDataProject.id);
-          deletedTrays = traysResponse.trays.length;
-          await Promise.all(
-            traysResponse.trays.map(async (tray) => {
-              await deleteTray(token, clearDataProject.id, tray.id);
-            })
-          );
-        }
-
-        if (clearDataSelection.cableTypes) {
-          const [cableTypesResponse, cablesResponse] = await Promise.all([
-            fetchCableTypes(clearDataProject.id),
-            fetchCables(clearDataProject.id)
-          ]);
-
-          deletedCableTypes = cableTypesResponse.cableTypes.length;
-          deletedCables = cablesResponse.cables.length;
-
-          await Promise.all(
-            cableTypesResponse.cableTypes.map(async (cableType) => {
-              await deleteCableType(token, clearDataProject.id, cableType.id);
-            })
-          );
-        } else if (clearDataSelection.cables) {
-          const cablesResponse = await fetchCables(clearDataProject.id);
-          deletedCables = cablesResponse.cables.length;
-
-          await Promise.all(
-            cablesResponse.cables.map(async (cable) => {
-              await deleteCable(token, clearDataProject.id, cable.id);
-            })
-          );
-        }
-
-        response = {
-          deleted: {
-            cableTypes: deletedCableTypes,
-            cables: deletedCables,
-            trays: deletedTrays
-          }
-        };
-      }
+        }, clearDataRevision);
+      await loadProjects({ showSpinner: false });
 
       const formatCount = (count: number, singular: string): string =>
         `${count} ${count === 1 ? singular : `${singular}s`}`;
@@ -622,8 +537,8 @@ export const useAdminProjectsSection = ({
         clearedSegments.push(
           formatCount(response.deleted.cableTypes, 'cable type')
         );
-        clearedSegments.push(formatCount(response.deleted.cables, 'cable'));
-      } else if (clearDataSelection.cables) {
+      }
+      if (clearDataSelection.cables) {
         clearedSegments.push(formatCount(response.deleted.cables, 'cable'));
       }
       if (clearDataSelection.trays) {
@@ -660,7 +575,7 @@ export const useAdminProjectsSection = ({
     setProjectActionMessage(null);
 
     try {
-      await deleteProject(token, projectId);
+      await deleteProject(token, projectId, projects.find((project) => project.id === projectId)?.mutationRevision);
       setProjects((previous) =>
         previous.filter((candidate) => candidate.id !== projectId)
       );

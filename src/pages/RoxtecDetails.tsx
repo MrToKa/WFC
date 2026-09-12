@@ -203,7 +203,7 @@ const downloadBlob = (blob: Blob, fileName: string): void => {
 export const RoxtecDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { projectId, roxtecId } = useParams<{ projectId: string; roxtecId: string }>();
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
   const [entry, setEntry] = useState<RoxtecEntry | null>(null);
@@ -221,7 +221,7 @@ export const RoxtecDetails = () => {
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEntry, setIsSavingEntry] = useState(false);
 
-  const canManageRoxtec = Boolean(token);
+  const canManageRoxtec = Boolean(token && user?.isAdmin);
 
   useEffect(() => {
     const id = Number(roxtecId);

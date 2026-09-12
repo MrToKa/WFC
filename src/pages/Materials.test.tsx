@@ -216,5 +216,6 @@ describe('Materials catalog filtering and pagination', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
     expect(apiMocks[catalog.key]).toHaveBeenCalledOnce();
     expect(showToast).not.toHaveBeenCalled();
-  }, 15000);
+  // Fluent UI role/visibility checks can exceed 15s on Windows CI. Keep every assertion.
+  }, 60000);
 });

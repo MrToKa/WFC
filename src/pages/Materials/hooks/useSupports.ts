@@ -25,10 +25,11 @@ type ShowToast = (props: {
 type UseSupportsParams = {
   token: string | null;
   isAdmin: boolean;
+  canExport?: boolean;
   showToast: ShowToast;
 };
 
-export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) => {
+export const useSupports = ({ token, isAdmin, canExport = isAdmin, showToast }: UseSupportsParams) => {
   const [allSupports, setAllSupports] = useState<MaterialSupport[]>([]);
   const {
     pagedItems: supports,
@@ -321,9 +322,13 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
   );
 
   const handleExportSupports = useCallback(async () => {
+    if (!token || !canExport) {
+      showToast({ intent: 'error', title: 'Export access required', body: 'Catalog exports require administrator or engineer access.' });
+      return;
+    }
     setIsExportingSupports(true);
     try {
-      const blob = await exportMaterialSupports(token ?? undefined);
+      const blob = await exportMaterialSupports(token);
       downloadBlob(blob, buildTimestampedFileName('materials-supports'));
       showToast({ intent: 'success', title: 'Supports exported' });
     } catch (error) {
@@ -344,14 +349,14 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     } finally {
       setIsExportingSupports(false);
     }
-  }, [showToast, token]);
+  }, [canExport, showToast, token]);
 
   const handleGetSupportTemplate = useCallback(async () => {
-    if (!isAdmin || !token) {
+    if (!token || !canExport) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.'
+        title: 'Export access required',
+        body: 'Catalog templates require administrator or engineer access.'
       });
       return;
     }
@@ -379,7 +384,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     } finally {
       setIsGettingSupportTemplate(false);
     }
-  }, [isAdmin, showToast, token]);
+  }, [canExport, showToast, token]);
 
   const handleSupportDelete = useCallback(
     async (support: MaterialSupport) => {
@@ -393,7 +398,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       }
 
       const confirmed = window.confirm(
-        `Delete support '${support.type}'? This action cannot be undone.`
+        `Mark support obsolete: '${support.type}'? The catalog record and its project and Change Order references will be preserved.`
       );
       if (!confirmed) {
         return;
@@ -401,8 +406,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
 
       setSupportPendingId(support.id);
       try {
-        await deleteMaterialSupport(token, support.id);
-        showToast({ intent: 'success', title: 'Support deleted' });
+        await deleteMaterialSupport(token, support.id, support.mutationRevision);
+        showToast({ intent: 'success', title: 'Support marked obsolete' });
 
         await loadSupports(supportPage, { silent: true });
       } catch (error) {
@@ -410,7 +415,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         showToast({
           intent: 'error',
           title: 'Failed to delete support',
-          body: 'Please try again.'
+          body: error instanceof ApiError ? error.message : 'Please try again.'
         });
       } finally {
         setSupportPendingId(null);

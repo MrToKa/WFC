@@ -28,10 +28,11 @@ type ShowToast = (props: {
 type UseTraysParams = {
   token: string | null;
   isAdmin: boolean;
+  canExport?: boolean;
   showToast: ShowToast;
 };
 
-export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
+export const useTrays = ({ token, isAdmin, canExport = isAdmin, showToast }: UseTraysParams) => {
   const [allTrays, setAllTrays] = useState<MaterialTray[]>([]);
   const {
     pagedItems: trays,
@@ -455,9 +456,13 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   );
 
   const handleExportTrays = useCallback(async () => {
+    if (!token || !canExport) {
+      showToast({ intent: 'error', title: 'Export access required', body: 'Catalog exports require administrator or engineer access.' });
+      return;
+    }
     setIsExportingTrays(true);
     try {
-      const blob = await exportMaterialTrays(token ?? undefined);
+      const blob = await exportMaterialTrays(token);
       downloadBlob(blob, buildTimestampedFileName('materials-trays'));
       showToast({ intent: 'success', title: 'Trays exported' });
     } catch (error) {
@@ -478,14 +483,14 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     } finally {
       setIsExportingTrays(false);
     }
-  }, [showToast, token]);
+  }, [canExport, showToast, token]);
 
   const handleGetTrayTemplate = useCallback(async () => {
-    if (!isAdmin || !token) {
+    if (!token || !canExport) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.'
+        title: 'Export access required',
+        body: 'Catalog templates require administrator or engineer access.'
       });
       return;
     }
@@ -513,7 +518,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     } finally {
       setIsGettingTrayTemplate(false);
     }
-  }, [isAdmin, showToast, token]);
+  }, [canExport, showToast, token]);
 
   const handleTrayDelete = useCallback(
     async (tray: MaterialTray) => {
@@ -527,7 +532,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       }
 
       const confirmed = window.confirm(
-        `Delete tray '${tray.type}'? This action cannot be undone.`
+        `Mark tray obsolete: '${tray.type}'? The catalog record and its project and Change Order references will be preserved.`
       );
       if (!confirmed) {
         return;
@@ -535,8 +540,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
 
       setTrayPendingId(tray.id);
       try {
-        await deleteMaterialTray(token, tray.id);
-        showToast({ intent: 'success', title: 'Tray deleted' });
+        await deleteMaterialTray(token, tray.id, tray.mutationRevision);
+        showToast({ intent: 'success', title: 'Tray marked obsolete' });
 
         await loadTrays(trayPage, { silent: true });
       } catch (error) {
@@ -544,7 +549,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Failed to delete tray',
-          body: 'Please try again.'
+          body: error instanceof ApiError ? error.message : 'Please try again.'
         });
       } finally {
         setTrayPendingId(null);

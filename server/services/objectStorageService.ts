@@ -37,6 +37,15 @@ export async function initializeObjectStorage(): Promise<void> {
   }
 }
 
+/** Backend readiness must never create or repair storage implicitly. */
+export async function assertObjectStorageReady(): Promise<void> {
+  for (const bucket of buckets) {
+    if (!(await client.bucketExists(bucket))) {
+      throw new Error(`Object storage bucket "${bucket}" is missing. Run npm run storage:init explicitly.`);
+    }
+  }
+}
+
 export async function ensureBucket(bucket: string): Promise<void> {
   try {
     const exists = await client.bucketExists(bucket);

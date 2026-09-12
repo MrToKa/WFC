@@ -1,3 +1,4 @@
+import { canEditProjectContent } from '@/utils/projectPermissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -12,7 +13,7 @@ import {
   Spinner,
   makeStyles,
   shorthands,
-  tokens
+  tokens,
 } from '@fluentui/react-components';
 import type { CheckboxOnChangeData } from '@fluentui/react-components';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -23,26 +24,26 @@ import {
   uploadProjectFile,
   downloadProjectFile,
   fetchProjectFiles,
-  downloadTemplateFile
+  downloadTrayMaterialImage,
 } from '@/api/client';
 import type { ProjectFile } from '@/api/client';
 import type {
   CableBundleSpacing,
   ProjectCableCategorySettings,
-  ProjectCableLayout
+  ProjectCableLayout,
 } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import {
   getProjectPlaceholders,
   setProjectPlaceholders,
-  clearProjectPlaceholders
+  clearProjectPlaceholders,
 } from '@/utils/projectPlaceholders';
 import {
   getCustomVariables,
   setCustomVariables,
   clearCustomVariables,
-  type CustomVariable
+  type CustomVariable,
 } from '@/utils/customVariablesStorage';
 import {
   getTrayBundleOverrides,
@@ -51,20 +52,23 @@ import {
   generateBundleRangeId,
   getBundleRangeLabel,
   type TrayBundleOverride,
-  type CustomBundleRange
+  type CustomBundleRange,
 } from '@/utils/trayBundleOverrides';
 
 // Import refactored modules
 import {
   useTrayData,
   useMaterialData,
-  useMaterialSupports,
   useLoadCurveData,
   useTrayCalculations,
   useGroundingCable,
   useLoadCurveEvaluation,
-  useProjectCableTypes
+  useProjectCableTypes,
 } from './TrayDetails/hooks';
+import {
+  getTrayDisplayMaterial,
+  isNewTrayMaterialSelection,
+} from './TrayDetails/trayMaterialSnapshot';
 import {
   toTrayFormState,
   parseNumberInput,
@@ -72,7 +76,7 @@ import {
   formatDimensionValue,
   formatWeightValue,
   matchCableCategory,
-  calculateTrayFreeSpaceMetrics
+  calculateTrayFreeSpaceMetrics,
 } from './TrayDetails/TrayDetails.utils';
 import { TrayFormState, TrayFormErrors } from './TrayDetails/TrayDetails.types';
 import {
@@ -83,14 +87,14 @@ import {
   SupportCalculationsSection,
   WeightCalculationsSection,
   GroundingCableControls,
-  LoadCurveSection
+  LoadCurveSection,
 } from './TrayDetails/components';
 import {
   CABLE_CATEGORY_CONFIG,
   CABLE_CATEGORY_ORDER,
   DEFAULT_CATEGORY_SETTINGS,
   DEFAULT_CABLE_SPACING,
-  type CableCategoryKey
+  type CableCategoryKey,
 } from './ProjectDetails/hooks/cableLayoutDefaults';
 import {
   TrayDrawingService,
@@ -98,7 +102,7 @@ import {
   type CategoryLayoutConfig,
   type TrayLayoutSummary,
   determineCableDiameterGroup,
-  determineCableDiameterGroupWithCustomRanges
+  determineCableDiameterGroupWithCustomRanges,
 } from './TrayDetails/trayDrawingService';
 import {
   canvasToBlob,
@@ -107,11 +111,10 @@ import {
   type TrayPlaceholderContext,
   type WordTableDefinition,
   type DocxImageDefinition,
-  MISSING_VALUE_PLACEHOLDER
+  MISSING_VALUE_PLACEHOLDER,
 } from './TrayDetails/trayReportUtils';
 
-const WORD_MIME_TYPE =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const WORD_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 const sanitizeFileComponent = (value: string): string => {
   if (!value) {
@@ -128,11 +131,7 @@ const sanitizeFileComponent = (value: string): string => {
   );
 };
 
-const buildReportFileNames = (
-  projectNumber: string,
-  projectName: string,
-  trayName: string
-) => {
+const buildReportFileNames = (projectNumber: string, projectName: string, trayName: string) => {
   const projectNumberPart = sanitizeFileComponent(projectNumber);
   const projectNamePart = sanitizeFileComponent(projectName);
   const trayNamePart = sanitizeFileComponent(trayName);
@@ -145,7 +144,7 @@ const buildReportFileNames = (
   return {
     loadCurve: `${sharedPrefix}_LoadCurve.jpeg`,
     bundles: `${sharedPrefix}_Bundles.jpeg`,
-    report: `${projectNumberPart}_${projectNamePart} - Cable tray calculations - ${trayNamePart}.docx`
+    report: `${projectNumberPart}_${projectNamePart} - Cable tray calculations - ${trayNamePart}.docx`,
   };
 };
 
@@ -185,7 +184,9 @@ type PendingImagePlaceholder = {
   maxHeightEmu?: number;
 };
 
-const readImageDimensions = (blob: Blob): Promise<{
+const readImageDimensions = (
+  blob: Blob,
+): Promise<{
   width: number;
   height: number;
 }> =>
@@ -208,25 +209,20 @@ const computeImageSizeEmu = async (
   options?: {
     layout?: 'default' | 'full-page';
     maxHeightEmu?: number;
-  }
+  },
 ) => {
   const layout = options?.layout ?? 'default';
   const isFullPage = layout === 'full-page';
-  const maxWidth = isFullPage
-    ? FULL_PAGE_IMAGE_WIDTH_EMU
-    : MAX_IMAGE_WIDTH_EMU;
+  const maxWidth = isFullPage ? FULL_PAGE_IMAGE_WIDTH_EMU : MAX_IMAGE_WIDTH_EMU;
   const fallbackMaxHeight = options?.maxHeightEmu ?? MAX_IMAGE_HEIGHT_EMU;
-  const fallbackHeight = Math.min(
-    Math.round(maxWidth * 0.6),
-    fallbackMaxHeight
-  );
+  const fallbackHeight = Math.min(Math.round(maxWidth * 0.6), fallbackMaxHeight);
 
   try {
     const { width, height } = await readImageDimensions(blob);
     if (!width || !height) {
       return {
         widthEmu: maxWidth,
-        heightEmu: fallbackHeight
+        heightEmu: fallbackHeight,
       };
     }
 
@@ -245,7 +241,7 @@ const computeImageSizeEmu = async (
 
       return {
         widthEmu: Math.round(scaledWidth),
-        heightEmu: Math.round(rawHeightEmu * scale)
+        heightEmu: Math.round(rawHeightEmu * scale),
       };
     }
 
@@ -254,26 +250,26 @@ const computeImageSizeEmu = async (
 
     return {
       widthEmu: Math.round(rawWidthEmu * scale),
-      heightEmu: Math.round(rawHeightEmu * scale)
+      heightEmu: Math.round(rawHeightEmu * scale),
     };
   } catch {
     return {
       widthEmu: maxWidth,
-      heightEmu: fallbackHeight
+      heightEmu: fallbackHeight,
     };
   }
 };
 
 const prepareImageDefinitions = async (
-  placeholders: Record<string, PendingImagePlaceholder>
+  placeholders: Record<string, PendingImagePlaceholder>,
 ): Promise<Record<string, DocxImageDefinition>> => {
   const entries = await Promise.all(
     Object.entries(placeholders).map(async ([placeholder, data]) => {
       try {
-        const { widthEmu, heightEmu } = await computeImageSizeEmu(
-          data.blob,
-          { layout: data.layout, maxHeightEmu: data.maxHeightEmu }
-        );
+        const { widthEmu, heightEmu } = await computeImageSizeEmu(data.blob, {
+          layout: data.layout,
+          maxHeightEmu: data.maxHeightEmu,
+        });
         const buffer = await data.blob.arrayBuffer();
         const fileStem = data.fileName.replace(/\.[^.]+$/, '');
 
@@ -283,31 +279,23 @@ const prepareImageDefinitions = async (
           heightEmu,
           fileName: fileStem,
           contentType: data.blob.type || 'image/jpeg',
-          description: data.description
+          description: data.description,
         };
 
         return [placeholder, definition] as const;
       } catch (error) {
-        console.error(
-          `Failed to prepare image for placeholder "${placeholder}"`,
-          error
-        );
+        console.error(`Failed to prepare image for placeholder "${placeholder}"`, error);
         return null;
       }
-    })
+    }),
   );
 
   return Object.fromEntries(
-    entries.filter(
-      (entry): entry is [string, DocxImageDefinition] => entry !== null
-    )
+    entries.filter((entry): entry is [string, DocxImageDefinition] => entry !== null),
   );
 };
 
-const rotateImageBlob = async (
-  blob: Blob,
-  direction: 'ccw90' | 'cw90'
-): Promise<Blob> => {
+const rotateImageBlob = async (blob: Blob, direction: 'ccw90' | 'cw90'): Promise<Blob> => {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return blob;
   }
@@ -381,19 +369,17 @@ const createEmptyCustomBundleRangesFormState = (): CustomBundleRangesFormState =
   mv: [],
   power: [],
   vfd: [],
-  control: []
+  control: [],
 });
 
 const createEmptyCustomBundleRangesErrors = (): CustomBundleRangesErrors => ({
   mv: null,
   power: null,
   vfd: null,
-  control: null
+  control: null,
 });
 
-const normalizeCustomBundleRangeMaxRows = (
-  value: number | null | undefined
-): number | null => {
+const normalizeCustomBundleRangeMaxRows = (value: number | null | undefined): number | null => {
   if (typeof value !== 'number' || !Number.isInteger(value)) {
     return null;
   }
@@ -416,7 +402,7 @@ const parseBundleRangeMaxRowsInput = (value: string): number | null => {
 };
 
 const buildBundleMaxRowsByKey = (
-  ranges: CustomBundleRange[] | null | undefined
+  ranges: CustomBundleRange[] | null | undefined,
 ): Record<string, number> | undefined => {
   if (!ranges || ranges.length === 0) {
     return undefined;
@@ -430,10 +416,7 @@ const buildBundleMaxRowsByKey = (
       }
       return [getBundleRangeLabel(range), maxRows] as const;
     })
-    .filter(
-      (entry): entry is readonly [string, number] =>
-        entry !== null
-    );
+    .filter((entry): entry is readonly [string, number] => entry !== null);
 
   if (entries.length === 0) {
     return undefined;
@@ -448,14 +431,15 @@ const buildBundleMaxRowsByKey = (
  */
 const buildCustomBundleRangesFormState = (
   projectRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null | undefined,
-  trayOverrideRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null | undefined
+  trayOverrideRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null | undefined,
 ): CustomBundleRangesFormState => {
   const result = createEmptyCustomBundleRangesFormState();
-  
+
   // Use tray overrides if they exist, otherwise fall back to project ranges
-  const sourceRanges = trayOverrideRanges && Object.keys(trayOverrideRanges).length > 0
-    ? trayOverrideRanges
-    : projectRanges;
+  const sourceRanges =
+    trayOverrideRanges && Object.keys(trayOverrideRanges).length > 0
+      ? trayOverrideRanges
+      : projectRanges;
 
   if (!sourceRanges) {
     return result;
@@ -471,7 +455,7 @@ const buildCustomBundleRangesFormState = (
         maxRows:
           normalizeCustomBundleRangeMaxRows(range.maxRows ?? null) !== null
             ? String(range.maxRows)
-            : ''
+            : '',
       }));
     }
   }
@@ -480,7 +464,7 @@ const buildCustomBundleRangesFormState = (
 };
 
 const parseCustomBundleRangesFormState = (
-  formState: CustomBundleRangesFormState
+  formState: CustomBundleRangesFormState,
 ): Partial<Record<CableCategoryKey, CustomBundleRange[]>> => {
   const result: Partial<Record<CableCategoryKey, CustomBundleRange[]>> = {};
 
@@ -494,7 +478,7 @@ const parseCustomBundleRangesFormState = (
             id: range.id,
             min: parseFloat(range.min) || 0,
             max: parseFloat(range.max) || 0,
-            ...(parsedMaxRows !== null ? { maxRows: parsedMaxRows } : {})
+            ...(parsedMaxRows !== null ? { maxRows: parsedMaxRows } : {}),
           };
         })
         .filter((range) => range.min >= 0 && range.max > 0);
@@ -508,12 +492,12 @@ const createBundleFormErrors = (): BundleFormErrors => ({
   mv: null,
   power: null,
   vfd: null,
-  control: null
+  control: null,
 });
 
 const buildBundleFormState = (
   layout: ProjectCableLayout | null,
-  overrides: Partial<Record<CableCategoryKey, ProjectCableCategorySettings>> | null
+  overrides: Partial<Record<CableCategoryKey, ProjectCableCategorySettings>> | null,
 ): BundleFormState =>
   CABLE_CATEGORY_ORDER.reduce((acc, key) => {
     const defaults = DEFAULT_CATEGORY_SETTINGS[key];
@@ -535,26 +519,24 @@ const buildBundleFormState = (
         ? defaults.trefoilSpacingBetweenBundles
         : settings.trefoilSpacingBetweenBundles;
     const phaseRotation =
-      settings?.applyPhaseRotation === null ||
-      settings?.applyPhaseRotation === undefined
+      settings?.applyPhaseRotation === null || settings?.applyPhaseRotation === undefined
         ? defaults.applyPhaseRotation
         : settings.applyPhaseRotation;
 
     acc[key] = {
       maxRows: maxRows !== null && maxRows !== undefined ? String(maxRows) : '',
-      maxColumns:
-        maxColumns !== null && maxColumns !== undefined ? String(maxColumns) : '',
+      maxColumns: maxColumns !== null && maxColumns !== undefined ? String(maxColumns) : '',
       bundleSpacing: validBundleSpacing,
       trefoil: Boolean(trefoil),
       trefoilSpacing: Boolean(trefoilSpacing),
-      phaseRotation: Boolean(phaseRotation)
+      phaseRotation: Boolean(phaseRotation),
     };
     return acc;
   }, {} as BundleFormState);
 
 const parseBundleInteger = (
   value: string,
-  label: 'rows' | 'columns'
+  label: 'rows' | 'columns',
 ): { numeric: number | null; error?: string } => {
   const trimmed = value.trim();
   if (trimmed === '') {
@@ -583,7 +565,7 @@ const parseBundleInteger = (
 
 const buildBundleCategorySettingsFromFormState = (
   category: CableCategoryKey,
-  input: BundleCategoryFormState
+  input: BundleCategoryFormState,
 ): ProjectCableCategorySettings => {
   const defaults = DEFAULT_CATEGORY_SETTINGS[category];
   const parsedRows = parseBundleInteger(input.maxRows, 'rows');
@@ -599,7 +581,7 @@ const buildBundleCategorySettingsFromFormState = (
       : null,
     applyPhaseRotation: CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
       ? input.phaseRotation
-      : null
+      : null,
   };
 };
 
@@ -612,30 +594,30 @@ const useStyles = makeStyles({
     width: '100%',
     margin: '0 auto',
     boxSizing: 'border-box',
-    ...shorthands.padding('2rem', '1.5rem', '4rem')
+    ...shorthands.padding('2rem', '1.5rem', '4rem'),
   },
   header: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem'
+    gap: '0.5rem',
   },
   actions: {
     display: 'flex',
     gap: '0.75rem',
     flexWrap: 'wrap',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   tableWrapper: {
     width: '100%',
-    overflowX: 'auto'
+    overflowX: 'auto',
   },
   tableSection: {
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
-    minWidth: '28rem'
+    minWidth: '28rem',
   },
   tableHeadCell: {
     textAlign: 'left',
@@ -643,12 +625,12 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
     whiteSpace: 'nowrap',
-    fontWeight: tokens.fontWeightSemibold
+    fontWeight: tokens.fontWeightSemibold,
   },
   tableCell: {
     padding: '0.75rem 1rem',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-    verticalAlign: 'top'
+    verticalAlign: 'top',
   },
   section: {
     display: 'grid',
@@ -660,28 +642,28 @@ const useStyles = makeStyles({
     width: '100%',
     maxWidth: '60rem',
     margin: '0 auto',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   },
   fullWidthSection: {
     maxWidth: 'none',
     width: 'calc(100% + 3rem)',
     marginLeft: '-1.5rem',
-    marginRight: '-1.5rem'
+    marginRight: '-1.5rem',
   },
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 16rem), 1fr))',
-    gap: '0.75rem'
+    gap: '0.75rem',
   },
   field: {
     display: 'flex',
     minWidth: 0,
     overflowWrap: 'anywhere',
     flexDirection: 'column',
-    gap: '0.25rem'
+    gap: '0.25rem',
   },
   fieldTitle: {
-    fontWeight: tokens.fontWeightSemibold
+    fontWeight: tokens.fontWeightSemibold,
   },
   bundleCard: {
     display: 'grid',
@@ -689,41 +671,41 @@ const useStyles = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.padding('0.75rem')
+    ...shorthands.padding('0.75rem'),
   },
   bundleSummary: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.5rem'
+    gap: '0.5rem',
   },
   emptyState: {
-    padding: '0.5rem 0'
+    padding: '0.5rem 0',
   },
   errorText: {
-    color: tokens.colorStatusDangerForeground1
+    color: tokens.colorStatusDangerForeground1,
   },
   freeSpaceDanger: {
     color: tokens.colorStatusDangerForeground1,
-    fontWeight: tokens.fontWeightSemibold
+    fontWeight: tokens.fontWeightSemibold,
   },
   freeSpaceWarning: {
     color: tokens.colorStatusWarningForeground1,
-    fontWeight: tokens.fontWeightSemibold
+    fontWeight: tokens.fontWeightSemibold,
   },
   chartWrapper: {
     width: '100%',
-    overflowX: 'auto'
+    overflowX: 'auto',
   },
   chartCanvas: {
-    minWidth: '32rem'
+    minWidth: '32rem',
   },
   chartMeta: {
     display: 'grid',
     gap: '0.75rem',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 16rem), 1fr))'
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 16rem), 1fr))',
   },
   chartStatus: {
-    fontWeight: tokens.fontWeightSemibold
+    fontWeight: tokens.fontWeightSemibold,
   },
   canvasSection: {
     display: 'flex',
@@ -733,18 +715,18 @@ const useStyles = makeStyles({
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
     ...shorthands.padding('1.25rem'),
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
   },
   canvasScroll: {
     width: '100%',
-    overflowX: 'auto'
+    overflowX: 'auto',
   },
   trayCanvas: {
     display: 'block',
     width: '100%',
     maxWidth: '100%',
     border: `1px solid ${tokens.colorNeutralStroke1}`,
-    backgroundColor: tokens.colorNeutralBackground1
+    backgroundColor: tokens.colorNeutralBackground1,
   },
   bundleRangesSection: {
     display: 'flex',
@@ -752,25 +734,25 @@ const useStyles = makeStyles({
     gap: '0.5rem',
     marginTop: '0.5rem',
     paddingTop: '0.5rem',
-    borderTop: `1px solid ${tokens.colorNeutralStroke2}`
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
   },
   bundleRangeRow: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
-    flexWrap: 'wrap'
+    flexWrap: 'wrap',
   },
   bundleRangeInput: {
-    width: '5rem'
+    width: '5rem',
   },
   bundleRangeLabel: {
     minWidth: '2rem',
-    textAlign: 'center' as const
+    textAlign: 'center' as const,
   },
   bundleRangeError: {
     color: tokens.colorStatusDangerForeground1,
-    fontSize: tokens.fontSizeBase200
-  }
+    fontSize: tokens.fontSizeBase200,
+  },
 });
 
 export const TrayDetails = () => {
@@ -783,7 +765,7 @@ export const TrayDetails = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
-  const isAdmin = Boolean(user?.isAdmin);
+  const isAdmin = canEditProjectContent(user, projectId);
   const currentUserDisplay = useMemo(() => {
     if (!user) {
       return '-';
@@ -806,15 +788,12 @@ export const TrayDetails = () => {
     isLoading,
     error,
     setTray,
-    setTrays
+    setTrays,
   } = useTrayData(projectId, trayId);
   const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
     useMaterialData();
-
-  const { materialSupportsById, materialSupportsLoading, materialSupportsError, materialSupportsLoaded } =
-    useMaterialSupports();
 
   const { projectCableTypes, projectCableTypesLoading, projectCableTypesError } =
     useProjectCableTypes(projectId);
@@ -828,7 +807,7 @@ export const TrayDetails = () => {
     widthMm: '',
     heightMm: '',
     lengthMm: '',
-    weightKgPerM: ''
+    weightKgPerM: '',
   });
   const [formErrors, setFormErrors] = useState<TrayFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -837,10 +816,10 @@ export const TrayDetails = () => {
   const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
   const [bundleFormUseCustom, setBundleFormUseCustom] = useState<boolean>(false);
   const [bundleFormState, setBundleFormState] = useState<BundleFormState>(() =>
-    buildBundleFormState(project?.cableLayout ?? null, null)
+    buildBundleFormState(project?.cableLayout ?? null, null),
   );
-  const [bundleFormErrors, setBundleFormErrors] = useState<BundleFormErrors>(
-    () => createBundleFormErrors()
+  const [bundleFormErrors, setBundleFormErrors] = useState<BundleFormErrors>(() =>
+    createBundleFormErrors(),
   );
   const [bundleOverrides, setBundleOverrides] = useState<TrayBundleOverride | null>(null);
   const [bundleSaving, setBundleSaving] = useState<boolean>(false);
@@ -871,23 +850,17 @@ export const TrayDetails = () => {
     setCustomBundleRangesFormState(
       buildCustomBundleRangesFormState(
         project?.cableLayout?.customBundleRanges,
-        stored?.customBundleRanges
-      )
+        stored?.customBundleRanges,
+      ),
     );
     setCustomBundleRangesErrors(createEmptyCustomBundleRangesErrors());
   }, [canonicalProjectId, project?.cableLayout, tray?.id, trayId]);
 
   // Material tray selection
+  const changingMaterialSelection = isNewTrayMaterialSelection(tray, formValues.type, isEditing);
   const selectedMaterialTray = useMemo(() => {
-    const fromForm = findMaterialTrayByType(formValues.type);
-    if (fromForm) {
-      return fromForm;
-    }
-    if (tray?.type) {
-      return findMaterialTrayByType(tray.type);
-    }
-    return null;
-  }, [findMaterialTrayByType, formValues.type, tray?.type]);
+    return getTrayDisplayMaterial(tray, formValues.type, isEditing, findMaterialTrayByType);
+  }, [findMaterialTrayByType, formValues.type, tray, isEditing]);
 
   const materialTrayMetadata = useMemo(() => {
     if (!selectedMaterialTray) {
@@ -901,15 +874,21 @@ export const TrayDetails = () => {
       rungHeightMm: selectedMaterialTray.rungHeightMm ?? null,
       imageTemplateId: selectedMaterialTray.imageTemplateId ?? null,
       imageTemplateFileName: selectedMaterialTray.imageTemplateFileName ?? null,
-      imageTemplateContentType: selectedMaterialTray.imageTemplateContentType ?? null
+      imageTemplateContentType: selectedMaterialTray.imageTemplateContentType ?? null,
     };
   }, [selectedMaterialTray]);
 
   const selectedRungHeightMm = selectedMaterialTray?.rungHeightMm ?? null;
 
   const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
-  const { selectedLoadCurve, loadCurveLoadingId, loadCurveError } =
-    useLoadCurveData(selectedLoadCurveId);
+  const {
+    selectedLoadCurve: previewLoadCurve,
+    loadCurveLoadingId,
+    loadCurveError,
+  } = useLoadCurveData(changingMaterialSelection ? selectedLoadCurveId : null);
+  const selectedLoadCurve = changingMaterialSelection
+    ? previewLoadCurve
+    : (tray?.materialSnapshot?.loadCurve ?? null);
   const selectedLoadCurveName =
     selectedMaterialTray?.loadCurveName ?? selectedLoadCurve?.name ?? null;
 
@@ -938,7 +917,7 @@ export const TrayDetails = () => {
         changed = true;
       }
 
-      if (isEditing) {
+      if (changingMaterialSelection) {
         if (previous.widthMm !== nextWidth) {
           nextState.widthMm = nextWidth;
           changed = true;
@@ -951,7 +930,7 @@ export const TrayDetails = () => {
 
       return changed ? nextState : previous;
     });
-  }, [selectedMaterialTray, isEditing]);
+  }, [selectedMaterialTray, changingMaterialSelection]);
 
   // Grounding cable logic
   const groundingHook = useGroundingCable(
@@ -961,7 +940,7 @@ export const TrayDetails = () => {
     token,
     showToast,
     setTray,
-    setTrays
+    setTrays,
   );
 
   const {
@@ -973,7 +952,7 @@ export const TrayDetails = () => {
     currentGroundingPreference,
     groundingPreferenceSaving,
     setGroundingSelectionsByTrayId,
-    persistGroundingPreference
+    persistGroundingPreference,
   } = groundingHook;
 
   // Initialize grounding selection when tray loads
@@ -983,8 +962,8 @@ export const TrayDetails = () => {
         ...previous,
         [tray.id]: {
           include: tray.includeGroundingCable,
-          typeId: tray.groundingCableTypeId
-        }
+          typeId: tray.groundingCableTypeId,
+        },
       }));
     }
   }, [tray, setGroundingSelectionsByTrayId]);
@@ -1010,12 +989,12 @@ export const TrayDetails = () => {
 
     const nextPreference = {
       include: true,
-      typeId: fallbackTypeId
+      typeId: fallbackTypeId,
     };
 
     setGroundingSelectionsByTrayId((previous) => ({
       ...previous,
-      [trayId]: nextPreference
+      [trayId]: nextPreference,
     }));
 
     void persistGroundingPreference(currentGroundingPreference, nextPreference);
@@ -1027,7 +1006,7 @@ export const TrayDetails = () => {
     currentGroundingPreference,
     groundingPreferenceSaving,
     persistGroundingPreference,
-    setGroundingSelectionsByTrayId
+    setGroundingSelectionsByTrayId,
   ]);
 
   // Calculate tray weight
@@ -1055,9 +1034,8 @@ export const TrayDetails = () => {
     project,
     tray,
     trayCables,
-    materialSupportsById,
     trayWeightPerMeterKg,
-    groundingCableWeightKgPerM
+    groundingCableWeightKgPerM,
   );
 
   const {
@@ -1071,7 +1049,7 @@ export const TrayDetails = () => {
     cablesTotalWeightKg,
     totalWeightLoadPerMeterKg,
     totalWeightKg,
-    totalWeightLoadPerMeterKn
+    totalWeightLoadPerMeterKn,
   } = calculations;
 
   // Safety factor calculations
@@ -1080,9 +1058,7 @@ export const TrayDetails = () => {
   const safetyFactorHasError =
     project !== null && safetyFactorPercent !== null && safetyFactorPercent < 0;
   const safetyFactorMultiplier =
-    safetyFactorHasError || safetyFactorPercent === null
-      ? null
-      : 1 + safetyFactorPercent / 100;
+    safetyFactorHasError || safetyFactorPercent === null ? null : 1 + safetyFactorPercent / 100;
   const safetyFactorStatusMessage = (() => {
     if (safetyFactorHasError) {
       return 'Safety factor must be zero or greater.';
@@ -1110,7 +1086,7 @@ export const TrayDetails = () => {
     chartSpanMeters,
     safetyAdjustedLoadKnPerM,
     safetyFactorMultiplier,
-    safetyFactorStatusMessage
+    safetyFactorStatusMessage,
   );
 
   // Navigation
@@ -1126,7 +1102,7 @@ export const TrayDetails = () => {
 
     return {
       previousTray: currentIndex > 0 ? trays[currentIndex - 1] : null,
-      nextTray: currentIndex < trays.length - 1 ? trays[currentIndex + 1] : null
+      nextTray: currentIndex < trays.length - 1 ? trays[currentIndex + 1] : null,
     };
   }, [tray, trays]);
 
@@ -1137,7 +1113,7 @@ export const TrayDetails = () => {
       }
       navigate(`/projects/${projectId}/trays/${targetTrayId}`);
     },
-    [navigate, projectId]
+    [navigate, projectId],
   );
 
   const handlePrevTray = () => {
@@ -1156,70 +1132,66 @@ export const TrayDetails = () => {
   const numberFormatter = useMemo(
     () =>
       new Intl.NumberFormat(undefined, {
-        maximumFractionDigits: 3
+        maximumFractionDigits: 3,
       }),
-    []
+    [],
   );
 
   const percentageFormatter = useMemo(
     () =>
       new Intl.NumberFormat(undefined, {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       }),
-    []
+    [],
   );
 
   const dateTimeFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(undefined, {
         dateStyle: 'medium',
-        timeStyle: 'short'
+        timeStyle: 'short',
       }),
-    []
+    [],
   );
 
-  const editingCustomBundleRanges = useMemo<
-    Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null
-  >(
-    () => {
-      if (!isEditing || !bundleFormUseCustom) {
-        return null;
-      }
+  const editingCustomBundleRanges = useMemo<Partial<
+    Record<CableCategoryKey, CustomBundleRange[]>
+  > | null>(() => {
+    if (!isEditing || !bundleFormUseCustom) {
+      return null;
+    }
 
-      const parsedRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
-      return CABLE_CATEGORY_ORDER.reduce<
-        Partial<Record<CableCategoryKey, CustomBundleRange[]>>
-      >((acc, key) => {
+    const parsedRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
+    return CABLE_CATEGORY_ORDER.reduce<Partial<Record<CableCategoryKey, CustomBundleRange[]>>>(
+      (acc, key) => {
         const validRanges = (parsedRanges[key] ?? []).filter(
           (range) =>
-            Number.isFinite(range.min) &&
-            Number.isFinite(range.max) &&
-            range.max > range.min
+            Number.isFinite(range.min) && Number.isFinite(range.max) && range.max > range.min,
         );
         if (validRanges.length > 0) {
           acc[key] = validRanges;
         }
         return acc;
-      }, {});
-    },
-    [isEditing, bundleFormUseCustom, customBundleRangesFormState]
-  );
+      },
+      {},
+    );
+  }, [isEditing, bundleFormUseCustom, customBundleRangesFormState]);
 
-  const activeCustomBundleRanges = useMemo<
-    Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null
-  >(
+  const activeCustomBundleRanges = useMemo<Partial<
+    Record<CableCategoryKey, CustomBundleRange[]>
+  > | null>(
     () =>
       editingCustomBundleRanges ??
       (bundleOverrides?.useCustom
-        ? bundleOverrides.customBundleRanges ?? {}
-        : project?.cableLayout?.customBundleRanges ?? null),
+        ? (bundleOverrides.customBundleRanges ?? {})
+        : (project?.cableLayout?.customBundleRanges ?? null)),
     [
       editingCustomBundleRanges,
       bundleOverrides?.useCustom,
       bundleOverrides?.customBundleRanges,
-      project?.cableLayout?.customBundleRanges
-    ]
+      project?.cableLayout?.customBundleRanges,
+    ],
   );
 
   const cableBundles: CableBundleMap = useMemo(() => {
@@ -1233,9 +1205,13 @@ export const TrayDetails = () => {
 
       // Use custom bundle ranges for this category if available
       const categoryCustomRanges = activeCustomBundleRanges?.[category as CableCategoryKey];
-      const bundleKey = categoryCustomRanges && categoryCustomRanges.length > 0
-        ? determineCableDiameterGroupWithCustomRanges(cable.diameterMm ?? null, categoryCustomRanges)
-        : determineCableDiameterGroup(cable.diameterMm ?? null);
+      const bundleKey =
+        categoryCustomRanges && categoryCustomRanges.length > 0
+          ? determineCableDiameterGroupWithCustomRanges(
+              cable.diameterMm ?? null,
+              categoryCustomRanges,
+            )
+          : determineCableDiameterGroup(cable.diameterMm ?? null);
 
       if (!bundles[category]) {
         bundles[category] = {};
@@ -1268,17 +1244,20 @@ export const TrayDetails = () => {
           acc[key] = buildBundleCategorySettingsFromFormState(key, bundleFormState[key]);
           return acc;
         }, {})
-      : bundleOverrides?.categories ?? {};
+      : (bundleOverrides?.categories ?? {});
 
     const mergedCategories = CABLE_CATEGORY_ORDER.reduce<
       Record<CableCategoryKey, ProjectCableCategorySettings>
-    >((acc, key) => {
-      const defaults = DEFAULT_CATEGORY_SETTINGS[key];
-      const baseSettings = (base?.[key] as ProjectCableCategorySettings | null) ?? defaults;
-      const override = categoriesSource[key];
-      acc[key] = override ? { ...baseSettings, ...override } : baseSettings;
-      return acc;
-    }, {} as Record<CableCategoryKey, ProjectCableCategorySettings>);
+    >(
+      (acc, key) => {
+        const defaults = DEFAULT_CATEGORY_SETTINGS[key];
+        const baseSettings = (base?.[key] as ProjectCableCategorySettings | null) ?? defaults;
+        const override = categoriesSource[key];
+        acc[key] = override ? { ...baseSettings, ...override } : baseSettings;
+        return acc;
+      },
+      {} as Record<CableCategoryKey, ProjectCableCategorySettings>,
+    );
 
     return {
       cableSpacing: base?.cableSpacing ?? DEFAULT_CABLE_SPACING,
@@ -1289,7 +1268,7 @@ export const TrayDetails = () => {
       power: mergedCategories.power ?? DEFAULT_CATEGORY_SETTINGS.power,
       vfd: mergedCategories.vfd ?? DEFAULT_CATEGORY_SETTINGS.vfd,
       control: mergedCategories.control ?? DEFAULT_CATEGORY_SETTINGS.control,
-      customBundleRanges: activeCustomBundleRanges
+      customBundleRanges: activeCustomBundleRanges,
     };
   }, [
     bundleOverrides,
@@ -1297,7 +1276,7 @@ export const TrayDetails = () => {
     activeCustomBundleRanges,
     isEditing,
     bundleFormUseCustom,
-    bundleFormState
+    bundleFormState,
   ]);
 
   const projectCableSpacingMm = useMemo(() => {
@@ -1313,18 +1292,15 @@ export const TrayDetails = () => {
     return categories.reduce<CategoryLayoutConfig>((acc, category) => {
       const defaults = DEFAULT_CATEGORY_SETTINGS[category];
       const layout = activeProjectCableLayout?.[category] ?? null;
-      const trefoil =
-        CABLE_CATEGORY_CONFIG[category].showTrefoil
-          ? layout?.trefoil ?? defaults.trefoil
-          : false;
-      const trefoilSpacingBetweenBundles =
-        CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
-          ? layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
-          : defaults.trefoilSpacingBetweenBundles;
-      const applyPhaseRotation =
-        CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
-          ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
-          : defaults.applyPhaseRotation;
+      const trefoil = CABLE_CATEGORY_CONFIG[category].showTrefoil
+        ? (layout?.trefoil ?? defaults.trefoil)
+        : false;
+      const trefoilSpacingBetweenBundles = CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
+        ? (layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles)
+        : defaults.trefoilSpacingBetweenBundles;
+      const applyPhaseRotation = CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
+        ? (layout?.applyPhaseRotation ?? defaults.applyPhaseRotation)
+        : defaults.applyPhaseRotation;
       acc[category] = {
         maxRows: layout?.maxRows ?? defaults.maxRows,
         maxColumns: layout?.maxColumns ?? defaults.maxColumns,
@@ -1333,23 +1309,19 @@ export const TrayDetails = () => {
         trefoil,
         trefoilSpacingBetweenBundles,
         applyPhaseRotation,
-        bundleMaxRowsByKey: buildBundleMaxRowsByKey(
-          activeCustomBundleRanges?.[category] ?? null
-        )
+        bundleMaxRowsByKey: buildBundleMaxRowsByKey(activeCustomBundleRanges?.[category] ?? null),
       };
       return acc;
     }, {} as CategoryLayoutConfig);
   }, [activeProjectCableLayout, projectCableSpacingMm, activeCustomBundleRanges]);
 
   const considerBundleSpacingAsFree = Boolean(
-    activeProjectCableLayout?.considerBundleSpacingAsFree
+    activeProjectCableLayout?.considerBundleSpacingAsFree,
   );
 
   const minFreeSpacePercent = activeProjectCableLayout?.minFreeSpacePercent ?? null;
   const maxFreeSpacePercent = activeProjectCableLayout?.maxFreeSpacePercent ?? null;
-  const trayPurposeNormalized = tray?.purpose
-    ? tray.purpose.trim().toLowerCase()
-    : '';
+  const trayPurposeNormalized = tray?.purpose ? tray.purpose.trim().toLowerCase() : '';
   const isMvTrayPurpose =
     trayPurposeNormalized === 'mv cable trays' ||
     trayPurposeNormalized === 'type a (pink color) for mv cables';
@@ -1362,7 +1334,7 @@ export const TrayDetails = () => {
         layout: activeProjectCableLayout ?? null,
         spacingBetweenCablesMm: projectCableSpacingMm,
         considerBundleSpacingAsFree,
-        layoutSummary
+        layoutSummary,
       }),
     [
       considerBundleSpacingAsFree,
@@ -1370,8 +1342,8 @@ export const TrayDetails = () => {
       layoutSummary,
       nonGroundingCables,
       projectCableSpacingMm,
-      tray
-    ]
+      tray,
+    ],
   );
 
   const freeSpaceAlert = useMemo(() => {
@@ -1387,22 +1359,18 @@ export const TrayDetails = () => {
     const percentDisplay = `${percentageFormatter.format(percent)} %`;
 
     if (minFreeSpacePercent !== null && percent < minFreeSpacePercent) {
-      const minDisplay = `${percentageFormatter.format(
-        minFreeSpacePercent
-      )} %`;
+      const minDisplay = `${percentageFormatter.format(minFreeSpacePercent)} %`;
       return {
         kind: 'danger' as const,
-        message: `Cable tray free space ${percentDisplay} is below the minimum threshold of ${minDisplay}.`
+        message: `Cable tray free space ${percentDisplay} is below the minimum threshold of ${minDisplay}.`,
       };
     }
 
     if (maxFreeSpacePercent !== null && percent > maxFreeSpacePercent) {
-      const maxDisplay = `${percentageFormatter.format(
-        maxFreeSpacePercent
-      )} %`;
+      const maxDisplay = `${percentageFormatter.format(maxFreeSpacePercent)} %`;
       return {
         kind: 'warning' as const,
-        message: `Cable tray free space ${percentDisplay} exceeds the maximum threshold of ${maxDisplay}.`
+        message: `Cable tray free space ${percentDisplay} exceeds the maximum threshold of ${maxDisplay}.`,
       };
     }
 
@@ -1414,7 +1382,7 @@ export const TrayDetails = () => {
     isMvTrayPurpose,
     maxFreeSpacePercent,
     minFreeSpacePercent,
-    percentageFormatter
+    percentageFormatter,
   ]);
 
   const drawTrayVisualization = useCallback(() => {
@@ -1437,7 +1405,7 @@ export const TrayDetails = () => {
         6,
         projectCableSpacingMm,
         effectiveLayoutConfig,
-        { rungHeightMm: selectedRungHeightMm ?? undefined }
+        { rungHeightMm: selectedRungHeightMm ?? undefined },
       );
       setLayoutSummary(summary ?? null);
       return summary !== null;
@@ -1452,7 +1420,7 @@ export const TrayDetails = () => {
     cableBundles,
     projectCableSpacingMm,
     effectiveLayoutConfig,
-    selectedRungHeightMm
+    selectedRungHeightMm,
   ]);
 
   useEffect(() => {
@@ -1558,14 +1526,12 @@ export const TrayDetails = () => {
         const maxRows = layout?.maxRows ?? defaults.maxRows;
         const maxColumns = layout?.maxColumns ?? defaults.maxColumns;
         const bundleSpacing = layout?.bundleSpacing ?? defaults.bundleSpacing;
-        const trefoil = config.showTrefoil
-          ? layout?.trefoil ?? defaults.trefoil
-          : null;
+        const trefoil = config.showTrefoil ? (layout?.trefoil ?? defaults.trefoil) : null;
         const trefoilSpacing = config.allowTrefoilSpacing
-          ? layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
+          ? (layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles)
           : null;
         const phaseRotation = config.allowPhaseRotation
-          ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
+          ? (layout?.applyPhaseRotation ?? defaults.applyPhaseRotation)
           : null;
 
         // Get custom bundle ranges for this category
@@ -1580,33 +1546,31 @@ export const TrayDetails = () => {
           trefoil,
           trefoilSpacing,
           phaseRotation,
-          customRanges
+          customRanges,
         };
       }),
-    [activeProjectCableLayout, trayCableCategories, activeCustomBundleRanges]
+    [activeProjectCableLayout, trayCableCategories, activeCustomBundleRanges],
   );
 
   const formatCableTypeLabel = useCallback(
-    (type: typeof projectCableTypes[0]) => {
+    (type: (typeof projectCableTypes)[0]) => {
       const baseName = type.name?.trim() || 'Unnamed cable type';
       const tag = type.tag?.trim();
       const weight = type.weightKgPerM;
       const weightDisplay =
-        weight !== null && !Number.isNaN(weight)
-          ? `${numberFormatter.format(weight)} kg/m`
-          : null;
+        weight !== null && !Number.isNaN(weight) ? `${numberFormatter.format(weight)} kg/m` : null;
 
       return [baseName, tag ? `(${tag})` : null, weightDisplay ? `- ${weightDisplay}` : null]
         .filter(Boolean)
         .join(' ');
     },
-    [numberFormatter]
+    [numberFormatter],
   );
 
   const formatSupportNumber = useCallback(
     (value: number | null) =>
       value === null || Number.isNaN(value) ? '-' : numberFormatter.format(value),
-    [numberFormatter]
+    [numberFormatter],
   );
 
   const trayLengthMeters = supportCalculations.lengthMeters;
@@ -1639,14 +1603,9 @@ export const TrayDetails = () => {
     }
 
     return `${numberFormatter.format(trayWeightPerMeterKg)} + ${numberFormatter.format(
-      supportsWeightPerMeterKg
+      supportsWeightPerMeterKg,
     )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} kg/m`;
-  }, [
-    trayWeightPerMeterKg,
-    supportsWeightPerMeterKg,
-    trayWeightLoadPerMeterKg,
-    numberFormatter
-  ]);
+  }, [trayWeightPerMeterKg, supportsWeightPerMeterKg, trayWeightLoadPerMeterKg, numberFormatter]);
 
   const trayTotalOwnWeightFormula = useMemo(() => {
     if (
@@ -1659,7 +1618,7 @@ export const TrayDetails = () => {
     }
 
     return `${numberFormatter.format(trayWeightLoadPerMeterKg)} * ${numberFormatter.format(
-      trayLengthMeters
+      trayLengthMeters,
     )} = ${numberFormatter.format(trayTotalOwnWeightKg)} kg`;
   }, [trayWeightLoadPerMeterKg, trayLengthMeters, trayTotalOwnWeightKg, numberFormatter]);
 
@@ -1683,14 +1642,9 @@ export const TrayDetails = () => {
     }
 
     return `${numberFormatter.format(cablesWeightLoadPerMeterKg)} * ${numberFormatter.format(
-      trayLengthMeters
+      trayLengthMeters,
     )} = ${numberFormatter.format(cablesTotalWeightKg)} kg`;
-  }, [
-    cablesWeightLoadPerMeterKg,
-    trayLengthMeters,
-    cablesTotalWeightKg,
-    numberFormatter
-  ]);
+  }, [cablesWeightLoadPerMeterKg, trayLengthMeters, cablesTotalWeightKg, numberFormatter]);
 
   const totalWeightLoadPerMeterFormula = useMemo(() => {
     if (
@@ -1702,36 +1656,34 @@ export const TrayDetails = () => {
     }
 
     return `${numberFormatter.format(trayWeightLoadPerMeterKg)} + ${numberFormatter.format(
-      cablesWeightLoadPerMeterKg
+      cablesWeightLoadPerMeterKg,
     )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} kg/m`;
   }, [
     trayWeightLoadPerMeterKg,
     cablesWeightLoadPerMeterKg,
     totalWeightLoadPerMeterKg,
-    numberFormatter
+    numberFormatter,
   ]);
 
   const totalWeightFormula = useMemo(() => {
-    if (
-      trayTotalOwnWeightKg === null ||
-      cablesTotalWeightKg === null ||
-      totalWeightKg === null
-    ) {
+    if (trayTotalOwnWeightKg === null || cablesTotalWeightKg === null || totalWeightKg === null) {
       return null;
     }
 
     return `${numberFormatter.format(trayTotalOwnWeightKg)} + ${numberFormatter.format(
-      cablesTotalWeightKg
+      cablesTotalWeightKg,
     )} = ${numberFormatter.format(totalWeightKg)} kg`;
   }, [trayTotalOwnWeightKg, cablesTotalWeightKg, totalWeightKg, numberFormatter]);
 
-  const occupiedWidthDisplay = freeSpaceMetrics.occupiedWidthMm === null
-    ? 'N/A'
-    : `${numberFormatter.format(freeSpaceMetrics.occupiedWidthMm)} mm`;
+  const occupiedWidthDisplay =
+    freeSpaceMetrics.occupiedWidthMm === null
+      ? 'N/A'
+      : `${numberFormatter.format(freeSpaceMetrics.occupiedWidthMm)} mm`;
 
-  const trayFreeSpaceDisplay = freeSpaceMetrics.freeWidthPercent === null
-    ? 'N/A'
-    : `${percentageFormatter.format(freeSpaceMetrics.freeWidthPercent)} %`;
+  const trayFreeSpaceDisplay =
+    freeSpaceMetrics.freeWidthPercent === null
+      ? 'N/A'
+      : `${percentageFormatter.format(freeSpaceMetrics.freeWidthPercent)} %`;
 
   const rawTrayWidthMm = tray?.widthMm ?? null;
   const trayWidthMm =
@@ -1752,14 +1704,14 @@ export const TrayDetails = () => {
     ) {
       const spacingContribution = Math.max(0, occupiedWidth - layoutSummary.totalCableWidthMm);
       return `${numberFormatter.format(layoutSummary.totalCableWidthMm)} + ${numberFormatter.format(
-        spacingContribution
+        spacingContribution,
       )} = ${numberFormatter.format(occupiedWidth)} mm`;
     }
 
     if (trayWidthMm !== null) {
       const freeWidthMm = Math.max(0, trayWidthMm - occupiedWidth);
       return `${numberFormatter.format(trayWidthMm)} - ${numberFormatter.format(
-        freeWidthMm
+        freeWidthMm,
       )} = ${numberFormatter.format(occupiedWidth)} mm`;
     }
 
@@ -1781,33 +1733,32 @@ export const TrayDetails = () => {
     }
 
     return `((${numberFormatter.format(trayWidthMm)} - ${numberFormatter.format(
-      occupiedWidth
+      occupiedWidth,
     )}) / ${numberFormatter.format(trayWidthMm)}) * 100 = ${percentageFormatter.format(
-      freePercent
+      freePercent,
     )} %`;
   }, [
     freeSpaceMetrics.freeWidthPercent,
     freeSpaceMetrics.occupiedWidthMm,
     numberFormatter,
     percentageFormatter,
-    trayWidthMm
+    trayWidthMm,
   ]);
 
   // Calculate useful tray height (tray height - rung height)
   const usefulTrayHeightMm = useMemo(() => {
     const trayHeightMm = tray?.heightMm ?? null;
     const rungHeightMm = selectedRungHeightMm;
-    
+
     if (trayHeightMm === null || rungHeightMm === null) {
       return null;
     }
-    
+
     return trayHeightMm - rungHeightMm;
   }, [tray?.heightMm, selectedRungHeightMm]);
 
-  const usefulTrayHeightDisplay = usefulTrayHeightMm === null
-    ? 'N/A'
-    : `${numberFormatter.format(usefulTrayHeightMm)} mm`;
+  const usefulTrayHeightDisplay =
+    usefulTrayHeightMm === null ? 'N/A' : `${numberFormatter.format(usefulTrayHeightMm)} mm`;
 
   const usefulTrayHeightFormula = useMemo(() => {
     const trayHeight = tray?.heightMm ?? null;
@@ -1825,7 +1776,7 @@ export const TrayDetails = () => {
     }
 
     return `${numberFormatter.format(trayHeight)} - ${numberFormatter.format(
-      rungHeight
+      rungHeight,
     )} = ${numberFormatter.format(usefulTrayHeightMm)} mm`;
   }, [tray?.heightMm, selectedRungHeightMm, usefulTrayHeightMm, numberFormatter]);
 
@@ -1835,22 +1786,27 @@ export const TrayDetails = () => {
     (_event: ChangeEvent<HTMLInputElement>, data: { value: string }) => {
       setFormValues((previous) => ({
         ...previous,
-        [field]: data.value
+        [field]: data.value,
       }));
     };
 
   const handleTypeSelect = useCallback(
     (_event: unknown, data: { optionValue?: string }) => {
       const nextType = data.optionValue ?? '';
-      const material = nextType ? findMaterialTrayByType(nextType) : null;
+      const material = getTrayDisplayMaterial(tray, nextType, true, findMaterialTrayByType);
+      const replacingType = isNewTrayMaterialSelection(tray, nextType, true);
 
       setFormValues((previous) => {
         const nextState: TrayFormState = {
           ...previous,
-          type: nextType
+          type: nextType,
         };
 
-        if (material) {
+        if (!replacingType && tray) {
+          nextState.widthMm = formatDimensionValue(tray.widthMm);
+          nextState.heightMm = formatDimensionValue(tray.heightMm);
+          nextState.weightKgPerM = formatWeightValue(material?.weightKgPerM);
+        } else if (material) {
           nextState.widthMm = formatDimensionValue(material.widthMm);
           nextState.heightMm = formatDimensionValue(material.heightMm);
           nextState.weightKgPerM = formatWeightValue(material.weightKgPerM);
@@ -1865,26 +1821,23 @@ export const TrayDetails = () => {
         ...previous,
         type: undefined,
         widthMm: undefined,
-        heightMm: undefined
+        heightMm: undefined,
       }));
     },
-    [findMaterialTrayByType]
+    [findMaterialTrayByType, tray],
   );
 
-  const handlePurposeSelect = useCallback(
-    (_event: unknown, data: { optionValue?: string }) => {
-      const nextPurpose = data.optionValue ?? '';
-      setFormValues((previous) => ({
-        ...previous,
-        purpose: nextPurpose
-      }));
-      setFormErrors((previous) => ({
-        ...previous,
-        purpose: undefined
-      }));
-    },
-    []
-  );
+  const handlePurposeSelect = useCallback((_event: unknown, data: { optionValue?: string }) => {
+    const nextPurpose = data.optionValue ?? '';
+    setFormValues((previous) => ({
+      ...previous,
+      purpose: nextPurpose,
+    }));
+    setFormErrors((previous) => ({
+      ...previous,
+      purpose: undefined,
+    }));
+  }, []);
 
   const handleGroundingCableToggle = useCallback(
     (_event: ChangeEvent<HTMLInputElement>, data: CheckboxOnChangeData) => {
@@ -1898,7 +1851,7 @@ export const TrayDetails = () => {
         showToast({
           intent: 'warning',
           title: 'No grounding cable types available',
-          body: 'Add a grounding cable type to the project before enabling this option.'
+          body: 'Add a grounding cable type to the project before enabling this option.',
         });
         return;
       }
@@ -1914,7 +1867,7 @@ export const TrayDetails = () => {
 
       const nextPreference = {
         include: nextInclude,
-        typeId: nextTypeId
+        typeId: nextTypeId,
       };
 
       if (
@@ -1927,7 +1880,7 @@ export const TrayDetails = () => {
 
       setGroundingSelectionsByTrayId((previous) => ({
         ...previous,
-        [trayId]: nextPreference
+        [trayId]: nextPreference,
       }));
 
       void persistGroundingPreference(previousPreference, nextPreference);
@@ -1939,8 +1892,8 @@ export const TrayDetails = () => {
       currentGroundingPreference,
       persistGroundingPreference,
       showToast,
-      setGroundingSelectionsByTrayId
-    ]
+      setGroundingSelectionsByTrayId,
+    ],
   );
 
   const handleGroundingCableTypeSelect = useCallback(
@@ -1957,7 +1910,7 @@ export const TrayDetails = () => {
       const previousPreference = currentGroundingPreference;
       const nextPreference = {
         include: true,
-        typeId: nextTypeId
+        typeId: nextTypeId,
       };
 
       if (
@@ -1970,7 +1923,7 @@ export const TrayDetails = () => {
 
       setGroundingSelectionsByTrayId((previous) => ({
         ...previous,
-        [trayId]: nextPreference
+        [trayId]: nextPreference,
       }));
 
       void persistGroundingPreference(previousPreference, nextPreference);
@@ -1981,8 +1934,8 @@ export const TrayDetails = () => {
       groundingCableTypes,
       currentGroundingPreference,
       persistGroundingPreference,
-      setGroundingSelectionsByTrayId
-    ]
+      setGroundingSelectionsByTrayId,
+    ],
   );
 
   const handleBundleNumericChange = useCallback(
@@ -1994,31 +1947,30 @@ export const TrayDetails = () => {
         setBundleFormErrors((previous) => ({ ...previous, [category]: null }));
         setBundleFormState((previous) => ({
           ...previous,
-          [category]: { ...previous[category], [field]: data.value }
+          [category]: { ...previous[category], [field]: data.value },
         }));
       },
-    [isEditing]
+    [isEditing],
   );
 
   const handleBundleSpacingChange = useCallback(
-    (category: CableCategoryKey) =>
-      (_event: unknown, data: { optionValue?: string }) => {
-        if (!isEditing) {
-          return;
-        }
-        const rawValue = data.optionValue as CableBundleSpacing | undefined;
-        const nextValue =
-          rawValue && BUNDLE_SPACING_OPTIONS.includes(rawValue)
-            ? rawValue
-            : DEFAULT_CATEGORY_SETTINGS[category].bundleSpacing;
+    (category: CableCategoryKey) => (_event: unknown, data: { optionValue?: string }) => {
+      if (!isEditing) {
+        return;
+      }
+      const rawValue = data.optionValue as CableBundleSpacing | undefined;
+      const nextValue =
+        rawValue && BUNDLE_SPACING_OPTIONS.includes(rawValue)
+          ? rawValue
+          : DEFAULT_CATEGORY_SETTINGS[category].bundleSpacing;
 
-        setBundleFormErrors((previous) => ({ ...previous, [category]: null }));
-        setBundleFormState((previous) => ({
-          ...previous,
-          [category]: { ...previous[category], bundleSpacing: nextValue }
-        }));
-      },
-    [isEditing]
+      setBundleFormErrors((previous) => ({ ...previous, [category]: null }));
+      setBundleFormState((previous) => ({
+        ...previous,
+        [category]: { ...previous[category], bundleSpacing: nextValue },
+      }));
+    },
+    [isEditing],
   );
 
   const handleBundleToggle = useCallback(
@@ -2030,10 +1982,10 @@ export const TrayDetails = () => {
         setBundleFormErrors((previous) => ({ ...previous, [category]: null }));
         setBundleFormState((previous) => ({
           ...previous,
-          [category]: { ...previous[category], [field]: Boolean(data.checked) }
+          [category]: { ...previous[category], [field]: Boolean(data.checked) },
         }));
       },
-    [isEditing]
+    [isEditing],
   );
 
   const handleBundleUseCustomChange = useCallback(
@@ -2043,7 +1995,7 @@ export const TrayDetails = () => {
       }
       setBundleFormUseCustom(Boolean(data.checked));
     },
-    [isEditing]
+    [isEditing],
   );
 
   const handleResetBundleForm = useCallback(
@@ -2051,19 +2003,19 @@ export const TrayDetails = () => {
       const source = overrideState ?? bundleOverrides ?? null;
       setBundleFormUseCustom(Boolean(source?.useCustom));
       setBundleFormState(
-        buildBundleFormState(project?.cableLayout ?? null, source?.categories ?? null)
+        buildBundleFormState(project?.cableLayout ?? null, source?.categories ?? null),
       );
       setBundleFormErrors(createBundleFormErrors());
       // Reset custom bundle ranges
       setCustomBundleRangesFormState(
         buildCustomBundleRangesFormState(
           project?.cableLayout?.customBundleRanges,
-          source?.customBundleRanges
-        )
+          source?.customBundleRanges,
+        ),
       );
       setCustomBundleRangesErrors(createEmptyCustomBundleRangesErrors());
     },
-    [bundleOverrides, project?.cableLayout]
+    [bundleOverrides, project?.cableLayout],
   );
 
   // Custom bundle range handlers for tray configuration
@@ -2075,11 +2027,11 @@ export const TrayDetails = () => {
         ...prev,
         [category]: [
           ...prev[category],
-          { id: generateBundleRangeId(), min: '', max: '', maxRows: '' }
-        ]
+          { id: generateBundleRangeId(), min: '', max: '', maxRows: '' },
+        ],
       }));
     },
-    [isEditing]
+    [isEditing],
   );
 
   const handleRemoveBundleRange = useCallback(
@@ -2088,10 +2040,10 @@ export const TrayDetails = () => {
       setCustomBundleRangesErrors((prev) => ({ ...prev, [category]: null }));
       setCustomBundleRangesFormState((prev) => ({
         ...prev,
-        [category]: prev[category].filter((r) => r.id !== rangeId)
+        [category]: prev[category].filter((r) => r.id !== rangeId),
       }));
     },
-    [isEditing]
+    [isEditing],
   );
 
   const handleBundleRangeChange = useCallback(
@@ -2099,18 +2051,16 @@ export const TrayDetails = () => {
       category: CableCategoryKey,
       rangeId: string,
       field: 'min' | 'max' | 'maxRows',
-      value: string
+      value: string,
     ) => {
       if (!isEditing) return;
       setCustomBundleRangesErrors((prev) => ({ ...prev, [category]: null }));
       setCustomBundleRangesFormState((prev) => ({
         ...prev,
-        [category]: prev[category].map((r) =>
-          r.id === rangeId ? { ...r, [field]: value } : r
-        )
+        [category]: prev[category].map((r) => (r.id === rangeId ? { ...r, [field]: value } : r)),
       }));
     },
-    [isEditing]
+    [isEditing],
   );
 
   const buildBundleOverrideInput = useCallback(() => {
@@ -2139,7 +2089,7 @@ export const TrayDetails = () => {
           : null,
         applyPhaseRotation: CABLE_CATEGORY_CONFIG[key].allowPhaseRotation
           ? input.phaseRotation
-          : null
+          : null,
       };
     }
 
@@ -2147,16 +2097,13 @@ export const TrayDetails = () => {
   }, [bundleFormState]);
 
   const persistBundleOverride = useCallback(
-    (
-      override: TrayBundleOverride,
-      options: { silent?: boolean } = {}
-    ): boolean => {
+    (override: TrayBundleOverride, options: { silent?: boolean } = {}): boolean => {
       if (!canonicalProjectId || (!tray?.id && !trayId)) {
         if (!options.silent) {
           showToast({
             intent: 'error',
             title: 'Tray not available',
-            body: 'Load a tray before saving bundle configuration.'
+            body: 'Load a tray before saving bundle configuration.',
           });
         }
         return false;
@@ -2174,13 +2121,13 @@ export const TrayDetails = () => {
             : 'Using project bundle configuration',
           body: override.useCustom
             ? 'Tray-level bundle rules will be used for this tray.'
-            : 'Project bundle rules will be applied to this tray.'
+            : 'Project bundle rules will be applied to this tray.',
         });
       }
 
       return true;
     },
-    [canonicalProjectId, showToast, tray?.id, trayId]
+    [canonicalProjectId, showToast, tray?.id, trayId],
   );
 
   const handleSaveBundleConfig = useCallback(() => {
@@ -2210,7 +2157,7 @@ export const TrayDetails = () => {
         const parsedRange: CustomBundleRange = {
           id: range.id,
           min: parseFloat(range.min) || 0,
-          max: parseFloat(range.max) || 0
+          max: parseFloat(range.max) || 0,
         };
 
         if (parsedRangeMaxRows.numeric !== null) {
@@ -2241,13 +2188,13 @@ export const TrayDetails = () => {
       // Parse custom bundle ranges from form state
       const parsedCustomRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
       const hasCustomRanges = Object.values(parsedCustomRanges).some(
-        (ranges) => ranges && ranges.length > 0
+        (ranges) => ranges && ranges.length > 0,
       );
 
       const nextOverride: TrayBundleOverride = {
         useCustom: bundleFormUseCustom,
         categories,
-        customBundleRanges: hasCustomRanges ? parsedCustomRanges : undefined
+        customBundleRanges: hasCustomRanges ? parsedCustomRanges : undefined,
       };
 
       persistBundleOverride(nextOverride);
@@ -2258,7 +2205,7 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Failed to save bundle configuration',
-        body: error instanceof Error ? error.message : undefined
+        body: error instanceof Error ? error.message : undefined,
       });
     } finally {
       setBundleSaving(false);
@@ -2269,7 +2216,7 @@ export const TrayDetails = () => {
     customBundleRangesFormState,
     handleResetBundleForm,
     persistBundleOverride,
-    showToast
+    showToast,
   ]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -2279,7 +2226,7 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to update trays.'
+        body: 'You need to be signed in as an admin to update trays.',
       });
       return;
     }
@@ -2300,9 +2247,7 @@ export const TrayDetails = () => {
       setTrays((previous) => {
         const hasTray = previous.some((item) => item.id === response.tray.id);
         return hasTray
-          ? previous.map((item) =>
-              item.id === response.tray.id ? response.tray : item
-            )
+          ? previous.map((item) => (item.id === response.tray.id ? response.tray : item))
           : [...previous, response.tray];
       });
       setFormValues(toTrayFormState(response.tray));
@@ -2314,18 +2259,18 @@ export const TrayDetails = () => {
         // Parse custom bundle ranges from form state
         const parsedCustomRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
         const hasCustomRanges = Object.values(parsedCustomRanges).some(
-          (ranges) => ranges && ranges.length > 0
+          (ranges) => ranges && ranges.length > 0,
         );
 
         const nextOverride: TrayBundleOverride = {
           useCustom: bundleFormUseCustom,
           categories,
-          customBundleRanges: hasCustomRanges ? parsedCustomRanges : undefined
+          customBundleRanges: hasCustomRanges ? parsedCustomRanges : undefined,
         };
         const currentOverride = bundleOverrides ?? {
           useCustom: false,
           categories: {},
-          customBundleRanges: undefined
+          customBundleRanges: undefined,
         };
         if (JSON.stringify(nextOverride) !== JSON.stringify(currentOverride)) {
           persistBundleOverride(nextOverride, { silent: true });
@@ -2342,10 +2287,10 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Failed to update tray',
-        body: err instanceof ApiError ? err.message : undefined
+        body: err instanceof ApiError ? err.message : undefined,
       });
     } finally {
-    setIsSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -2354,14 +2299,12 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to delete trays.'
+        body: 'You need to be signed in as an admin to delete trays.',
       });
       return;
     }
 
-    const confirmed = window.confirm(
-      `Delete tray "${tray.name}"? This action cannot be undone.`
-    );
+    const confirmed = window.confirm(`Delete tray "${tray.name}"? This action cannot be undone.`);
 
     if (!confirmed) {
       return;
@@ -2378,7 +2321,7 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Failed to delete tray',
-        body: err instanceof ApiError ? err.message : undefined
+        body: err instanceof ApiError ? err.message : undefined,
       });
       setIsDeleting(false);
     }
@@ -2396,49 +2339,28 @@ export const TrayDetails = () => {
   // UI state calculations
   const selectedGroundingCableLabel = useMemo(
     () =>
-      selectedGroundingCableType
-        ? formatCableTypeLabel(selectedGroundingCableType)
-        : undefined,
-    [selectedGroundingCableType, formatCableTypeLabel]
+      selectedGroundingCableType ? formatCableTypeLabel(selectedGroundingCableType) : undefined,
+    [selectedGroundingCableType, formatCableTypeLabel],
   );
   const groundingCableDisplay =
     selectedGroundingCableLabel ??
-    (selectedGroundingCableType ? selectedGroundingCableType.name ?? null : null);
+    (selectedGroundingCableType ? (selectedGroundingCableType.name ?? null) : null);
 
   const hasGroundingCableWeightData = groundingCableWeightKgPerM !== null;
   const groundingCableMissingWeight =
     includeGroundingCable && selectedGroundingCableType !== null && !hasGroundingCableWeightData;
 
-  const supportIdToLoad = supportOverride?.supportId ?? null;
   const supportSectionNeedsSupportData = Boolean(supportOverride?.supportId);
   const supportDistanceMissing = supportCalculations.distanceMeters === null;
   const trayLengthMissing =
     supportCalculations.lengthMeters === null || supportCalculations.lengthMeters <= 0;
-  const supportDetailsMissing =
-    supportSectionNeedsSupportData &&
-    materialSupportsLoaded &&
-    !materialSupportsLoading &&
-    supportIdToLoad !== null &&
-    !overrideSupport;
+  const supportDetailsMissing = supportSectionNeedsSupportData && !overrideSupport;
   const supportDetailsError = supportDetailsMissing
-    ? 'Selected support details were not found.'
-    : materialSupportsError;
+    ? 'Historical support characteristics were not captured and are unknown.'
+    : null;
 
   const supportTypeDisplay = overrideSupport?.type ?? supportOverride?.supportType ?? null;
-  const rawSupportLengthMm = overrideSupport?.lengthMm ?? null;
-  const supportLengthMm = useMemo(() => {
-    if (rawSupportLengthMm !== null) {
-      return rawSupportLengthMm;
-    }
-    const supportType = supportOverride?.supportType?.trim().toLowerCase();
-    if (!supportType) {
-      return null;
-    }
-    const matchedSupport = Object.values(materialSupportsById).find((support) =>
-      support.type?.trim().toLowerCase() === supportType
-    );
-    return matchedSupport?.lengthMm ?? null;
-  }, [materialSupportsById, rawSupportLengthMm, supportOverride?.supportType]);
+  const supportLengthMm = overrideSupport?.lengthMm ?? null;
 
   const canUseMaterialDropdown = !isLoadingMaterials && materialTrays.length > 0;
   const weightDisplay =
@@ -2446,23 +2368,22 @@ export const TrayDetails = () => {
       ? formValues.weightKgPerM
       : formatWeightValue(selectedMaterialTray?.weightKgPerM) || '-';
   const currentTypeHasMaterial = Boolean(
-    formValues.type && findMaterialTrayByType(formValues.type)
+    formValues.type && findMaterialTrayByType(formValues.type),
   );
 
   // Chart visualization data
-  const chartStatusColor =
-    safetyFactorBlocking
-      ? tokens.colorStatusDangerForeground1
-      : chartEvaluation.status === 'ok'
+  const chartStatusColor = safetyFactorBlocking
+    ? tokens.colorStatusDangerForeground1
+    : chartEvaluation.status === 'ok'
       ? tokens.colorPaletteGreenForeground1
       : chartEvaluation.status === 'too-short'
-      ? tokens.colorPaletteMarigoldForeground2
-      : chartEvaluation.status === 'no-curve' ||
-        chartEvaluation.status === 'loading' ||
-        chartEvaluation.status === 'awaiting-data' ||
-        chartEvaluation.status === 'no-points'
-      ? tokens.colorNeutralForeground3
-      : tokens.colorPaletteRedForeground1;
+        ? tokens.colorPaletteMarigoldForeground2
+        : chartEvaluation.status === 'no-curve' ||
+            chartEvaluation.status === 'loading' ||
+            chartEvaluation.status === 'awaiting-data' ||
+            chartEvaluation.status === 'no-points'
+          ? tokens.colorNeutralForeground3
+          : tokens.colorPaletteRedForeground1;
 
   const chartPointSpanDisplay =
     chartSpanMeters !== null ? numberFormatter.format(chartSpanMeters) : '-';
@@ -2484,8 +2405,8 @@ export const TrayDetails = () => {
       {
         span: highlight.span,
         toLoad: highlight.load,
-        color: lineColor
-      }
+        color: lineColor,
+      },
     ];
   }, [chartEvaluation.limitHighlight]);
 
@@ -2499,8 +2420,8 @@ export const TrayDetails = () => {
         load: chartEvaluation.allowableLoadAtSpan,
         toSpan: chartSpanMeters,
         color: tokens.colorPaletteRedForeground1,
-        label: 'Load limit at span'
-      }
+        label: 'Load limit at span',
+      },
     ];
   }, [chartEvaluation.allowableLoadAtSpan, chartSpanMeters]);
 
@@ -2525,8 +2446,9 @@ export const TrayDetails = () => {
   }, [chartEvaluation.limitHighlight, numberFormatter]);
 
   const loadCurveRefreshKey = useMemo(
-    () => `${includeGroundingCable}-${selectedGroundingCableTypeId ?? 'none'}-${groundingCableWeightKgPerM ?? 'na'}`,
-    [includeGroundingCable, selectedGroundingCableTypeId, groundingCableWeightKgPerM]
+    () =>
+      `${includeGroundingCable}-${selectedGroundingCableTypeId ?? 'none'}-${groundingCableWeightKgPerM ?? 'na'}`,
+    [includeGroundingCable, selectedGroundingCableTypeId, groundingCableWeightKgPerM],
   );
 
   const trayReportBaseContext = useMemo<TrayReportBaseContext | null>(() => {
@@ -2570,7 +2492,7 @@ export const TrayDetails = () => {
       percentageFormatter,
       dateTimeFormatter,
       materialTrayMetadata,
-      currentUserDisplay
+      currentUserDisplay,
     };
   }, [
     project,
@@ -2608,7 +2530,7 @@ export const TrayDetails = () => {
     percentageFormatter,
     dateTimeFormatter,
     materialTrayMetadata,
-    currentUserDisplay
+    currentUserDisplay,
   ]);
 
   const canGenerateReport = Boolean(token && trayReportBaseContext);
@@ -2618,7 +2540,7 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Unable to generate report',
-        body: 'Project data is still loading. Try again in a moment.'
+        body: 'Project data is still loading. Try again in a moment.',
       });
       return;
     }
@@ -2627,20 +2549,19 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Tray purpose required',
-        body: 'Assign a purpose to this tray before generating a report.'
+        body: 'Assign a purpose to this tray before generating a report.',
       });
       return;
     }
 
     const templatePurpose = tray.purpose.trim();
-    const templateSelection =
-      project.trayPurposeTemplates?.[templatePurpose] ?? null;
+    const templateSelection = project.trayPurposeTemplates?.[templatePurpose] ?? null;
 
     if (!templateSelection?.fileId) {
       showToast({
         intent: 'error',
         title: 'Tray template missing',
-        body: 'Assign a report template to this tray purpose in Project details.'
+        body: 'Assign a report template to this tray purpose in Project details.',
       });
       return;
     }
@@ -2649,7 +2570,7 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Load curve unavailable',
-        body: 'Load curve visualization is not available to export.'
+        body: 'Load curve visualization is not available to export.',
       });
       return;
     }
@@ -2658,7 +2579,7 @@ export const TrayDetails = () => {
       showToast({
         intent: 'error',
         title: 'Tray visualization unavailable',
-        body: 'Tray layout visualization is not available to export.'
+        body: 'Tray layout visualization is not available to export.',
       });
       return;
     }
@@ -2669,14 +2590,13 @@ export const TrayDetails = () => {
       const { loadCurve, bundles, report } = buildReportFileNames(
         project.projectNumber,
         project.name,
-        tray.name
+        tray.name,
       );
 
       const projectFilesResponse = await fetchProjectFiles(projectId, token);
       let projectFilesList = [...projectFilesResponse.files];
 
-      const normalizeFileName = (fileName: string): string =>
-        fileName.trim().toLowerCase();
+      const normalizeFileName = (fileName: string): string => fileName.trim().toLowerCase();
 
       const findExistingFileIdByName = (fileName: string): string | null => {
         const normalized = normalizeFileName(fileName);
@@ -2684,16 +2604,14 @@ export const TrayDetails = () => {
           return null;
         }
         const existing = projectFilesList.find(
-          (file) => normalizeFileName(file.fileName) === normalized
+          (file) => normalizeFileName(file.fileName) === normalized,
         );
         return existing?.id ?? null;
       };
 
       const registerProjectFile = (file: ProjectFile) => {
         projectFilesList = (() => {
-          const index = projectFilesList.findIndex(
-            (existing) => existing.id === file.id
-          );
+          const index = projectFilesList.findIndex((existing) => existing.id === file.id);
           if (index === -1) {
             return [...projectFilesList, file];
           }
@@ -2706,12 +2624,12 @@ export const TrayDetails = () => {
       const templateDownloadPromise = downloadProjectFile(
         token,
         projectId,
-        templateSelection.fileId
+        templateSelection.fileId,
       );
 
       const [loadCurveBlob, bundlesBlob] = await Promise.all([
         canvasToBlob(loadCurveCanvasRef.current, 'image/jpeg', 0.92),
-        canvasToBlob(trayCanvasRef.current, 'image/jpeg', 0.92)
+        canvasToBlob(trayCanvasRef.current, 'image/jpeg', 0.92),
       ]);
 
       const rotatedBundlesBlob = await rotateImageBlob(bundlesBlob, 'ccw90');
@@ -2725,6 +2643,8 @@ export const TrayDetails = () => {
 
         const imageMeta = trayReportBaseContext.materialTrayMetadata;
         if (
+          changingMaterialSelection ||
+          !tray.materialSnapshot?.imageAvailable ||
           !imageMeta?.imageTemplateId ||
           !imageMeta.imageTemplateContentType ||
           !imageMeta.imageTemplateContentType.startsWith('image/')
@@ -2739,10 +2659,7 @@ export const TrayDetails = () => {
         }
 
         try {
-          const { blob } = await downloadTemplateFile(
-            token,
-            imageMeta.imageTemplateId
-          );
+          const blob = await downloadTrayMaterialImage(token, projectId!, trayId!);
           trayTemplateImageBlob = blob;
         } catch (error) {
           console.error('Failed to download tray type image template', error);
@@ -2753,141 +2670,128 @@ export const TrayDetails = () => {
       };
 
       const loadCurveFile = new File([loadCurveBlob], loadCurve, {
-        type: 'image/jpeg'
+        type: 'image/jpeg',
       });
       const bundlesFile = new File([bundlesBlob], bundles, {
-        type: 'image/jpeg'
+        type: 'image/jpeg',
       });
 
       const loadCurveReplaceId = findExistingFileIdByName(loadCurve);
       const bundlesReplaceId = findExistingFileIdByName(bundles);
 
-      const [{ file: storedLoadCurve }, { file: storedBundles }] =
-        await Promise.all([
-          uploadProjectFile(
-            token,
-            projectId,
-            loadCurveFile,
-            loadCurveReplaceId ? { replaceFileId: loadCurveReplaceId } : undefined
-          ),
-          uploadProjectFile(
-            token,
-            projectId,
-            bundlesFile,
-            bundlesReplaceId ? { replaceFileId: bundlesReplaceId } : undefined
-          )
-        ]);
+      const [{ file: storedLoadCurve }, { file: storedBundles }] = await Promise.all([
+        uploadProjectFile(
+          token,
+          projectId,
+          loadCurveFile,
+          loadCurveReplaceId ? { replaceFileId: loadCurveReplaceId } : undefined,
+        ),
+        uploadProjectFile(
+          token,
+          projectId,
+          bundlesFile,
+          bundlesReplaceId ? { replaceFileId: bundlesReplaceId } : undefined,
+        ),
+      ]);
 
       registerProjectFile(storedLoadCurve);
       registerProjectFile(storedBundles);
 
-      const { blob: templateBlob, contentType } =
-        await templateDownloadPromise;
+      const { blob: templateBlob, contentType } = await templateDownloadPromise;
 
-    if (!canonicalProjectId) {
-      showToast({
-        intent: 'error',
-        title: 'Project unavailable',
-        body: 'Project identifier is missing for placeholder resolution.'
-      });
-      return;
-    }
-
-    const placeholderKeyCandidates = [
-      canonicalProjectId,
-      projectId && projectId !== canonicalProjectId ? projectId : null
-    ].filter(
-      (value, index, array): value is string =>
-        Boolean(value) && array.indexOf(value) === index
-    );
-
-    let storedPlaceholders: Record<string, string> = {};
-    let placeholdersSourceKey: string | null = null;
-
-    for (const candidate of placeholderKeyCandidates) {
-      if (!candidate) {
-        continue;
-      }
-      const candidateValues = getProjectPlaceholders(candidate);
-      if (Object.keys(candidateValues).length > 0) {
-        storedPlaceholders = candidateValues;
-        placeholdersSourceKey = candidate;
-        break;
-      }
-    }
-
-    if (Object.keys(storedPlaceholders).length === 0) {
-      showToast({
-        intent: 'error',
-        title: 'No placeholders configured',
-        body: 'Map placeholders in the Variables tab before generating a report.'
-      });
-      return;
-    }
-
-    if (
-      placeholdersSourceKey &&
-      placeholdersSourceKey !== canonicalProjectId
-    ) {
-      setProjectPlaceholders(canonicalProjectId, storedPlaceholders);
-      clearProjectPlaceholders(placeholdersSourceKey);
-    }
-
-    const resolveCustomVariables = (): CustomVariable[] => {
       if (!canonicalProjectId) {
-        return [];
+        showToast({
+          intent: 'error',
+          title: 'Project unavailable',
+          body: 'Project identifier is missing for placeholder resolution.',
+        });
+        return;
       }
-      const keyCandidates = [
+
+      const placeholderKeyCandidates = [
         canonicalProjectId,
-        projectId && projectId !== canonicalProjectId ? projectId : null
+        projectId && projectId !== canonicalProjectId ? projectId : null,
       ].filter(
-        (value, index, array): value is string =>
-          Boolean(value) && array.indexOf(value) === index
+        (value, index, array): value is string => Boolean(value) && array.indexOf(value) === index,
       );
 
-      let variables: CustomVariable[] = [];
-      let sourceKey: string | null = null;
+      let storedPlaceholders: Record<string, string> = {};
+      let placeholdersSourceKey: string | null = null;
 
-      for (const candidate of keyCandidates) {
+      for (const candidate of placeholderKeyCandidates) {
         if (!candidate) {
           continue;
         }
-        const candidateVariables = getCustomVariables(candidate);
-        if (candidateVariables.length > 0) {
-          variables = candidateVariables;
-          sourceKey = candidate;
+        const candidateValues = getProjectPlaceholders(candidate);
+        if (Object.keys(candidateValues).length > 0) {
+          storedPlaceholders = candidateValues;
+          placeholdersSourceKey = candidate;
           break;
         }
       }
 
-      if (
-        sourceKey &&
-        sourceKey !== canonicalProjectId &&
-        variables.length > 0
-      ) {
-        setCustomVariables(canonicalProjectId, variables);
-        clearCustomVariables(sourceKey);
+      if (Object.keys(storedPlaceholders).length === 0) {
+        showToast({
+          intent: 'error',
+          title: 'No placeholders configured',
+          body: 'Map placeholders in the Variables tab before generating a report.',
+        });
+        return;
       }
 
-      return variables;
-    };
+      if (placeholdersSourceKey && placeholdersSourceKey !== canonicalProjectId) {
+        setProjectPlaceholders(canonicalProjectId, storedPlaceholders);
+        clearProjectPlaceholders(placeholdersSourceKey);
+      }
 
-    const customVariables = resolveCustomVariables();
-    const customVariableIds = new Set(customVariables.map((item) => item.id));
-    const customPlaceholderTokens = new Set<string>();
+      const resolveCustomVariables = (): CustomVariable[] => {
+        if (!canonicalProjectId) {
+          return [];
+        }
+        const keyCandidates = [
+          canonicalProjectId,
+          projectId && projectId !== canonicalProjectId ? projectId : null,
+        ].filter(
+          (value, index, array): value is string =>
+            Boolean(value) && array.indexOf(value) === index,
+        );
 
-    const placeholderBundle = buildTrayPlaceholderValues({
-      ...trayReportBaseContext,
-      projectFiles: projectFilesList,
-      loadCurveImageFileName: loadCurve,
-        bundlesImageFileName: bundles
+        let variables: CustomVariable[] = [];
+        let sourceKey: string | null = null;
+
+        for (const candidate of keyCandidates) {
+          if (!candidate) {
+            continue;
+          }
+          const candidateVariables = getCustomVariables(candidate);
+          if (candidateVariables.length > 0) {
+            variables = candidateVariables;
+            sourceKey = candidate;
+            break;
+          }
+        }
+
+        if (sourceKey && sourceKey !== canonicalProjectId && variables.length > 0) {
+          setCustomVariables(canonicalProjectId, variables);
+          clearCustomVariables(sourceKey);
+        }
+
+        return variables;
+      };
+
+      const customVariables = resolveCustomVariables();
+      const customVariableIds = new Set(customVariables.map((item) => item.id));
+      const customPlaceholderTokens = new Set<string>();
+
+      const placeholderBundle = buildTrayPlaceholderValues({
+        ...trayReportBaseContext,
+        projectFiles: projectFilesList,
+        loadCurveImageFileName: loadCurve,
+        bundlesImageFileName: bundles,
       });
       const textReplacements: Record<string, string> = {};
       const tableReplacements: Record<string, WordTableDefinition> = {};
-      const pendingImagePlaceholders: Record<
-        string,
-        PendingImagePlaceholder
-      > = {};
+      const pendingImagePlaceholders: Record<string, PendingImagePlaceholder> = {};
 
       for (const variable of customVariables) {
         const placeholderToken = storedPlaceholders[variable.id];
@@ -2895,9 +2799,7 @@ export const TrayDetails = () => {
           continue;
         }
         const replacementValue =
-          variable.name.trim() === ''
-            ? MISSING_VALUE_PLACEHOLDER
-            : variable.name.trim();
+          variable.name.trim() === '' ? MISSING_VALUE_PLACEHOLDER : variable.name.trim();
         textReplacements[placeholderToken] = replacementValue;
         customPlaceholderTokens.add(placeholderToken);
       }
@@ -2944,8 +2846,8 @@ export const TrayDetails = () => {
             if (templateBlob) {
               sourceBlob = templateBlob;
               fileNameForBlob =
-                trayReportBaseContext.materialTrayMetadata
-                  ?.imageTemplateFileName ?? 'TrayTypeImage';
+                trayReportBaseContext.materialTrayMetadata?.imageTemplateFileName ??
+                'TrayTypeImage';
               description = 'Tray type illustration';
               layout = 'default';
               maxHeightEmu = TRAY_TEMPLATE_MAX_HEIGHT_EMU;
@@ -2958,7 +2860,7 @@ export const TrayDetails = () => {
               fileName: fileNameForBlob,
               description,
               layout,
-              maxHeightEmu
+              maxHeightEmu,
             };
           }
           continue;
@@ -2971,39 +2873,26 @@ export const TrayDetails = () => {
           resolvedValue !== ''
         ) {
           console.warn(
-            `Placeholder "${trimmedPlaceholder}" has multiple values; keeping the first one.`
+            `Placeholder "${trimmedPlaceholder}" has multiple values; keeping the first one.`,
           );
           continue;
         }
         textReplacements[trimmedPlaceholder] = resolvedValue;
       }
 
-      const resolvedImagePlaceholders = await prepareImageDefinitions(
-        pendingImagePlaceholders
-      );
+      const resolvedImagePlaceholders = await prepareImageDefinitions(pendingImagePlaceholders);
 
-      const updatedDocumentBlob = await replaceDocxPlaceholders(
-        templateBlob,
-        textReplacements,
-        {
-          tables:
-            Object.keys(tableReplacements).length > 0
-              ? tableReplacements
-              : undefined,
-          images:
-            Object.keys(resolvedImagePlaceholders).length > 0
-              ? resolvedImagePlaceholders
-              : undefined
-        }
-      );
+      const updatedDocumentBlob = await replaceDocxPlaceholders(templateBlob, textReplacements, {
+        tables: Object.keys(tableReplacements).length > 0 ? tableReplacements : undefined,
+        images:
+          Object.keys(resolvedImagePlaceholders).length > 0 ? resolvedImagePlaceholders : undefined,
+      });
 
       const wordContentType =
-        contentType && contentType !== 'application/octet-stream'
-          ? contentType
-          : WORD_MIME_TYPE;
+        contentType && contentType !== 'application/octet-stream' ? contentType : WORD_MIME_TYPE;
 
       const reportFile = new File([updatedDocumentBlob], report, {
-        type: wordContentType
+        type: wordContentType,
       });
 
       const reportReplaceId = findExistingFileIdByName(report);
@@ -3012,7 +2901,7 @@ export const TrayDetails = () => {
         token,
         projectId,
         reportFile,
-        reportReplaceId ? { replaceFileId: reportReplaceId } : undefined
+        reportReplaceId ? { replaceFileId: reportReplaceId } : undefined,
       );
 
       registerProjectFile(uploadedReport);
@@ -3022,7 +2911,7 @@ export const TrayDetails = () => {
       showToast({
         intent: 'success',
         title: 'Tray report generated',
-        body: `Saved as "${uploadedReport.fileName}". Check your downloads to store a local copy.`
+        body: `Saved as "${uploadedReport.fileName}". Check your downloads to store a local copy.`,
       });
     } catch (error) {
       console.error('Failed to generate tray report', error);
@@ -3033,21 +2922,13 @@ export const TrayDetails = () => {
           error instanceof ApiError
             ? error.message
             : error instanceof Error
-            ? error.message
-            : undefined
+              ? error.message
+              : undefined,
       });
     } finally {
       setIsGeneratingReport(false);
     }
-  }, [
-    project,
-    tray,
-    projectId,
-    token,
-    trayReportBaseContext,
-    showToast,
-    canonicalProjectId
-  ]);
+  }, [project, tray, projectId, token, trayReportBaseContext, showToast, canonicalProjectId]);
 
   // Loading and error states
   if (isLoading) {
@@ -3088,6 +2969,12 @@ export const TrayDetails = () => {
       />
 
       {/* Tray Details Section */}
+      {!tray.materialSnapshot && tray.type ? (
+        <Body1>
+          Historical catalog characteristics were not captured for this tray. Existing project
+          dimensions are preserved; other characteristics are unknown.
+        </Body1>
+      ) : null}
       {isEditing ? (
         <TrayEditForm
           formValues={formValues}
@@ -3126,12 +3013,14 @@ export const TrayDetails = () => {
         />
         {isEditing && bundleFormUseCustom !== isUsingCustomBundles ? (
           <Body1 className={styles.emptyState}>
-            Save to {bundleFormUseCustom ? 'apply tray bundle overrides' : 'use project bundle settings'}.
+            Save to{' '}
+            {bundleFormUseCustom ? 'apply tray bundle overrides' : 'use project bundle settings'}.
           </Body1>
         ) : null}
         {isEditing && bundleFormUseCustom && trayCableCategories.length === 0 ? (
           <Body1 className={styles.emptyState}>
-            No cables with recognized purposes on this tray. Add cables with MV, Power, VFD, or Control purposes to configure bundle settings.
+            No cables with recognized purposes on this tray. Add cables with MV, Power, VFD, or
+            Control purposes to configure bundle settings.
           </Body1>
         ) : null}
         {bundleFormUseCustom && isEditing && trayCableCategories.length > 0 ? (
@@ -3148,9 +3037,7 @@ export const TrayDetails = () => {
                 const customRangesError = customBundleRangesErrors[key];
                 return (
                   <div key={key} className={styles.bundleCard}>
-                    <Caption1 className={styles.fieldTitle}>
-                      {config.label}
-                    </Caption1>
+                    <Caption1 className={styles.fieldTitle}>{config.label}</Caption1>
                     <Field
                       label="Max rows"
                       validationState={error ? 'error' : undefined}
@@ -3205,10 +3092,18 @@ export const TrayDetails = () => {
                     ) : null}
 
                     {/* Custom bundle size ranges for this category */}
-                    <div style={{ marginTop: '12px', borderTop: `1px solid ${tokens.colorNeutralStroke1}`, paddingTop: '12px' }}>
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+                        paddingTop: '12px',
+                      }}
+                    >
                       <Caption1>Custom bundle size ranges (mm)</Caption1>
                       {customRangesError ? (
-                        <Body1 style={{ color: tokens.colorPaletteRedForeground1, fontSize: '12px' }}>
+                        <Body1
+                          style={{ color: tokens.colorPaletteRedForeground1, fontSize: '12px' }}
+                        >
                           {customRangesError}
                         </Body1>
                       ) : null}
@@ -3219,7 +3114,7 @@ export const TrayDetails = () => {
                             display: 'flex',
                             alignItems: 'center',
                             gap: '8px',
-                            marginTop: '8px'
+                            marginTop: '8px',
                           }}
                         >
                           <Input
@@ -3287,11 +3182,7 @@ export const TrayDetails = () => {
             >
               Reset
             </Button>
-            <Button
-              appearance="primary"
-              onClick={handleSaveBundleConfig}
-              disabled={bundleSaving}
-            >
+            <Button appearance="primary" onClick={handleSaveBundleConfig} disabled={bundleSaving}>
               {bundleSaving ? 'Saving...' : 'Save bundle settings'}
             </Button>
           </div>
@@ -3311,27 +3202,35 @@ export const TrayDetails = () => {
           ) : (
             trayBundleDetails.map((detail) => (
               <Body1 key={detail.key} style={{ marginBottom: '0.25rem', fontWeight: 'normal' }}>
-                {detail.label}<br />
-                Current max rows - {numberFormatter.format(detail.maxRows)}{'    '}<br />
-                Current max columns - {numberFormatter.format(detail.maxColumns)}{'    '}<br />
-                Current space between bundles - {detail.bundleSpacing}{'    '}<br />
-                Trefoil - {
-                  detail.trefoil === null
-                    ? 'Not applicable'
-                    : detail.trefoil
+                {detail.label}
+                <br />
+                Current max rows - {numberFormatter.format(detail.maxRows)}
+                {'    '}
+                <br />
+                Current max columns - {numberFormatter.format(detail.maxColumns)}
+                {'    '}
+                <br />
+                Current space between bundles - {detail.bundleSpacing}
+                {'    '}
+                <br />
+                Trefoil -{' '}
+                {detail.trefoil === null
+                  ? 'Not applicable'
+                  : detail.trefoil
                     ? 'Enabled'
-                    : 'Disabled'
-                }<br />
+                    : 'Disabled'}
+                <br />
                 {detail.trefoilSpacing !== null ? (
                   <>
-                    Space between trefoil bundles -{' '}
-                    {detail.trefoilSpacing ? 'Enabled' : 'Disabled'}{'    '}<br />
+                    Space between trefoil bundles - {detail.trefoilSpacing ? 'Enabled' : 'Disabled'}
+                    {'    '}
+                    <br />
                   </>
                 ) : null}
                 {detail.phaseRotation !== null ? (
                   <>
-                    Apply phase rotation -{' '}
-                    {detail.phaseRotation ? 'Enabled' : 'Disabled'}<br />
+                    Apply phase rotation - {detail.phaseRotation ? 'Enabled' : 'Disabled'}
+                    <br />
                   </>
                 ) : null}
                 {detail.customRanges.length > 0 ? (
@@ -3365,7 +3264,7 @@ export const TrayDetails = () => {
       {/* Support Calculations Section */}
       <SupportCalculationsSection
         supportSectionNeedsSupportData={supportSectionNeedsSupportData}
-        materialSupportsLoading={materialSupportsLoading}
+        materialSupportsLoading={false}
         supportDetailsError={supportDetailsError}
         supportDistanceMissing={supportDistanceMissing}
         trayLengthMissing={trayLengthMissing}
@@ -3384,13 +3283,13 @@ export const TrayDetails = () => {
           {
             label: 'Tray weight load per meter kg/m',
             value: trayWeightLoadPerMeterKg,
-            formula: trayWeightLoadPerMeterFormula
+            formula: trayWeightLoadPerMeterFormula,
           },
           {
             label: 'Tray total own weight kg',
             value: trayTotalOwnWeightKg,
-            formula: trayTotalOwnWeightFormula
-          }
+            formula: trayTotalOwnWeightFormula,
+          },
         ]}
         formatNumber={formatSupportNumber}
         styles={styles}
@@ -3428,9 +3327,7 @@ export const TrayDetails = () => {
           </div>
           <div className={styles.field}>
             <Caption1>Total weight on the tray kg</Caption1>
-            <Body1>
-              {cablesTotalWeightFormula ?? formatSupportNumber(cablesTotalWeightKg)}
-            </Body1>
+            <Body1>{cablesTotalWeightFormula ?? formatSupportNumber(cablesTotalWeightKg)}</Body1>
           </div>
         </div>
       </div>
@@ -3442,13 +3339,13 @@ export const TrayDetails = () => {
           {
             label: 'Total weight load per meter kg/m',
             value: totalWeightLoadPerMeterKg,
-            formula: totalWeightLoadPerMeterFormula
+            formula: totalWeightLoadPerMeterFormula,
           },
           {
             label: 'Total weight kg',
             value: totalWeightKg,
-            formula: totalWeightFormula
-          }
+            formula: totalWeightFormula,
+          },
         ]}
         formatNumber={formatSupportNumber}
         styles={styles}
@@ -3495,9 +3392,7 @@ export const TrayDetails = () => {
         {freeSpaceAlert ? (
           <Body1
             className={
-              freeSpaceAlert.kind === 'danger'
-                ? styles.freeSpaceDanger
-                : styles.freeSpaceWarning
+              freeSpaceAlert.kind === 'danger' ? styles.freeSpaceDanger : styles.freeSpaceWarning
             }
           >
             {freeSpaceAlert.message}

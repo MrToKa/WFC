@@ -6,10 +6,26 @@ import { mapUserRow } from '../models/user.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { adminUpdateUserSchema } from '../validators.js';
 import { updateUserProfile } from '../services/userService.js';
+import { z } from 'zod';
+import { replaceEngineerProjects } from '../services/projectAccessService.js';
+import { respondToMutationError } from '../services/mutationService.js';
 
 const adminUsersRouter = Router();
 
 adminUsersRouter.use(authenticate, requireAdmin);
+
+adminUsersRouter.put('/users/:userId/project-access', async (req: Request, res: Response) => {
+  const id = z.string().uuid().safeParse(req.params.userId);
+  const body = z.object({ projectIds: z.array(z.string().uuid()).max(1000) }).strict().safeParse(req.body);
+  if (!id.success || !body.success) { res.status(400).json({ error: 'Valid user and project IDs are required' }); return; }
+  try {
+    res.json(await replaceEngineerProjects(id.data, [...new Set(body.data.projectIds)], req.userId!));
+  } catch (error) {
+    if (respondToMutationError(error, res)) return;
+    console.error('Project assignment failed', error);
+    res.status(500).json({ error: 'Failed to update project assignments' });
+  }
+});
 
 adminUsersRouter.get(
   '/users',
@@ -24,6 +40,7 @@ adminUsersRouter.get(
             first_name,
             last_name,
             is_admin,
+            ARRAY(SELECT pe.project_id FROM project_engineers pe WHERE pe.user_id=users.id ORDER BY pe.project_id) AS engineer_project_ids,
             created_at,
             updated_at
           FROM users
@@ -172,6 +189,7 @@ adminUsersRouter.post(
             first_name,
             last_name,
             is_admin,
+            ARRAY(SELECT pe.project_id FROM project_engineers pe WHERE pe.user_id=users.id ORDER BY pe.project_id) AS engineer_project_ids,
             created_at,
             updated_at;
         `,

@@ -134,6 +134,9 @@ const projectFieldSchema = {
 } as const;
 
 export const createProjectSchema = z.object(projectFieldSchema).strict();
+export const projectSupportDistancesSchema = z.object({
+  supportDistances: projectFieldSchema.supportDistances.unwrap(),
+}).strict();
 
 export const updateProjectSchema = z
   .object({
@@ -373,6 +376,7 @@ export const updateMaterialInstrumentInstallationMaterialSchema =
 
 export const createCableTypeDefaultMaterialSchema = z
   .object({
+    currentMaterialId: z.string().uuid().nullable().optional(),
     name: cableTypeDefaultMaterialNameField,
     quantity: cableTypeNumericField,
     unit: cableTypeDefaultMaterialUnitField,
@@ -382,6 +386,7 @@ export const createCableTypeDefaultMaterialSchema = z
 
 export const updateCableTypeDefaultMaterialSchema = z
   .object({
+    currentMaterialId: z.string().uuid().nullable().optional(),
     name: cableTypeDefaultMaterialNameField.optional(),
     quantity: cableTypeNumericField,
     unit: cableTypeDefaultMaterialUnitField,
@@ -390,6 +395,7 @@ export const updateCableTypeDefaultMaterialSchema = z
   .strict()
   .refine(
     (value) =>
+      value.currentMaterialId !== undefined ||
       value.name !== undefined ||
       value.quantity !== undefined ||
       value.unit !== undefined ||

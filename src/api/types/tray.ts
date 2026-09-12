@@ -1,3 +1,13 @@
+import type { MaterialTray, MaterialLoadCurve } from './material';
+
+export type TrayMaterialSnapshot = {
+  schemaVersion: 1;
+  capturedAt: string;
+  material: MaterialTray;
+  loadCurve: MaterialLoadCurve | null;
+  imageAvailable: boolean;
+};
+
 export type Tray = {
   id: string;
   projectId: string;
@@ -9,6 +19,8 @@ export type Tray = {
   lengthMm: number | null;
   includeGroundingCable: boolean;
   groundingCableTypeId: string | null;
+  materialSnapshot?: TrayMaterialSnapshot | null;
+  materialSnapshotStatus?: 'captured' | 'unknown';
   createdAt: string;
   updatedAt: string;
 };

@@ -1,0 +1,14 @@
+.git
+.data
+node_modules
+dist
+coverage
+.env
+**/.env
+**/*.dump
+**/*.pem
+**/*.key
+.codex
+.agents
+docs
+codex-prompts

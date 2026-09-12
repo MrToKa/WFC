@@ -1,3 +1,4 @@
+import { canEditProjectContent } from '@/utils/projectPermissions';
 import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -310,7 +311,7 @@ export const CableTypeDetails = () => {
   const { showToast } = useToast();
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isAdmin = Boolean(user?.isAdmin);
+  const isAdmin = canEditProjectContent(user, projectId);
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
 
   const [details, setDetails] = useState<CableTypeDetailsData | null>(null);
@@ -325,6 +326,7 @@ export const CableTypeDetails = () => {
     string | null
   >(null);
 
+  const [dialogRevision, setDialogRevision] = useState<number | undefined>();
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
   const [dialogMode, setDialogMode] = useState<DefaultMaterialDialogMode>('create');
   const [dialogValues, setDialogValues] =
@@ -476,6 +478,7 @@ export const CableTypeDetails = () => {
     setDialogMode('create');
     setDialogValues(emptyDefaultMaterialForm);
     setDialogErrors({});
+    setDialogRevision(details?.mutationRevision);
     setDialogOpen(true);
     setEditingDefaultMaterialId(null);
   }, [
@@ -483,15 +486,21 @@ export const CableTypeDetails = () => {
     availableDefaultMaterialsError,
     availableDefaultMaterialsLoading,
     showToast,
+    details?.mutationRevision,
+    availableDefaultMaterials,
   ]);
 
-  const openEditDialog = useCallback((material: CableTypeDefaultMaterial) => {
-    setDialogMode('edit');
-    setDialogValues(toDefaultMaterialFormState(material));
-    setDialogErrors({});
-    setDialogOpen(true);
-    setEditingDefaultMaterialId(material.id);
-  }, []);
+  const openEditDialog = useCallback(
+    (material: CableTypeDefaultMaterial) => {
+      setDialogMode('edit');
+      setDialogValues(toDefaultMaterialFormState(material));
+      setDialogErrors({});
+      setDialogRevision(details?.mutationRevision);
+      setDialogOpen(true);
+      setEditingDefaultMaterialId(material.id);
+    },
+    [details?.mutationRevision],
+  );
 
   const handleDialogSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -515,12 +524,23 @@ export const CableTypeDetails = () => {
 
     try {
       if (dialogMode === 'create') {
-        const response = await createCableTypeDefaultMaterial(token, projectId, cableTypeId, input);
+        const response = await createCableTypeDefaultMaterial(
+          token,
+          projectId,
+          cableTypeId,
+          {
+            ...input,
+            currentMaterialId: availableDefaultMaterials.find((item) => item.type === input.name)
+              ?.id,
+          },
+          dialogRevision,
+        );
 
         setDetails((previous) =>
           previous
             ? {
                 ...previous,
+                mutationRevision: response.mutationRevision,
                 defaultMaterials: sortDefaultMaterials([
                   ...previous.defaultMaterials,
                   response.defaultMaterial,
@@ -535,13 +555,22 @@ export const CableTypeDetails = () => {
           projectId,
           cableTypeId,
           editingDefaultMaterialId,
-          input,
+          {
+            ...input,
+            currentMaterialId:
+              details?.defaultMaterials.find((row) => row.id === editingDefaultMaterialId)?.name ===
+              input.name
+                ? undefined
+                : availableDefaultMaterials.find((item) => item.type === input.name)?.id,
+          },
+          dialogRevision,
         );
 
         setDetails((previous) =>
           previous
             ? {
                 ...previous,
+                mutationRevision: response.mutationRevision,
                 defaultMaterials: sortDefaultMaterials(
                   previous.defaultMaterials.map((item) =>
                     item.id === editingDefaultMaterialId ? response.defaultMaterial : item,
@@ -609,11 +638,18 @@ export const CableTypeDetails = () => {
       setPendingDefaultMaterialId(material.id);
 
       try {
-        await deleteCableTypeDefaultMaterial(token, projectId, cableTypeId, material.id);
+        const response = await deleteCableTypeDefaultMaterial(
+          token,
+          projectId,
+          cableTypeId,
+          material.id,
+          details?.mutationRevision,
+        );
         setDetails((previous) =>
           previous
             ? {
                 ...previous,
+                mutationRevision: response.mutationRevision,
                 defaultMaterials: previous.defaultMaterials.filter(
                   (item) => item.id !== material.id,
                 ),
@@ -632,7 +668,7 @@ export const CableTypeDetails = () => {
         setPendingDefaultMaterialId(null);
       }
     },
-    [cableTypeId, isAdmin, projectId, showToast, token],
+    [cableTypeId, isAdmin, projectId, showToast, token, details?.mutationRevision],
   );
 
   const handleImportClick = useCallback(() => {
@@ -670,12 +706,19 @@ export const CableTypeDetails = () => {
       setIsImportingDefaultMaterials(true);
 
       try {
-        const response = await importCableTypeDefaultMaterials(token, projectId, cableTypeId, file);
+        const response = await importCableTypeDefaultMaterials(
+          token,
+          projectId,
+          cableTypeId,
+          file,
+          details?.mutationRevision,
+        );
 
         setDetails((previous) =>
           previous
             ? {
                 ...previous,
+                mutationRevision: response.mutationRevision,
                 defaultMaterials: sortDefaultMaterials(response.defaultMaterials),
               }
             : previous,
@@ -689,15 +732,15 @@ export const CableTypeDetails = () => {
         setIsImportingDefaultMaterials(false);
       }
     },
-    [cableTypeId, isAdmin, projectId, showToast, token],
+    [cableTypeId, isAdmin, projectId, showToast, token, details?.mutationRevision],
   );
 
   const handleExportDefaultMaterials = useCallback(async () => {
-    if (!details || !projectId || !cableTypeId || !token || !isAdmin) {
+    if (!details || !projectId || !cableTypeId || !token) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export default materials.',
+        title: 'Sign-in required',
+        body: 'You need to be signed in to export default materials.',
       });
       return;
     }
@@ -729,7 +772,7 @@ export const CableTypeDetails = () => {
     } finally {
       setIsExportingDefaultMaterials(false);
     }
-  }, [cableTypeId, details, isAdmin, projectId, showToast, token]);
+  }, [cableTypeId, details, projectId, showToast, token]);
 
   const pageTitle = details ? `Cable type - ${details.cableType.name}` : 'Cable type details';
 
@@ -878,8 +921,8 @@ export const CableTypeDetails = () => {
             <Title3>Additional default materials</Title3>
             <Caption1 className={styles.readOnlyNotice}>
               Add reusable materials from Cable installation materials that should be associated
-              with this cable type. Import from Excel replaces the current list for this cable
-              type, and Remarks cells are optional.
+              with this cable type. Import replaces project additions and preserves captured catalog
+              defaults. Remarks cells are optional.
             </Caption1>
           </div>
           <div className={styles.sectionActions}>
@@ -891,7 +934,7 @@ export const CableTypeDetails = () => {
                 {isImportingDefaultMaterials ? 'Importing...' : 'Import from Excel'}
               </Button>
             ) : null}
-            {isAdmin ? (
+            {token ? (
               <Button
                 appearance="secondary"
                 onClick={() => void handleExportDefaultMaterials()}
@@ -958,8 +1001,11 @@ export const CableTypeDetails = () => {
                       <td className={styles.tableCell}>{formatOptionalText(material.remarks)}</td>
                       <td className={styles.tableCell}>
                         {material.sourceKind === 'standard-material'
-                          ? 'Inherited from Materials'
-                          : 'Project default'}
+                          ? 'Catalog inherited'
+                          : material.sourceKind === 'manual'
+                            ? 'Project addition'
+                            : 'Legacy origin unknown'}
+                        {material.inheritedOverride ? ' (locally edited)' : ''}
                       </td>
                       {isAdmin ? (
                         <td className={styles.tableCell}>

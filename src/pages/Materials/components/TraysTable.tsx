@@ -172,7 +172,7 @@ export const TraysTable = ({
                             onClick={() => onDelete(tray)}
                             disabled={isBusy}
                           >
-                            {isBusy ? 'Deleting...' : 'Delete'}
+                            {isBusy ? 'Updating...' : 'Mark obsolete'}
                           </Button>
                         </>
                       ) : null}

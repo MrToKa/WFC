@@ -12,7 +12,6 @@ import {
   calculateInheritedChangeOrderQuantities,
   calculateMinimumOrder,
   snapshotExpandedStandardMaterial,
-  synchronizeChangeOrderMaterialOrdering,
 } from './changeOrderService.js';
 
 describe('Change Order catalog snapshots', () => {
@@ -114,33 +113,6 @@ describe('Change Order catalog snapshots', () => {
       packageCount: 52,
       spareQuantity: 2,
     });
-  });
-
-  it('refreshes ordering metadata for existing manual and inherited Change Order items', async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [] });
-
-    await synchronizeChangeOrderMaterialOrdering(
-      { query } as Parameters<typeof synchronizeChangeOrderMaterialOrdering>[0],
-      'project-id',
-      'change-order',
-      'change-order-id',
-    );
-
-    expect(query).toHaveBeenCalledOnce();
-    const [sql, values] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain("WHEN item.line_kind = 'manual'");
-    expect(sql).toContain('item.order_measurement IS NULL');
-    expect(sql).toContain('item.unit IS NOT DISTINCT FROM item.order_measurement');
-    expect(sql).toContain('THEN source.order_measurement');
-    expect(sql).toContain('item.source_catalog = source.source_catalog');
-    expect(sql).toContain('change_order.document_type = $3');
-    expect(sql).not.toContain("AND item.line_kind = 'inherited'");
-    expect(sql).toContain('FROM material_cable_installation_materials');
-    expect(sql).toContain('FROM material_tray_installation_materials');
-    expect(sql).toContain('FROM material_instruments');
-    expect(sql).toContain('FROM material_instrument_installation_materials');
-    expect(sql).not.toContain('unit_price');
-    expect(values).toEqual(['change-order-id', 'project-id', 'change-order']);
   });
 
   it('maps cable types and does not change a snapshot when its source changes later', () => {

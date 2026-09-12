@@ -14,6 +14,7 @@ const CableTypesHarness = ({ withPurposeFilter = false }: { withPurposeFilter?: 
     <CableTypesTab
       styles={styles}
       isAdmin={false}
+      canExport
       isRefreshing={false}
       onRefresh={vi.fn()}
       onCreate={vi.fn()}
@@ -55,6 +56,13 @@ const CableTypesHarness = ({ withPurposeFilter = false }: { withPurposeFilter?: 
 };
 
 describe('CableTypesTab', () => {
+  it('shows exports and templates to signed-in ordinary users without mutation controls', () => {
+    render(<FluentProvider theme={webLightTheme}><CableTypesHarness /></FluentProvider>);
+    expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Get upload template' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Add cable type' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import from Excel' })).not.toBeInTheDocument();
+  });
   it('supports selecting and clearing the optional purpose filter', () => {
     render(
       <FluentProvider theme={webLightTheme}>

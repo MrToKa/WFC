@@ -41,6 +41,7 @@ export type StandardMaterialAssignmentRow = {
   referenced_material_minimum_order_quantity: string | number;
   referenced_material_order_measurement: 'pcs' | 'pack' | 'meters';
   referenced_material_packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
+  referenced_material_obsolete_at?: Date | string | null;
   quantity: string | number;
   unit: StandardMaterialUnit;
   remarks: string | null;
@@ -55,6 +56,7 @@ export type StandardMaterialAssignment = {
   referencedMaterialId: string;
   referencedMaterialCategory: StandardMaterialReferenceCategory;
   referencedMaterial: {
+    obsoleteAt?: string;
     id: string;
     type: string;
     purpose: string | null;
@@ -94,6 +96,7 @@ export const mapStandardMaterialAssignmentRow = (
   referencedMaterialId: row.referenced_material_id,
   referencedMaterialCategory: row.referenced_material_category,
   referencedMaterial: {
+    ...(row.referenced_material_obsolete_at ? { obsoleteAt: toIsoString(row.referenced_material_obsolete_at) } : {}),
     id: row.referenced_material_id,
     type: row.referenced_material_name,
     purpose: row.referenced_material_purpose ?? null,

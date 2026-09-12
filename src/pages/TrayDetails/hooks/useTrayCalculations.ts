@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Project, Tray, Cable, MaterialSupport } from '../../../api/client';
+import { Project, Tray, Cable } from '../../../api/client';
 import { SupportCalculationResult } from '../TrayDetails.types';
 import { KN_PER_KG } from '../TrayDetails.utils';
 
@@ -7,9 +7,8 @@ export const useTrayCalculations = (
   project: Project | null,
   tray: Tray | null,
   trayCables: Cable[],
-  materialSupportsById: Record<string, MaterialSupport>,
   trayWeightPerMeterKg: number | null,
-  groundingCableWeightKgPerM: number | null
+  groundingCableWeightKgPerM: number | null,
 ) => {
   const supportOverride = useMemo(() => {
     if (!project || !tray || !tray.type) {
@@ -18,25 +17,14 @@ export const useTrayCalculations = (
     return project.supportDistanceOverrides[tray.type] ?? null;
   }, [project, tray]);
 
-  const supportIdToLoad = supportOverride?.supportId ?? null;
-
-  const overrideSupport = useMemo(() =>
-    supportIdToLoad && materialSupportsById[supportIdToLoad]
-      ? materialSupportsById[supportIdToLoad]
-      : null,
-    [supportIdToLoad, materialSupportsById]
-  );
+  const overrideSupport = supportOverride?.supportSnapshot ?? null;
 
   const supportCalculations = useMemo<SupportCalculationResult>(() => {
     const lengthMeters =
-      tray && tray.lengthMm !== null && tray.lengthMm > 0
-        ? tray.lengthMm / 1000
-        : null;
+      tray && tray.lengthMm !== null && tray.lengthMm > 0 ? tray.lengthMm / 1000 : null;
 
     const overrideDistance =
-      supportOverride && supportOverride.distance !== null
-        ? supportOverride.distance
-        : null;
+      supportOverride && supportOverride.distance !== null ? supportOverride.distance : null;
 
     let distanceMeters =
       overrideDistance ??
@@ -56,16 +44,14 @@ export const useTrayCalculations = (
     }
 
     const weightPerPieceOverride =
-      overrideSupport && overrideSupport.weightKg !== null
-        ? overrideSupport.weightKg
-        : null;
+      overrideSupport && overrideSupport.weightKg !== null ? overrideSupport.weightKg : null;
 
     const weightPerPieceKg =
-      weightPerPieceOverride !== null
+      supportOverride?.supportId || overrideSupport
         ? weightPerPieceOverride
         : project && project.supportWeight !== null
-        ? project.supportWeight
-        : null;
+          ? project.supportWeight
+          : null;
 
     if (lengthMeters === null || lengthMeters <= 0 || distanceMeters === null) {
       return {
@@ -74,7 +60,7 @@ export const useTrayCalculations = (
         supportsCount: null,
         weightPerPieceKg,
         totalWeightKg: null,
-        weightPerMeterKg: null
+        weightPerMeterKg: null,
       };
     }
 
@@ -86,13 +72,10 @@ export const useTrayCalculations = (
       supportsCount += 1;
     }
 
-    const totalWeightKg =
-      weightPerPieceKg !== null ? supportsCount * weightPerPieceKg : null;
+    const totalWeightKg = weightPerPieceKg !== null ? supportsCount * weightPerPieceKg : null;
 
     const weightPerMeterKg =
-      totalWeightKg !== null && lengthMeters > 0
-        ? totalWeightKg / lengthMeters
-        : null;
+      totalWeightKg !== null && lengthMeters > 0 ? totalWeightKg / lengthMeters : null;
 
     return {
       lengthMeters,
@@ -100,14 +83,14 @@ export const useTrayCalculations = (
       supportsCount,
       weightPerPieceKg,
       totalWeightKg,
-      weightPerMeterKg
+      weightPerMeterKg,
     };
   }, [project, tray, supportOverride, overrideSupport]);
 
   // Keep drawing/grouping order aligned with the tray table (# column).
   const nonGroundingCables = useMemo(
     () => [...trayCables].sort((a, b) => a.cableId - b.cableId),
-    [trayCables]
+    [trayCables],
   );
 
   const cablesForWeightCalculation = useMemo(() => {
@@ -148,22 +131,14 @@ export const useTrayCalculations = (
   }, [trayWeightPerMeterKg, supportWeightPerMeterKg]);
 
   const trayTotalOwnWeightKg = useMemo(() => {
-    if (
-      trayWeightLoadPerMeterKg === null ||
-      trayLengthMeters === null ||
-      trayLengthMeters <= 0
-    ) {
+    if (trayWeightLoadPerMeterKg === null || trayLengthMeters === null || trayLengthMeters <= 0) {
       return null;
     }
     return trayWeightLoadPerMeterKg * trayLengthMeters;
   }, [trayWeightLoadPerMeterKg, trayLengthMeters]);
 
   const cablesTotalWeightKg = useMemo(() => {
-    if (
-      cablesWeightLoadPerMeterKg === null ||
-      trayLengthMeters === null ||
-      trayLengthMeters <= 0
-    ) {
+    if (cablesWeightLoadPerMeterKg === null || trayLengthMeters === null || trayLengthMeters <= 0) {
       return null;
     }
     return cablesWeightLoadPerMeterKg * trayLengthMeters;
@@ -201,6 +176,6 @@ export const useTrayCalculations = (
     cablesTotalWeightKg,
     totalWeightLoadPerMeterKg,
     totalWeightKg,
-    totalWeightLoadPerMeterKn
+    totalWeightLoadPerMeterKn,
   };
 };

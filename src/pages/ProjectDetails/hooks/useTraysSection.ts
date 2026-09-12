@@ -534,8 +534,8 @@ export const useTraysSection = ({
       if (!projectSnapshot || !token) {
         showToast({
           intent: 'error',
-          title: 'Admin access required',
-          body: 'You need to be signed in as an admin to export trays.'
+          title: 'Sign-in required',
+          body: 'You need to be signed in to export trays.'
         });
         return;
       }
@@ -586,8 +586,8 @@ export const useTraysSection = ({
     if (!projectSnapshot || !token) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.'
+        title: 'Sign-in required',
+        body: 'You need to be signed in to get the template.'
       });
       return;
     }

@@ -155,7 +155,7 @@ export const SupportsTable = ({
                             onClick={() => onDelete(support)}
                             disabled={isBusy}
                           >
-                            {isBusy ? 'Deleting...' : 'Delete'}
+                            {isBusy ? 'Updating...' : 'Mark obsolete'}
                           </Button>
                         </>
                       ) : null}

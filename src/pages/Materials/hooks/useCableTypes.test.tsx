@@ -19,6 +19,7 @@ vi.mock('@/api/client', async (importOriginal) => ({
 }));
 
 const makeCableType = (index: number, purpose: string | null): MaterialCableType => ({
+  mutationRevision: 5,
   id: `cable-${index}`,
   name: `Cable ${String(index).padStart(2, '0')}`,
   purpose,
@@ -44,7 +45,7 @@ const renderCatalog = () =>
 describe('material cable types filtering and pagination', () => {
   beforeEach(() => {
     apiMocks.fetch.mockReset();
-    apiMocks.remove.mockReset().mockResolvedValue(undefined);
+    apiMocks.remove.mockReset().mockResolvedValue({ mutationRevision: 6 });
     apiMocks.import.mockReset();
     showToast.mockClear();
   });
@@ -131,7 +132,8 @@ describe('material cable types filtering and pagination', () => {
 
     await act(() => result.current.handleDeleteCableType(lastMatch));
 
-    expect(apiMocks.remove).toHaveBeenCalledWith('admin-token', lastMatch.id);
+    expect(apiMocks.remove).toHaveBeenCalledWith('admin-token', lastMatch.id, 5);
+    expect(result.current.pagedCableTypes.every((item) => item.mutationRevision === 6)).toBe(true);
     expect(result.current.cableTypePage).toBe(1);
     expect(result.current.totalCableTypePages).toBe(1);
     expect(result.current.pagedCableTypes).toHaveLength(CABLE_TYPES_PER_PAGE);

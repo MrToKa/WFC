@@ -62,9 +62,10 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StandardMaterialAssignment | null>(null);
+  const [editingRevision, setEditingRevision] = useState<number | undefined>();
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const isAdmin = Boolean(user?.isAdmin);
+  const isAdmin = Boolean(user?.isAdmin && !details?.obsoleteAt);
   const backPath = materialsBackPath(capability.tab);
   const usesTrayInstallationCatalog = category === 'tray-installation-material';
   const usesInstrumentInstallationCatalog =
@@ -143,11 +144,13 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   }, [loadCatalog]);
 
   const openAdd = (): void => {
+    setEditingRevision(details?.mutationRevision);
     setEditing(null);
     setDialogOpen(true);
   };
 
   const openEdit = (assignment: StandardMaterialAssignment): void => {
+    setEditingRevision(details?.mutationRevision);
     setEditing(assignment);
     setDialogOpen(true);
   };
@@ -157,9 +160,9 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
     setSaving(true);
     try {
       if (editing) {
-        await updateStandardMaterial(token, category, ownerId, editing.id, input);
+        await updateStandardMaterial(token, category, ownerId, editing.id, input, editingRevision);
       } else {
-        await createStandardMaterial(token, category, ownerId, input);
+        await createStandardMaterial(token, category, ownerId, input, editingRevision);
       }
       setDialogOpen(false);
       setEditing(null);
@@ -188,7 +191,7 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
     }
     setBusyId(assignment.id);
     try {
-      await deleteStandardMaterial(token, category, ownerId, assignment.id);
+      await deleteStandardMaterial(token, category, ownerId, assignment.id, details?.mutationRevision);
       await loadDetails(true);
       showToast({ title: 'Standard Material deleted', intent: 'success' });
     } catch (caught) {
@@ -224,7 +227,7 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   return (
     <>
       <MaterialDetailsLayout
-        title={getTitle(details.material)}
+        title={`${getTitle(details.material)}${details.obsoleteAt ? ' — Obsolete' : ''}`}
         categoryLabel={details.category.label}
         properties={getProperties(details.material)}
         createdAt={details.material.createdAt}

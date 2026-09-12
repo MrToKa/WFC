@@ -10,6 +10,7 @@ import type {
 
 export const CHANGE_ORDER_COLLECTIONS = ['change-orders', 'internal-ncrs'] as const;
 export type ChangeOrderCollection = (typeof CHANGE_ORDER_COLLECTIONS)[number];
+export type ChangeOrderMutation = { expectedRevision: number; idempotencyKey?: string };
 
 const basePath = (projectId: string, collection: ChangeOrderCollection = 'change-orders'): string =>
   `/api/projects/${projectId}/${collection}`;
@@ -18,7 +19,7 @@ export async function fetchChangeOrders(
   token: string,
   projectId: string,
   collection: ChangeOrderCollection = 'change-orders',
-): Promise<{ changeOrders: ChangeOrderSummary[] }> {
+): Promise<{ changeOrders: ChangeOrderSummary[]; mutationRevision?: number }> {
   return request(`${basePath(projectId, collection)}`, { token });
 }
 
@@ -36,8 +37,14 @@ export async function createChangeOrder(
   projectId: string,
   input: ChangeOrderHeaderInput,
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<{ changeOrder: ChangeOrderDetails }> {
-  return request(basePath(projectId, collection), { method: 'POST', token, body: input });
+  return request(basePath(projectId, collection), {
+    method: 'POST',
+    token,
+    body: input,
+    ...mutation,
+  });
 }
 
 export async function updateChangeOrder(
@@ -46,10 +53,12 @@ export async function updateChangeOrder(
   changeOrderId: string,
   input: Partial<ChangeOrderHeaderInput>,
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<{ changeOrder: ChangeOrderDetails }> {
   return request(`${basePath(projectId, collection)}/${changeOrderId}`, {
     method: 'PATCH',
     token,
+    ...mutation,
     body: input,
   });
 }
@@ -59,10 +68,12 @@ export async function deleteChangeOrder(
   projectId: string,
   changeOrderId: string,
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<void> {
   await request(`${basePath(projectId, collection)}/${changeOrderId}`, {
     method: 'DELETE',
     token,
+    ...mutation,
   });
 }
 
@@ -72,10 +83,12 @@ export async function addChangeOrderItem(
   changeOrderId: string,
   input: { sourceCatalog: ChangeOrderSourceCatalog; sourceMaterialId: string },
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<{ item: ChangeOrderItem; changeOrder: ChangeOrderDetails }> {
   return request(`${basePath(projectId, collection)}/${changeOrderId}/items`, {
     method: 'POST',
     token,
+    ...mutation,
     body: input,
   });
 }
@@ -87,10 +100,12 @@ export async function updateChangeOrderItem(
   itemId: string,
   input: ChangeOrderItemUpdate,
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<{ item: ChangeOrderItem }> {
   return request(`${basePath(projectId, collection)}/${changeOrderId}/items/${itemId}`, {
     method: 'PATCH',
     token,
+    ...mutation,
     body: input,
   });
 }
@@ -101,10 +116,12 @@ export async function duplicateChangeOrderItem(
   changeOrderId: string,
   itemId: string,
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<{ item: ChangeOrderItem; changeOrder: ChangeOrderDetails }> {
   return request(`${basePath(projectId, collection)}/${changeOrderId}/items/${itemId}/duplicate`, {
     method: 'POST',
     token,
+    ...mutation,
   });
 }
 
@@ -114,10 +131,12 @@ export async function deleteChangeOrderItem(
   changeOrderId: string,
   itemId: string,
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<void> {
   await request(`${basePath(projectId, collection)}/${changeOrderId}/items/${itemId}`, {
     method: 'DELETE',
     token,
+    ...mutation,
   });
 }
 
@@ -127,10 +146,12 @@ export async function reorderChangeOrderItems(
   changeOrderId: string,
   orderedItemIds: string[],
   collection: ChangeOrderCollection = 'change-orders',
+  mutation?: ChangeOrderMutation,
 ): Promise<{ items: ChangeOrderItem[] }> {
   return request(`${basePath(projectId, collection)}/${changeOrderId}/items/order`, {
     method: 'PUT',
     token,
+    ...mutation,
     body: { orderedItemIds },
   });
 }

@@ -5,10 +5,15 @@ import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import { mapProjectRow } from '../models/project.js';
 import type { ProjectRow } from '../models/project.js';
-import { authenticate, requireAdmin } from '../middleware.js';
+import { authenticate, requireAdmin, requireProjectEditor } from '../middleware.js';
+import { z } from 'zod';
+import { projectSupportDistancesSchema } from '../validators.js';
 import { clearProjectDataSchema, createProjectSchema, updateProjectSchema } from '../validators.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import { syncProjectSupportSnapshots } from '../services/projectCatalogSnapshotService.js';
 import { withTransaction } from '../utils/transaction.js';
+import { beginProjectMaterialMutation, completeProjectMaterialMutation } from '../services/projectMaterialMutationService.js';
+import { MutationError, respondToMutationError } from '../services/mutationService.js';
 import { cableTypesRouter } from './cableTypesRoutes.js';
 import { cablesRouter } from './cablesRoutes.js';
 import { roxtecEntriesRouter } from './roxtecEntriesRoutes.js';
@@ -34,43 +39,29 @@ type NormalizedTrayPurposeTemplates = Record<
   }
 >;
 
-const syncSupportDistances = async (
-  client: PoolClient,
-  projectId: string,
-  overrides: NormalizedSupportOverrides,
-): Promise<void> => {
-  const entries = Object.entries(overrides)
-    .map(([trayType, value]) => [trayType.trim(), value] as const)
-    .filter(
-      ([trayType, value]) =>
-        trayType !== '' && (value.distance !== null || value.supportId !== null),
-    );
+const syncSupportDistances = syncProjectSupportSnapshots;
 
-  await client.query(`DELETE FROM project_support_distances WHERE project_id = $1;`, [projectId]);
-
-  for (const [trayType, value] of entries) {
-    await client.query(
-      `
-          INSERT INTO project_support_distances (
-            project_id,
-            tray_type,
-            support_distance,
-            support_id,
-            created_at,
-            updated_at
-          )
-          VALUES ($1, $2, $3, $4, NOW(), NOW())
-          ON CONFLICT (project_id, tray_type)
-          DO UPDATE
-          SET
-            support_distance = EXCLUDED.support_distance,
-            support_id = EXCLUDED.support_id,
-            updated_at = NOW();
-        `,
-      [projectId, trayType, value.distance, value.supportId],
-    );
-  }
-};
+projectsRouter.put('/:projectId/support-distances', authenticate, requireProjectEditor,
+  async (req: Request, res: Response) => {
+    const parsed = projectSupportDistancesSchema.safeParse(req.body);
+    if (!z.string().uuid().safeParse(req.params.projectId).success || !parsed.success) {
+      res.status(400).json({ error: 'Only valid project support-distance overrides are accepted' }); return;
+    }
+    try {
+      const project = await withTransaction(async (client) => {
+        const lock = await client.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [req.params.projectId]);
+        if (!lock.rows[0]) return null;
+        await syncSupportDistances(client, req.params.projectId, normalizeSupportDistances(parsed.data.supportDistances));
+        return ensureProjectExists(req.params.projectId, client);
+      });
+      if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+      res.json({ project: mapProjectRow(project) });
+    } catch (error) {
+      if (respondToMutationError(error, res)) return;
+      console.error('Update project support overrides failed', error);
+      res.status(500).json({ error: 'Failed to update support overrides' });
+    }
+  });
 
 const syncTrayPurposeTemplates = async (
   client: PoolClient,
@@ -480,6 +471,7 @@ projectsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
       `
           SELECT
             p.id,
+            COALESCE((SELECT revision FROM mutation_revisions mr WHERE mr.resource_type = 'project-materials' AND mr.resource_id = p.id), 0) AS mutation_revision,
             p.project_number,
             p.name,
             p.customer,
@@ -496,12 +488,12 @@ projectsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
                   d.tray_type,
                   jsonb_build_object(
                     'distance', d.support_distance,
-                    'supportId', d.support_id,
-                    'supportType', s.support_type
+                    'supportId', COALESCE(d.support_snapshot->'material'->>'id', d.support_id::text),
+                    'supportType', d.support_snapshot->'material'->>'type',
+                    'supportSnapshot', d.support_snapshot->'material'
                   )
                 )
                 FROM project_support_distances d
-                LEFT JOIN material_supports s ON s.id = d.support_id
                 WHERE d.project_id = p.id
               ),
               '{}'::jsonb
@@ -841,6 +833,8 @@ projectsRouter.post(
     try {
       client = await pool.connect();
       await client.query('BEGIN');
+      const mutation = await beginProjectMaterialMutation(client, req, res);
+      if (!mutation) return;
 
       const projectResult = await client.query<{ id: string }>(
         `SELECT id FROM projects WHERE id = $1`,
@@ -864,31 +858,23 @@ projectsRouter.post(
         deletedTrays = traysResult.rowCount ?? 0;
       }
 
-      if (cableTypes) {
-        const [cablesCountResult, cableTypesCountResult] = await Promise.all([
-          client.query<{ count: number }>(
-            `SELECT COUNT(*)::int AS count FROM cables WHERE project_id = $1`,
-            [projectId],
-          ),
-          client.query<{ count: number }>(
-            `SELECT COUNT(*)::int AS count FROM cable_types WHERE project_id = $1`,
-            [projectId],
-          ),
-        ]);
-
-        deletedCables = cablesCountResult.rows[0]?.count ?? 0;
-        deletedCableTypes = cableTypesCountResult.rows[0]?.count ?? 0;
-
-        await client.query(`DELETE FROM cable_types WHERE project_id = $1`, [projectId]);
-      } else if (cables) {
+      if (cableTypes && !cables) {
+        const inUse = await client.query('SELECT 1 FROM cables WHERE project_id = $1 LIMIT 1', [projectId]);
+        if (inUse.rows.length) throw new MutationError(409, 'CABLE_TYPE_IN_USE',
+          'Reassign the cables before deleting their types, or explicitly select both cables and cable types for removal.');
+      }
+      if (cables) {
         const cablesResult = await client.query(`DELETE FROM cables WHERE project_id = $1`, [
           projectId,
         ]);
         deletedCables = cablesResult.rowCount ?? 0;
       }
+      if (cableTypes) {
+        const typesResult = await client.query('DELETE FROM cable_types WHERE project_id = $1', [projectId]);
+        deletedCableTypes = typesResult.rowCount ?? 0;
+      }
 
-      await client.query('COMMIT');
-      res.json({
+      await completeProjectMaterialMutation(client, mutation, projectId, res, {
         deleted: {
           cableTypes: deletedCableTypes,
           cables: deletedCables,
@@ -897,6 +883,7 @@ projectsRouter.post(
       });
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);
+      if (respondToMutationError(error, res)) return;
       console.error('Clear project data error', error);
       res.status(500).json({ error: 'Failed to clear project data' });
     } finally {
@@ -917,20 +904,31 @@ projectsRouter.delete(
       return;
     }
 
+    let client: PoolClient | undefined;
     try {
-      const result = await pool.query(`DELETE FROM projects WHERE id = $1 RETURNING id`, [
-        projectId,
-      ]);
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const mutation = await beginProjectMaterialMutation(client, req, res);
+      if (!mutation) return;
+      // Whole-project removal explicitly includes its cables. Remove them before
+      // project cascades reach the RESTRICT-protected cable types.
+      await client.query('DELETE FROM cables WHERE project_id = $1', [projectId]);
+      const result = await client.query(`DELETE FROM projects WHERE id = $1 RETURNING id`, [projectId]);
 
       if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
         res.status(404).json({ error: 'Project not found' });
         return;
       }
 
-      res.status(204).send();
+      await completeProjectMaterialMutation(client, mutation, projectId, res, { deleted: true });
     } catch (error) {
+      await client?.query('ROLLBACK').catch(() => undefined);
+      if (respondToMutationError(error, res)) return;
       console.error('Delete project error', error);
       res.status(500).json({ error: 'Failed to delete project' });
+    } finally {
+      client?.release();
     }
   },
 );

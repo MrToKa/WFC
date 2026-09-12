@@ -1,0 +1,17 @@
+FROM node:24.13.0-bookworm-slim@sha256:4660b1ca8b28d6d1906fd644abe34b2ed81d15434d26d845ef0aced307cf4b6f AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY tsconfig.json tsconfig.node.json vite.config.ts index.html ./
+COPY src ./src
+# Empty API port makes browser requests same-origin; nginx forwards /api.
+ENV VITE_API_PORT=""
+RUN npm run build -- --outDir /app/frontend-dist
+
+FROM nginx:1.28.0-alpine@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619158284
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
+COPY --from=build /app/frontend-dist /usr/share/nginx/html
+USER nginx
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --start-period=5s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/health
+ENTRYPOINT ["nginx", "-g", "daemon off;"]

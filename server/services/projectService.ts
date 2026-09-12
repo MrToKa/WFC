@@ -14,6 +14,7 @@ export const ensureProjectExists = async (
     `
       SELECT
         p.id,
+        COALESCE((SELECT revision FROM mutation_revisions mr WHERE mr.resource_type = 'project-materials' AND mr.resource_id = p.id), 0) AS mutation_revision,
         p.project_number,
         p.name,
         p.customer,
@@ -30,12 +31,12 @@ export const ensureProjectExists = async (
               d.tray_type,
               jsonb_build_object(
                 'distance', d.support_distance,
-                'supportId', d.support_id,
-                'supportType', s.support_type
+                'supportId', COALESCE(d.support_snapshot->'material'->>'id', d.support_id::text),
+                'supportType', d.support_snapshot->'material'->>'type',
+                'supportSnapshot', d.support_snapshot->'material'
               )
             )
             FROM project_support_distances d
-            LEFT JOIN material_supports s ON s.id = d.support_id
             WHERE d.project_id = p.id
           ),
           '{}'::jsonb

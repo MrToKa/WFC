@@ -1,4 +1,5 @@
 import type { Request, Response, Router } from 'express';
+import { getMaterialCapability } from '../services/materialCapabilities.js';
 import { z } from 'zod';
 import { withTransaction } from '../utils/transaction.js';
 import type { StandardMaterialOwnerCategory } from '../models/standardMaterial.js';
@@ -8,12 +9,19 @@ import {
   deleteStandardMaterialAssignment,
   StandardMaterialDomainError,
   updateStandardMaterialAssignment,
+  listStandardMaterialAssignments,
+  captureStandardMaterialGraph,
+  STANDARD_MATERIAL_MUTATION_SCOPE,
 } from '../services/standardMaterialService.js';
+import {
+  getMutationRevision, readMutationHeaders, respondToMutationError, withVersionedMutation,
+} from '../services/mutationService.js';
 import { createStandardMaterialSchema, updateStandardMaterialSchema } from '../validators.js';
 
 const uuidSchema = z.string().uuid();
 
 const respondForDomainError = (error: unknown, res: Response): boolean => {
+  if (respondToMutationError(error, res)) return true;
   if (!(error instanceof StandardMaterialDomainError)) return false;
   if (
     error.code === 'OWNER_NOT_FOUND' ||
@@ -52,6 +60,34 @@ export const registerStandardMaterialMutationRoutes = (
   ownerPath: string,
   ownerParam: string,
 ): void => {
+  router.get(`${ownerPath}/standard-materials`, async (req: Request, res: Response) => {
+    const ids = validateRouteIds(req, res, ownerParam, false);
+    if (!ids) return;
+    try {
+      const result = await withTransaction(async (client) => {
+        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+        const standardMaterials = await listStandardMaterialAssignments(client, category, ids.ownerId);
+        const ownerStatus = await client.query<{ obsolete_at: Date | string | null }>(
+          `SELECT obsolete_at FROM ${getMaterialCapability(category).ownerTable} WHERE id = $1`, [ids.ownerId]);
+        const mutationRevision = await getMutationRevision(client,
+          STANDARD_MATERIAL_MUTATION_SCOPE.resourceType, STANDARD_MATERIAL_MUTATION_SCOPE.resourceId);
+        return { standardMaterials, mutationRevision, obsoleteAt: ownerStatus.rows[0]?.obsolete_at ?? null };
+      });
+      res.setHeader('ETag', `"${result.mutationRevision}"`);
+      res.json(result);
+    } catch (error) {
+      console.error('Read Standard Material composition error', error);
+      res.status(500).json({ error: 'Failed to load Standard Material composition' });
+    }
+  });
+
+  const parameters = (req: Request) => ({
+    ...STANDARD_MATERIAL_MUTATION_SCOPE,
+    ...readMutationHeaders(req),
+    actorId: req.userId ?? '',
+    request: { method: req.method, category, params: req.params, body: req.body },
+  });
+
   router.post(
     `${ownerPath}/standard-materials`,
     authenticate,
@@ -65,10 +101,13 @@ export const registerStandardMaterialMutationRoutes = (
         return;
       }
       try {
-        const standardMaterial = await withTransaction((client) =>
+        const result = await withVersionedMutation(parameters(req), (client) =>
           createStandardMaterialAssignment(client, category, ids.ownerId, parsed.data),
+          captureStandardMaterialGraph,
+          captureStandardMaterialGraph,
         );
-        res.status(201).json({ standardMaterial });
+        res.setHeader('ETag', `"${result.revision}"`);
+        res.status(201).json({ standardMaterial: result.value, mutationRevision: result.revision });
       } catch (error) {
         if (respondForDomainError(error, res)) return;
         if (
@@ -100,7 +139,7 @@ export const registerStandardMaterialMutationRoutes = (
         return;
       }
       try {
-        const standardMaterial = await withTransaction((client) =>
+        const result = await withVersionedMutation(parameters(req), (client) =>
           updateStandardMaterialAssignment(
             client,
             category,
@@ -108,8 +147,11 @@ export const registerStandardMaterialMutationRoutes = (
             assignmentId,
             parsed.data,
           ),
+          captureStandardMaterialGraph,
+          captureStandardMaterialGraph,
         );
-        res.json({ standardMaterial });
+        res.setHeader('ETag', `"${result.revision}"`);
+        res.json({ standardMaterial: result.value, mutationRevision: result.revision });
       } catch (error) {
         if (respondForDomainError(error, res)) return;
         if (
@@ -136,9 +178,11 @@ export const registerStandardMaterialMutationRoutes = (
       if (!ids?.assignmentId) return;
       const { ownerId, assignmentId } = ids;
       try {
-        await withTransaction((client) =>
-          deleteStandardMaterialAssignment(client, category, ownerId, assignmentId),
-        );
+        const result = await withVersionedMutation(parameters(req), async (client) => {
+          await deleteStandardMaterialAssignment(client, category, ownerId, assignmentId);
+          return null;
+        }, captureStandardMaterialGraph, captureStandardMaterialGraph);
+        res.setHeader('ETag', `"${result.revision}"`);
         res.status(204).send();
       } catch (error) {
         if (respondForDomainError(error, res)) return;

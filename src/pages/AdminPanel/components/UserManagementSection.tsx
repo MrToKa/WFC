@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import type { User } from '@/api/client';
+import { ProjectAccessDialog } from './ProjectAccessDialog';
 import {
   Body1,
   Button,
@@ -28,6 +31,7 @@ export const UserManagementSection = ({
   currentUserId,
   state
 }: UserManagementSectionProps) => {
+  const [accessUser, setAccessUser] = useState<User | null>(null);
   const {
     usersLoading,
     usersRefreshing,
@@ -59,6 +63,7 @@ export const UserManagementSection = ({
 
   return (
     <section className={styles.section} aria-labelledby="user-management-heading">
+      {accessUser ? <ProjectAccessDialog user={accessUser} onClose={() => setAccessUser(null)} onSaved={() => void state.loadUsers()} /> : null}
       <div className={styles.header}>
         <Subtitle2 id="user-management-heading">User management</Subtitle2>
         <Body1>Update user profiles, promote new administrators, or remove accounts.</Body1>
@@ -174,7 +179,7 @@ export const UserManagementSection = ({
                           : '(not provided)'}
                       </td>
                       <td className={styles.tableCell}>
-                        {user.isAdmin ? 'Administrator' : 'User'}
+                        {user.isAdmin ? 'Administrator' : user.engineerProjectIds?.length ? 'Project engineer' : 'User'}
                       </td>
                       <td className={styles.tableCell}>{formatDateTime(user.createdAt)}</td>
                       <td className={styles.tableCell}>{formatDateTime(user.updatedAt)}</td>
@@ -188,6 +193,9 @@ export const UserManagementSection = ({
                             >
                               {isEditing ? 'Editing...' : 'Edit'}
                             </Button>
+                          ) : null}
+                          {!user.isAdmin ? (
+                            <Button disabled={disableActions} onClick={() => setAccessUser(user)}>Project access</Button>
                           ) : null}
                           {!user.isAdmin ? (
                             <Button

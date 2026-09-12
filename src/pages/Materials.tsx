@@ -30,6 +30,8 @@ import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { MATERIAL_DETAILS_CAPABILITIES } from './Materials/materialCapabilities';
+import { ObsoleteMaterialsTab } from './Materials/components/ObsoleteMaterialsTab';
+import { canExportCatalog } from '@/utils/projectPermissions';
 
 export const Materials = () => {
   const styles = useStyles();
@@ -40,6 +42,7 @@ export const Materials = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const isAdmin = Boolean(user?.isAdmin);
+  const canExport = Boolean(token && canExportCatalog(user));
   const selectedTab = parseMaterialsTab(searchParams.get('tab'));
 
   const numberFormatter = useMemo(
@@ -79,24 +82,27 @@ export const Materials = () => {
     [weightFormatter],
   );
 
-  const traysHook = useTrays({ token, isAdmin, showToast });
-  const supportsHook = useSupports({ token, isAdmin, showToast });
+  const traysHook = useTrays({ token, isAdmin, canExport, showToast });
+  const supportsHook = useSupports({ token, isAdmin, canExport, showToast });
   const loadCurvesHook = useLoadCurves({ token, isAdmin, showToast });
-  const cableTypesHook = useCableTypes({ token, isAdmin, showToast });
+  const cableTypesHook = useCableTypes({ token, isAdmin, canExport, showToast });
   const cableInstallationMaterialsHook = useCableInstallationMaterials({
     token,
     isAdmin,
+    canExport,
     showToast,
   });
   const trayInstallationMaterialsHook = useTrayInstallationMaterials({
     token,
     isAdmin,
+    canExport,
     showToast,
   });
-  const instrumentsHook = useInstruments({ token, isAdmin, showToast });
+  const instrumentsHook = useInstruments({ token, isAdmin, canExport, showToast });
   const instrumentInstallationMaterialsHook = useInstrumentInstallationMaterials({
     token,
     isAdmin,
+    canExport,
     showToast,
   });
   const catalogs = {
@@ -153,7 +159,7 @@ export const Materials = () => {
     ? loadCurvesHook.loadCurvePagination.totalPages
     : 1;
   const selectedTabLabel =
-    selectedCatalog?.label ??
+    (selectedTab === 'obsolete' ? 'Obsolete materials' : selectedCatalog?.label) ??
     (selectedTab === 'trays'
       ? 'Trays'
       : selectedTab === 'supports'
@@ -186,11 +192,13 @@ export const Materials = () => {
         <Tab value="instrumentInstallationMaterials">Instruments installation materials</Tab>
         <Tab value="supports">Supports</Tab>
         <Tab value="loadCurves">Load curves</Tab>
+        <Tab value="obsolete">Obsolete materials</Tab>
       </TabList>
 
       <div className={styles.tabPanel} role="tabpanel" aria-label={selectedTabLabel}>
-        {selectedCatalog && catalogHook ? (
+        {selectedTab === 'obsolete' ? <ObsoleteMaterialsTab token={token} /> : selectedCatalog && catalogHook ? (
           <CableInstallationMaterialsTab
+          canExport={canExport}
             styles={cableTypesStyles}
             isAdmin={isAdmin}
             isRefreshing={catalogHook.cableInstallationMaterialsRefreshing}
@@ -269,6 +277,10 @@ export const Materials = () => {
                     accept=".xlsx"
                     onChange={traysHook.handleTrayImportChange}
                   />
+
+                </>
+              ) : null}
+              {canExport ? (
                   <Button
                     appearance="secondary"
                     onClick={traysHook.handleGetTrayTemplate}
@@ -278,9 +290,8 @@ export const Materials = () => {
                       ? 'Getting template...'
                       : 'Get upload template'}
                   </Button>
-                </>
               ) : null}
-              <Button onClick={traysHook.handleExportTrays} disabled={traysHook.isExportingTrays}>
+              <Button onClick={traysHook.handleExportTrays} disabled={!canExport || traysHook.isExportingTrays}>
                 {traysHook.isExportingTrays ? 'Exporting...' : 'Export to Excel'}
               </Button>
             </div>
@@ -348,6 +359,10 @@ export const Materials = () => {
                     accept=".xlsx"
                     onChange={supportsHook.handleSupportImportChange}
                   />
+
+                </>
+              ) : null}
+              {canExport ? (
                   <Button
                     appearance="secondary"
                     onClick={supportsHook.handleGetSupportTemplate}
@@ -357,11 +372,10 @@ export const Materials = () => {
                       ? 'Getting template...'
                       : 'Get upload template'}
                   </Button>
-                </>
               ) : null}
               <Button
                 onClick={supportsHook.handleExportSupports}
-                disabled={supportsHook.isExportingSupports}
+                disabled={!canExport || supportsHook.isExportingSupports}
               >
                 {supportsHook.isExportingSupports ? 'Exporting...' : 'Export to Excel'}
               </Button>
@@ -444,6 +458,8 @@ export const Materials = () => {
           </>
         ) : (
           <CableTypesTab
+            deleteLabel="Mark obsolete"
+          canExport={canExport}
             styles={cableTypesStyles}
             isAdmin={isAdmin}
             isRefreshing={cableTypesHook.cableTypesRefreshing}

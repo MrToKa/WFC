@@ -5,6 +5,7 @@ export type UserRow = {
   first_name: string | null;
   last_name: string | null;
   is_admin: boolean;
+  engineer_project_ids?: string[];
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -15,6 +16,7 @@ export type PublicUser = {
   firstName: string | null;
   lastName: string | null;
   isAdmin: boolean;
+  engineerProjectIds: string[];
   createdAt: string;
   updatedAt: string;
 };
@@ -25,6 +27,7 @@ export const mapUserRow = (row: UserRow): PublicUser => ({
   firstName: row.first_name ?? null,
   lastName: row.last_name ?? null,
   isAdmin: row.is_admin,
+  engineerProjectIds: row.engineer_project_ids ?? [],
   createdAt:
     typeof row.created_at === 'string'
       ? row.created_at

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, request } from './http';
+import { ApiError, request, uploadExcelFile } from './http';
 import { downloadProjectFileVersion, uploadProjectFile } from './projectFiles';
 import { downloadTemplateFile, uploadTemplateFile } from './templateFiles';
 
@@ -12,6 +12,59 @@ const jsonResponse = (body: unknown, status = 200) =>
 afterEach(() => vi.restoreAllMocks());
 
 describe('HTTP transport', () => {
+  it('retries an uncertain protected mutation with the same operation key and revision', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new TypeError('Connection reset'))
+      .mockResolvedValueOnce(jsonResponse({ saved: true }));
+    await expect(request('/api/example', {
+      method: 'PATCH', body: { quantity: 3 }, expectedRevision: 7,
+    })).resolves.toEqual({ saved: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]).toEqual(fetchMock.mock.calls[1]);
+    expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({
+      'If-Match': '"7"', 'Idempotency-Key': expect.any(String),
+    });
+  });
+
+  it('surfaces a stale revision without retrying it', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
+      error: 'Reload before saving', code: 'REVISION_CONFLICT',
+    }, 409));
+    await expect(request('/api/example', { method: 'DELETE', expectedRevision: 2 }))
+      .rejects.toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('retains the key for a user retry after both transport attempts fail', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Offline'));
+    const options = { method: 'POST' as const, body: { quantity: 2 }, expectedRevision: 10 };
+    await expect(request('/api/uncertain-save', options)).rejects.toThrow('Offline');
+    const firstKey = (fetchMock.mock.calls[0][1]?.headers as Record<string, string>)['Idempotency-Key'];
+    fetchMock.mockImplementation(async () => jsonResponse({ saved: true }));
+    await request('/api/uncertain-save', options);
+    expect((fetchMock.mock.calls[2][1]?.headers as Record<string, string>)['Idempotency-Key']).toBe(firstKey);
+    await request('/api/uncertain-save', options);
+    expect((fetchMock.mock.calls[3][1]?.headers as Record<string, string>)['Idempotency-Key']).not.toBe(firstKey);
+  });
+
+  it('does not retry writes without an atomic receipt contract', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Network lost'));
+    await expect(request('/api/example', { method: 'POST', body: {} })).rejects.toThrow('Network lost');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('preserves the revision, operation key and file across uncertain import retries', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Offline'));
+    const file = new File(['workbook'], 'materials.xlsx');
+    await expect(uploadExcelFile('/api/uncertain-import', 'token', file, 'Import failed', { expectedRevision: 3 }))
+      .rejects.toThrow('Offline');
+    expect(fetchMock.mock.calls[0][1]).toBe(fetchMock.mock.calls[1][1]);
+    fetchMock.mockResolvedValue(jsonResponse({ imported: 2 }));
+    await uploadExcelFile('/api/uncertain-import', 'token', file, 'Import failed', { expectedRevision: 3 });
+    expect(fetchMock.mock.calls[2][1]?.headers).toEqual(fetchMock.mock.calls[0][1]?.headers);
+    expect((fetchMock.mock.calls[2][1]?.body as FormData).get('file')).toBe(file);
+  });
+
   it.each([false, 0, '', null])('preserves the JSON request body %j', async (body) => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')

@@ -1,0 +1,4726 @@
+{
+  "columns": [
+    {
+      "table_name": "cable_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "cable_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "cable_type_default_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "cable_type_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "source_kind",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "source_master_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "column_name": "source_standard_material_assignment_ids",
+      "data_type": "ARRAY",
+      "udt_name": "_uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "tag",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "diameter_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "weight_kg_per_m",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "from_location",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "to_location",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "routing",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "material",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "part_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_types",
+      "column_name": "source_material_cable_type_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "cable_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "version_number",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "change_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "change_source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "cable_number",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "revision",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "mto",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "tag",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "cable_type_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "cable_type_name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "from_location",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "to_location",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "routing",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "delivery",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "design_length",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "install_length",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "pull_date",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "connected_from",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "connected_to",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "tested",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "changed_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cable_versions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "cable_id",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "revision",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "mto",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "tag",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "cable_type_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "from_location",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "to_location",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "routing",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "delivery",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "design_length",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "install_length",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "materials_initialized",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "materials_customized",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "pull_date",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "connected_from",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "connected_to",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "tested",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "cables",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "material",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "part_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "dimension_mm",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "weight_kg",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "cable_installation_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "referenced_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "cable_type_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "referenced_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "material",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "part_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "diameter_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "weight_kg_per_m",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_cable_types",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "material",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "part_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "dimension_mm",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "weight_kg",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "instrument_installation_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "referenced_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "instrument_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "referenced_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "material",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "part_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "dimension_mm",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "weight_kg",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_instruments",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "column_name": "load_curve_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "column_name": "point_order",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "column_name": "span_m",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "column_name": "load_kn_per_m",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curves",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curves",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curves",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_load_curves",
+      "column_name": "tray_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_load_curves",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_load_curves",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "support_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "referenced_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "support_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "height_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "width_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "length_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "weight_kg",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "image_template_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_supports",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "material",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "part_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "dimension_mm",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "weight_kg",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "tray_installation_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "referenced_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "tray_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "referenced_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "tray_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "height_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "rung_height_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "width_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "weight_kg_per_m",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "load_curve_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "image_template_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "material_trays",
+      "column_name": "source",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "change_order_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "sort_order",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "source_catalog",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "source_material_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "design_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "packaging",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "packaging_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "packaging_unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "ordered_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "ordered_unit",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "sap_number",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "description_en",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "description_de",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "dimension_mm",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "material",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "weight_kg",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "clear_description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "country_of_origin",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "hs_code",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "tag_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "drawing_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "shipping_list",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "revision_number",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "client_barcode",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "manufacturer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "manufacturer_part_no",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "acs_barcode",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "remarks",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "line_kind",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "parent_item_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "quantity_per_parent",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "source_standard_material_assignment_ids",
+      "data_type": "ARRAY",
+      "udt_name": "_uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "minimum_order_quantity",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "column_name": "order_measurement",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "document_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "title",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "project_reference",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "prepared_by",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "report_date",
+      "data_type": "date",
+      "udt_name": "date",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "revision",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_change_orders",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "project_file_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "version_number",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "object_key",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "file_name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "content_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "size_bytes",
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "uploaded_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_file_versions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "object_key",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "file_name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "content_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "size_bytes",
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "uploaded_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_files",
+      "column_name": "uploaded_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "id",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "revision",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "tag",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_support_distances",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_support_distances",
+      "column_name": "tray_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_support_distances",
+      "column_name": "support_distance",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_support_distances",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_support_distances",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_support_distances",
+      "column_name": "support_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "column_name": "tray_purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "column_name": "project_file_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "project_number",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "customer",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "manager",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "description",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "secondary_tray_length",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "support_distance",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "support_weight",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "tray_load_safety_factor",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "cable_layout_settings",
+      "data_type": "jsonb",
+      "udt_name": "jsonb",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "projects",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "template_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "version_number",
+      "data_type": "integer",
+      "udt_name": "int4",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "object_key",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "file_name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "content_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "size_bytes",
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "uploaded_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "template_file_versions",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_files",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_files",
+      "column_name": "object_key",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_files",
+      "column_name": "file_name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "template_files",
+      "column_name": "content_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "template_files",
+      "column_name": "size_bytes",
+      "data_type": "bigint",
+      "udt_name": "int8",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "template_files",
+      "column_name": "uploaded_by",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "template_files",
+      "column_name": "uploaded_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "project_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "tray_type",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "purpose",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "width_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "height_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "length_mm",
+      "data_type": "numeric",
+      "udt_name": "numeric",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "include_grounding_cable",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "trays",
+      "column_name": "grounding_cable_type_id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "users",
+      "column_name": "id",
+      "data_type": "uuid",
+      "udt_name": "uuid",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "users",
+      "column_name": "email",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "users",
+      "column_name": "password_hash",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "users",
+      "column_name": "first_name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "users",
+      "column_name": "last_name",
+      "data_type": "text",
+      "udt_name": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "table_name": "users",
+      "column_name": "is_admin",
+      "data_type": "boolean",
+      "udt_name": "bool",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "users",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    },
+    {
+      "table_name": "users",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "udt_name": "timestamptz",
+      "is_nullable": "NO"
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (source IS NULL OR (source = ANY (ARRAY['default'::text, 'manual'::text])))"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (cable_id) REFERENCES cables(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (cable_type_default_material_id) REFERENCES cable_type_default_materials(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_id"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL name"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "cable_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (source_kind IS NULL OR (source_kind = ANY (ARRAY['manual'::text, 'standard-material'::text])))"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (cable_type_id) REFERENCES cable_types(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (source_master_material_id) REFERENCES material_cable_installation_materials(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_type_id"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL name"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "cable_type_default_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (source_material_cable_type_id) REFERENCES material_cable_types(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL name"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "cable_types",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "c",
+      "definition": "CHECK (change_source = ANY (ARRAY['manual'::text, 'import'::text]))"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "c",
+      "definition": "CHECK (change_type = ANY (ARRAY['create'::text, 'update'::text]))"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "c",
+      "definition": "CHECK (mto IS NULL OR (mto = ANY (ARRAY['MV'::text, 'LV'::text, 'Instrumentation'::text, 'Control'::text])))"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (cable_id) REFERENCES cables(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_id"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_number"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_type_id"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_type_name"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL change_source"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL change_type"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL version_number"
+    },
+    {
+      "table_name": "cable_versions",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "c",
+      "definition": "CHECK (mto IS NULL OR (mto = ANY (ARRAY['MV'::text, 'LV'::text, 'Instrumentation'::text, 'Control'::text])))"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (cable_type_id) REFERENCES cable_types(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_id"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_type_id"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL materials_customized"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL materials_initialized"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "cables",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text]))"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging = ANY (ARRAY['m'::text, 'Package'::text, 'Box'::text, 'Drum'::text, 'pcs'::text]))"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL minimum_order_quantity"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_measurement"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL packaging"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL type"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_cable_installation_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (cable_installation_material_id <> referenced_material_id)"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity > 0::numeric AND quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit = ANY (ARRAY['pcs'::text, 'meters'::text, 'pcs/m'::text]))"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (cable_installation_material_id) REFERENCES material_cable_installation_materials(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (referenced_material_id) REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_installation_material_id"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL quantity"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL referenced_material_id"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_cable_installation_standard_materials",
+      "constraint_type": "u",
+      "definition": "UNIQUE (cable_installation_material_id, referenced_material_id)"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity > 0::numeric AND quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit = ANY (ARRAY['pcs'::text, 'meters'::text, 'pcs/m'::text]))"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (cable_type_id) REFERENCES material_cable_types(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (referenced_material_id) REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL cable_type_id"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL quantity"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL referenced_material_id"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_cable_type_standard_materials",
+      "constraint_type": "u",
+      "definition": "UNIQUE (cable_type_id, referenced_material_id)"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text]))"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging = ANY (ARRAY['m'::text, 'Package'::text, 'Box'::text, 'Drum'::text, 'pcs'::text]))"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL minimum_order_quantity"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL name"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_measurement"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL packaging"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_cable_types",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text]))"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging = ANY (ARRAY['m'::text, 'Package'::text, 'Box'::text, 'Drum'::text, 'pcs'::text]))"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL minimum_order_quantity"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_measurement"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL packaging"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL type"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_instrument_installation_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (instrument_installation_material_id <> referenced_material_id)"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity > 0::numeric AND quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit = ANY (ARRAY['pcs'::text, 'meters'::text, 'pcs/m'::text]))"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (instrument_installation_material_id) REFERENCES material_instrument_installation_materials(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (referenced_material_id) REFERENCES material_instrument_installation_materials(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL instrument_installation_material_id"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL quantity"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL referenced_material_id"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_instrument_installation_standard_materials",
+      "constraint_type": "u",
+      "definition": "UNIQUE (instrument_installation_material_id, referenced_material_id)"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity > 0::numeric AND quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit = ANY (ARRAY['pcs'::text, 'meters'::text, 'pcs/m'::text]))"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (instrument_id) REFERENCES material_instruments(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (referenced_material_id) REFERENCES material_instrument_installation_materials(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL instrument_id"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL quantity"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL referenced_material_id"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_instrument_standard_materials",
+      "constraint_type": "u",
+      "definition": "UNIQUE (instrument_id, referenced_material_id)"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text]))"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging = ANY (ARRAY['m'::text, 'Package'::text, 'Box'::text, 'Drum'::text, 'pcs'::text]))"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL minimum_order_quantity"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_measurement"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL packaging"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL type"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_instruments",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (load_curve_id) REFERENCES material_load_curves(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "n",
+      "definition": "NOT NULL load_curve_id"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "n",
+      "definition": "NOT NULL load_kn_per_m"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "n",
+      "definition": "NOT NULL point_order"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "n",
+      "definition": "NOT NULL span_m"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_load_curve_points",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_load_curves",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (tray_id) REFERENCES material_trays(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "material_load_curves",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_load_curves",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_load_curves",
+      "constraint_type": "n",
+      "definition": "NOT NULL name"
+    },
+    {
+      "table_name": "material_load_curves",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_load_curves",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_load_curves",
+      "constraint_type": "u",
+      "definition": "UNIQUE (name)"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity > 0::numeric AND quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit = ANY (ARRAY['pcs'::text, 'meters'::text, 'pcs/m'::text]))"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (referenced_material_id) REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (support_id) REFERENCES material_supports(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL quantity"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL referenced_material_id"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL support_id"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_support_standard_materials",
+      "constraint_type": "u",
+      "definition": "UNIQUE (support_id, referenced_material_id)"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text]))"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging = ANY (ARRAY['m'::text, 'Package'::text, 'Box'::text, 'Drum'::text, 'pcs'::text]))"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (image_template_id) REFERENCES template_files(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL minimum_order_quantity"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_measurement"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL packaging"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL support_type"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_supports",
+      "constraint_type": "u",
+      "definition": "UNIQUE (support_type)"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text]))"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging = ANY (ARRAY['m'::text, 'Package'::text, 'Box'::text, 'Drum'::text, 'pcs'::text]))"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL minimum_order_quantity"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_measurement"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL packaging"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL type"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_tray_installation_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity > 0::numeric AND quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (tray_installation_material_id <> referenced_material_id)"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit = ANY (ARRAY['pcs'::text, 'meters'::text, 'pcs/m'::text]))"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (referenced_material_id) REFERENCES material_tray_installation_materials(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (tray_installation_material_id) REFERENCES material_tray_installation_materials(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL quantity"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL referenced_material_id"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL tray_installation_material_id"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_tray_installation_standard_materials",
+      "constraint_type": "u",
+      "definition": "UNIQUE (tray_installation_material_id, referenced_material_id)"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity > 0::numeric AND quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "c",
+      "definition": "CHECK (unit = ANY (ARRAY['pcs'::text, 'meters'::text, 'pcs/m'::text]))"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (referenced_material_id) REFERENCES material_cable_installation_materials(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (tray_id) REFERENCES material_trays(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL quantity"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL referenced_material_id"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL tray_id"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_tray_standard_materials",
+      "constraint_type": "u",
+      "definition": "UNIQUE (tray_id, referenced_material_id)"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text]))"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging = ANY (ARRAY['m'::text, 'Package'::text, 'Box'::text, 'Drum'::text, 'pcs'::text]))"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (image_template_id) REFERENCES template_files(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (load_curve_id) REFERENCES material_load_curves(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL minimum_order_quantity"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_measurement"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL packaging"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL tray_type"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "material_trays",
+      "constraint_type": "u",
+      "definition": "UNIQUE (tray_type)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (btrim(description_en) <> ''::text)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (design_quantity >= 0::numeric AND design_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (line_kind = ANY (ARRAY['manual'::text, 'inherited'::text]))"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (minimum_order_quantity IS NULL OR minimum_order_quantity > 0::numeric AND minimum_order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (ordered_quantity IS NULL OR ordered_quantity >= 0::numeric AND ordered_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (order_measurement IS NULL OR (order_measurement = ANY (ARRAY['pcs'::text, 'pack'::text, 'meters'::text])))"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (order_quantity >= 0::numeric AND order_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (packaging_quantity IS NULL OR packaging_quantity >= 0::numeric AND packaging_quantity < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (quantity_per_parent IS NULL OR quantity_per_parent > 0::numeric AND quantity_per_parent < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (sort_order > 0)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (source_catalog = ANY (ARRAY['cable-type'::text, 'cable-installation-material'::text, 'tray-installation-material'::text, 'instrument'::text, 'instrument-installation-material'::text, 'tray'::text, 'support'::text]))"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (unit_price >= 0::numeric AND unit_price < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "c",
+      "definition": "CHECK (weight_kg IS NULL OR weight_kg >= 0::numeric AND weight_kg < 'Infinity'::numeric)"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (change_order_id) REFERENCES project_change_orders(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (parent_item_id) REFERENCES project_change_order_items(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL change_order_id"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL description_en"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL design_quantity"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL line_kind"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL order_quantity"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL sort_order"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL source_catalog"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL source_material_id"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL unit_price"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "project_change_order_items",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "c",
+      "definition": "CHECK (btrim(prepared_by) <> ''::text)"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "c",
+      "definition": "CHECK (btrim(revision) <> ''::text)"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "c",
+      "definition": "CHECK (btrim(title) <> ''::text)"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "c",
+      "definition": "CHECK (document_type = ANY (ARRAY['change-order'::text, 'internal-ncr'::text]))"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL document_type"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL prepared_by"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL report_date"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL revision"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL title"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "project_change_orders",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_file_id) REFERENCES project_files(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL file_name"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL object_key"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_file_id"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL version_number"
+    },
+    {
+      "table_name": "project_file_versions",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL file_name"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL object_key"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL uploaded_at"
+    },
+    {
+      "table_name": "project_files",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "n",
+      "definition": "NOT NULL revision"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "n",
+      "definition": "NOT NULL tag"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "n",
+      "definition": "NOT NULL type"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "project_roxtec_entries",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (project_id, id)"
+    },
+    {
+      "table_name": "project_support_distances",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_support_distances",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (support_id) REFERENCES material_supports(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "project_support_distances",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "project_support_distances",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "project_support_distances",
+      "constraint_type": "n",
+      "definition": "NOT NULL tray_type"
+    },
+    {
+      "table_name": "project_support_distances",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "project_support_distances",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (project_id, tray_type)"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_file_id) REFERENCES project_files(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_file_id"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "n",
+      "definition": "NOT NULL tray_purpose"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "project_tray_purpose_templates",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (project_id, tray_purpose)"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "n",
+      "definition": "NOT NULL customer"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "n",
+      "definition": "NOT NULL name"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_number"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "projects",
+      "constraint_type": "u",
+      "definition": "UNIQUE (project_number)"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (template_id) REFERENCES template_files(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL file_name"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL object_key"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL template_id"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "n",
+      "definition": "NOT NULL version_number"
+    },
+    {
+      "table_name": "template_file_versions",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "template_files",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "template_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL file_name"
+    },
+    {
+      "table_name": "template_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "template_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL object_key"
+    },
+    {
+      "table_name": "template_files",
+      "constraint_type": "n",
+      "definition": "NOT NULL uploaded_at"
+    },
+    {
+      "table_name": "template_files",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (grounding_cable_type_id) REFERENCES cable_types(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL include_grounding_cable"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL name"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL project_id"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "trays",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "n",
+      "definition": "NOT NULL created_at"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "n",
+      "definition": "NOT NULL email"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "n",
+      "definition": "NOT NULL id"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "n",
+      "definition": "NOT NULL is_admin"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "n",
+      "definition": "NOT NULL password_hash"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "n",
+      "definition": "NOT NULL updated_at"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "users",
+      "constraint_type": "u",
+      "definition": "UNIQUE (email)"
+    }
+  ]
+}

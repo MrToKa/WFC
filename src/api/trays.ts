@@ -1,30 +1,38 @@
 import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
 import type { Tray, TrayInput, CableImportSummary } from './types';
 
-export async function fetchTrays(
-  projectId: string
-): Promise<{ trays: Tray[] }> {
+export async function downloadTrayMaterialImage(
+  token: string,
+  projectId: string,
+  trayId: string,
+): Promise<Blob> {
+  const response = await fetch(
+    `${getApiBaseUrl()}/api/projects/${projectId}/trays/${trayId}/material-image`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  if (!response.ok) throw new ApiError(response.status, 'Captured tray image is unavailable');
+  return response.blob();
+}
+
+export async function fetchTrays(projectId: string): Promise<{ trays: Tray[] }> {
   return request<{ trays: Tray[] }>(`/api/projects/${projectId}/trays`);
 }
 
-export async function fetchTray(
-  projectId: string,
-  trayId: string
-): Promise<{ tray: Tray }> {
-  return request<{ tray: Tray }>(
-    `/api/projects/${projectId}/trays/${trayId}`
-  );
+export async function fetchTray(projectId: string, trayId: string): Promise<{ tray: Tray }> {
+  return request<{ tray: Tray }>(`/api/projects/${projectId}/trays/${trayId}`);
 }
 
 export async function createTray(
   token: string,
   projectId: string,
-  data: TrayInput
+  data: TrayInput,
 ): Promise<{ tray: Tray }> {
   return request<{ tray: Tray }>(`/api/projects/${projectId}/trays`, {
     method: 'POST',
     token,
-    body: data
+    body: data,
   });
 }
 
@@ -32,33 +40,26 @@ export async function updateTray(
   token: string,
   projectId: string,
   trayId: string,
-  data: Partial<TrayInput>
+  data: Partial<TrayInput>,
 ): Promise<{ tray: Tray }> {
-  return request<{ tray: Tray }>(
-    `/api/projects/${projectId}/trays/${trayId}`,
-    {
-      method: 'PATCH',
-      token,
-      body: data
-    }
-  );
+  return request<{ tray: Tray }>(`/api/projects/${projectId}/trays/${trayId}`, {
+    method: 'PATCH',
+    token,
+    body: data,
+  });
 }
 
-export async function deleteTray(
-  token: string,
-  projectId: string,
-  trayId: string
-): Promise<void> {
+export async function deleteTray(token: string, projectId: string, trayId: string): Promise<void> {
   await request<void>(`/api/projects/${projectId}/trays/${trayId}`, {
     method: 'DELETE',
-    token
+    token,
   });
 }
 
 export async function importTrays(
   token: string,
   projectId: string,
-  file: File
+  file: File,
 ): Promise<{ summary: CableImportSummary; trays: Tray[] }> {
   return uploadExcelFile(
     `/api/projects/${projectId}/trays/import`,
@@ -71,23 +72,18 @@ export async function importTrays(
 export async function exportTrays(
   token: string,
   projectId: string,
-  options?: { freeSpaceByTrayId?: Record<string, number | null> }
+  options?: { freeSpaceByTrayId?: Record<string, number | null> },
 ): Promise<Blob> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/trays/export`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        ...(options?.freeSpaceByTrayId
-          ? { freeSpaceByTrayId: options.freeSpaceByTrayId }
-          : {})
-      })
-    }
-  );
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/trays/export`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...(options?.freeSpaceByTrayId ? { freeSpaceByTrayId: options.freeSpaceByTrayId } : {}),
+    }),
+  });
 
   if (!response.ok) {
     let payload: unknown = null;
@@ -110,19 +106,13 @@ export async function exportTrays(
   return response.blob();
 }
 
-export async function getTraysTemplate(
-  token: string,
-  projectId: string
-): Promise<Blob> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/trays/template`,
-    {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    }
-  );
+export async function getTraysTemplate(token: string, projectId: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/trays/template`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
   if (!response.ok) {
     let payload: unknown = null;

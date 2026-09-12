@@ -4,13 +4,13 @@ import {
   MaterialSupport,
   Project,
   ProjectSupportOverridePayload,
-  updateProject
 } from '@/api/client';
+import { request } from '@/api/http';
 import {
   formatDecimalInputValue,
   limitDecimalInput,
   parseNumberInput,
-  roundToDecimalPlaces
+  roundToDecimalPlaces,
 } from '../../ProjectDetails.utils';
 
 type ShowToast = (props: {
@@ -70,7 +70,7 @@ export const useSupportDistanceOverrides = ({
   token,
   isAdmin,
   showToast,
-  reloadProject
+  reloadProject,
 }: UseSupportDistanceOverridesParams) => {
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [supportIds, setSupportIds] = useState<Record<string, string | null>>({});
@@ -83,14 +83,10 @@ export const useSupportDistanceOverrides = ({
       const next: Record<string, string> = {};
       trayTypeDetails.forEach(({ trayType }) => {
         const override = overrides[trayType];
-        if (
-          override &&
-          override.distance !== null &&
-          override.distance !== undefined
-        ) {
+        if (override && override.distance !== null && override.distance !== undefined) {
           next[trayType] = formatDecimalInputValue(
             override.distance,
-            SUPPORT_DISTANCE_DECIMAL_PLACES
+            SUPPORT_DISTANCE_DECIMAL_PLACES,
           );
         } else {
           next[trayType] = '';
@@ -102,8 +98,7 @@ export const useSupportDistanceOverrides = ({
       const next: Record<string, string | null> = {};
       trayTypeDetails.forEach(({ trayType }) => {
         const override = overrides[trayType];
-        next[trayType] =
-          override && override.supportId ? override.supportId : null;
+        next[trayType] = override && override.supportId ? override.supportId : null;
       });
       return next;
     });
@@ -117,7 +112,7 @@ export const useSupportDistanceOverrides = ({
         acc[support.id] = support;
         return acc;
       }, {}),
-    [supports]
+    [supports],
   );
 
   const supportOptionsByTrayType = useMemo(
@@ -139,8 +134,7 @@ export const useSupportDistanceOverrides = ({
           options = supports.filter(
             (support) =>
               support.lengthMm !== null &&
-              Math.abs(support.lengthMm - targetWidth) <=
-                SUPPORT_LENGTH_MATCH_TOLERANCE
+              Math.abs(support.lengthMm - targetWidth) <= SUPPORT_LENGTH_MATCH_TOLERANCE,
           );
         } else {
           options = supports;
@@ -149,55 +143,48 @@ export const useSupportDistanceOverrides = ({
         acc[detail.trayType] = {
           options,
           widthMm: detail.widthMm,
-          hasMultipleWidths: detail.hasMultipleWidths
+          hasMultipleWidths: detail.hasMultipleWidths,
         };
         return acc;
       }, {}),
-    [supports, trayTypeDetails]
+    [supports, trayTypeDetails],
   );
 
-  const handleInputChange = useCallback(
-    (trayType: string, value: string) => {
-      const nextValue = limitDecimalInput(value, SUPPORT_DISTANCE_DECIMAL_PLACES);
-      setInputs((previous) => ({
+  const handleInputChange = useCallback((trayType: string, value: string) => {
+    const nextValue = limitDecimalInput(value, SUPPORT_DISTANCE_DECIMAL_PLACES);
+    setInputs((previous) => ({
+      ...previous,
+      [trayType]: nextValue,
+    }));
+    setErrors((previous) => {
+      if (!previous[trayType]) {
+        return previous;
+      }
+      return {
         ...previous,
-        [trayType]: nextValue
-      }));
-      setErrors((previous) => {
-        if (!previous[trayType]) {
-          return previous;
-        }
-        return {
-          ...previous,
-          [trayType]: null
-        };
-      });
-    },
-    []
-  );
+        [trayType]: null,
+      };
+    });
+  }, []);
 
-  const handleSupportChange = useCallback(
-    (trayType: string, supportId: string | null) => {
-      const normalizedSupportId =
-        supportId && supportId.trim() !== '' ? supportId : null;
+  const handleSupportChange = useCallback((trayType: string, supportId: string | null) => {
+    const normalizedSupportId = supportId && supportId.trim() !== '' ? supportId : null;
 
-      setSupportIds((previous) => {
-        const next = { ...previous };
-        next[trayType] = normalizedSupportId;
-        return next;
-      });
-      setErrors((previous) => {
-        if (!previous[trayType]) {
-          return previous;
-        }
-        return {
-          ...previous,
-          [trayType]: null
-        };
-      });
-    },
-    []
-  );
+    setSupportIds((previous) => {
+      const next = { ...previous };
+      next[trayType] = normalizedSupportId;
+      return next;
+    });
+    setErrors((previous) => {
+      if (!previous[trayType]) {
+        return previous;
+      }
+      return {
+        ...previous,
+        [trayType]: null,
+      };
+    });
+  }, []);
 
   const handleSave = useCallback(
     async (trayType: string) => {
@@ -205,7 +192,7 @@ export const useSupportDistanceOverrides = ({
         showToast({
           intent: 'error',
           title: 'Sign-in required',
-          body: 'You need to be signed in to update support settings.'
+          body: 'You need to be signed in to update support settings.',
         });
         return;
       }
@@ -214,7 +201,7 @@ export const useSupportDistanceOverrides = ({
         showToast({
           intent: 'error',
           title: 'Administrator access required',
-          body: 'Only administrators can update support settings.'
+          body: 'Only administrators can update support settings.',
         });
         return;
       }
@@ -225,7 +212,7 @@ export const useSupportDistanceOverrides = ({
       if (parsed.error) {
         setErrors((previous) => ({
           ...previous,
-          [trayType]: parsed.error
+          [trayType]: parsed.error,
         }));
         return;
       }
@@ -238,94 +225,79 @@ export const useSupportDistanceOverrides = ({
 
       const currentOverride = project.supportDistanceOverrides[trayType];
       const currentDistance =
-        currentOverride && currentOverride.distance !== null
-          ? currentOverride.distance
-          : null;
+        currentOverride && currentOverride.distance !== null ? currentOverride.distance : null;
       const currentSupportId =
-        currentOverride && currentOverride.supportId
-          ? currentOverride.supportId
-          : null;
+        currentOverride && currentOverride.supportId ? currentOverride.supportId : null;
 
-      if (
-        currentDistance === nextDistance &&
-        currentSupportId === selectedSupportId
-      ) {
+      if (currentDistance === nextDistance && currentSupportId === selectedSupportId) {
         setErrors((previous) => ({
           ...previous,
-          [trayType]: 'No changes to save.'
+          [trayType]: 'No changes to save.',
         }));
         return;
       }
 
       setSaving((previous) => ({
         ...previous,
-        [trayType]: true
+        [trayType]: true,
       }));
       setErrors((previous) => ({
         ...previous,
-        [trayType]: null
+        [trayType]: null,
       }));
 
       try {
-        const nextOverrides = Object.entries(
-          project.supportDistanceOverrides
-        ).reduce<Record<string, ProjectSupportOverridePayload>>(
-          (acc, [key, override]) => {
-            acc[key] = {
-              distance:
-                override?.distance !== undefined && override?.distance !== null
-                  ? override.distance
-                  : null,
-              supportId: override?.supportId ?? null
-            };
-            return acc;
-          },
-          {}
-        );
+        const nextOverrides = Object.entries(project.supportDistanceOverrides).reduce<
+          Record<string, ProjectSupportOverridePayload>
+        >((acc, [key, override]) => {
+          acc[key] = {
+            distance:
+              override?.distance !== undefined && override?.distance !== null
+                ? override.distance
+                : null,
+            supportId: override?.supportId ?? null,
+          };
+          return acc;
+        }, {});
 
         if (nextDistance === null && !selectedSupportId) {
           delete nextOverrides[trayType];
         } else {
           nextOverrides[trayType] = {
             distance: nextDistance,
-            supportId: selectedSupportId
+            supportId: selectedSupportId,
           };
         }
 
-        await updateProject(token, project.id, {
-          supportDistances: nextOverrides
+        await request(`/api/projects/${project.id}/support-distances`, {
+          token, method: 'PUT', body: { supportDistances: nextOverrides },
         });
         await reloadProject();
         showToast({
           intent: 'success',
-          title: `Support settings for ${trayType} updated`
+          title: `Support settings for ${trayType} updated`,
         });
       } catch (error) {
-        console.error(
-          `Failed to update support settings for tray type "${trayType}"`,
-          error
-        );
+        console.error(`Failed to update support settings for tray type "${trayType}"`, error);
         const message =
-          error instanceof ApiError
-            ? error.message
-            : 'Failed to update support settings.';
+          error instanceof ApiError ? error.message : 'Failed to update support settings.';
         setErrors((previous) => ({
           ...previous,
-          [trayType]: message
+          [trayType]: message,
         }));
         showToast({
           intent: 'error',
           title: 'Update failed',
-          body: message
+          body: message,
         });
       } finally {
         setSaving((previous) => ({
           ...previous,
-          [trayType]: false
+          [trayType]: false,
         }));
       }
     },
-    [inputs, supportIds, isAdmin, project, reloadProject, showToast, token]
+    [inputs, supportIds, isAdmin, project, reloadProject, showToast, token],
   );
 
   const fields: SupportDistanceOverrideField[] = useMemo(() => {
@@ -335,18 +307,15 @@ export const useSupportDistanceOverrides = ({
 
     return trayTypeDetails.map((detail) => {
       const override = project.supportDistanceOverrides[detail.trayType];
-      const currentDistance =
-        override && override.distance !== null ? override.distance : null;
-      const currentSupportType =
-        override?.supportType ??
-        (override?.supportId ? supportsById[override.supportId]?.type ?? null : null);
+      const currentDistance = override && override.distance !== null ? override.distance : null;
+      const currentSupportType = override?.supportType ??
+        (override?.supportId ? 'Historical support characteristics unknown' : null);
       const selectedSupportId = supportIds[detail.trayType] ?? null;
-      const optionsInfo =
-        supportOptionsByTrayType[detail.trayType] ?? {
-          options: [] as MaterialSupport[],
-          widthMm: detail.widthMm,
-          hasMultipleWidths: detail.hasMultipleWidths
-        };
+      const optionsInfo = supportOptionsByTrayType[detail.trayType] ?? {
+        options: [] as MaterialSupport[],
+        widthMm: detail.widthMm,
+        hasMultipleWidths: detail.hasMultipleWidths,
+      };
 
       return {
         trayType: detail.trayType,
@@ -357,15 +326,12 @@ export const useSupportDistanceOverrides = ({
         defaultValue: project.supportDistance ?? null,
         input: inputs[detail.trayType] ?? '',
         selectedSupportId,
-        selectedSupportLabel:
-          selectedSupportId
-            ? supportsById[selectedSupportId]?.type ??
-              override?.supportType ??
-              'Support no longer available'
-            : 'None (use default)',
-        selectedSupportMissing: Boolean(
-          selectedSupportId && !supportsById[selectedSupportId]
-        ),
+        selectedSupportLabel: selectedSupportId
+          ? selectedSupportId === override?.supportId
+            ? (override.supportType ?? 'Historical support characteristics unknown')
+            : (supportsById[selectedSupportId]?.type ?? 'Support no longer available')
+          : 'None (use default)',
+        selectedSupportMissing: Boolean(selectedSupportId && !supportsById[selectedSupportId]),
         supportOptions: optionsInfo.options,
         supportsLoading,
         supportsError,
@@ -374,7 +340,7 @@ export const useSupportDistanceOverrides = ({
         onInputChange: (value: string) => handleInputChange(detail.trayType, value),
         onSupportChange: (supportId: string | null) =>
           handleSupportChange(detail.trayType, supportId),
-        onSave: () => handleSave(detail.trayType)
+        onSave: () => handleSave(detail.trayType),
       };
     });
   }, [
@@ -390,7 +356,7 @@ export const useSupportDistanceOverrides = ({
     saving,
     handleInputChange,
     handleSupportChange,
-    handleSave
+    handleSave,
   ]);
 
   return fields;

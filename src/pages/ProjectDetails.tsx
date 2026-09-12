@@ -1,3 +1,4 @@
+import { canEditProjectContent } from '@/utils/projectPermissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Body1, Button, Spinner, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
@@ -76,7 +77,6 @@ import {
   PROJECT_FILE_CATEGORY_LABELS,
   getProjectFileCategory,
 } from './ProjectDetails/projectFileUtils';
-import { useMaterialData } from './TrayDetails/hooks';
 
 const CATEGORY_KEYS: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
 
@@ -200,37 +200,10 @@ export const ProjectDetails = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, token } = useAuth();
   const { showToast } = useToast();
-  const { materialTrays } = useMaterialData();
 
   const isAdmin = Boolean(user?.isAdmin);
-  const canManageCables = Boolean(token);
-
-  const findMaterialTrayByType = useCallback(
-    (trayType: string | null | undefined) => {
-      if (!trayType) {
-        return null;
-      }
-      const normalized = trayType.trim().toLowerCase();
-      if (!normalized) {
-        return null;
-      }
-      return (
-        materialTrays.find(
-          (materialTray) => materialTray.type.trim().toLowerCase() === normalized,
-        ) ?? null
-      );
-    },
-    [materialTrays],
-  );
-
-  const findMaterialTrayManufacturer = useCallback(
-    (trayType: string | null | undefined): string | null => {
-      const match = findMaterialTrayByType(trayType);
-      const manufacturer = match?.manufacturer?.trim();
-      return manufacturer ? (manufacturer === '' ? null : manufacturer) : null;
-    },
-    [findMaterialTrayByType],
-  );
+  const canEditContent = canEditProjectContent(user, projectId);
+  const canManageCables = canEditContent && Boolean(token);
 
   const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
   const selectedTab: ProjectDetailsTab =
@@ -549,7 +522,7 @@ export const ProjectDetails = () => {
   });
 
   const { supports, supportsLoading, supportsError } = useMaterialSupports({
-    isAdmin,
+    isAdmin: canEditContent,
     showToast,
   });
 
@@ -560,7 +533,7 @@ export const ProjectDetails = () => {
     supportsLoading,
     supportsError,
     token,
-    isAdmin,
+    isAdmin: canEditContent,
     showToast,
     reloadProject,
   });
@@ -656,7 +629,7 @@ export const ProjectDetails = () => {
         typeof tray.heightMm === 'number' &&
         tray.heightMm > 0
       ) {
-        const rungHeightMm = findMaterialTrayByType(tray.type)?.rungHeightMm ?? null;
+        const rungHeightMm = tray.materialSnapshot?.material.rungHeightMm ?? null;
         try {
           layoutSummary = trayDrawingService.drawTrayLayout(
             canvas,
@@ -692,7 +665,6 @@ export const ProjectDetails = () => {
   }, [
     cables,
     canonicalProjectId,
-    findMaterialTrayByType,
     project?.cableLayout,
     projectCableSpacingMm,
     trayDrawingService,
@@ -1027,7 +999,7 @@ export const ProjectDetails = () => {
         id: 'tray-details:manufacturer',
         name: 'Tray manufacturer',
         value: describeDynamicValue(
-          fallbackText(findMaterialTrayManufacturer(sampleTray?.type ?? null)),
+          fallbackText(sampleTray?.materialSnapshot?.material.manufacturer ?? null),
         ),
       },
       {
@@ -1282,7 +1254,6 @@ export const ProjectDetails = () => {
     trays,
     trayFreeSpaceMetricsById,
     trayTemplateRows,
-    findMaterialTrayManufacturer,
   ]);
 
   const variablesTabLoading =
@@ -1521,6 +1492,7 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'details' ? (
         <DetailsTab
+          canEditSupports={canEditContent}
           styles={styles}
           project={project}
           formattedDates={formattedDates}
@@ -1541,8 +1513,9 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cables' ? (
         <CableTypesTab
+          canExport={Boolean(token)}
           styles={styles}
-          isAdmin={isAdmin}
+          isAdmin={canEditContent}
           isRefreshing={cableTypesRefreshing}
           onRefresh={() => void reloadCableTypes({ showSpinner: false })}
           onCreate={openCreateCableTypeDialog}
@@ -1579,8 +1552,9 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'trays' ? (
         <TraysTab
+          canExport={Boolean(token)}
           styles={styles}
-          isAdmin={isAdmin}
+          isAdmin={canEditContent}
           isRefreshing={traysRefreshing}
           onRefresh={() => void reloadTrays({ showSpinner: false })}
           onCreate={openCreateTrayDialog}
@@ -1654,9 +1628,10 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cable-list' ? (
         <CableListTab
+          canExport={Boolean(token)}
           styles={styles}
           canManageCables={canManageCables}
-          isAdmin={isAdmin}
+          isAdmin={canEditContent}
           filterText={filterText}
           onFilterTextChange={setCableFilterText}
           filterCriteria={filterCriteria}
@@ -1707,7 +1682,7 @@ export const ProjectDetails = () => {
       {selectedTab === 'cable-report' ? (
         <CableReportTab
           styles={styles}
-          canManageCables={canManageCables}
+          canExport={Boolean(token)}
           isRefreshing={cablesRefreshing}
           onRefresh={handleCableReportRefresh}
           selectedMto={selectedCableReportMto}

@@ -20,7 +20,9 @@ import type {
   CableSortDirection,
 } from './types';
 
-export async function fetchCableTypes(projectId: string): Promise<{ cableTypes: CableType[] }> {
+export async function fetchCableTypes(
+  projectId: string,
+): Promise<{ cableTypes: CableType[]; mutationRevision?: number }> {
   return request<{ cableTypes: CableType[] }>(`/api/projects/${projectId}/cable-types`, {
     method: 'GET',
   });
@@ -30,10 +32,12 @@ export async function createCableType(
   token: string,
   projectId: string,
   data: CableTypeInput,
-): Promise<{ cableType: CableType }> {
+  expectedRevision?: number,
+): Promise<{ cableType: CableType; mutationRevision?: number }> {
   return request<{ cableType: CableType }>(`/api/projects/${projectId}/cable-types`, {
     method: 'POST',
     token,
+    expectedRevision,
     body: data,
   });
 }
@@ -43,12 +47,14 @@ export async function updateCableType(
   projectId: string,
   cableTypeId: string,
   data: Partial<CableTypeInput>,
-): Promise<{ cableType: CableType }> {
+  expectedRevision?: number,
+): Promise<{ cableType: CableType; mutationRevision?: number }> {
   return request<{ cableType: CableType }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}`,
     {
       method: 'PATCH',
       token,
+      expectedRevision,
       body: data,
     },
   );
@@ -58,23 +64,30 @@ export async function deleteCableType(
   token: string,
   projectId: string,
   cableTypeId: string,
-): Promise<void> {
-  await request<void>(`/api/projects/${projectId}/cable-types/${cableTypeId}`, {
-    method: 'DELETE',
-    token,
-  });
+  expectedRevision?: number,
+): Promise<{ mutationRevision?: number }> {
+  return request<{ mutationRevision?: number }>(
+    `/api/projects/${projectId}/cable-types/${cableTypeId}`,
+    {
+      method: 'DELETE',
+      token,
+      expectedRevision,
+    },
+  );
 }
 
 export async function importCableTypes(
   token: string,
   projectId: string,
   file: File,
-): Promise<{ summary: CableImportSummary; cableTypes: CableType[] }> {
+  expectedRevision?: number,
+): Promise<{ summary: CableImportSummary; cableTypes: CableType[]; mutationRevision?: number }> {
   return uploadExcelFile(
     `/api/projects/${projectId}/cable-types/import`,
     token,
     file,
     'Failed to import cable types',
+    { expectedRevision },
   );
 }
 
@@ -154,12 +167,14 @@ export async function createCableTypeDefaultMaterial(
   projectId: string,
   cableTypeId: string,
   data: CableTypeDefaultMaterialInput,
-): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
+  expectedRevision?: number,
+): Promise<{ defaultMaterial: CableTypeDefaultMaterial; mutationRevision?: number }> {
   return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials`,
     {
       method: 'POST',
       token,
+      expectedRevision,
       body: data,
     },
   );
@@ -171,12 +186,14 @@ export async function updateCableTypeDefaultMaterial(
   cableTypeId: string,
   defaultMaterialId: string,
   data: Partial<CableTypeDefaultMaterialInput>,
-): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
+  expectedRevision?: number,
+): Promise<{ defaultMaterial: CableTypeDefaultMaterial; mutationRevision?: number }> {
   return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
     {
       method: 'PATCH',
       token,
+      expectedRevision,
       body: data,
     },
   );
@@ -187,12 +204,14 @@ export async function deleteCableTypeDefaultMaterial(
   projectId: string,
   cableTypeId: string,
   defaultMaterialId: string,
-): Promise<void> {
-  await request<void>(
+  expectedRevision?: number,
+): Promise<{ mutationRevision?: number }> {
+  return request<{ mutationRevision?: number }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
     {
       method: 'DELETE',
       token,
+      expectedRevision,
     },
   );
 }
@@ -202,15 +221,18 @@ export async function importCableTypeDefaultMaterials(
   projectId: string,
   cableTypeId: string,
   file: File,
+  expectedRevision?: number,
 ): Promise<{
   summary: CableTypeDefaultMaterialImportSummary;
   defaultMaterials: CableTypeDefaultMaterial[];
+  mutationRevision?: number;
 }> {
   return uploadExcelFile(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/import`,
     token,
     file,
     'Failed to import default materials',
+    { expectedRevision },
   );
 }
 
@@ -250,7 +272,9 @@ export async function exportCableTypeDefaultMaterials(
   return response.blob();
 }
 
-export async function fetchCables(projectId: string): Promise<{ cables: Cable[] }> {
+export async function fetchCables(
+  projectId: string,
+): Promise<{ cables: Cable[]; mutationRevision?: number }> {
   return request<{ cables: Cable[] }>(`/api/projects/${projectId}/cables`);
 }
 
@@ -258,14 +282,7 @@ export async function fetchCableReportSummary(
   projectId: string,
   options?: {
     filterText?: string;
-    criteria?:
-      | 'all'
-      | 'tag'
-      | 'typeName'
-      | 'fromLocation'
-      | 'toLocation'
-      | 'routing'
-      | 'delivery';
+    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing' | 'delivery';
     mto?: CableMtoOption | null;
   },
 ): Promise<{ summary: CableReportSummary }> {
@@ -316,10 +333,12 @@ export async function createCable(
   token: string,
   projectId: string,
   data: CableInput,
-): Promise<{ cable: Cable }> {
+  expectedRevision?: number,
+): Promise<{ cable: Cable; mutationRevision?: number }> {
   return request<{ cable: Cable }>(`/api/projects/${projectId}/cables`, {
     method: 'POST',
     token,
+    expectedRevision,
     body: data,
   });
 }
@@ -329,10 +348,12 @@ export async function updateCable(
   projectId: string,
   cableId: string,
   data: Partial<CableInput>,
-): Promise<{ cable: Cable }> {
+  expectedRevision?: number,
+): Promise<{ cable: Cable; mutationRevision?: number }> {
   return request<{ cable: Cable }>(`/api/projects/${projectId}/cables/${cableId}`, {
     method: 'PATCH',
     token,
+    expectedRevision,
     body: data,
   });
 }
@@ -341,10 +362,12 @@ export async function deleteCable(
   token: string,
   projectId: string,
   cableId: string,
-): Promise<void> {
-  await request<void>(`/api/projects/${projectId}/cables/${cableId}`, {
+  expectedRevision?: number,
+): Promise<{ mutationRevision?: number }> {
+  return request<{ mutationRevision?: number }>(`/api/projects/${projectId}/cables/${cableId}`, {
     method: 'DELETE',
     token,
+    expectedRevision,
   });
 }
 
@@ -353,12 +376,14 @@ export async function createCableMaterial(
   projectId: string,
   cableId: string,
   data: CableMaterialInput,
-): Promise<{ cableMaterial: CableMaterial }> {
+  expectedRevision?: number,
+): Promise<{ cableMaterial: CableMaterial; mutationRevision?: number }> {
   return request<{ cableMaterial: CableMaterial }>(
     `/api/projects/${projectId}/cables/${cableId}/materials`,
     {
       method: 'POST',
       token,
+      expectedRevision,
       body: data,
     },
   );
@@ -370,12 +395,14 @@ export async function updateCableMaterial(
   cableId: string,
   materialId: string,
   data: Partial<CableMaterialInput>,
-): Promise<{ cableMaterial: CableMaterial }> {
+  expectedRevision?: number,
+): Promise<{ cableMaterial: CableMaterial; mutationRevision?: number }> {
   return request<{ cableMaterial: CableMaterial }>(
     `/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`,
     {
       method: 'PATCH',
       token,
+      expectedRevision,
       body: data,
     },
   );
@@ -386,29 +413,38 @@ export async function deleteCableMaterial(
   projectId: string,
   cableId: string,
   materialId: string,
-): Promise<void> {
-  await request<void>(`/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`, {
-    method: 'DELETE',
-    token,
-  });
+  expectedRevision?: number,
+): Promise<{ mutationRevision?: number }> {
+  return request<{ mutationRevision?: number }>(
+    `/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`,
+    {
+      method: 'DELETE',
+      token,
+      expectedRevision,
+    },
+  );
 }
 
 export async function syncCableBaseMaterials(
   token: string,
   projectId: string,
   cableId: string,
+  expectedRevision?: number,
 ): Promise<{
   cableMaterials: CableMaterial[];
   cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
   summary: CableMaterialSyncSummary;
+  mutationRevision?: number;
 }> {
   return request<{
     cableMaterials: CableMaterial[];
     cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
     summary: CableMaterialSyncSummary;
+    mutationRevision?: number;
   }>(`/api/projects/${projectId}/cables/${cableId}/materials/sync-defaults`, {
     method: 'POST',
     token,
+    expectedRevision,
   });
 }
 
@@ -416,12 +452,14 @@ export async function importCables(
   token: string,
   projectId: string,
   file: File,
-): Promise<{ summary: CableImportSummary; cables: Cable[] }> {
+  expectedRevision?: number,
+): Promise<{ summary: CableImportSummary; cables: Cable[]; mutationRevision?: number }> {
   return uploadExcelFile(
     `/api/projects/${projectId}/cables/import`,
     token,
     file,
     'Failed to import cables',
+    { expectedRevision },
   );
 }
 
@@ -431,14 +469,7 @@ export async function exportCables(
   options?: {
     filterText?: string;
     cableTypeId?: string;
-    criteria?:
-      | 'all'
-      | 'tag'
-      | 'typeName'
-      | 'fromLocation'
-      | 'toLocation'
-      | 'routing'
-      | 'delivery';
+    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing' | 'delivery';
     mto?: CableMtoOption | null;
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;
