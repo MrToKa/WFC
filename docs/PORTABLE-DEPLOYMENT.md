@@ -41,7 +41,7 @@ Run from the repository root:
 powershell -ExecutionPolicy Bypass -File .\scripts\backup-wfc.ps1
 ```
 
-The script creates a timestamped folder on the Desktop containing:
+The script creates a timestamped folder under `D:\WFC Back-ups` (created automatically) containing:
 
 - a PostgreSQL custom-format dump;
 - all MinIO objects;
@@ -62,7 +62,7 @@ creates a consistent logical backup. Treat the backup as sensitive because it co
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\scripts\restore-wfc.ps1 `
-       -BackupPath "C:\Users\YOUR_NAME\Desktop\WFC_Backup_YYYY-MM-DD_HH-mm-ss"
+       -BackupPath "D:\WFC Back-ups\WFC_Backup_YYYY-MM-DD_HH-mm-ss"
    ```
 
 3. Open `http://localhost:5173` and verify users, projects, uploaded files, and templates.
