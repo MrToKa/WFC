@@ -20,7 +20,7 @@ MinIO requires the following environment variables inside `server/.env` (default
 MINIO_ENDPOINT=localhost
 MINIO_PORT=9000
 MINIO_ACCESS_KEY=wfcminio
-MINIO_SECRET_KEY=wfcminio123
+MINIO_SECRET_KEY=CHANGE_ME_WITH_A_RANDOM_PASSWORD
 MINIO_USE_SSL=false
 MINIO_BUCKET_PROJECTS=wfc-project-files
 MINIO_BUCKET_TEMPLATES=wfc-template-files
