@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$DestinationRoot = [Environment]::GetFolderPath("Desktop"),
+    [ValidateNotNullOrEmpty()]
+    [string]$DestinationRoot = 'D:\WFC Back-ups',
     [string]$PostgresContainer,
     [string]$MinioContainer,
     [ValidateNotNullOrEmpty()]
