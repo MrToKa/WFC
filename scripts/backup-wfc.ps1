@@ -15,36 +15,62 @@ $PostgresContainerPath = "/tmp/$PostgresFileName"
 $MinioBackupDir = Join-Path $BackupDir "minio-data"
 $ConfigurationDir = Join-Path $BackupDir "configuration"
 
-# List names once: a missing candidate is normal during auto-detection.
-# Probing it with docker inspect writes stderr, which Windows PowerShell 5.1
-# turns into a terminating NativeCommandError under ErrorActionPreference=Stop.
+# Enumerate containers successfully instead of probing nonexistent names.
+# Docker Desktop may show a Compose service name rather than the container name.
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     throw "Docker was not found. Install and start Docker Desktop first."
 }
 
-$AvailableContainers = @(docker container ls --all --format '{{.Names}}')
+$ContainerRows = @(docker container ls --all --format '{{json .}}')
 if ($LASTEXITCODE -ne 0) {
     throw "Could not list Docker containers. Check that Docker Desktop is running."
 }
+$AvailableContainers = @($ContainerRows | ForEach-Object { $_ | ConvertFrom-Json })
+$ContainerSummary = ($AvailableContainers | ForEach-Object {
+    "{0} [{1}; {2}]" -f $_.Names, $_.Image, $_.State
+}) -join "; "
 
-function Test-ContainerExists {
-    param([string]$Name)
-    return $AvailableContainers -ccontains $Name
+function Resolve-BackupContainer {
+    param(
+        [string]$ExplicitName,
+        [string]$Service,
+        [string[]]$KnownNames,
+        [string]$ImagePattern,
+        [string]$ParameterName
+    )
+
+    if ($ExplicitName) {
+        $matches = @($AvailableContainers | Where-Object { $_.Names -ceq $ExplicitName })
+        if ($matches.Count -ne 1) {
+            throw "Container '$ExplicitName' was not found. Available: $ContainerSummary. Omit -$ParameterName for auto-detection or pass its exact name."
+        }
+        return $matches[0].Names
+    }
+
+    # Prefer the WFC Compose service, then established names, then image.
+    # Never pick an arbitrary container when multiple candidates match.
+    $matches = @($AvailableContainers | Where-Object {
+        $labels = @($_.Labels -split ',')
+        ($labels -contains 'com.docker.compose.project=wfc') -and
+        ($labels -contains "com.docker.compose.service=$Service")
+    })
+    if ($matches.Count -eq 0) {
+        $matches = @($AvailableContainers | Where-Object { $KnownNames -ccontains $_.Names })
+    }
+    if ($matches.Count -eq 0) {
+        $matches = @($AvailableContainers | Where-Object { $_.Image -match $ImagePattern })
+    }
+    if ($matches.Count -ne 1) {
+        throw "Cannot uniquely identify $Service. Pass -$ParameterName with the exact container name. Available: $ContainerSummary"
+    }
+    return $matches[0].Names
 }
 
-if (-not $PostgresContainer) {
-    $PostgresContainer = if (Test-ContainerExists "wfc-postgres") { "wfc-postgres" } else { "wfc_app" }
-}
-if (-not $MinioContainer) {
-    $MinioContainer = if (Test-ContainerExists "wfc-minio") { "wfc-minio" } else { "minio" }
-}
+$PostgresContainer = Resolve-BackupContainer -ExplicitName $PostgresContainer -Service 'postgres' -KnownNames @('wfc-postgres', 'wfc_app') -ImagePattern '(^|/)postgres(:|@|$)' -ParameterName 'PostgresContainer'
+$MinioContainer = Resolve-BackupContainer -ExplicitName $MinioContainer -Service 'minio' -KnownNames @('wfc-minio', 'minio') -ImagePattern '(^|/)minio/minio(:|@|$)' -ParameterName 'MinioContainer'
 
-if (-not (Test-ContainerExists $PostgresContainer)) {
-    throw "PostgreSQL container '$PostgresContainer' was not found."
-}
-if (-not (Test-ContainerExists $MinioContainer)) {
-    throw "MinIO container '$MinioContainer' was not found."
-}
+Write-Host "PostgreSQL container: $PostgresContainer"
+Write-Host "MinIO container: $MinioContainer"
 
 Push-Location $ProjectRoot
 try {
