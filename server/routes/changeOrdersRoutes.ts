@@ -1,10 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response, Router as ExpressRouter } from 'express';
 import { Router } from 'express';
 import { z } from 'zod';
-import type {
-  ChangeOrderDocumentType,
-  ChangeOrderSourceCatalog,
-} from '../models/changeOrder.js';
+import type { ChangeOrderDocumentType } from '../models/changeOrder.js';
 import { authenticate, type AuthenticatedRequest } from '../middleware.js';
 import {
   ChangeOrderTemplateError,
@@ -14,24 +12,20 @@ import {
 } from '../services/changeOrderExcelExportService.js';
 import { CatalogMaterialNotFoundError } from '../services/changeOrderCatalogService.js';
 import {
-  addChangeOrderItem,
+  applyChangeOrderMaterials,
+  ChangeOrderConflictError,
+  InvalidChangeOrderMaterialError,
   createChangeOrder,
   deleteChangeOrder,
-  deleteChangeOrderItem,
-  duplicateChangeOrderItem,
   getChangeOrder,
   InvalidChangeOrderOrderError,
   listChangeOrders,
-  reorderChangeOrderItems,
   updateChangeOrder,
-  updateChangeOrderItem,
 } from '../services/changeOrderService.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
-  addChangeOrderItemSchema,
+  changeOrderMaterialsSchema,
   createChangeOrderSchema,
-  reorderChangeOrderItemsSchema,
-  updateChangeOrderItemSchema,
   updateChangeOrderSchema,
 } from '../validators.js';
 
@@ -51,17 +45,12 @@ const parseIds = (
   return true;
 };
 
-const DOCUMENT_LABELS: Record<
-  ChangeOrderDocumentType,
-  { singular: string; plural: string }
-> = {
+const DOCUMENT_LABELS: Record<ChangeOrderDocumentType, { singular: string; plural: string }> = {
   'change-order': { singular: 'Change Order', plural: 'Change Orders' },
   'internal-ncr': { singular: 'Internal NCR', plural: 'Internal NCRs' },
 };
 
-export const createChangeOrdersRouter = (
-  documentType: ChangeOrderDocumentType,
-): ExpressRouter => {
+export const createChangeOrdersRouter = (documentType: ChangeOrderDocumentType): ExpressRouter => {
   const router = Router({ mergeParams: true });
   const labels = DOCUMENT_LABELS[documentType];
 
@@ -130,40 +119,83 @@ export const createChangeOrdersRouter = (
     }
   });
 
-  router.patch('/:changeOrderId', async (req: Request, res: Response): Promise<void> => {
-    if (!parseIds(req, res, ['changeOrderId'])) return;
-    const parsed = updateChangeOrderSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.flatten() });
-      return;
-    }
-    try {
-      const changeOrder = await updateChangeOrder(
-        req.params.projectId,
-        documentType,
-        req.params.changeOrderId,
-        parsed.data,
-      );
-      if (!changeOrder) {
-        res.status(404).json({ error: `${labels.singular} not found` });
+  router.patch(
+    '/:changeOrderId',
+    async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      if (!parseIds(req, res, ['changeOrderId'])) return;
+      const parsed = updateChangeOrderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      res.json({ changeOrder });
-    } catch (error) {
-      console.error(`Update ${labels.singular} error`, error);
-      res.status(500).json({ error: `Failed to update ${labels.singular}` });
-    }
-  });
+      try {
+        const changeOrder = await updateChangeOrder(
+          req.params.projectId,
+          documentType,
+          req.params.changeOrderId,
+          parsed.data,
+          req.userId as string,
+        );
+        if (!changeOrder) {
+          res.status(404).json({ error: `${labels.singular} not found` });
+          return;
+        }
+        res.json({ changeOrder });
+      } catch (error) {
+        console.error(`Update ${labels.singular} error`, error);
+        res.status(500).json({ error: `Failed to update ${labels.singular}` });
+      }
+    },
+  );
+
+  for (const preview of [true, false]) {
+    router[preview ? 'post' : 'put'](
+      preview ? '/:changeOrderId/materials/preview' : '/:changeOrderId/materials',
+      async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+        if (!parseIds(req, res, ['changeOrderId'])) return;
+        const parsed = changeOrderMaterialsSchema.safeParse(req.body);
+        if (!parsed.success) {
+          res.status(400).json({ error: parsed.error.flatten() });
+          return;
+        }
+        try {
+          const changeOrder = await applyChangeOrderMaterials(
+            req.params.projectId,
+            documentType,
+            req.params.changeOrderId,
+            req.userId as string,
+            parsed.data,
+            preview,
+          );
+          if (!changeOrder) {
+            res.status(404).json({ error: `${labels.singular} not found` });
+            return;
+          }
+          res.json({ changeOrder });
+        } catch (error) {
+          if (error instanceof ChangeOrderConflictError) {
+            res.status(409).json({ error: error.message });
+          } else if (
+            error instanceof InvalidChangeOrderMaterialError ||
+            error instanceof InvalidChangeOrderOrderError
+          ) {
+            res.status(400).json({ error: error.message });
+          } else if (error instanceof CatalogMaterialNotFoundError) {
+            res.status(404).json({ error: 'Source material not found' });
+          } else {
+            console.error(`Save ${labels.singular} materials error`, error);
+            res.status(500).json({ error: `Failed to ${preview ? 'preview' : 'save'} materials` });
+          }
+        }
+      },
+    );
+  }
 
   router.delete('/:changeOrderId', async (req: Request, res: Response): Promise<void> => {
     if (!parseIds(req, res, ['changeOrderId'])) return;
     try {
       if (
-        !(await deleteChangeOrder(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-        ))
+        !(await deleteChangeOrder(req.params.projectId, documentType, req.params.changeOrderId))
       ) {
         res.status(404).json({ error: `${labels.singular} not found` });
         return;
@@ -175,203 +207,148 @@ export const createChangeOrdersRouter = (
     }
   });
 
-  router.post(
-    '/:changeOrderId/items',
-    async (req: Request, res: Response): Promise<void> => {
-      if (!parseIds(req, res, ['changeOrderId'])) return;
-      const parsed = addChangeOrderItemSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.flatten() });
+  // Older clients use individual item endpoints. They still go through the same
+  // atomic save and author/change-log handling as the materials editor.
+  const itemRoutes: Array<{
+    method: 'post' | 'patch' | 'delete' | 'put';
+    path: string;
+    operation: (req: Request) => unknown;
+  }> = [
+    {
+      method: 'post',
+      path: '/:changeOrderId/items',
+      operation: (req) => ({ ...req.body, type: 'add', id: randomUUID() }),
+    },
+    {
+      method: 'patch',
+      path: '/:changeOrderId/items/:itemId',
+      operation: (req) => ({ type: 'update', itemId: req.params.itemId, input: req.body }),
+    },
+    {
+      method: 'post',
+      path: '/:changeOrderId/items/:itemId/duplicate',
+      operation: (req) => ({ type: 'duplicate', itemId: req.params.itemId, id: randomUUID() }),
+    },
+    {
+      method: 'delete',
+      path: '/:changeOrderId/items/:itemId',
+      operation: (req) => ({ type: 'delete', itemId: req.params.itemId }),
+    },
+    {
+      method: 'put',
+      path: '/:changeOrderId/items/order',
+      operation: (req) => ({ ...req.body, type: 'reorder' }),
+    },
+  ];
+  for (const route of itemRoutes) {
+    router[route.method](
+      route.path,
+      async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+        if (!parseIds(req, res, ['changeOrderId'])) return;
+        const parsed = changeOrderMaterialsSchema.shape.operations.element.safeParse(
+          route.operation(req),
+        );
+        if (!parsed.success) {
+          res.status(400).json({ error: parsed.error.flatten() });
+          return;
+        }
+        try {
+          const before = await getChangeOrder(
+            req.params.projectId,
+            documentType,
+            req.params.changeOrderId,
+          );
+          if (!before) {
+            res.status(404).json({ error: labels.singular + ' not found' });
+            return;
+          }
+          const changeOrder = await applyChangeOrderMaterials(
+            req.params.projectId,
+            documentType,
+            req.params.changeOrderId,
+            req.userId as string,
+            {
+              expectedUpdatedAt: before.updatedAt,
+              newRevision: false,
+              operations: [parsed.data],
+            },
+          );
+          if (!changeOrder) {
+            res.status(404).json({ error: labels.singular + ' not found' });
+            return;
+          }
+          const operation = parsed.data;
+          if (operation.type === 'delete') {
+            res.status(204).send();
+            return;
+          }
+          if (operation.type === 'reorder') {
+            res.json({ items: changeOrder.items });
+            return;
+          }
+          const item =
+            operation.type === 'update'
+              ? changeOrder.items.find((row) => row.id === operation.itemId)
+              : changeOrder.items.find(
+                  (row) =>
+                    row.lineKind !== 'inherited' && !before.items.some((old) => old.id === row.id),
+                );
+          res.status(operation.type === 'update' ? 200 : 201).json({ item, changeOrder });
+        } catch (error) {
+          if (error instanceof ChangeOrderConflictError)
+            res.status(409).json({ error: error.message });
+          else if (error instanceof CatalogMaterialNotFoundError)
+            res.status(404).json({ error: 'Source material not found' });
+          else if (
+            error instanceof InvalidChangeOrderMaterialError ||
+            error instanceof InvalidChangeOrderOrderError
+          )
+            res.status(400).json({ error: error.message });
+          else {
+            console.error('Update document material error', error);
+            res.status(500).json({ error: 'Failed to update materials' });
+          }
+        }
+      },
+    );
+  }
+
+  router.get('/:changeOrderId/export', async (req: Request, res: Response): Promise<void> => {
+    if (!parseIds(req, res, ['changeOrderId'])) return;
+    try {
+      const changeOrder = await getChangeOrder(
+        req.params.projectId,
+        documentType,
+        req.params.changeOrderId,
+      );
+      if (!changeOrder) {
+        res.status(404).json({ error: `${labels.singular} not found` });
         return;
       }
-      try {
-        const item = await addChangeOrderItem(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-          parsed.data.sourceCatalog as ChangeOrderSourceCatalog,
-          parsed.data.sourceMaterialId,
-        );
-        if (!item) {
-          res.status(404).json({ error: `${labels.singular} not found` });
-          return;
-        }
-        const changeOrder = await getChangeOrder(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-        );
-        if (!changeOrder) {
-          res.status(404).json({ error: `${labels.singular} not found` });
-          return;
-        }
-        res.status(201).json({ item, changeOrder });
-      } catch (error) {
-        if (error instanceof CatalogMaterialNotFoundError) {
-          res.status(404).json({ error: 'Source material not found' });
-          return;
-        }
-        console.error(`Add ${labels.singular} item error`, error);
-        res.status(500).json({ error: `Failed to add material to ${labels.singular}` });
-      }
-    },
-  );
-
-  router.patch(
-    '/:changeOrderId/items/:itemId',
-    async (req: Request, res: Response): Promise<void> => {
-      if (!parseIds(req, res, ['changeOrderId', 'itemId'])) return;
-      const parsed = updateChangeOrderItemSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.flatten() });
+      const workbook = await generateChangeOrderWorkbook(changeOrder, undefined, documentType);
+      const fileName = sanitizeChangeOrderFileName(changeOrder.title, documentType);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.send(workbook);
+    } catch (error) {
+      if (error instanceof EmptyChangeOrderError) {
+        res.status(400).json({ error: error.message });
         return;
       }
-      try {
-        const item = await updateChangeOrderItem(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-          req.params.itemId,
-          parsed.data,
-        );
-        if (!item) {
-          res.status(404).json({ error: `${labels.singular} item not found` });
-          return;
-        }
-        res.json({ item });
-      } catch (error) {
-        console.error(`Update ${labels.singular} item error`, error);
-        res.status(500).json({ error: `Failed to update ${labels.singular} item` });
-      }
-    },
-  );
-
-  router.post(
-    '/:changeOrderId/items/:itemId/duplicate',
-    async (req: Request, res: Response): Promise<void> => {
-      if (!parseIds(req, res, ['changeOrderId', 'itemId'])) return;
-      try {
-        const item = await duplicateChangeOrderItem(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-          req.params.itemId,
-        );
-        if (!item) {
-          res.status(404).json({ error: `${labels.singular} item not found` });
-          return;
-        }
-        const changeOrder = await getChangeOrder(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-        );
-        if (!changeOrder) {
-          res.status(404).json({ error: `${labels.singular} not found` });
-          return;
-        }
-        res.status(201).json({ item, changeOrder });
-      } catch (error) {
-        console.error(`Duplicate ${labels.singular} item error`, error);
-        res.status(500).json({ error: `Failed to duplicate ${labels.singular} item` });
-      }
-    },
-  );
-
-  router.delete(
-    '/:changeOrderId/items/:itemId',
-    async (req: Request, res: Response): Promise<void> => {
-      if (!parseIds(req, res, ['changeOrderId', 'itemId'])) return;
-      try {
-        const deleted = await deleteChangeOrderItem(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-          req.params.itemId,
-        );
-        if (!deleted) {
-          res.status(404).json({ error: `${labels.singular} item not found` });
-          return;
-        }
-        res.status(204).send();
-      } catch (error) {
-        console.error(`Delete ${labels.singular} item error`, error);
-        res.status(500).json({ error: `Failed to delete ${labels.singular} item` });
-      }
-    },
-  );
-
-  router.put(
-    '/:changeOrderId/items/order',
-    async (req: Request, res: Response): Promise<void> => {
-      if (!parseIds(req, res, ['changeOrderId'])) return;
-      const parsed = reorderChangeOrderItemsSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.flatten() });
+      if (error instanceof ChangeOrderTemplateError) {
+        console.error(`Generate ${labels.singular} workbook template error`, error);
+        res
+          .status(500)
+          .json({ error: `The ${labels.singular} export template is unavailable or invalid` });
         return;
       }
-      try {
-        const items = await reorderChangeOrderItems(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-          parsed.data.orderedItemIds,
-        );
-        if (!items) {
-          res.status(404).json({ error: `${labels.singular} not found` });
-          return;
-        }
-        res.json({ items });
-      } catch (error) {
-        if (error instanceof InvalidChangeOrderOrderError) {
-          res.status(400).json({ error: error.message });
-          return;
-        }
-        console.error(`Reorder ${labels.singular} items error`, error);
-        res.status(500).json({ error: `Failed to reorder ${labels.singular} items` });
-      }
-    },
-  );
-
-  router.get(
-    '/:changeOrderId/export',
-    async (req: Request, res: Response): Promise<void> => {
-      if (!parseIds(req, res, ['changeOrderId'])) return;
-      try {
-        const changeOrder = await getChangeOrder(
-          req.params.projectId,
-          documentType,
-          req.params.changeOrderId,
-        );
-        if (!changeOrder) {
-          res.status(404).json({ error: `${labels.singular} not found` });
-          return;
-        }
-        const workbook = await generateChangeOrderWorkbook(changeOrder, undefined, documentType);
-        const fileName = sanitizeChangeOrderFileName(changeOrder.title, documentType);
-        res.setHeader(
-          'Content-Type',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        );
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        res.send(workbook);
-      } catch (error) {
-        if (error instanceof EmptyChangeOrderError) {
-          res.status(400).json({ error: error.message });
-          return;
-        }
-        if (error instanceof ChangeOrderTemplateError) {
-          console.error(`Generate ${labels.singular} workbook template error`, error);
-          res
-            .status(500)
-            .json({ error: `The ${labels.singular} export template is unavailable or invalid` });
-          return;
-        }
-        console.error(`Export ${labels.singular} error`, error);
-        res.status(500).json({ error: `Failed to export ${labels.singular}` });
-      }
-    },
-  );
+      console.error(`Export ${labels.singular} error`, error);
+      res.status(500).json({ error: `Failed to export ${labels.singular}` });
+    }
+  });
 
   return router;
 };

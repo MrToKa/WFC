@@ -1818,6 +1818,8 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE project_change_orders
       ADD COLUMN IF NOT EXISTS document_type TEXT NOT NULL DEFAULT 'change-order';
+    ALTER TABLE project_change_orders
+      ADD COLUMN IF NOT EXISTS change_log JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 
   await pool.query(`

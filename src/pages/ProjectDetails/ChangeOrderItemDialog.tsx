@@ -50,7 +50,6 @@ const EDITABLE_FIELDS: ReadonlySet<keyof FormState> = new Set([
   'countryOfOrigin',
   'tagNo',
   'drawingNo',
-  'revisionNumber',
   'remarks',
 ]);
 
@@ -110,6 +109,7 @@ const nullable = (input: string): string | null => input.trim() || null;
 type Props = {
   item: ChangeOrderItem | null;
   saving: boolean;
+  currentRevision: string;
   documentName?: string;
   onDismiss: () => void;
   onSave: (update: ChangeOrderItemUpdate) => Promise<void>;
@@ -118,6 +118,7 @@ type Props = {
 export const ChangeOrderItemDialog = ({
   item,
   saving,
+  currentRevision,
   documentName = 'Change Order',
   onDismiss,
   onSave,
@@ -145,7 +146,6 @@ export const ChangeOrderItemDialog = ({
           : {
               designQuantity: parseRequiredNumber(form.designQuantity, 'Design quantity'),
               orderQuantity: parseRequiredNumber(form.orderQuantity, 'Order quantity'),
-              revisionNumber: nullable(form.revisionNumber),
             }),
         unitPrice: parseRequiredNumber(form.unitPrice, 'Price'),
         countryOfOrigin: nullable(form.countryOfOrigin),
@@ -160,22 +160,31 @@ export const ChangeOrderItemDialog = ({
     }
   };
 
+  const isInheritedQuantity = (field: keyof FormState): boolean =>
+    item?.lineKind === 'inherited' && (field === 'designQuantity' || field === 'orderQuantity');
+
+  const originalForm = item ? toForm(item) : null;
+  const materialChanged =
+    form !== null &&
+    originalForm !== null &&
+    Array.from(EDITABLE_FIELDS).some((field) => {
+      if (isInheritedQuantity(field)) return false;
+      return field === 'designQuantity' || field === 'orderQuantity' || field === 'unitPrice'
+        ? Number(form[field]) !== Number(originalForm[field])
+        : nullable(form[field]) !== nullable(originalForm[field]);
+    });
+
   const input = (field: keyof FormState, label: string, type: 'text' | 'number' = 'text') => (
     <Field label={label}>
       <Input
         type={type}
         min={type === 'number' ? 0 : undefined}
         step={type === 'number' ? 'any' : undefined}
-        value={form?.[field] ?? ''}
-        onChange={(_, data) => set(field, data.value)}
-        disabled={
-          saving ||
-          !EDITABLE_FIELDS.has(field) ||
-          (item?.lineKind === 'inherited' &&
-            (field === 'designQuantity' ||
-              field === 'orderQuantity' ||
-              field === 'revisionNumber'))
+        value={
+          field === 'revisionNumber' && materialChanged ? currentRevision : (form?.[field] ?? '')
         }
+        onChange={(_, data) => set(field, data.value)}
+        disabled={saving || !EDITABLE_FIELDS.has(field) || isInheritedQuantity(field)}
       />
     </Field>
   );
@@ -236,11 +245,7 @@ export const ChangeOrderItemDialog = ({
               {input('clientBarcode', 'Client Barcode')}
               {input('acsBarcode', 'ACS barcode')}
               <Field label="Clear description" className={styles.wide}>
-                <Textarea
-                  resize="vertical"
-                  value={form?.clearDescription ?? ''}
-                  disabled
-                />
+                <Textarea resize="vertical" value={form?.clearDescription ?? ''} disabled />
               </Field>
               <Field label="Remarks" className={styles.wide}>
                 <Textarea

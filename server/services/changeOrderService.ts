@@ -1,5 +1,7 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import type { z } from 'zod';
+import type { changeOrderMaterialsSchema } from '../validators.js';
 import { pool } from '../db.js';
 import {
   calculateChangeOrderTotal,
@@ -9,6 +11,7 @@ import {
   type ChangeOrderDocumentType,
   type ChangeOrderItem,
   type ChangeOrderItemRow,
+  type ChangeOrderLogEntry,
   type ChangeOrderRow,
   type ChangeOrderSourceCatalog,
   type ChangeOrderSummary,
@@ -52,7 +55,6 @@ export type ChangeOrderItemUpdate = {
   tagNo?: string | null;
   drawingNo?: string | null;
   shippingList?: string | null;
-  revisionNumber?: string | null;
   clientBarcode?: string | null;
   manufacturer?: string | null;
   manufacturerPartNo?: string | null;
@@ -327,8 +329,6 @@ export const getChangeOrder = async (
   const row = headerResult.rows[0];
   if (!row) return null;
 
-  await synchronizeChangeOrderMaterialOrdering(queryable, projectId, documentType, changeOrderId);
-
   const itemResult = await queryable.query<ChangeOrderItemRow>(
     `SELECT ${qualifiedItemColumns('item')}
      FROM project_change_order_items item
@@ -349,6 +349,7 @@ export const getChangeOrder = async (
     createdBy: row.created_by ?? null,
     totalPrice: calculateChangeOrderTotal(items),
     items,
+    changeLog: row.change_log ?? [],
   };
 };
 
@@ -359,62 +360,110 @@ export const createChangeOrder = async (
   input: ChangeOrderHeaderInput,
 ): Promise<ChangeOrderDetails> => {
   const id = randomUUID();
-  await pool.query(
-    `
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `
       INSERT INTO project_change_orders (
         id, project_id, document_type, title, project_reference, prepared_by, report_date,
         revision, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5,
+        (SELECT COALESCE(NULLIF(btrim(concat_ws(' ', first_name, last_name)), ''), email)
+         FROM users WHERE id = $7), $6, '00', $7)
     `,
-    [
-      id,
-      projectId,
-      documentType,
-      input.title.trim(),
-      normalizeText(input.projectReference),
-      input.preparedBy.trim(),
-      input.reportDate,
-      input.revision.trim(),
-      createdBy,
-    ],
-  );
-  const created = await getChangeOrder(projectId, documentType, id);
-  const documentName = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
-  if (!created) throw new Error(`Created ${documentName} could not be loaded`);
-  return created;
+      [
+        id,
+        projectId,
+        documentType,
+        input.title.trim(),
+        normalizeText(input.projectReference),
+        input.reportDate,
+        createdBy,
+      ],
+    );
+    await recordChangeOrderChanges(client, id, createdBy, '00', [
+      'Created document "' + input.title.trim() + '".',
+    ]);
+    const created = await getChangeOrder(projectId, documentType, id, client);
+    const documentName = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
+    if (!created) throw new Error(`Created ${documentName} could not be loaded`);
+    await client.query('COMMIT');
+    return created;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 };
 
-const HEADER_COLUMN_MAP: Record<keyof ChangeOrderHeaderInput, string> = {
+const HEADER_COLUMN_MAP = {
   title: 'title',
   projectReference: 'project_reference',
-  preparedBy: 'prepared_by',
   reportDate: 'report_date',
-  revision: 'revision',
-};
+} as const;
 
 export const updateChangeOrder = async (
   projectId: string,
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   input: ChangeOrderHeaderUpdate,
+  userId: string,
 ): Promise<ChangeOrderDetails | null> => {
-  const assignments: string[] = [];
-  const values: unknown[] = [];
-  for (const key of Object.keys(input) as Array<keyof ChangeOrderHeaderInput>) {
-    values.push(key === 'projectReference' ? normalizeText(input[key]) : input[key]);
-    assignments.push(`${HEADER_COLUMN_MAP[key]} = $${values.length}`);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const owner = await client.query(
+      'SELECT id FROM project_change_orders WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE',
+      [changeOrderId, projectId, documentType],
+    );
+    if (!owner.rows[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const before = await getChangeOrder(projectId, documentType, changeOrderId, client);
+    if (!before) throw new Error('Document could not be loaded');
+    const assignments: string[] = [],
+      values: unknown[] = [],
+      changes: string[] = [];
+    for (const key of Object.keys(HEADER_COLUMN_MAP) as Array<keyof typeof HEADER_COLUMN_MAP>) {
+      if (input[key] === undefined) continue;
+      const value = key === 'projectReference' ? normalizeText(input[key]) : input[key]?.trim();
+      if (before[key] === value) continue;
+      values.push(value);
+      assignments.push(HEADER_COLUMN_MAP[key] + ' = $' + values.length);
+      changes.push(
+        fieldLabel(key) +
+          ': ' +
+          displayChangeValue(before[key]) +
+          ' → ' +
+          displayChangeValue(value) +
+          '.',
+      );
+    }
+    if (changes.length === 0) {
+      await client.query('ROLLBACK');
+      return before;
+    }
+    values.push(changeOrderId);
+    await client.query(
+      'UPDATE project_change_orders SET ' +
+        assignments.join(', ') +
+        ' WHERE id = $' +
+        values.length,
+      values,
+    );
+    await recordChangeOrderChanges(client, changeOrderId, userId, before.revision, changes);
+    const after = await getChangeOrder(projectId, documentType, changeOrderId, client);
+    await client.query('COMMIT');
+    return after;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
-  values.push(changeOrderId, projectId, documentType);
-  const result = await pool.query(
-    `UPDATE project_change_orders
-     SET ${assignments.join(', ')}, updated_at = NOW()
-     WHERE id = $${values.length - 2}
-       AND project_id = $${values.length - 1}
-       AND document_type = $${values.length}`,
-    values,
-  );
-  if (result.rowCount === 0) return null;
-  return getChangeOrder(projectId, documentType, changeOrderId);
 };
 
 export const deleteChangeOrder = async (
@@ -430,6 +479,8 @@ export const deleteChangeOrder = async (
   return (result.rowCount ?? 0) > 0;
 };
 
+type MaterialMutationContext = { client: PoolClient; nextId?: () => string };
+
 const insertSnapshot = async (
   client: PoolClient,
   changeOrderId: string,
@@ -444,6 +495,7 @@ const insertSnapshot = async (
     orderQuantity?: number;
     revisionNumber?: string | null;
   },
+  id: string = randomUUID(),
 ): Promise<ChangeOrderItem> => {
   const designQuantity = provenance?.designQuantity ?? 0;
   const minimumOrder = calculateMinimumOrder(
@@ -467,7 +519,7 @@ const insertSnapshot = async (
       RETURNING ${ITEM_COLUMNS}
     `,
     [
-      randomUUID(),
+      id,
       changeOrderId,
       sortOrder,
       snapshot.sourceCatalog,
@@ -506,17 +558,18 @@ export const addChangeOrderItem = async (
   changeOrderId: string,
   sourceCatalog: ChangeOrderSourceCatalog,
   sourceMaterialId: string,
+  context?: MaterialMutationContext,
 ): Promise<ChangeOrderItem | null> => {
-  const client = await pool.connect();
+  const client = context?.client ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!context) await client.query('BEGIN');
     const owner = await client.query<{ id: string; revision: string }>(
       `SELECT id, revision FROM project_change_orders
        WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
       [changeOrderId, projectId, documentType],
     );
     if (!owner.rows[0]) {
-      await client.query('ROLLBACK');
+      if (!context) await client.query('ROLLBACK');
       return null;
     }
     const snapshot = await resolveChangeOrderCatalogSnapshot(
@@ -535,6 +588,7 @@ export const addChangeOrderItem = async (
       orderResult.rows[0]?.next_order ?? 1,
       snapshot,
       { lineKind: 'manual', revisionNumber: owner.rows[0].revision },
+      context?.nextId?.(),
     );
     const expanded = await expandStandardMaterials(client, sourceCatalog, sourceMaterialId);
     let nextSortOrder = (orderResult.rows[0]?.next_order ?? 1) + 1;
@@ -560,6 +614,7 @@ export const addChangeOrderItem = async (
           orderQuantity: inheritedQuantities.orderQuantity,
           revisionNumber: owner.rows[0].revision,
         },
+        context?.nextId?.(),
       );
       nextSortOrder += 1;
     }
@@ -569,13 +624,13 @@ export const addChangeOrderItem = async (
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!context) await client.query('COMMIT');
     return item;
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!context) await client.query('ROLLBACK');
     throw error;
   } finally {
-    client.release();
+    if (!context) client.release();
   }
 };
 
@@ -631,10 +686,11 @@ export const duplicateChangeOrderItem = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   itemId: string,
+  context?: MaterialMutationContext,
 ): Promise<ChangeOrderItem | null> => {
-  const client = await pool.connect();
+  const client = context?.client ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!context) await client.query('BEGIN');
     const sourceResult = await client.query<{ id: string }>(
       `SELECT item.id
        FROM project_change_order_items item
@@ -648,7 +704,7 @@ export const duplicateChangeOrderItem = async (
       [itemId, changeOrderId, projectId, documentType],
     );
     if (!sourceResult.rows[0]) {
-      await client.query('ROLLBACK');
+      if (!context) await client.query('ROLLBACK');
       return null;
     }
 
@@ -669,7 +725,7 @@ export const duplicateChangeOrderItem = async (
     );
 
     let nextSortOrder = orderResult.rows[0]?.next_order ?? 1;
-    const duplicatedItemId = randomUUID();
+    const duplicatedItemId = (context?.nextId ?? randomUUID)();
     const duplicatedItem = await cloneChangeOrderItemRow(
       client,
       itemId,
@@ -683,7 +739,7 @@ export const duplicateChangeOrderItem = async (
       await cloneChangeOrderItemRow(
         client,
         child.id,
-        randomUUID(),
+        (context?.nextId ?? randomUUID)(),
         nextSortOrder,
         duplicatedItemId,
       );
@@ -705,13 +761,13 @@ export const duplicateChangeOrderItem = async (
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!context) await client.query('COMMIT');
     return duplicatedItem;
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
+    if (!context) await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
-    client.release();
+    if (!context) client.release();
   }
 };
 
@@ -737,7 +793,6 @@ const ITEM_COLUMN_MAP: Record<keyof ChangeOrderItemUpdate, string> = {
   tagNo: 'tag_no',
   drawingNo: 'drawing_no',
   shippingList: 'shipping_list',
-  revisionNumber: 'revision_number',
   clientBarcode: 'client_barcode',
   manufacturer: 'manufacturer',
   manufacturerPartNo: 'manufacturer_part_no',
@@ -760,7 +815,6 @@ const NULLABLE_TEXT_ITEM_KEYS = new Set<keyof ChangeOrderItemUpdate>([
   'tagNo',
   'drawingNo',
   'shippingList',
-  'revisionNumber',
   'clientBarcode',
   'manufacturer',
   'manufacturerPartNo',
@@ -774,14 +828,14 @@ export const updateChangeOrderItem = async (
   changeOrderId: string,
   itemId: string,
   input: ChangeOrderItemUpdate,
+  context?: MaterialMutationContext,
 ): Promise<ChangeOrderItem | null> => {
   const assignments: string[] = [];
   const values: unknown[] = [];
   const updatesInheritedManagedFields =
     input.designQuantity !== undefined ||
     input.orderQuantity !== undefined ||
-    input.unit !== undefined ||
-    input.revisionNumber !== undefined;
+    input.unit !== undefined;
   for (const key of Object.keys(input) as Array<keyof ChangeOrderItemUpdate>) {
     const rawValue = input[key];
     values.push(
@@ -792,9 +846,9 @@ export const updateChangeOrderItem = async (
     assignments.push(`${ITEM_COLUMN_MAP[key]} = $${values.length}`);
   }
   values.push(itemId, changeOrderId, projectId, documentType);
-  const client = await pool.connect();
+  const client = context?.client ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!context) await client.query('BEGIN');
     const result = await client.query<ChangeOrderItemRow>(
       `
         UPDATE project_change_order_items i
@@ -812,7 +866,7 @@ export const updateChangeOrderItem = async (
     );
     const updated = result.rows[0];
     if (!updated) {
-      await client.query('ROLLBACK');
+      if (!context) await client.query('ROLLBACK');
       return null;
     }
     let normalizedUpdated = updated;
@@ -866,12 +920,11 @@ export const updateChangeOrderItem = async (
            END AS raw_order_quantity
          FROM project_change_order_items child
          WHERE child.parent_item_id = $1
-           AND child.change_order_id = $6
+           AND child.change_order_id = $5
            AND child.line_kind = 'inherited'
        )
        UPDATE project_change_order_items child
        SET
-         revision_number = $5,
          design_quantity = required.design_quantity,
          order_quantity = GREATEST(required.design_quantity, required.raw_order_quantity),
          packaging_quantity = child.minimum_order_quantity,
@@ -894,7 +947,6 @@ export const updateChangeOrderItem = async (
         normalizedUpdated.design_quantity,
         normalizedUpdated.order_quantity,
         normalizedUpdated.source_catalog,
-        normalizedUpdated.revision_number,
         changeOrderId,
       ],
     );
@@ -904,13 +956,13 @@ export const updateChangeOrderItem = async (
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!context) await client.query('COMMIT');
     return mapChangeOrderItemRow(normalizedUpdated);
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => undefined);
+    if (!context) await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
-    client.release();
+    if (!context) client.release();
   }
 };
 
@@ -919,10 +971,11 @@ export const deleteChangeOrderItem = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   itemId: string,
+  context?: MaterialMutationContext,
 ): Promise<boolean> => {
-  const client = await pool.connect();
+  const client = context?.client ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!context) await client.query('BEGIN');
     const deleted = await client.query(
       `
         DELETE FROM project_change_order_items i
@@ -935,7 +988,7 @@ export const deleteChangeOrderItem = async (
       [itemId, changeOrderId, projectId, documentType],
     );
     if (deleted.rowCount === 0) {
-      await client.query('ROLLBACK');
+      if (!context) await client.query('ROLLBACK');
       return false;
     }
     await client.query(
@@ -956,13 +1009,13 @@ export const deleteChangeOrderItem = async (
        WHERE id = $1 AND project_id = $2 AND document_type = $3`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!context) await client.query('COMMIT');
     return true;
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!context) await client.query('ROLLBACK');
     throw error;
   } finally {
-    client.release();
+    if (!context) client.release();
   }
 };
 
@@ -973,17 +1026,18 @@ export const reorderChangeOrderItems = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   orderedItemIds: string[],
+  context?: MaterialMutationContext,
 ): Promise<ChangeOrderItem[] | null> => {
-  const client = await pool.connect();
+  const client = context?.client ?? (await pool.connect());
   try {
-    await client.query('BEGIN');
+    if (!context) await client.query('BEGIN');
     const owner = await client.query<{ id: string }>(
       `SELECT id FROM project_change_orders
        WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
       [changeOrderId, projectId, documentType],
     );
     if (!owner.rows[0]) {
-      await client.query('ROLLBACK');
+      if (!context) await client.query('ROLLBACK');
       return null;
     }
     const current = await client.query<{ id: string }>(
@@ -1021,10 +1075,269 @@ export const reorderChangeOrderItems = async (
        ORDER BY item.sort_order`,
       [changeOrderId, projectId, documentType],
     );
-    await client.query('COMMIT');
+    if (!context) await client.query('COMMIT');
     return reordered.rows.map(mapChangeOrderItemRow);
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!context) await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    if (!context) client.release();
+  }
+};
+
+export class ChangeOrderConflictError extends Error {}
+export class InvalidChangeOrderMaterialError extends Error {}
+
+export const nextChangeOrderRevision = (revision: string): string =>
+  String((/^\d+$/.test(revision) ? BigInt(revision) : 0n) + 1n).padStart(2, '0');
+
+// Replaying a draft must produce the same IDs, including inherited rows, so later
+// operations can refer to materials added earlier in the editing session.
+const draftItemIds = (documentId: string, operationId: string): (() => string) => {
+  let index = 0;
+  return () => {
+    const bytes = createHash('sha256').update(`${documentId}:${operationId}:${index++}`).digest();
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = bytes.subarray(0, 16).toString('hex');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
+};
+
+const displayChangeValue = (value: unknown): string =>
+  value === null || value === undefined || value === '' ? '(empty)' : String(value);
+
+const fieldLabel = (field: string): string => {
+  const label = field.replace(/([A-Z])/g, ' $1');
+  return label[0].toUpperCase() + label.slice(1);
+};
+
+export const describeMaterialChanges = (
+  before: ChangeOrderItem[],
+  after: ChangeOrderItem[],
+): string[] => {
+  const changes: string[] = [];
+  const previous = new Map(before.map((item) => [item.id, item]));
+  const current = new Map(after.map((item) => [item.id, item]));
+  const ignored = new Set([
+    'id',
+    'changeOrderId',
+    'createdAt',
+    'updatedAt',
+    'sourceMaterialId',
+    'parentItemId',
+    'sourceStandardMaterialAssignmentIds',
+  ]);
+  for (const item of before) {
+    if (!current.has(item.id))
+      changes.push(
+        `Removed material "${item.descriptionEn}" (item ${item.sortOrder}, order quantity ${item.orderQuantity}).`,
+      );
+  }
+  for (const item of after) {
+    const old = previous.get(item.id);
+    if (!old) {
+      changes.push(
+        `Added ${item.lineKind === 'inherited' ? 'inherited ' : ''}material "${item.descriptionEn}" (item ${item.sortOrder}, design quantity ${item.designQuantity}, order quantity ${item.orderQuantity}, unit price ${item.unitPrice}).`,
+      );
+      continue;
+    }
+    for (const key of Object.keys(item) as Array<keyof ChangeOrderItem>) {
+      if (
+        !ignored.has(key) &&
+        JSON.stringify(old[key] ?? null) !== JSON.stringify(item[key] ?? null)
+      ) {
+        changes.push(
+          `"${item.descriptionEn}" (item ${item.sortOrder}): ${fieldLabel(key)}: ${displayChangeValue(old[key])} → ${displayChangeValue(item[key])}.`,
+        );
+      }
+    }
+  }
+  return changes;
+};
+
+const recordChangeOrderChanges = async (
+  client: PoolClient,
+  changeOrderId: string,
+  userId: string,
+  revision: string,
+  changes: string[],
+): Promise<void> => {
+  const actor = await client.query<{ name: string }>(
+    `SELECT COALESCE(NULLIF(btrim(concat_ws(' ', first_name, last_name)), ''), email) AS name
+     FROM users WHERE id = $1`,
+    [userId],
+  );
+  if (!actor.rows[0]) throw new Error('Current user not found');
+  const entry: ChangeOrderLogEntry = {
+    id: randomUUID(),
+    userId,
+    userName: actor.rows[0].name,
+    changedAt: new Date().toISOString(),
+    revision,
+    changes,
+  };
+  await client.query(
+    `UPDATE project_change_orders
+     SET prepared_by = $2, revision = $3, updated_at = clock_timestamp(),
+         change_log = change_log || $4::jsonb
+     WHERE id = $1`,
+    [changeOrderId, entry.userName, revision, JSON.stringify([entry])],
+  );
+};
+
+export const applyChangeOrderMaterials = async (
+  projectId: string,
+  documentType: ChangeOrderDocumentType,
+  changeOrderId: string,
+  userId: string,
+  input: z.infer<typeof changeOrderMaterialsSchema>,
+  preview = false,
+): Promise<ChangeOrderDetails | null> => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const owner = await client.query<ChangeOrderRow>(
+      `SELECT * FROM project_change_orders
+       WHERE id = $1 AND project_id = $2 AND document_type = $3 FOR UPDATE`,
+      [changeOrderId, projectId, documentType],
+    );
+    if (!owner.rows[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    if (
+      new Date(owner.rows[0].updated_at).getTime() !== new Date(input.expectedUpdatedAt).getTime()
+    ) {
+      throw new ChangeOrderConflictError(
+        'This document has changed since editing started. Cancel editing and reopen it to load the latest changes.',
+      );
+    }
+    const before = await getChangeOrder(projectId, documentType, changeOrderId, client);
+    if (!before) throw new Error('Document could not be loaded');
+    const revision = input.newRevision ? nextChangeOrderRevision(before.revision) : before.revision;
+    if (input.newRevision) {
+      await client.query('UPDATE project_change_orders SET revision = $2 WHERE id = $1', [
+        changeOrderId,
+        revision,
+      ]);
+    }
+    await synchronizeChangeOrderMaterialOrdering(client, projectId, documentType, changeOrderId);
+    for (const operation of input.operations) {
+      const context: MaterialMutationContext = {
+        client,
+        nextId: 'id' in operation ? draftItemIds(changeOrderId, operation.id) : undefined,
+      };
+      let result: unknown;
+      switch (operation.type) {
+        case 'add':
+          result = await addChangeOrderItem(
+            projectId,
+            documentType,
+            changeOrderId,
+            operation.sourceCatalog,
+            operation.sourceMaterialId,
+            context,
+          );
+          break;
+        case 'duplicate':
+          result = await duplicateChangeOrderItem(
+            projectId,
+            documentType,
+            changeOrderId,
+            operation.itemId,
+            context,
+          );
+          break;
+        case 'update':
+          result = await updateChangeOrderItem(
+            projectId,
+            documentType,
+            changeOrderId,
+            operation.itemId,
+            operation.input,
+            context,
+          );
+          break;
+        case 'delete':
+          result = await deleteChangeOrderItem(
+            projectId,
+            documentType,
+            changeOrderId,
+            operation.itemId,
+            context,
+          );
+          break;
+        case 'reorder':
+          result = await reorderChangeOrderItems(
+            projectId,
+            documentType,
+            changeOrderId,
+            operation.orderedItemIds,
+            context,
+          );
+          break;
+      }
+      if (!result)
+        throw new InvalidChangeOrderMaterialError(
+          'A material could not be changed. Reopen the document and try again.',
+        );
+    }
+    let after = await getChangeOrder(projectId, documentType, changeOrderId, client);
+    if (!after) throw new Error('Updated document could not be loaded');
+    // A row's revision records its last material change, independently of its
+    // parent. Merely creating a document revision or renumbering rows does not
+    // revise unchanged materials. This also covers derived inherited quantities.
+    const previousItems = new Map(before.items.map((item) => [item.id, item]));
+    const revisionMetadata = new Set<keyof ChangeOrderItem>([
+      'id',
+      'changeOrderId',
+      'sortOrder',
+      'createdAt',
+      'updatedAt',
+      'revisionNumber',
+    ]);
+    const changedItemIds = new Set(
+      after.items
+        .filter((item) => {
+          const previous = previousItems.get(item.id);
+          return (
+            !previous ||
+            (Object.keys(item) as Array<keyof ChangeOrderItem>).some(
+              (key) =>
+                !revisionMetadata.has(key) &&
+                JSON.stringify(previous[key] ?? null) !== JSON.stringify(item[key] ?? null),
+            )
+          );
+        })
+        .map((item) => item.id),
+    );
+    if (changedItemIds.size > 0) {
+      await client.query(
+        `UPDATE project_change_order_items
+         SET revision_number = $2
+         WHERE change_order_id = $1 AND id = ANY($3::uuid[])`,
+        [changeOrderId, revision, [...changedItemIds]],
+      );
+      after = {
+        ...after,
+        items: after.items.map((item) =>
+          changedItemIds.has(item.id) ? { ...item, revisionNumber: revision } : item,
+        ),
+      };
+    }
+    const changes = describeMaterialChanges(before.items, after.items);
+    if (input.newRevision) changes.unshift(`Revision: ${before.revision} → ${revision}.`);
+    if (preview || changes.length === 0) {
+      await client.query('ROLLBACK');
+      return { ...after, updatedAt: before.updatedAt, preparedBy: before.preparedBy };
+    }
+    await recordChangeOrderChanges(client, changeOrderId, userId, revision, changes);
+    after = await getChangeOrder(projectId, documentType, changeOrderId, client);
+    await client.query('COMMIT');
+    return after;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => undefined);
     throw error;
   } finally {
     client.release();

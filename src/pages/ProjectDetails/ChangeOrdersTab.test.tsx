@@ -50,7 +50,7 @@ const details: ChangeOrderDetails = {
       tagNo: null,
       drawingNo: null,
       shippingList: null,
-      revisionNumber: null,
+      revisionNumber: '00',
       clientBarcode: null,
       manufacturer: 'Maker',
       manufacturerPartNo: 'PART-1',
@@ -82,6 +82,8 @@ vi.mock('@/api/client', () => ({
   })),
   fetchChangeOrder: vi.fn(async () => ({ changeOrder: details })),
   createChangeOrder: vi.fn(),
+  previewChangeOrderMaterials: vi.fn(async () => ({ changeOrder: details })),
+  saveChangeOrderMaterials: vi.fn(async () => ({ changeOrder: details })),
   updateChangeOrder: vi.fn(),
   deleteChangeOrder: vi.fn(),
   addChangeOrderItem: vi.fn(),
@@ -151,7 +153,7 @@ const user: User = {
 
 describe('ChangeOrdersTab', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -167,6 +169,162 @@ describe('ChangeOrdersTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
     await screen.findByRole('cell', { name: 'Widget support' });
   };
+
+  const unlockMaterials = (): void => {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit materials' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep current revision' }));
+  };
+
+  it.each(['change-orders', 'internal-ncrs'] as const)(
+    'locks materials in %s and saves a revision with author and history only on Save materials',
+    async (collection) => {
+      const api = await import('@/api/client');
+      const changed = {
+        ...details,
+        revision: '01',
+        items: [{ ...details.items[0], orderQuantity: 20, revisionNumber: '01' }],
+      };
+      const saved = {
+        ...changed,
+        preparedBy: 'Latest Editor',
+        updatedAt: '2026-09-14T12:00:00.000Z',
+        changeLog: [
+          {
+            id: 'log-1',
+            userId: user.id,
+            userName: 'Latest Editor',
+            changedAt: '2026-09-14T12:00:00.000Z',
+            revision: '01',
+            changes: ['Order Quantity: 10 → 20'],
+          },
+        ],
+      };
+      vi.mocked(api.previewChangeOrderMaterials).mockResolvedValueOnce({ changeOrder: changed });
+      vi.mocked(api.saveChangeOrderMaterials)
+        .mockRejectedValueOnce(new Error('Save failed'))
+        .mockResolvedValueOnce({ changeOrder: saved });
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab
+              project={project}
+              token="token"
+              currentUser={user}
+              collection={collection}
+            />
+          </ToastProvider>
+        </FluentProvider>,
+      );
+      await screen.findByRole('button', { name: 'Open Existing order' });
+      fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+      await screen.findByRole('cell', { name: 'Widget support' });
+      for (const name of [
+        'Add material',
+        'Edit item 1',
+        'Duplicate item 1',
+        'Delete item 1',
+        'Save materials',
+      ]) {
+        expect(screen.getByRole('button', { name })).toBeDisabled();
+      }
+      expect(screen.getByLabelText('Prepared by')).toBeDisabled();
+      expect(screen.getByLabelText('Revision')).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit materials' }));
+      fireEvent.click(screen.getByRole('button', { name: 'New revision' }));
+      expect(screen.getByLabelText('Revision')).toHaveValue('01');
+      expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Export Excel' })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
+      expect(screen.getByLabelText('Revision number')).toBeDisabled();
+      expect(screen.getByLabelText('Revision number')).toHaveValue('00');
+      fireEvent.change(screen.getByLabelText('Order Qty'), { target: { value: '20' } });
+      expect(screen.getByLabelText('Revision number')).toHaveValue('01');
+      fireEvent.change(screen.getByLabelText('Order Qty'), { target: { value: '10' } });
+      expect(screen.getByLabelText('Revision number')).toHaveValue('00');
+      fireEvent.change(screen.getByLabelText('Order Qty'), { target: { value: '20' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Save item' })).not.toBeInTheDocument(),
+      );
+      expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+      expect(api.updateChangeOrderItem).not.toHaveBeenCalled();
+      expect(
+        vi.mocked(api.previewChangeOrderMaterials).mock.calls[0][3].operations[0],
+      ).toMatchObject({
+        type: 'update',
+        input: expect.not.objectContaining({ revisionNumber: expect.anything() }),
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
+      expect(screen.getByLabelText('Revision number')).toHaveValue('01');
+      expect(screen.getByLabelText('Revision number')).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.getByLabelText('Prepared by')).toHaveValue('Test User');
+      fireEvent.click(screen.getByRole('button', { name: 'Save materials' }));
+      await screen.findByText('Save failed');
+      expect(screen.getByRole('button', { name: 'Edit item 1' })).toBeEnabled();
+      expect(screen.getByLabelText('Revision')).toHaveValue('01');
+      fireEvent.click(screen.getByRole('button', { name: 'Save materials' }));
+      await waitFor(() =>
+        expect(screen.getByLabelText('Prepared by')).toHaveValue('Latest Editor'),
+      );
+      expect(screen.getByRole('button', { name: 'Edit item 1' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled();
+      const history = screen.getByRole('table', { name: 'Change log' });
+      expect(within(history).getByText('Latest Editor')).toBeInTheDocument();
+      expect(within(history).getByText('Order Quantity: 10 → 20')).toBeInTheDocument();
+      expect(api.saveChangeOrderMaterials).toHaveBeenLastCalledWith(
+        'token',
+        project.id,
+        details.id,
+        expect.objectContaining({
+          expectedUpdatedAt: details.updatedAt,
+          newRevision: true,
+          operations: [expect.objectContaining({ type: 'update', itemId: details.items[0].id })],
+        }),
+        collection,
+      );
+    },
+    30_000,
+  );
+
+  it('can keep revision 00 and cancel a new revision without saving', async () => {
+    const api = await import('@/api/client');
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+    await openExistingOrder();
+    unlockMaterials();
+    expect(screen.getByLabelText('Revision')).toHaveValue('00');
+    fireEvent.click(screen.getByRole('button', { name: 'Save materials' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled(),
+    );
+    expect(api.saveChangeOrderMaterials).toHaveBeenCalledWith(
+      'token',
+      project.id,
+      details.id,
+      {
+        expectedUpdatedAt: details.updatedAt,
+        newRevision: false,
+        operations: [],
+      },
+      'change-orders',
+    );
+    vi.mocked(api.saveChangeOrderMaterials).mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit materials' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New revision' }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    confirm.mockRestore();
+    expect(screen.getByLabelText('Revision')).toHaveValue('00');
+    expect(screen.getByRole('button', { name: 'Add material' })).toBeDisabled();
+    expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+  });
 
   it('shows all Change Orders in a table until one is selected', async () => {
     render(
@@ -218,6 +376,7 @@ describe('ChangeOrdersTab', () => {
       'internal-ncrs',
     );
 
+    unlockMaterials();
     fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
     expect(screen.getByText('Edit Internal NCR item')).toBeInTheDocument();
     const editableFields = [
@@ -227,7 +386,6 @@ describe('ChangeOrdersTab', () => {
       'Country of origin',
       'Pos./TAG-No',
       'Drawing No.',
-      'Revision number',
       'Remarks',
     ];
     for (const field of editableFields) {
@@ -236,6 +394,7 @@ describe('ChangeOrdersTab', () => {
       expect(control).not.toHaveAttribute('readonly');
     }
     const readOnlyFields = [
+      'Revision number',
       'Description (EN)',
       'Unit',
       'Packaging',
@@ -266,26 +425,33 @@ describe('ChangeOrdersTab', () => {
     fireEvent.change(screen.getByLabelText('Country of origin'), { target: { value: 'BG' } });
     fireEvent.change(screen.getByLabelText('Pos./TAG-No'), { target: { value: 'TAG-1' } });
     fireEvent.change(screen.getByLabelText('Drawing No.'), { target: { value: 'DWG-1' } });
-    fireEvent.change(screen.getByLabelText('Revision number'), { target: { value: '01' } });
     fireEvent.change(screen.getByLabelText('Remarks'), { target: { value: 'Checked' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
 
     await waitFor(() =>
-      expect(api.updateChangeOrderItem).toHaveBeenCalledWith(
+      expect(api.previewChangeOrderMaterials).toHaveBeenCalledWith(
         'token',
         project.id,
         details.id,
-        details.items[0].id,
-        {
-          designQuantity: 15,
-          orderQuantity: 16,
-          unitPrice: 5.5,
-          countryOfOrigin: 'BG',
-          tagNo: 'TAG-1',
-          drawingNo: 'DWG-1',
-          revisionNumber: '01',
-          remarks: 'Checked',
-        },
+        expect.objectContaining({
+          newRevision: false,
+          expectedUpdatedAt: details.updatedAt,
+          operations: [
+            {
+              type: 'update',
+              itemId: details.items[0].id,
+              input: {
+                designQuantity: 15,
+                orderQuantity: 16,
+                unitPrice: 5.5,
+                countryOfOrigin: 'BG',
+                tagNo: 'TAG-1',
+                drawingNo: 'DWG-1',
+                remarks: 'Checked',
+              },
+            },
+          ],
+        }),
         'internal-ncrs',
       ),
     );
@@ -381,8 +547,7 @@ describe('ChangeOrdersTab', () => {
           instrumentInstallationMaterials: materialsWithOtherPurpose,
         });
       }
-      vi.mocked(api.addChangeOrderItem).mockResolvedValueOnce({
-        item: addedItem,
+      vi.mocked(api.previewChangeOrderMaterials).mockResolvedValueOnce({
         changeOrder: {
           ...details,
           itemCount: 2,
@@ -406,6 +571,7 @@ describe('ChangeOrdersTab', () => {
       await screen.findByRole('table', { name: collectionTableName });
       fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
       await screen.findByRole('cell', { name: 'Widget support' });
+      unlockMaterials();
       fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
       expect(screen.getByRole('option', { name: catalogLabel })).toBeInTheDocument();
       fireEvent.change(screen.getByRole('combobox', { name: 'Catalog category' }), {
@@ -429,20 +595,23 @@ describe('ChangeOrdersTab', () => {
       fireEvent.click(within(catalogRow!).getByText('Add'));
 
       await waitFor(() =>
-        expect(api.addChangeOrderItem).toHaveBeenCalledWith(
+        expect(api.previewChangeOrderMaterials).toHaveBeenCalledWith(
           'token',
           project.id,
           details.id,
-          {
-            sourceCatalog,
-            sourceMaterialId: materialId,
-          },
+          expect.objectContaining({
+            operations: [
+              expect.objectContaining({ type: 'add', sourceCatalog, sourceMaterialId: materialId }),
+            ],
+          }),
           collection,
         ),
       );
       expect(await screen.findByText(`Edit ${documentName} item`)).toBeInTheDocument();
       expect(screen.getByLabelText('Description (EN)')).toHaveValue(materialType);
       expect(screen.getByLabelText('Price')).toHaveValue(6.5);
+      expect(screen.getByLabelText('Revision number')).toBeDisabled();
+      expect(screen.getByLabelText('Revision number')).toHaveValue('00');
     },
     15_000,
   );
@@ -460,12 +629,14 @@ describe('ChangeOrdersTab', () => {
     expect(screen.getByText('-2')).toBeInTheDocument();
     expect(screen.queryByText(/Total: 40\.00/)).not.toBeInTheDocument();
 
+    unlockMaterials();
     fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
     expect(screen.getByText('Edit Change Order item')).toBeInTheDocument();
     expect(screen.getByLabelText('Price')).toBeEnabled();
     expect(screen.getByLabelText('Description (EN)')).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }));
     const exportButton = screen.getByRole('button', { name: /export excel/i });
     expect(exportButton).toBeEnabled();
 
@@ -525,14 +696,17 @@ describe('ChangeOrdersTab', () => {
     );
 
     await openExistingOrder();
+    unlockMaterials();
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
 
     await waitFor(() =>
-      expect(api.duplicateChangeOrderItem).toHaveBeenCalledWith(
+      expect(api.previewChangeOrderMaterials).toHaveBeenCalledWith(
         'token',
         project.id,
         details.id,
-        details.items[0].id,
+        expect.objectContaining({
+          operations: [expect.objectContaining({ type: 'duplicate', itemId: details.items[0].id })],
+        }),
         'change-orders',
       ),
     );
@@ -557,8 +731,7 @@ describe('ChangeOrdersTab', () => {
       parentItemId: copiedParent.id,
       quantityPerParent: 1,
     };
-    vi.mocked(api.duplicateChangeOrderItem).mockResolvedValueOnce({
-      item: copiedParent,
+    vi.mocked(api.previewChangeOrderMaterials).mockResolvedValueOnce({
       changeOrder: {
         ...details,
         itemCount: 3,
@@ -576,6 +749,7 @@ describe('ChangeOrdersTab', () => {
     );
 
     await openExistingOrder();
+    unlockMaterials();
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate item 1' }));
 
     const expandButton = await screen.findByRole('button', {
@@ -631,8 +805,7 @@ describe('ChangeOrdersTab', () => {
         },
       ],
     });
-    vi.mocked(api.addChangeOrderItem).mockResolvedValueOnce({
-      item: addedParent,
+    vi.mocked(api.previewChangeOrderMaterials).mockResolvedValueOnce({
       changeOrder: {
         ...details,
         itemCount: 3,
@@ -650,6 +823,7 @@ describe('ChangeOrdersTab', () => {
     );
 
     await openExistingOrder();
+    unlockMaterials();
     fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
 
     const catalogRow = (await screen.findByText('New cable type')).closest('tr');
@@ -820,15 +994,29 @@ describe('ChangeOrdersTab', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
       await screen.findByRole('cell', { name: 'First main material' });
 
+      unlockMaterials();
       expect(screen.getByRole('button', { name: 'Move item 4 down' })).toBeDisabled();
       fireEvent.click(screen.getByRole('button', { name: 'Move item 4 up' }));
 
       await waitFor(() =>
-        expect(api.reorderChangeOrderItems).toHaveBeenCalledWith(
+        expect(api.previewChangeOrderMaterials).toHaveBeenCalledWith(
           'token',
           project.id,
           details.id,
-          [secondMainId, thirdChildId, firstMainId, firstChildId, secondChildId],
+          expect.objectContaining({
+            operations: [
+              {
+                type: 'reorder',
+                orderedItemIds: [
+                  secondMainId,
+                  thirdChildId,
+                  firstMainId,
+                  firstChildId,
+                  secondChildId,
+                ],
+              },
+            ],
+          }),
           collection,
         ),
       );

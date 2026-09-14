@@ -38,6 +38,14 @@ describe('Change Order validation', () => {
     expect(updateChangeOrderItemSchema.safeParse({ orderQuantity: -0.1 }).success).toBe(false);
   });
 
+  it('rejects manually supplied material revisions', () => {
+    expect(updateChangeOrderItemSchema.safeParse({ revisionNumber: '99' }).success).toBe(false);
+    expect(
+      updateChangeOrderItemSchema.safeParse({ orderQuantity: 200, revisionNumber: '99' }).success,
+    ).toBe(false);
+    expect(updateChangeOrderItemSchema.safeParse({ orderQuantity: 200 }).success).toBe(true);
+  });
+
   it.each(['tray-installation-material', 'instrument', 'instrument-installation-material'])(
     'accepts %s as a document material source',
     (sourceCatalog) => {

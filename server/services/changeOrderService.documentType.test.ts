@@ -50,30 +50,34 @@ describe('Change Order document type scoping', () => {
       'document-id',
     ]);
 
-    databaseMocks.query.mockResolvedValueOnce({ rowCount: 0 });
+    clientQuery.mockResolvedValue({ rows: [] });
     await expect(
-      updateChangeOrder('project-id', 'internal-ncr', 'document-id', { title: 'Updated' }),
+      updateChangeOrder(
+        'project-id',
+        'internal-ncr',
+        'document-id',
+        { title: 'Updated' },
+        'user-id',
+      ),
     ).resolves.toBeNull();
-    expect(queryCall(databaseMocks.query, 2)[0]).toContain('document_type = $4');
-    expect(queryCall(databaseMocks.query, 2)[1]).toEqual([
-      'Updated',
-      'document-id',
-      'project-id',
-      'internal-ncr',
-    ]);
+    expect(queryCall(clientQuery, 1)[0]).toContain('document_type = $3');
+    expect(queryCall(clientQuery, 1)[1]).toEqual(['document-id', 'project-id', 'internal-ncr']);
 
     databaseMocks.query.mockResolvedValueOnce({ rowCount: 0 });
     await expect(deleteChangeOrder('project-id', 'internal-ncr', 'document-id')).resolves.toBe(
       false,
     );
-    expect(queryCall(databaseMocks.query, 3)[0]).toContain('document_type = $3');
-    expect(queryCall(databaseMocks.query, 3)[1]).toEqual([
+    expect(queryCall(databaseMocks.query, 2)[0]).toContain('document_type = $3');
+    expect(queryCall(databaseMocks.query, 2)[1]).toEqual([
       'document-id',
       'project-id',
       'internal-ncr',
     ]);
 
-    databaseMocks.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
+    clientQuery.mockReset();
+    clientQuery.mockImplementation(async (sql: string) => ({
+      rows: sql.includes('AS name') ? [{ name: 'Test User' }] : [],
+    }));
     await expect(
       createChangeOrder('project-id', 'internal-ncr', 'user-id', {
         title: 'NCR 1',
@@ -82,7 +86,7 @@ describe('Change Order document type scoping', () => {
         revision: '00',
       }),
     ).rejects.toThrow('Created Internal NCR could not be loaded');
-    const [createSql, createValues] = queryCall(databaseMocks.query, 4);
+    const [createSql, createValues] = queryCall(clientQuery, 1);
     expect(createSql).toContain('id, project_id, document_type');
     expect(createValues[1]).toBe('project-id');
     expect(createValues[2]).toBe('internal-ncr');

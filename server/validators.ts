@@ -786,7 +786,6 @@ export const updateChangeOrderItemSchema = z
     tagNo: optionalChangeOrderText(500),
     drawingNo: optionalChangeOrderText(500),
     shippingList: optionalChangeOrderText(500),
-    revisionNumber: optionalChangeOrderText(100),
     clientBarcode: optionalChangeOrderText(500),
     manufacturer: optionalChangeOrderText(500),
     manufacturerPartNo: optionalChangeOrderText(500),
@@ -805,5 +804,50 @@ export const reorderChangeOrderItemsSchema = z
       .min(1)
       .max(5_000)
       .refine((ids) => new Set(ids).size === ids.length, 'Item IDs must be unique'),
+  })
+  .strict();
+
+export const changeOrderMaterialsSchema = z
+  .object({
+    expectedUpdatedAt: z.string().datetime(),
+    newRevision: z.boolean(),
+    operations: z
+      .array(
+        z.discriminatedUnion('type', [
+          z
+            .object({
+              type: z.literal('add'),
+              id: z.string().uuid(),
+              sourceCatalog: z.enum(CHANGE_ORDER_SOURCE_CATALOGS),
+              sourceMaterialId: z.string().uuid(),
+            })
+            .strict(),
+          z
+            .object({
+              type: z.literal('duplicate'),
+              id: z.string().uuid(),
+              itemId: z.string().uuid(),
+            })
+            .strict(),
+          z
+            .object({
+              type: z.literal('update'),
+              itemId: z.string().uuid(),
+              input: updateChangeOrderItemSchema,
+            })
+            .strict(),
+          z.object({ type: z.literal('delete'), itemId: z.string().uuid() }).strict(),
+          z
+            .object({
+              type: z.literal('reorder'),
+              orderedItemIds: z
+                .array(z.string().uuid())
+                .max(5000)
+                .refine((ids) => new Set(ids).size === ids.length, 'Item IDs must be unique'),
+            })
+            .strict(),
+        ]),
+      )
+      .max(500),
   })
   .strict();

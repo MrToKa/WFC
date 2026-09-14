@@ -30,6 +30,7 @@ export type ChangeOrderRow = {
   updated_at: Date | string;
   item_count?: string | number;
   total_price?: string | number;
+  change_log?: ChangeOrderLogEntry[];
 };
 
 export type ChangeOrderItemRow = {
@@ -139,6 +140,16 @@ export type ChangeOrderDetails = ChangeOrderSummary & {
   projectCustomer: string;
   createdBy: string | null;
   items: ChangeOrderItem[];
+  changeLog?: ChangeOrderLogEntry[];
+};
+
+export type ChangeOrderLogEntry = {
+  id: string;
+  userId: string;
+  userName: string;
+  changedAt: string;
+  revision: string;
+  changes: string[];
 };
 
 const toIsoString = (value: Date | string): string =>

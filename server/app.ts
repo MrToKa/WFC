@@ -26,6 +26,10 @@ export const createApp = (): Express => {
   );
   // Filtered exports send IDs for every matching page, which can exceed the default 100 KB.
   app.use(/^\/api\/materials\/[^/]+\/export$/, express.json({ limit: '10mb' }));
+  app.use(
+    /^\/api\/projects\/[^/]+\/(change-orders|internal-ncrs)\/[^/]+\/materials(\/preview)?$/,
+    express.json({ limit: '5mb' }),
+  );
   app.use(express.json());
 
   app.get('/health', (_req: Request, res: Response) => {

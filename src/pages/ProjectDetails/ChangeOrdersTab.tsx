@@ -15,6 +15,12 @@ import {
   Body1,
   Button,
   Caption1,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Field,
   Input,
   MessageBar,
@@ -35,15 +41,14 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import {
-  addChangeOrderItem,
   createChangeOrder,
   deleteChangeOrder,
-  deleteChangeOrderItem,
-  duplicateChangeOrderItem,
   exportChangeOrder,
-  reorderChangeOrderItems,
+  previewChangeOrderMaterials,
+  saveChangeOrderMaterials,
+  type ChangeOrderDetails,
+  type ChangeOrderMaterialOperation,
   updateChangeOrder,
-  updateChangeOrderItem,
   type ChangeOrderCollection,
   type ChangeOrderHeaderInput,
   type ChangeOrderItem,
@@ -160,6 +165,15 @@ const formatMoney = (amount: number): string =>
     amount,
   );
 
+const createMaterialOperationId = (): string => {
+  // getRandomValues also works when the app is opened over HTTP on the local network.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 type Props = {
   project: Project;
   token: string | null;
@@ -187,7 +201,7 @@ export const ChangeOrdersTab = ({
   const {
     changeOrders,
     selectedId,
-    details,
+    details: savedDetails,
     loading,
     detailsLoading,
     error,
@@ -213,16 +227,39 @@ export const ChangeOrdersTab = ({
   const [exporting, setExporting] = useState(false);
   const [expandedParentIds, setExpandedParentIds] = useState<Set<string>>(() => new Set());
 
+  const [materialsEditing, setMaterialsEditing] = useState(false);
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+  const [newRevision, setNewRevision] = useState(false);
+  const [draftDetails, setDraftDetails] = useState<ChangeOrderDetails | null>(null);
+  const [operations, setOperations] = useState<ChangeOrderMaterialOperation[]>([]);
+  const [savingMaterials, setSavingMaterials] = useState(false);
+  const details = draftDetails ?? savedDetails;
+  const materialsDirty = materialsEditing && (operations.length > 0 || newRevision);
+  const materialBusy = pendingAction || addingMaterial || savingItem || savingMaterials;
+  const materialsLocked = !materialsEditing || materialBusy;
+
   useEffect(() => {
-    if (!details) return;
-    setHeader(toHeader(details));
+    if (!savedDetails) return;
+    setHeader(toHeader(savedDetails));
     setHeaderDirty(false);
     setNewMode(false);
-  }, [details]);
+  }, [savedDetails]);
 
   useEffect(() => {
     setExpandedParentIds(new Set());
   }, [selectedId]);
+
+  useEffect(() => {
+    setMaterialsEditing(false);
+    setDraftDetails(null);
+    setOperations([]);
+    setNewRevision(false);
+    setEditingItem(null);
+    setMaterialDialogOpen(false);
+    setRevisionDialogOpen(false);
+    setHeaderDirty(false);
+    setNewMode(false);
+  }, [project.id, collection, token]);
 
   const items = details?.items ?? [];
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
@@ -250,17 +287,107 @@ export const ChangeOrdersTab = ({
     });
   };
 
+  useEffect(() => {
+    if (!materialsDirty && !headerDirty) return;
+    const warn = (event: BeforeUnloadEvent): void => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [materialsDirty, headerDirty]);
+
+  const resetMaterials = (): void => {
+    setMaterialsEditing(false);
+    setDraftDetails(null);
+    setOperations([]);
+    setNewRevision(false);
+    setEditingItem(null);
+    setMaterialDialogOpen(false);
+    setRevisionDialogOpen(false);
+  };
+
   const canLeave = (): boolean =>
-    !headerDirty || window.confirm(`Discard unsaved ${labels.singular} header changes?`);
+    (!headerDirty && !materialsDirty) || window.confirm('Discard unsaved document changes?');
+
+  const startMaterials = (createRevision: boolean): void => {
+    if (!savedDetails) return;
+    setNewRevision(createRevision);
+    setOperations([]);
+    setDraftDetails({
+      ...savedDetails,
+      revision: createRevision
+        ? String(
+            (/^\d+$/.test(savedDetails.revision) ? BigInt(savedDetails.revision) : 0n) + 1n,
+          ).padStart(2, '0')
+        : savedDetails.revision,
+    });
+    setMaterialsEditing(true);
+    setRevisionDialogOpen(false);
+  };
+
+  const stageMaterialOperation = async (
+    operation: ChangeOrderMaterialOperation,
+  ): Promise<ChangeOrderDetails> => {
+    if (!token || !selectedId || !savedDetails || !materialsEditing)
+      throw new Error('Start editing materials first.');
+    const nextOperations = [...operations, operation];
+    const response = await previewChangeOrderMaterials(
+      token,
+      project.id,
+      selectedId,
+      {
+        expectedUpdatedAt: savedDetails.updatedAt,
+        newRevision,
+        operations: nextOperations,
+      },
+      collection,
+    );
+    setOperations(nextOperations);
+    setDraftDetails(response.changeOrder);
+    return response.changeOrder;
+  };
+
+  const saveMaterials = async (): Promise<void> => {
+    if (!token || !selectedId || !savedDetails || !materialsEditing || materialBusy) return;
+    setSavingMaterials(true);
+    try {
+      const response = await saveChangeOrderMaterials(
+        token,
+        project.id,
+        selectedId,
+        {
+          expectedUpdatedAt: savedDetails.updatedAt,
+          newRevision,
+          operations,
+        },
+        collection,
+      );
+      resetMaterials();
+      setDetails(response.changeOrder);
+      await loadList();
+      showToast({ title: 'Materials saved', intent: 'success' });
+    } catch (caught) {
+      showToast({
+        title: 'Could not save materials',
+        body: caught instanceof Error ? caught.message : undefined,
+        intent: 'error',
+      });
+    } finally {
+      setSavingMaterials(false);
+    }
+  };
 
   const choose = async (id: string): Promise<void> => {
     if (!canLeave()) return;
+    resetMaterials();
     setNewMode(false);
     await selectChangeOrder(id || null);
   };
 
   const startNew = async (): Promise<void> => {
     if (!canLeave()) return;
+    resetMaterials();
     await selectChangeOrder(null);
     setNewMode(true);
     setHeader(defaultHeader(project, currentUser));
@@ -296,6 +423,7 @@ export const ChangeOrdersTab = ({
         showToast({ title: `${labels.singular} created`, intent: 'success' });
       } else if (selectedId) {
         const response = await updateChangeOrder(token, project.id, selectedId, header, collection);
+        setDetails(response.changeOrder);
         setHeader(toHeader(response.changeOrder));
         setHeaderDirty(false);
         await loadList();
@@ -336,11 +464,6 @@ export const ChangeOrdersTab = ({
     }
   };
 
-  const reloadActive = async (): Promise<void> => {
-    await loadList();
-    if (selectedId) await selectChangeOrder(selectedId);
-  };
-
   const addMaterial = async (choice: {
     id: string;
     category: ChangeOrderSourceCatalog;
@@ -348,25 +471,17 @@ export const ChangeOrdersTab = ({
     if (!token || !selectedId) return;
     setAddingMaterial(true);
     try {
-      const result = await addChangeOrderItem(
-        token,
-        project.id,
-        selectedId,
-        {
-          sourceCatalog: choice.category,
-          sourceMaterialId: choice.id,
-        },
-        collection,
-      );
-      setDetails(result.changeOrder);
-      setExpandedParentIds((current) => {
-        const next = new Set(current);
-        next.delete(result.item.id);
-        return next;
+      const updated = await stageMaterialOperation({
+        type: 'add',
+        id: createMaterialOperationId(),
+        sourceCatalog: choice.category,
+        sourceMaterialId: choice.id,
       });
+      const added = updated.items.find(
+        (item) => item.lineKind !== 'inherited' && !itemsById.has(item.id),
+      );
       setMaterialDialogOpen(false);
-      setEditingItem(result.item);
-      await loadList();
+      setEditingItem(added ?? null);
       showToast({ title: 'Material added', intent: 'success' });
     } catch (caught) {
       showToast({
@@ -383,17 +498,9 @@ export const ChangeOrdersTab = ({
     if (!token || !selectedId || !editingItem) return;
     setSavingItem(true);
     try {
-      await updateChangeOrderItem(
-        token,
-        project.id,
-        selectedId,
-        editingItem.id,
-        update,
-        collection,
-      );
+      await stageMaterialOperation({ type: 'update', itemId: editingItem.id, input: update });
       setEditingItem(null);
-      await reloadActive();
-      showToast({ title: 'Item saved', intent: 'success' });
+      showToast({ title: 'Item updated in draft', intent: 'success' });
     } catch (caught) {
       throw caught instanceof Error ? caught : new Error('Could not save item');
     } finally {
@@ -405,8 +512,7 @@ export const ChangeOrdersTab = ({
     if (!token || !selectedId || !window.confirm(`Remove "${item.descriptionEn}"?`)) return;
     setPendingAction(true);
     try {
-      await deleteChangeOrderItem(token, project.id, selectedId, item.id, collection);
-      await reloadActive();
+      await stageMaterialOperation({ type: 'delete', itemId: item.id });
       showToast({ title: 'Item removed', intent: 'success' });
     } catch (caught) {
       showToast({
@@ -423,21 +529,15 @@ export const ChangeOrdersTab = ({
     if (!token || !selectedId || item.lineKind === 'inherited') return;
     setPendingAction(true);
     try {
-      const result = await duplicateChangeOrderItem(
-        token,
-        project.id,
-        selectedId,
-        item.id,
-        collection,
-      );
-      setDetails(result.changeOrder);
-      setExpandedParentIds((current) => {
-        const next = new Set(current);
-        next.delete(result.item.id);
-        return next;
+      const updated = await stageMaterialOperation({
+        type: 'duplicate',
+        id: createMaterialOperationId(),
+        itemId: item.id,
       });
-      await loadList();
-      setEditingItem(result.item);
+      const added = updated.items.find(
+        (row) => row.lineKind !== 'inherited' && !itemsById.has(row.id),
+      );
+      setEditingItem(added ?? null);
       showToast({ title: 'Material duplicated', intent: 'success' });
     } catch (caught) {
       showToast({
@@ -479,8 +579,7 @@ export const ChangeOrdersTab = ({
     ids.push(...items.filter((item) => !groupedItemIds.has(item.id)).map((item) => item.id));
     setPendingAction(true);
     try {
-      await reorderChangeOrderItems(token, project.id, selectedId, ids, collection);
-      await reloadActive();
+      await stageMaterialOperation({ type: 'reorder', orderedItemIds: ids });
     } catch (caught) {
       showToast({
         title: 'Could not reorder items',
@@ -538,7 +637,7 @@ export const ChangeOrdersTab = ({
           <Select
             value={newMode ? '__new__' : (selectedId ?? '')}
             onChange={(event) => void choose(event.target.value)}
-            disabled={loading || pendingAction}
+            disabled={loading || materialBusy || savingHeader}
           >
             <option value="">
               Select {labels.article} {labels.singular}
@@ -551,12 +650,16 @@ export const ChangeOrdersTab = ({
             ))}
           </Select>
         </Field>
-        <Button icon={<AddRegular />} onClick={() => void startNew()}>
+        <Button
+          icon={<AddRegular />}
+          disabled={materialBusy || savingHeader}
+          onClick={() => void startNew()}
+        >
           New {labels.singular}
         </Button>
         <Button
           icon={<DeleteRegular />}
-          disabled={!selectedId || newMode || pendingAction}
+          disabled={!selectedId || newMode || materialBusy || materialsEditing || savingHeader}
           onClick={() => void removeChangeOrder()}
         >
           Delete {labels.singular}
@@ -586,34 +689,37 @@ export const ChangeOrdersTab = ({
             <div className={styles.headerGrid}>
               <Field label="Title" required>
                 <Input
+                  disabled={materialsEditing || savingHeader}
                   value={header.title}
                   onChange={(_, data) => setHeaderField('title', data.value)}
                 />
               </Field>
               <Field label="Project reference">
                 <Input
+                  disabled={materialsEditing || savingHeader}
                   value={header.projectReference ?? ''}
                   onChange={(_, data) => setHeaderField('projectReference', data.value)}
                 />
               </Field>
               <Field label="Prepared by" required>
-                <Input
-                  value={header.preparedBy}
-                  onChange={(_, data) => setHeaderField('preparedBy', data.value)}
-                />
+                <Input aria-label="Prepared by" value={header.preparedBy} disabled />
               </Field>
               <Field label="Date" required>
                 <Input
                   aria-label="Date"
                   type="date"
+                  disabled={materialsEditing || savingHeader}
                   value={header.reportDate}
                   onChange={(_, data) => setHeaderField('reportDate', data.value)}
                 />
               </Field>
               <Field label="Revision" required>
                 <Input
-                  value={header.revision}
-                  onChange={(_, data) => setHeaderField('revision', data.value)}
+                  aria-label="Revision"
+                  value={
+                    materialsEditing ? (details?.revision ?? header.revision) : header.revision
+                  }
+                  disabled
                 />
               </Field>
             </div>
@@ -621,7 +727,7 @@ export const ChangeOrdersTab = ({
               <Button
                 appearance="primary"
                 icon={<SaveRegular />}
-                disabled={savingHeader || (!newMode && !headerDirty)}
+                disabled={materialsEditing || savingHeader || (!newMode && !headerDirty)}
                 onClick={() => void saveHeader()}
               >
                 {savingHeader ? 'Saving…' : 'Save'}
@@ -634,8 +740,43 @@ export const ChangeOrdersTab = ({
             <div className={styles.selectorRow}>
               <Title3>Materials</Title3>
               <Button
+                icon={<EditRegular />}
+                disabled={
+                  newMode ||
+                  !selectedId ||
+                  headerDirty ||
+                  materialsEditing ||
+                  materialBusy ||
+                  savingHeader
+                }
+                onClick={() => setRevisionDialogOpen(true)}
+              >
+                Edit materials
+              </Button>
+              <Button
+                appearance="primary"
+                icon={<SaveRegular />}
+                disabled={
+                  !materialsEditing || materialBusy || editingItem !== null || materialDialogOpen
+                }
+                onClick={() => void saveMaterials()}
+              >
+                {savingMaterials ? 'Saving materials…' : 'Save materials'}
+              </Button>
+              {materialsEditing ? (
+                <Button
+                  disabled={materialBusy}
+                  onClick={() => {
+                    if (!materialsDirty || window.confirm('Discard unsaved material changes?'))
+                      resetMaterials();
+                  }}
+                >
+                  Cancel editing
+                </Button>
+              ) : null}
+              <Button
                 icon={<AddRegular />}
-                disabled={newMode || !selectedId || headerDirty || pendingAction}
+                disabled={newMode || !selectedId || headerDirty || materialsLocked}
                 onClick={() => setMaterialDialogOpen(true)}
               >
                 Add material
@@ -644,6 +785,7 @@ export const ChangeOrdersTab = ({
                 icon={<ArrowDownloadRegular />}
                 disabled={
                   newMode ||
+                  materialsEditing ||
                   !selectedId ||
                   headerDirty ||
                   editingItem !== null ||
@@ -656,6 +798,12 @@ export const ChangeOrdersTab = ({
                 {exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
             </div>
+            {materialsEditing ? (
+              <Text>
+                {materialsDirty ? 'Unsaved material changes. ' : ''}Use Save materials to save and
+                lock the table.
+              </Text>
+            ) : null}
             {newMode ? (
               <Text>Save the {labels.singular} header before adding materials.</Text>
             ) : items.length === 0 ? (
@@ -784,6 +932,7 @@ export const ChangeOrdersTab = ({
                                   icon={<EditRegular />}
                                   aria-label={`Edit item ${index + 1}`}
                                   title="Edit"
+                                  disabled={materialsLocked}
                                   onClick={() => setEditingItem(item)}
                                 />
                                 <Button
@@ -792,7 +941,7 @@ export const ChangeOrdersTab = ({
                                   icon={<CopyRegular />}
                                   aria-label={`Duplicate item ${index + 1}`}
                                   title="Duplicate"
-                                  disabled={pendingAction || item.lineKind === 'inherited'}
+                                  disabled={materialsLocked || item.lineKind === 'inherited'}
                                   onClick={() => void duplicateItem(item)}
                                 />
                                 <Button
@@ -801,7 +950,7 @@ export const ChangeOrdersTab = ({
                                   icon={<DeleteRegular />}
                                   aria-label={`Delete item ${index + 1}`}
                                   title="Delete"
-                                  disabled={pendingAction || item.lineKind === 'inherited'}
+                                  disabled={materialsLocked || item.lineKind === 'inherited'}
                                   onClick={() => void removeItem(item)}
                                 />
                                 <Button
@@ -813,7 +962,7 @@ export const ChangeOrdersTab = ({
                                   disabled={
                                     mainItemIndex === undefined ||
                                     mainItemIndex === 0 ||
-                                    pendingAction
+                                    materialsLocked
                                   }
                                   onClick={() => void moveItem(item.id, -1)}
                                 />
@@ -826,7 +975,7 @@ export const ChangeOrdersTab = ({
                                   disabled={
                                     mainItemIndex === undefined ||
                                     mainItemIndex === mainItems.length - 1 ||
-                                    pendingAction ||
+                                    materialsLocked ||
                                     mainItems.length === 0
                                   }
                                   onClick={() => void moveItem(item.id, 1)}
@@ -898,6 +1047,64 @@ export const ChangeOrdersTab = ({
         <Text>No {labels.plural} yet. Create the first one to begin.</Text>
       ) : null}
 
+      {savedDetails && !newMode ? (
+        <div className={styles.card}>
+          <Title3>Change log</Title3>
+          {savedDetails.changeLog?.length ? (
+            <div className={styles.tableWrap}>
+              <Table aria-label="Change log">
+                <TableHeader>
+                  <TableRow>
+                    <TableHeaderCell>Who</TableHeaderCell>
+                    <TableHeaderCell>When</TableHeaderCell>
+                    <TableHeaderCell>Revision</TableHeaderCell>
+                    <TableHeaderCell>Changes</TableHeaderCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {[...savedDetails.changeLog].reverse().map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell>{entry.userName}</TableCell>
+                      <TableCell>{new Date(entry.changedAt).toLocaleString()}</TableCell>
+                      <TableCell>{entry.revision}</TableCell>
+                      <TableCell>
+                        <ul>
+                          {entry.changes.map((change, index) => (
+                            <li key={index}>{change}</li>
+                          ))}
+                        </ul>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <Text>No recorded changes yet. Future saved changes will appear here.</Text>
+          )}
+        </div>
+      ) : null}
+      <Dialog
+        open={revisionDialogOpen}
+        onOpenChange={(_, data) => setRevisionDialogOpen(data.open)}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Edit materials</DialogTitle>
+            <DialogContent>
+              Create a new revision for these material changes? The revision and changes will be
+              saved when you select Save materials.
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setRevisionDialogOpen(false)}>Cancel</Button>
+              <Button onClick={() => startMaterials(false)}>Keep current revision</Button>
+              <Button appearance="primary" onClick={() => startMaterials(true)}>
+                New revision
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
       <ChangeOrderMaterialDialog
         open={materialDialogOpen}
         adding={addingMaterial}
@@ -908,6 +1115,7 @@ export const ChangeOrdersTab = ({
       <ChangeOrderItemDialog
         item={editingItem}
         saving={savingItem}
+        currentRevision={details?.revision ?? header.revision}
         documentName={labels.singular}
         onDismiss={() => setEditingItem(null)}
         onSave={saveItem}

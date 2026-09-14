@@ -71,6 +71,29 @@ export type ChangeOrderDetails = ChangeOrderSummary & {
   projectCustomer: string;
   createdBy: string | null;
   items: ChangeOrderItem[];
+  changeLog?: ChangeOrderLogEntry[];
+};
+
+export type ChangeOrderLogEntry = {
+  id: string;
+  userId: string;
+  userName: string;
+  changedAt: string;
+  revision: string;
+  changes: string[];
+};
+
+export type ChangeOrderMaterialOperation =
+  | { type: 'add'; id: string; sourceCatalog: ChangeOrderSourceCatalog; sourceMaterialId: string }
+  | { type: 'duplicate'; id: string; itemId: string }
+  | { type: 'update'; itemId: string; input: ChangeOrderItemUpdate }
+  | { type: 'delete'; itemId: string }
+  | { type: 'reorder'; orderedItemIds: string[] };
+
+export type ChangeOrderMaterialsInput = {
+  expectedUpdatedAt: string;
+  newRevision: boolean;
+  operations: ChangeOrderMaterialOperation[];
 };
 
 export type ChangeOrderHeaderInput = {
@@ -105,7 +128,6 @@ export type ChangeOrderItemUpdate = Partial<
     | 'tagNo'
     | 'drawingNo'
     | 'shippingList'
-    | 'revisionNumber'
     | 'clientBarcode'
     | 'manufacturer'
     | 'manufacturerPartNo'

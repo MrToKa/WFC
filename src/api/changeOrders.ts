@@ -4,6 +4,7 @@ import type {
   ChangeOrderHeaderInput,
   ChangeOrderItem,
   ChangeOrderItemUpdate,
+  ChangeOrderMaterialsInput,
   ChangeOrderSourceCatalog,
   ChangeOrderSummary,
 } from './types';
@@ -63,6 +64,34 @@ export async function deleteChangeOrder(
   await request(`${basePath(projectId, collection)}/${changeOrderId}`, {
     method: 'DELETE',
     token,
+  });
+}
+
+export async function previewChangeOrderMaterials(
+  token: string,
+  projectId: string,
+  changeOrderId: string,
+  input: ChangeOrderMaterialsInput,
+  collection: ChangeOrderCollection = 'change-orders',
+): Promise<{ changeOrder: ChangeOrderDetails }> {
+  return request(`${basePath(projectId, collection)}/${changeOrderId}/materials/preview`, {
+    method: 'POST',
+    token,
+    body: input,
+  });
+}
+
+export async function saveChangeOrderMaterials(
+  token: string,
+  projectId: string,
+  changeOrderId: string,
+  input: ChangeOrderMaterialsInput,
+  collection: ChangeOrderCollection = 'change-orders',
+): Promise<{ changeOrder: ChangeOrderDetails }> {
+  return request(`${basePath(projectId, collection)}/${changeOrderId}/materials`, {
+    method: 'PUT',
+    token,
+    body: input,
   });
 }
 
