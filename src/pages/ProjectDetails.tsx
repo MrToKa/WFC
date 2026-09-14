@@ -193,6 +193,14 @@ const VALID_TABS: ProjectDetailsTab[] = [
   'variables-api',
 ];
 
+const ADMIN_TABS: ProjectDetailsTab[] = [
+  'cable-report',
+  'change-orders',
+  'internal-ncrs',
+  'files',
+  'variables-api',
+];
+
 export const ProjectDetails = () => {
   const styles = useProjectDetailsStyles();
   const navigate = useNavigate();
@@ -200,10 +208,10 @@ export const ProjectDetails = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const { user, token } = useAuth();
   const { showToast } = useToast();
-  const { materialTrays } = useMaterialData();
 
   const isAdmin = Boolean(user?.isAdmin);
-  const canManageCables = Boolean(token);
+  const { materialTrays } = useMaterialData(projectId, isAdmin);
+  const canManageCables = isAdmin && Boolean(token);
 
   const findMaterialTrayByType = useCallback(
     (trayType: string | null | undefined) => {
@@ -234,7 +242,7 @@ export const ProjectDetails = () => {
 
   const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
   const selectedTab: ProjectDetailsTab =
-    tabParam && VALID_TABS.includes(tabParam) && (tabParam !== 'variables-api' || isAdmin)
+    tabParam && VALID_TABS.includes(tabParam) && (isAdmin || !ADMIN_TABS.includes(tabParam))
       ? tabParam
       : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
@@ -294,7 +302,7 @@ export const ProjectDetails = () => {
   } = useCableListSection({
     projectId,
     project,
-    token,
+    token: isAdmin ? token : null,
     showToast,
   });
 
@@ -357,7 +365,7 @@ export const ProjectDetails = () => {
   } = useCableTypesSection({
     projectId,
     project,
-    token,
+    token: isAdmin ? token : null,
     showToast,
     onMutate: () => void reloadCables({ showSpinner: false }),
   });
@@ -393,7 +401,7 @@ export const ProjectDetails = () => {
   } = useTraysSection({
     projectId,
     project,
-    token,
+    token: isAdmin ? token : null,
     showToast,
   });
 
@@ -422,7 +430,7 @@ export const ProjectDetails = () => {
     handleDeleteVersion: handleProjectFileVersionDelete,
   } = useProjectFilesSection({
     projectId,
-    token,
+    token: isAdmin ? token : null,
     isAdmin,
     showToast,
   });
@@ -550,6 +558,7 @@ export const ProjectDetails = () => {
 
   const { supports, supportsLoading, supportsError } = useMaterialSupports({
     isAdmin,
+    projectId,
     showToast,
   });
 
@@ -1291,8 +1300,8 @@ export const ProjectDetails = () => {
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
       const requested = data.value as ProjectDetailsTab;
-      // Ignore clicks on Variables API for non-admin users (should not render, but defensive)
-      const tab = requested === 'variables-api' && !isAdmin ? selectedTab : requested;
+      // Apply the same section permissions to navigation events and direct URLs.
+      const tab = ADMIN_TABS.includes(requested) && !isAdmin ? selectedTab : requested;
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
         if (tab === 'details') {
@@ -1511,11 +1520,11 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="trays">Trays</Tab>
-        <Tab value="cable-report">Cables report</Tab>
-        <Tab value="change-orders">Change Orders</Tab>
-        <Tab value="internal-ncrs">Internal NCRs</Tab>
+        {isAdmin ? <Tab value="cable-report">Cables report</Tab> : null}
+        {isAdmin ? <Tab value="change-orders">Change Orders</Tab> : null}
+        {isAdmin ? <Tab value="internal-ncrs">Internal NCRs</Tab> : null}
         <Tab value="roxtec">Roxtec</Tab>
-        <Tab value="files">Files</Tab>
+        {isAdmin ? <Tab value="files">Files</Tab> : null}
         {isAdmin ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
 
@@ -1615,7 +1624,7 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {selectedTab === 'files' ? (
+      {isAdmin && selectedTab === 'files' ? (
         <ProjectFilesTab
           styles={styles}
           files={projectFiles}
@@ -1704,7 +1713,7 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {selectedTab === 'cable-report' ? (
+      {isAdmin && selectedTab === 'cable-report' ? (
         <CableReportTab
           styles={styles}
           canManageCables={canManageCables}
@@ -1724,11 +1733,11 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {selectedTab === 'change-orders' ? (
+      {isAdmin && selectedTab === 'change-orders' ? (
         <ChangeOrdersTab project={project} token={token} currentUser={user} />
       ) : null}
 
-      {selectedTab === 'internal-ncrs' ? (
+      {isAdmin && selectedTab === 'internal-ncrs' ? (
         <ChangeOrdersTab
           project={project}
           token={token}
@@ -1738,7 +1747,7 @@ export const ProjectDetails = () => {
       ) : null}
 
       {selectedTab === 'roxtec' ? (
-        <RoxtecTab styles={styles} projectId={project.id} token={token} />
+        <RoxtecTab styles={styles} projectId={project.id} token={isAdmin ? token : null} />
       ) : null}
 
       <Button appearance="secondary" onClick={() => navigate(-1)}>

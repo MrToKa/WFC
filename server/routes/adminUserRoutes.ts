@@ -6,10 +6,68 @@ import { mapUserRow } from '../models/user.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import { adminUpdateUserSchema } from '../validators.js';
 import { updateUserProfile } from '../services/userService.js';
+import { z } from 'zod';
+import { withTransaction } from '../utils/transaction.js';
 
 const adminUsersRouter = Router();
 
 adminUsersRouter.use(authenticate, requireAdmin);
+
+adminUsersRouter.get('/users/:userId/projects', async (req: Request, res: Response) => {
+  if (!z.string().uuid().safeParse(req.params.userId).success) {
+    res.status(400).json({ error: 'Invalid user ID' });
+    return;
+  }
+  try {
+    const user = await pool.query('SELECT id FROM users WHERE id = $1', [req.params.userId]);
+    if (!user.rows.length) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    const result = await pool.query<{ project_id: string }>(
+      'SELECT project_id FROM user_project_access WHERE user_id = $1 ORDER BY project_id',
+      [req.params.userId],
+    );
+    res.json({ projectIds: result.rows.map((row) => row.project_id) });
+  } catch (error) {
+    console.error('List project access error', error);
+    res.status(500).json({ error: 'Failed to load project access' });
+  }
+});
+
+adminUsersRouter.put('/users/:userId/projects', async (req: Request, res: Response) => {
+  const parsed = z.object({ projectIds: z.array(z.string().uuid()).max(10000) }).strict().safeParse(req.body);
+  if (!z.string().uuid().safeParse(req.params.userId).success || !parsed.success) {
+    res.status(400).json({ error: 'Provide a valid user ID and list of project IDs' });
+    return;
+  }
+  const projectIds = [...new Set(parsed.data.projectIds)];
+  try {
+    const outcome = await withTransaction(async (client) => {
+      // Serialize simultaneous access changes for this account.
+      const user = await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [req.params.userId]);
+      if (!user.rows.length) return 'missing-user';
+      const projects = await client.query('SELECT id FROM projects WHERE id = ANY($1::uuid[]) FOR KEY SHARE', [projectIds]);
+      if (projects.rows.length !== projectIds.length) return 'missing-project';
+      await client.query('DELETE FROM user_project_access WHERE user_id = $1', [req.params.userId]);
+      await client.query(
+        'INSERT INTO user_project_access (user_id, project_id) SELECT $1, unnest($2::uuid[])',
+        [req.params.userId, projectIds],
+      );
+      return 'saved';
+    });
+    if (outcome === 'missing-user') {
+      res.status(404).json({ error: 'User not found' });
+    } else if (outcome === 'missing-project') {
+      res.status(400).json({ error: 'One or more projects no longer exist' });
+    } else {
+      res.json({ projectIds });
+    }
+  } catch (error) {
+    console.error('Update project access error', error);
+    res.status(500).json({ error: 'Failed to update project access' });
+  }
+});
 
 adminUsersRouter.get(
   '/users',

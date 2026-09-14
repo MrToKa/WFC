@@ -681,7 +681,7 @@ export const DetailsTab = ({
         ) : null}
       </div>
 
-      <div className={styles.panel}>
+      {isAdmin ? <div className={styles.panel}>
         <Caption1>Tray report templates</Caption1>
         {trayTemplateRows.length === 0 ? (
           <Body1>No tray purposes found for this project.</Body1>
@@ -771,7 +771,7 @@ export const DetailsTab = ({
             ) : null}
           </>
         )}
-      </div>
+      </div> : null}
     </div>
   );
 };

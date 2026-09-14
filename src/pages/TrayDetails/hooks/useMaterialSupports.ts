@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
-import { MaterialSupport, fetchMaterialSupports } from '../../../api/client';
+import { MaterialSupport, fetchMaterialSupports, fetchProjectTrayData } from '../../../api/client';
 
-export const useMaterialSupports = () => {
-  const [materialSupportsById, setMaterialSupportsById] = useState<Record<string, MaterialSupport>>({});
+export const useMaterialSupports = (projectId: string | undefined, isAdmin: boolean) => {
+  const [materialSupportsById, setMaterialSupportsById] = useState<Record<string, MaterialSupport>>(
+    {},
+  );
   const [materialSupportsLoading, setMaterialSupportsLoading] = useState<boolean>(false);
   const [materialSupportsError, setMaterialSupportsError] = useState<string | null>(null);
   const [materialSupportsLoaded, setMaterialSupportsLoaded] = useState<boolean>(false);
 
   useEffect(() => {
     let cancelled = false;
+    setMaterialSupportsById({});
+    setMaterialSupportsLoaded(false);
 
     const loadSupports = async () => {
       setMaterialSupportsLoading(true);
@@ -20,10 +24,12 @@ export const useMaterialSupports = () => {
         const PAGE_SIZE = 100;
 
         while (true) {
-          const { supports: pageSupports, pagination } = await fetchMaterialSupports({
-            page,
-            pageSize: PAGE_SIZE
-          });
+          const { supports: pageSupports, pagination } = isAdmin
+            ? await fetchMaterialSupports({ page, pageSize: PAGE_SIZE })
+            : {
+                supports: projectId ? (await fetchProjectTrayData(projectId)).supports : [],
+                pagination: null,
+              };
 
           loaded.push(...pageSupports);
 
@@ -62,12 +68,12 @@ export const useMaterialSupports = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [projectId, isAdmin]);
 
   return {
     materialSupportsById,
     materialSupportsLoading,
     materialSupportsError,
-    materialSupportsLoaded
+    materialSupportsLoaded,
   };
 };

@@ -2742,7 +2742,7 @@ cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promi
 
   try {
     client = await pool.connect();
-    await client.query('BEGIN');
+    await client.query(req.isAdmin ? 'BEGIN' : 'BEGIN READ ONLY');
 
     const cable = await findProjectCableById(client, projectId, cableId);
 
@@ -2752,15 +2752,17 @@ cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promi
       return;
     }
 
-    const cableMaterials = await ensureCableMaterialsInitialized(
-      client,
-      projectId,
-      cable.id,
-      cable.cable_type_id,
-      cable.type_name,
-      cable.materials_initialized,
-      cable.materials_customized,
-    );
+    const cableMaterials = req.isAdmin
+      ? await ensureCableMaterialsInitialized(
+          client,
+          projectId,
+          cable.id,
+          cable.cable_type_id,
+          cable.type_name,
+          cable.materials_initialized,
+          cable.materials_customized,
+        )
+      : await listCableMaterials(client, cable.id);
 
     const [materialCableType, cableTypeDefaultMaterials] = await Promise.all([
       findMaterialCableTypeDetailsByName(client, cable.type_name),

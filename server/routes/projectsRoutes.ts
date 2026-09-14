@@ -5,7 +5,13 @@ import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import { mapProjectRow } from '../models/project.js';
 import type { ProjectRow } from '../models/project.js';
-import { authenticate, requireAdmin } from '../middleware.js';
+import {
+  authenticate,
+  requireAdmin,
+  loadCurrentUserRole,
+  requireProjectAccess,
+  requireProjectReadOnly,
+} from '../middleware.js';
 import { clearProjectDataSchema, createProjectSchema, updateProjectSchema } from '../validators.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import { withTransaction } from '../utils/transaction.js';
@@ -15,8 +21,11 @@ import { roxtecEntriesRouter } from './roxtecEntriesRoutes.js';
 import { traysRouter } from './traysRoutes.js';
 import { projectFilesRouter } from './projectFilesRoutes.js';
 import { changeOrdersRouter, internalNcrsRouter } from './changeOrdersRoutes.js';
+import { projectTrayDataRouter } from './projectTrayDataRoutes.js';
 
 const projectsRouter = Router();
+projectsRouter.use(authenticate, loadCurrentUserRole, requireProjectReadOnly);
+projectsRouter.use('/:projectId', requireProjectAccess);
 const INVALID_TRAY_TEMPLATE_FILE = 'INVALID_TRAY_TEMPLATE_FILE';
 
 type NormalizedSupportOverrides = Record<
@@ -474,7 +483,7 @@ const normalizeCableLayout = (layout: CableLayoutInput): Record<string, unknown>
   return Object.keys(normalized).length > 0 ? normalized : null;
 };
 
-projectsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
+projectsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query<ProjectRow>(
       `
@@ -509,8 +518,13 @@ projectsRouter.get('/', async (_req: Request, res: Response): Promise<void> => {
             p.created_at,
             p.updated_at
           FROM projects p
+          WHERE $1::boolean OR EXISTS (
+            SELECT 1 FROM user_project_access access
+            WHERE access.project_id = p.id AND access.user_id = $2
+          )
           ORDER BY p.created_at DESC;
         `,
+      [req.isAdmin === true, req.userId],
     );
     res.json({ projects: result.rows.map(mapProjectRow) });
   } catch (error) {
@@ -535,7 +549,9 @@ projectsRouter.get('/:projectId', async (req: Request, res: Response): Promise<v
       return;
     }
 
-    res.json({ project: mapProjectRow(project) });
+    const visibleProject = mapProjectRow(project);
+    if (!req.isAdmin) visibleProject.trayPurposeTemplates = {};
+    res.json({ project: visibleProject });
   } catch (error) {
     console.error('Fetch project error', error);
     res.status(500).json({ error: 'Failed to fetch project details' });
@@ -939,6 +955,7 @@ projectsRouter.use('/:projectId/cable-types', cableTypesRouter);
 projectsRouter.use('/:projectId/cables', cablesRouter);
 projectsRouter.use('/:projectId/roxtec', roxtecEntriesRouter);
 projectsRouter.use('/:projectId/trays', traysRouter);
+projectsRouter.use('/:projectId/tray-data', projectTrayDataRouter);
 projectsRouter.use('/:projectId/files', projectFilesRouter);
 projectsRouter.use('/:projectId/change-orders', changeOrdersRouter);
 projectsRouter.use('/:projectId/internal-ncrs', internalNcrsRouter);

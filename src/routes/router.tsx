@@ -57,71 +57,131 @@ export const routes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: <Projects />,
-      },
-      {
-        path: 'materials',
-        element: <Materials />,
-      },
-      {
-        path: 'templates',
         element: (
           <RequireAuth>
-            <Templates />
+            <Projects />
           </RequireAuth>
         ),
       },
       {
+        path: 'materials',
+        element: (
+          <RequireAdmin>
+            <Materials />
+          </RequireAdmin>
+        ),
+      },
+      {
+        path: 'templates',
+        element: (
+          <RequireAdmin>
+            <Templates />
+          </RequireAdmin>
+        ),
+      },
+      {
         path: 'materials/cable-types/:cableTypeId',
-        element: <MaterialCableTypeDetails />,
+        element: (
+          <RequireAdmin>
+            <MaterialCableTypeDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'materials/cable-installation-materials/:cableInstallationMaterialId',
-        element: <MaterialCableInstallationMaterialDetails />,
+        element: (
+          <RequireAdmin>
+            <MaterialCableInstallationMaterialDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'materials/tray-installation-materials/:trayInstallationMaterialId',
-        element: <MaterialTrayInstallationMaterialDetails />,
+        element: (
+          <RequireAdmin>
+            <MaterialTrayInstallationMaterialDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'materials/instruments/:instrumentId',
-        element: <MaterialInstrumentDetails />,
+        element: (
+          <RequireAdmin>
+            <MaterialInstrumentDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'materials/instrument-installation-materials/:instrumentInstallationMaterialId',
-        element: <MaterialInstrumentInstallationMaterialDetails />,
+        element: (
+          <RequireAdmin>
+            <MaterialInstrumentInstallationMaterialDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'materials/trays/:trayId',
-        element: <MaterialTrayDetails />,
+        element: (
+          <RequireAdmin>
+            <MaterialTrayDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'materials/supports/:supportId',
-        element: <MaterialSupportDetails />,
+        element: (
+          <RequireAdmin>
+            <MaterialSupportDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'materials/load-curves/:loadCurveId',
-        element: <LoadCurveDetails />,
+        element: (
+          <RequireAdmin>
+            <LoadCurveDetails />
+          </RequireAdmin>
+        ),
       },
       {
         path: 'projects/:projectId',
-        element: <ProjectDetails />,
+        element: (
+          <RequireAuth>
+            <ProjectDetails />
+          </RequireAuth>
+        ),
       },
       {
         path: 'projects/:projectId/roxtec/:roxtecId',
-        element: <RoxtecDetails />,
+        element: (
+          <RequireAuth>
+            <RoxtecDetails />
+          </RequireAuth>
+        ),
       },
       {
         path: 'projects/:projectId/cable-types/:cableTypeId',
-        element: <CableTypeDetails />,
+        element: (
+          <RequireAuth>
+            <CableTypeDetails />
+          </RequireAuth>
+        ),
       },
       {
         path: 'projects/:projectId/cables/:cableId',
-        element: <CableDetails />,
+        element: (
+          <RequireAuth>
+            <CableDetails />
+          </RequireAuth>
+        ),
       },
       {
         path: 'projects/:projectId/trays/:trayId',
-        element: <TrayDetails />,
+        element: (
+          <RequireAuth>
+            <TrayDetails />
+          </RequireAuth>
+        ),
       },
       {
         path: 'login',

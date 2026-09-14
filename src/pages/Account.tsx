@@ -224,6 +224,11 @@ export const Account = () => {
     <section className={styles.root} aria-labelledby="account-heading">
       <div className={styles.profileSection}>
         <Title3 id="account-heading">Account overview</Title3>
+        {!user.isAdmin ? (
+          <Body1 role="status">
+            Contact an administrator to receive access to projects. Your access is read-only.
+          </Body1>
+        ) : null}
         <Persona
           className={styles.persona}
           name={displayName}

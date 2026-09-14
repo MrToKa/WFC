@@ -32,8 +32,8 @@ describe('AppShell', () => {
 
     const primaryNav = screen.getByRole('navigation', { name: /primary/i });
     expect(primaryNav).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /projects/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /materials/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /projects/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /materials/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument();
   });
 

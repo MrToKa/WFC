@@ -1,10 +1,19 @@
 import { request } from './http';
 import type {
   Project,
+  MaterialTray,
+  MaterialSupport,
+  MaterialLoadCurve,
   ProjectCableLayoutInput,
   ProjectSupportOverridePayload,
   ProjectTrayPurposeTemplateSelection
 } from './types';
+
+export function fetchProjectTrayData(projectId: string) {
+  return request<{ trays: MaterialTray[]; supports: MaterialSupport[]; loadCurves: MaterialLoadCurve[] }>(
+    `/api/projects/${projectId}/tray-data`,
+  );
+}
 
 export async function fetchProjects(): Promise<{ projects: Project[] }> {
   return request<{ projects: Project[] }>('/api/projects', { method: 'GET' });

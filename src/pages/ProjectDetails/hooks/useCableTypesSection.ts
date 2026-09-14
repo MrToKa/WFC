@@ -343,6 +343,11 @@ export const useCableTypesSection = ({
     let active = true;
 
     const loadMaterialCableTypes = async () => {
+      if (!token) {
+        setMaterialCableTypes([]);
+        setMaterialCableTypesLoading(false);
+        return;
+      }
       setMaterialCableTypesLoading(true);
       setMaterialCableTypesError(null);
 
@@ -379,7 +384,7 @@ export const useCableTypesSection = ({
     return () => {
       active = false;
     };
-  }, [sortMaterialCableTypes]);
+  }, [sortMaterialCableTypes, token]);
 
   const goToPreviousPage = useCallback(() => {
     setPage((previous) => Math.max(1, previous - 1));

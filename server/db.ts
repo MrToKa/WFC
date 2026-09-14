@@ -48,6 +48,14 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS user_project_access (
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      PRIMARY KEY (user_id, project_id)
+    );
+  `);
+
+  await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS manager TEXT;
   `);

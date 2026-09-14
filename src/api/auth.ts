@@ -57,6 +57,16 @@ export async function fetchAllUsers(token: string): Promise<{ users: User[] }> {
   });
 }
 
+export function fetchUserProjectAccess(token: string, userId: string) {
+  return request<{ projectIds: string[] }>(`/api/admin/users/${userId}/projects`, { token });
+}
+
+export function updateUserProjectAccess(token: string, userId: string, projectIds: string[]) {
+  return request<{ projectIds: string[] }>(`/api/admin/users/${userId}/projects`, {
+    token, method: 'PUT', body: { projectIds },
+  });
+}
+
 export async function updateUserAsAdmin(
   token: string,
   userId: string,

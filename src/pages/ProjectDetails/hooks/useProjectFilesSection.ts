@@ -157,7 +157,7 @@ export const useProjectFilesSection = ({
   const reloadFiles = useCallback(
     async (options?: { showSpinner?: boolean }) => {
       const request = ++latestRequest.current;
-      if (!projectId || !token) {
+      if (!isAdmin || !projectId || !token) {
         setFiles([]);
         setIsLoading(false);
         setIsRefreshing(false);
@@ -187,7 +187,7 @@ export const useProjectFilesSection = ({
         }
       }
     },
-    [projectId, token]
+    [isAdmin, projectId, token]
   );
 
   useEffect(() => {

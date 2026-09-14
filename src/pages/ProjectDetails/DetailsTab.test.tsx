@@ -151,18 +151,13 @@ describe('DetailsTab tray report templates', () => {
     expect(screen.queryByText('Saving...')).not.toBeInTheDocument();
   });
 
-  it('keeps every selector read-only when editing permission is absent', () => {
+  it('hides report templates when editing permission is absent', () => {
     const onSave = vi.fn(async () => {});
     render(<StatefulDetails onSave={onSave} canEdit={false} />);
-    const power = screen.getByRole('combobox', { name: 'Tray report template for Power' });
-    const control = screen.getByRole('combobox', { name: 'Tray report template for Control' });
-    expect(power).toBeDisabled();
-    expect(control).toBeDisabled();
-    fireEvent.click(control);
+    expect(screen.queryByRole('combobox', { name: 'Tray report template for Power' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Tray report template for Control' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option')).not.toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
-    expect(
-      screen.getByText('Only administrators can change tray report templates.'),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Tray report templates')).not.toBeInTheDocument();
   });
 });

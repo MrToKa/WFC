@@ -811,10 +811,10 @@ export const TrayDetails = () => {
   const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
-    useMaterialData();
+    useMaterialData(projectId, isAdmin);
 
   const { materialSupportsById, materialSupportsLoading, materialSupportsError, materialSupportsLoaded } =
-    useMaterialSupports();
+    useMaterialSupports(projectId, isAdmin);
 
   const { projectCableTypes, projectCableTypesLoading, projectCableTypesError } =
     useProjectCableTypes(projectId);
@@ -909,7 +909,7 @@ export const TrayDetails = () => {
 
   const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
   const { selectedLoadCurve, loadCurveLoadingId, loadCurveError } =
-    useLoadCurveData(selectedLoadCurveId);
+    useLoadCurveData(selectedLoadCurveId, projectId, isAdmin);
   const selectedLoadCurveName =
     selectedMaterialTray?.loadCurveName ?? selectedLoadCurve?.name ?? null;
 
@@ -2611,7 +2611,7 @@ export const TrayDetails = () => {
     currentUserDisplay
   ]);
 
-  const canGenerateReport = Boolean(token && trayReportBaseContext);
+  const canGenerateReport = Boolean(isAdmin && token && trayReportBaseContext);
 
   const handleGenerateReport = useCallback(async () => {
     if (!project || !tray || !projectId || !token || !trayReportBaseContext) {

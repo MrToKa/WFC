@@ -470,10 +470,10 @@ export const CableDetails = () => {
     projectId: string;
     cableId: string;
   }>();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { showToast } = useToast();
 
-  const canManageMaterials = Boolean(token);
+  const canManageMaterials = Boolean(user?.isAdmin && token);
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
 
   const [details, setDetails] = useState<CableDetailsData | null>(null);
@@ -700,6 +700,10 @@ export const CableDetails = () => {
     let active = true;
 
     const loadAvailableMaterials = async () => {
+      if (!canManageMaterials) {
+        setAvailableMaterialsLoading(false);
+        return;
+      }
       setAvailableMaterialsLoading(true);
       setAvailableMaterialsError(null);
 
@@ -734,7 +738,7 @@ export const CableDetails = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [canManageMaterials]);
 
   useEffect(() => {
     if (cableVersions.length === 0) {

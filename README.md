@@ -89,8 +89,7 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
   - Pagination to navigate large data sets.
   - Import and export to Excel; exports respect the active filter and sort selections and no longer
     include the cable ID column.
-  - Any authenticated user can create, edit, delete, import, export, and inline-edit cables. Admin
-    users additionally see the "Import from Excel" button.
+  - Only administrators can create, edit, delete, import, export, or inline-edit project data.
 - **Tray management** – CRUD, import, and export flows similar to the cable lists.
 - **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files
   stored in MinIO object storage.
@@ -103,6 +102,19 @@ load curve points belong in the `CurveData` sheet. The complete workbook is vali
 records are changed. Invalid values, duplicate identifiers, missing required columns, or unknown
 referenced materials reject the import. Blank optional cells remain supported. Import notifications
 include the file name, row and column details, correction guidance, and the number of saved records.
+
+## Project access
+
+Projects require sign-in. Basic users can only read projects explicitly assigned by an administrator
+through **Admin → User management → Project access**. Select projects and save to grant access;
+clear selections to revoke access. Changes take effect on subsequent API requests without signing in
+again. Materials, Templates, Cables report, Change Orders, Internal NCRs, Files, and all import/export
+operations require administrator access, including direct URLs and API calls.
+
+New basic accounts start without project access and receive a message to contact an administrator.
+Existing basic accounts also need explicit assignments. The first registered account remains the
+bootstrap administrator. Database initialization creates the `user_project_access` table automatically
+on server startup; no existing accounts or project records are removed.
 
 ## Project Structure (high level)
 

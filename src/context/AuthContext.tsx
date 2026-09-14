@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { readStoredToken, TOKEN_STORAGE_KEY } from '@/api/session';
 import {
   createContext,
   useCallback,
@@ -47,16 +48,7 @@ type AuthContextValue = {
   deleteAccount: () => Promise<void>;
 };
 
-const TOKEN_STORAGE_KEY = 'wfc_auth_token';
-
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-const readStoredToken = (): string | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
-};
 
 const persistToken = (token: string | null): void => {
   if (typeof window === 'undefined') {

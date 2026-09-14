@@ -382,6 +382,10 @@ export const CableTypeDetails = () => {
     let active = true;
 
     const loadAvailableDefaultMaterials = async () => {
+      if (!isAdmin) {
+        setAvailableDefaultMaterialsLoading(false);
+        return;
+      }
       setAvailableDefaultMaterialsLoading(true);
       setAvailableDefaultMaterialsError(null);
 
@@ -416,7 +420,7 @@ export const CableTypeDetails = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [isAdmin]);
 
   const handleDialogFieldChange =
     (field: keyof DefaultMaterialFormState) =>

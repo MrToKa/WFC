@@ -1,4 +1,5 @@
 import type { ApiErrorPayload, ExcelImportIssue, ExcelImportSummary } from './types';
+import { readStoredToken } from './session';
 
 export class ApiError extends Error {
   status: number;
@@ -133,8 +134,9 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     headers['Content-Type'] = 'application/json';
   }
 
-  if (options.token) {
-    headers.Authorization = `Bearer ${options.token}`;
+  const token = options.token ?? (path.startsWith('/api/auth/') ? null : readStoredToken());
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {

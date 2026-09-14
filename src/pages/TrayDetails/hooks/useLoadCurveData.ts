@@ -1,10 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MaterialLoadCurve, fetchMaterialLoadCurve } from '../../../api/client';
+import {
+  MaterialLoadCurve,
+  fetchMaterialLoadCurve,
+  fetchProjectTrayData,
+} from '../../../api/client';
 
-export const useLoadCurveData = (selectedLoadCurveId: string | null) => {
+export const useLoadCurveData = (
+  selectedLoadCurveId: string | null,
+  projectId: string | undefined,
+  isAdmin: boolean,
+) => {
   const [loadCurvesById, setLoadCurvesById] = useState<Record<string, MaterialLoadCurve>>({});
   const [loadCurveLoadingId, setLoadCurveLoadingId] = useState<string | null>(null);
   const [loadCurveError, setLoadCurveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoadCurvesById({});
+  }, [projectId, isAdmin]);
 
   useEffect(() => {
     if (!selectedLoadCurveId) {
@@ -24,11 +36,21 @@ export const useLoadCurveData = (selectedLoadCurveId: string | null) => {
 
     const load = async () => {
       try {
-        const response = await fetchMaterialLoadCurve(selectedLoadCurveId);
+        const response = isAdmin
+          ? await fetchMaterialLoadCurve(selectedLoadCurveId)
+          : {
+              loadCurve: projectId
+                ? (await fetchProjectTrayData(projectId)).loadCurves.find(
+                    (curve) => curve.id === selectedLoadCurveId,
+                  )
+                : undefined,
+            };
+        if (!response.loadCurve) throw new Error('Load curve not available in this project');
+        const loadCurve = response.loadCurve;
         if (!cancelled) {
           setLoadCurvesById((previous) => ({
             ...previous,
-            [selectedLoadCurveId]: response.loadCurve
+            [selectedLoadCurveId]: loadCurve,
           }));
         }
       } catch (err) {
@@ -48,18 +70,19 @@ export const useLoadCurveData = (selectedLoadCurveId: string | null) => {
     return () => {
       cancelled = true;
     };
-  }, [selectedLoadCurveId, loadCurvesById]);
+  }, [selectedLoadCurveId, loadCurvesById, projectId, isAdmin]);
 
-  const selectedLoadCurve = useMemo(() =>
-    selectedLoadCurveId && loadCurvesById[selectedLoadCurveId]
-      ? loadCurvesById[selectedLoadCurveId]
-      : null,
-    [selectedLoadCurveId, loadCurvesById]
+  const selectedLoadCurve = useMemo(
+    () =>
+      selectedLoadCurveId && loadCurvesById[selectedLoadCurveId]
+        ? loadCurvesById[selectedLoadCurveId]
+        : null,
+    [selectedLoadCurveId, loadCurvesById],
   );
 
   return {
     selectedLoadCurve,
     loadCurveLoadingId,
-    loadCurveError
+    loadCurveError,
   };
 };

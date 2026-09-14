@@ -12,6 +12,9 @@ import {
   Spinner,
   Subtitle2
 } from '@fluentui/react-components';
+import { useState } from 'react';
+import type { User } from '@/api/client';
+import { ProjectAccessDialog } from './ProjectAccessDialog';
 
 import { formatDateTime } from '../AdminPanel.utils';
 import type { AdminPanelStyles } from '../AdminPanel.styles';
@@ -28,6 +31,7 @@ export const UserManagementSection = ({
   currentUserId,
   state
 }: UserManagementSectionProps) => {
+  const [accessUser, setAccessUser] = useState<User | null>(null);
   const {
     usersLoading,
     usersRefreshing,
@@ -61,7 +65,7 @@ export const UserManagementSection = ({
     <section className={styles.section} aria-labelledby="user-management-heading">
       <div className={styles.header}>
         <Subtitle2 id="user-management-heading">User management</Subtitle2>
-        <Body1>Update user profiles, promote new administrators, or remove accounts.</Body1>
+        <Body1>Manage project access, update user profiles, promote administrators, or remove accounts.</Body1>
       </div>
 
       <div className={styles.controls}>
@@ -180,6 +184,11 @@ export const UserManagementSection = ({
                       <td className={styles.tableCell}>{formatDateTime(user.updatedAt)}</td>
                       <td className={styles.tableCell}>
                         <div className={styles.actionCell}>
+                          {!user.isAdmin ? (
+                            <Button size="small" onClick={() => setAccessUser(user)} disabled={disableActions}>
+                              Project access
+                            </Button>
+                          ) : null}
                           {!isCurrentUser ? (
                             <Button
                               size="small"
@@ -241,6 +250,8 @@ export const UserManagementSection = ({
           ) : null}
         </>
       )}
+
+      {accessUser ? <ProjectAccessDialog key={accessUser.id} user={accessUser} onClose={() => setAccessUser(null)} /> : null}
 
       <Dialog
         open={Boolean(editingUser)}

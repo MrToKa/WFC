@@ -20,17 +20,15 @@ type NavLinkConfig = {
   end?: boolean;
 };
 
-const PUBLIC_LINKS: NavLinkConfig[] = [
-  { to: '/', label: 'Projects', end: true },
-  { to: '/materials', label: 'Materials' },
-] as const;
-
 const AUTH_LINKS: NavLinkConfig[] = [
-  ...PUBLIC_LINKS,
-  { to: '/templates', label: 'Templates' },
+  { to: '/', label: 'Projects', end: true },
 ] as const;
 
-const ADMIN_LINKS: NavLinkConfig[] = [{ to: '/admin', label: 'Admin' }];
+const ADMIN_LINKS: NavLinkConfig[] = [
+  { to: '/materials', label: 'Materials' },
+  { to: '/templates', label: 'Templates' },
+  { to: '/admin', label: 'Admin' },
+] as const;
 
 const GUEST_LINKS: NavLinkConfig[] = [
   { to: '/login', label: 'Log in' },
@@ -164,7 +162,7 @@ export const AppShell = () => {
   const { user, signOut } = useAuth();
   const navLinks = user
     ? [...AUTH_LINKS, ...(user.isAdmin ? ADMIN_LINKS : [])]
-    : [...PUBLIC_LINKS, ...GUEST_LINKS];
+    : GUEST_LINKS;
 
   const displayName = (() => {
     if (!user) {

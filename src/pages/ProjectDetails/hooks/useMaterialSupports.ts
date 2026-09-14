@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ApiError, MaterialSupport, fetchMaterialSupports } from '@/api/client';
+import {
+  ApiError,
+  MaterialSupport,
+  fetchMaterialSupports,
+  fetchProjectTrayData,
+} from '@/api/client';
 
 type ShowToast = (props: {
   intent: 'success' | 'error' | 'warning' | 'info';
@@ -9,6 +14,7 @@ type ShowToast = (props: {
 
 type UseMaterialSupportsParams = {
   isAdmin: boolean;
+  projectId?: string;
   showToast: ShowToast;
 };
 
@@ -20,7 +26,8 @@ export type UseMaterialSupportsReturn = {
 
 export const useMaterialSupports = ({
   isAdmin,
-  showToast
+  projectId,
+  showToast,
 }: UseMaterialSupportsParams): UseMaterialSupportsReturn => {
   const [supports, setSupports] = useState<MaterialSupport[]>([]);
   const [supportsLoading, setSupportsLoading] = useState<boolean>(false);
@@ -28,6 +35,7 @@ export const useMaterialSupports = ({
 
   useEffect(() => {
     let cancelled = false;
+    setSupports([]);
 
     const loadSupports = async () => {
       setSupportsLoading(true);
@@ -39,8 +47,12 @@ export const useMaterialSupports = ({
         const PAGE_SIZE = 100;
 
         while (true) {
-          const { supports: pageSupports, pagination } =
-            await fetchMaterialSupports({ page, pageSize: PAGE_SIZE });
+          const { supports: pageSupports, pagination } = isAdmin
+            ? await fetchMaterialSupports({ page, pageSize: PAGE_SIZE })
+            : {
+                supports: projectId ? (await fetchProjectTrayData(projectId)).supports : [],
+                pagination: null,
+              };
 
           loaded.push(...pageSupports);
 
@@ -52,24 +64,19 @@ export const useMaterialSupports = ({
         }
 
         if (!cancelled) {
-          loaded.sort((a, b) =>
-            a.type.localeCompare(b.type, undefined, { sensitivity: 'base' })
-          );
+          loaded.sort((a, b) => a.type.localeCompare(b.type, undefined, { sensitivity: 'base' }));
           setSupports(loaded);
         }
       } catch (error) {
         console.error('Failed to load supports', error);
         if (!cancelled) {
-          const message =
-            error instanceof ApiError
-              ? error.message
-              : 'Failed to load supports.';
+          const message = error instanceof ApiError ? error.message : 'Failed to load supports.';
           setSupportsError(message);
           if (isAdmin) {
             showToast({
               intent: 'error',
               title: 'Failed to load supports',
-              body: message
+              body: message,
             });
           }
         }
@@ -85,11 +92,11 @@ export const useMaterialSupports = ({
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, showToast]);
+  }, [isAdmin, projectId, showToast]);
 
   return {
     supports,
     supportsLoading,
-    supportsError
+    supportsError,
   };
 };

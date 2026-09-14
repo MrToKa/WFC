@@ -100,7 +100,7 @@ export const Register = () => {
   return (
     <section className={styles.root} aria-labelledby="register-heading">
       <Title3 id="register-heading">Create your account</Title3>
-      <Body1>Create an account to access projects, materials, and your profile.</Body1>
+      <Body1>Create an account, then contact an administrator to receive access to projects.</Body1>
       <form className={styles.form} onSubmit={handleSubmit} noValidate>
         <Field
           label="Email"

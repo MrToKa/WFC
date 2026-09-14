@@ -14,6 +14,7 @@ import { materialsRouter } from './routes/materialsRoutes.js';
 import { projectsRouter } from './routes/projectsRoutes.js';
 import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
+import { authenticate, requireAdmin } from './middleware.js';
 
 export const createApp = (): Express => {
   const app = express();
@@ -39,6 +40,8 @@ export const createApp = (): Express => {
   app.use('/api/auth', authRouter);
   app.use('/api/users', userRouter);
   app.use('/api/admin', adminUsersRouter);
+  app.use('/api/materials', authenticate, requireAdmin);
+  app.use('/api/templates', authenticate, requireAdmin);
   app.use('/api/materials/cable-installation-materials', materialCableInstallationMaterialsRouter);
   app.use('/api/materials/tray-installation-materials', materialTrayInstallationMaterialsRouter);
   app.use('/api/materials/instruments', materialInstrumentsRouter);

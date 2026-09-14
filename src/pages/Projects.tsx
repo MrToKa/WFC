@@ -13,6 +13,7 @@ import {
 } from '@fluentui/react-components';
 import { useNavigate } from 'react-router-dom';
 import { ApiError, Project, fetchProjects } from '@/api/client';
+import { useAuth } from '@/context/AuthContext';
 
 const useStyles = makeStyles({
   root: {
@@ -92,6 +93,7 @@ const useStyles = makeStyles({
 export const Projects = () => {
   const styles = useStyles();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -208,6 +210,9 @@ export const Projects = () => {
       {filteredProjects.length === 0 ? (
         <div className={styles.emptyState}>
           <Subtitle2>No projects found</Subtitle2>
+          {!user?.isAdmin && projects.length === 0 && !error ? (
+            <Body1>Contact an administrator to receive access to projects.</Body1>
+          ) : null}
           <Body1>Projects will appear here when they are created.</Body1>
         </div>
       ) : (

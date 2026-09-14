@@ -275,6 +275,7 @@ export const useTraysSection = ({
   // Fetch material trays
   useEffect(() => {
       const loadMaterialTrays = async () => {
+        if (!token) { setMaterialTrays([]); return; }
         try {
           const response = await fetchAllMaterialTrays();
           setMaterialTrays(response.trays);
@@ -283,7 +284,7 @@ export const useTraysSection = ({
         }
       };
       void loadMaterialTrays();
-  }, []);
+  }, [token]);
 
   const goToPreviousPage = useCallback(() => {
     setPage((previous) => Math.max(1, previous - 1));

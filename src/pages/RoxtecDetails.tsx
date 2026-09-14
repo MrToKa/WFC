@@ -203,7 +203,7 @@ const downloadBlob = (blob: Blob, fileName: string): void => {
 export const RoxtecDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { projectId, roxtecId } = useParams<{ projectId: string; roxtecId: string }>();
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
   const [entry, setEntry] = useState<RoxtecEntry | null>(null);
@@ -221,7 +221,7 @@ export const RoxtecDetails = () => {
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEntry, setIsSavingEntry] = useState(false);
 
-  const canManageRoxtec = Boolean(token);
+  const canManageRoxtec = Boolean(user?.isAdmin && token);
 
   useEffect(() => {
     const id = Number(roxtecId);
@@ -321,7 +321,7 @@ export const RoxtecDetails = () => {
   }, [cables, routings]);
 
   const saveRoutings = (nextRoutings: string[]) => {
-    if (!projectId || !entry) {
+    if (!canManageRoxtec || !projectId || !entry) {
       return;
     }
     setRoutings(nextRoutings);
@@ -424,7 +424,7 @@ export const RoxtecDetails = () => {
   };
 
   const exportMatchingCables = async () => {
-    if (!project || !entry || matchingCables.length === 0) {
+    if (!canManageRoxtec || !project || !entry || matchingCables.length === 0) {
       return;
     }
 
@@ -608,9 +608,9 @@ export const RoxtecDetails = () => {
       <div className={styles.panel}>
         <Title3>Routings</Title3>
         <Body1>
-          Add one or more routings to filter the cable list for this Roxtec entry.
+          Routings used to match cables for this Roxtec entry.
         </Body1>
-        <div className={styles.routingForm}>
+        {canManageRoxtec ? <div className={styles.routingForm}>
           <Input
             className={styles.routingInput}
             value={routingInput}
@@ -626,20 +626,20 @@ export const RoxtecDetails = () => {
           <Button appearance="primary" onClick={addRouting}>
             Add routing
           </Button>
-        </div>
+        </div> : null}
         {routings.length > 0 ? (
           <div className={styles.routingList} aria-label="Routings filters">
             {routings.map((routing) => (
               <span className={styles.routingChip} key={routing}>
                 <Body1>{routing}</Body1>
-                <Button
+                {canManageRoxtec ? <Button
                   size="small"
                   appearance="subtle"
                   onClick={() => removeRouting(routing)}
                   aria-label={`Remove routing ${routing}`}
                 >
                   Remove
-                </Button>
+                </Button> : null}
               </span>
             ))}
           </div>
@@ -649,7 +649,7 @@ export const RoxtecDetails = () => {
       <div className={styles.panel}>
         <div className={styles.panelHeader}>
           <Title3>Matching cables</Title3>
-          <Button
+          {canManageRoxtec ? <Button
             onClick={() => void exportMatchingCables()}
             disabled={
               isExportingMatchingCables ||
@@ -658,7 +658,7 @@ export const RoxtecDetails = () => {
             }
           >
             {isExportingMatchingCables ? 'Exporting...' : 'Export to Excel'}
-          </Button>
+          </Button> : null}
         </div>
         {cablesError ? <Body1 className={styles.errorText}>{cablesError}</Body1> : null}
         {cablesLoading ? (

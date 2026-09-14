@@ -163,7 +163,7 @@ describe('project data loading', () => {
         useProjectFilesSection({
           projectId: 'project-1',
           token,
-          isAdmin: false,
+          isAdmin: true,
           showToast: vi.fn(),
         }),
       { initialProps: { token: 'token' as string | null } },
