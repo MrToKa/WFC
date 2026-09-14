@@ -1,4 +1,8 @@
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Button,
   Caption1,
@@ -772,6 +776,39 @@ export const DetailsTab = ({
           </>
         )}
       </div> : null}
+      <Accordion collapsible defaultOpenItems={[]} key={project.id}>
+        <AccordionItem value="change-tracker" className={styles.panel}>
+          <AccordionHeader>Change tracker</AccordionHeader>
+          <AccordionPanel>
+            {project.changeLog?.length ? (
+              <div className={styles.tableContainer}>
+                <table className={styles.table} aria-label="Change tracker">
+                  <thead>
+                    <tr>
+                      {['Who', 'When', 'Changes'].map((label) => (
+                        <th key={label} className={styles.tableHeadCell}>{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...project.changeLog].reverse().map((entry) => (
+                      <tr key={entry.id}>
+                        <td className={styles.tableCell}>{entry.userName}</td>
+                        <td className={styles.tableCell}>{new Date(entry.changedAt).toLocaleString()}</td>
+                        <td className={styles.tableCell}>
+                          <ul>{entry.changes.map((change, index) => <li key={index}>{change}</li>)}</ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>
+            )}
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 };

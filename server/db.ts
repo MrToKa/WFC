@@ -71,6 +71,11 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS change_log JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
+
+  await pool.query(`
+    ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS secondary_tray_length NUMERIC;
   `);
 

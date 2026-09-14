@@ -124,6 +124,14 @@ const StatefulDetails = ({
 };
 
 describe('DetailsTab tray report templates', () => {
+  it('initially collapses the change tracker and opens it on demand', () => {
+    render(<StatefulDetails onSave={vi.fn(async () => {})} />);
+    const toggle = screen.getByRole('button', { name: 'Change tracker' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('No recorded changes yet. Future saved changes will appear here.')).toBeVisible();
+  });
   it('disables every template selector while one assignment is saving, then enables them again', async () => {
     let finishSave!: () => void;
     const onSave = vi.fn(

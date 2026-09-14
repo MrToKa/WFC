@@ -15,6 +15,7 @@ import {
 } from '../middleware.js';
 import { clearProjectDataSchema, createProjectSchema, updateProjectSchema } from '../validators.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import { recordProjectChanges } from '../services/projectChangeLogService.js';
 import { withTransaction } from '../utils/transaction.js';
 import { cableTypesRouter } from './cableTypesRoutes.js';
 import { cablesRouter } from './cablesRoutes.js';
@@ -773,6 +774,9 @@ projectsRouter.patch(
 
     try {
       const projectRow = await withTransaction(async (client) => {
+        await client.query('SELECT id FROM projects WHERE id = $1 FOR UPDATE', [projectId]);
+        const before = await ensureProjectExists(projectId, client);
+        if (!before) return null;
         const result = await client.query<{ id: string }>(
           `
           UPDATE projects
@@ -803,7 +807,12 @@ projectsRouter.patch(
           );
         }
 
-        return ensureProjectExists(projectId, client);
+        const after = await ensureProjectExists(projectId, client);
+        if (after) {
+          const entry = await recordProjectChanges(client, projectId, req.userId!, mapProjectRow(before), mapProjectRow(after));
+          if (entry) after.change_log = [...(after.change_log ?? []), entry];
+        }
+        return after;
       });
 
       if (!projectRow) {

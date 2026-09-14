@@ -1,4 +1,13 @@
+export type ProjectChangeLogEntry = {
+  id: string;
+  userId: string;
+  userName: string;
+  changedAt: string;
+  changes: string[];
+};
+
 export type Project = {
+  changeLog?: ProjectChangeLogEntry[];
   id: string;
   canEdit?: boolean;
   projectNumber: string;
@@ -80,9 +89,7 @@ export type ProjectCableLayout = {
   customBundleRanges: Partial<Record<CableCategoryKey, CustomBundleRange[]>> | null;
 };
 
-export type ProjectCableCategorySettingsInput =
-  | Partial<ProjectCableCategorySettings>
-  | null;
+export type ProjectCableCategorySettingsInput = Partial<ProjectCableCategorySettings> | null;
 
 export type ProjectCableLayoutInput = {
   cableSpacing?: number | null;

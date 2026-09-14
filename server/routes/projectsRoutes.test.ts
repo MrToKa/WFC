@@ -62,6 +62,30 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('project mutations', () => {
+  it('saves history with the authenticated author in the project transaction', async () => {
+    let reads = 0;
+    client.query.mockImplementation(async (sql: string) => {
+      statements.push(sql.trim());
+      if (sql.includes('FROM projects p')) {
+        reads += 1;
+        return { rowCount: 1, rows: [{ ...projectRow, name: reads === 1 ? 'Old name' : 'Updated project' }] };
+      }
+      if (sql.includes('FROM users')) return { rows: [{ name: 'Editor' }] };
+      return { rowCount: 1, rows: [{ id: projectId }] };
+    });
+    const response = responseStub();
+    await handlerFor('patch', '/:projectId')(
+      { params: { projectId }, userId: 'actor-id', body: { name: 'Updated project' } } as unknown as Request,
+      response,
+    );
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).toHaveBeenCalledWith({ project: expect.objectContaining({
+      changeLog: [expect.objectContaining({ userId: 'actor-id', userName: 'Editor', changes: ['Name: Old name → Updated project'] })],
+    }) });
+    expect(statements[1]).toContain('FOR UPDATE');
+    expect(statements.at(-2)).toContain('SET change_log = change_log');
+    expect(statements.at(-1)).toBe('COMMIT');
+  });
   it('rolls back all project edits and support settings when a template belongs to another project', async () => {
     const response = responseStub();
     await handlerFor('patch', '/:projectId')(

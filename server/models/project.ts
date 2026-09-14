@@ -1,6 +1,15 @@
 import { toNumberOrNull } from './cableType.js';
 
+export type ProjectChangeLogEntry = {
+  id: string;
+  userId: string;
+  userName: string;
+  changedAt: string;
+  changes: string[];
+};
+
 export type ProjectRow = {
+  change_log?: ProjectChangeLogEntry[];
   id: string;
   project_number: string;
   name: string;
@@ -19,6 +28,7 @@ export type ProjectRow = {
 };
 
 export type PublicProject = {
+  changeLog?: ProjectChangeLogEntry[];
   id: string;
   projectNumber: string;
   name: string;
@@ -400,6 +410,7 @@ const toCableLayoutSettings = (value: unknown): PublicCableLayout => {
 };
 
 export const mapProjectRow = (row: ProjectRow): PublicProject => ({
+  changeLog: row.change_log ?? [],
   id: row.id,
   projectNumber: row.project_number,
   name: row.name,

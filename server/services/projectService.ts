@@ -14,6 +14,7 @@ export const ensureProjectExists = async (
     `
       SELECT
         p.id,
+        p.change_log,
         p.project_number,
         p.name,
         p.customer,
