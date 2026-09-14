@@ -10,7 +10,8 @@ import {
   Field,
   Input,
   Spinner,
-  Subtitle2
+  Subtitle2,
+  mergeClasses
 } from '@fluentui/react-components';
 import { useState } from 'react';
 import type { User } from '@/api/client';
@@ -58,14 +59,15 @@ export const UserManagementSection = ({
     handleUserFieldChange,
     handleSubmitUserEdit,
     handleDeleteUser,
-    handlePromoteUser
+    handlePromoteUser,
+    handleChangeUserRole
   } = state;
 
   return (
     <section className={styles.section} aria-labelledby="user-management-heading">
       <div className={styles.header}>
         <Subtitle2 id="user-management-heading">User management</Subtitle2>
-        <Body1>Manage project access, update user profiles, promote administrators, or remove accounts.</Body1>
+        <Body1>Manage user roles and project access, update profiles, or remove accounts.</Body1>
       </div>
 
       <div className={styles.controls}>
@@ -84,17 +86,17 @@ export const UserManagementSection = ({
       </div>
 
       {usersError ? (
-        <Body1 className={`${styles.statusMessage} ${styles.errorText}`}>{usersError}</Body1>
+        <Body1 className={mergeClasses(styles.statusMessage, styles.errorText)}>{usersError}</Body1>
       ) : null}
 
       {userActionError ? (
-        <Body1 className={`${styles.statusMessage} ${styles.errorText}`}>
+        <Body1 className={mergeClasses(styles.statusMessage, styles.errorText)}>
           {userActionError}
         </Body1>
       ) : null}
 
       {userActionMessage ? (
-        <Body1 className={`${styles.statusMessage} ${styles.successText}`}>
+        <Body1 className={mergeClasses(styles.statusMessage, styles.successText)}>
           {userActionMessage}
         </Body1>
       ) : null}
@@ -178,7 +180,7 @@ export const UserManagementSection = ({
                           : '(not provided)'}
                       </td>
                       <td className={styles.tableCell}>
-                        {user.isAdmin ? 'Administrator' : 'User'}
+                        {user.isAdmin ? 'Administrator' : user.role === 'technician' ? 'Technician' : 'Basic'}
                       </td>
                       <td className={styles.tableCell}>{formatDateTime(user.createdAt)}</td>
                       <td className={styles.tableCell}>{formatDateTime(user.updatedAt)}</td>
@@ -187,6 +189,15 @@ export const UserManagementSection = ({
                           {!user.isAdmin ? (
                             <Button size="small" onClick={() => setAccessUser(user)} disabled={disableActions}>
                               Project access
+                            </Button>
+                          ) : null}
+                          {!user.isAdmin ? (
+                            <Button
+                              size="small"
+                              disabled={disableActions}
+                              onClick={() => void handleChangeUserRole(user.id, user.role === 'technician' ? 'basic' : 'technician')}
+                            >
+                              {user.role === 'technician' ? 'Set as Basic' : 'Set as Technician'}
                             </Button>
                           ) : null}
                           {!isCurrentUser ? (

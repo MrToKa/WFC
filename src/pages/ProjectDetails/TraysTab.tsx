@@ -21,6 +21,7 @@ import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 type TraysTabProps = {
   styles: ProjectDetailsStyles;
   isAdmin: boolean;
+  canExport?: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
   onCreate: () => void;
@@ -57,6 +58,7 @@ type TraysTabProps = {
 export const TraysTab = ({
   styles,
   isAdmin,
+  canExport = isAdmin,
   isRefreshing,
   onRefresh,
   onCreate,
@@ -119,13 +121,6 @@ export const TraysTab = ({
           </Button>
           <Button
             appearance="secondary"
-            onClick={onExport}
-            disabled={isExporting}
-          >
-            {isExporting ? 'Exporting...' : 'Export to Excel'}
-          </Button>
-          <Button
-            appearance="secondary"
             onClick={onGetTemplate}
             disabled={isGettingTemplate}
           >
@@ -139,6 +134,15 @@ export const TraysTab = ({
             onChange={onImportFileChange}
           />
         </>
+      ) : null}
+      {canExport ? (
+          <Button
+            appearance="secondary"
+            onClick={onExport}
+            disabled={isExporting}
+          >
+            {isExporting ? 'Exporting...' : 'Export to Excel'}
+          </Button>
       ) : null}
     </div>
 

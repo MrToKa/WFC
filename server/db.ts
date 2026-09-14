@@ -30,6 +30,12 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'basic'
+      CHECK (role IN ('basic', 'technician', 'admin'));
+    UPDATE users SET role = 'admin' WHERE is_admin AND role <> 'admin';
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS projects (
       id UUID PRIMARY KEY,
       project_number TEXT NOT NULL UNIQUE,

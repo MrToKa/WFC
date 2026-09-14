@@ -47,6 +47,7 @@ type UseCableTypesSectionParams = {
   projectId?: string;
   project: { id: string; projectNumber: string } | null;
   token: string | null;
+  exportToken?: string | null;
   showToast: ShowToast;
   onMutate?: () => void;
 };
@@ -135,6 +136,7 @@ export const useCableTypesSection = ({
   projectId,
   project,
   token,
+  exportToken = token,
   showToast,
   onMutate
 }: UseCableTypesSectionParams): UseCableTypesSectionResult => {
@@ -683,11 +685,11 @@ export const useCableTypesSection = ({
   );
 
   const handleExportCableTypes = useCallback(async () => {
-    if (!projectSnapshot || !token) {
+    if (!projectSnapshot || !exportToken) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export cable types.'
+        title: 'Export access required',
+        body: 'You need to be signed in with export access to export cable types.'
       });
       return;
     }
@@ -695,7 +697,7 @@ export const useCableTypesSection = ({
     setIsExporting(true);
 
     try {
-      const blob = await exportCableTypes(token, projectSnapshot.id);
+      const blob = await exportCableTypes(exportToken, projectSnapshot.id);
       const link = document.createElement('a');
       const url = window.URL.createObjectURL(blob);
       const fileName = `${sanitizeFileSegment(
@@ -728,7 +730,7 @@ export const useCableTypesSection = ({
     } finally {
       setIsExporting(false);
     }
-  }, [projectSnapshot, showToast, token]);
+  }, [projectSnapshot, showToast, exportToken]);
 
   const handleGetCableTypesTemplate = useCallback(async () => {
     if (!projectSnapshot || !token) {

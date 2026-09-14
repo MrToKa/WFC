@@ -47,6 +47,7 @@ type UseTraysSectionParams = {
   projectId?: string;
   project: { id: string; projectNumber: string } | null;
   token: string | null;
+  exportToken?: string | null;
   showToast: ShowToast;
 };
 
@@ -113,6 +114,7 @@ export const useTraysSection = ({
   projectId,
   project,
   token,
+  exportToken = token,
   showToast
 }: UseTraysSectionParams): UseTraysSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -532,11 +534,11 @@ export const useTraysSection = ({
 
   const handleExportTrays = useCallback(
     async (freeSpaceByTrayId?: Record<string, number | null>) => {
-      if (!projectSnapshot || !token) {
+      if (!projectSnapshot || !exportToken) {
         showToast({
           intent: 'error',
-          title: 'Admin access required',
-          body: 'You need to be signed in as an admin to export trays.'
+          title: 'Export access required',
+          body: 'You need to be signed in with export access to export trays.'
         });
         return;
       }
@@ -544,7 +546,7 @@ export const useTraysSection = ({
       setIsExporting(true);
 
       try {
-        const blob = await exportTrays(token, projectSnapshot.id, {
+        const blob = await exportTrays(exportToken, projectSnapshot.id, {
           freeSpaceByTrayId
         });
         const link = document.createElement('a');
@@ -580,7 +582,7 @@ export const useTraysSection = ({
         setIsExporting(false);
       }
     },
-    [projectSnapshot, showToast, token]
+    [projectSnapshot, showToast, exportToken]
   );
 
   const handleGetTraysTemplate = useCallback(async () => {

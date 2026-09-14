@@ -4,6 +4,7 @@ declare global {
       userId?: string;
       userEmail?: string;
       isAdmin?: boolean;
+      role?: import('../models/user.js').UserRole;
     }
   }
 }

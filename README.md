@@ -89,7 +89,7 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
   - Pagination to navigate large data sets.
   - Import and export to Excel; exports respect the active filter and sort selections and no longer
     include the cable ID column.
-  - Only administrators can create, edit, delete, import, export, or inline-edit project data.
+  - Only administrators can create, edit, delete, import, or inline-edit project data. Administrators and Technicians can export project table data.
 - **Tray management** – CRUD, import, and export flows similar to the cable lists.
 - **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files
   stored in MinIO object storage.
@@ -108,13 +108,22 @@ include the file name, row and column details, correction guidance, and the numb
 Projects require sign-in. Basic users can only read projects explicitly assigned by an administrator
 through **Admin → User management → Project access**. Select projects and save to grant access;
 clear selections to revoke access. Changes take effect on subsequent API requests without signing in
-again. Materials, Templates, Cables report, Change Orders, Internal NCRs, Files, and all import/export
-operations require administrator access, including direct URLs and API calls.
+again. Materials, Templates, Cables report, Change Orders, Internal NCRs, Variables API, and all
+modifications/imports require administrator access, including direct URLs and API calls.
+
+Assign **Technician** using **Admin ? User management ? Set as Technician**; **Set as Basic**
+revokes the role. Both roles require explicit project assignments and can read cable and tray details.
+Technicians can export project tables to Excel (cables, cable types, trays, cable type default materials,
+and matching Roxtec cables), and read/download project files and their versions. They cannot export
+Cables report, download upload templates, or modify, import, upload, replace, or delete project data.
+Basic users cannot access Files or export data. Role changes apply to the next API request;
+refresh the browser to update visible controls.
 
 New basic accounts start without project access and receive a message to contact an administrator.
 Existing basic accounts also need explicit assignments. The first registered account remains the
-bootstrap administrator. Database initialization creates the `user_project_access` table automatically
-on server startup; no existing accounts or project records are removed.
+bootstrap administrator. Restart the API server after updating: database initialization adds the
+`users.role` column and creates the `user_project_access` table automatically. Existing administrators
+remain administrators, other existing accounts remain Basic, and no project assignments are removed.
 
 ## Project Structure (high level)
 

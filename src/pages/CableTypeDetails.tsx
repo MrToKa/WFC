@@ -311,6 +311,7 @@ export const CableTypeDetails = () => {
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const isAdmin = Boolean(user?.isAdmin);
+  const canExport = Boolean(token && (isAdmin || user?.role === 'technician'));
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
 
   const [details, setDetails] = useState<CableTypeDetailsData | null>(null);
@@ -697,11 +698,11 @@ export const CableTypeDetails = () => {
   );
 
   const handleExportDefaultMaterials = useCallback(async () => {
-    if (!details || !projectId || !cableTypeId || !token || !isAdmin) {
+    if (!details || !projectId || !cableTypeId || !token || !canExport) {
       showToast({
         intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to export default materials.',
+        title: 'Export access required',
+        body: 'You need to be signed in with export access to export default materials.',
       });
       return;
     }
@@ -733,7 +734,7 @@ export const CableTypeDetails = () => {
     } finally {
       setIsExportingDefaultMaterials(false);
     }
-  }, [cableTypeId, details, isAdmin, projectId, showToast, token]);
+  }, [cableTypeId, details, canExport, projectId, showToast, token]);
 
   const pageTitle = details ? `Cable type - ${details.cableType.name}` : 'Cable type details';
 
@@ -895,7 +896,7 @@ export const CableTypeDetails = () => {
                 {isImportingDefaultMaterials ? 'Importing...' : 'Import from Excel'}
               </Button>
             ) : null}
-            {isAdmin ? (
+            {canExport ? (
               <Button
                 appearance="secondary"
                 onClick={() => void handleExportDefaultMaterials()}

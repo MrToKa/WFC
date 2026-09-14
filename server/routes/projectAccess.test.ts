@@ -10,8 +10,12 @@ vi.mock('../auth.js', async (original) => ({
   ...(await original<typeof import('../auth.js')>()),
   ...auth,
 }));
-vi.mock('../services/objectStorageService.js', () => ({}));
+vi.mock('../services/objectStorageService.js', async () => ({
+  getProjectBucket: () => 'test-project-files',
+  getObjectStream: async () => (await import('node:stream')).Readable.from(['test']),
+}));
 
+import ExcelJS from 'exceljs';
 import { createApp } from '../app.js';
 
 const adminId = '00000000-0000-4000-8000-000000000001';
@@ -32,6 +36,7 @@ let server: Server;
 let baseUrl: string;
 let grants: Set<string>;
 let basicIsAdmin: boolean;
+let basicRole: 'basic' | 'technician';
 let basicExists: boolean;
 
 beforeAll(async () => {
@@ -49,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   grants = new Set([allowedId]);
   basicIsAdmin = false;
+  basicRole = 'basic';
   basicExists = true;
   auth.verifyAccessToken.mockImplementation((token: string) => ({
     sub: token === 'admin' ? adminId : basicId,
@@ -56,15 +62,22 @@ beforeEach(() => {
     isAdmin: token === 'admin' || token === 'stale-admin',
   }));
   database.query.mockImplementation(async (sql: string, values: unknown[] = []) => {
-    if (sql.includes('SELECT is_admin FROM users')) {
+    if (/SELECT is_admin(?:, role)? FROM users/.test(sql)) {
       return {
         rows:
           values[0] === adminId
             ? [{ is_admin: true }]
             : basicExists
-              ? [{ is_admin: basicIsAdmin }]
+              ? [{ is_admin: basicIsAdmin, role: basicRole }]
               : [],
       };
+    }
+    if (sql.includes('UPDATE users SET role = $2')) {
+      if (values[0] !== basicId || basicIsAdmin || !basicExists) return { rows: [] };
+      expect(sql).toContain('AND is_admin = FALSE');
+      basicRole = values[1] as typeof basicRole;
+      return { rows: [{ id: basicId, email: 'basic@example.com', is_admin: false, role: basicRole,
+        created_at: '2026-01-01', updated_at: '2026-01-01' }] };
     }
     if (sql.includes('SELECT id FROM users')) return { rows: [{ id: values[0] }] };
     if (sql.trim().startsWith('SELECT 1 FROM user_project_access')) {
@@ -144,7 +157,8 @@ describe('project access through the complete API middleware stack', () => {
     expect((await response.json()).project.trayPurposeTemplates).toEqual({});
   });
 
-  it('does not initialize or modify materials when a basic user reads cable details', async () => {
+  it.each(['basic', 'technician'] as const)('does not initialize or modify materials when %s reads cable details', async (role) => {
+    basicRole = role;
     const baseQuery = database.query.getMockImplementation()!;
     database.query.mockImplementation(async (sql: string, values: unknown[] = []) => {
       if (sql.includes('FROM cables c')) {
@@ -312,5 +326,140 @@ describe('administrator project assignments', () => {
   ])('preserves existing access when assignment validation fails: %j', async (body) => {
     expect((await call(path, 'admin', 'PUT', body)).status).toBe(400);
     expect(grants).toEqual(new Set([allowedId]));
+  });
+});
+
+
+describe('Technician permissions', () => {
+  beforeEach(() => { basicRole = 'technician'; });
+
+  it('lists only assigned projects and immediately honors revoked access', async () => {
+    expect((await (await call('/api/projects')).json()).projects.map((p: { id: string }) => p.id)).toEqual([allowedId]);
+    expect((await call('/api/projects/' + otherId)).status).toBe(403);
+    grants.clear();
+    expect((await (await call('/api/projects')).json()).projects).toEqual([]);
+    expect((await call('/api/projects/' + allowedId + '/cables/export')).status).toBe(403);
+  });
+
+  it.each([
+    ['/cables/export', 'GET'], ['/cables/export?view=list', 'GET'],
+    ['/cables/export?view=change-tracker', 'GET'], ['/cable-types/export', 'GET'],
+    ['/trays/export', 'POST'],
+  ])('exports table data without writes: %s %s', async (suffix, method) => {
+    const response = await call('/api/projects/' + allowedId + suffix, 'basic', method, method === 'POST' ? {} : undefined);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('spreadsheetml');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await response.arrayBuffer());
+    expect(workbook.worksheets.length).toBeGreaterThan(0);
+    expect(database.query.mock.calls.some(([sql]) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+    expect((await call('/api/projects/' + otherId + suffix, 'basic', method, method === 'POST' ? {} : undefined)).status).toBe(403);
+  });
+
+  it.each([
+    '/cables/report-summary', '/cables/export?view=report', '/cables/export?view=REPORT',
+    '/cables/export?view[]=report', '/cables/export?view[toString]=report',
+    '/cables/template', '/cable-types/template', '/trays/template',
+    '/change-orders', '/internal-ncrs', '/variables-api', '/future-section',
+  ])('blocks restricted sections and report exports: %s', async (suffix) => {
+    for (const method of ['GET', 'HEAD']) {
+      expect((await call('/api/projects/' + allowedId + suffix, 'basic', method)).status).toBe(403);
+    }
+  });
+
+  it.each(['/api/materials/trays', '/api/materials/cable-types', '/api/templates', '/api/admin/users'])(
+    'blocks global access: %s', async (path) => {
+      expect((await call(path)).status).toBe(403);
+    },
+  );
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('blocks %s mutations and imports', async (method) => {
+    for (const suffix of ['', '/cables', '/cables/' + itemId, '/cables/import', '/cables/export',
+      '/cables/' + itemId + '/materials', '/cable-types/import', '/trays/import', '/trays/' + itemId,
+      '/roxtec/1', '/files', '/files/' + itemId, '/files/' + itemId + '/versions/' + itemId,
+      '/change-orders', '/internal-ncrs', '/clear-data']) {
+      expect((await call('/api/projects/' + allowedId + suffix, 'basic', method, {})).status).toBe(403);
+    }
+    expect((await call('/api/projects', 'basic', method, {})).status).toBe(403);
+  });
+
+  it('allows file reading but denies deletion even for the original uploader with a stale admin token', async () => {
+    const baseQuery = database.query.getMockImplementation()!;
+    database.query.mockImplementation(async (sql: string, values: unknown[]) => {
+      if (sql.includes('FROM project_files pf')) {
+        expect(values).toEqual([allowedId]);
+        return { rows: [{ id: itemId, project_id: allowedId, file_name: 'drawing.pdf',
+          content_type: 'application/pdf', size_bytes: 4, uploaded_by: basicId, uploaded_at: '2026-01-01' }] };
+      }
+      return baseQuery(sql, values);
+    });
+    const response = await call('/api/projects/' + allowedId + '/files', 'stale-admin');
+    expect(response.status).toBe(200);
+    expect((await response.json()).files[0].canDelete).toBe(false);
+    expect((await call('/api/projects/' + allowedId + '/files/' + itemId, 'stale-admin', 'DELETE')).status).toBe(403);
+    expect((await call('/api/projects/' + otherId + '/files')).status).toBe(403);
+  });
+
+  it('exports cable type default materials only after checking the project and item', async () => {
+    const baseQuery = database.query.getMockImplementation()!;
+    database.query.mockImplementation(async (sql: string, values: unknown[]) => {
+      if (sql.includes('FROM cable_types') && sql.includes('AND id = $2')) {
+        expect(values).toEqual([allowedId, itemId]);
+        return { rows: [{ id: itemId, project_id: allowedId, name: 'Type A',
+          created_at: '2026-01-01', updated_at: '2026-01-01' }] };
+      }
+      return baseQuery(sql, values);
+    });
+    const suffix = '/cable-types/' + itemId + '/default-materials/export';
+    const response = await call('/api/projects/' + allowedId + suffix);
+    expect(response.status).toBe(200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await response.arrayBuffer());
+    expect(workbook.worksheets[0].name).toBe('Default Materials');
+    expect((await call('/api/projects/' + otherId + suffix)).status).toBe(403);
+    expect(database.query.mock.calls.some(([sql]) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+  });
+
+  it('downloads files only from an assigned project with project-scoped item queries', async () => {
+    const baseQuery = database.query.getMockImplementation()!;
+    database.query.mockImplementation(async (sql: string, values: unknown[]) => {
+      if (sql.includes('FROM project_files pf')) {
+        expect(sql).toContain('pf.project_id = $2');
+        expect(values).toEqual([itemId, allowedId]);
+        return { rows: [{ id: itemId, project_id: allowedId, file_name: 'drawing.pdf',
+          object_key: 'test-file', content_type: 'application/pdf', size_bytes: 4 }] };
+      }
+      return baseQuery(sql, values);
+    });
+    const suffix = '/files/' + itemId + '/download';
+    const response = await call('/api/projects/' + allowedId + suffix);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('test');
+    expect((await call('/api/projects/' + otherId + suffix)).status).toBe(403);
+  });
+
+  it('only permits administrators to assign or revoke Technician, preserving project grants', async () => {
+    const path = '/api/admin/users/' + basicId + '/role';
+    expect((await call(path, 'basic', 'PUT', { role: 'technician' })).status).toBe(403);
+    let response = await call(path, 'admin', 'PUT', { role: 'basic' });
+    expect(response.status).toBe(200);
+    expect((await response.json()).user.role).toBe('basic');
+    expect((await call('/api/projects/' + allowedId + '/cables/export')).status).toBe(403);
+    response = await call(path, 'admin', 'PUT', { role: 'technician' });
+    expect(response.status).toBe(200);
+    expect((await response.json()).user).toMatchObject({ role: 'technician', isAdmin: false });
+    expect((await call('/api/projects/' + allowedId + '/cables/export')).status).toBe(200);
+    expect(grants).toEqual(new Set([allowedId]));
+  });
+
+  it.each([{ role: 'admin' }, { role: 'unknown' }, { role: 'technician', isAdmin: true }, {}])(
+    'rejects invalid role changes: %j', async (body) => {
+      expect((await call('/api/admin/users/' + basicId + '/role', 'admin', 'PUT', body)).status).toBe(400);
+      expect(basicRole).toBe('technician');
+    },
+  );
+
+  it('does not use the role endpoint to demote administrators', async () => {
+    expect((await call('/api/admin/users/' + adminId + '/role', 'admin', 'PUT', { role: 'basic' })).status).toBe(404);
   });
 });

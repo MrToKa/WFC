@@ -39,6 +39,7 @@ type CableListTabProps = {
   styles: ProjectDetailsStyles;
   canManageCables: boolean;
   isAdmin: boolean;
+  canExport?: boolean;
   filterText: string;
   onFilterTextChange: (value: string) => void;
   filterCriteria: CableSearchCriteria;
@@ -106,6 +107,7 @@ export const CableListTab = ({
   styles,
   canManageCables,
   isAdmin,
+  canExport = isAdmin,
   filterText,
   onFilterTextChange,
   filterCriteria,
@@ -194,6 +196,18 @@ export const CableListTab = ({
               />
             </>
           ) : null}
+          <Switch
+            checked={inlineEditingEnabled}
+            label="Inline edit"
+            onChange={(_, data) =>
+              onInlineEditingToggle(Boolean(data.checked))
+            }
+            disabled={inlineUpdatingIds.size > 0}
+          />
+        </>
+      ) : null}
+      {canExport ? (
+        <>
           <Button
             appearance="secondary"
             onClick={onExport}
@@ -208,14 +222,6 @@ export const CableListTab = ({
           >
             {isExporting ? 'Exporting...' : 'Change tracker'}
           </Button>
-          <Switch
-            checked={inlineEditingEnabled}
-            label="Inline edit"
-            onChange={(_, data) =>
-              onInlineEditingToggle(Boolean(data.checked))
-            }
-            disabled={inlineUpdatingIds.size > 0}
-          />
         </>
       ) : null}
     </div>

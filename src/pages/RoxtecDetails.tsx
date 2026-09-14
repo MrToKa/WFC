@@ -221,6 +221,7 @@ export const RoxtecDetails = () => {
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEntry, setIsSavingEntry] = useState(false);
 
+  const canExport = Boolean(token && (user?.isAdmin || user?.role === 'technician'));
   const canManageRoxtec = Boolean(user?.isAdmin && token);
 
   useEffect(() => {
@@ -424,7 +425,7 @@ export const RoxtecDetails = () => {
   };
 
   const exportMatchingCables = async () => {
-    if (!canManageRoxtec || !project || !entry || matchingCables.length === 0) {
+    if (!canExport || !project || !entry || matchingCables.length === 0) {
       return;
     }
 
@@ -649,7 +650,7 @@ export const RoxtecDetails = () => {
       <div className={styles.panel}>
         <div className={styles.panelHeader}>
           <Title3>Matching cables</Title3>
-          {canManageRoxtec ? <Button
+          {canExport ? <Button
             onClick={() => void exportMatchingCables()}
             disabled={
               isExportingMatchingCables ||

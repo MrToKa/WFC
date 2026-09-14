@@ -33,14 +33,15 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
 
       const result = await client.query<UserRow>(
         `
-          INSERT INTO users (id, email, password_hash, first_name, last_name, is_admin)
-          VALUES ($1, $2, $3, $4, $5, $6)
+          INSERT INTO users (id, email, password_hash, first_name, last_name, is_admin, role)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
           RETURNING id,
                     email,
                     password_hash,
                     first_name,
                     last_name,
                     is_admin,
+                    role,
                     created_at,
                     updated_at;
         `,
@@ -51,6 +52,7 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
           firstName ?? null,
           lastName ?? null,
           isFirstUser,
+          isFirstUser ? 'admin' : 'basic',
         ],
       );
 
@@ -99,6 +101,7 @@ authRouter.post(
             first_name,
             last_name,
             is_admin,
+            role,
             created_at,
             updated_at
           FROM users

@@ -37,6 +37,7 @@ type CableTypesTabItem = Pick<
 type CableTypesTabProps<T extends CableTypesTabItem> = {
   styles: FilterableTableSectionStyles;
   isAdmin: boolean;
+  canExport?: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
   onCreate: () => void;
@@ -79,6 +80,7 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
 export const CableTypesTab = <T extends CableTypesTabItem>({
   styles,
   isAdmin,
+  canExport = isAdmin,
   isRefreshing,
   onRefresh,
   onCreate,
@@ -154,13 +156,6 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
             </Button>
             <Button
               appearance="secondary"
-              onClick={onExport}
-              disabled={isExporting || disableExportAction}
-            >
-              {isExporting ? 'Exporting...' : 'Export to Excel'}
-            </Button>
-            <Button
-              appearance="secondary"
               onClick={onGetTemplate}
               disabled={isGettingTemplate || disableGetTemplateAction}
             >
@@ -174,6 +169,15 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
               onChange={onImportFileChange}
             />
           </>
+        ) : null}
+        {canExport ? (
+          <Button
+            appearance="secondary"
+            onClick={onExport}
+            disabled={isExporting || disableExportAction}
+          >
+            {isExporting ? 'Exporting...' : 'Export to Excel'}
+          </Button>
         ) : null}
       </div>
 

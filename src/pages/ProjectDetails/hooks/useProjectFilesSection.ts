@@ -157,7 +157,7 @@ export const useProjectFilesSection = ({
   const reloadFiles = useCallback(
     async (options?: { showSpinner?: boolean }) => {
       const request = ++latestRequest.current;
-      if (!isAdmin || !projectId || !token) {
+      if (!projectId || !token) {
         setFiles([]);
         setIsLoading(false);
         setIsRefreshing(false);
@@ -187,7 +187,7 @@ export const useProjectFilesSection = ({
         }
       }
     },
-    [isAdmin, projectId, token]
+    [projectId, token]
   );
 
   useEffect(() => {
@@ -354,7 +354,7 @@ export const useProjectFilesSection = ({
   );
 
   const handleReplaceConfirm = useCallback(async () => {
-    if (!pendingUploadFile || !replaceTarget || !projectId || !token) {
+    if (!isAdmin || !pendingUploadFile || !replaceTarget || !projectId || !token) {
       resetReplaceState();
       return;
     }
@@ -406,6 +406,7 @@ export const useProjectFilesSection = ({
       setIsReplacing(false);
     }
   }, [
+    isAdmin,
     loadFileVersions,
     pendingUploadFile,
     projectId,
@@ -425,7 +426,7 @@ export const useProjectFilesSection = ({
 
   const handleDeleteFile = useCallback(
     async (fileId: string) => {
-      if (!token || !projectId) {
+      if (!isAdmin || !token || !projectId) {
         showToast({
           title: 'Delete not allowed',
           body: 'You must be signed in to delete files.',
@@ -454,7 +455,7 @@ export const useProjectFilesSection = ({
         setPendingFileId(null);
       }
     },
-    [projectId, showToast, token]
+    [isAdmin, projectId, showToast, token]
   );
 
   const handleDownloadFile = useCallback(
@@ -566,7 +567,7 @@ export const useProjectFilesSection = ({
 
   const handleDeleteVersion = useCallback(
     async (version: ProjectFileVersion) => {
-      if (!projectId || !token) {
+      if (!isAdmin || !projectId || !token) {
         showToast({
           title: 'Delete not allowed',
           body: 'You must be signed in to delete file versions.',
@@ -609,7 +610,7 @@ export const useProjectFilesSection = ({
         });
       }
     },
-    [projectId, showToast, token]
+    [isAdmin, projectId, showToast, token]
   );
 
   return {

@@ -329,7 +329,7 @@ export const ProjectFilesTab = ({
                         >
                           {isDownloading ? 'Downloading...' : 'Download'}
                         </Button>
-                        {file.canDelete ? (
+                        {canUpload && file.canDelete ? (
                           <Button
                             size="small"
                             appearance="outline"

@@ -103,3 +103,9 @@ export async function promoteUserAsAdmin(
     token
   });
 }
+
+export function updateUserRoleAsAdmin(token: string, userId: string, role: 'basic' | 'technician') {
+  return request<{ user: User }>(`/api/admin/users/${userId}/role`, {
+    method: 'PUT', token, body: { role },
+  });
+}

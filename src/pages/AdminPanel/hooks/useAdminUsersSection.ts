@@ -7,7 +7,8 @@ import {
   deleteUserAsAdmin,
   fetchAllUsers,
   promoteUserAsAdmin,
-  updateUserAsAdmin
+  updateUserAsAdmin,
+  updateUserRoleAsAdmin
 } from '@/api/client';
 
 import {
@@ -51,6 +52,7 @@ export type AdminUsersSectionState = {
   ) => (_event: unknown, data: { value: string }) => void;
   handleSubmitUserEdit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   handleDeleteUser: (userId: string) => Promise<void>;
+  handleChangeUserRole: (userId: string, role: 'basic' | 'technician') => Promise<void>;
   handlePromoteUser: (userId: string) => Promise<void>;
 };
 
@@ -126,7 +128,7 @@ export const useAdminUsersSection = ({
           return (
             candidate.email.toLowerCase().includes(term) ||
             name.includes(term) ||
-            (candidate.isAdmin ? 'administrator' : 'user').includes(term)
+            (candidate.isAdmin ? 'administrator' : candidate.role === 'technician' ? 'technician' : 'basic user').includes(term)
           );
         })
       : [...users];
@@ -147,8 +149,8 @@ export const useAdminUsersSection = ({
           return nameA.localeCompare(nameB) * direction;
         }
         case 'role': {
-          const roleA = a.isAdmin ? 'administrator' : 'user';
-          const roleB = b.isAdmin ? 'administrator' : 'user';
+          const roleA = a.isAdmin ? 'administrator' : a.role ?? 'basic';
+          const roleB = b.isAdmin ? 'administrator' : b.role ?? 'basic';
           return roleA.localeCompare(roleB) * direction;
         }
         case 'updatedAt':
@@ -329,6 +331,22 @@ export const useAdminUsersSection = ({
     }
   };
 
+  const handleChangeUserRole = async (userId: string, role: 'basic' | 'technician') => {
+    if (!token) return;
+    setUserPendingAction(userId);
+    setUserActionError(null);
+    setUserActionMessage(null);
+    try {
+      const response = await updateUserRoleAsAdmin(token, userId, role);
+      setUsers((previous) => previous.map((candidate) => candidate.id === userId ? response.user : candidate));
+      setUserActionMessage(role === 'technician' ? 'User role changed to Technician.' : 'User role changed to Basic.');
+    } catch (error) {
+      setUserActionError(error instanceof ApiError ? error.message : 'Failed to update user role.');
+    } finally {
+      setUserPendingAction(null);
+    }
+  };
+
   const handlePromoteUser = async (userId: string) => {
     if (!token) {
       return;
@@ -387,6 +405,7 @@ export const useAdminUsersSection = ({
     handleUserFieldChange,
     handleSubmitUserEdit,
     handleDeleteUser,
-    handlePromoteUser
+    handlePromoteUser,
+    handleChangeUserRole
   };
 };

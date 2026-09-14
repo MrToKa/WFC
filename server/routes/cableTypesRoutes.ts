@@ -14,7 +14,7 @@ import {
 import { mapCableTypeRow, toNumberOrNull } from '../models/cableType.js';
 import type { CableTypeRow } from '../models/cableType.js';
 import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
-import { authenticate, requireAdmin } from '../middleware.js';
+import { authenticate, requireAdmin, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   excelImportError,
@@ -1746,7 +1746,7 @@ cableTypesRouter.post(
 cableTypesRouter.get(
   '/:cableTypeId/default-materials/export',
   authenticate,
-  requireAdmin,
+  requireProjectExport,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId } = req.params;
 
@@ -1902,7 +1902,7 @@ cableTypesRouter.get(
 cableTypesRouter.get(
   '/export',
   authenticate,
-  requireAdmin,
+  requireProjectExport,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 

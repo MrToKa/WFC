@@ -58,6 +58,7 @@ type UseCableListSectionParams = {
   projectId?: string;
   project: { id: string; projectNumber: string } | null;
   token: string | null;
+  exportToken?: string | null;
   showToast: ShowToast;
 };
 
@@ -174,6 +175,7 @@ export const useCableListSection = ({
   projectId,
   project,
   token,
+  exportToken = token,
   showToast
 }: UseCableListSectionParams): UseCableListSectionResult => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -989,7 +991,7 @@ export const useCableListSection = ({
       view: 'list' | 'report' | 'change-tracker' = 'list',
       mto: CableMtoOption | null = null
     ) => {
-      if (!projectSnapshot || !token) {
+      if (!projectSnapshot || !exportToken) {
         showToast({
           intent: 'error',
           title: 'Sign-in required',
@@ -1001,7 +1003,7 @@ export const useCableListSection = ({
       setIsExporting(true);
 
       try {
-        const blob = await exportCables(token, projectSnapshot.id, {
+        const blob = await exportCables(exportToken, projectSnapshot.id, {
           filterText,
           criteria: filterCriteria,
           view,
@@ -1048,7 +1050,7 @@ export const useCableListSection = ({
         setIsExporting(false);
       }
     },
-    [filterCriteria, filterText, projectSnapshot, showToast, token]
+    [filterCriteria, filterText, projectSnapshot, showToast, exportToken]
   );
 
   const handleGetCablesTemplate = useCallback(

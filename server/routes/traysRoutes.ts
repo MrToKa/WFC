@@ -14,7 +14,7 @@ import {
   computeTrayFreeSpaceByTrayId,
   type TrayCableForFreeSpace,
 } from '../utils/trayFreeSpace.js';
-import { authenticate, requireAdmin } from '../middleware.js';
+import { authenticate, requireAdmin, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   excelImportError,
@@ -249,7 +249,7 @@ traysRouter.get(
 traysRouter.post(
   '/export',
   authenticate,
-  requireAdmin,
+  requireProjectExport,
   async (
     req: Request<{ projectId?: string }, unknown, TrayExportBody>,
     res: Response,

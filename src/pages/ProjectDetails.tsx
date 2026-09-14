@@ -211,6 +211,8 @@ export const ProjectDetails = () => {
 
   const isAdmin = Boolean(user?.isAdmin);
   const { materialTrays } = useMaterialData(projectId, isAdmin);
+  const canExport = Boolean(token && (isAdmin || user?.role === 'technician'));
+  const canReadFiles = isAdmin || user?.role === 'technician';
   const canManageCables = isAdmin && Boolean(token);
 
   const findMaterialTrayByType = useCallback(
@@ -242,7 +244,7 @@ export const ProjectDetails = () => {
 
   const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
   const selectedTab: ProjectDetailsTab =
-    tabParam && VALID_TABS.includes(tabParam) && (isAdmin || !ADMIN_TABS.includes(tabParam))
+    tabParam && VALID_TABS.includes(tabParam) && (isAdmin || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
       ? tabParam
       : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
@@ -303,6 +305,7 @@ export const ProjectDetails = () => {
     projectId,
     project,
     token: isAdmin ? token : null,
+    exportToken: canExport ? token : null,
     showToast,
   });
 
@@ -366,6 +369,7 @@ export const ProjectDetails = () => {
     projectId,
     project,
     token: isAdmin ? token : null,
+    exportToken: canExport ? token : null,
     showToast,
     onMutate: () => void reloadCables({ showSpinner: false }),
   });
@@ -402,6 +406,7 @@ export const ProjectDetails = () => {
     projectId,
     project,
     token: isAdmin ? token : null,
+    exportToken: canExport ? token : null,
     showToast,
   });
 
@@ -430,7 +435,7 @@ export const ProjectDetails = () => {
     handleDeleteVersion: handleProjectFileVersionDelete,
   } = useProjectFilesSection({
     projectId,
-    token: isAdmin ? token : null,
+    token: canReadFiles ? token : null,
     isAdmin,
     showToast,
   });
@@ -1301,7 +1306,7 @@ export const ProjectDetails = () => {
     (_event: unknown, data: { value: TabValue }) => {
       const requested = data.value as ProjectDetailsTab;
       // Apply the same section permissions to navigation events and direct URLs.
-      const tab = ADMIN_TABS.includes(requested) && !isAdmin ? selectedTab : requested;
+      const tab = ADMIN_TABS.includes(requested) && !isAdmin && !(requested === 'files' && canReadFiles) ? selectedTab : requested;
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
         if (tab === 'details') {
@@ -1312,7 +1317,7 @@ export const ProjectDetails = () => {
         return next;
       });
     },
-    [isAdmin, selectedTab, setSearchParams],
+    [canReadFiles, isAdmin, selectedTab, setSearchParams],
   );
 
   const handleCreateCable = useCallback(() => {
@@ -1524,7 +1529,7 @@ export const ProjectDetails = () => {
         {isAdmin ? <Tab value="change-orders">Change Orders</Tab> : null}
         {isAdmin ? <Tab value="internal-ncrs">Internal NCRs</Tab> : null}
         <Tab value="roxtec">Roxtec</Tab>
-        {isAdmin ? <Tab value="files">Files</Tab> : null}
+        {canReadFiles ? <Tab value="files">Files</Tab> : null}
         {isAdmin ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
 
@@ -1550,6 +1555,7 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cables' ? (
         <CableTypesTab
+          canExport={canExport}
           styles={styles}
           isAdmin={isAdmin}
           isRefreshing={cableTypesRefreshing}
@@ -1588,6 +1594,7 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'trays' ? (
         <TraysTab
+          canExport={canExport}
           styles={styles}
           isAdmin={isAdmin}
           isRefreshing={traysRefreshing}
@@ -1624,7 +1631,7 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {isAdmin && selectedTab === 'files' ? (
+      {canReadFiles && selectedTab === 'files' ? (
         <ProjectFilesTab
           styles={styles}
           files={projectFiles}
@@ -1663,6 +1670,7 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cable-list' ? (
         <CableListTab
+          canExport={canExport}
           styles={styles}
           canManageCables={canManageCables}
           isAdmin={isAdmin}

@@ -13,6 +13,31 @@ const adminUsersRouter = Router();
 
 adminUsersRouter.use(authenticate, requireAdmin);
 
+// Changing a non-administrator role preserves their explicit project assignments.
+adminUsersRouter.put('/users/:userId/role', async (req: Request, res: Response) => {
+  const parsed = z.object({ role: z.enum(['basic', 'technician']) }).strict().safeParse(req.body);
+  if (!z.string().uuid().safeParse(req.params.userId).success || !parsed.success) {
+    res.status(400).json({ error: 'Provide a valid user ID and basic or technician role' });
+    return;
+  }
+  try {
+    const result = await pool.query<UserRow>(
+      `UPDATE users SET role = $2, updated_at = NOW()
+       WHERE id = $1 AND is_admin = FALSE
+       RETURNING id, email, password_hash, first_name, last_name, is_admin, role, created_at, updated_at`,
+      [req.params.userId, parsed.data.role],
+    );
+    if (!result.rows[0]) {
+      res.status(404).json({ error: 'Non-administrator user not found' });
+      return;
+    }
+    res.json({ user: mapUserRow(result.rows[0]) });
+  } catch (error) {
+    console.error('Update user role error', error);
+    res.status(500).json({ error: 'Failed to update user role' });
+  }
+});
+
 adminUsersRouter.get('/users/:userId/projects', async (req: Request, res: Response) => {
   if (!z.string().uuid().safeParse(req.params.userId).success) {
     res.status(400).json({ error: 'Invalid user ID' });
@@ -82,6 +107,7 @@ adminUsersRouter.get(
             first_name,
             last_name,
             is_admin,
+            role,
             created_at,
             updated_at
           FROM users
@@ -220,7 +246,7 @@ adminUsersRouter.post(
       const result = await pool.query<UserRow>(
         `
           UPDATE users
-          SET is_admin = TRUE,
+          SET is_admin = TRUE, role = 'admin',
               updated_at = NOW()
           WHERE id = $1
           RETURNING
@@ -230,6 +256,7 @@ adminUsersRouter.post(
             first_name,
             last_name,
             is_admin,
+            role,
             created_at,
             updated_at;
         `,

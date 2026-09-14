@@ -227,13 +227,14 @@ export const Account = () => {
         {!user.isAdmin ? (
           <Body1 role="status">
             Contact an administrator to receive access to projects. Your access is read-only.
+            {user.role === 'technician' ? ' You can export project table data.' : null}
           </Body1>
         ) : null}
         <Persona
           className={styles.persona}
           name={displayName}
           secondaryText={user.email}
-          tertiaryText={user.isAdmin ? 'Administrator' : 'User'}
+          tertiaryText={user.isAdmin ? 'Administrator' : user.role === 'technician' ? 'Technician' : 'Basic'}
           quaternaryText={
             profileSummary
               ? `Created ${profileSummary.created} - Updated ${profileSummary.updated}`

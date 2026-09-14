@@ -28,7 +28,7 @@ export const updateUserProfile = async (
     `UPDATE users
      SET ${fields.join(', ')}
      WHERE id = $${values.length}
-     RETURNING id, email, password_hash, first_name, last_name, is_admin, created_at, updated_at`,
+     RETURNING id, email, password_hash, first_name, last_name, is_admin, role, created_at, updated_at`,
     values,
   );
   return result.rows[0] ?? null;

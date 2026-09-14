@@ -105,6 +105,13 @@ describe.each([
     expect(mocks.query).not.toHaveBeenCalled();
   });
 
+  it('cannot change its role through profile fields', async () => {
+    const response = responseStub();
+    await handlerFor(router, 'patch', path)(requestWith({ firstName: 'Changed', role: 'admin', isAdmin: true }), response);
+    const [sql] = mocks.query.mock.calls[0];
+    expect(sql).not.toMatch(/SET[\s\S]*?(?:role|is_admin)\s*=/);
+  });
+
   it('preserves password and other omitted fields for a name-only edit', async () => {
     const response = responseStub();
     await handlerFor(router, 'patch', path)(requestWith({ firstName: 'Changed' }), response);
@@ -153,6 +160,7 @@ describe('registration', () => {
       null,
       null,
       count === 0,
+      count === 0 ? 'admin' : 'basic',
     ]);
     expect(calls.at(-1)).toEqual(['COMMIT']);
     expect(client.release).toHaveBeenCalledOnce();

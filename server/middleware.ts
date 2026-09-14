@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifyAccessToken } from './auth.js';
 import { pool } from './db.js';
+import { resolveUserRole, type UserRow } from './models/user.js';
 import { z } from 'zod';
 
 export type AuthenticatedRequest = Request;
@@ -18,7 +19,8 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     const payload = verifyAccessToken(token);
     req.userId = payload.sub;
     req.userEmail = payload.email;
-    req.isAdmin = payload.isAdmin === true;
+    // Nested routers must preserve permissions already resolved from the database.
+    if (!req.role) req.isAdmin = payload.isAdmin === true;
     next();
   } catch (error) {
     res.status(401).json({ error: 'Invalid or expired token' });
@@ -49,6 +51,7 @@ export async function requireAdmin(
     }
 
     req.isAdmin = true;
+    req.role = 'admin';
     next();
   } catch (error) {
     console.error('Admin check failed', error);
@@ -67,8 +70,8 @@ export async function loadCurrentUserRole(
     return;
   }
   try {
-    const result = await pool.query<{ is_admin: boolean }>(
-      'SELECT is_admin FROM users WHERE id = $1',
+    const result = await pool.query<Pick<UserRow, 'is_admin' | 'role'>>(
+      'SELECT is_admin, role FROM users WHERE id = $1',
       [req.userId],
     );
     if (!result.rows[0]) {
@@ -76,6 +79,7 @@ export async function loadCurrentUserRole(
       return;
     }
     req.isAdmin = result.rows[0].is_admin;
+    req.role = resolveUserRole(result.rows[0]);
     next();
   } catch (error) {
     console.error('Account access check failed', error);
@@ -84,11 +88,14 @@ export async function loadCurrentUserRole(
 }
 
 export function requireProjectReadOnly(req: Request, res: Response, next: NextFunction): void {
-  if (req.isAdmin || req.method === 'GET' || req.method === 'HEAD') {
+  // Tray export accepts calculated free space in the body, but never changes stored data.
+  const isTrayExport = req.role === 'technician' && req.method === 'POST' &&
+    /^\/[0-9a-f-]+\/trays\/export\/?$/i.test(req.path);
+  if (req.isAdmin || req.method === 'GET' || req.method === 'HEAD' || isTrayExport) {
     next();
     return;
   }
-  res.status(403).json({ error: 'Basic users have read-only project access' });
+  res.status(403).json({ error: 'This role has read-only project access' });
 }
 
 // Mounted at /:projectId before every project endpoint. New sections are denied by default.
@@ -100,6 +107,24 @@ const basicProjectReadPaths = [
   /^\/trays\/[0-9a-f-]+\/?$/i,
   /^\/roxtec\/\d+\/?$/i,
 ];
+
+const technicianFileReadPaths = [
+  /^\/files\/?$/i,
+  /^\/files\/[0-9a-f-]+\/(download|versions)\/?$/i,
+  /^\/files\/[0-9a-f-]+\/versions\/[0-9a-f-]+\/download\/?$/i,
+];
+
+const technicianExportPaths = [
+  /^\/(cables|cable-types)\/export\/?$/i,
+  /^\/cable-types\/[0-9a-f-]+\/default-materials\/export\/?$/i,
+];
+
+export async function requireProjectExport(req: Request, res: Response, next: NextFunction): Promise<void> {
+  await loadCurrentUserRole(req, res, () => {
+    if (req.isAdmin || req.role === 'technician') next();
+    else res.status(403).json({ error: 'Export requires administrator or Technician access' });
+  });
+}
 
 export async function requireProjectAccess(
   req: Request,
@@ -119,10 +144,18 @@ export async function requireProjectAccess(
     next();
     return;
   }
-  if (
-    !['GET', 'HEAD'].includes(req.method) ||
-    !basicProjectReadPaths.some((path) => path.test(req.path))
-  ) {
+  const isRead = ['GET', 'HEAD'].includes(req.method);
+  const isTechnician = req.role === 'technician';
+  const isExport = isTechnician && (
+    (isRead && technicianExportPaths.some((path) => path.test(req.path))) ||
+    (req.method === 'POST' && /^\/trays\/export\/?$/i.test(req.path))
+  );
+  const isCableReportExport = /^\/cables\/export\/?$/i.test(req.path) &&
+    req.query.view !== undefined && (typeof req.query.view !== 'string' ||
+      !['list', 'change-tracker'].includes(req.query.view.toLowerCase()));
+  const isAllowedRead = isRead && (basicProjectReadPaths.some((path) => path.test(req.path)) ||
+    (isTechnician && technicianFileReadPaths.some((path) => path.test(req.path))));
+  if ((!isAllowedRead && !isExport) || (isExport && isCableReportExport)) {
     res.status(403).json({ error: 'This action or project section requires administrator access' });
     return;
   }

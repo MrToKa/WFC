@@ -148,8 +148,7 @@ export const projectFilesRouter = (() => {
 
       const files = result.rows.map((row: ProjectFileRow) =>
         mapProjectFileRow(row, {
-          canDelete:
-            req.isAdmin === true || (req.userId !== undefined && req.userId === row.uploaded_by),
+          canDelete: req.isAdmin === true,
         }),
       );
 

@@ -4,6 +4,7 @@ export type User = {
   firstName: string | null;
   lastName: string | null;
   isAdmin: boolean;
+  role?: 'basic' | 'technician' | 'admin';
   createdAt: string;
   updatedAt: string;
 };
