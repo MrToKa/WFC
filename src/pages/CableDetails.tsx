@@ -1,3 +1,4 @@
+import { canEditProject } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -473,8 +474,8 @@ export const CableDetails = () => {
   const { token, user } = useAuth();
   const { showToast } = useToast();
 
-  const canManageMaterials = Boolean(user?.isAdmin && token);
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
+  const canManageMaterials = Boolean(token && canEditProject(user, project, projectId));
 
   const [details, setDetails] = useState<CableDetailsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);

@@ -12,6 +12,7 @@ import {
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { SignOut20Regular } from '@fluentui/react-icons';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { canReadCatalogs } from '@/utils/permissions';
 import { useAuth } from '@/context/AuthContext';
 
 type NavLinkConfig = {
@@ -161,7 +162,7 @@ export const AppShell = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const navLinks = user
-    ? [...AUTH_LINKS, ...(user.isAdmin ? ADMIN_LINKS : [])]
+    ? [...AUTH_LINKS, ...ADMIN_LINKS.filter((link) => link.to === '/admin' ? user.isAdmin : canReadCatalogs(user))]
     : GUEST_LINKS;
 
   const displayName = (() => {

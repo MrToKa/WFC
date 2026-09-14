@@ -1,3 +1,5 @@
+import { ProjectActions } from './ProjectDetails/ProjectActions';
+import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Body1, Button, Spinner, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
@@ -209,11 +211,14 @@ export const ProjectDetails = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
-  const isAdmin = Boolean(user?.isAdmin);
-  const { materialTrays } = useMaterialData(projectId, isAdmin);
-  const canExport = Boolean(token && (isAdmin || user?.role === 'technician'));
-  const canReadFiles = isAdmin || user?.role === 'technician';
-  const canManageCables = isAdmin && Boolean(token);
+  const { project, projectLoading, projectError, formattedDates, reloadProject } =
+    useProjectDetailsData({ projectId });
+  const canEdit = canEditProject(user, project, projectId);
+  const canViewAll = canReadCatalogs(user);
+  const { materialTrays } = useMaterialData(projectId, canViewAll);
+  const canExport = Boolean(token && (canViewAll || user?.role === 'technician'));
+  const canReadFiles = canViewAll || user?.role === 'technician';
+  const canManageCables = canEdit && Boolean(token);
 
   const findMaterialTrayByType = useCallback(
     (trayType: string | null | undefined) => {
@@ -244,7 +249,7 @@ export const ProjectDetails = () => {
 
   const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
   const selectedTab: ProjectDetailsTab =
-    tabParam && VALID_TABS.includes(tabParam) && (isAdmin || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
+    tabParam && VALID_TABS.includes(tabParam) && (canViewAll || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
       ? tabParam
       : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
@@ -257,8 +262,6 @@ export const ProjectDetails = () => {
     ProjectTrayPurposeTemplate
   > | null>(null);
 
-  const { project, projectLoading, projectError, formattedDates, reloadProject } =
-    useProjectDetailsData({ projectId });
   const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const {
@@ -304,7 +307,7 @@ export const ProjectDetails = () => {
   } = useCableListSection({
     projectId,
     project,
-    token: isAdmin ? token : null,
+    token: canEdit ? token : null,
     exportToken: canExport ? token : null,
     showToast,
   });
@@ -368,7 +371,7 @@ export const ProjectDetails = () => {
   } = useCableTypesSection({
     projectId,
     project,
-    token: isAdmin ? token : null,
+    token: canEdit ? token : null,
     exportToken: canExport ? token : null,
     showToast,
     onMutate: () => void reloadCables({ showSpinner: false }),
@@ -405,7 +408,7 @@ export const ProjectDetails = () => {
   } = useTraysSection({
     projectId,
     project,
-    token: isAdmin ? token : null,
+    token: canEdit ? token : null,
     exportToken: canExport ? token : null,
     showToast,
   });
@@ -436,7 +439,7 @@ export const ProjectDetails = () => {
   } = useProjectFilesSection({
     projectId,
     token: canReadFiles ? token : null,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
   });
 
@@ -497,7 +500,7 @@ export const ProjectDetails = () => {
     project,
     field: 'secondaryTrayLength',
     token,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
     reloadProject,
   });
@@ -505,7 +508,7 @@ export const ProjectDetails = () => {
     project,
     field: 'supportDistance',
     token,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
     reloadProject,
   });
@@ -513,7 +516,7 @@ export const ProjectDetails = () => {
     project,
     field: 'supportWeight',
     token,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
     reloadProject,
   });
@@ -521,7 +524,7 @@ export const ProjectDetails = () => {
     project,
     field: 'trayLoadSafetyFactor',
     token,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
     reloadProject,
   });
@@ -562,7 +565,7 @@ export const ProjectDetails = () => {
   });
 
   const { supports, supportsLoading, supportsError } = useMaterialSupports({
-    isAdmin,
+    isAdmin: canEdit,
     projectId,
     showToast,
   });
@@ -574,7 +577,7 @@ export const ProjectDetails = () => {
     supportsLoading,
     supportsError,
     token,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
     reloadProject,
   });
@@ -582,7 +585,7 @@ export const ProjectDetails = () => {
   const { cableSpacingField, categoryCards: cableCategoryCards } = useCableLayoutSettings({
     project,
     token,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
     reloadProject,
   });
@@ -590,7 +593,7 @@ export const ProjectDetails = () => {
   const customBundleRangesController = useCustomBundleRanges({
     project,
     token,
-    isAdmin,
+    isAdmin: canEdit,
     showToast,
     reloadProject,
   });
@@ -1306,7 +1309,7 @@ export const ProjectDetails = () => {
     (_event: unknown, data: { value: TabValue }) => {
       const requested = data.value as ProjectDetailsTab;
       // Apply the same section permissions to navigation events and direct URLs.
-      const tab = ADMIN_TABS.includes(requested) && !isAdmin && !(requested === 'files' && canReadFiles) ? selectedTab : requested;
+      const tab = ADMIN_TABS.includes(requested) && !canViewAll && !(requested === 'files' && canReadFiles) ? selectedTab : requested;
       setSearchParams((previous) => {
         const next = new URLSearchParams(previous);
         if (tab === 'details') {
@@ -1317,7 +1320,7 @@ export const ProjectDetails = () => {
         return next;
       });
     },
-    [canReadFiles, isAdmin, selectedTab, setSearchParams],
+    [canReadFiles, canViewAll, selectedTab, setSearchParams],
   );
 
   const handleCreateCable = useCallback(() => {
@@ -1399,7 +1402,7 @@ export const ProjectDetails = () => {
         return;
       }
 
-      if (!isAdmin) {
+      if (!canEdit) {
         showToast({
           intent: 'error',
           title: 'Admin access required',
@@ -1475,7 +1478,7 @@ export const ProjectDetails = () => {
         }
       }
     },
-    [isAdmin, project, showToast, token, trayTemplateOverrides],
+    [canEdit, project, showToast, token, trayTemplateOverrides],
   );
 
   if (projectLoading) {
@@ -1513,6 +1516,13 @@ export const ProjectDetails = () => {
           </Title3>
         </div>
         <Body1>Customer: {project.customer}</Body1>
+        <Body1>{canEdit ? 'You can edit this project.' : 'Read-only project access.'}</Body1>
+        {canEdit ? <ProjectActions key={project.id} project={project} onSaved={() => {
+          void reloadProject();
+          void reloadCables({ showSpinner: false });
+          void reloadCableTypes({ showSpinner: false });
+          void reloadTrays({ showSpinner: false });
+        }} /> : null}
       </div>
 
       <TabList
@@ -1525,12 +1535,12 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="trays">Trays</Tab>
-        {isAdmin ? <Tab value="cable-report">Cables report</Tab> : null}
-        {isAdmin ? <Tab value="change-orders">Change Orders</Tab> : null}
-        {isAdmin ? <Tab value="internal-ncrs">Internal NCRs</Tab> : null}
+        {canViewAll ? <Tab value="cable-report">Cables report</Tab> : null}
+        {canViewAll ? <Tab value="change-orders">Change Orders</Tab> : null}
+        {canViewAll ? <Tab value="internal-ncrs">Internal NCRs</Tab> : null}
         <Tab value="roxtec">Roxtec</Tab>
         {canReadFiles ? <Tab value="files">Files</Tab> : null}
-        {isAdmin ? <Tab value="variables-api">Variables API</Tab> : null}
+        {canViewAll ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
 
       {selectedTab === 'details' ? (
@@ -1538,7 +1548,7 @@ export const ProjectDetails = () => {
           styles={styles}
           project={project}
           formattedDates={formattedDates}
-          isAdmin={isAdmin}
+          isAdmin={canEdit}
           cableSpacingField={cableSpacingField}
           cableCategoryCards={cableCategoryCards}
           customBundleRanges={customBundleRangesController}
@@ -1548,7 +1558,7 @@ export const ProjectDetails = () => {
           trayTemplateOptions={wordFileOptions}
           trayTemplateSaving={trayTemplateSaving}
           trayTemplateErrors={trayTemplateErrors}
-          canEditTrayTemplates={isAdmin && Boolean(token)}
+          canEditTrayTemplates={canEdit && Boolean(token)}
           onTrayTemplateChange={handleTrayTemplateChange}
         />
       ) : null}
@@ -1557,7 +1567,7 @@ export const ProjectDetails = () => {
         <CableTypesTab
           canExport={canExport}
           styles={styles}
-          isAdmin={isAdmin}
+          isAdmin={canEdit}
           isRefreshing={cableTypesRefreshing}
           onRefresh={() => void reloadCableTypes({ showSpinner: false })}
           onCreate={openCreateCableTypeDialog}
@@ -1596,7 +1606,7 @@ export const ProjectDetails = () => {
         <TraysTab
           canExport={canExport}
           styles={styles}
-          isAdmin={isAdmin}
+          isAdmin={canEdit}
           isRefreshing={traysRefreshing}
           onRefresh={() => void reloadTrays({ showSpinner: false })}
           onCreate={openCreateTrayDialog}
@@ -1659,7 +1669,7 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {selectedTab === 'variables-api' && isAdmin ? (
+      {selectedTab === 'variables-api' && canViewAll ? (
         <VariablesApiTab
           styles={styles}
           projectId={project.id}
@@ -1673,7 +1683,7 @@ export const ProjectDetails = () => {
           canExport={canExport}
           styles={styles}
           canManageCables={canManageCables}
-          isAdmin={isAdmin}
+          isAdmin={canEdit}
           filterText={filterText}
           onFilterTextChange={setCableFilterText}
           filterCriteria={filterCriteria}
@@ -1721,10 +1731,10 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {isAdmin && selectedTab === 'cable-report' ? (
+      {canViewAll && selectedTab === 'cable-report' ? (
         <CableReportTab
           styles={styles}
-          canManageCables={canManageCables}
+          canManageCables={canExport}
           isRefreshing={cablesRefreshing}
           onRefresh={handleCableReportRefresh}
           selectedMto={selectedCableReportMto}
@@ -1741,12 +1751,13 @@ export const ProjectDetails = () => {
         />
       ) : null}
 
-      {isAdmin && selectedTab === 'change-orders' ? (
-        <ChangeOrdersTab project={project} token={token} currentUser={user} />
+      {canViewAll && selectedTab === 'change-orders' ? (
+        <ChangeOrdersTab canEdit={canEdit} project={project} token={token} currentUser={user} />
       ) : null}
 
-      {isAdmin && selectedTab === 'internal-ncrs' ? (
+      {canViewAll && selectedTab === 'internal-ncrs' ? (
         <ChangeOrdersTab
+          canEdit={canEdit}
           project={project}
           token={token}
           currentUser={user}
@@ -1755,7 +1766,7 @@ export const ProjectDetails = () => {
       ) : null}
 
       {selectedTab === 'roxtec' ? (
-        <RoxtecTab styles={styles} projectId={project.id} token={isAdmin ? token : null} />
+        <RoxtecTab styles={styles} projectId={project.id} token={canEdit ? token : null} />
       ) : null}
 
       <Button appearance="secondary" onClick={() => navigate(-1)}>

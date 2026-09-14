@@ -2742,7 +2742,7 @@ cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promi
 
   try {
     client = await pool.connect();
-    await client.query(req.isAdmin ? 'BEGIN' : 'BEGIN READ ONLY');
+    await client.query(req.canEditProject ? 'BEGIN' : 'BEGIN READ ONLY');
 
     const cable = await findProjectCableById(client, projectId, cableId);
 
@@ -2752,7 +2752,7 @@ cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promi
       return;
     }
 
-    const cableMaterials = req.isAdmin
+    const cableMaterials = req.canEditProject
       ? await ensureCableMaterialsInitialized(
           client,
           projectId,

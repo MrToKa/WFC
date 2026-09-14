@@ -180,7 +180,7 @@ export const UserManagementSection = ({
                           : '(not provided)'}
                       </td>
                       <td className={styles.tableCell}>
-                        {user.isAdmin ? 'Administrator' : user.role === 'technician' ? 'Technician' : 'Basic'}
+                        {user.isAdmin ? 'Administrator' : user.role === 'engineer' ? 'Engineer' : user.role === 'technician' ? 'Technician' : 'Basic'}
                       </td>
                       <td className={styles.tableCell}>{formatDateTime(user.createdAt)}</td>
                       <td className={styles.tableCell}>{formatDateTime(user.updatedAt)}</td>
@@ -198,6 +198,12 @@ export const UserManagementSection = ({
                               onClick={() => void handleChangeUserRole(user.id, user.role === 'technician' ? 'basic' : 'technician')}
                             >
                               {user.role === 'technician' ? 'Set as Basic' : 'Set as Technician'}
+                            </Button>
+                          ) : null}
+                          {!user.isAdmin ? (
+                            <Button size="small" disabled={disableActions}
+                              onClick={() => void handleChangeUserRole(user.id, user.role === 'engineer' ? 'basic' : 'engineer')}>
+                              {user.role === 'engineer' ? 'Set as Basic' : 'Set as Engineer'}
                             </Button>
                           ) : null}
                           {!isCurrentUser ? (

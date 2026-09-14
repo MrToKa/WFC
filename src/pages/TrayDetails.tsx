@@ -1,3 +1,4 @@
+import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -783,7 +784,6 @@ export const TrayDetails = () => {
   const { user, token } = useAuth();
   const { showToast } = useToast();
 
-  const isAdmin = Boolean(user?.isAdmin);
   const currentUserDisplay = useMemo(() => {
     if (!user) {
       return '-';
@@ -808,13 +808,14 @@ export const TrayDetails = () => {
     setTray,
     setTrays
   } = useTrayData(projectId, trayId);
+  const canEdit = canEditProject(user, project, projectId);
   const canonicalProjectId = project?.id ?? projectId ?? null;
 
   const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
-    useMaterialData(projectId, isAdmin);
+    useMaterialData(projectId, canReadCatalogs(user));
 
   const { materialSupportsById, materialSupportsLoading, materialSupportsError, materialSupportsLoaded } =
-    useMaterialSupports(projectId, isAdmin);
+    useMaterialSupports(projectId, canReadCatalogs(user));
 
   const { projectCableTypes, projectCableTypesLoading, projectCableTypesError } =
     useProjectCableTypes(projectId);
@@ -909,7 +910,7 @@ export const TrayDetails = () => {
 
   const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
   const { selectedLoadCurve, loadCurveLoadingId, loadCurveError } =
-    useLoadCurveData(selectedLoadCurveId, projectId, isAdmin);
+    useLoadCurveData(selectedLoadCurveId, projectId, canReadCatalogs(user));
   const selectedLoadCurveName =
     selectedMaterialTray?.loadCurveName ?? selectedLoadCurve?.name ?? null;
 
@@ -2611,7 +2612,7 @@ export const TrayDetails = () => {
     currentUserDisplay
   ]);
 
-  const canGenerateReport = Boolean(isAdmin && token && trayReportBaseContext);
+  const canGenerateReport = Boolean(canEdit && token && trayReportBaseContext);
 
   const handleGenerateReport = useCallback(async () => {
     if (!project || !tray || !projectId || !token || !trayReportBaseContext) {
@@ -3074,7 +3075,7 @@ export const TrayDetails = () => {
         project={project}
         previousTray={previousTray}
         nextTray={nextTray}
-        isAdmin={isAdmin}
+        isAdmin={canEdit}
         isEditing={isEditing}
         isDeleting={isDeleting}
         canGenerateReport={canGenerateReport}
@@ -3402,7 +3403,7 @@ export const TrayDetails = () => {
         <GroundingCableControls
           includeGroundingCable={includeGroundingCable}
           groundingPreferenceSaving={groundingPreferenceSaving}
-          isAdmin={isAdmin}
+          isAdmin={canEdit}
           projectCableTypesLoading={projectCableTypesLoading}
           projectCableTypesError={projectCableTypesError}
           groundingCableTypes={groundingCableTypes}
@@ -3518,7 +3519,7 @@ export const TrayDetails = () => {
         <Button appearance="secondary" onClick={handlePrevTray} disabled={!previousTray}>
           Previous tray
         </Button>
-        {isAdmin ? (
+        {canEdit ? (
           <Button
             appearance="primary"
             onClick={() => void handleGenerateReport()}

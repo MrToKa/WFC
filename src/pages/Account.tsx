@@ -226,7 +226,9 @@ export const Account = () => {
         <Title3 id="account-heading">Account overview</Title3>
         {!user.isAdmin ? (
           <Body1 role="status">
-            Contact an administrator to receive access to projects. Your access is read-only.
+            {user.role === 'engineer'
+              ? 'You can edit projects assigned by an administrator and read and export other projects. Materials and Templates are read-only.'
+              : 'Contact an administrator to receive access to projects. Your access is read-only.'}
             {user.role === 'technician' ? ' You can export project table data.' : null}
           </Body1>
         ) : null}
@@ -234,7 +236,7 @@ export const Account = () => {
           className={styles.persona}
           name={displayName}
           secondaryText={user.email}
-          tertiaryText={user.isAdmin ? 'Administrator' : user.role === 'technician' ? 'Technician' : 'Basic'}
+          tertiaryText={user.isAdmin ? 'Administrator' : user.role === 'engineer' ? 'Engineer' : user.role === 'technician' ? 'Technician' : 'Basic'}
           quaternaryText={
             profileSummary
               ? `Created ${profileSummary.created} - Updated ${profileSummary.updated}`

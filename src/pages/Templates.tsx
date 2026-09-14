@@ -882,7 +882,7 @@ export const Templates = () => {
                         >
                           {isDownloading ? 'Downloading...' : 'Download'}
                         </Button>
-                        {file.canDelete ? (
+                        {isAdmin && file.canDelete ? (
                           <Button
                             size="small"
                             appearance="outline"

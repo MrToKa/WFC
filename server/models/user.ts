@@ -1,4 +1,4 @@
-export type UserRole = 'basic' | 'technician' | 'admin';
+export type UserRole = 'basic' | 'technician' | 'engineer' | 'admin';
 
 export type UserRow = {
   id: string;
@@ -24,7 +24,7 @@ export type PublicUser = {
 };
 
 export const resolveUserRole = (row: Pick<UserRow, 'is_admin' | 'role'>): UserRole =>
-  row.is_admin ? 'admin' : row.role === 'technician' ? 'technician' : 'basic';
+  row.is_admin ? 'admin' : row.role === 'technician' || row.role === 'engineer' ? row.role : 'basic';
 
 export const mapUserRow = (row: UserRow): PublicUser => ({
   id: row.id,

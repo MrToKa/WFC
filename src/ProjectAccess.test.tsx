@@ -1,13 +1,14 @@
-import { configure, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ThemeProvider } from '@/app/ThemeProvider';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { routes } from '@/routes/router';
 
 const projectId = '00000000-0000-4000-8000-000000000003';
+const otherProjectId = '00000000-0000-4000-8000-000000000004';
 configure({ asyncUtilTimeout: 10000 });
 const basicUser = {
   id: '00000000-0000-4000-8000-000000000002',
@@ -36,7 +37,9 @@ const project = {
   createdAt: '2026-01-01',
   updatedAt: '2026-01-01',
 };
-let role: 'basic' | 'technician' = 'basic';
+let role: 'basic' | 'technician' | 'engineer' = 'basic';
+let projectEditable = false;
+const mutations: { path: string; method: string; body: unknown }[] = [];
 const requests: string[] = [];
 const json = (payload: unknown) =>
   new Response(JSON.stringify(payload), { headers: { 'Content-Type': 'application/json' } });
@@ -58,17 +61,33 @@ beforeEach(() => {
   localStorage.setItem('wfc_auth_token', 'basic-token');
   requests.length = 0;
   role = 'basic';
+  projectEditable = false;
+  mutations.length = 0;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, options?: RequestInit) => {
       const path = new URL(input).pathname;
       requests.push(path);
+      if (options?.method && !['GET', 'HEAD'].includes(options.method)) mutations.push({ path, method: options.method, body: options.body });
       if (path === '/api/auth/register')
         return json({ user: basicUser, token: 'basic-token', expiresInSeconds: 3600 });
       expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer basic-token');
+      if (path === '/api/projects/' + otherProjectId) return json({ project: { ...project, id: otherProjectId, projectNumber: 'P-002', canEdit: false } });
       if (path === '/api/users/me') return json({ user: { ...basicUser, role } });
-      if (path === '/api/projects') return json({ projects: [] });
-      if (path === `/api/projects/${projectId}`) return json({ project });
+      if (path === '/api/projects') return json({ projects: role === 'engineer' ? [project] : [] });
+      if (path === '/api/templates') return json({ files: [] });
+      if (path.startsWith('/api/materials/')) {
+        const category = path.split('/')[3];
+        const key = ({ trays: 'trays', supports: 'supports', 'load-curves': 'loadCurves', 'cable-types': 'cableTypes',
+          'cable-installation-materials': 'cableInstallationMaterials', 'tray-installation-materials': 'trayInstallationMaterials',
+          instruments: 'instruments', 'instrument-installation-materials': 'instrumentInstallationMaterials' } as Record<string, string>)[category];
+        if (key) return json({ [key]: [], pagination: { page: 1, pageSize: 50, total: 0, totalItems: 0, totalPages: 1 } });
+      }
+      if (path.endsWith('/change-orders') || path.endsWith('/internal-ncrs')) return json({ changeOrders: [] });
+      if (path.endsWith('/report-summary')) return json({ summary: {
+        deliverySummaries: [], cableTypeSummaries: [], cableCount: 0, missingDesignLengthCount: 0, totalDesignLength: 0,
+      } });
+      if (path === `/api/projects/${projectId}`) return json({ project: { ...project, canEdit: projectEditable } });
       if (path.endsWith('/cables/cable-id/details')) return json({
         cable: { id: 'cable-id', projectId, cableId: 1, cableTypeId: 'type-id', typeName: 'Type A',
           tag: 'CABLE-1', routing: 'TRAY-1', updatedAt: '2026-01-01' },
@@ -108,7 +127,12 @@ beforeEach(() => {
     }),
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(async () => {
+  cleanup();
+  // Let pending catalog loads settle while the API mock is still installed.
+  await act(async () => {});
+  vi.unstubAllGlobals();
+});
 
 describe('basic user navigation and project controls', () => {
   it('shows only Projects in the navigation and explains how to request access', async () => {
@@ -273,5 +297,97 @@ describe('Technician navigation and export controls', () => {
     expect(screen.getByRole('tab', { name: 'Files' })).toHaveAttribute('aria-selected', 'true');
     expect(requests.some((path) => path.endsWith('/files'))).toBe(true);
     for (const button of screen.queryAllByRole('button')) expect(button.textContent).not.toMatch(/Upload|Delete|Replace/);
+  });
+});
+
+
+describe('Engineer navigation and project controls', () => {
+  beforeEach(() => { role = 'engineer'; });
+
+  it('shows Materials and Templates but denies the Admin page', async () => {
+    const router = mount('/admin');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/account'));
+    const nav = within(screen.getByRole('navigation', { name: 'Primary' }));
+    for (const name of ['Projects', 'Materials', 'Templates']) expect(nav.getByRole('link', { name })).toBeInTheDocument();
+    expect(nav.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Engineer')).toBeInTheDocument();
+  });
+
+  it.each(['/materials', '/templates'])('opens %s without controls for changing the catalog', async (path) => {
+    const router = mount(path);
+    await waitFor(() => expect(requests).toContain(path === '/templates' ? '/api/templates' : '/api/materials/trays/all'));
+    expect(router.state.location.pathname).toBe(path);
+    await waitFor(() => expect(screen.queryByText(/Loading (materials|template files)/)).not.toBeInTheDocument());
+    for (const button of screen.queryAllByRole('button')) expect(button.textContent).not.toMatch(/Add |Import|Upload|Delete|Edit |Save /);
+    expect(mutations).toEqual([]);
+  });
+
+  it.each(['cable-list', 'cables', 'trays'])('offers exports without editing for an unassigned project in %s', async (tab) => {
+    mount('/projects/' + projectId + '?tab=' + tab);
+    expect(await screen.findByRole('button', { name: 'Export to Excel' })).toBeInTheDocument();
+    expect(screen.getByText('Read-only project access.')).toBeInTheDocument();
+    for (const button of screen.queryAllByRole('button')) expect(button.textContent).not.toMatch(/Add cable|Add tray|Import|Edit project|Delete project|Clear project/);
+    expect(screen.queryByRole('switch', { name: 'Inline edit' })).not.toBeInTheDocument();
+    expect(mutations).toEqual([]);
+  });
+
+  it.each(['change-orders', 'internal-ncrs'])('reads %s without document mutation actions in an unassigned project', async (tab) => {
+    mount('/projects/' + projectId + '?tab=' + tab);
+    await waitFor(() => expect(requests).toContain('/api/projects/' + projectId + '/' + tab));
+    expect(screen.queryByRole('button', { name: /New (Change Order|Internal NCR)/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Delete (Change Order|Internal NCR)/ })).not.toBeInTheDocument();
+    expect(mutations).toEqual([]);
+  });
+
+  it.each(['cable-list', 'cables', 'trays'])('allows imports and editing for an assigned project in %s', async (tab) => {
+    projectEditable = true;
+    mount('/projects/' + projectId + '?tab=' + tab);
+    expect(await screen.findByRole('button', { name: 'Import from Excel' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeInTheDocument();
+  });
+
+  it('drops editing controls when navigating from an assigned to an unassigned project', async () => {
+    projectEditable = true;
+    const router = mount('/projects/' + projectId + '?tab=cable-list');
+    await screen.findByRole('button', { name: 'Import from Excel' });
+    await act(() => router.navigate('/projects/' + otherProjectId + '?tab=cable-list'));
+    await screen.findByText(/P-002/);
+    expect(screen.queryByRole('button', { name: 'Import from Excel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit project' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeInTheDocument();
+  });
+
+  it('edits assigned project metadata from the project page', async () => {
+    // Give Tabster a visible viewport so jsdom can activate the modal focus scope.
+    const viewport = vi.spyOn(document.body, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(0, 0, 1024, 768));
+    const offsetParent = vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get')
+      .mockImplementation(function (this: HTMLElement) { return this.parentElement; });
+    onTestFinished(() => {
+      viewport.mockRestore();
+      offsetParent.mockRestore();
+    });
+    projectEditable = true;
+    mount('/projects/' + projectId + '?tab=cable-list');
+    const actor = userEvent.setup();
+    await actor.click(await screen.findByRole('button', { name: 'Edit project' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    const name = dialog.getByRole('textbox', { name: 'Name' });
+    await actor.clear(name);
+    await actor.type(name, 'Updated project');
+    await actor.click(dialog.getByRole('button', { name: 'Save project' }));
+    await waitFor(() => expect(mutations.some((request) => request.method === 'PATCH' && request.path === '/api/projects/' + projectId)).toBe(true));
+    expect(JSON.parse(String(mutations.find((request) => request.method === 'PATCH')?.body)).name).toBe('Updated project');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('allows document creation and file upload in assigned projects', async () => {
+    projectEditable = true;
+    const router = mount('/projects/' + projectId + '?tab=change-orders');
+    expect(await screen.findByRole('button', { name: 'New Change Order' })).toBeInTheDocument();
+    await act(() => router.navigate('/projects/' + projectId + '?tab=files'));
+    expect(await screen.findByRole('button', { name: /Upload .* file/ })).toBeInTheDocument();
   });
 });

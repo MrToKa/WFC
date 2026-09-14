@@ -14,7 +14,7 @@ import {
 import { mapCableTypeRow, toNumberOrNull } from '../models/cableType.js';
 import type { CableTypeRow } from '../models/cableType.js';
 import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
-import { authenticate, requireAdmin, requireProjectExport } from '../middleware.js';
+import { authenticate, requireProjectEdit, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   excelImportError,
@@ -392,7 +392,7 @@ cableTypesRouter.get('/', async (req: Request, res: Response): Promise<void> => 
 cableTypesRouter.post(
   '/',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -530,7 +530,7 @@ cableTypesRouter.post(
 cableTypesRouter.patch(
   '/:cableTypeId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId } = req.params;
 
@@ -699,7 +699,7 @@ cableTypesRouter.patch(
 cableTypesRouter.delete(
   '/:cableTypeId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId } = req.params;
 
@@ -747,7 +747,7 @@ cableTypesRouter.delete(
 cableTypesRouter.post(
   '/import',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
@@ -1129,7 +1129,7 @@ cableTypesRouter.get(
 cableTypesRouter.post(
   '/:cableTypeId/default-materials',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId } = req.params;
 
@@ -1221,7 +1221,7 @@ cableTypesRouter.post(
 cableTypesRouter.patch(
   '/:cableTypeId/default-materials/:defaultMaterialId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId, defaultMaterialId } = req.params;
 
@@ -1333,7 +1333,7 @@ cableTypesRouter.patch(
 cableTypesRouter.delete(
   '/:cableTypeId/default-materials/:defaultMaterialId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId, defaultMaterialId } = req.params;
 
@@ -1384,7 +1384,7 @@ cableTypesRouter.delete(
 cableTypesRouter.post(
   '/:cableTypeId/default-materials/import',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   uploadExcelFile,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, cableTypeId } = req.params;
@@ -1835,7 +1835,7 @@ cableTypesRouter.get(
 cableTypesRouter.get(
   '/template',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     try {
       const workbook = new ExcelJS.Workbook();

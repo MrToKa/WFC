@@ -1,3 +1,4 @@
+import { canEditProject } from '@/utils/permissions';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AddRegular,
@@ -178,6 +179,7 @@ type Props = {
   project: Project;
   token: string | null;
   currentUser: User | null;
+  canEdit?: boolean;
   collection?: ChangeOrderCollection;
 };
 
@@ -193,6 +195,7 @@ export const ChangeOrdersTab = ({
   project,
   token,
   currentUser,
+  canEdit = canEditProject(currentUser, project),
   collection = 'change-orders',
 }: Props) => {
   const styles = useStyles();
@@ -236,7 +239,7 @@ export const ChangeOrdersTab = ({
   const details = draftDetails ?? savedDetails;
   const materialsDirty = materialsEditing && (operations.length > 0 || newRevision);
   const materialBusy = pendingAction || addingMaterial || savingItem || savingMaterials;
-  const materialsLocked = !materialsEditing || materialBusy;
+  const materialsLocked = !canEdit || !materialsEditing || materialBusy;
 
   useEffect(() => {
     if (!savedDetails) return;
@@ -259,7 +262,7 @@ export const ChangeOrdersTab = ({
     setRevisionDialogOpen(false);
     setHeaderDirty(false);
     setNewMode(false);
-  }, [project.id, collection, token]);
+  }, [project.id, collection, token, canEdit]);
 
   const items = details?.items ?? [];
   const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
@@ -311,7 +314,7 @@ export const ChangeOrdersTab = ({
     (!headerDirty && !materialsDirty) || window.confirm('Discard unsaved document changes?');
 
   const startMaterials = (createRevision: boolean): void => {
-    if (!savedDetails) return;
+    if (!canEdit || !savedDetails) return;
     setNewRevision(createRevision);
     setOperations([]);
     setDraftDetails({
@@ -329,7 +332,7 @@ export const ChangeOrdersTab = ({
   const stageMaterialOperation = async (
     operation: ChangeOrderMaterialOperation,
   ): Promise<ChangeOrderDetails> => {
-    if (!token || !selectedId || !savedDetails || !materialsEditing)
+    if (!canEdit || !token || !selectedId || !savedDetails || !materialsEditing)
       throw new Error('Start editing materials first.');
     const nextOperations = [...operations, operation];
     const response = await previewChangeOrderMaterials(
@@ -349,7 +352,8 @@ export const ChangeOrdersTab = ({
   };
 
   const saveMaterials = async (): Promise<void> => {
-    if (!token || !selectedId || !savedDetails || !materialsEditing || materialBusy) return;
+    if (!canEdit || !token || !selectedId || !savedDetails || !materialsEditing || materialBusy)
+      return;
     setSavingMaterials(true);
     try {
       const response = await saveChangeOrderMaterials(
@@ -386,6 +390,7 @@ export const ChangeOrdersTab = ({
   };
 
   const startNew = async (): Promise<void> => {
+    if (!canEdit) return;
     if (!canLeave()) return;
     resetMaterials();
     await selectChangeOrder(null);
@@ -395,12 +400,13 @@ export const ChangeOrdersTab = ({
   };
 
   const setHeaderField = (field: keyof ChangeOrderHeaderInput, value: string): void => {
+    if (!canEdit) return;
     setHeader((current) => ({ ...current, [field]: value }));
     setHeaderDirty(true);
   };
 
   const saveHeader = async (): Promise<void> => {
-    if (!token) return;
+    if (!canEdit || !token) return;
     if (
       !header.title.trim() ||
       !header.preparedBy.trim() ||
@@ -441,6 +447,7 @@ export const ChangeOrdersTab = ({
   };
 
   const removeChangeOrder = async (): Promise<void> => {
+    if (!canEdit) return;
     if (
       !token ||
       !selectedId ||
@@ -468,7 +475,7 @@ export const ChangeOrdersTab = ({
     id: string;
     category: ChangeOrderSourceCatalog;
   }): Promise<void> => {
-    if (!token || !selectedId) return;
+    if (!canEdit || !token || !selectedId) return;
     setAddingMaterial(true);
     try {
       const updated = await stageMaterialOperation({
@@ -495,7 +502,7 @@ export const ChangeOrdersTab = ({
   };
 
   const saveItem = async (update: ChangeOrderItemUpdate): Promise<void> => {
-    if (!token || !selectedId || !editingItem) return;
+    if (!canEdit || !token || !selectedId || !editingItem) return;
     setSavingItem(true);
     try {
       await stageMaterialOperation({ type: 'update', itemId: editingItem.id, input: update });
@@ -513,7 +520,7 @@ export const ChangeOrdersTab = ({
       item.lineKind === 'inherited'
         ? `Remove "${item.descriptionEn}" from this ${labels.singular}? The source material and its Standard Materials will remain unchanged.`
         : `Remove "${item.descriptionEn}"?`;
-    if (!token || !selectedId || !window.confirm(confirmation)) return;
+    if (!canEdit || !token || !selectedId || !window.confirm(confirmation)) return;
     setPendingAction(true);
     try {
       await stageMaterialOperation({ type: 'delete', itemId: item.id });
@@ -530,7 +537,7 @@ export const ChangeOrdersTab = ({
   };
 
   const duplicateItem = async (item: ChangeOrderItem): Promise<void> => {
-    if (!token || !selectedId) return;
+    if (!canEdit || !token || !selectedId) return;
     setPendingAction(true);
     try {
       const updated = await stageMaterialOperation({
@@ -555,7 +562,7 @@ export const ChangeOrdersTab = ({
   };
 
   const moveItem = async (itemId: string, direction: -1 | 1): Promise<void> => {
-    if (!token || !selectedId) return;
+    if (!canEdit || !token || !selectedId) return;
     const mainItemIndex = mainItemIndexes.get(itemId);
     if (mainItemIndex === undefined) return;
     const targetMainItemIndex = mainItemIndex + direction;
@@ -654,20 +661,24 @@ export const ChangeOrdersTab = ({
             ))}
           </Select>
         </Field>
-        <Button
-          icon={<AddRegular />}
-          disabled={materialBusy || savingHeader}
-          onClick={() => void startNew()}
-        >
-          New {labels.singular}
-        </Button>
-        <Button
-          icon={<DeleteRegular />}
-          disabled={!selectedId || newMode || materialBusy || materialsEditing || savingHeader}
-          onClick={() => void removeChangeOrder()}
-        >
-          Delete {labels.singular}
-        </Button>
+        {canEdit ? (
+          <Button
+            icon={<AddRegular />}
+            disabled={materialBusy || savingHeader}
+            onClick={() => void startNew()}
+          >
+            New {labels.singular}
+          </Button>
+        ) : null}
+        {canEdit ? (
+          <Button
+            icon={<DeleteRegular />}
+            disabled={!selectedId || newMode || materialBusy || materialsEditing || savingHeader}
+            onClick={() => void removeChangeOrder()}
+          >
+            Delete {labels.singular}
+          </Button>
+        ) : null}
       </div>
 
       {error ? (
@@ -693,14 +704,14 @@ export const ChangeOrdersTab = ({
             <div className={styles.headerGrid}>
               <Field label="Title" required>
                 <Input
-                  disabled={materialsEditing || savingHeader}
+                  disabled={!canEdit || materialsEditing || savingHeader}
                   value={header.title}
                   onChange={(_, data) => setHeaderField('title', data.value)}
                 />
               </Field>
               <Field label="Project reference">
                 <Input
-                  disabled={materialsEditing || savingHeader}
+                  disabled={!canEdit || materialsEditing || savingHeader}
                   value={header.projectReference ?? ''}
                   onChange={(_, data) => setHeaderField('projectReference', data.value)}
                 />
@@ -712,7 +723,7 @@ export const ChangeOrdersTab = ({
                 <Input
                   aria-label="Date"
                   type="date"
-                  disabled={materialsEditing || savingHeader}
+                  disabled={!canEdit || materialsEditing || savingHeader}
                   value={header.reportDate}
                   onChange={(_, data) => setHeaderField('reportDate', data.value)}
                 />
@@ -728,14 +739,16 @@ export const ChangeOrdersTab = ({
               </Field>
             </div>
             <Toolbar>
-              <Button
-                appearance="primary"
-                icon={<SaveRegular />}
-                disabled={materialsEditing || savingHeader || (!newMode && !headerDirty)}
-                onClick={() => void saveHeader()}
-              >
-                {savingHeader ? 'Saving…' : 'Save'}
-              </Button>
+              {canEdit ? (
+                <Button
+                  appearance="primary"
+                  icon={<SaveRegular />}
+                  disabled={materialsEditing || savingHeader || (!newMode && !headerDirty)}
+                  onClick={() => void saveHeader()}
+                >
+                  {savingHeader ? 'Saving…' : 'Save'}
+                </Button>
+              ) : null}
               {headerDirty ? <Text>Unsaved header changes</Text> : null}
             </Toolbar>
           </div>
@@ -743,30 +756,34 @@ export const ChangeOrdersTab = ({
           <div className={styles.card}>
             <div className={styles.selectorRow}>
               <Title3>Materials</Title3>
-              <Button
-                icon={<EditRegular />}
-                disabled={
-                  newMode ||
-                  !selectedId ||
-                  headerDirty ||
-                  materialsEditing ||
-                  materialBusy ||
-                  savingHeader
-                }
-                onClick={() => setRevisionDialogOpen(true)}
-              >
-                Edit materials
-              </Button>
-              <Button
-                appearance="primary"
-                icon={<SaveRegular />}
-                disabled={
-                  !materialsEditing || materialBusy || editingItem !== null || materialDialogOpen
-                }
-                onClick={() => void saveMaterials()}
-              >
-                {savingMaterials ? 'Saving materials…' : 'Save materials'}
-              </Button>
+              {canEdit ? (
+                <Button
+                  icon={<EditRegular />}
+                  disabled={
+                    newMode ||
+                    !selectedId ||
+                    headerDirty ||
+                    materialsEditing ||
+                    materialBusy ||
+                    savingHeader
+                  }
+                  onClick={() => setRevisionDialogOpen(true)}
+                >
+                  Edit materials
+                </Button>
+              ) : null}
+              {canEdit ? (
+                <Button
+                  appearance="primary"
+                  icon={<SaveRegular />}
+                  disabled={
+                    !materialsEditing || materialBusy || editingItem !== null || materialDialogOpen
+                  }
+                  onClick={() => void saveMaterials()}
+                >
+                  {savingMaterials ? 'Saving materials…' : 'Save materials'}
+                </Button>
+              ) : null}
               {materialsEditing ? (
                 <Button
                   disabled={materialBusy}
@@ -778,13 +795,15 @@ export const ChangeOrdersTab = ({
                   Cancel editing
                 </Button>
               ) : null}
-              <Button
-                icon={<AddRegular />}
-                disabled={newMode || !selectedId || headerDirty || materialsLocked}
-                onClick={() => setMaterialDialogOpen(true)}
-              >
-                Add material
-              </Button>
+              {canEdit ? (
+                <Button
+                  icon={<AddRegular />}
+                  disabled={newMode || !selectedId || headerDirty || materialsLocked}
+                  onClick={() => setMaterialDialogOpen(true)}
+                >
+                  Add material
+                </Button>
+              ) : null}
               <Button
                 icon={<ArrowDownloadRegular />}
                 disabled={
@@ -939,64 +958,74 @@ export const ChangeOrdersTab = ({
                             </TableCell>
                             <TableCell>
                               <div className={styles.actions}>
-                                <Button
-                                  size="small"
-                                  appearance="subtle"
-                                  icon={<EditRegular />}
-                                  aria-label={`Edit item ${index + 1}`}
-                                  title="Edit"
-                                  disabled={materialsLocked}
-                                  onClick={() => setEditingItem(item)}
-                                />
-                                <Button
-                                  size="small"
-                                  appearance="subtle"
-                                  icon={<CopyRegular />}
-                                  aria-label={`Duplicate item ${index + 1}`}
-                                  title={
-                                    item.lineKind === 'inherited'
-                                      ? 'Duplicate as main material'
-                                      : 'Duplicate'
-                                  }
-                                  disabled={materialsLocked}
-                                  onClick={() => void duplicateItem(item)}
-                                />
-                                <Button
-                                  size="small"
-                                  appearance="subtle"
-                                  icon={<DeleteRegular />}
-                                  aria-label={`Delete item ${index + 1}`}
-                                  title={`Remove from this ${labels.singular}`}
-                                  disabled={materialsLocked}
-                                  onClick={() => void removeItem(item)}
-                                />
-                                <Button
-                                  size="small"
-                                  appearance="subtle"
-                                  icon={<ArrowUpRegular />}
-                                  aria-label={`Move item ${index + 1} up`}
-                                  title="Move up"
-                                  disabled={
-                                    mainItemIndex === undefined ||
-                                    mainItemIndex === 0 ||
-                                    materialsLocked
-                                  }
-                                  onClick={() => void moveItem(item.id, -1)}
-                                />
-                                <Button
-                                  size="small"
-                                  appearance="subtle"
-                                  icon={<ArrowDownRegular />}
-                                  aria-label={`Move item ${index + 1} down`}
-                                  title="Move down"
-                                  disabled={
-                                    mainItemIndex === undefined ||
-                                    mainItemIndex === mainItems.length - 1 ||
-                                    materialsLocked ||
-                                    mainItems.length === 0
-                                  }
-                                  onClick={() => void moveItem(item.id, 1)}
-                                />
+                                {canEdit ? (
+                                  <Button
+                                    size="small"
+                                    appearance="subtle"
+                                    icon={<EditRegular />}
+                                    aria-label={`Edit item ${index + 1}`}
+                                    title="Edit"
+                                    disabled={materialsLocked}
+                                    onClick={() => setEditingItem(item)}
+                                  />
+                                ) : null}
+                                {canEdit ? (
+                                  <Button
+                                    size="small"
+                                    appearance="subtle"
+                                    icon={<CopyRegular />}
+                                    aria-label={`Duplicate item ${index + 1}`}
+                                    title={
+                                      item.lineKind === 'inherited'
+                                        ? 'Duplicate as main material'
+                                        : 'Duplicate'
+                                    }
+                                    disabled={materialsLocked}
+                                    onClick={() => void duplicateItem(item)}
+                                  />
+                                ) : null}
+                                {canEdit ? (
+                                  <Button
+                                    size="small"
+                                    appearance="subtle"
+                                    icon={<DeleteRegular />}
+                                    aria-label={`Delete item ${index + 1}`}
+                                    title={`Remove from this ${labels.singular}`}
+                                    disabled={materialsLocked}
+                                    onClick={() => void removeItem(item)}
+                                  />
+                                ) : null}
+                                {canEdit ? (
+                                  <Button
+                                    size="small"
+                                    appearance="subtle"
+                                    icon={<ArrowUpRegular />}
+                                    aria-label={`Move item ${index + 1} up`}
+                                    title="Move up"
+                                    disabled={
+                                      mainItemIndex === undefined ||
+                                      mainItemIndex === 0 ||
+                                      materialsLocked
+                                    }
+                                    onClick={() => void moveItem(item.id, -1)}
+                                  />
+                                ) : null}
+                                {canEdit ? (
+                                  <Button
+                                    size="small"
+                                    appearance="subtle"
+                                    icon={<ArrowDownRegular />}
+                                    aria-label={`Move item ${index + 1} down`}
+                                    title="Move down"
+                                    disabled={
+                                      mainItemIndex === undefined ||
+                                      mainItemIndex === mainItems.length - 1 ||
+                                      materialsLocked ||
+                                      mainItems.length === 0
+                                    }
+                                    onClick={() => void moveItem(item.id, 1)}
+                                  />
+                                ) : null}
                               </div>
                             </TableCell>
                           </TableRow>

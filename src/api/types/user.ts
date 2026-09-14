@@ -4,7 +4,7 @@ export type User = {
   firstName: string | null;
   lastName: string | null;
   isAdmin: boolean;
-  role?: 'basic' | 'technician' | 'admin';
+  role?: 'basic' | 'technician' | 'engineer' | 'admin';
   createdAt: string;
   updatedAt: string;
 };

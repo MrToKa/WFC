@@ -15,9 +15,9 @@ adminUsersRouter.use(authenticate, requireAdmin);
 
 // Changing a non-administrator role preserves their explicit project assignments.
 adminUsersRouter.put('/users/:userId/role', async (req: Request, res: Response) => {
-  const parsed = z.object({ role: z.enum(['basic', 'technician']) }).strict().safeParse(req.body);
+  const parsed = z.object({ role: z.enum(['basic', 'technician', 'engineer']) }).strict().safeParse(req.body);
   if (!z.string().uuid().safeParse(req.params.userId).success || !parsed.success) {
-    res.status(400).json({ error: 'Provide a valid user ID and basic or technician role' });
+    res.status(400).json({ error: 'Provide a valid user ID and basic, technician or engineer role' });
     return;
   }
   try {

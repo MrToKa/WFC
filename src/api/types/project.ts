@@ -1,5 +1,6 @@
 export type Project = {
   id: string;
+  canEdit?: boolean;
   projectNumber: string;
   name: string;
   customer: string;

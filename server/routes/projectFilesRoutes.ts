@@ -4,7 +4,7 @@ import type { Response } from 'express';
 import { Router } from 'express';
 import multer from 'multer';
 import type { AuthenticatedRequest } from '../middleware.js';
-import { authenticate, requireAdmin } from '../middleware.js';
+import { authenticate, requireProjectEdit } from '../middleware.js';
 import { pool } from '../db.js';
 import {
   deleteObject,
@@ -148,7 +148,7 @@ export const projectFilesRouter = (() => {
 
       const files = result.rows.map((row: ProjectFileRow) =>
         mapProjectFileRow(row, {
-          canDelete: req.isAdmin === true,
+          canDelete: req.canEditProject === true,
         }),
       );
 
@@ -161,7 +161,7 @@ export const projectFilesRouter = (() => {
 
   router.post(
     '/',
-    requireAdmin,
+    requireProjectEdit,
     upload.single('file'),
     async (req: ProjectFilesUploadRequest, res: Response) => {
       const { projectId } = req.params;
@@ -578,7 +578,7 @@ export const projectFilesRouter = (() => {
 
       const isUploader = fileRow.uploaded_by !== null && fileRow.uploaded_by === req.userId;
 
-      if (!isUploader && req.isAdmin !== true) {
+      if (!isUploader && req.canEditProject !== true) {
         res.status(403).json({
           error: 'Only the uploader or an admin can delete this file',
         });
@@ -830,7 +830,7 @@ export const projectFilesRouter = (() => {
 
   router.delete(
     '/:fileId/versions/:versionId',
-    requireAdmin,
+    requireProjectEdit,
     async (req: ProjectFilesRequest, res: Response) => {
       const { projectId, fileId, versionId } = req.params;
 

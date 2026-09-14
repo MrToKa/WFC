@@ -1,3 +1,4 @@
+import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -221,8 +222,8 @@ export const RoxtecDetails = () => {
   const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEntry, setIsSavingEntry] = useState(false);
 
-  const canExport = Boolean(token && (user?.isAdmin || user?.role === 'technician'));
-  const canManageRoxtec = Boolean(user?.isAdmin && token);
+  const canExport = Boolean(token && (canReadCatalogs(user) || user?.role === 'technician'));
+  const canManageRoxtec = Boolean(canEditProject(user, project, projectId) && token);
 
   useEffect(() => {
     const id = Number(roxtecId);

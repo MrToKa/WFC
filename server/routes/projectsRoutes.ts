@@ -8,6 +8,7 @@ import type { ProjectRow } from '../models/project.js';
 import {
   authenticate,
   requireAdmin,
+  requireProjectEdit,
   loadCurrentUserRole,
   requireProjectAccess,
   requireProjectReadOnly,
@@ -485,7 +486,7 @@ const normalizeCableLayout = (layout: CableLayoutInput): Record<string, unknown>
 
 projectsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
-    const result = await pool.query<ProjectRow>(
+    const result = await pool.query<ProjectRow & { can_edit: boolean }>(
       `
           SELECT
             p.id,
@@ -516,17 +517,21 @@ projectsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
               '{}'::jsonb
             ) AS support_distances,
             p.created_at,
-            p.updated_at
+            p.updated_at,
+            ($1::boolean OR ($3::boolean AND EXISTS (
+              SELECT 1 FROM user_project_access access
+              WHERE access.project_id = p.id AND access.user_id = $2
+            ))) AS can_edit
           FROM projects p
-          WHERE $1::boolean OR EXISTS (
+          WHERE $1::boolean OR $3::boolean OR EXISTS (
             SELECT 1 FROM user_project_access access
             WHERE access.project_id = p.id AND access.user_id = $2
           )
           ORDER BY p.created_at DESC;
         `,
-      [req.isAdmin === true, req.userId],
+      [req.isAdmin === true, req.userId, req.role === 'engineer'],
     );
-    res.json({ projects: result.rows.map(mapProjectRow) });
+    res.json({ projects: result.rows.map((row) => ({ ...mapProjectRow(row), canEdit: row.can_edit === true })) });
   } catch (error) {
     console.error('List projects error', error);
     res.status(500).json({ error: 'Failed to fetch projects' });
@@ -550,8 +555,8 @@ projectsRouter.get('/:projectId', async (req: Request, res: Response): Promise<v
     }
 
     const visibleProject = mapProjectRow(project);
-    if (!req.isAdmin) visibleProject.trayPurposeTemplates = {};
-    res.json({ project: visibleProject });
+    if (!req.isAdmin && req.role !== 'engineer') visibleProject.trayPurposeTemplates = {};
+    res.json({ project: { ...visibleProject, canEdit: req.canEditProject === true } });
   } catch (error) {
     console.error('Fetch project error', error);
     res.status(500).json({ error: 'Failed to fetch project details' });
@@ -649,7 +654,7 @@ projectsRouter.post(
         return createdProject;
       });
 
-      res.status(201).json({ project: mapProjectRow(projectRow) });
+      res.status(201).json({ project: { ...mapProjectRow(projectRow), canEdit: true } });
     } catch (error) {
       if (error instanceof Error && error.message === INVALID_TRAY_TEMPLATE_FILE) {
         res.status(400).json({
@@ -677,7 +682,7 @@ projectsRouter.post(
 projectsRouter.patch(
   '/:projectId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -806,7 +811,7 @@ projectsRouter.patch(
         return;
       }
 
-      res.json({ project: mapProjectRow(projectRow) });
+      res.json({ project: { ...mapProjectRow(projectRow), canEdit: true } });
     } catch (error) {
       if (error instanceof Error && error.message === INVALID_TRAY_TEMPLATE_FILE) {
         res.status(400).json({
@@ -834,7 +839,7 @@ projectsRouter.patch(
 projectsRouter.post(
   '/:projectId/clear-data',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -924,7 +929,7 @@ projectsRouter.post(
 projectsRouter.delete(
   '/:projectId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 

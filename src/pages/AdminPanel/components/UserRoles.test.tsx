@@ -30,15 +30,15 @@ beforeEach(() => {
 });
 
 describe('user roles in the administrator panel', () => {
-  it('assigns Technician, filters by the new role, and restores Basic', async () => {
+  it.each(['Technician', 'Engineer'])('assigns %s, filters by the new role, and restores Basic', async (role) => {
     mount();
     const actor = userEvent.setup();
-    await actor.click(await screen.findByRole('button', { name: 'Set as Technician' }));
-    expect(mocks.save).toHaveBeenCalledWith('admin-token', 'basic-id', 'technician');
-    expect(await screen.findByRole('cell', { name: 'Technician' })).toBeInTheDocument();
+    await actor.click(await screen.findByRole('button', { name: 'Set as ' + role }));
+    expect(mocks.save).toHaveBeenCalledWith('admin-token', 'basic-id', role.toLowerCase());
+    expect(await screen.findByRole('cell', { name: role })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Project access' })).toBeInTheDocument();
     const filter = screen.getByPlaceholderText('Filter users...');
-    await actor.type(filter, 'technician');
+    await actor.type(filter, role.toLowerCase());
     expect(screen.getByText(user.email)).toBeInTheDocument();
     await actor.clear(filter);
     await actor.click(screen.getByRole('button', { name: 'Set as Basic' }));

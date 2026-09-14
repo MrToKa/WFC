@@ -146,7 +146,7 @@ const user: User = {
   email: 'test@example.com',
   firstName: 'Test',
   lastName: 'User',
-  isAdmin: false,
+  isAdmin: true,
   createdAt: '2026-07-29T00:00:00.000Z',
   updatedAt: '2026-07-29T00:00:00.000Z',
 };
@@ -174,6 +174,36 @@ describe('ChangeOrdersTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Edit materials' }));
     fireEvent.click(screen.getByRole('button', { name: 'Keep current revision' }));
   };
+
+  it.each(['change-orders', 'internal-ncrs'] as const)(
+    'lets an unassigned Engineer read and export %s while keeping documents read-only',
+    async (collection) => {
+      const api = await import('@/api/client');
+      vi.mocked(api.exportChangeOrder).mockResolvedValue({ blob: new Blob(['excel']), fileName: 'order.xlsx' });
+      vi.stubGlobal('URL', class extends URL {
+        static createObjectURL = vi.fn(() => 'blob:export');
+        static revokeObjectURL = vi.fn();
+      });
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      onTestFinished(() => { click.mockRestore(); vi.unstubAllGlobals(); });
+      render(<FluentProvider theme={webLightTheme}><ToastProvider>
+        <ChangeOrdersTab project={{ ...project, canEdit: false }} token="token"
+          currentUser={{ ...user, isAdmin: false, role: 'engineer' }} collection={collection} />
+      </ToastProvider></FluentProvider>);
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Existing order' }));
+      await screen.findByRole('cell', { name: 'Widget support' });
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Existing order');
+      expect(screen.getByRole('textbox', { name: 'Title' })).toBeDisabled();
+      for (const button of screen.queryAllByRole('button')) expect(button.textContent).not.toMatch(/New Change Order|New Internal NCR|Delete Change Order|Delete Internal NCR|Edit materials|Save materials|Save header|Add material/);
+      const exportButton = screen.getByRole('button', { name: 'Export Excel' });
+      expect(exportButton).toBeEnabled();
+      fireEvent.click(exportButton);
+      await waitFor(() => expect(api.exportChangeOrder).toHaveBeenCalledWith('token', project.id, details.id, details.title, collection));
+      expect(api.updateChangeOrder).not.toHaveBeenCalled();
+      expect(api.previewChangeOrderMaterials).not.toHaveBeenCalled();
+      expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['change-orders', 'internal-ncrs'] as const)(
     'locks materials in %s and saves a revision with author and history only on Save materials',

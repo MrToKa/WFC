@@ -52,7 +52,7 @@ export type AdminUsersSectionState = {
   ) => (_event: unknown, data: { value: string }) => void;
   handleSubmitUserEdit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   handleDeleteUser: (userId: string) => Promise<void>;
-  handleChangeUserRole: (userId: string, role: 'basic' | 'technician') => Promise<void>;
+  handleChangeUserRole: (userId: string, role: 'basic' | 'technician' | 'engineer') => Promise<void>;
   handlePromoteUser: (userId: string) => Promise<void>;
 };
 
@@ -128,7 +128,7 @@ export const useAdminUsersSection = ({
           return (
             candidate.email.toLowerCase().includes(term) ||
             name.includes(term) ||
-            (candidate.isAdmin ? 'administrator' : candidate.role === 'technician' ? 'technician' : 'basic user').includes(term)
+            (candidate.isAdmin ? 'administrator' : candidate.role === 'technician' || candidate.role === 'engineer' ? candidate.role : 'basic user').includes(term)
           );
         })
       : [...users];
@@ -331,7 +331,7 @@ export const useAdminUsersSection = ({
     }
   };
 
-  const handleChangeUserRole = async (userId: string, role: 'basic' | 'technician') => {
+  const handleChangeUserRole = async (userId: string, role: 'basic' | 'technician' | 'engineer') => {
     if (!token) return;
     setUserPendingAction(userId);
     setUserActionError(null);
@@ -339,7 +339,7 @@ export const useAdminUsersSection = ({
     try {
       const response = await updateUserRoleAsAdmin(token, userId, role);
       setUsers((previous) => previous.map((candidate) => candidate.id === userId ? response.user : candidate));
-      setUserActionMessage(role === 'technician' ? 'User role changed to Technician.' : 'User role changed to Basic.');
+      setUserActionMessage(role === 'engineer' ? 'User role changed to Engineer.' : role === 'technician' ? 'User role changed to Technician.' : 'User role changed to Basic.');
     } catch (error) {
       setUserActionError(error instanceof ApiError ? error.message : 'Failed to update user role.');
     } finally {

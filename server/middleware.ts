@@ -91,7 +91,8 @@ export function requireProjectReadOnly(req: Request, res: Response, next: NextFu
   // Tray export accepts calculated free space in the body, but never changes stored data.
   const isTrayExport = req.role === 'technician' && req.method === 'POST' &&
     /^\/[0-9a-f-]+\/trays\/export\/?$/i.test(req.path);
-  if (req.isAdmin || req.method === 'GET' || req.method === 'HEAD' || isTrayExport) {
+  const isEngineerProjectRequest = req.role === 'engineer' && /^\/[0-9a-f-]+(?:\/|$)/i.test(req.path);
+  if (req.isAdmin || isEngineerProjectRequest || req.method === 'GET' || req.method === 'HEAD' || isTrayExport) {
     next();
     return;
   }
@@ -121,10 +122,31 @@ const technicianExportPaths = [
 
 export async function requireProjectExport(req: Request, res: Response, next: NextFunction): Promise<void> {
   await loadCurrentUserRole(req, res, () => {
-    if (req.isAdmin || req.role === 'technician') next();
-    else res.status(403).json({ error: 'Export requires administrator or Technician access' });
+    if (req.isAdmin || req.role === 'technician' || req.role === 'engineer') next();
+    else res.status(403).json({ error: 'Export requires administrator, Engineer or Technician access' });
   });
 }
+
+// Project routers call this after requireProjectAccess has resolved the assignment.
+export function requireProjectEdit(req: Request, res: Response, next: NextFunction): void {
+  if (req.canEditProject) next();
+  else res.status(403).json({ error: 'Project editing permission required' });
+}
+
+export async function requireCatalogAccess(req: Request, res: Response, next: NextFunction): Promise<void> {
+  await loadCurrentUserRole(req, res, () => {
+    if (req.isAdmin || (req.role === 'engineer' && ['GET', 'HEAD'].includes(req.method))) next();
+    else res.status(403).json({ error: 'Catalog changes require administrator access' });
+  });
+}
+
+const engineerReadPaths = [
+  ...basicProjectReadPaths,
+  ...technicianFileReadPaths,
+  ...technicianExportPaths,
+  /^\/cables\/report-summary\/?$/i,
+  /^\/(change-orders|internal-ncrs)(\/[0-9a-f-]+(\/export)?)?\/?$/i,
+];
 
 export async function requireProjectAccess(
   req: Request,
@@ -141,7 +163,26 @@ export async function requireProjectAccess(
     return;
   }
   if (req.isAdmin) {
+    req.canEditProject = true;
     next();
+    return;
+  }
+  req.canEditProject = false;
+  if (req.role === 'engineer') {
+    try {
+      const result = await pool.query(
+        'SELECT 1 FROM user_project_access WHERE user_id = $1 AND project_id = $2',
+        [req.userId, projectId],
+      );
+      req.canEditProject = result.rows.length > 0;
+      const isRead = ['GET', 'HEAD'].includes(req.method) && engineerReadPaths.some((path) => path.test(req.path));
+      const isTrayExport = req.method === 'POST' && /^\/trays\/export\/?$/i.test(req.path);
+      if (req.canEditProject || isRead || isTrayExport) next();
+      else res.status(403).json({ error: 'Project editing permission required' });
+    } catch (error) {
+      console.error('Project permission check failed', error);
+      res.status(500).json({ error: 'Failed to verify project permissions' });
+    }
     return;
   }
   const isRead = ['GET', 'HEAD'].includes(req.method);

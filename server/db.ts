@@ -31,7 +31,10 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'basic'
-      CHECK (role IN ('basic', 'technician', 'admin'));
+      CHECK (role IN ('basic', 'technician', 'engineer', 'admin'));
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check
+      CHECK (role IN ('basic', 'technician', 'engineer', 'admin'));
     UPDATE users SET role = 'admin' WHERE is_admin AND role <> 'admin';
   `);
 

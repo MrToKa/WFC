@@ -84,8 +84,9 @@ export const ProjectAccessDialog = ({ user, onClose }: { user: User; onClose: ()
           <DialogContent>
             <Body1>{user.email}</Body1>
             <p>
-              Select projects this user may view. Clearing all projects removes their project
-              access.
+              {user.role === 'engineer'
+                ? 'Select projects this Engineer may edit. Other projects remain available for reading and table export.'
+                : 'Select projects this user may view. Clearing all projects removes their project access.'}
             </p>
             {loading ? <Spinner label="Loading project access..." /> : null}
             {error ? <p role="alert">{error}</p> : null}

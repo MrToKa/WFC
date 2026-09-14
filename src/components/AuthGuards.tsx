@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { Spinner } from '@fluentui/react-components';
+import { canReadCatalogs } from '@/utils/permissions';
 import { useAuth } from '@/context/AuthContext';
 
 export const RequireAuth = ({ children }: { children: ReactElement }): ReactElement => {
@@ -42,6 +43,14 @@ export const RequireAdmin = ({ children }: { children: ReactElement }): ReactEle
     return <Navigate to="/account" replace state={{ from: location.pathname }} />;
   }
 
+  return children;
+};
+
+export const RequireCatalogAccess = ({ children }: { children: ReactElement }): ReactElement => {
+  const { user, initializing } = useAuth();
+  if (initializing) return <Spinner label="Loading catalog access..." />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canReadCatalogs(user)) return <Navigate to="/account" replace />;
   return children;
 };
 

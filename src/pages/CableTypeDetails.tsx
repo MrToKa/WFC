@@ -1,3 +1,4 @@
+import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -310,9 +311,9 @@ export const CableTypeDetails = () => {
   const { showToast } = useToast();
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isAdmin = Boolean(user?.isAdmin);
-  const canExport = Boolean(token && (isAdmin || user?.role === 'technician'));
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
+  const canEdit = canEditProject(user, project, projectId);
+  const canExport = Boolean(token && (canReadCatalogs(user) || user?.role === 'technician'));
 
   const [details, setDetails] = useState<CableTypeDetailsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -383,7 +384,7 @@ export const CableTypeDetails = () => {
     let active = true;
 
     const loadAvailableDefaultMaterials = async () => {
-      if (!isAdmin) {
+      if (!canEdit) {
         setAvailableDefaultMaterialsLoading(false);
         return;
       }
@@ -421,7 +422,7 @@ export const CableTypeDetails = () => {
     return () => {
       active = false;
     };
-  }, [isAdmin]);
+  }, [canEdit]);
 
   const handleDialogFieldChange =
     (field: keyof DefaultMaterialFormState) =>
@@ -501,7 +502,7 @@ export const CableTypeDetails = () => {
   const handleDialogSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!projectId || !cableTypeId || !token || !isAdmin) {
+    if (!projectId || !cableTypeId || !token || !canEdit) {
       setDialogErrors({
         general: 'You need to be signed in as an admin to manage default materials.',
       });
@@ -594,7 +595,7 @@ export const CableTypeDetails = () => {
 
   const handleDeleteDefaultMaterial = useCallback(
     async (material: CableTypeDefaultMaterial) => {
-      if (!projectId || !cableTypeId || !token || !isAdmin) {
+      if (!projectId || !cableTypeId || !token || !canEdit) {
         showToast({
           intent: 'error',
           title: 'Admin access required',
@@ -637,11 +638,11 @@ export const CableTypeDetails = () => {
         setPendingDefaultMaterialId(null);
       }
     },
-    [cableTypeId, isAdmin, projectId, showToast, token],
+    [cableTypeId, canEdit, projectId, showToast, token],
   );
 
   const handleImportClick = useCallback(() => {
-    if (!projectId || !cableTypeId || !token || !isAdmin) {
+    if (!projectId || !cableTypeId || !token || !canEdit) {
       showToast({
         intent: 'error',
         title: 'Admin access required',
@@ -651,7 +652,7 @@ export const CableTypeDetails = () => {
     }
 
     importInputRef.current?.click();
-  }, [cableTypeId, isAdmin, projectId, showToast, token]);
+  }, [cableTypeId, canEdit, projectId, showToast, token]);
 
   const handleImportFileChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -663,7 +664,7 @@ export const CableTypeDetails = () => {
         return;
       }
 
-      if (!projectId || !cableTypeId || !token || !isAdmin) {
+      if (!projectId || !cableTypeId || !token || !canEdit) {
         showToast({
           intent: 'error',
           title: 'Admin access required',
@@ -694,7 +695,7 @@ export const CableTypeDetails = () => {
         setIsImportingDefaultMaterials(false);
       }
     },
-    [cableTypeId, isAdmin, projectId, showToast, token],
+    [cableTypeId, canEdit, projectId, showToast, token],
   );
 
   const handleExportDefaultMaterials = useCallback(async () => {
@@ -888,7 +889,7 @@ export const CableTypeDetails = () => {
             </Caption1>
           </div>
           <div className={styles.sectionActions}>
-            {isAdmin ? (
+            {canEdit ? (
               <Button
                 onClick={handleImportClick}
                 disabled={isImportingDefaultMaterials || isExportingDefaultMaterials}
@@ -905,7 +906,7 @@ export const CableTypeDetails = () => {
                 {isExportingDefaultMaterials ? 'Exporting...' : 'Export to Excel'}
               </Button>
             ) : null}
-            {isAdmin ? (
+            {canEdit ? (
               <Button
                 appearance="primary"
                 onClick={openCreateDialog}
@@ -927,7 +928,7 @@ export const CableTypeDetails = () => {
         {details.defaultMaterials.length === 0 ? (
           <div className={styles.emptyState}>
             <Body1>
-              {isAdmin
+              {canEdit
                 ? 'No default materials added yet. Use the button above to create the first one.'
                 : 'No default materials have been added for this cable type.'}
             </Body1>
@@ -944,7 +945,7 @@ export const CableTypeDetails = () => {
                   <th className={styles.tableHeadCell}>Unit</th>
                   <th className={styles.tableHeadCell}>Remarks</th>
                   <th className={styles.tableHeadCell}>Source</th>
-                  {isAdmin ? <th className={styles.tableHeadCell}>Actions</th> : null}
+                  {canEdit ? <th className={styles.tableHeadCell}>Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -966,7 +967,7 @@ export const CableTypeDetails = () => {
                           ? 'Inherited from Materials'
                           : 'Project default'}
                       </td>
-                      {isAdmin ? (
+                      {canEdit ? (
                         <td className={styles.tableCell}>
                           <div className={styles.actionsCell}>
                             <Button

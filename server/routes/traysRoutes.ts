@@ -14,7 +14,7 @@ import {
   computeTrayFreeSpaceByTrayId,
   type TrayCableForFreeSpace,
 } from '../utils/trayFreeSpace.js';
-import { authenticate, requireAdmin, requireProjectExport } from '../middleware.js';
+import { authenticate, requireProjectEdit, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
 import {
   excelImportError,
@@ -166,7 +166,7 @@ traysRouter.get('/', async (req: Request, res: Response): Promise<void> => {
 traysRouter.get(
   '/template',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -458,7 +458,7 @@ traysRouter.get('/:trayId', async (req: Request, res: Response): Promise<void> =
 traysRouter.post(
   '/',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId } = req.params;
 
@@ -550,7 +550,7 @@ traysRouter.post(
 traysRouter.patch(
   '/:trayId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, trayId } = req.params;
 
@@ -706,7 +706,7 @@ traysRouter.patch(
 traysRouter.delete(
   '/:trayId',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   async (req: Request, res: Response): Promise<void> => {
     const { projectId, trayId } = req.params;
 
@@ -741,7 +741,7 @@ traysRouter.delete(
 traysRouter.post(
   '/import',
   authenticate,
-  requireAdmin,
+  requireProjectEdit,
   uploadExcelFile,
   async (req: TrayImportRequest, res: Response): Promise<void> => {
     const { projectId } = req.params;

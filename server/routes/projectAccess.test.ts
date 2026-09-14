@@ -36,7 +36,7 @@ let server: Server;
 let baseUrl: string;
 let grants: Set<string>;
 let basicIsAdmin: boolean;
-let basicRole: 'basic' | 'technician';
+let basicRole: 'basic' | 'technician' | 'engineer';
 let basicExists: boolean;
 
 beforeAll(async () => {
@@ -103,10 +103,10 @@ beforeEach(() => {
     }
     if (sql.includes('FROM projects p')) {
       if (sql.includes('ORDER BY p.created_at')) {
-        expect(sql).toContain('WHERE $1::boolean OR EXISTS');
+        expect(sql).toContain('WHERE $1::boolean OR $3::boolean OR EXISTS');
         expect(sql).toContain('access.user_id = $2');
         return {
-          rows: [allowedId, otherId].filter((id) => values[0] || grants.has(id)).map(projectRow),
+          rows: [allowedId, otherId].filter((id) => values[0] || values[2] || grants.has(id)).map((id) => ({ ...projectRow(id), can_edit: Boolean(values[0] || (values[2] && grants.has(id))) })),
         };
       }
       return { rows: [projectRow(String(values[0]))] };
@@ -146,6 +146,7 @@ describe('project access through the complete API middleware stack', () => {
     expect(database.query).toHaveBeenCalledWith(expect.stringContaining('access.user_id = $2'), [
       false,
       basicId,
+      false,
     ]);
     grants.clear();
     expect((await (await call('/api/projects')).json()).projects).toEqual([]);
@@ -157,8 +158,9 @@ describe('project access through the complete API middleware stack', () => {
     expect((await response.json()).project.trayPurposeTemplates).toEqual({});
   });
 
-  it.each(['basic', 'technician'] as const)('does not initialize or modify materials when %s reads cable details', async (role) => {
+  it.each(['basic', 'technician', 'engineer'] as const)('does not initialize or modify materials when %s reads cable details', async (role) => {
     basicRole = role;
+    if (role === 'engineer') grants.clear();
     const baseQuery = database.query.getMockImplementation()!;
     database.query.mockImplementation(async (sql: string, values: unknown[] = []) => {
       if (sql.includes('FROM cables c')) {
@@ -461,5 +463,139 @@ describe('Technician permissions', () => {
 
   it('does not use the role endpoint to demote administrators', async () => {
     expect((await call('/api/admin/users/' + adminId + '/role', 'admin', 'PUT', { role: 'basic' })).status).toBe(404);
+  });
+});
+
+
+describe('Engineer permissions', () => {
+  beforeEach(() => { basicRole = 'engineer'; });
+
+  it('lists every project with editing enabled only for assignments', async () => {
+    const response = await call('/api/projects');
+    expect(response.status).toBe(200);
+    const projects = (await response.json()).projects;
+    expect(projects.map((p: { id: string; canEdit: boolean }) => [p.id, p.canEdit])).toEqual([
+      [allowedId, true], [otherId, false],
+    ]);
+    for (const [id, canEdit] of [[allowedId, true], [otherId, false]] as const) {
+      const project = (await (await call('/api/projects/' + id)).json()).project;
+      expect(project.canEdit).toBe(canEdit);
+      expect(project.trayPurposeTemplates.Power.fileId).toBe(itemId);
+    }
+    grants.clear();
+    const noGrants = (await (await call('/api/projects')).json()).projects;
+    expect(noGrants).toHaveLength(2);
+    expect(noGrants.every((p: { canEdit: boolean }) => !p.canEdit)).toBe(true);
+  });
+
+  it.each(['/api/materials/trays', '/api/materials/supports', '/api/materials/cable-types',
+    '/api/materials/load-curves', '/api/materials/cable-installation-materials', '/api/templates'])(
+    'reads global catalog %s', async (path) => {
+      expect((await call(path)).status).toBe(200);
+    },
+  );
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('denies %s catalog changes even with a stale admin token', async (method) => {
+    for (const path of ['/api/materials/trays', '/api/materials/trays/' + itemId,
+      '/api/materials/trays/' + itemId + '/standard-materials', '/api/materials/trays/import',
+      '/api/materials/cable-types', '/api/materials/cable-types/import',
+      '/api/templates', '/api/templates/' + itemId, '/api/templates/' + itemId + '/versions/' + itemId]) {
+      expect((await call(path, 'stale-admin', method, {})).status).toBe(403);
+    }
+    expect(database.query.mock.calls.some(([sql]) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+  });
+
+  it('denies the admin panel API, role changes, assignments and project creation', async () => {
+    for (const [path, method] of [['/api/admin/users', 'GET'], ['/api/admin/users/' + basicId + '/role', 'PUT'],
+      ['/api/admin/users/' + basicId + '/projects', 'PUT'], ['/api/admin/users/' + basicId + '/promote', 'POST'],
+      ['/api/projects', 'POST']]) {
+      expect((await call(path, 'basic', method, method === 'GET' ? undefined : {})).status).toBe(403);
+    }
+  });
+
+  it.each(['/cables', '/cable-types', '/trays', '/roxtec', '/tray-data', '/files',
+    '/cables/report-summary', '/change-orders', '/internal-ncrs'])(
+    'reads %s in other projects', async (suffix) => {
+      expect((await call('/api/projects/' + otherId + suffix)).status).toBe(200);
+    },
+  );
+
+  it.each([['/cables/export', 'GET'], ['/cables/export?view=report', 'GET'],
+    ['/cables/export?view=change-tracker', 'GET'], ['/cable-types/export', 'GET'], ['/trays/export', 'POST']])(
+    'exports %s from other projects without writes', async (suffix, method) => {
+      const response = await call('/api/projects/' + otherId + suffix, 'basic', method, method === 'POST' ? {} : undefined);
+      expect(response.status).toBe(200);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await response.arrayBuffer());
+      expect(workbook.worksheets.length).toBeGreaterThan(0);
+      expect(database.query.mock.calls.some(([sql]) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+    },
+  );
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('denies %s changes in other projects', async (method) => {
+    for (const suffix of ['', '/clear-data', '/cables', '/cables/' + itemId, '/cables/import',
+      '/cables/' + itemId + '/materials', '/cable-types', '/cable-types/import', '/trays', '/trays/import',
+      '/roxtec', '/roxtec/1', '/files', '/files/' + itemId, '/files/' + itemId + '/versions/' + itemId,
+      '/change-orders', '/change-orders/' + itemId + '/materials', '/internal-ncrs']) {
+      expect((await call('/api/projects/' + otherId + suffix, 'stale-admin', method, {})).status).toBe(403);
+    }
+    expect(database.query.mock.calls.some(([sql]) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+  });
+
+  it.each([['', 'PATCH'], ['/clear-data', 'POST'], ['/cables', 'POST'], ['/cable-types', 'POST'],
+    ['/trays', 'POST'], ['/roxtec', 'POST'], ['/change-orders', 'POST'], ['/internal-ncrs', 'POST']])(
+    'allows editing assigned projects through nested middleware: %s %s', async (suffix, method) => {
+      // An empty payload reaches the route validation only if every permission gate passes.
+      expect((await call('/api/projects/' + allowedId + suffix, 'basic', method, {})).status).toBe(400);
+    },
+  );
+
+  it('cannot update a foreign cable by placing its ID under an assigned project URL', async () => {
+    const baseQuery = database.query.getMockImplementation()!;
+    database.query.mockImplementation(async (sql: string, values: unknown[]) => {
+      if (sql.includes('FROM cables c')) {
+        expect(sql).toContain('c.project_id = $1');
+        expect(sql).toContain('c.id = $2');
+        expect(values).toEqual([allowedId, itemId]);
+        return { rows: [] };
+      }
+      return baseQuery(sql, values);
+    });
+    expect((await call('/api/projects/' + allowedId + '/cables/' + itemId, 'basic', 'PATCH', { tag: 'Foreign' })).status).toBe(404);
+    expect(database.query.mock.calls.some(([sql]) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(sql))).toBe(false);
+  });
+
+  it('saves assigned project metadata, immediately blocks revoked edits, and retains read/export access', async () => {
+    const baseQuery = database.query.getMockImplementation()!;
+    database.query.mockImplementation(async (sql: string, values: unknown[]) => {
+      if (sql.includes('UPDATE projects')) {
+        expect(values).toContain(allowedId);
+        expect(sql).toContain('WHERE id =');
+        return { rows: [{ id: allowedId }], rowCount: 1 };
+      }
+      return baseQuery(sql, values);
+    });
+    const path = '/api/projects/' + allowedId;
+    const response = await call(path, 'basic', 'PATCH', { name: 'Updated' });
+    expect(response.status).toBe(200);
+    expect((await response.json()).project.canEdit).toBe(true);
+    expect(database.query.mock.calls.some(([sql]) => sql.includes('UPDATE projects'))).toBe(true);
+    grants.clear();
+    expect((await call(path, 'basic', 'PATCH', { name: 'Forbidden' })).status).toBe(403);
+    expect((await (await call(path)).json()).project.canEdit).toBe(false);
+    expect((await call(path + '/cables/export')).status).toBe(200);
+  });
+
+  it('assigns Engineer through the admin endpoint and revokes broad reads on downgrade', async () => {
+    basicRole = 'basic';
+    const path = '/api/admin/users/' + basicId + '/role';
+    const response = await call(path, 'admin', 'PUT', { role: 'engineer' });
+    expect(response.status).toBe(200);
+    expect((await response.json()).user).toMatchObject({ role: 'engineer', isAdmin: false });
+    expect((await call('/api/projects/' + otherId)).status).toBe(200);
+    expect((await call('/api/materials/trays')).status).toBe(200);
+    await call(path, 'admin', 'PUT', { role: 'basic' });
+    expect((await call('/api/projects/' + otherId)).status).toBe(403);
+    expect((await call('/api/materials/trays')).status).toBe(403);
   });
 });

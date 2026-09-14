@@ -1,7 +1,7 @@
 import { lazy, type ComponentType } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 import { AppShell } from '@/app/AppShell';
-import { RedirectIfAuthenticated, RequireAdmin, RequireAuth } from '@/components/AuthGuards';
+import { RedirectIfAuthenticated, RequireAdmin, RequireCatalogAccess, RequireAuth } from '@/components/AuthGuards';
 
 const lazyPage = <Name extends string>(
   load: () => Promise<Record<Name, ComponentType>>,
@@ -66,81 +66,81 @@ export const routes: RouteObject[] = [
       {
         path: 'materials',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <Materials />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'templates',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <Templates />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/cable-types/:cableTypeId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <MaterialCableTypeDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/cable-installation-materials/:cableInstallationMaterialId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <MaterialCableInstallationMaterialDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/tray-installation-materials/:trayInstallationMaterialId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <MaterialTrayInstallationMaterialDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/instruments/:instrumentId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <MaterialInstrumentDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/instrument-installation-materials/:instrumentInstallationMaterialId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <MaterialInstrumentInstallationMaterialDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/trays/:trayId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <MaterialTrayDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/supports/:supportId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <MaterialSupportDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
         path: 'materials/load-curves/:loadCurveId',
         element: (
-          <RequireAdmin>
+          <RequireCatalogAccess>
             <LoadCurveDetails />
-          </RequireAdmin>
+          </RequireCatalogAccess>
         ),
       },
       {
