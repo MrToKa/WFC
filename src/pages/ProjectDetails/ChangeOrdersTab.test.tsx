@@ -840,6 +840,77 @@ describe('ChangeOrdersTab', () => {
     expect(screen.getByText('New inherited material')).toBeInTheDocument();
   }, 15_000);
 
+  it.each([
+    ['change-orders', 'All Change Orders'],
+    ['internal-ncrs', 'All Internal NCRs'],
+  ] as const)(
+    'shows minimum-order quantities in the %s materials table',
+    async (collection, collectionTableName) => {
+      const api = await import('@/api/client');
+      const cases = [
+        { design: 16, requested: 16, packSize: 100, packs: 1, order: 100, spare: 84 },
+        { design: 116, requested: 116, packSize: 100, packs: 2, order: 200, spare: 84 },
+        { design: 100, requested: 100, packSize: 100, packs: 1, order: 100, spare: 0 },
+        { design: 0, requested: 0, packSize: 100, packs: 0, order: 0, spare: 0 },
+        { design: 12, requested: 10, packSize: null, packs: null, order: 10, spare: -2 },
+      ];
+      vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({
+        changeOrder: {
+          ...details,
+          itemCount: cases.length + 1,
+          items: [
+            details.items[0],
+            ...cases.map((testCase, index) => ({
+              ...details.items[0],
+              id: `quantity-item-${index}`,
+              sortOrder: index + 2,
+              descriptionEn: `Quantity case ${index}`,
+              lineKind: index === 0 ? ('inherited' as const) : ('manual' as const),
+              parentItemId: index === 0 ? details.items[0].id : null,
+              designQuantity: testCase.design,
+              orderQuantity: testCase.requested,
+              spareQuantity: testCase.spare,
+              minimumOrderQuantity: testCase.packSize,
+              packagingQuantity: testCase.packSize,
+              orderedQuantity: testCase.packs,
+            })),
+          ],
+        },
+      });
+
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab
+              project={project}
+              token="token"
+              currentUser={user}
+              collection={collection}
+            />
+          </ToastProvider>
+        </FluentProvider>,
+      );
+
+      await screen.findByRole('table', { name: collectionTableName });
+      fireEvent.click(screen.getByRole('button', { name: 'Open Existing order' }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Expand inherited standard materials for item 1',
+        }),
+      );
+
+      cases.forEach((testCase, index) => {
+        const row = screen.getByText(`Quantity case ${index}`).closest('tr')!;
+        const quantities = within(row)
+          .getAllByRole('cell')
+          .slice(2, 5)
+          .map((cell) => cell.textContent);
+        expect(quantities).toEqual([testCase.design, testCase.order, testCase.spare].map(String));
+      });
+    },
+    15_000,
+  );
+
   it('starts inherited standard materials collapsed without renumbering rows', async () => {
     const api = await import('@/api/client');
     const inheritedDetails: ChangeOrderDetails = {

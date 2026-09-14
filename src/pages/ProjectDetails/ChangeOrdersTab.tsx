@@ -842,6 +842,13 @@ export const ChangeOrdersTab = ({
                         const hasInheritedItems = parentIdsWithInheritedItems.has(item.id);
                         const inheritedItemsExpanded = expandedParentIds.has(item.id);
                         const mainItemIndex = mainItemIndexes.get(item.id);
+                        // Match Excel's full-package quantity; orderQuantity stores unrounded demand.
+                        const displayedOrderQuantity =
+                          item.packagingQuantity !== null &&
+                          item.packagingQuantity > 0 &&
+                          item.orderedQuantity !== null
+                            ? item.packagingQuantity * item.orderedQuantity
+                            : item.orderQuantity;
 
                         return (
                           <TableRow key={item.id}>
@@ -896,7 +903,9 @@ export const ChangeOrdersTab = ({
                               ) : null}
                             </TableCell>
                             <TableCell className={styles.numeric}>{item.designQuantity}</TableCell>
-                            <TableCell className={styles.numeric}>{item.orderQuantity}</TableCell>
+                            <TableCell className={styles.numeric}>
+                              {displayedOrderQuantity}
+                            </TableCell>
                             <TableCell
                               className={mergeClasses(
                                 styles.numeric,
