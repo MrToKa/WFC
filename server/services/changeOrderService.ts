@@ -651,6 +651,12 @@ const cloneChangeOrderItemRow = async (
   targetSortOrder: number,
   targetParentItemId: string | null,
 ): Promise<ChangeOrderItem> => {
+  // A copy without a parent is always an independent main row, even when its
+  // source was inherited. Child copies keep their inheritance within the new group.
+  const inheritanceColumns =
+    targetParentItemId === null
+      ? "'manual', NULL, '{}'::uuid[]"
+      : 'source.line_kind, source.quantity_per_parent, source.source_standard_material_assignment_ids';
   const result = await client.query<ChangeOrderItemRow>(
     `
       INSERT INTO project_change_order_items (
@@ -667,8 +673,7 @@ const cloneChangeOrderItemRow = async (
         source.unit_price, source.country_of_origin, source.hs_code, source.tag_no,
         source.drawing_no, source.shipping_list, source.revision_number,
         source.client_barcode, source.manufacturer, source.manufacturer_part_no,
-        source.acs_barcode, source.remarks, source.line_kind,
-        source.quantity_per_parent, source.source_standard_material_assignment_ids,
+        source.acs_barcode, source.remarks, ${inheritanceColumns},
         source.minimum_order_quantity, source.order_measurement
       FROM project_change_order_items source
       WHERE source.id = $1
@@ -691,13 +696,12 @@ export const duplicateChangeOrderItem = async (
   const client = context?.client ?? (await pool.connect());
   try {
     if (!context) await client.query('BEGIN');
-    const sourceResult = await client.query<{ id: string }>(
-      `SELECT item.id
+    const sourceResult = await client.query<{ id: string; line_kind: 'manual' | 'inherited' }>(
+      `SELECT item.id, item.line_kind
        FROM project_change_order_items item
        JOIN project_change_orders change_order ON change_order.id = item.change_order_id
        WHERE item.id = $1
          AND item.change_order_id = $2
-         AND item.line_kind = 'manual'
          AND change_order.project_id = $3
          AND change_order.document_type = $4
        FOR UPDATE OF item, change_order`,
@@ -708,15 +712,18 @@ export const duplicateChangeOrderItem = async (
       return null;
     }
 
-    const children = await client.query<{ id: string }>(
-      `SELECT id
-       FROM project_change_order_items
-       WHERE parent_item_id = $1
-         AND change_order_id = $2
-         AND line_kind = 'inherited'
-       ORDER BY sort_order, created_at, id`,
-      [itemId, changeOrderId],
-    );
+    const children =
+      sourceResult.rows[0].line_kind === 'inherited'
+        ? { rows: [] }
+        : await client.query<{ id: string }>(
+            `SELECT id
+             FROM project_change_order_items
+             WHERE parent_item_id = $1
+               AND change_order_id = $2
+               AND line_kind = 'inherited'
+             ORDER BY sort_order, created_at, id`,
+            [itemId, changeOrderId],
+          );
     const orderResult = await client.query<{ next_order: number }>(
       `SELECT COALESCE(MAX(sort_order), 0)::int + 1 AS next_order
        FROM project_change_order_items
@@ -976,12 +983,13 @@ export const deleteChangeOrderItem = async (
   const client = context?.client ?? (await pool.connect());
   try {
     if (!context) await client.query('BEGIN');
+    // Both manual and inherited rows are document-local snapshots. Deleting one
+    // leaves the source catalog material and its Standard Material assignments intact.
     const deleted = await client.query(
       `
         DELETE FROM project_change_order_items i
         USING project_change_orders co
         WHERE i.id = $1 AND i.change_order_id = $2
-          AND i.line_kind = 'manual'
           AND co.id = i.change_order_id AND co.project_id = $3
           AND co.document_type = $4
       `,

@@ -509,7 +509,11 @@ export const ChangeOrdersTab = ({
   };
 
   const removeItem = async (item: ChangeOrderItem): Promise<void> => {
-    if (!token || !selectedId || !window.confirm(`Remove "${item.descriptionEn}"?`)) return;
+    const confirmation =
+      item.lineKind === 'inherited'
+        ? `Remove "${item.descriptionEn}" from this ${labels.singular}? The source material and its Standard Materials will remain unchanged.`
+        : `Remove "${item.descriptionEn}"?`;
+    if (!token || !selectedId || !window.confirm(confirmation)) return;
     setPendingAction(true);
     try {
       await stageMaterialOperation({ type: 'delete', itemId: item.id });
@@ -526,7 +530,7 @@ export const ChangeOrdersTab = ({
   };
 
   const duplicateItem = async (item: ChangeOrderItem): Promise<void> => {
-    if (!token || !selectedId || item.lineKind === 'inherited') return;
+    if (!token || !selectedId) return;
     setPendingAction(true);
     try {
       const updated = await stageMaterialOperation({
@@ -949,8 +953,12 @@ export const ChangeOrdersTab = ({
                                   appearance="subtle"
                                   icon={<CopyRegular />}
                                   aria-label={`Duplicate item ${index + 1}`}
-                                  title="Duplicate"
-                                  disabled={materialsLocked || item.lineKind === 'inherited'}
+                                  title={
+                                    item.lineKind === 'inherited'
+                                      ? 'Duplicate as main material'
+                                      : 'Duplicate'
+                                  }
+                                  disabled={materialsLocked}
                                   onClick={() => void duplicateItem(item)}
                                 />
                                 <Button
@@ -958,8 +966,8 @@ export const ChangeOrdersTab = ({
                                   appearance="subtle"
                                   icon={<DeleteRegular />}
                                   aria-label={`Delete item ${index + 1}`}
-                                  title="Delete"
-                                  disabled={materialsLocked || item.lineKind === 'inherited'}
+                                  title={`Remove from this ${labels.singular}`}
+                                  disabled={materialsLocked}
                                   onClick={() => void removeItem(item)}
                                 />
                                 <Button

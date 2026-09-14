@@ -1,6 +1,6 @@
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { ChangeOrderDetails, Project, User } from '@/api/client';
 import { ToastProvider } from '@/context/ToastContext';
 import { ChangeOrdersTab } from './ChangeOrdersTab';
@@ -712,6 +712,127 @@ describe('ChangeOrdersTab', () => {
     );
   }, 15_000);
 
+  it.each([
+    ['change-orders', 'Change Order'],
+    ['internal-ncrs', 'Internal NCR'],
+  ] as const)(
+    'copies an inherited material as an editable main row in %s',
+    async (collection, documentName) => {
+      const api = await import('@/api/client');
+      // Tabster treats jsdom's zero-sized body as a hidden iframe and cannot
+      // activate the editor's modal focus scope without a visible viewport.
+      const viewport = vi
+        .spyOn(document.body, 'getBoundingClientRect')
+        .mockReturnValue(new DOMRect(0, 0, 1024, 768));
+      const offsetParent = vi
+        .spyOn(HTMLElement.prototype, 'offsetParent', 'get')
+        .mockImplementation(function (this: HTMLElement) {
+          return this.parentElement;
+        });
+      onTestFinished(() => {
+        viewport.mockRestore();
+        offsetParent.mockRestore();
+      });
+      const child = {
+        ...details.items[0],
+        id: '66666666-6666-4666-8666-666666666666',
+        descriptionEn: 'Cable cleat',
+        lineKind: 'inherited' as const,
+        parentItemId: details.items[0].id,
+        quantityPerParent: 2,
+        sortOrder: 2,
+      };
+      const copy = {
+        ...child,
+        id: '77777777-7777-4777-8777-777777777777',
+        lineKind: 'manual' as const,
+        parentItemId: null,
+        quantityPerParent: null,
+        sortOrder: 3,
+      };
+      const copiedDetails = { ...details, itemCount: 3, items: [details.items[0], child, copy] };
+      const editedDetails = {
+        ...copiedDetails,
+        items: [details.items[0], child, { ...copy, orderQuantity: 20, totalPrice: 80 }],
+      };
+      vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({
+        changeOrder: { ...details, itemCount: 2, items: [details.items[0], child] },
+      });
+      vi.mocked(api.previewChangeOrderMaterials)
+        .mockResolvedValueOnce({ changeOrder: copiedDetails })
+        .mockResolvedValueOnce({ changeOrder: editedDetails });
+      vi.mocked(api.saveChangeOrderMaterials).mockResolvedValueOnce({ changeOrder: editedDetails });
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab
+              project={project}
+              token="token"
+              currentUser={user}
+              collection={collection}
+            />
+          </ToastProvider>
+        </FluentProvider>,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Existing order' }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Expand inherited standard materials for item 1',
+        }),
+      );
+      const duplicate = screen.getByRole('button', { name: 'Duplicate item 2' });
+      expect(duplicate).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Edit materials' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Keep current revision' }));
+      expect(duplicate).toBeEnabled();
+      expect(duplicate).toHaveAttribute('title', 'Duplicate as main material');
+      fireEvent.click(duplicate);
+      const dialog = await screen.findByRole('dialog', { name: `Edit ${documentName} item` });
+      expect(within(dialog).getByLabelText('Design Qty')).toBeEnabled();
+      expect(within(dialog).getByLabelText('Order Qty')).toBeEnabled();
+      expect(within(dialog).getByLabelText('Order Qty')).toHaveValue(10);
+      fireEvent.change(within(dialog).getByLabelText('Order Qty'), { target: { value: '20' } });
+      fireEvent.click(await within(dialog).findByRole('button', { name: 'Save item' }));
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+      const table = await screen.findByRole('table', { name: `${documentName} items` });
+      expect(within(table).getAllByText('Cable cleat')).toHaveLength(2);
+      const copyRow = screen.getByRole('button', { name: 'Edit item 3' }).closest('tr')!;
+      expect(copyRow).not.toHaveTextContent('Inherited Standard Material');
+      expect(screen.getByRole('button', { name: 'Move item 3 up' })).toBeEnabled();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Collapse inherited standard materials for item 1' }),
+      );
+      expect(within(table).getAllByText('Cable cleat')).toHaveLength(1);
+      expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Save materials' }));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled(),
+      );
+      expect(api.saveChangeOrderMaterials).toHaveBeenLastCalledWith(
+        'token',
+        project.id,
+        details.id,
+        expect.objectContaining({
+          operations: [
+            expect.objectContaining({
+              type: 'duplicate',
+              itemId: child.id,
+              id: expect.any(String),
+            }),
+            expect.objectContaining({
+              type: 'update',
+              itemId: copy.id,
+              input: expect.objectContaining({ orderQuantity: 20 }),
+            }),
+          ],
+        }),
+        collection,
+      );
+      expect(within(table).getByText('Cable cleat')).toBeInTheDocument();
+    },
+    30_000,
+  );
+
   it('shows an expansion control immediately for a copied material', async () => {
     const api = await import('@/api/client');
     const copiedParent: ChangeOrderDetails['items'][number] = {
@@ -909,6 +1030,92 @@ describe('ChangeOrdersTab', () => {
       });
     },
     15_000,
+  );
+
+  it.each([
+    ['change-orders', 'Change Order'],
+    ['internal-ncrs', 'Internal NCR'],
+  ] as const)(
+    'removes an inherited row through the %s draft and saves only that row deletion',
+    async (collection, documentName) => {
+      const api = await import('@/api/client');
+      const child = {
+        ...details.items[0],
+        id: '66666666-6666-4666-8666-666666666666',
+        descriptionEn: 'Unneeded accessory',
+        lineKind: 'inherited' as const,
+        parentItemId: details.items[0].id,
+        sortOrder: 2,
+      };
+      const inheritedDetails = {
+        ...details,
+        itemCount: 2,
+        totalPrice: 80,
+        items: [details.items[0], child],
+      };
+      vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({ changeOrder: inheritedDetails });
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValue(true);
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab
+              project={project}
+              token="token"
+              currentUser={user}
+              collection={collection}
+            />
+          </ToastProvider>
+        </FluentProvider>,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Existing order' }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: 'Expand inherited standard materials for item 1',
+        }),
+      );
+      const remove = screen.getByRole('button', { name: 'Delete item 2' });
+      expect(remove).toBeDisabled();
+      unlockMaterials();
+      expect(remove).toBeEnabled();
+      fireEvent.click(remove);
+      expect(api.previewChangeOrderMaterials).not.toHaveBeenCalled();
+      expect(screen.getByText('Unneeded accessory')).toBeInTheDocument();
+      fireEvent.click(remove);
+      const payload = {
+        expectedUpdatedAt: details.updatedAt,
+        newRevision: false,
+        operations: [{ type: 'delete', itemId: child.id }],
+      };
+      expect(confirm).toHaveBeenLastCalledWith(
+        `Remove "Unneeded accessory" from this ${documentName}? The source material and its Standard Materials will remain unchanged.`,
+      );
+      await waitFor(() => expect(screen.queryByText('Unneeded accessory')).not.toBeInTheDocument());
+      expect(screen.getByRole('cell', { name: 'Widget support' })).toBeInTheDocument();
+      expect(api.previewChangeOrderMaterials).toHaveBeenLastCalledWith(
+        'token',
+        project.id,
+        details.id,
+        payload,
+        collection,
+      );
+      expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Save materials' }));
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled(),
+      );
+      expect(api.saveChangeOrderMaterials).toHaveBeenLastCalledWith(
+        'token',
+        project.id,
+        details.id,
+        payload,
+        collection,
+      );
+      expect(screen.queryByText('Unneeded accessory')).not.toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: 'Widget support' })).toBeInTheDocument();
+      expect(api.deleteChangeOrderItem).not.toHaveBeenCalled();
+      confirm.mockRestore();
+    },
+    30_000,
   );
 
   it('starts inherited standard materials collapsed without renumbering rows', async () => {
