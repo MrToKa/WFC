@@ -1,4 +1,3 @@
-import { ProjectActions } from './ProjectDetails/ProjectActions';
 import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -1517,12 +1516,6 @@ export const ProjectDetails = () => {
         </div>
         <Body1>Customer: {project.customer}</Body1>
         <Body1>{canEdit ? 'You can edit this project.' : 'Read-only project access.'}</Body1>
-        {canEdit ? <ProjectActions key={project.id} project={project} onSaved={() => {
-          void reloadProject();
-          void reloadCables({ showSpinner: false });
-          void reloadCableTypes({ showSpinner: false });
-          void reloadTrays({ showSpinner: false });
-        }} /> : null}
       </div>
 
       <TabList

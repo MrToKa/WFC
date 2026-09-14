@@ -1,7 +1,7 @@
 import { act, cleanup, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeProvider } from '@/app/ThemeProvider';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -343,8 +343,9 @@ describe('Engineer navigation and project controls', () => {
     projectEditable = true;
     mount('/projects/' + projectId + '?tab=' + tab);
     expect(await screen.findByRole('button', { name: 'Import from Excel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit project' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete project' })).toBeInTheDocument();
+    for (const name of ['Edit project', 'Clear project data', 'Delete project']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
     expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeInTheDocument();
   });
 
@@ -357,30 +358,6 @@ describe('Engineer navigation and project controls', () => {
     expect(screen.queryByRole('button', { name: 'Import from Excel' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit project' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeInTheDocument();
-  });
-
-  it('edits assigned project metadata from the project page', async () => {
-    // Give Tabster a visible viewport so jsdom can activate the modal focus scope.
-    const viewport = vi.spyOn(document.body, 'getBoundingClientRect')
-      .mockReturnValue(new DOMRect(0, 0, 1024, 768));
-    const offsetParent = vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get')
-      .mockImplementation(function (this: HTMLElement) { return this.parentElement; });
-    onTestFinished(() => {
-      viewport.mockRestore();
-      offsetParent.mockRestore();
-    });
-    projectEditable = true;
-    mount('/projects/' + projectId + '?tab=cable-list');
-    const actor = userEvent.setup();
-    await actor.click(await screen.findByRole('button', { name: 'Edit project' }));
-    const dialog = within(await screen.findByRole('dialog'));
-    const name = dialog.getByRole('textbox', { name: 'Name' });
-    await actor.clear(name);
-    await actor.type(name, 'Updated project');
-    await actor.click(dialog.getByRole('button', { name: 'Save project' }));
-    await waitFor(() => expect(mutations.some((request) => request.method === 'PATCH' && request.path === '/api/projects/' + projectId)).toBe(true));
-    expect(JSON.parse(String(mutations.find((request) => request.method === 'PATCH')?.body)).name).toBe('Updated project');
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('allows document creation and file upload in assigned projects', async () => {
