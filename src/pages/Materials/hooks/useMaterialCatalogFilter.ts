@@ -131,6 +131,7 @@ export const useMaterialCatalogFilter = <T extends CatalogItem>(items: T[]) => {
   }, []);
 
   return {
+    filteredItems,
     pagedItems,
     page,
     pagination,

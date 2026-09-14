@@ -31,6 +31,7 @@ const routeFor = (router: Router, method: string, path: string): Route => {
 
 const invoke = async (router: Router, method: string, path: string, input: object = {}) => {
   const response = {
+    locals: {},
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
     send: vi.fn().mockReturnThis(),

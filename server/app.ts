@@ -24,6 +24,8 @@ export const createApp = (): Express => {
       exposedHeaders: ['Content-Disposition'],
     }),
   );
+  // Filtered exports send IDs for every matching page, which can exceed the default 100 KB.
+  app.use(/^\/api\/materials\/[^/]+\/export$/, express.json({ limit: '10mb' }));
   app.use(express.json());
 
   app.get('/health', (_req: Request, res: Response) => {

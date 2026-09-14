@@ -1,3 +1,4 @@
+import { registerMaterialExportRoutes, filterMaterialExportRows } from '../utils/materialExcelExport.js';
 import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
 import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
 import type { PoolClient } from 'pg';
@@ -613,7 +614,8 @@ export const createInstallationMaterialCatalogRouter = (
     },
   );
 
-  router.get(
+  registerMaterialExportRoutes(
+    router,
     '/export',
     authenticate,
     requireAdmin,
@@ -622,7 +624,7 @@ export const createInstallationMaterialCatalogRouter = (
         const result = await pool.query<MaterialTrayInstallationMaterialRow>(
           `${selectMaterialsQuery} ORDER BY type ASC`,
         );
-        const rows = result.rows.map((row) => [
+        const rows = filterMaterialExportRows(result.rows, res).map((row) => [
           row.type ?? '',
           row.purpose ?? '',
           row.material ?? '',

@@ -1,3 +1,4 @@
+import { registerMaterialExportRoutes, filterMaterialExportRows } from '../utils/materialExcelExport.js';
 import type { PoolClient } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
@@ -1101,7 +1102,8 @@ materialsRouter.post(
   }
 );
 
-materialsRouter.get(
+registerMaterialExportRoutes(
+  materialsRouter,
   '/trays/export',
   async (_req: Request, res: Response): Promise<void> => {
     try {
@@ -1131,7 +1133,7 @@ materialsRouter.get(
         { name: TRAY_HEADERS.packaging, key: 'packaging', width: 18 }
       ] as const;
 
-      const rows = result.rows.map((row) => [
+      const rows = filterMaterialExportRows(result.rows, res).map((row) => [
         row.manufacturer ?? '',
         row.tray_type,
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',
@@ -1834,7 +1836,8 @@ materialsRouter.post(
   }
 );
 
-materialsRouter.get(
+registerMaterialExportRoutes(
+  materialsRouter,
   '/supports/export',
   async (_req: Request, res: Response): Promise<void> => {
     try {
@@ -1863,7 +1866,7 @@ materialsRouter.get(
         { name: SUPPORT_HEADERS.packaging, key: 'packaging', width: 18 }
       ] as const;
 
-      const rows = result.rows.map((row) => [
+      const rows = filterMaterialExportRows(result.rows, res).map((row) => [
         row.manufacturer ?? '',
         row.support_type,
         row.height_mm !== null && row.height_mm !== '' ? Number(row.height_mm) : '',

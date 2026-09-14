@@ -96,7 +96,7 @@ type InstallationMaterialsCatalog = {
     items: MaterialCableInstallationMaterial[];
     summary: { inserted: number; updated: number; skipped: number };
   }>;
-  export: (token: string) => Promise<Blob>;
+  export: (token: string, ids?: string[]) => Promise<Blob>;
   getTemplate: (token: string) => Promise<Blob>;
 };
 
@@ -666,7 +666,10 @@ const useInstallationMaterials = ({
     setIsExporting(true);
 
     try {
-      const blob = await catalog.export(token);
+      const blob = await catalog.export(
+        token,
+        filteredCableInstallationMaterials.map((item) => item.id),
+      );
       downloadBlob(blob, buildTimestampedFileName(catalog.fileStem));
       showToast({ intent: 'success', title: `${catalog.pluralTitle} exported` });
     } catch (err) {
@@ -687,7 +690,7 @@ const useInstallationMaterials = ({
     } finally {
       setIsExporting(false);
     }
-  }, [catalog, isAdmin, showToast, token]);
+  }, [catalog, filteredCableInstallationMaterials, isAdmin, showToast, token]);
 
   const handleGetCableInstallationMaterialsTemplate = useCallback(async () => {
     if (!isAdmin || !token) {

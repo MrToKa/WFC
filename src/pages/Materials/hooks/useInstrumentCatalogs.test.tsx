@@ -206,7 +206,7 @@ describe.each(configs)(
       expect(fileEvent.target.value).toBe('');
 
       await act(async () => result.current.handleExportCableInstallationMaterials());
-      expect(api.export).toHaveBeenCalledWith('token');
+      expect(api.export).toHaveBeenCalledWith('token', ['imported']);
       expect(mocks.download).toHaveBeenCalledWith(
         expect.any(Blob),
         expect.stringMatching(new RegExp(`^${fileStem}.*\\.xlsx$`)),

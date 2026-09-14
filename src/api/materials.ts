@@ -165,10 +165,12 @@ export async function importMaterialCableTypes(
   );
 }
 
-export async function exportMaterialCableTypes(token: string): Promise<Blob> {
+export async function exportMaterialCableTypes(token: string, ids?: string[]): Promise<Blob> {
   const response = await fetch(`${getApiBaseUrl()}/api/materials/cable-types/export`, {
-    method: 'GET',
+    method: ids === undefined ? 'GET' : 'POST',
+    body: ids === undefined ? undefined : JSON.stringify({ ids }),
     headers: {
+      ...(ids === undefined ? {} : { 'Content-Type': 'application/json' }),
       Authorization: `Bearer ${token}`,
     },
   });
@@ -285,12 +287,17 @@ export async function importMaterialCableInstallationMaterials(
   );
 }
 
-export async function exportMaterialCableInstallationMaterials(token: string): Promise<Blob> {
+export async function exportMaterialCableInstallationMaterials(
+  token: string,
+  ids?: string[],
+): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/materials/cable-installation-materials/export`,
     {
-      method: 'GET',
+      method: ids === undefined ? 'GET' : 'POST',
+      body: ids === undefined ? undefined : JSON.stringify({ ids }),
       headers: {
+        ...(ids === undefined ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${token}`,
       },
     },
@@ -408,12 +415,17 @@ export async function importMaterialTrayInstallationMaterials(
   );
 }
 
-export async function exportMaterialTrayInstallationMaterials(token: string): Promise<Blob> {
+export async function exportMaterialTrayInstallationMaterials(
+  token: string,
+  ids?: string[],
+): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/materials/tray-installation-materials/export`,
     {
-      method: 'GET',
+      method: ids === undefined ? 'GET' : 'POST',
+      body: ids === undefined ? undefined : JSON.stringify({ ids }),
       headers: {
+        ...(ids === undefined ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${token}`,
       },
     },
@@ -522,10 +534,12 @@ export async function importMaterialInstruments(
   );
 }
 
-export async function exportMaterialInstruments(token: string): Promise<Blob> {
+export async function exportMaterialInstruments(token: string, ids?: string[]): Promise<Blob> {
   const response = await fetch(`${getApiBaseUrl()}/api/materials/instruments/export`, {
-    method: 'GET',
+    method: ids === undefined ? 'GET' : 'POST',
+    body: ids === undefined ? undefined : JSON.stringify({ ids }),
     headers: {
+      ...(ids === undefined ? {} : { 'Content-Type': 'application/json' }),
       Authorization: `Bearer ${token}`,
     },
   });
@@ -642,12 +656,17 @@ export async function importMaterialInstrumentInstallationMaterials(
   );
 }
 
-export async function exportMaterialInstrumentInstallationMaterials(token: string): Promise<Blob> {
+export async function exportMaterialInstrumentInstallationMaterials(
+  token: string,
+  ids?: string[],
+): Promise<Blob> {
   const response = await fetch(
     `${getApiBaseUrl()}/api/materials/instrument-installation-materials/export`,
     {
-      method: 'GET',
+      method: ids === undefined ? 'GET' : 'POST',
+      body: ids === undefined ? undefined : JSON.stringify({ ids }),
       headers: {
+        ...(ids === undefined ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${token}`,
       },
     },
@@ -766,23 +785,19 @@ export async function importMaterialTrays(
   token: string,
   file: File,
 ): Promise<{ summary: MaterialImportSummary; trays: MaterialTray[] }> {
-  return uploadExcelFile(
-    `/api/materials/trays/import`,
-    token,
-    file,
-    'Failed to import trays',
-  );
+  return uploadExcelFile(`/api/materials/trays/import`, token, file, 'Failed to import trays');
 }
 
-export async function exportMaterialTrays(token?: string): Promise<Blob> {
+export async function exportMaterialTrays(token?: string, ids?: string[]): Promise<Blob> {
   const headers: Record<string, string> = {};
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${getApiBaseUrl()}/api/materials/trays/export`, {
-    method: 'GET',
-    headers,
+    method: ids === undefined ? 'GET' : 'POST',
+    body: ids === undefined ? undefined : JSON.stringify({ ids }),
+    headers: { ...headers, ...(ids === undefined ? {} : { 'Content-Type': 'application/json' }) },
   });
 
   if (!response.ok) {
@@ -926,15 +941,16 @@ export async function importMaterialSupports(
   );
 }
 
-export async function exportMaterialSupports(token?: string): Promise<Blob> {
+export async function exportMaterialSupports(token?: string, ids?: string[]): Promise<Blob> {
   const headers: Record<string, string> = {};
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${getApiBaseUrl()}/api/materials/supports/export`, {
-    method: 'GET',
-    headers,
+    method: ids === undefined ? 'GET' : 'POST',
+    body: ids === undefined ? undefined : JSON.stringify({ ids }),
+    headers: { ...headers, ...(ids === undefined ? {} : { 'Content-Type': 'application/json' }) },
   });
 
   if (!response.ok) {

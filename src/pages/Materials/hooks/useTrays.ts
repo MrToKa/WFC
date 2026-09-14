@@ -38,6 +38,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     pagination: trayPagination,
     page: trayPage,
     setPage: setTrayPage,
+    filteredItems,
     ...filters
   } = useMaterialCatalogFilter(allTrays);
   const loadRequestId = useRef(0);
@@ -457,7 +458,10 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   const handleExportTrays = useCallback(async () => {
     setIsExportingTrays(true);
     try {
-      const blob = await exportMaterialTrays(token ?? undefined);
+      const blob = await exportMaterialTrays(
+        token ?? undefined,
+        filteredItems.map((item) => item.id),
+      );
       downloadBlob(blob, buildTimestampedFileName('materials-trays'));
       showToast({ intent: 'success', title: 'Trays exported' });
     } catch (error) {
@@ -478,7 +482,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     } finally {
       setIsExportingTrays(false);
     }
-  }, [showToast, token]);
+  }, [filteredItems, showToast, token]);
 
   const handleGetTrayTemplate = useCallback(async () => {
     if (!isAdmin || !token) {

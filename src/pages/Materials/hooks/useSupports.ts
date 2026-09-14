@@ -35,6 +35,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     pagination: supportPagination,
     page: supportPage,
     setPage: setSupportPage,
+    filteredItems,
     ...filters
   } = useMaterialCatalogFilter(allSupports);
   const loadRequestId = useRef(0);
@@ -323,7 +324,10 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
   const handleExportSupports = useCallback(async () => {
     setIsExportingSupports(true);
     try {
-      const blob = await exportMaterialSupports(token ?? undefined);
+      const blob = await exportMaterialSupports(
+        token ?? undefined,
+        filteredItems.map((item) => item.id),
+      );
       downloadBlob(blob, buildTimestampedFileName('materials-supports'));
       showToast({ intent: 'success', title: 'Supports exported' });
     } catch (error) {
@@ -344,7 +348,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     } finally {
       setIsExportingSupports(false);
     }
-  }, [showToast, token]);
+  }, [filteredItems, showToast, token]);
 
   const handleGetSupportTemplate = useCallback(async () => {
     if (!isAdmin || !token) {

@@ -1,3 +1,4 @@
+import { registerMaterialExportRoutes, filterMaterialExportRows } from '../utils/materialExcelExport.js';
 import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
 import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
 import type { PoolClient } from 'pg';
@@ -842,7 +843,8 @@ materialCableInstallationMaterialsRouter.get(
   },
 );
 
-materialCableInstallationMaterialsRouter.get(
+registerMaterialExportRoutes(
+  materialCableInstallationMaterialsRouter,
   '/export',
   authenticate,
   requireAdmin,
@@ -876,7 +878,7 @@ materialCableInstallationMaterialsRouter.get(
         { name: MATERIAL_CABLE_INSTALLATION_EXCEL_HEADERS.source, width: 40 },
       ] as const;
 
-      const rows = result.rows.map((row: MaterialCableInstallationMaterialRow) => [
+      const rows = filterMaterialExportRows(result.rows, res).map((row: MaterialCableInstallationMaterialRow) => [
         row.type ?? '',
         row.purpose ?? '',
         row.material ?? '',

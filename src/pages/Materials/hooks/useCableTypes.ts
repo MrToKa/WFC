@@ -495,7 +495,10 @@ export const useCableTypes = ({
     setIsExporting(true);
 
     try {
-      const blob = await exportMaterialCableTypes(token);
+      const blob = await exportMaterialCableTypes(
+        token,
+        filteredCableTypes.map((item) => item.id),
+      );
       downloadBlob(blob, buildTimestampedFileName('materials-cable-types'));
       showToast({ intent: 'success', title: 'Cable types exported' });
     } catch (err) {
@@ -516,7 +519,7 @@ export const useCableTypes = ({
     } finally {
       setIsExporting(false);
     }
-  }, [isAdmin, showToast, token]);
+  }, [filteredCableTypes, isAdmin, showToast, token]);
 
   const handleGetCableTypesTemplate = useCallback(async () => {
     if (!isAdmin || !token) {
