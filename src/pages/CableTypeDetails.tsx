@@ -1,5 +1,4 @@
 import { canEditProject, canReadCatalogs } from '@/utils/permissions';
-import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -39,11 +38,9 @@ import {
   deleteCableTypeDefaultMaterial,
   exportCableTypeDefaultMaterials,
   fetchCableTypeDetails,
-  fetchMaterialCableInstallationMaterials,
-  importCableTypeDefaultMaterials,
   type CableTypeDefaultMaterial,
+  type ProjectChangeLogEntry,
   type CableTypeDetails as CableTypeDetailsData,
-  type MaterialCableInstallationMaterial,
   updateCableTypeDefaultMaterial,
 } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
@@ -53,7 +50,10 @@ import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsD
 import { formatNumeric, parseNumberInput, toNullableString } from './ProjectDetails.utils';
 import { downloadBlob } from './Materials/Materials.utils';
 
-type DefaultMaterialDialogMode = 'create' | 'edit';
+import { ChangeOrderMaterialDialog } from './ProjectDetails/ChangeOrderMaterialDialog';
+import type { ChangeOrderSourceCatalog } from '@/api/client';
+
+const DEFAULT_MATERIAL_CATEGORIES: ChangeOrderSourceCatalog[] = ['cable-installation-material'];
 
 type DefaultMaterialFormState = {
   name: string;
@@ -247,9 +247,6 @@ const useStyles = makeStyles({
     gap: '0.75rem',
     flexWrap: 'wrap',
   },
-  hiddenInput: {
-    display: 'none',
-  },
   tableContainer: {
     width: '100%',
     minWidth: 0,
@@ -313,7 +310,6 @@ export const CableTypeDetails = () => {
   }>();
   const { user, token } = useAuth();
   const { showToast } = useToast();
-  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
   const canEdit = canEditProject(user, project, projectId);
@@ -322,24 +318,19 @@ export const CableTypeDetails = () => {
   const [details, setDetails] = useState<CableTypeDetailsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [availableDefaultMaterials, setAvailableDefaultMaterials] = useState<
-    MaterialCableInstallationMaterial[]
-  >([]);
-  const [availableDefaultMaterialsLoading, setAvailableDefaultMaterialsLoading] =
-    useState<boolean>(true);
-  const [availableDefaultMaterialsError, setAvailableDefaultMaterialsError] = useState<
-    string | null
-  >(null);
-
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
-  const [dialogMode, setDialogMode] = useState<DefaultMaterialDialogMode>('create');
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (dialogOpen) quantityInputRef.current?.focus({ preventScroll: true });
+  }, [dialogOpen]);
+  const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
+  const [addingMaterial, setAddingMaterial] = useState(false);
   const [dialogValues, setDialogValues] =
     useState<DefaultMaterialFormState>(emptyDefaultMaterialForm);
   const [dialogErrors, setDialogErrors] = useState<DefaultMaterialFormErrors>({});
   const [dialogSubmitting, setDialogSubmitting] = useState<boolean>(false);
   const [editingDefaultMaterialId, setEditingDefaultMaterialId] = useState<string | null>(null);
   const [pendingDefaultMaterialId, setPendingDefaultMaterialId] = useState<string | null>(null);
-  const [isImportingDefaultMaterials, setIsImportingDefaultMaterials] = useState<boolean>(false);
   const [isExportingDefaultMaterials, setIsExportingDefaultMaterials] = useState<boolean>(false);
 
   const detailsRequestId = useRef(0);
@@ -384,67 +375,12 @@ export const CableTypeDetails = () => {
     };
   }, [loadDetails]);
 
-  useEffect(() => {
-    let active = true;
-
-    const loadAvailableDefaultMaterials = async () => {
-      if (!canEdit) {
-        setAvailableDefaultMaterialsLoading(false);
-        return;
-      }
-      setAvailableDefaultMaterialsLoading(true);
-      setAvailableDefaultMaterialsError(null);
-
-      try {
-        const response = await fetchMaterialCableInstallationMaterials();
-
-        if (!active) {
-          return;
-        }
-
-        setAvailableDefaultMaterials(response.cableInstallationMaterials);
-      } catch (err) {
-        console.error('Failed to load cable installation materials for default materials', err);
-
-        if (!active) {
-          return;
-        }
-
-        setAvailableDefaultMaterials([]);
-        setAvailableDefaultMaterialsError(
-          err instanceof ApiError ? err.message : 'Failed to load cable installation materials.',
-        );
-      } finally {
-        if (active) {
-          setAvailableDefaultMaterialsLoading(false);
-        }
-      }
-    };
-
-    void loadAvailableDefaultMaterials();
-
-    return () => {
-      active = false;
-    };
-  }, [canEdit]);
-
   const handleDialogFieldChange =
     (field: keyof DefaultMaterialFormState) =>
     (_event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>, data: { value: string }) => {
       setDialogValues((previous) => ({ ...previous, [field]: data.value }));
       setDialogErrors((previous) => ({ ...previous, [field]: undefined, general: undefined }));
     };
-
-  const handleDefaultMaterialNameSelect = useCallback(
-    (_event: unknown, data: { optionValue?: string }) => {
-      setDialogValues((previous) => ({
-        ...previous,
-        name: data.optionValue ?? '',
-      }));
-      setDialogErrors((previous) => ({ ...previous, name: undefined, general: undefined }));
-    },
-    [],
-  );
 
   const handleDefaultMaterialUnitSelect = useCallback(
     (_event: unknown, data: { optionValue?: string }) => {
@@ -464,39 +400,64 @@ export const CableTypeDetails = () => {
 
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
-    setDialogMode('create');
     setDialogValues(emptyDefaultMaterialForm);
     setDialogErrors({});
     setDialogSubmitting(false);
     setEditingDefaultMaterialId(null);
   }, []);
 
-  const openCreateDialog = useCallback(() => {
-    if (!availableDefaultMaterialsLoading && availableDefaultMaterials.length === 0) {
+  const applyDefaultMaterialChange = useCallback(
+    (
+      changedCableTypeId: string,
+      updateMaterials: (materials: CableTypeDefaultMaterial[]) => CableTypeDefaultMaterial[],
+      changeLogEntry: ProjectChangeLogEntry | null,
+    ) => {
+      setDetails((previous) => {
+        if (!previous || previous.cableType.id !== changedCableTypeId) return previous;
+        const changeLog = previous.cableType.changeLog ?? [];
+        return {
+          ...previous,
+          defaultMaterials: sortDefaultMaterials(updateMaterials(previous.defaultMaterials)),
+          cableType: {
+            ...previous.cableType,
+            changeLog:
+              changeLogEntry && !changeLog.some((entry) => entry.id === changeLogEntry.id)
+                ? [...changeLog, changeLogEntry]
+                : changeLog,
+          },
+        };
+      });
+    },
+    [],
+  );
+
+  const handleAddCatalogMaterial = async (choice: { id: string }) => {
+    if (!projectId || !cableTypeId || !token || !canEdit) return;
+    setAddingMaterial(true);
+    try {
+      const response = await createCableTypeDefaultMaterial(token, projectId, cableTypeId, {
+        sourceMaterialId: choice.id,
+      });
+      applyDefaultMaterialChange(
+        cableTypeId,
+        (materials) => [...materials, response.defaultMaterial],
+        response.changeLogEntry,
+      );
+      setCatalogDialogOpen(false);
+      openEditDialog(response.defaultMaterial);
+      showToast({ intent: 'success', title: 'Default material added' });
+    } catch (err) {
       showToast({
         intent: 'error',
-        title: 'No cable installation materials available',
-        body:
-          availableDefaultMaterialsError ??
-          'Add cable installation materials in Materials before assigning them here.',
+        title: 'Failed to add default material',
+        body: err instanceof Error ? err.message : undefined,
       });
-      return;
+    } finally {
+      setAddingMaterial(false);
     }
-
-    setDialogMode('create');
-    setDialogValues(emptyDefaultMaterialForm);
-    setDialogErrors({});
-    setDialogOpen(true);
-    setEditingDefaultMaterialId(null);
-  }, [
-    availableDefaultMaterials.length,
-    availableDefaultMaterialsError,
-    availableDefaultMaterialsLoading,
-    showToast,
-  ]);
+  };
 
   const openEditDialog = useCallback((material: CableTypeDefaultMaterial) => {
-    setDialogMode('edit');
     setDialogValues(toDefaultMaterialFormState(material));
     setDialogErrors({});
     setDialogOpen(true);
@@ -524,47 +485,27 @@ export const CableTypeDetails = () => {
     setDialogErrors({});
 
     try {
-      if (dialogMode === 'create') {
-        const response = await createCableTypeDefaultMaterial(token, projectId, cableTypeId, input);
-
-        setDetails((previous) =>
-          previous
-            ? {
-                ...previous,
-                defaultMaterials: sortDefaultMaterials([
-                  ...previous.defaultMaterials,
-                  response.defaultMaterial,
-                ]),
-              }
-            : previous,
-        );
-        showToast({ intent: 'success', title: 'Default material added' });
-      } else if (editingDefaultMaterialId) {
+      if (editingDefaultMaterialId) {
         const response = await updateCableTypeDefaultMaterial(
           token,
           projectId,
           cableTypeId,
           editingDefaultMaterialId,
-          input,
+          { quantity: input.quantity, unit: input.unit, remarks: input.remarks },
         );
 
-        setDetails((previous) =>
-          previous
-            ? {
-                ...previous,
-                defaultMaterials: sortDefaultMaterials(
-                  previous.defaultMaterials.map((item) =>
-                    item.id === editingDefaultMaterialId ? response.defaultMaterial : item,
-                  ),
-                ),
-              }
-            : previous,
+        applyDefaultMaterialChange(
+          cableTypeId,
+          (materials) =>
+            materials.map((item) =>
+              item.id === editingDefaultMaterialId ? response.defaultMaterial : item,
+            ),
+          response.changeLogEntry,
         );
         showToast({ intent: 'success', title: 'Default material updated' });
       }
 
       resetDialog();
-      await loadDetails();
     } catch (err) {
       console.error('Failed to save default material', err);
       if (err instanceof ApiError) {
@@ -620,19 +561,18 @@ export const CableTypeDetails = () => {
       setPendingDefaultMaterialId(material.id);
 
       try {
-        await deleteCableTypeDefaultMaterial(token, projectId, cableTypeId, material.id);
-        setDetails((previous) =>
-          previous
-            ? {
-                ...previous,
-                defaultMaterials: previous.defaultMaterials.filter(
-                  (item) => item.id !== material.id,
-                ),
-              }
-            : previous,
+        const response = await deleteCableTypeDefaultMaterial(
+          token,
+          projectId,
+          cableTypeId,
+          material.id,
+        );
+        applyDefaultMaterialChange(
+          cableTypeId,
+          (materials) => materials.filter((item) => item.id !== material.id),
+          response.changeLogEntry,
         );
         showToast({ intent: 'success', title: 'Default material deleted' });
-        await loadDetails();
       } catch (err) {
         console.error('Failed to delete default material', err);
         showToast({
@@ -644,65 +584,7 @@ export const CableTypeDetails = () => {
         setPendingDefaultMaterialId(null);
       }
     },
-    [cableTypeId, canEdit, loadDetails, projectId, showToast, token],
-  );
-
-  const handleImportClick = useCallback(() => {
-    if (!projectId || !cableTypeId || !token || !canEdit) {
-      showToast({
-        intent: 'error',
-        title: 'Admin access required',
-        body: 'You need to be signed in as an admin to import default materials.',
-      });
-      return;
-    }
-
-    importInputRef.current?.click();
-  }, [cableTypeId, canEdit, projectId, showToast, token]);
-
-  const handleImportFileChange = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-
-      event.target.value = '';
-
-      if (!file) {
-        return;
-      }
-
-      if (!projectId || !cableTypeId || !token || !canEdit) {
-        showToast({
-          intent: 'error',
-          title: 'Admin access required',
-          body: 'You need to be signed in as an admin to import default materials.',
-        });
-        return;
-      }
-
-      setIsImportingDefaultMaterials(true);
-
-      try {
-        const response = await importCableTypeDefaultMaterials(token, projectId, cableTypeId, file);
-
-        setDetails((previous) =>
-          previous
-            ? {
-                ...previous,
-                defaultMaterials: sortDefaultMaterials(response.defaultMaterials),
-              }
-            : previous,
-        );
-
-        showToast(excelImportSuccessToast(file.name, response.summary, 'Default materials'));
-        await loadDetails();
-      } catch (err) {
-        console.error('Failed to import default materials', err);
-        showToast(excelImportErrorToast(err, file.name));
-      } finally {
-        setIsImportingDefaultMaterials(false);
-      }
-    },
-    [cableTypeId, canEdit, loadDetails, projectId, showToast, token],
+    [applyDefaultMaterialChange, cableTypeId, canEdit, projectId, showToast, token],
   );
 
   const handleExportDefaultMaterials = useCallback(async () => {
@@ -753,21 +635,6 @@ export const CableTypeDetails = () => {
 
     return `Last updated ${dateFormatter.format(new Date(details.cableType.updatedAt))}`;
   }, [details]);
-
-  const availableDefaultMaterialNames = useMemo(
-    () => availableDefaultMaterials.map((material) => material.type),
-    [availableDefaultMaterials],
-  );
-
-  const resolvedDefaultMaterialNames = useMemo(() => {
-    if (!dialogValues.name) {
-      return availableDefaultMaterialNames;
-    }
-
-    return availableDefaultMaterialNames.includes(dialogValues.name)
-      ? availableDefaultMaterialNames
-      : [dialogValues.name, ...availableDefaultMaterialNames];
-  }, [availableDefaultMaterialNames, dialogValues.name]);
 
   const sourceMaterialDetails = details?.materialCableType;
 
@@ -890,45 +757,25 @@ export const CableTypeDetails = () => {
           <div>
             <Title3>Additional default materials</Title3>
             <Caption1 className={styles.readOnlyNotice}>
-              Add reusable materials from Cable installation materials that should be associated
-              with this cable type. Import from Excel replaces the current list for this cable type,
-              and Remarks cells are optional.
+              Select existing Cable installation materials from the catalog, then edit their
+              quantity, unit and remarks for this cable type.
             </Caption1>
           </div>
           <div className={styles.sectionActions}>
-            {canEdit ? (
-              <Button
-                onClick={handleImportClick}
-                disabled={isImportingDefaultMaterials || isExportingDefaultMaterials}
-              >
-                {isImportingDefaultMaterials ? 'Importing...' : 'Import from Excel'}
-              </Button>
-            ) : null}
             {canExport ? (
               <Button
                 appearance="secondary"
                 onClick={() => void handleExportDefaultMaterials()}
-                disabled={isExportingDefaultMaterials || isImportingDefaultMaterials}
+                disabled={isExportingDefaultMaterials}
               >
                 {isExportingDefaultMaterials ? 'Exporting...' : 'Export to Excel'}
               </Button>
             ) : null}
             {canEdit ? (
-              <Button
-                appearance="primary"
-                onClick={openCreateDialog}
-                disabled={availableDefaultMaterialsLoading || isImportingDefaultMaterials}
-              >
+              <Button appearance="primary" onClick={() => setCatalogDialogOpen(true)}>
                 Add default material
               </Button>
             ) : null}
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx"
-              className={styles.hiddenInput}
-              onChange={handleImportFileChange}
-            />
           </div>
         </div>
 
@@ -980,7 +827,7 @@ export const CableTypeDetails = () => {
                             <Button
                               size="small"
                               onClick={() => openEditDialog(material)}
-                              disabled={isBusy || isImportingDefaultMaterials}
+                              disabled={isBusy}
                             >
                               Edit
                             </Button>
@@ -988,7 +835,7 @@ export const CableTypeDetails = () => {
                               size="small"
                               appearance="secondary"
                               onClick={() => void handleDeleteDefaultMaterial(material)}
-                              disabled={isBusy || isImportingDefaultMaterials}
+                              disabled={isBusy}
                             >
                               Delete
                             </Button>
@@ -1046,6 +893,16 @@ export const CableTypeDetails = () => {
         </AccordionItem>
       </Accordion>
 
+      <ChangeOrderMaterialDialog
+        open={catalogDialogOpen}
+        adding={addingMaterial}
+        documentName="cable type default materials"
+        categories={DEFAULT_MATERIAL_CATEGORIES}
+        doubleWidth
+        onDismiss={() => !addingMaterial && setCatalogDialogOpen(false)}
+        onSelect={handleAddCatalogMaterial}
+      />
+
       <Dialog
         open={dialogOpen}
         onOpenChange={(_, data) => {
@@ -1054,37 +911,17 @@ export const CableTypeDetails = () => {
           }
         }}
       >
-        <DialogSurface>
+        <DialogSurface style={{ width: '1200px', maxWidth: 'calc(100vw - 32px)' }}>
           <form className={styles.dialogForm} onSubmit={(event) => void handleDialogSubmit(event)}>
             <DialogBody>
-              <DialogTitle>
-                {dialogMode === 'create' ? 'Add default material' : 'Edit default material'}
-              </DialogTitle>
+              <DialogTitle>Edit default material</DialogTitle>
               <DialogContent>
                 <Field
                   label="Material"
-                  required
                   validationState={dialogErrors.name ? 'error' : undefined}
                   validationMessage={dialogErrors.name}
                 >
-                  <Combobox
-                    placeholder={
-                      resolvedDefaultMaterialNames.length > 0
-                        ? 'Select cable installation material'
-                        : 'No cable installation materials available'
-                    }
-                    selectedOptions={dialogValues.name ? [dialogValues.name] : []}
-                    value={dialogValues.name || undefined}
-                    onOptionSelect={handleDefaultMaterialNameSelect}
-                    freeform={false}
-                    disabled={resolvedDefaultMaterialNames.length === 0}
-                  >
-                    {resolvedDefaultMaterialNames.map((materialName) => (
-                      <Option key={materialName} value={materialName}>
-                        {materialName}
-                      </Option>
-                    ))}
-                  </Combobox>
+                  <Input value={dialogValues.name} readOnly />
                 </Field>
                 <Field
                   label="Quantity"
@@ -1092,6 +929,7 @@ export const CableTypeDetails = () => {
                   validationMessage={dialogErrors.quantity}
                 >
                   <Input
+                    ref={quantityInputRef}
                     value={dialogValues.quantity}
                     onChange={handleDialogFieldChange('quantity')}
                     inputMode="decimal"
@@ -1105,7 +943,7 @@ export const CableTypeDetails = () => {
                   <Combobox
                     placeholder="Select unit"
                     selectedOptions={dialogValues.unit ? [dialogValues.unit] : []}
-                    value={dialogValues.unit || undefined}
+                    value={dialogValues.unit}
                     onOptionSelect={handleDefaultMaterialUnitSelect}
                     freeform={false}
                   >
@@ -1136,11 +974,7 @@ export const CableTypeDetails = () => {
                   Cancel
                 </Button>
                 <Button type="submit" appearance="primary" disabled={dialogSubmitting}>
-                  {dialogSubmitting
-                    ? 'Saving...'
-                    : dialogMode === 'create'
-                      ? 'Add material'
-                      : 'Save changes'}
+                  {dialogSubmitting ? 'Saving...' : 'Save changes'}
                 </Button>
               </DialogActions>
             </DialogBody>

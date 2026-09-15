@@ -10,7 +10,9 @@ import type {
   CableMaterialInput,
   CableMaterialSyncSummary,
   CableTypeDefaultMaterial,
-  CableTypeDefaultMaterialImportSummary,
+  CableTypeDefaultMaterialMutationResult,
+  ProjectChangeLogEntry,
+  CableTypeDefaultMaterialUpdateInput,
   CableTypeDefaultMaterialInput,
   CableTypeDetails,
   CableTypeInput,
@@ -154,8 +156,8 @@ export async function createCableTypeDefaultMaterial(
   projectId: string,
   cableTypeId: string,
   data: CableTypeDefaultMaterialInput,
-): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
-  return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
+): Promise<CableTypeDefaultMaterialMutationResult> {
+  return request<CableTypeDefaultMaterialMutationResult>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials`,
     {
       method: 'POST',
@@ -170,9 +172,9 @@ export async function updateCableTypeDefaultMaterial(
   projectId: string,
   cableTypeId: string,
   defaultMaterialId: string,
-  data: Partial<CableTypeDefaultMaterialInput>,
-): Promise<{ defaultMaterial: CableTypeDefaultMaterial }> {
-  return request<{ defaultMaterial: CableTypeDefaultMaterial }>(
+  data: CableTypeDefaultMaterialUpdateInput,
+): Promise<CableTypeDefaultMaterialMutationResult> {
+  return request<CableTypeDefaultMaterialMutationResult>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
     {
       method: 'PATCH',
@@ -187,30 +189,13 @@ export async function deleteCableTypeDefaultMaterial(
   projectId: string,
   cableTypeId: string,
   defaultMaterialId: string,
-): Promise<void> {
-  await request<void>(
+): Promise<{ changeLogEntry: ProjectChangeLogEntry | null }> {
+  return request<{ changeLogEntry: ProjectChangeLogEntry | null }>(
     `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/${defaultMaterialId}`,
     {
       method: 'DELETE',
       token,
     },
-  );
-}
-
-export async function importCableTypeDefaultMaterials(
-  token: string,
-  projectId: string,
-  cableTypeId: string,
-  file: File,
-): Promise<{
-  summary: CableTypeDefaultMaterialImportSummary;
-  defaultMaterials: CableTypeDefaultMaterial[];
-}> {
-  return uploadExcelFile(
-    `/api/projects/${projectId}/cable-types/${cableTypeId}/default-materials/import`,
-    token,
-    file,
-    'Failed to import default materials',
   );
 }
 
@@ -258,14 +243,7 @@ export async function fetchCableReportSummary(
   projectId: string,
   options?: {
     filterText?: string;
-    criteria?:
-      | 'all'
-      | 'tag'
-      | 'typeName'
-      | 'fromLocation'
-      | 'toLocation'
-      | 'routing'
-      | 'delivery';
+    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing' | 'delivery';
     mto?: CableMtoOption | null;
   },
 ): Promise<{ summary: CableReportSummary }> {
@@ -431,14 +409,7 @@ export async function exportCables(
   options?: {
     filterText?: string;
     cableTypeId?: string;
-    criteria?:
-      | 'all'
-      | 'tag'
-      | 'typeName'
-      | 'fromLocation'
-      | 'toLocation'
-      | 'routing'
-      | 'delivery';
+    criteria?: 'all' | 'tag' | 'typeName' | 'fromLocation' | 'toLocation' | 'routing' | 'delivery';
     mto?: CableMtoOption | null;
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;

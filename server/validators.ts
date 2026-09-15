@@ -371,7 +371,7 @@ export const createMaterialInstrumentInstallationMaterialSchema =
 export const updateMaterialInstrumentInstallationMaterialSchema =
   updateMaterialTrayInstallationMaterialSchema;
 
-export const createCableTypeDefaultMaterialSchema = z
+export const createCableMaterialSchema = z
   .object({
     name: cableTypeDefaultMaterialNameField,
     quantity: cableTypeNumericField,
@@ -380,7 +380,7 @@ export const createCableTypeDefaultMaterialSchema = z
   })
   .strict();
 
-export const updateCableTypeDefaultMaterialSchema = z
+export const updateCableMaterialSchema = z
   .object({
     name: cableTypeDefaultMaterialNameField.optional(),
     quantity: cableTypeNumericField,
@@ -397,9 +397,24 @@ export const updateCableTypeDefaultMaterialSchema = z
     { message: 'At least one field must be provided' },
   );
 
-export const createCableMaterialSchema = createCableTypeDefaultMaterialSchema;
+export const createCableTypeDefaultMaterialSchema = z
+  .object({
+    sourceMaterialId: z.string().uuid(),
+  })
+  .strict();
 
-export const updateCableMaterialSchema = updateCableTypeDefaultMaterialSchema;
+export const updateCableTypeDefaultMaterialSchema = z
+  .object({
+    quantity: cableTypeNumericField,
+    unit: cableTypeDefaultMaterialUnitField,
+    remarks: cableTypeDefaultMaterialRemarksField,
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.quantity !== undefined || value.unit !== undefined || value.remarks !== undefined,
+    { message: 'At least one field must be provided' },
+  );
 
 const standardMaterialQuantity = z.number().finite().positive().max(1_000_000_000);
 

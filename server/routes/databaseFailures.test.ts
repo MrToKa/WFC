@@ -87,13 +87,6 @@ const mutationCases = [
     request: () => request({}, { Type: 'Cable type' }),
   },
   {
-    name: 'import cable type materials',
-    router: cableTypesRouter,
-    method: 'post',
-    path: '/:cableTypeId/default-materials/import',
-    request: () => request({}, { Material: 'Connector', Quantity: 2, Unit: 'pcs' }),
-  },
-  {
     name: 'import cables',
     router: cablesRouter,
     method: 'post',

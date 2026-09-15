@@ -50,15 +50,46 @@ describe('cable type change tracker', () => {
       }),
     ).toEqual(['Purpose: Power → Not specified', 'Diameter [mm]: 12 → 14']);
   });
-  it('records material quantities, remarks, additions and removals', () => {
+  it('records material edits as field changes on the same row', () => {
     const changes = describeCableTypeChanges(snapshot, {
       ...snapshot,
       materials: [{ ...snapshot.materials[0], quantity: 3, remarks: 'Updated' }],
     });
-    expect(changes).toHaveLength(2);
-    expect(changes[0]).toContain('Removed default material "Cleat" (Quantity: 2;');
-    expect(changes[1]).toContain('Added default material "Cleat" (Quantity: 3;');
-    expect(changes[1]).toContain('Remarks: Updated');
+    expect(changes).toEqual([
+      'Default material "Cleat" / Quantity: 2 → 3',
+      'Default material "Cleat" / Remarks: Not specified → Updated',
+    ]);
+  });
+  it('distinguishes edits from actual additions and removals with the same name', () => {
+    const changes = describeCableTypeChanges(
+      {
+        ...snapshot,
+        materials: [
+          ...snapshot.materials,
+          { ...snapshot.materials[0], id: 'removed', quantity: 5 },
+        ],
+      },
+      {
+        ...snapshot,
+        materials: [
+          { ...snapshot.materials[0], quantity: 3 },
+          { ...snapshot.materials[0], id: 'added', quantity: 7 },
+        ],
+      },
+    );
+    expect(changes).toEqual([
+      'Default material "Cleat" / Quantity: 2 → 3',
+      expect.stringContaining('Removed default material "Cleat" (Quantity: 5;'),
+      expect.stringContaining('Added default material "Cleat" (Quantity: 7;'),
+    ]);
+  });
+  it('ignores unchanged values on an existing material row', () => {
+    expect(
+      describeCableTypeChanges(snapshot, {
+        ...snapshot,
+        materials: [{ ...snapshot.materials[0], quantity: 2, updated_at: '2026-02-01' }],
+      }),
+    ).toEqual([]);
   });
   it('counts identical material rows and detects inherited source changes', () => {
     expect(

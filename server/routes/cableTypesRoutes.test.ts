@@ -56,7 +56,11 @@ describe('cable type material history transactions', () => {
   it('commits the deletion and its authenticated history together', async () => {
     const res = response();
     await deleteMaterial(request, res);
-    expect(res.status).toHaveBeenCalledWith(204);
+    expect(res.json).toHaveBeenCalledWith({
+      changeLogEntry: expect.objectContaining({
+        changes: [expect.stringContaining('Removed default material "Cleat"')],
+      }),
+    });
     const calls = client.query.mock.calls;
     expect(calls[0][0]).toBe('BEGIN');
     expect(calls[1][0]).toContain('FOR UPDATE');
@@ -97,3 +101,140 @@ describe('cable type material history transactions', () => {
     expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
   });
 });
+
+const addMaterial = (cableTypesRouter as unknown as { stack: Layer[] }).stack
+  .find(
+    (layer) => layer.route?.path === '/:cableTypeId/default-materials' && layer.route.methods.post,
+  )!
+  .route!.stack.at(-1)!.handle;
+const sourceMaterialId = '00000000-0000-4000-8000-000000000001';
+
+describe('catalog-only cable type default materials', () => {
+  it('has no Excel import endpoint', () => {
+    expect(
+      (cableTypesRouter as unknown as { stack: Layer[] }).stack.some(
+        (layer) => layer.route?.path === '/:cableTypeId/default-materials/import',
+      ),
+    ).toBe(false);
+  });
+  it('rejects free-form material names', async () => {
+    const res = response();
+    await addMaterial({ ...request, body: { name: 'Invented material' } } as Request, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(database.connect).not.toHaveBeenCalled();
+  });
+  it('rejects a missing or deleted catalog ID without saving', async () => {
+    const res = response();
+    await addMaterial({ ...request, body: { sourceMaterialId } } as Request, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM material_cable_installation_materials WHERE id = $1'),
+      [sourceMaterialId],
+    );
+    expect(client.query.mock.calls.some(([sql]) => sql.includes('INSERT INTO'))).toBe(false);
+    expect(client.query).toHaveBeenLastCalledWith('ROLLBACK');
+  });
+  it('uses the catalog name, unit and ID and saves history in the same transaction', async () => {
+    const query = client.query.getMockImplementation()!;
+    const material = {
+      id: 'new',
+      cable_type_id: 'type',
+      name: 'Database cleat',
+      quantity: 1,
+      unit: 'meters',
+      remarks: null,
+      source_master_material_id: sourceMaterialId,
+      source_kind: 'manual',
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    };
+    let inserted = false;
+    client.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM material_cable_installation_materials'))
+        return {
+          rows: [{ id: sourceMaterialId, type: 'Database cleat', order_measurement: 'meters' }],
+        };
+      if (sql.includes('INSERT INTO cable_type_default_materials')) {
+        inserted = true;
+        return { rows: [material] };
+      }
+      if (sql.includes('SELECT * FROM cable_type_default_materials'))
+        return { rows: inserted ? [material] : [] };
+      return query(sql);
+    });
+    const res = response();
+    await addMaterial({ ...request, body: { sourceMaterialId } } as Request, res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({
+      changeLogEntry: expect.objectContaining({ userId: 'actor' }),
+      defaultMaterial: expect.objectContaining({
+        name: 'Database cleat',
+        quantity: 1,
+        unit: 'meters',
+        sourceMasterMaterialId: sourceMaterialId,
+      }),
+    });
+    const insert = client.query.mock.calls.find(([sql]) =>
+      sql.includes('INSERT INTO cable_type_default_materials'),
+    )!;
+    expect(insert[1].slice(1)).toEqual([
+      'type',
+      'Database cleat',
+      1,
+      'meters',
+      null,
+      sourceMaterialId,
+    ]);
+    expect(
+      client.query.mock.calls.some(([sql]) => sql.includes('change_log = change_log ||')),
+    ).toBe(true);
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+});
+
+it.each([1, 2])(
+  'returns an in-place quantity edit and its history for quantity %s',
+  async (quantity) => {
+    const editMaterial = (cableTypesRouter as unknown as { stack: Layer[] }).stack
+      .find(
+        (layer) =>
+          layer.route?.path === '/:cableTypeId/default-materials/:defaultMaterialId' &&
+          layer.route.methods.patch,
+      )!
+      .route!.stack.at(-1)!.handle;
+    let material = {
+      id: 'material',
+      cable_type_id: 'type',
+      name: 'Cleat',
+      quantity: 1,
+      unit: 'pcs',
+      remarks: null,
+      source_kind: 'manual',
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    };
+    const query = client.query.getMockImplementation()!;
+    client.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT * FROM cable_type_default_materials')) return { rows: [material] };
+      if (sql.includes('UPDATE cable_type_default_materials')) {
+        material = { ...material, quantity };
+        return { rows: [material] };
+      }
+      return query(sql);
+    });
+    const res = response();
+    await editMaterial({ ...request, body: { quantity } } as Request, res);
+    expect(res.json).toHaveBeenCalledWith({
+      defaultMaterial: expect.objectContaining({ id: 'material', quantity }),
+      changeLogEntry:
+        quantity === 1
+          ? null
+          : expect.objectContaining({
+              userId: 'actor',
+              changes: ['Default material "Cleat" / Quantity: 1 → 2'],
+            }),
+    });
+    expect(client.query.mock.calls.some(([sql]) => /INSERT|DELETE/.test(sql))).toBe(false);
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
+  },
+);

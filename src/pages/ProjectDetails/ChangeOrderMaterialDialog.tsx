@@ -42,6 +42,16 @@ type CatalogChoice = {
   partNumber: string;
 };
 
+const DEFAULT_CATEGORIES: ChangeOrderSourceCatalog[] = [
+  'cable-type',
+  'cable-installation-material',
+  'tray-installation-material',
+  'tray',
+  'instrument',
+  'instrument-installation-material',
+  'support',
+];
+
 const useStyles = makeStyles({
   controls: {
     display: 'grid',
@@ -83,6 +93,8 @@ const loadAllSupports = async (): Promise<CatalogChoice[]> => {
 };
 
 type Props = {
+  categories?: ChangeOrderSourceCatalog[];
+  doubleWidth?: boolean;
   open: boolean;
   adding: boolean;
   documentName?: string;
@@ -94,11 +106,13 @@ export const ChangeOrderMaterialDialog = ({
   open,
   adding,
   documentName = 'Change Order',
+  categories = DEFAULT_CATEGORIES,
+  doubleWidth = false,
   onDismiss,
   onSelect,
 }: Props) => {
   const styles = useStyles();
-  const [category, setCategory] = useState<ChangeOrderSourceCatalog>('cable-type');
+  const [category, setCategory] = useState<ChangeOrderSourceCatalog>(categories[0]);
   const [purpose, setPurpose] = useState('');
   const [search, setSearch] = useState('');
   const [choices, setChoices] = useState<CatalogChoice[]>([]);
@@ -111,13 +125,23 @@ export const ChangeOrderMaterialDialog = ({
     setLoading(true);
     setError(null);
     void Promise.all([
-      fetchMaterialCableTypes(),
-      fetchMaterialCableInstallationMaterials(),
-      fetchMaterialTrayInstallationMaterials(),
-      fetchMaterialInstruments(),
-      fetchMaterialInstrumentInstallationMaterials(),
-      fetchAllMaterialTrays(),
-      loadAllSupports(),
+      categories.includes('cable-type')
+        ? fetchMaterialCableTypes()
+        : Promise.resolve({ cableTypes: [] }),
+      categories.includes('cable-installation-material')
+        ? fetchMaterialCableInstallationMaterials()
+        : Promise.resolve({ cableInstallationMaterials: [] }),
+      categories.includes('tray-installation-material')
+        ? fetchMaterialTrayInstallationMaterials()
+        : Promise.resolve({ trayInstallationMaterials: [] }),
+      categories.includes('instrument')
+        ? fetchMaterialInstruments()
+        : Promise.resolve({ instruments: [] }),
+      categories.includes('instrument-installation-material')
+        ? fetchMaterialInstrumentInstallationMaterials()
+        : Promise.resolve({ instrumentInstallationMaterials: [] }),
+      categories.includes('tray') ? fetchAllMaterialTrays() : Promise.resolve({ trays: [] }),
+      categories.includes('support') ? loadAllSupports() : Promise.resolve([]),
     ])
       .then((catalogs) => {
         const [
@@ -219,7 +243,7 @@ export const ChangeOrderMaterialDialog = ({
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [open, categories]);
 
   const purposeOptions = useMemo(
     () =>
@@ -248,7 +272,10 @@ export const ChangeOrderMaterialDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => !data.open && onDismiss()}>
-      <DialogSurface aria-label={`Add material to ${documentName}`}>
+      <DialogSurface
+        style={doubleWidth ? { width: '1200px', maxWidth: 'calc(100vw - 32px)' } : undefined}
+        aria-label={`Add material to ${documentName}`}
+      >
         <DialogBody>
           <DialogTitle>Add material</DialogTitle>
           <DialogContent>
@@ -261,15 +288,29 @@ export const ChangeOrderMaterialDialog = ({
                     setPurpose('');
                   }}
                 >
-                  <option value="cable-type">Cable material types</option>
-                  <option value="cable-installation-material">Cable installation materials</option>
-                  <option value="tray-installation-material">Trays installation materials</option>
-                  <option value="tray">Trays</option>
-                  <option value="instrument">Instruments</option>
-                  <option value="instrument-installation-material">
-                    Instruments installation materials
-                  </option>
-                  <option value="support">Supports</option>
+                  {categories.includes('cable-type') ? (
+                    <option value="cable-type">Cable material types</option>
+                  ) : null}
+                  {categories.includes('cable-installation-material') ? (
+                    <option value="cable-installation-material">
+                      Cable installation materials
+                    </option>
+                  ) : null}
+                  {categories.includes('tray-installation-material') ? (
+                    <option value="tray-installation-material">Trays installation materials</option>
+                  ) : null}
+                  {categories.includes('tray') ? <option value="tray">Trays</option> : null}
+                  {categories.includes('instrument') ? (
+                    <option value="instrument">Instruments</option>
+                  ) : null}
+                  {categories.includes('instrument-installation-material') ? (
+                    <option value="instrument-installation-material">
+                      Instruments installation materials
+                    </option>
+                  ) : null}
+                  {categories.includes('support') ? (
+                    <option value="support">Supports</option>
+                  ) : null}
                 </Select>
               </Field>
               <Field label="Purpose">

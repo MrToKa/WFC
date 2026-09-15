@@ -316,80 +316,6 @@ describe('project tray Excel validation', () => {
   });
 });
 
-describe('cable type default material Excel validation', () => {
-  const path = '/:cableTypeId/default-materials/import';
-  const headers = ['Material', 'Quantity', 'Unit', 'Remarks'];
-
-  it.each([
-    { label: 'unknown unit', row: ['Connector', 1, 'kg'], column: 'Unit' },
-    { label: 'excessive quantity', row: ['Connector', 1000001, 'pcs'], column: 'Quantity' },
-    { label: 'invalid quantity', row: ['Connector', 'several', 'pcs'], column: 'Quantity' },
-    { label: 'missing quantity', row: ['Connector', '', 'pcs'], column: 'Quantity' },
-    { label: 'missing unit', row: ['Connector', 1, ''], column: 'Unit' },
-    { label: 'missing material', row: ['', 1, 'pcs'], column: 'Material' },
-    {
-      label: 'overlong remarks',
-      row: ['Connector', 1, 'pcs', 'x'.repeat(2001)],
-      column: 'Remarks',
-    },
-  ])('rejects $label without deleting existing materials', async ({ row, column }) => {
-    assertInvalid(
-      await importSheet(cableTypesRouter, [headers, ['Connector', 1, 'pcs'], [], row], path),
-      column,
-      4,
-    );
-    expect(mocks.connect).not.toHaveBeenCalled();
-  });
-
-  it('reports unknown materials at the actual worksheet row', async () => {
-    assertInvalid(
-      await importSheet(cableTypesRouter, [headers, [], ['Missing', 1, 'pcs']], path),
-      'Material',
-      3,
-    );
-  });
-
-  it('does not erase existing materials when a required identifier is hidden by Excel formatting', async () => {
-    const response = await importSheet(cableTypesRouter, [headers, [1, '', '']], path, (sheet) => {
-      sheet.A2.z = ';;;';
-    });
-    assertInvalid(response, 'Material');
-    expect(mocks.connect).not.toHaveBeenCalled();
-  });
-
-  it('rejects duplicate normalized rows before replacing existing materials', async () => {
-    assertInvalid(
-      await importSheet(
-        cableTypesRouter,
-        [headers, ['Connector', 1, 'pcs'], ['connector', 1, 'pcs']],
-        path,
-      ),
-      'Material',
-      3,
-    );
-  });
-
-  it('keeps case-insensitive headers, decimal commas and different quantities for a material', async () => {
-    const response = await importSheet(
-      cableTypesRouter,
-      [
-        [' material ', 'QUANTITY', 'unit'],
-        ['Connector', '2,5', 'pcs/m'],
-        ['Connector', 3, 'pcs'],
-      ],
-      path,
-    );
-    expect(response.status).not.toHaveBeenCalled();
-    const insert = client.query.mock.calls.find(([sql]) =>
-      String(sql).includes('INSERT INTO cable_type_default_materials'),
-    );
-    expect(insert?.[1][3]).toBe(2.5);
-    expect(response.json).toHaveBeenCalledWith(
-      expect.objectContaining({ summary: { imported: 2 } }),
-    );
-  });
-});
-
 describe.each([
   {
     name: 'cables',
@@ -406,13 +332,6 @@ describe.each([
     required: 'Type',
   },
   { name: 'trays', router: traysRouter, headers: ['Name'], path: '/import', required: 'Name' },
-  {
-    name: 'default materials',
-    router: cableTypesRouter,
-    headers: ['Material', 'Quantity', 'Unit'],
-    path: '/:cableTypeId/default-materials/import',
-    required: 'Material',
-  },
 ])('$name workbook structure', ({ router, headers, path, required }) => {
   it('rejects a header-only workbook', async () => {
     assertInvalid(await importSheet(router, [headers], path), 'Workbook');

@@ -44,6 +44,15 @@ const format = (value: unknown) =>
 const describeMaterial = (material: CableTypeDefaultMaterialRow) =>
   `"${material.name}" (Quantity: ${format(material.quantity == null ? null : Number(material.quantity))}; Unit: ${format(material.unit)}; Remarks: ${format(material.remarks)}; Source: ${material.source_kind === 'standard-material' ? 'Inherited from Materials' : 'Project default'})`;
 
+const materialValues = (material: CableTypeDefaultMaterialRow) => ({
+  Name: material.name,
+  Quantity: material.quantity == null ? null : Number(material.quantity),
+  Unit: material.unit,
+  Remarks: material.remarks,
+  Source:
+    material.source_kind === 'standard-material' ? 'Inherited from Materials' : 'Project default',
+});
+
 export const describeCableTypeChanges = (
   before: CableTypeSnapshot | null,
   after: CableTypeSnapshot,
@@ -59,15 +68,35 @@ export const describeCableTypeChanges = (
     const newValue = format(normalize(after.cableType[field]));
     if (oldValue !== newValue) changes.push(`${label}: ${oldValue} → ${newValue}`);
   }
-  // Compare values, not row IDs: Excel imports and inherited snapshots recreate rows.
-  const remaining = after.materials.map(describeMaterial);
+  // Match persistent rows first so edits are described as field changes.
+  const remaining = [...after.materials];
+  const unmatched: CableTypeDefaultMaterialRow[] = [];
   for (const material of before?.materials ?? []) {
+    const index = remaining.findIndex((candidate) => candidate.id === material.id);
+    if (index < 0) {
+      unmatched.push(material);
+      continue;
+    }
+    const [updated] = remaining.splice(index, 1);
+    const oldValues = materialValues(material);
+    const newValues = materialValues(updated);
+    for (const key of Object.keys(oldValues) as (keyof typeof oldValues)[]) {
+      if (format(oldValues[key]) !== format(newValues[key])) {
+        changes.push(
+          `Default material "${material.name}" / ${key}: ${format(oldValues[key])} → ${format(newValues[key])}`,
+        );
+      }
+    }
+  }
+  // Inherited snapshots can recreate otherwise identical rows with new IDs.
+  for (const material of unmatched) {
     const description = describeMaterial(material);
-    const index = remaining.indexOf(description);
+    const index = remaining.findIndex((candidate) => describeMaterial(candidate) === description);
     if (index >= 0) remaining.splice(index, 1);
     else changes.push(`Removed default material ${description}`);
   }
-  for (const description of remaining) changes.push(`Added default material ${description}`);
+  for (const material of remaining)
+    changes.push(`Added default material ${describeMaterial(material)}`);
   return changes;
 };
 

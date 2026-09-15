@@ -1,4 +1,8 @@
 import {
+  resolveChangeOrderCatalogSnapshot,
+  CatalogMaterialNotFoundError,
+} from '../services/changeOrderCatalogService.js';
+import {
   readCableTypeSnapshot,
   recordCableTypeChanges,
 } from '../services/cableTypeChangeLogService.js';
@@ -27,11 +31,7 @@ import {
   validateExcelImport,
 } from '../utils/excelImport.js';
 import { snapshotStandardMaterialsToProjectCableType } from '../services/projectCableTypeSnapshotService.js';
-import {
-  buildNamedCatalogLookup,
-  findNamedCatalogMatch,
-  type NamedCatalogLookup,
-} from '../utils/catalogNameMatching.js';
+import { buildNamedCatalogLookup, findNamedCatalogMatch } from '../utils/catalogNameMatching.js';
 import {
   createCableTypeDefaultMaterialSchema,
   createCableTypeSchema,
@@ -53,13 +53,6 @@ const CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS = {
   remarks: 'Remarks',
 } as const;
 
-const CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES = {
-  material: [CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material],
-  quantity: [CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity],
-  unit: [CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.unit],
-  remarks: [CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.remarks],
-} as const;
-
 const normalizeOptionalString = (value: string | null | undefined): string | null => {
   if (value === undefined || value === null) {
     return null;
@@ -68,33 +61,6 @@ const normalizeOptionalString = (value: string | null | undefined): string | nul
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
 };
-
-const toNullableNumber = (value: unknown): number | null => {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-
-    if (trimmed === '') {
-      return null;
-    }
-
-    const normalized = trimmed.replace(',', '.');
-    const parsed = Number(normalized);
-
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-};
-
-const normalizeExcelHeader = (value: string): string => value.trim().toLowerCase();
 
 const sanitizeFileSegment = (value: string | null | undefined): string =>
   (typeof value === 'string' ? value.trim() : '')
@@ -146,15 +112,6 @@ type MaterialCableTypeMatchRow = {
   weight_kg_per_m: string | number | null;
 };
 
-type MaterialCableInstallationMaterialMatchRow = {
-  type: string;
-};
-
-type MaterialCableInstallationMaterialCatalogRow = {
-  type: string;
-  name: string;
-};
-
 type ProjectCableTypeNameRow = {
   id: string;
   name: string;
@@ -200,21 +157,9 @@ const selectMaterialCableTypeDetailsForProjectQuery = `
   FROM material_cable_types
 `;
 
-const selectMaterialCableInstallationMaterialsForProjectQuery = `
-  SELECT
-    type
-  FROM material_cable_installation_materials
-`;
-
 const createMaterialCableTypeNotFoundPayload = (name: string) => ({
   fieldErrors: {
     name: [`Cable type "${name}" was not found in materials.`],
-  },
-});
-
-const createMaterialCableInstallationMaterialNotFoundPayload = (name: string) => ({
-  fieldErrors: {
-    name: [`Cable installation material "${name}" was not found in materials.`],
   },
 });
 
@@ -241,38 +186,6 @@ const findMaterialCableTypeByName = async (
     buildNamedCatalogLookup<MaterialCableTypeMatchRow>(result.rows),
     name,
   );
-};
-
-const findMaterialCableInstallationMaterialByType = async (
-  queryable: Queryable,
-  type: string,
-): Promise<MaterialCableInstallationMaterialMatchRow | null> => {
-  const result = await queryable.query<MaterialCableInstallationMaterialMatchRow>(
-    `
-      ${selectMaterialCableInstallationMaterialsForProjectQuery}
-      WHERE lower(type) = lower($1)
-      LIMIT 1;
-    `,
-    [type],
-  );
-
-  return result.rows[0] ?? null;
-};
-
-const listMaterialCableInstallationMaterialCatalog = async (
-  queryable: Queryable,
-): Promise<MaterialCableInstallationMaterialCatalogRow[]> => {
-  const result = await queryable.query<MaterialCableInstallationMaterialCatalogRow>(
-    `
-      SELECT
-        type,
-        type AS name
-      FROM material_cable_installation_materials
-      ORDER BY type ASC;
-    `,
-  );
-
-  return result.rows;
 };
 
 const findMaterialCableTypesByKeys = async (
@@ -1190,18 +1103,12 @@ cableTypesRouter.post(
         return;
       }
 
-      const { name, quantity, unit, remarks } = parseResult.data;
-      const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
+      const { sourceMaterialId } = parseResult.data;
+      const material = await resolveChangeOrderCatalogSnapshot(
         client,
-        name,
+        'cable-installation-material',
+        sourceMaterialId,
       );
-
-      if (!materialCableInstallationMaterial) {
-        res.status(400).json({
-          error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim()),
-        });
-        return;
-      }
 
       const result = await client.query<CableTypeDefaultMaterialRow>(
         `
@@ -1212,9 +1119,10 @@ cableTypesRouter.post(
             quantity,
             unit,
             remarks,
-            source_kind
+            source_kind,
+            source_master_material_id
           )
-          VALUES ($1, $2, $3, $4, $5, $6, 'manual')
+          VALUES ($1, $2, $3, $4, $5, $6, 'manual', $7)
           RETURNING
             id,
             cable_type_id,
@@ -1231,20 +1139,34 @@ cableTypesRouter.post(
         [
           randomUUID(),
           cableTypeId,
-          materialCableInstallationMaterial.type,
-          quantity ?? null,
-          normalizeOptionalString(unit ?? null),
-          normalizeOptionalString(remarks ?? null),
+          material.descriptionEn,
+          1,
+          material.unit === 'meters' ? 'meters' : 'pcs',
+          null,
+          sourceMaterialId,
         ],
       );
 
-      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
+      const changeLogEntry = await recordCableTypeChanges(
+        client,
+        projectId,
+        cableTypeId,
+        req.userId!,
+        before,
+      );
       await client.query('COMMIT');
       committed = true;
       res.status(201).json({
         defaultMaterial: mapCableTypeDefaultMaterialRow(result.rows[0]),
+        changeLogEntry,
       });
     } catch (error) {
+      if (error instanceof CatalogMaterialNotFoundError) {
+        res
+          .status(400)
+          .json({ error: 'The selected material is no longer available in the catalog.' });
+        return;
+      }
       console.error('Create cable type default material error', error);
       res.status(500).json({ error: 'Failed to create default material' });
     } finally {
@@ -1297,28 +1219,11 @@ cableTypesRouter.patch(
         return;
       }
 
-      const { name, quantity, unit, remarks } = parseResult.data;
+      const { quantity, unit, remarks } = parseResult.data;
 
       const fields: string[] = [];
       const values: Array<string | number | null> = [];
       let index = 1;
-
-      if (name !== undefined) {
-        const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
-          client,
-          name,
-        );
-
-        if (!materialCableInstallationMaterial) {
-          res.status(400).json({
-            error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim()),
-          });
-          return;
-        }
-
-        fields.push(`name = $${index++}`);
-        values.push(materialCableInstallationMaterial.type);
-      }
 
       if (quantity !== undefined) {
         fields.push(`quantity = $${index++}`);
@@ -1350,6 +1255,9 @@ cableTypesRouter.patch(
             quantity,
             unit,
             remarks,
+            source_kind,
+            source_master_material_id,
+            source_standard_material_assignment_ids,
             created_at,
             updated_at;
         `,
@@ -1363,11 +1271,18 @@ cableTypesRouter.patch(
         return;
       }
 
-      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
+      const changeLogEntry = await recordCableTypeChanges(
+        client,
+        projectId,
+        cableTypeId,
+        req.userId!,
+        before,
+      );
       await client.query('COMMIT');
       committed = true;
       res.json({
         defaultMaterial: mapCableTypeDefaultMaterialRow(defaultMaterial),
+        changeLogEntry,
       });
     } catch (error) {
       console.error('Update cable type default material error', error);
@@ -1429,10 +1344,16 @@ cableTypesRouter.delete(
         return;
       }
 
-      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
+      const changeLogEntry = await recordCableTypeChanges(
+        client,
+        projectId,
+        cableTypeId,
+        req.userId!,
+        before,
+      );
       await client.query('COMMIT');
       committed = true;
-      res.status(204).send();
+      res.json({ changeLogEntry });
     } catch (error) {
       console.error('Delete cable type default material error', error);
       res.status(500).json({ error: 'Failed to delete default material' });
@@ -1441,375 +1362,6 @@ cableTypesRouter.delete(
         if (!committed) await client.query('ROLLBACK').catch(() => undefined);
         client.release();
       }
-    }
-  },
-);
-
-cableTypesRouter.post(
-  '/:cableTypeId/default-materials/import',
-  authenticate,
-  requireProjectEdit,
-  uploadExcelFile,
-  async (req: Request, res: Response): Promise<void> => {
-    const { projectId, cableTypeId } = req.params;
-
-    if (!projectId || !cableTypeId) {
-      res.status(400).json({ error: 'Project ID and cable type ID are required' });
-      return;
-    }
-
-    try {
-      const project = await ensureProjectExists(projectId);
-
-      if (!project) {
-        res.status(404).json({ error: 'Project not found' });
-        return;
-      }
-
-      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
-
-      if (!cableType) {
-        res.status(404).json({ error: 'Cable type not found' });
-        return;
-      }
-    } catch (error) {
-      console.error('Verify project for cable type default material import error', error);
-      res.status(500).json({ error: 'Failed to verify project cable type' });
-      return;
-    }
-
-    if (!req.file) {
-      res.status(400).json({ error: 'An .xlsx file is required' });
-      return;
-    }
-
-    const extension = path.extname(req.file.originalname ?? '').toLowerCase();
-
-    if (extension !== '.xlsx') {
-      res.status(400).json({ error: 'Only .xlsx files are supported' });
-      return;
-    }
-
-    let worksheet: XLSX.WorkSheet | null = null;
-
-    try {
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-      const sheetName = workbook.SheetNames[0];
-
-      if (!sheetName) {
-        res.status(400).json({ error: 'The workbook does not contain any sheets' });
-        return;
-      }
-
-      worksheet = workbook.Sheets[sheetName];
-    } catch (error) {
-      console.error('Read cable type default material import workbook error', error);
-      res.status(400).json({ error: 'Failed to read Excel workbook' });
-      return;
-    }
-
-    const rawRows = XLSX.utils.sheet_to_json<(unknown | null)[]>(worksheet, {
-      header: 1,
-      raw: true,
-      defval: null,
-    });
-    const headerRow = Array.isArray(rawRows[0]) ? rawRows[0] : [];
-    const normalizedHeaders = new Set(
-      headerRow
-        .map((value) => normalizeExcelHeader(String(value ?? '')))
-        .filter((value) => value !== ''),
-    );
-    const missingHeaders = [
-      CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material,
-      CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity,
-      CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.unit,
-    ].filter((header) => !normalizedHeaders.has(normalizeExcelHeader(header)));
-
-    if (missingHeaders.length > 0) {
-      res.status(400).json(
-        excelImportError(
-          missingHeaders.map((column) => ({
-            row: worksheet['!ref'] ? XLSX.utils.decode_range(worksheet['!ref']).s.r + 1 : 1,
-            column,
-            message: 'Required column is missing. Use the import template.',
-          })),
-        ),
-      );
-      return;
-    }
-
-    type CableTypeDefaultMaterialImportRow = Record<string, unknown>;
-
-    // Default material templates historically accept trimmed, case-insensitive headers.
-    const aliases = (name: string) => [
-      name,
-      ...headerRow
-        .map((value) => String(value ?? ''))
-        .filter((header) => normalizeExcelHeader(header) === normalizeExcelHeader(name)),
-    ];
-    const rows = readExcelImportRows(
-      worksheet,
-      aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity),
-    );
-    const issues = validateExcelImport(worksheet, [
-      {
-        headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material),
-        required: true,
-        maxLength: 200,
-      },
-      {
-        headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity),
-        type: 'number',
-        min: 0,
-        max: 1_000_000,
-      },
-      {
-        headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.unit),
-        values: ['pcs', 'meters', 'pcs/m'],
-      },
-      { headers: aliases(CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.remarks), maxLength: 2000 },
-    ]);
-
-    const readCell = (
-      row: CableTypeDefaultMaterialImportRow,
-      headers: readonly string[],
-    ): unknown => {
-      const normalizedAliasHeaders = new Set(headers.map(normalizeExcelHeader));
-
-      for (const [header, value] of Object.entries(row)) {
-        if (normalizedAliasHeaders.has(normalizeExcelHeader(header))) {
-          return value;
-        }
-      }
-
-      return undefined;
-    };
-
-    const hasCellValue = (value: unknown): boolean =>
-      normalizeOptionalString(typeof value === 'number' ? String(value) : String(value ?? '')) !==
-      null;
-
-    const prepared: Array<{
-      rowNumber: number;
-      name: string;
-      quantity: number | null;
-      unit: string | null;
-      remarks: string | null;
-    }> = [];
-
-    for (const [index, row] of rows.entries()) {
-      const materialRaw = readCell(row, CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES.material);
-      const quantityRaw = readCell(row, CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES.quantity);
-      const unitRaw = readCell(row, CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES.unit);
-      const remarksRaw = readCell(row, CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADER_ALIASES.remarks);
-      const rowNumber = getExcelRowNumber(row, index);
-      const hasAnyValue = [materialRaw, quantityRaw, unitRaw, remarksRaw].some(hasCellValue);
-
-      if (!hasAnyValue) {
-        continue;
-      }
-
-      const name =
-        typeof materialRaw === 'number' ? String(materialRaw) : String(materialRaw ?? '').trim();
-
-      if (name === '') {
-        continue;
-      }
-
-      const quantityText =
-        typeof quantityRaw === 'number' ? String(quantityRaw) : String(quantityRaw ?? '').trim();
-      const quantity = toNullableNumber(quantityRaw);
-
-      if (quantityText !== '' && quantity === null) {
-        continue;
-      }
-
-      if (quantity !== null && quantity < 0) {
-        continue;
-      }
-
-      const unit = normalizeOptionalString(
-        typeof unitRaw === 'number' ? String(unitRaw) : String(unitRaw ?? ''),
-      );
-
-      if (quantity !== null && unit === null) {
-        issues.push({
-          row: rowNumber,
-          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.unit,
-          message: 'Unit is required when quantity is set.',
-        });
-      }
-
-      if (quantity === null && unit !== null) {
-        issues.push({
-          row: rowNumber,
-          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.quantity,
-          message: 'Quantity is required when unit is set.',
-        });
-      }
-
-      prepared.push({
-        rowNumber,
-        name,
-        quantity,
-        unit,
-        remarks: normalizeOptionalString(
-          typeof remarksRaw === 'number' ? String(remarksRaw) : String(remarksRaw ?? ''),
-        ),
-      });
-    }
-
-    if (issues.length > 0) {
-      res.status(400).json(excelImportError(issues));
-      return;
-    }
-
-    if (prepared.length === 0) {
-      res.status(400).json(
-        excelImportError([
-          {
-            row: worksheet['!ref'] ? XLSX.utils.decode_range(worksheet['!ref']).s.r + 2 : 2,
-            column: 'Workbook',
-            message: 'No default materials found in the workbook. Add at least one material row.',
-          },
-        ]),
-      );
-      return;
-    }
-
-    let materialLookup: NamedCatalogLookup<MaterialCableInstallationMaterialCatalogRow>;
-
-    try {
-      const materialCatalog = await listMaterialCableInstallationMaterialCatalog(pool);
-      materialLookup = buildNamedCatalogLookup(materialCatalog);
-    } catch (error) {
-      console.error('Fetch material catalog for cable type default material import error', error);
-      res.status(500).json({ error: 'Failed to validate materials' });
-      return;
-    }
-
-    const normalizedRows = prepared.map((row) => {
-      const matchedMaterial = findNamedCatalogMatch(materialLookup, row.name);
-
-      if (!matchedMaterial) {
-        issues.push({
-          row: row.rowNumber,
-          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material,
-          message: `Cable installation material "${row.name}" was not found in the material catalog. Add it to Materials first.`,
-        });
-        return row;
-      }
-
-      return {
-        ...row,
-        name: matchedMaterial.type,
-      };
-    });
-
-    const seenRows = new Map<string, number>();
-    for (const row of normalizedRows) {
-      const key = JSON.stringify([row.name.toLowerCase(), row.quantity, row.unit, row.remarks]);
-      const firstRow = seenRows.get(key);
-      if (firstRow !== undefined) {
-        issues.push({
-          row: row.rowNumber,
-          column: CABLE_TYPE_DEFAULT_MATERIAL_EXCEL_HEADERS.material,
-          message: `Duplicate material row; it already appears on row ${firstRow}.`,
-        });
-      } else {
-        seenRows.set(key, row.rowNumber);
-      }
-    }
-
-    if (issues.length > 0) {
-      res.status(400).json(excelImportError(issues));
-      return;
-    }
-
-    let client: PoolClient | undefined;
-
-    try {
-      client = await pool.connect();
-      await client.query('BEGIN');
-      const before = await readCableTypeSnapshot(client, projectId, cableTypeId);
-      if (!before) {
-        await client.query('ROLLBACK');
-        res.status(404).json({ error: 'Cable type not found' });
-        return;
-      }
-
-      await client.query(
-        `
-          DELETE FROM cable_type_default_materials
-          WHERE cable_type_id = $1;
-        `,
-        [cableTypeId],
-      );
-
-      if (normalizedRows.length > 0) {
-        const insertValues: Array<string | number | null> = [];
-        const valueClauses: string[] = [];
-
-        normalizedRows.forEach((row, index) => {
-          const baseIndex = index * 6;
-          insertValues.push(
-            randomUUID(),
-            cableTypeId,
-            row.name,
-            row.quantity,
-            row.unit,
-            row.remarks,
-          );
-          valueClauses.push(
-            `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6})`,
-          );
-        });
-
-        await client.query(
-          `
-            INSERT INTO cable_type_default_materials (
-              id,
-              cable_type_id,
-              name,
-              quantity,
-              unit,
-              remarks,
-              source_kind
-            )
-            VALUES ${valueClauses.map((clause) => `${clause.slice(0, -1)}, 'manual')`).join(', ')};
-          `,
-          insertValues,
-        );
-      }
-
-      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
-      await client.query('COMMIT');
-    } catch (error) {
-      await client?.query('ROLLBACK').catch(() => undefined);
-      console.error('Import cable type default materials error', error);
-      res.status(500).json({ error: 'Failed to import default materials' });
-      return;
-    } finally {
-      client?.release();
-    }
-
-    try {
-      const refreshed = await listCableTypeDefaultMaterials(pool, cableTypeId);
-
-      res.json({
-        summary: {
-          imported: normalizedRows.length,
-        },
-        defaultMaterials: refreshed.map(mapCableTypeDefaultMaterialRow),
-      });
-    } catch (error) {
-      console.error('Fetch cable type default materials after import error', error);
-      res.status(500).json({
-        error: 'Default materials imported but failed to refresh list',
-        summary: {
-          imported: normalizedRows.length,
-        },
-      });
     }
   },
 );

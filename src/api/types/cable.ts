@@ -138,15 +138,19 @@ export type CableTypeDefaultMaterial = {
   updatedAt: string;
 };
 
+export type CableTypeDefaultMaterialMutationResult = {
+  defaultMaterial: CableTypeDefaultMaterial;
+  changeLogEntry: ProjectChangeLogEntry | null;
+};
+
 export type CableTypeDefaultMaterialInput = {
-  name: string;
+  sourceMaterialId: string;
+};
+
+export type CableTypeDefaultMaterialUpdateInput = {
   quantity?: number | null;
   unit?: string | null;
   remarks?: string | null;
-};
-
-export type CableTypeDefaultMaterialImportSummary = {
-  imported: number;
 };
 
 export type CableMaterialSource = 'default' | 'manual';

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { importCableTypeDefaultMaterials, importCableTypes, importCables } from './cables';
+import { importCableTypes, importCables } from './cables';
 import { importTrays } from './trays';
 import {
   importMaterialCableInstallationMaterials,
@@ -36,10 +36,6 @@ const imports: [string, (file: File) => Promise<unknown>][] = [
   ['/projects/project/cable-types/import', (file) => importCableTypes('token', 'project', file)],
   ['/projects/project/cables/import', (file) => importCables('token', 'project', file)],
   ['/projects/project/trays/import', (file) => importTrays('token', 'project', file)],
-  [
-    '/projects/project/cable-types/type/default-materials/import',
-    (file) => importCableTypeDefaultMaterials('token', 'project', 'type', file),
-  ],
 ];
 
 afterEach(() => vi.restoreAllMocks());
