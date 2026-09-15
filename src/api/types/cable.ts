@@ -183,6 +183,7 @@ export type CableTypeDetails = {
 };
 
 export type CableDetails = {
+  changeLog?: ProjectChangeLogEntry[];
   cable: Cable;
   materialCableType: MaterialCableType | null;
   cableTypeDefaultMaterials: CableTypeDefaultMaterial[];

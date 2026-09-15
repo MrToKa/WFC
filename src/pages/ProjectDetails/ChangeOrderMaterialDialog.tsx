@@ -99,7 +99,7 @@ type Props = {
   adding: boolean;
   documentName?: string;
   onDismiss: () => void;
-  onSelect: (choice: Pick<CatalogChoice, 'id' | 'category'>) => Promise<void>;
+  onSelect: (choice: Pick<CatalogChoice, 'id' | 'category' | 'description'>) => Promise<void>;
 };
 
 export const ChangeOrderMaterialDialog = ({

@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import type { ProjectChangeLogEntry } from '../models/project.js';
+import { recordCableMaterialChanges } from '../services/cableMaterialChangeLogService.js';
 import path from 'node:path';
 import type { Request as ExpressRequest, Response } from 'express';
 import { Router } from 'express';
@@ -408,6 +410,7 @@ const selectCableDetailsQuery = `
     c.tested,
     c.materials_initialized,
     c.materials_customized,
+    c.change_log,
     c.created_at,
     c.updated_at,
     ct.name AS type_name,
@@ -501,7 +504,8 @@ const selectMaterialCableTypeDetailsQuery = `
 
 const selectMaterialCableInstallationMaterialsQuery = `
   SELECT
-    type
+    type,
+    order_measurement
   FROM material_cable_installation_materials
 `;
 
@@ -697,9 +701,11 @@ const formatDateTimeCell = (value: string): Date | string => {
 
 type MaterialCableInstallationMaterialMatchRow = {
   type: string;
+  order_measurement: MaterialCableInstallationMaterialRow['order_measurement'];
 };
 
 type CableDetailsRow = CableWithTypeRow & {
+  change_log?: ProjectChangeLogEntry[];
   materials_initialized: boolean;
   materials_customized: boolean;
 };
@@ -832,13 +838,15 @@ const findProjectCableById = async (
   queryable: Queryable,
   projectId: string,
   cableId: string,
+  lockForUpdate = false,
 ): Promise<CableDetailsRow | null> => {
   const result = await queryable.query<CableDetailsRow>(
     `
       ${selectCableDetailsQuery}
       WHERE c.project_id = $1
         AND c.id = $2
-      LIMIT 1;
+      LIMIT 1
+      ${lockForUpdate ? 'FOR UPDATE OF c' : ''};
     `,
     [projectId, cableId],
   );
@@ -2603,12 +2611,20 @@ cablesRouter.patch(
       const shouldResetMaterials = currentSnapshot.cableTypeId !== nextSnapshot.cableTypeId;
 
       if (shouldResetMaterials) {
+        const previousMaterials = await listCableMaterials(client, updated.id);
         await resetCableMaterialsToCableTypeDefaults(
           client,
           projectId,
           updated.id,
           nextSnapshot.cableTypeId,
           nextSnapshot.typeName,
+        );
+        await recordCableMaterialChanges(
+          client,
+          updated.id,
+          req.userId!,
+          previousMaterials,
+          await listCableMaterials(client, updated.id),
         );
       }
 
@@ -2773,6 +2789,7 @@ cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promi
 
     res.json({
       cable: mapCableRow(cable),
+      changeLog: cable.change_log ?? [],
       materialCableType: materialCableType ? mapMaterialCableTypeRow(materialCableType) : null,
       cableTypeDefaultMaterials: cableTypeDefaultMaterials.map(mapCableTypeDefaultMaterialRow),
       cableMaterials: cableMaterials.map(mapCableMaterialRow),
@@ -2813,7 +2830,7 @@ cablesRouter.post(
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const cable = await findProjectCableById(client, projectId, cableId);
+      const cable = await findProjectCableById(client, projectId, cableId, true);
 
       if (!cable) {
         await client.query('ROLLBACK');
@@ -2841,9 +2858,17 @@ cablesRouter.post(
         cable.materials_customized,
       );
 
+      const changeLogEntry = await recordCableMaterialChanges(
+        client,
+        cable.id,
+        req.userId!,
+        existingMaterials,
+        syncResult.cableMaterials,
+      );
       await client.query('COMMIT');
 
       res.json({
+        changeLogEntry,
         cableMaterials: syncResult.cableMaterials.map(mapCableMaterialRow),
         cableTypeDefaultMaterials: syncResult.cableTypeDefaultMaterials.map(
           mapCableTypeDefaultMaterialRow,
@@ -2894,7 +2919,8 @@ cablesRouter.post(
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const cable = await findProjectCableById(client, projectId, cableId);
+      // Serialize additions to this cable so simultaneous requests cannot add the same material.
+      const cable = await findProjectCableById(client, projectId, cableId, true);
 
       if (!cable) {
         await client.query('ROLLBACK');
@@ -2902,7 +2928,7 @@ cablesRouter.post(
         return;
       }
 
-      await ensureCableMaterialsInitialized(
+      const existingMaterials = await ensureCableMaterialsInitialized(
         client,
         projectId,
         cable.id,
@@ -2923,6 +2949,18 @@ cablesRouter.post(
         res.status(400).json({
           error: createMaterialCableInstallationMaterialNotFoundPayload(name.trim()),
         });
+        return;
+      }
+
+      if (
+        existingMaterials.some(
+          (material) =>
+            normalizeComparableCatalogName(material.name) ===
+            normalizeComparableCatalogName(materialCableInstallationMaterial.type),
+        )
+      ) {
+        await client.query('ROLLBACK');
+        res.status(409).json({ error: 'This material is already added to this cable.' });
         return;
       }
 
@@ -2955,8 +2993,12 @@ cablesRouter.post(
           randomUUID(),
           cable.id,
           materialCableInstallationMaterial.type,
-          quantity ?? null,
-          normalizeOptionalString(unit ?? null),
+          quantity === undefined ? 1 : quantity,
+          unit === undefined
+            ? materialCableInstallationMaterial.order_measurement === 'meters'
+              ? 'meters'
+              : 'pcs'
+            : normalizeOptionalString(unit),
           normalizeOptionalString(remarks ?? null),
           CABLE_MATERIAL_SOURCE_MANUAL,
           null,
@@ -2967,9 +3009,17 @@ cablesRouter.post(
         initialized: true,
         customized: true,
       });
+      const changeLogEntry = await recordCableMaterialChanges(
+        client,
+        cable.id,
+        req.userId!,
+        existingMaterials,
+        [...existingMaterials, result.rows[0]],
+      );
       await client.query('COMMIT');
 
       res.status(201).json({
+        changeLogEntry,
         cableMaterial: mapCableMaterialRow(result.rows[0]),
       });
     } catch (error) {
@@ -3018,7 +3068,7 @@ cablesRouter.patch(
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const cable = await findProjectCableById(client, projectId, cableId);
+      const cable = await findProjectCableById(client, projectId, cableId, true);
 
       if (!cable) {
         await client.query('ROLLBACK');
@@ -3026,7 +3076,7 @@ cablesRouter.patch(
         return;
       }
 
-      await ensureCableMaterialsInitialized(
+      const existingMaterials = await ensureCableMaterialsInitialized(
         client,
         projectId,
         cable.id,
@@ -3109,9 +3159,17 @@ cablesRouter.patch(
         initialized: true,
         customized: true,
       });
+      const changeLogEntry = await recordCableMaterialChanges(
+        client,
+        cable.id,
+        req.userId!,
+        existingMaterials,
+        existingMaterials.map((material) => material.id === materialId ? cableMaterial : material),
+      );
       await client.query('COMMIT');
 
       res.json({
+        changeLogEntry,
         cableMaterial: mapCableMaterialRow(cableMaterial),
       });
     } catch (error) {
@@ -3153,7 +3211,7 @@ cablesRouter.delete(
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const cable = await findProjectCableById(client, projectId, cableId);
+      const cable = await findProjectCableById(client, projectId, cableId, true);
 
       if (!cable) {
         await client.query('ROLLBACK');
@@ -3161,7 +3219,7 @@ cablesRouter.delete(
         return;
       }
 
-      await ensureCableMaterialsInitialized(
+      const existingMaterials = await ensureCableMaterialsInitialized(
         client,
         projectId,
         cable.id,
@@ -3190,9 +3248,16 @@ cablesRouter.delete(
         initialized: true,
         customized: true,
       });
+      const changeLogEntry = await recordCableMaterialChanges(
+        client,
+        cable.id,
+        req.userId!,
+        existingMaterials,
+        existingMaterials.filter((material) => material.id !== materialId),
+      );
       await client.query('COMMIT');
 
-      res.status(204).send();
+      res.json({ changeLogEntry });
     } catch (error) {
       if (client) {
         await client.query('ROLLBACK').catch(() => undefined);
@@ -3791,12 +3856,20 @@ cablesRouter.post(
         );
 
         if (shouldResetMaterials) {
+          const previousMaterials = await listCableMaterials(client, existing.id);
           await resetCableMaterialsToCableTypeDefaults(
             client,
             projectId,
             existing.id,
             nextSnapshot.cableTypeId,
             nextSnapshot.typeName,
+          );
+          await recordCableMaterialChanges(
+            client,
+            existing.id,
+            req.userId!,
+            previousMaterials,
+            await listCableMaterials(client, existing.id),
           );
         }
 

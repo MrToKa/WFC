@@ -39,7 +39,6 @@ import {
   fetchCables,
   fetchCableDetails,
   fetchCableVersions,
-  fetchMaterialCableInstallationMaterials,
   fetchTrays,
   syncCableBaseMaterials,
   type Cable,
@@ -48,7 +47,8 @@ import {
   type CableType,
   type CableVersion,
   type CableTypeDefaultMaterial,
-  type MaterialCableInstallationMaterial,
+  type ChangeOrderSourceCatalog,
+  type ProjectChangeLogEntry,
   type Tray,
   updateCable,
   updateCableMaterial,
@@ -57,6 +57,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
 import { CableDialog, type CableDialogField } from './ProjectDetails/CableDialog';
+import { ChangeOrderMaterialDialog } from './ProjectDetails/ChangeOrderMaterialDialog';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
 import {
   diffCableVersions,
@@ -73,7 +74,13 @@ import {
 } from './ProjectDetails.forms';
 import { formatNumeric, parseNumberInput, toNullableString } from './ProjectDetails.utils';
 
-type CableMaterialDialogMode = 'create' | 'edit';
+const CABLE_MATERIAL_CATEGORIES: ChangeOrderSourceCatalog[] = ['cable-installation-material'];
+
+const appendChangeLog = (
+  history: ProjectChangeLogEntry[] = [],
+  entry?: ProjectChangeLogEntry | null,
+): ProjectChangeLogEntry[] =>
+  entry && !history.some((item) => item.id === entry.id) ? [...history, entry] : history;
 
 type CableMaterialFormState = {
   name: string;
@@ -488,14 +495,13 @@ export const CableDetails = () => {
   const [projectCables, setProjectCables] = useState<Cable[]>([]);
   const [projectTrays, setProjectTrays] = useState<Tray[]>([]);
   const [cableTypes, setCableTypes] = useState<CableType[]>([]);
-  const [availableMaterials, setAvailableMaterials] = useState<MaterialCableInstallationMaterial[]>(
-    [],
-  );
-  const [availableMaterialsLoading, setAvailableMaterialsLoading] = useState<boolean>(true);
-  const [availableMaterialsError, setAvailableMaterialsError] = useState<string | null>(null);
-
+  const [catalogDialogOpen, setCatalogDialogOpen] = useState(false);
+  const [addingMaterial, setAddingMaterial] = useState(false);
   const [dialogOpen, setDialogOpen] = useState<boolean>(false);
-  const [dialogMode, setDialogMode] = useState<CableMaterialDialogMode>('create');
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (dialogOpen) quantityInputRef.current?.focus({ preventScroll: true });
+  }, [dialogOpen]);
   const [dialogValues, setDialogValues] = useState<CableMaterialFormState>(emptyCableMaterialForm);
   const [dialogErrors, setDialogErrors] = useState<CableMaterialFormErrors>({});
   const [dialogSubmitting, setDialogSubmitting] = useState<boolean>(false);
@@ -698,50 +704,6 @@ export const CableDetails = () => {
   }, [projectId]);
 
   useEffect(() => {
-    let active = true;
-
-    const loadAvailableMaterials = async () => {
-      if (!canManageMaterials) {
-        setAvailableMaterialsLoading(false);
-        return;
-      }
-      setAvailableMaterialsLoading(true);
-      setAvailableMaterialsError(null);
-
-      try {
-        const response = await fetchMaterialCableInstallationMaterials();
-
-        if (!active) {
-          return;
-        }
-
-        setAvailableMaterials(response.cableInstallationMaterials);
-      } catch (err) {
-        console.error('Failed to load cable installation materials for cable materials', err);
-
-        if (!active) {
-          return;
-        }
-
-        setAvailableMaterials([]);
-        setAvailableMaterialsError(
-          err instanceof ApiError ? err.message : 'Failed to load cable installation materials.',
-        );
-      } finally {
-        if (active) {
-          setAvailableMaterialsLoading(false);
-        }
-      }
-    };
-
-    void loadAvailableMaterials();
-
-    return () => {
-      active = false;
-    };
-  }, [canManageMaterials]);
-
-  useEffect(() => {
     if (cableVersions.length === 0) {
       setSelectedVersionId(null);
       setComparedVersionId(null);
@@ -779,7 +741,7 @@ export const CableDetails = () => {
   const selectedVersion = useMemo(
     () =>
       selectedVersionId
-        ? cableVersions.find((version) => version.id === selectedVersionId) ?? null
+        ? (cableVersions.find((version) => version.id === selectedVersionId) ?? null)
         : null,
     [cableVersions, selectedVersionId],
   );
@@ -787,7 +749,7 @@ export const CableDetails = () => {
   const comparedVersion = useMemo(
     () =>
       comparedVersionId && comparedVersionId !== selectedVersionId
-        ? cableVersions.find((version) => version.id === comparedVersionId) ?? null
+        ? (cableVersions.find((version) => version.id === comparedVersionId) ?? null)
         : null,
     [cableVersions, comparedVersionId, selectedVersionId],
   );
@@ -796,6 +758,24 @@ export const CableDetails = () => {
     () => (selectedVersion ? diffCableVersions(selectedVersion, comparedVersion) : []),
     [comparedVersion, selectedVersion],
   );
+
+  const changeLog = useMemo(() => {
+    const versions = [...cableVersions].sort((a, b) => b.versionNumber - a.versionNumber);
+    const revisionEntries = versions.map((version, index) => ({
+      id: `version-${version.id}`,
+      userName: formatCableVersionUser(version),
+      changedAt: version.changedAt,
+      changes: [
+        formatCableVersionChange(version),
+        ...diffCableVersions(version, versions[index + 1] ?? null).map(
+          (change) => `${change.label}: ${change.previousValue} → ${change.nextValue}`,
+        ),
+      ],
+    }));
+    return [...(details?.changeLog ?? []), ...revisionEntries].sort(
+      (a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime(),
+    );
+  }, [cableVersions, details?.changeLog]);
 
   const handleSelectedVersionChange = useCallback(
     (_event: unknown, data: { optionValue?: string }) => {
@@ -827,17 +807,6 @@ export const CableDetails = () => {
       setDialogValues((previous) => ({ ...previous, [field]: data.value }));
       setDialogErrors((previous) => ({ ...previous, [field]: undefined, general: undefined }));
     };
-
-  const handleMaterialNameSelect = useCallback(
-    (_event: unknown, data: { optionValue?: string }) => {
-      setDialogValues((previous) => ({
-        ...previous,
-        name: data.optionValue ?? '',
-      }));
-      setDialogErrors((previous) => ({ ...previous, name: undefined, general: undefined }));
-    },
-    [],
-  );
 
   const handleMaterialUnitSelect = useCallback(
     (_event: unknown, data: { optionValue?: string }) => {
@@ -881,21 +850,23 @@ export const CableDetails = () => {
     [],
   );
 
-  const handleCableEditMtoSelect = useCallback((_event: unknown, data: { optionValue?: string }) => {
-    setCableEditDialogValues((previous) => ({
-      ...previous,
-      mto: data.optionValue ?? '',
-    }));
-    setCableEditDialogErrors((previous) => ({
-      ...previous,
-      mto: undefined,
-      general: undefined,
-    }));
-  }, []);
+  const handleCableEditMtoSelect = useCallback(
+    (_event: unknown, data: { optionValue?: string }) => {
+      setCableEditDialogValues((previous) => ({
+        ...previous,
+        mto: data.optionValue ?? '',
+      }));
+      setCableEditDialogErrors((previous) => ({
+        ...previous,
+        mto: undefined,
+        general: undefined,
+      }));
+    },
+    [],
+  );
 
   const resetDialog = useCallback(() => {
     setDialogOpen(false);
-    setDialogMode('create');
     setDialogValues(emptyCableMaterialForm);
     setDialogErrors({});
     setDialogSubmitting(false);
@@ -919,32 +890,56 @@ export const CableDetails = () => {
     setCableEditDialogOpen(true);
   }, [details]);
 
-  const openCreateDialog = useCallback(() => {
-    if (!availableMaterialsLoading && availableMaterials.length === 0) {
-      showToast({
-        intent: 'error',
-        title: 'No cable installation materials available',
-        body:
-          availableMaterialsError ??
-          'Add cable installation materials in Materials before assigning them here.',
-      });
-      return;
-    }
-
-    setDialogMode('create');
-    setDialogValues(emptyCableMaterialForm);
-    setDialogErrors({});
-    setDialogOpen(true);
-    setEditingCableMaterialId(null);
-  }, [availableMaterials.length, availableMaterialsError, availableMaterialsLoading, showToast]);
-
   const openEditDialog = useCallback((material: CableMaterial) => {
-    setDialogMode('edit');
     setDialogValues(toCableMaterialFormState(material));
     setDialogErrors({});
     setDialogOpen(true);
     setEditingCableMaterialId(material.id);
   }, []);
+
+  const handleAddCatalogMaterial = async (choice: { description: string }) => {
+    if (!projectId || !cableId || !token || !canManageMaterials || addingMaterial) return;
+    if (
+      details?.cableMaterials.some(
+        (material) =>
+          normalizeComparableMaterialText(material.name) ===
+          normalizeComparableMaterialText(choice.description),
+      )
+    ) {
+      showToast({
+        intent: 'error',
+        title: 'Material already added',
+        body: 'This material is already added to this cable. Edit the existing row to change its quantity.',
+      });
+      return;
+    }
+    setAddingMaterial(true);
+    try {
+      const response = await createCableMaterial(token, projectId, cableId, {
+        name: choice.description,
+      });
+      setDetails((previous) =>
+        previous
+          ? {
+              ...previous,
+              cableMaterials: sortMaterials([...previous.cableMaterials, response.cableMaterial]),
+              changeLog: appendChangeLog(previous.changeLog, response.changeLogEntry),
+            }
+          : previous,
+      );
+      setCatalogDialogOpen(false);
+      openEditDialog(response.cableMaterial);
+      showToast({ intent: 'success', title: 'Cable material added' });
+    } catch (err) {
+      showToast({
+        intent: 'error',
+        title: 'Failed to add cable material',
+        body: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setAddingMaterial(false);
+    }
+  };
 
   const handleDialogSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -967,25 +962,13 @@ export const CableDetails = () => {
     setDialogErrors({});
 
     try {
-      if (dialogMode === 'create') {
-        const response = await createCableMaterial(token, projectId, cableId, input);
-
-        setDetails((previous) =>
-          previous
-            ? {
-                ...previous,
-                cableMaterials: sortMaterials([...previous.cableMaterials, response.cableMaterial]),
-              }
-            : previous,
-        );
-        showToast({ intent: 'success', title: 'Cable material added' });
-      } else if (editingCableMaterialId) {
+      if (editingCableMaterialId) {
         const response = await updateCableMaterial(
           token,
           projectId,
           cableId,
           editingCableMaterialId,
-          input,
+          { quantity: input.quantity, unit: input.unit, remarks: input.remarks },
         );
 
         setDetails((previous) =>
@@ -997,6 +980,7 @@ export const CableDetails = () => {
                     item.id === editingCableMaterialId ? response.cableMaterial : item,
                   ),
                 ),
+                changeLog: appendChangeLog(previous.changeLog, response.changeLogEntry),
               }
             : previous,
         );
@@ -1135,12 +1119,13 @@ export const CableDetails = () => {
       setPendingCableMaterialId(material.id);
 
       try {
-        await deleteCableMaterial(token, projectId, cableId, material.id);
+        const response = await deleteCableMaterial(token, projectId, cableId, material.id);
         setDetails((previous) =>
           previous
             ? {
                 ...previous,
                 cableMaterials: previous.cableMaterials.filter((item) => item.id !== material.id),
+                changeLog: appendChangeLog(previous.changeLog, response?.changeLogEntry),
               }
             : previous,
         );
@@ -1180,6 +1165,7 @@ export const CableDetails = () => {
               ...previous,
               cableTypeDefaultMaterials: sortMaterials(response.cableTypeDefaultMaterials),
               cableMaterials: sortMaterials(response.cableMaterials),
+              changeLog: appendChangeLog(previous.changeLog, response.changeLogEntry),
             }
           : previous,
       );
@@ -1226,24 +1212,10 @@ export const CableDetails = () => {
   }, [details]);
 
   const autoCalculatedLength = useMemo(
-    () => calculateAutoCableLength(details?.cable.routing, projectTrays, project?.secondaryTrayLength),
+    () =>
+      calculateAutoCableLength(details?.cable.routing, projectTrays, project?.secondaryTrayLength),
     [details?.cable.routing, project?.secondaryTrayLength, projectTrays],
   );
-
-  const availableMaterialNames = useMemo(
-    () => availableMaterials.map((material) => material.type),
-    [availableMaterials],
-  );
-
-  const resolvedMaterialNames = useMemo(() => {
-    if (!dialogValues.name) {
-      return availableMaterialNames;
-    }
-
-    return availableMaterialNames.includes(dialogValues.name)
-      ? availableMaterialNames
-      : [dialogValues.name, ...availableMaterialNames];
-  }, [availableMaterialNames, dialogValues.name]);
 
   const sourceMaterialDetails = details?.materialCableType;
   const cableTypesForDialog = useMemo(() => {
@@ -1541,8 +1513,8 @@ export const CableDetails = () => {
             {canManageMaterials ? (
               <Button
                 appearance="primary"
-                onClick={openCreateDialog}
-                disabled={availableMaterialsLoading || syncingBaseMaterials}
+                onClick={() => setCatalogDialogOpen(true)}
+                disabled={syncingBaseMaterials}
               >
                 Add cable material
               </Button>
@@ -1656,7 +1628,9 @@ export const CableDetails = () => {
                       <Field label="Selected revision">
                         <Combobox
                           selectedOptions={selectedVersion ? [selectedVersion.id] : []}
-                          value={selectedVersion ? formatCableVersionOption(selectedVersion) : undefined}
+                          value={
+                            selectedVersion ? formatCableVersionOption(selectedVersion) : undefined
+                          }
                           onOptionSelect={handleSelectedVersionChange}
                           freeform={false}
                         >
@@ -1671,7 +1645,9 @@ export const CableDetails = () => {
                         <Combobox
                           placeholder="Select a revision to compare"
                           selectedOptions={comparedVersion ? [comparedVersion.id] : []}
-                          value={comparedVersion ? formatCableVersionOption(comparedVersion) : undefined}
+                          value={
+                            comparedVersion ? formatCableVersionOption(comparedVersion) : undefined
+                          }
                           onOptionSelect={handleComparedVersionChange}
                           freeform={false}
                         >
@@ -1790,8 +1766,12 @@ export const CableDetails = () => {
                               <tr key={version.id}>
                                 <td className={styles.tableCell}>v{version.versionNumber}</td>
                                 <td className={styles.tableCell}>{version.revision ?? '-'}</td>
-                                <td className={styles.tableCell}>{formatCableVersionChange(version)}</td>
-                                <td className={styles.tableCell}>{formatCableVersionUser(version)}</td>
+                                <td className={styles.tableCell}>
+                                  {formatCableVersionChange(version)}
+                                </td>
+                                <td className={styles.tableCell}>
+                                  {formatCableVersionUser(version)}
+                                </td>
                                 <td className={styles.tableCell}>
                                   {formatCableVersionTimestamp(version.changedAt)}
                                 </td>
@@ -1823,6 +1803,55 @@ export const CableDetails = () => {
         </Accordion>
       </Card>
 
+      <Accordion collapsible defaultOpenItems={[]} key={details.cable.id}>
+        <AccordionItem value="change-tracker" className={styles.fullWidthCard}>
+          <AccordionHeader>Change tracker</AccordionHeader>
+          <AccordionPanel>
+            {versionsLoading ? <Spinner label="Loading cable change history..." /> : null}
+            {versionsError ? (
+              <div className={styles.sectionActions}>
+                <Body1 className={styles.errorText}>{versionsError}</Body1>
+                <Button onClick={() => void loadVersions()}>Retry history</Button>
+              </div>
+            ) : null}
+            {changeLog.length > 0 ? (
+              <div className={styles.tableContainer}>
+                <table className={styles.table} aria-label="Change tracker">
+                  <thead>
+                    <tr>
+                      {['Who', 'When', 'Changes'].map((label) => (
+                        <th key={label} className={styles.tableHeadCell}>
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {changeLog.map((entry) => (
+                      <tr key={entry.id}>
+                        <td className={styles.tableCell}>{entry.userName}</td>
+                        <td className={styles.tableCell}>
+                          {new Date(entry.changedAt).toLocaleString()}
+                        </td>
+                        <td className={styles.tableCell}>
+                          <ul>
+                            {entry.changes.map((change, index) => (
+                              <li key={index}>{change}</li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : !versionsLoading && !versionsError ? (
+              <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>
+            ) : null}
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
+
       <CableDialog
         styles={styles}
         open={cableEditDialogOpen}
@@ -1839,6 +1868,16 @@ export const CableDetails = () => {
         visibleFields={CABLE_DETAILS_DIALOG_VISIBLE_FIELDS}
       />
 
+      <ChangeOrderMaterialDialog
+        open={catalogDialogOpen}
+        adding={addingMaterial}
+        documentName="cable materials"
+        categories={CABLE_MATERIAL_CATEGORIES}
+        doubleWidth
+        onDismiss={() => !addingMaterial && setCatalogDialogOpen(false)}
+        onSelect={handleAddCatalogMaterial}
+      />
+
       <Dialog
         open={dialogOpen}
         onOpenChange={(_, data) => {
@@ -1847,37 +1886,17 @@ export const CableDetails = () => {
           }
         }}
       >
-        <DialogSurface>
+        <DialogSurface style={{ width: '1200px', maxWidth: 'calc(100vw - 32px)' }}>
           <form className={styles.dialogForm} onSubmit={(event) => void handleDialogSubmit(event)}>
             <DialogBody>
-              <DialogTitle>
-                {dialogMode === 'create' ? 'Add cable material' : 'Edit cable material'}
-              </DialogTitle>
+              <DialogTitle>Edit cable material</DialogTitle>
               <DialogContent>
                 <Field
                   label="Material"
-                  required
                   validationState={dialogErrors.name ? 'error' : undefined}
                   validationMessage={dialogErrors.name}
                 >
-                  <Combobox
-                    placeholder={
-                      resolvedMaterialNames.length > 0
-                        ? 'Select cable installation material'
-                        : 'No cable installation materials available'
-                    }
-                    selectedOptions={dialogValues.name ? [dialogValues.name] : []}
-                    value={dialogValues.name || undefined}
-                    onOptionSelect={handleMaterialNameSelect}
-                    freeform={false}
-                    disabled={resolvedMaterialNames.length === 0}
-                  >
-                    {resolvedMaterialNames.map((materialName) => (
-                      <Option key={materialName} value={materialName}>
-                        {materialName}
-                      </Option>
-                    ))}
-                  </Combobox>
+                  <Input value={dialogValues.name} readOnly />
                 </Field>
                 <Field
                   label="Quantity"
@@ -1885,6 +1904,7 @@ export const CableDetails = () => {
                   validationMessage={dialogErrors.quantity}
                 >
                   <Input
+                    ref={quantityInputRef}
                     value={dialogValues.quantity}
                     onChange={handleDialogFieldChange('quantity')}
                     inputMode="decimal"
@@ -1898,7 +1918,7 @@ export const CableDetails = () => {
                   <Combobox
                     placeholder="Select unit"
                     selectedOptions={dialogValues.unit ? [dialogValues.unit] : []}
-                    value={dialogValues.unit || undefined}
+                    value={dialogValues.unit}
                     onOptionSelect={handleMaterialUnitSelect}
                     freeform={false}
                   >
@@ -1929,11 +1949,7 @@ export const CableDetails = () => {
                   Cancel
                 </Button>
                 <Button type="submit" appearance="primary" disabled={dialogSubmitting}>
-                  {dialogSubmitting
-                    ? 'Saving...'
-                    : dialogMode === 'create'
-                      ? 'Add material'
-                      : 'Save changes'}
+                  {dialogSubmitting ? 'Saving...' : 'Save changes'}
                 </Button>
               </DialogActions>
             </DialogBody>

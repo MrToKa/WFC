@@ -331,8 +331,8 @@ export async function createCableMaterial(
   projectId: string,
   cableId: string,
   data: CableMaterialInput,
-): Promise<{ cableMaterial: CableMaterial }> {
-  return request<{ cableMaterial: CableMaterial }>(
+): Promise<{ cableMaterial: CableMaterial; changeLogEntry?: ProjectChangeLogEntry | null }> {
+  return request<{ cableMaterial: CableMaterial; changeLogEntry?: ProjectChangeLogEntry | null }>(
     `/api/projects/${projectId}/cables/${cableId}/materials`,
     {
       method: 'POST',
@@ -348,8 +348,8 @@ export async function updateCableMaterial(
   cableId: string,
   materialId: string,
   data: Partial<CableMaterialInput>,
-): Promise<{ cableMaterial: CableMaterial }> {
-  return request<{ cableMaterial: CableMaterial }>(
+): Promise<{ cableMaterial: CableMaterial; changeLogEntry?: ProjectChangeLogEntry | null }> {
+  return request<{ cableMaterial: CableMaterial; changeLogEntry?: ProjectChangeLogEntry | null }>(
     `/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`,
     {
       method: 'PATCH',
@@ -364,11 +364,14 @@ export async function deleteCableMaterial(
   projectId: string,
   cableId: string,
   materialId: string,
-): Promise<void> {
-  await request<void>(`/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`, {
-    method: 'DELETE',
-    token,
-  });
+): Promise<{ changeLogEntry?: ProjectChangeLogEntry | null }> {
+  return request<{ changeLogEntry?: ProjectChangeLogEntry | null }>(
+    `/api/projects/${projectId}/cables/${cableId}/materials/${materialId}`,
+    {
+      method: 'DELETE',
+      token,
+    },
+  );
 }
 
 export async function syncCableBaseMaterials(
@@ -376,11 +379,13 @@ export async function syncCableBaseMaterials(
   projectId: string,
   cableId: string,
 ): Promise<{
+  changeLogEntry?: ProjectChangeLogEntry | null;
   cableMaterials: CableMaterial[];
   cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
   summary: CableMaterialSyncSummary;
 }> {
   return request<{
+    changeLogEntry?: ProjectChangeLogEntry | null;
     cableMaterials: CableMaterial[];
     cableTypeDefaultMaterials: CableTypeDefaultMaterial[];
     summary: CableMaterialSyncSummary;
