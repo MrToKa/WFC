@@ -16,6 +16,7 @@ import {
 } from '../utils/trayFreeSpace.js';
 import { authenticate, requireProjectEdit, requireProjectExport } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
+import { recordTrayChanges } from '../services/trayChangeLogService.js';
 import {
   excelImportError,
   getExcelRowNumber,
@@ -94,6 +95,7 @@ const selectTraysQuery = `
     length_mm,
     include_grounding_cable,
     grounding_cable_type_id,
+    change_log,
     created_at,
     updated_at
   FROM trays
@@ -489,8 +491,11 @@ traysRouter.post(
 
     const { name, type, purpose, widthMm, heightMm, lengthMm } = parseResult.data;
 
+    let client: PoolClient | undefined;
     try {
-      const result = await pool.query<TrayRow>(
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const result = await client.query<TrayRow>(
         `
           INSERT INTO trays (
             id,
@@ -529,8 +534,11 @@ traysRouter.post(
         ],
       );
 
+      await recordTrayChanges(client, req.userId!, null, result.rows[0]);
+      await client.query('COMMIT');
       res.status(201).json({ tray: mapTrayRow(result.rows[0]) });
     } catch (error) {
+      await client?.query('ROLLBACK').catch(() => undefined);
       if (
         typeof error === 'object' &&
         error !== null &&
@@ -543,6 +551,8 @@ traysRouter.post(
 
       console.error('Create tray error', error);
       res.status(500).json({ error: 'Failed to create tray' });
+    } finally {
+      client?.release();
     }
   },
 );
@@ -664,8 +674,20 @@ traysRouter.patch(
 
     fields.push(`updated_at = NOW()`);
 
+    let client: PoolClient | undefined;
     try {
-      const result = await pool.query<TrayRow>(
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const previous = await client.query<TrayRow>(
+        'SELECT * FROM trays WHERE project_id = $1 AND id = $2 FOR UPDATE',
+        [projectId, trayId],
+      );
+      if (!previous.rows[0]) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Tray not found' });
+        return;
+      }
+      const result = await client.query<TrayRow>(
         `
           UPDATE trays
           SET ${fields.join(', ')}
@@ -682,6 +704,7 @@ traysRouter.patch(
             length_mm,
             include_grounding_cable,
             grounding_cable_type_id,
+            change_log,
             created_at,
             updated_at;
         `,
@@ -691,14 +714,20 @@ traysRouter.patch(
       const tray = result.rows[0];
 
       if (!tray) {
+        await client.query('ROLLBACK');
         res.status(404).json({ error: 'Tray not found' });
         return;
       }
 
+      await recordTrayChanges(client, req.userId!, previous.rows[0], tray);
+      await client.query('COMMIT');
       res.json({ tray: mapTrayRow(tray) });
     } catch (error) {
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Update tray error', error);
       res.status(500).json({ error: 'Failed to update tray' });
+    } finally {
+      client?.release();
     }
   },
 );
@@ -959,7 +988,8 @@ traysRouter.post(
         `
           ${selectTraysQuery}
           WHERE project_id = $1
-            AND lower(name) = ANY($2::text[]);
+            AND lower(name) = ANY($2::text[])
+          ORDER BY id FOR UPDATE;
         `,
         [projectId, prepared.map((row) => row.key)],
       );
@@ -979,7 +1009,7 @@ traysRouter.post(
         const existing = existingMap.get(row.key);
 
         if (existing) {
-          await client.query(
+          const updated = await client.query<TrayRow>(
             `
               UPDATE trays
               SET
@@ -989,13 +1019,15 @@ traysRouter.post(
                 height_mm = $4,
                 length_mm = $5,
                 updated_at = NOW()
-              WHERE id = $6;
+              WHERE id = $6
+              RETURNING *;
             `,
             [row.type, row.purpose, widthMm, heightMm, row.length, existing.id],
           );
+          await recordTrayChanges(client, req.userId!, existing, updated.rows[0]);
           summary.updated += 1;
         } else {
-          await client.query(
+          const inserted = await client.query<TrayRow>(
             `
               INSERT INTO trays (
                 id,
@@ -1007,7 +1039,8 @@ traysRouter.post(
                 height_mm,
                 length_mm
               )
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              RETURNING *;
             `,
             [
               randomUUID(),
@@ -1020,6 +1053,7 @@ traysRouter.post(
               row.length,
             ],
           );
+          await recordTrayChanges(client, req.userId!, null, inserted.rows[0]);
           summary.inserted += 1;
         }
       }

@@ -96,7 +96,14 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.ensureProjectExists.mockResolvedValue({ id });
   mocks.connect.mockResolvedValue(client);
-  client.query.mockImplementation(async (sql: string) => {
+  client.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+    if (sql.includes('INSERT INTO trays')) return {
+      rows: [{
+        id: values![0], project_id: values![1], name: values![2], tray_type: values![3],
+        purpose: values![4], width_mm: values![5], height_mm: values![6], length_mm: values![7],
+        created_at: '2026-01-01', updated_at: '2026-01-01',
+      }], rowCount: 1,
+    };
     if (sql.includes('SELECT * FROM cable_types')) return { rows: [{ id, name: 'Cable type' }], rowCount: 1 };
     if (sql.includes('FROM users')) return { rows: [{ name: 'Editor' }], rowCount: 1 };
     if (sql.includes('FROM cable_types') && sql.includes('lower(name) = ANY')) {

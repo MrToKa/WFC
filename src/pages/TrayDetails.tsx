@@ -76,6 +76,7 @@ import {
   calculateTrayFreeSpaceMetrics
 } from './TrayDetails/TrayDetails.utils';
 import { TrayFormState, TrayFormErrors } from './TrayDetails/TrayDetails.types';
+import { TrayChangeTracker } from './TrayDetails/components/TrayChangeTracker';
 import {
   TrayDetailsHeader,
   CablesTableSection,
@@ -3532,6 +3533,8 @@ export const TrayDetails = () => {
           Next tray
         </Button>
       </div>
+
+      <TrayChangeTracker tray={tray} />
     </section>
   );
 };

@@ -1,4 +1,7 @@
+import type { ProjectChangeLogEntry } from './project';
+
 export type Tray = {
+  changeLog?: ProjectChangeLogEntry[];
   id: string;
   projectId: string;
   name: string;

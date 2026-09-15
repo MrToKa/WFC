@@ -1,4 +1,7 @@
+import type { ProjectChangeLogEntry } from './project.js';
+
 export type TrayRow = {
+  change_log?: ProjectChangeLogEntry[];
   id: string;
   project_id: string;
   name: string;
@@ -26,6 +29,7 @@ const toIsoString = (value: Date | string): string =>
   typeof value === 'string' ? value : value.toISOString();
 
 export type PublicTray = {
+  changeLog?: ProjectChangeLogEntry[];
   id: string;
   projectId: string;
   name: string;
@@ -41,6 +45,7 @@ export type PublicTray = {
 };
 
 export const mapTrayRow = (row: TrayRow): PublicTray => ({
+  changeLog: row.change_log ?? [],
   id: row.id,
   projectId: row.project_id,
   name: row.name,

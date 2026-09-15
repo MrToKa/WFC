@@ -852,6 +852,11 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE trays
+    ADD COLUMN IF NOT EXISTS change_log JSONB NOT NULL DEFAULT '[]'::jsonb;
+  `);
+
+  await pool.query(`
+    ALTER TABLE trays
     ADD COLUMN IF NOT EXISTS include_grounding_cable BOOLEAN NOT NULL DEFAULT FALSE;
   `);
 
