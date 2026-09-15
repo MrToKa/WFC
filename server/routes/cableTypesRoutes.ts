@@ -1,3 +1,7 @@
+import {
+  readCableTypeSnapshot,
+  recordCableTypeChanges,
+} from '../services/cableTypeChangeLogService.js';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
@@ -107,6 +111,7 @@ const selectCableTypesQuery = `
     diameter_mm,
     weight_kg_per_m,
     source_material_cable_type_id,
+    change_log,
     created_at,
     updated_at
   FROM cable_types
@@ -515,6 +520,14 @@ cableTypesRouter.post(
         materialCableType.id,
         { replaceInherited: false },
       );
+      const entry = await recordCableTypeChanges(
+        client,
+        projectId,
+        result.rows[0].id,
+        req.userId!,
+        null,
+      );
+      if (entry) result.rows[0].change_log = [entry];
       await client.query('COMMIT');
       res.status(201).json({ cableType: mapCableTypeRow(result.rows[0]) });
     } catch (error) {
@@ -565,6 +578,7 @@ cableTypesRouter.patch(
     try {
       client = await pool.connect();
       await client.query('BEGIN');
+      const before = await readCableTypeSnapshot(client, projectId, cableTypeId);
       const existingCableTypeResult = await client.query<ProjectCableTypeNameRow>(
         `
           SELECT id, name, source_material_cable_type_id
@@ -684,6 +698,14 @@ cableTypesRouter.patch(
           { replaceInherited: true },
         );
       }
+      const entry = await recordCableTypeChanges(
+        client,
+        projectId,
+        cableTypeId,
+        req.userId!,
+        before,
+      );
+      cableType.change_log = [...(before?.cableType.change_log ?? []), ...(entry ? [entry] : [])];
       await client.query('COMMIT');
       res.json({ cableType: mapCableTypeRow(cableType) });
     } catch (error) {
@@ -953,6 +975,7 @@ cableTypesRouter.post(
         }
 
         if (existing) {
+          const before = await readCableTypeSnapshot(client, projectId, existing.id);
           await client.query(
             `
               UPDATE cable_types
@@ -990,6 +1013,7 @@ cableTypesRouter.post(
               { replaceInherited: true },
             );
           }
+          await recordCableTypeChanges(client, projectId, existing.id, req.userId!, before);
           summary.updated += 1;
         } else {
           const cableTypeId = randomUUID();
@@ -1032,6 +1056,7 @@ cableTypesRouter.post(
             materialCableType.id,
             { replaceInherited: false },
           );
+          await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, null);
           summary.inserted += 1;
         }
       }
@@ -1145,6 +1170,8 @@ cableTypesRouter.post(
       return;
     }
 
+    let client: PoolClient | undefined;
+    let committed = false;
     try {
       const project = await ensureProjectExists(projectId);
 
@@ -1153,7 +1180,10 @@ cableTypesRouter.post(
         return;
       }
 
-      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const before = await readCableTypeSnapshot(client, projectId, cableTypeId);
+      const cableType = before?.cableType;
 
       if (!cableType) {
         res.status(404).json({ error: 'Cable type not found' });
@@ -1162,7 +1192,7 @@ cableTypesRouter.post(
 
       const { name, quantity, unit, remarks } = parseResult.data;
       const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
-        pool,
+        client,
         name,
       );
 
@@ -1173,7 +1203,7 @@ cableTypesRouter.post(
         return;
       }
 
-      const result = await pool.query<CableTypeDefaultMaterialRow>(
+      const result = await client.query<CableTypeDefaultMaterialRow>(
         `
           INSERT INTO cable_type_default_materials (
             id,
@@ -1208,12 +1238,20 @@ cableTypesRouter.post(
         ],
       );
 
+      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
+      await client.query('COMMIT');
+      committed = true;
       res.status(201).json({
         defaultMaterial: mapCableTypeDefaultMaterialRow(result.rows[0]),
       });
     } catch (error) {
       console.error('Create cable type default material error', error);
       res.status(500).json({ error: 'Failed to create default material' });
+    } finally {
+      if (client) {
+        if (!committed) await client.query('ROLLBACK').catch(() => undefined);
+        client.release();
+      }
     }
   },
 );
@@ -1239,6 +1277,8 @@ cableTypesRouter.patch(
       return;
     }
 
+    let client: PoolClient | undefined;
+    let committed = false;
     try {
       const project = await ensureProjectExists(projectId);
 
@@ -1247,7 +1287,10 @@ cableTypesRouter.patch(
         return;
       }
 
-      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const before = await readCableTypeSnapshot(client, projectId, cableTypeId);
+      const cableType = before?.cableType;
 
       if (!cableType) {
         res.status(404).json({ error: 'Cable type not found' });
@@ -1262,7 +1305,7 @@ cableTypesRouter.patch(
 
       if (name !== undefined) {
         const materialCableInstallationMaterial = await findMaterialCableInstallationMaterialByType(
-          pool,
+          client,
           name,
         );
 
@@ -1294,7 +1337,7 @@ cableTypesRouter.patch(
 
       fields.push('updated_at = NOW()');
 
-      const result = await pool.query<CableTypeDefaultMaterialRow>(
+      const result = await client.query<CableTypeDefaultMaterialRow>(
         `
           UPDATE cable_type_default_materials
           SET ${fields.join(', ')}
@@ -1320,12 +1363,20 @@ cableTypesRouter.patch(
         return;
       }
 
+      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
+      await client.query('COMMIT');
+      committed = true;
       res.json({
         defaultMaterial: mapCableTypeDefaultMaterialRow(defaultMaterial),
       });
     } catch (error) {
       console.error('Update cable type default material error', error);
       res.status(500).json({ error: 'Failed to update default material' });
+    } finally {
+      if (client) {
+        if (!committed) await client.query('ROLLBACK').catch(() => undefined);
+        client.release();
+      }
     }
   },
 );
@@ -1344,6 +1395,8 @@ cableTypesRouter.delete(
       return;
     }
 
+    let client: PoolClient | undefined;
+    let committed = false;
     try {
       const project = await ensureProjectExists(projectId);
 
@@ -1352,14 +1405,17 @@ cableTypesRouter.delete(
         return;
       }
 
-      const cableType = await findProjectCableTypeById(pool, projectId, cableTypeId);
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const before = await readCableTypeSnapshot(client, projectId, cableTypeId);
+      const cableType = before?.cableType;
 
       if (!cableType) {
         res.status(404).json({ error: 'Cable type not found' });
         return;
       }
 
-      const result = await pool.query(
+      const result = await client.query(
         `
           DELETE FROM cable_type_default_materials
           WHERE id = $1
@@ -1373,10 +1429,18 @@ cableTypesRouter.delete(
         return;
       }
 
+      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
+      await client.query('COMMIT');
+      committed = true;
       res.status(204).send();
     } catch (error) {
       console.error('Delete cable type default material error', error);
       res.status(500).json({ error: 'Failed to delete default material' });
+    } finally {
+      if (client) {
+        if (!committed) await client.query('ROLLBACK').catch(() => undefined);
+        client.release();
+      }
     }
   },
 );
@@ -1667,6 +1731,12 @@ cableTypesRouter.post(
     try {
       client = await pool.connect();
       await client.query('BEGIN');
+      const before = await readCableTypeSnapshot(client, projectId, cableTypeId);
+      if (!before) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Cable type not found' });
+        return;
+      }
 
       await client.query(
         `
@@ -1712,6 +1782,7 @@ cableTypesRouter.post(
         );
       }
 
+      await recordCableTypeChanges(client, projectId, cableTypeId, req.userId!, before);
       await client.query('COMMIT');
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);

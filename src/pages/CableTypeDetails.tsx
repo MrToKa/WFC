@@ -4,6 +4,10 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Body2,
   Button,
@@ -560,6 +564,7 @@ export const CableTypeDetails = () => {
       }
 
       resetDialog();
+      await loadDetails();
     } catch (err) {
       console.error('Failed to save default material', err);
       if (err instanceof ApiError) {
@@ -627,6 +632,7 @@ export const CableTypeDetails = () => {
             : previous,
         );
         showToast({ intent: 'success', title: 'Default material deleted' });
+        await loadDetails();
       } catch (err) {
         console.error('Failed to delete default material', err);
         showToast({
@@ -638,7 +644,7 @@ export const CableTypeDetails = () => {
         setPendingDefaultMaterialId(null);
       }
     },
-    [cableTypeId, canEdit, projectId, showToast, token],
+    [cableTypeId, canEdit, loadDetails, projectId, showToast, token],
   );
 
   const handleImportClick = useCallback(() => {
@@ -688,6 +694,7 @@ export const CableTypeDetails = () => {
         );
 
         showToast(excelImportSuccessToast(file.name, response.summary, 'Default materials'));
+        await loadDetails();
       } catch (err) {
         console.error('Failed to import default materials', err);
         showToast(excelImportErrorToast(err, file.name));
@@ -695,7 +702,7 @@ export const CableTypeDetails = () => {
         setIsImportingDefaultMaterials(false);
       }
     },
-    [cableTypeId, canEdit, projectId, showToast, token],
+    [cableTypeId, canEdit, loadDetails, projectId, showToast, token],
   );
 
   const handleExportDefaultMaterials = useCallback(async () => {
@@ -884,8 +891,8 @@ export const CableTypeDetails = () => {
             <Title3>Additional default materials</Title3>
             <Caption1 className={styles.readOnlyNotice}>
               Add reusable materials from Cable installation materials that should be associated
-              with this cable type. Import from Excel replaces the current list for this cable
-              type, and Remarks cells are optional.
+              with this cable type. Import from Excel replaces the current list for this cable type,
+              and Remarks cells are optional.
             </Caption1>
           </div>
           <div className={styles.sectionActions}>
@@ -996,6 +1003,48 @@ export const CableTypeDetails = () => {
           </div>
         )}
       </Card>
+
+      <Accordion collapsible defaultOpenItems={[]} key={details.cableType.id}>
+        <AccordionItem value="change-tracker" className={styles.fullWidthCard}>
+          <AccordionHeader>Change tracker</AccordionHeader>
+          <AccordionPanel>
+            {details.cableType.changeLog?.length ? (
+              <div className={styles.tableContainer}>
+                <table className={styles.table} aria-label="Change tracker">
+                  <thead>
+                    <tr>
+                      {['Who', 'When', 'Changes'].map((label) => (
+                        <th key={label} className={styles.tableHeadCell}>
+                          {label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...details.cableType.changeLog].reverse().map((entry) => (
+                      <tr key={entry.id}>
+                        <td className={styles.tableCell}>{entry.userName}</td>
+                        <td className={styles.tableCell}>
+                          {new Date(entry.changedAt).toLocaleString()}
+                        </td>
+                        <td className={styles.tableCell}>
+                          <ul>
+                            {entry.changes.map((change, index) => (
+                              <li key={index}>{change}</li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>
+            )}
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
 
       <Dialog
         open={dialogOpen}

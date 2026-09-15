@@ -1,6 +1,6 @@
-export const toNumberOrNull = (
-  value: string | number | null
-): number | null => {
+import type { ProjectChangeLogEntry } from './project.js';
+
+export const toNumberOrNull = (value: string | number | null): number | null => {
   if (value === null || value === undefined) {
     return null;
   }
@@ -10,6 +10,7 @@ export const toNumberOrNull = (
 };
 
 export type CableTypeRow = {
+  change_log?: ProjectChangeLogEntry[];
   id: string;
   project_id: string;
   name: string;
@@ -27,6 +28,7 @@ export type CableTypeRow = {
 };
 
 export type PublicCableType = {
+  changeLog?: ProjectChangeLogEntry[];
   id: string;
   projectId: string;
   name: string;
@@ -39,6 +41,7 @@ export type PublicCableType = {
 };
 
 export const mapCableTypeRow = (row: CableTypeRow): PublicCableType => ({
+  changeLog: row.change_log ?? [],
   id: row.id,
   projectId: row.project_id,
   name: row.name,
@@ -46,12 +49,6 @@ export const mapCableTypeRow = (row: CableTypeRow): PublicCableType => ({
   diameterMm: toNumberOrNull(row.diameter_mm),
   weightKgPerM: toNumberOrNull(row.weight_kg_per_m),
   sourceMaterialCableTypeId: row.source_material_cable_type_id ?? null,
-  createdAt:
-    typeof row.created_at === 'string'
-      ? row.created_at
-      : row.created_at.toISOString(),
-  updatedAt:
-    typeof row.updated_at === 'string'
-      ? row.updated_at
-      : row.updated_at.toISOString()
+  createdAt: typeof row.created_at === 'string' ? row.created_at : row.created_at.toISOString(),
+  updatedAt: typeof row.updated_at === 'string' ? row.updated_at : row.updated_at.toISOString(),
 });

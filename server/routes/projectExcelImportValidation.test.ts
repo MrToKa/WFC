@@ -97,6 +97,8 @@ beforeEach(() => {
   mocks.ensureProjectExists.mockResolvedValue({ id });
   mocks.connect.mockResolvedValue(client);
   client.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('SELECT * FROM cable_types')) return { rows: [{ id, name: 'Cable type' }], rowCount: 1 };
+    if (sql.includes('FROM users')) return { rows: [{ name: 'Editor' }], rowCount: 1 };
     if (sql.includes('FROM cable_types') && sql.includes('lower(name) = ANY')) {
       if (sql.includes('source_material_cable_type_id')) return { rows: [], rowCount: 0 };
       return { rows: [{ id, name: 'Cable type' }], rowCount: 1 };

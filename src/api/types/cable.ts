@@ -1,3 +1,4 @@
+import type { ProjectChangeLogEntry } from './project';
 import type { MaterialCableType } from './material';
 import type { FileUploader } from './user';
 
@@ -6,6 +7,7 @@ export const CABLE_MTO_OPTIONS = ['MV', 'LV', 'Instrumentation', 'Control'] as c
 export type CableMtoOption = (typeof CABLE_MTO_OPTIONS)[number];
 
 export type CableType = {
+  changeLog?: ProjectChangeLogEntry[];
   id: string;
   projectId: string;
   name: string;
