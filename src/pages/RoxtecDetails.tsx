@@ -2,6 +2,10 @@ import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Button,
   Caption1,
@@ -24,11 +28,13 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { fetchCables } from '@/api/cables';
 import { fetchRoxtecEntry, updateRoxtecEntry } from '@/api/roxtec';
-import type { Cable, RoxtecEntry } from '@/api/types';
+import type { Cable, ProjectChangeLogEntry, RoxtecEntry } from '@/api/types';
 import { useAuth } from '@/context/AuthContext';
 import { getRoxtecRoutings, setRoxtecRoutings } from '@/utils/roxtecRoutings';
 import { sanitizeFileSegment } from './ProjectDetails.utils';
 import { useProjectDetailsData } from './ProjectDetails/hooks/useProjectDetailsData';
+import { TablePagination } from './ProjectDetails/TablePagination';
+import { CABLE_LIST_PER_PAGE } from './ProjectDetails.forms';
 
 const useStyles = makeStyles({
   root: {
@@ -107,6 +113,17 @@ const useStyles = makeStyles({
     width: '100%',
     minWidth: 0,
     overflowX: 'auto'
+  },
+  pagination: {
+    display: 'flex',
+    gap: '0.5rem',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: '1rem'
+  },
+  paginationDropdown: {
+    minWidth: '8rem'
   },
   table: {
     width: '100%',
@@ -207,12 +224,14 @@ export const RoxtecDetails = () => {
   const { token, user } = useAuth();
   const { projectId, roxtecId } = useParams<{ projectId: string; roxtecId: string }>();
   const { project, projectLoading, projectError } = useProjectDetailsData({ projectId });
+  const [changeLog, setChangeLog] = useState<ProjectChangeLogEntry[]>([]);
   const [entry, setEntry] = useState<RoxtecEntry | null>(null);
   const [entryLoading, setEntryLoading] = useState(true);
   const [entryError, setEntryError] = useState<string | null>(null);
   const [routingInput, setRoutingInput] = useState('');
   const [routings, setRoutings] = useState<string[]>([]);
   const [cables, setCables] = useState<Cable[]>([]);
+  const [page, setPage] = useState(1);
   const [cablesLoading, setCablesLoading] = useState(false);
   const [cablesError, setCablesError] = useState<string | null>(null);
   const [isExportingMatchingCables, setIsExportingMatchingCables] =
@@ -246,6 +265,7 @@ export const RoxtecDetails = () => {
           return;
         }
         setEntry(response.entry);
+        setChangeLog(response.changeLog ?? []);
       } catch (error) {
         if (!active) {
           return;
@@ -321,6 +341,23 @@ export const RoxtecDetails = () => {
 
     return Array.from(uniqueCables.values());
   }, [cables, routings]);
+
+  const totalPages = Math.max(1, Math.ceil(matchingCables.length / CABLE_LIST_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedCables = useMemo(() => {
+    const startIndex = (currentPage - 1) * CABLE_LIST_PER_PAGE;
+    return matchingCables.slice(startIndex, startIndex + CABLE_LIST_PER_PAGE);
+  }, [currentPage, matchingCables]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [projectId, roxtecId, routings]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const saveRoutings = (nextRoutings: string[]) => {
     if (!canManageRoxtec || !projectId || !entry) {
@@ -415,6 +452,7 @@ export const RoxtecDetails = () => {
       });
 
       setEntry(response.entry);
+      setChangeLog(response.changeLog ?? []);
       setEditError(null);
       setIsEditDialogOpen(false);
     } catch (error) {
@@ -694,7 +732,7 @@ export const RoxtecDetails = () => {
                 </tr>
               </thead>
               <tbody>
-                {matchingCables.map((cable) => (
+                {pagedCables.map((cable) => (
                   <tr key={cable.id}>
                     <td className={styles.tableCell}>{cable.cableId}</td>
                     <td className={styles.tableCell}>{cable.revision ?? '-'}</td>
@@ -713,7 +751,52 @@ export const RoxtecDetails = () => {
             </table>
           </div>
         )}
+        {!cablesLoading && matchingCables.length > CABLE_LIST_PER_PAGE ? (
+          <TablePagination
+            styles={styles}
+            page={currentPage}
+            totalPages={totalPages}
+            onPrevious={() => setPage(Math.max(1, currentPage - 1))}
+            onNext={() => setPage(Math.min(totalPages, currentPage + 1))}
+            onPageSelect={(nextPage) => setPage(Math.max(1, Math.min(totalPages, nextPage)))}
+            dropdownAriaLabel="Select matching cables page"
+          />
+        ) : null}
       </div>
+
+      <Accordion collapsible defaultOpenItems={[]} key={`${projectId}:${roxtecId}`}>
+        <AccordionItem value="change-log" className={styles.panel}>
+          <AccordionHeader>Change log</AccordionHeader>
+          <AccordionPanel>
+            {changeLog?.length ? (
+              <div className={styles.tableContainer}>
+                <table className={styles.table} aria-label="Change log">
+                  <thead>
+                    <tr>
+                      {['Who', 'When', 'Changes'].map((label) => (
+                        <th key={label} className={styles.tableHeadCell}>{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...changeLog].reverse().map((entry) => (
+                      <tr key={entry.id}>
+                        <td className={styles.tableCell}>{entry.userName}</td>
+                        <td className={styles.tableCell}>{new Date(entry.changedAt).toLocaleString()}</td>
+                        <td className={styles.tableCell}>
+                          <ul>{entry.changes.map((change, index) => <li key={index}>{change}</li>)}</ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>
+            )}
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
 
       <Dialog
         open={isEditDialogOpen}

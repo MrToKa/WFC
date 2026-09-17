@@ -5,6 +5,27 @@ import type { ProjectChangeLogEntry } from '../models/project.js';
 
 const fields = { revision: 'Rev.', tag: 'Tag', type: 'Type', description: 'Description' } as const;
 const format = (value: string | null) => value || 'Not specified';
+type RoxtecChangeLogEntry = ProjectChangeLogEntry & {
+  roxtecId?: number;
+  roxtecCreatedAt?: string;
+};
+
+export const getRoxtecChangeLog = (
+  history: RoxtecChangeLogEntry[],
+  entry: RoxtecEntryRow,
+): ProjectChangeLogEntry[] => {
+  const createdAt = new Date(entry.created_at).toISOString();
+  return history.filter((item) => {
+    if (item.roxtecId !== undefined) {
+      return item.roxtecId === entry.id && item.roxtecCreatedAt === createdAt;
+    }
+    // Older history identifies the entry in the description only.
+    return new Date(item.changedAt).getTime() >= new Date(createdAt).getTime() &&
+      item.changes.some((change) =>
+        [ 'Added ', 'Deleted ', '' ].some((prefix) => change.startsWith(`${prefix}Roxtec ${entry.id} (`)),
+      );
+  });
+};
 export const describeRoxtecChanges = (
   before: RoxtecEntryRow | null,
   after: RoxtecEntryRow | null,
@@ -42,7 +63,10 @@ export const recordRoxtecChanges = async (
     [userId],
   );
   if (!actor.rows[0]) throw new Error('Current user not found');
-  const entry: ProjectChangeLogEntry = {
+  const roxtec = after ?? before!;
+  const entry: RoxtecChangeLogEntry = {
+    roxtecId: roxtec.id,
+    roxtecCreatedAt: new Date(roxtec.created_at).toISOString(),
     id: randomUUID(),
     userId,
     userName: actor.rows[0].name,

@@ -1,4 +1,4 @@
-import { recordRoxtecChanges } from '../services/roxtecChangeLogService.js';
+import { getRoxtecChangeLog, recordRoxtecChanges } from '../services/roxtecChangeLogService.js';
 import type { PoolClient } from 'pg';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
@@ -127,7 +127,8 @@ export const roxtecEntriesRouter = (() => {
         return;
       }
 
-      res.json({ entry: mapRoxtecEntryRow(entry) });
+      const history = await pool.query('SELECT roxtec_change_log FROM projects WHERE id = $1', [projectId]);
+      res.json({ entry: mapRoxtecEntryRow(entry), changeLog: getRoxtecChangeLog(history.rows[0]?.roxtec_change_log ?? [], entry) });
     } catch (error) {
       console.error('Failed to fetch Roxtec entry', error);
       res.status(500).json({ error: 'Failed to fetch Roxtec entry' });
@@ -305,8 +306,9 @@ export const roxtecEntriesRouter = (() => {
       }
 
       await recordRoxtecChanges(client, projectId, req.userId, previous.rows[0], entry);
+      const history = await client.query('SELECT roxtec_change_log FROM projects WHERE id = $1', [projectId]);
       await client.query('COMMIT');
-      res.json({ entry: mapRoxtecEntryRow(entry) });
+      res.json({ entry: mapRoxtecEntryRow(entry), changeLog: getRoxtecChangeLog(history.rows[0]?.roxtec_change_log ?? [], entry) });
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Failed to update Roxtec entry', error);

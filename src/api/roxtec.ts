@@ -12,8 +12,8 @@ export async function fetchRoxtecEntries(
 export async function fetchRoxtecEntry(
   projectId: string,
   roxtecId: number
-): Promise<{ entry: RoxtecEntry }> {
-  return request<{ entry: RoxtecEntry }>(
+): Promise<{ entry: RoxtecEntry; changeLog?: ProjectChangeLogEntry[] }> {
+  return request<{ entry: RoxtecEntry; changeLog?: ProjectChangeLogEntry[] }>(
     `/api/projects/${projectId}/roxtec/${roxtecId}`,
     {
       method: 'GET'
@@ -48,8 +48,8 @@ export async function updateRoxtecEntry(
     type: string;
     description?: string | null;
   }
-): Promise<{ entry: RoxtecEntry }> {
-  return request<{ entry: RoxtecEntry }>(
+): Promise<{ entry: RoxtecEntry; changeLog?: ProjectChangeLogEntry[] }> {
+  return request<{ entry: RoxtecEntry; changeLog?: ProjectChangeLogEntry[] }>(
     `/api/projects/${projectId}/roxtec/${roxtecId}`,
     {
       method: 'PATCH',

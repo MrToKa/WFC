@@ -31,6 +31,9 @@ import {
 import type { ProjectChangeLogEntry, RoxtecEntry } from '@/api/types';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
+import { TablePagination } from './TablePagination';
+
+const ROXTEC_PER_PAGE = 10;
 
 type RoxtecDraft = Omit<
   RoxtecEntry,
@@ -65,6 +68,7 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   const [dialogMode, setDialogMode] = useState<RoxtecDialogMode>('create');
   const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
   const [filterText, setFilterText] = useState('');
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<RoxtecEntry | null>(null);
@@ -97,6 +101,7 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   }, [projectId]);
 
   useEffect(() => {
+    setPage(1);
     void loadEntries();
   }, [loadEntries]);
 
@@ -275,6 +280,19 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
     });
   }, [entries, filterText]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / ROXTEC_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedEntries = useMemo(() => {
+    const startIndex = (currentPage - 1) * ROXTEC_PER_PAGE;
+    return filteredEntries.slice(startIndex, startIndex + ROXTEC_PER_PAGE);
+  }, [currentPage, filteredEntries]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Roxtec">
       <div className={styles.panel}>
@@ -296,7 +314,10 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
         <div className={styles.filtersRow}>
           <Input
             value={filterText}
-            onChange={(_, data) => setFilterText(data.value)}
+            onChange={(_, data) => {
+              setFilterText(data.value);
+              setPage(1);
+            }}
             placeholder="Filter Roxtec entries"
             aria-label="Filter Roxtec entries"
           />
@@ -451,7 +472,7 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
                   </td>
                 </tr>
               ) : (
-                filteredEntries.map((entry) => (
+                pagedEntries.map((entry) => (
                   <tr key={entry.id}>
                     <td className={styles.tableCell}>{entry.id}</td>
                     <td className={styles.tableCell}>{entry.revision}</td>
@@ -485,6 +506,17 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
             </tbody>
           </table>
         </div>
+        {!isLoading && filteredEntries.length > ROXTEC_PER_PAGE ? (
+          <TablePagination
+            styles={styles}
+            page={currentPage}
+            totalPages={totalPages}
+            onPrevious={() => setPage(Math.max(1, currentPage - 1))}
+            onNext={() => setPage(Math.min(totalPages, currentPage + 1))}
+            onPageSelect={(nextPage) => setPage(Math.max(1, Math.min(totalPages, nextPage)))}
+            dropdownAriaLabel="Select Roxtec page"
+          />
+        ) : null}
       </div>
       <Accordion collapsible defaultOpenItems={[]} key={projectId}>
         <AccordionItem value="change-log" className={styles.panel}>
