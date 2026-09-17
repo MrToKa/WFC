@@ -13,6 +13,10 @@ import {
   SaveRegular,
 } from '@fluentui/react-icons';
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Button,
   Caption1,
@@ -1094,41 +1098,45 @@ export const ChangeOrdersTab = ({
       ) : null}
 
       {savedDetails && !newMode ? (
-        <div className={styles.card}>
-          <Title3>Change log</Title3>
-          {savedDetails.changeLog?.length ? (
-            <div className={styles.tableWrap}>
-              <Table aria-label="Change log">
-                <TableHeader>
-                  <TableRow>
-                    <TableHeaderCell>Who</TableHeaderCell>
-                    <TableHeaderCell>When</TableHeaderCell>
-                    <TableHeaderCell>Revision</TableHeaderCell>
-                    <TableHeaderCell>Changes</TableHeaderCell>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...savedDetails.changeLog].reverse().map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{entry.userName}</TableCell>
-                      <TableCell>{new Date(entry.changedAt).toLocaleString()}</TableCell>
-                      <TableCell>{entry.revision}</TableCell>
-                      <TableCell>
-                        <ul>
-                          {entry.changes.map((change, index) => (
-                            <li key={index}>{change}</li>
-                          ))}
-                        </ul>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          ) : (
-            <Text>No recorded changes yet. Future saved changes will appear here.</Text>
-          )}
-        </div>
+        <Accordion collapsible defaultOpenItems={[]} key={`${collection}-${savedDetails.id}`}>
+          <AccordionItem value="change-log" className={styles.card}>
+            <AccordionHeader>Change log</AccordionHeader>
+            <AccordionPanel>
+              {savedDetails.changeLog?.length ? (
+                <div className={styles.tableWrap}>
+                  <Table aria-label="Change log">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHeaderCell>Who</TableHeaderCell>
+                        <TableHeaderCell>When</TableHeaderCell>
+                        <TableHeaderCell>Revision</TableHeaderCell>
+                        <TableHeaderCell>Changes</TableHeaderCell>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {[...savedDetails.changeLog].reverse().map((entry) => (
+                        <TableRow key={entry.id}>
+                          <TableCell>{entry.userName}</TableCell>
+                          <TableCell>{new Date(entry.changedAt).toLocaleString()}</TableCell>
+                          <TableCell>{entry.revision}</TableCell>
+                          <TableCell>
+                            <ul>
+                              {entry.changes.map((change, index) => (
+                                <li key={index}>{change}</li>
+                              ))}
+                            </ul>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <Text>No recorded changes yet. Future saved changes will appear here.</Text>
+              )}
+            </AccordionPanel>
+          </AccordionItem>
+        </Accordion>
       ) : null}
       <Dialog
         open={revisionDialogOpen}

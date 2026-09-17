@@ -299,6 +299,7 @@ describe('ChangeOrdersTab', () => {
       );
       expect(screen.getByRole('button', { name: 'Edit item 1' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Change log' }));
       const history = screen.getByRole('table', { name: 'Change log' });
       expect(within(history).getByText('Latest Editor')).toBeInTheDocument();
       expect(within(history).getByText('Order Quantity: 10 → 20')).toBeInTheDocument();
