@@ -19,6 +19,59 @@ const addMaterial = (cablesRouter as unknown as { stack: Layer[] }).stack
   .route!.stack.at(-1)!.handle;
 
 const client = { query: vi.fn(), release: vi.fn() };
+
+it('returns the saved revision author after their account has been deleted', async () => {
+  const listVersions = (cablesRouter as unknown as { stack: Layer[] }).stack
+    .find((layer) => layer.route?.path === '/:cableId/versions' && layer.route.methods.get)!
+    .route!.stack.at(-1)!.handle;
+  const author = {
+    id: 'deleted-user',
+    firstName: 'Original',
+    lastName: 'Author',
+    email: 'author@example.com',
+  };
+  database.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('FROM cable_versions v')) {
+      expect(sql).toContain('v.changed_by_snapshot');
+      return {
+        rows: [
+          {
+            id: 'version',
+            cable_id: 'cable',
+            cable_number: 10,
+            version_number: 2,
+            revision: 'B',
+            created_at: '2026-09-17T00:00:00.000Z',
+            changed_by: null,
+            changed_by_snapshot: author,
+            changed_by_first_name: null,
+            changed_by_last_name: null,
+            changed_by_email: null,
+          },
+        ],
+      };
+    }
+    return { rows: [{ id: 'cable' }] };
+  });
+  const res = { status: vi.fn(), json: vi.fn() };
+  res.status.mockReturnValue(res);
+
+  await listVersions(
+    { params: { projectId: 'project', cableId: 'cable' } } as unknown as Request,
+    res as unknown as Response,
+  );
+
+  expect(res.status).not.toHaveBeenCalled();
+  expect(res.json).toHaveBeenCalledWith({
+    versions: [
+      expect.objectContaining({
+        revision: 'B',
+        changedBy: author,
+      }),
+    ],
+  });
+});
+
 let catalogUnit: 'pcs' | 'meters' | 'pack';
 let existingMaterials: { name: string; source: 'manual' | 'default'; quantity: number }[];
 let failHistory: boolean;

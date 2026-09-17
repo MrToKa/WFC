@@ -1016,10 +1016,14 @@ const insertCableVersion = async (
         connected_from,
         connected_to,
         tested,
-        changed_by
+        changed_by,
+        changed_by_snapshot
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
+        (SELECT jsonb_build_object(
+          'id', id, 'firstName', first_name, 'lastName', last_name, 'email', email
+        ) FROM users WHERE id = $22)
       );
     `,
     [
@@ -1116,6 +1120,7 @@ const listCableVersionsByCableRecordIds = async (
         v.connected_to,
         v.tested,
         v.changed_by,
+        v.changed_by_snapshot,
         v.created_at,
         u.first_name AS changed_by_first_name,
         u.last_name AS changed_by_last_name,
@@ -2714,6 +2719,7 @@ cablesRouter.get('/:cableId/versions', async (req: Request, res: Response): Prom
           v.connected_to,
           v.tested,
           v.changed_by,
+          v.changed_by_snapshot,
           v.created_at,
           u.first_name AS changed_by_first_name,
           u.last_name AS changed_by_last_name,

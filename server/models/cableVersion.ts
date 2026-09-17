@@ -26,6 +26,7 @@ export type CableVersionRow = {
   connected_to: Date | string | null;
   tested: Date | string | null;
   changed_by: string | null;
+  changed_by_snapshot?: PublicCableVersion['changedBy'];
   created_at: Date | string;
   changed_by_first_name: string | null;
   changed_by_last_name: string | null;
@@ -110,12 +111,14 @@ export const mapCableVersionRow = (row: CableVersionRow): PublicCableVersion => 
   connectedTo: row.connected_to ? toDateOnlyString(row.connected_to) : null,
   tested: row.tested ? toDateOnlyString(row.tested) : null,
   changedAt: toIsoString(row.created_at),
-  changedBy: row.changed_by
-    ? {
-        id: row.changed_by,
-        firstName: row.changed_by_first_name,
-        lastName: row.changed_by_last_name,
-        email: row.changed_by_email,
-      }
-    : null,
+  changedBy:
+    row.changed_by_snapshot ??
+    (row.changed_by
+      ? {
+          id: row.changed_by,
+          firstName: row.changed_by_first_name,
+          lastName: row.changed_by_last_name,
+          email: row.changed_by_email,
+        }
+      : null),
 });

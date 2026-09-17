@@ -643,6 +643,23 @@ export async function initializeDatabase(): Promise<void> {
       ON cable_versions (cable_id, version_number);
   `);
 
+  // Keep the audit author independently of the account's nullable foreign key.
+  // Backfill existing versions while their authors are still available.
+  await pool.query(`
+    ALTER TABLE cable_versions
+    ADD COLUMN IF NOT EXISTS changed_by_snapshot JSONB;
+
+    UPDATE cable_versions v
+    SET changed_by_snapshot = jsonb_build_object(
+      'id', u.id,
+      'firstName', u.first_name,
+      'lastName', u.last_name,
+      'email', u.email
+    )
+    FROM users u
+    WHERE u.id = v.changed_by AND v.changed_by_snapshot IS NULL;
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS cable_versions_cable_id_idx
       ON cable_versions (cable_id);
