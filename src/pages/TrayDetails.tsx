@@ -3534,7 +3534,10 @@ export const TrayDetails = () => {
         </Button>
       </div>
 
-      <TrayChangeTracker tray={tray} />
+      <TrayChangeTracker
+        tray={tray}
+        canExport={Boolean(token && (canReadCatalogs(user) || user?.role === 'technician'))}
+      />
     </section>
   );
 };

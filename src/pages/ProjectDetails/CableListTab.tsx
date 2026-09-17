@@ -1,4 +1,4 @@
-import type { ChangeEvent, RefObject } from 'react';
+import type { ChangeEvent, ReactNode, RefObject } from 'react';
 import { useMemo } from 'react';
 
 import {
@@ -36,6 +36,7 @@ import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { CableFormState } from '../ProjectDetails.forms';
 
 type CableListTabProps = {
+  changeLog?: ReactNode;
   styles: ProjectDetailsStyles;
   canManageCables: boolean;
   isAdmin: boolean;
@@ -104,6 +105,7 @@ type CableListTabProps = {
 };
 
 export const CableListTab = ({
+  changeLog,
   styles,
   canManageCables,
   isAdmin,
@@ -627,6 +629,7 @@ export const CableListTab = ({
         </DialogBody>
       </DialogSurface>
     </Dialog>
+    {changeLog}
   </div>
   );
 };

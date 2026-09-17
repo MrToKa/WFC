@@ -29,6 +29,7 @@ import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
+import { CableListChangeLog, SectionChangeLog } from './ProjectDetails/SectionChangeLog';
 import { ProjectFilesTab } from './ProjectDetails/ProjectFilesTab';
 import { RoxtecTab } from './ProjectDetails/RoxtecTab';
 import { ChangeOrdersTab } from './ProjectDetails/ChangeOrdersTab';
@@ -1538,6 +1539,7 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'details' ? (
         <DetailsTab
+          canExport={canExport}
           styles={styles}
           project={project}
           formattedDates={formattedDates}
@@ -1558,6 +1560,16 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cables' ? (
         <CableTypesTab
+          changeLog={
+            <SectionChangeLog
+              styles={styles}
+              items={cableTypes}
+              canExport={canExport}
+              fileName={`project-${project.projectNumber}-cable-types-change-log`}
+              loading={cableTypesLoading}
+              error={cableTypesError}
+            />
+          }
           canExport={canExport}
           styles={styles}
           isAdmin={canEdit}
@@ -1597,6 +1609,16 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'trays' ? (
         <TraysTab
+          changeLog={
+            <SectionChangeLog
+              styles={styles}
+              items={trays}
+              canExport={canExport}
+              fileName={`project-${project.projectNumber}-trays-change-log`}
+              loading={traysLoading}
+              error={traysError}
+            />
+          }
           canExport={canExport}
           styles={styles}
           isAdmin={canEdit}
@@ -1673,6 +1695,14 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cable-list' ? (
         <CableListTab
+          changeLog={
+            <CableListChangeLog
+              styles={styles}
+              projectId={project.id}
+              cables={cables}
+              canExport={canExport}
+            />
+          }
           canExport={canExport}
           styles={styles}
           canManageCables={canManageCables}
@@ -1759,7 +1789,12 @@ export const ProjectDetails = () => {
       ) : null}
 
       {selectedTab === 'roxtec' ? (
-        <RoxtecTab styles={styles} projectId={project.id} token={canEdit ? token : null} />
+        <RoxtecTab
+          styles={styles}
+          projectId={project.id}
+          token={canEdit ? token : null}
+          canExport={canExport}
+        />
       ) : null}
 
       <Button appearance="secondary" onClick={() => navigate(-1)}>

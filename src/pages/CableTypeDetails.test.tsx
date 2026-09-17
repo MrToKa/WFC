@@ -164,6 +164,7 @@ it('adds a database cable installation material and opens its editor without rel
   const dialog = screen.getByRole('dialog', {
     name: 'Add material to cable type default materials',
   });
+  await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
   expect(dialog).toHaveStyle({ width: '1200px' });
   expect(getComputedStyle(dialog).maxWidth).toBe('calc(100vw - 32px)');
   const table = await within(dialog).findByRole('table', { name: 'Available materials' });
@@ -196,7 +197,7 @@ it('adds a database cable installation material and opens its editor without rel
   fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(fetchCableTypeDetails).toHaveBeenCalledTimes(1);
-  expect(screen.getByRole('table', { name: 'Change tracker' })).toBe(history);
+  expect(await screen.findByRole('table', { name: 'Change tracker' })).toBe(history);
   expect(within(history).getByText('Added default material "Cleat"')).toBeInTheDocument();
   expect(screen.getByRole('cell', { name: 'Cleat' })).toBeInTheDocument();
 }, 15_000);

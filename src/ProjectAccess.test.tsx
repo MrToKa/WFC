@@ -94,6 +94,7 @@ beforeEach(() => {
         materialCableType: null, cableMaterials: [], cableTypeDefaultMaterials: [],
       });
       if (path.endsWith('/cables/cable-id/versions')) return json({ versions: [] });
+      if (path.endsWith('/cables/change-log')) return json({ versions: [], cables: [] });
       if (path.endsWith('/cable-types/type-id/details')) return json({
         cableType: { id: 'type-id', projectId, name: 'Type A', updatedAt: '2026-01-01' },
         materialCableType: null, defaultMaterials: [], cableCount: 0,

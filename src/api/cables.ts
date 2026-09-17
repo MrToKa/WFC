@@ -278,6 +278,13 @@ export async function fetchCableDetails(projectId: string, cableId: string): Pro
   });
 }
 
+export async function fetchCableListHistory(projectId: string): Promise<{
+  versions: CableVersion[];
+  cables: { id: string; cableId: number; tag: string | null; changeLog: ProjectChangeLogEntry[] }[];
+}> {
+  return request(`/api/projects/${projectId}/cables/change-log`, { method: 'GET' });
+}
+
 export async function fetchCableVersions(
   projectId: string,
   cableId: string,

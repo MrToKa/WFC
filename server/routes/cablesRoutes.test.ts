@@ -72,6 +72,29 @@ it('returns the saved revision author after their account has been deleted', asy
   });
 });
 
+it('loads project cable history with project-scoped queries and saved authors', async () => {
+  const handler = (cablesRouter as unknown as { stack: Layer[] }).stack
+    .find((layer) => layer.route?.path === '/change-log' && layer.route.methods.get)!
+    .route!.stack.at(-1)!.handle;
+  const author = { id: 'deleted', firstName: 'Original', lastName: 'Author', email: null };
+  database.query.mockImplementation(async (sql: string, values: unknown[]) => {
+    expect(sql).toContain('project_id = $1');
+    expect(values).toEqual(['project']);
+    if (sql.includes('FROM cable_versions v')) return { rows: [{
+      id: 'version', cable_id: 'cable', cable_number: 1, version_number: 1,
+      created_at: '2026-09-17T00:00:00Z', changed_by_snapshot: author,
+    }] };
+    return { rows: [{ id: 'cable', cable_id: 1, tag: 'C1', change_log: [] }] };
+  });
+  const res = { status: vi.fn(), json: vi.fn() };
+  res.status.mockReturnValue(res);
+  await handler({ params: { projectId: 'project' } } as unknown as Request, res as unknown as Response);
+  expect(res.json).toHaveBeenCalledWith({
+    cables: [{ id: 'cable', cableId: 1, tag: 'C1', changeLog: [] }],
+    versions: [expect.objectContaining({ changedBy: author, cableRecordId: 'cable' })],
+  });
+});
+
 let catalogUnit: 'pcs' | 'meters' | 'pack';
 let existingMaterials: { name: string; source: 'manual' | 'default'; quantity: number }[];
 let failHistory: boolean;

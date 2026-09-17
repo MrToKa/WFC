@@ -1,4 +1,5 @@
-import { canEditProject } from '@/utils/permissions';
+import { ChangeLogTable } from '@/components/ChangeLogTable';
+import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -1807,47 +1808,17 @@ export const CableDetails = () => {
         <AccordionItem value="change-tracker" className={styles.fullWidthCard}>
           <AccordionHeader>Change tracker</AccordionHeader>
           <AccordionPanel>
-            {versionsLoading ? <Spinner label="Loading cable change history..." /> : null}
-            {versionsError ? (
-              <div className={styles.sectionActions}>
-                <Body1 className={styles.errorText}>{versionsError}</Body1>
-                <Button onClick={() => void loadVersions()}>Retry history</Button>
-              </div>
-            ) : null}
-            {changeLog.length > 0 ? (
-              <div className={styles.tableContainer}>
-                <table className={styles.table} aria-label="Change tracker">
-                  <thead>
-                    <tr>
-                      {['Who', 'When', 'Changes'].map((label) => (
-                        <th key={label} className={styles.tableHeadCell}>
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {changeLog.map((entry) => (
-                      <tr key={entry.id}>
-                        <td className={styles.tableCell}>{entry.userName}</td>
-                        <td className={styles.tableCell}>
-                          {new Date(entry.changedAt).toLocaleString()}
-                        </td>
-                        <td className={styles.tableCell}>
-                          <ul>
-                            {entry.changes.map((change, index) => (
-                              <li key={index}>{change}</li>
-                            ))}
-                          </ul>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : !versionsLoading && !versionsError ? (
-              <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>
-            ) : null}
+            <ChangeLogTable
+              entries={changeLog}
+              label="Change tracker"
+              fileName={`cable-${details.cable.tag || details.cable.cableId}-change-log`}
+              loading={versionsLoading}
+              error={versionsError}
+              onRetry={() => void loadVersions()}
+              canExport={Boolean(
+                token && (canReadCatalogs(user) || user?.role === 'technician'),
+              )}
+            />
           </AccordionPanel>
         </AccordionItem>
       </Accordion>

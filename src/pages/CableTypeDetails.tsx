@@ -1,3 +1,4 @@
+import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -855,40 +856,12 @@ export const CableTypeDetails = () => {
         <AccordionItem value="change-tracker" className={styles.fullWidthCard}>
           <AccordionHeader>Change tracker</AccordionHeader>
           <AccordionPanel>
-            {details.cableType.changeLog?.length ? (
-              <div className={styles.tableContainer}>
-                <table className={styles.table} aria-label="Change tracker">
-                  <thead>
-                    <tr>
-                      {['Who', 'When', 'Changes'].map((label) => (
-                        <th key={label} className={styles.tableHeadCell}>
-                          {label}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...details.cableType.changeLog].reverse().map((entry) => (
-                      <tr key={entry.id}>
-                        <td className={styles.tableCell}>{entry.userName}</td>
-                        <td className={styles.tableCell}>
-                          {new Date(entry.changedAt).toLocaleString()}
-                        </td>
-                        <td className={styles.tableCell}>
-                          <ul>
-                            {entry.changes.map((change, index) => (
-                              <li key={index}>{change}</li>
-                            ))}
-                          </ul>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>
-            )}
+            <ChangeLogTable
+              entries={details.cableType.changeLog}
+              label="Change tracker"
+              fileName={`cable-type-${details.cableType.name}-change-log`}
+              canExport={canExport}
+            />
           </AccordionPanel>
         </AccordionItem>
       </Accordion>

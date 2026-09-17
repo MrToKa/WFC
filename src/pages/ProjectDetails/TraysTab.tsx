@@ -1,4 +1,4 @@
-﻿import type { ChangeEvent, RefObject } from 'react';
+﻿import type { ChangeEvent, ReactNode, RefObject } from 'react';
 import { useMemo } from 'react';
 
 import {
@@ -19,6 +19,7 @@ import { TablePagination } from './TablePagination';
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
 type TraysTabProps = {
+  changeLog?: ReactNode;
   styles: ProjectDetailsStyles;
   isAdmin: boolean;
   canExport?: boolean;
@@ -56,6 +57,7 @@ type TraysTabProps = {
 };
 
 export const TraysTab = ({
+  changeLog,
   styles,
   isAdmin,
   canExport = isAdmin,
@@ -331,6 +333,7 @@ export const TraysTab = ({
         ) : null}
       </div>
     )}
+    {changeLog}
   </div>
   );
 };

@@ -1,4 +1,4 @@
-import type { ChangeEvent, RefObject } from 'react';
+import type { ChangeEvent, ReactNode, RefObject } from 'react';
 import { useMemo } from 'react';
 
 import {
@@ -35,6 +35,7 @@ type CableTypesTabItem = Pick<
 };
 
 type CableTypesTabProps<T extends CableTypesTabItem> = {
+  changeLog?: ReactNode;
   styles: FilterableTableSectionStyles;
   isAdmin: boolean;
   canExport?: boolean;
@@ -78,6 +79,7 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
 };
 
 export const CableTypesTab = <T extends CableTypesTabItem>({
+  changeLog,
   styles,
   isAdmin,
   canExport = isAdmin,
@@ -337,6 +339,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
           ) : null}
         </>
       )}
+      {changeLog}
     </div>
   );
 };

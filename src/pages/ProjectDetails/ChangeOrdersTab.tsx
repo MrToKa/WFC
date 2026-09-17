@@ -1,3 +1,4 @@
+import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject } from '@/utils/permissions';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -1102,38 +1103,12 @@ export const ChangeOrdersTab = ({
           <AccordionItem value="change-log" className={styles.card}>
             <AccordionHeader>Change log</AccordionHeader>
             <AccordionPanel>
-              {savedDetails.changeLog?.length ? (
-                <div className={styles.tableWrap}>
-                  <Table aria-label="Change log">
-                    <TableHeader>
-                      <TableRow>
-                        <TableHeaderCell>Who</TableHeaderCell>
-                        <TableHeaderCell>When</TableHeaderCell>
-                        <TableHeaderCell>Revision</TableHeaderCell>
-                        <TableHeaderCell>Changes</TableHeaderCell>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {[...savedDetails.changeLog].reverse().map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell>{entry.userName}</TableCell>
-                          <TableCell>{new Date(entry.changedAt).toLocaleString()}</TableCell>
-                          <TableCell>{entry.revision}</TableCell>
-                          <TableCell>
-                            <ul>
-                              {entry.changes.map((change, index) => (
-                                <li key={index}>{change}</li>
-                              ))}
-                            </ul>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <Text>No recorded changes yet. Future saved changes will appear here.</Text>
-              )}
+              <ChangeLogTable
+                entries={savedDetails.changeLog}
+                showRevision
+                fileName={`${collection}-${savedDetails.title}-change-log`}
+                canExport={Boolean(token)}
+              />
             </AccordionPanel>
           </AccordionItem>
         </Accordion>

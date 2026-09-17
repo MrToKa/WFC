@@ -2665,6 +2665,45 @@ cablesRouter.patch(
   },
 );
 
+cablesRouter.get('/change-log', async (req: Request, res: Response): Promise<void> => {
+  const { projectId } = req.params;
+  if (!projectId) {
+    res.status(400).json({ error: 'Project ID is required' });
+    return;
+  }
+  try {
+    if (!(await ensureProjectExists(projectId))) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+    const [versions, cables] = await Promise.all([
+      pool.query<CableVersionRow>(
+        `SELECT v.*, u.first_name AS changed_by_first_name,
+          u.last_name AS changed_by_last_name, u.email AS changed_by_email
+         FROM cable_versions v
+         JOIN cables c ON c.id = v.cable_id
+         LEFT JOIN users u ON u.id = v.changed_by
+         WHERE c.project_id = $1
+         ORDER BY v.version_number ASC`,
+        [projectId],
+      ),
+      pool.query<{ id: string; cable_id: number; tag: string | null; change_log: ProjectChangeLogEntry[] }>(
+        'SELECT id, cable_id, tag, change_log FROM cables WHERE project_id = $1',
+        [projectId],
+      ),
+    ]);
+    res.json({
+      versions: versions.rows.map(mapCableVersionRow),
+      cables: cables.rows.map((cable) => ({
+        id: cable.id, cableId: cable.cable_id, tag: cable.tag, changeLog: cable.change_log ?? [],
+      })),
+    });
+  } catch (error) {
+    console.error('List cable history error', error);
+    res.status(500).json({ error: 'Failed to load cable history' });
+  }
+});
+
 cablesRouter.get('/:cableId/versions', async (req: Request, res: Response): Promise<void> => {
   const { projectId, cableId } = req.params;
 
