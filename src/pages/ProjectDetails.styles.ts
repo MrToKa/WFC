@@ -225,6 +225,21 @@ export const useProjectDetailsStyles = makeStyles({
     alignItems: 'flex-end',
     gap: '0.25rem',
   },
+  clearPlaceholdersButton: {
+    '&:not(:disabled)': {
+      backgroundColor: tokens.colorStatusDangerBackground3,
+      color: tokens.colorNeutralForegroundOnBrand,
+      ...shorthands.borderColor(tokens.colorStatusDangerBackground3),
+    },
+    '&:not(:disabled):hover': {
+      backgroundColor: tokens.colorStatusDangerBackground3Hover,
+      ...shorthands.borderColor(tokens.colorStatusDangerBackground3Hover),
+    },
+    '&:not(:disabled):active': {
+      backgroundColor: tokens.colorStatusDangerBackground3Pressed,
+      ...shorthands.borderColor(tokens.colorStatusDangerBackground3Pressed),
+    },
+  },
   variablesSectionHeader: {
     display: 'flex',
     alignItems: 'center',

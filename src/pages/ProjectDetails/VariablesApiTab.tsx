@@ -11,7 +11,6 @@ import {
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import {
-  clearProjectPlaceholders,
   getProjectPlaceholders,
   setProjectPlaceholders
 } from '@/utils/projectPlaceholders';
@@ -52,6 +51,7 @@ export const VariablesApiTab = ({
   sections,
   isLoading
 }: VariablesApiTabProps) => {
+  const [isEditing, setIsEditing] = useState(false);
   const [placeholders, setPlaceholders] = useState<Record<string, string>>(() =>
     getProjectPlaceholders(projectId)
   );
@@ -61,23 +61,27 @@ export const VariablesApiTab = ({
 
   useEffect(() => {
     setPlaceholders(getProjectPlaceholders(projectId));
-  }, [projectId]);
-
-  useEffect(() => {
     setCustomVariablesState(getCustomVariables(projectId));
+    setIsEditing(false);
   }, [projectId]);
 
-  useEffect(() => {
-    if (Object.keys(placeholders).length === 0) {
-      clearProjectPlaceholders(projectId);
-    } else {
-      setProjectPlaceholders(projectId, placeholders);
-    }
-  }, [placeholders, projectId]);
+  const handleEdit = () => {
+    setPlaceholders(getProjectPlaceholders(projectId));
+    setCustomVariablesState(getCustomVariables(projectId));
+    setIsEditing(true);
+  };
 
-  useEffect(() => {
+  const handleSave = () => {
+    setProjectPlaceholders(projectId, placeholders);
     setCustomVariables(projectId, customVariables);
-  }, [customVariables, projectId]);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setPlaceholders(getProjectPlaceholders(projectId));
+    setCustomVariablesState(getCustomVariables(projectId));
+    setIsEditing(false);
+  };
 
   const handlePlaceholderChange = (rowId: string, value: string) => {
     setPlaceholders((previous) => {
@@ -102,10 +106,20 @@ export const VariablesApiTab = ({
   };
 
   const handleClearPlaceholders = () => {
-    if (Object.keys(placeholders).length === 0) {
+    if (!isEditing || Object.keys(placeholders).length === 0) {
       return;
     }
-    clearProjectPlaceholders(projectId);
+    if (!window.confirm('Clear all placeholders for this project? (1 of 2)')) {
+      return;
+    }
+    if (
+      !window.confirm(
+        'Confirm clearing all placeholders, including custom variable placeholders. ' +
+          'Click Save afterwards to save this change, or Cancel to restore them. (2 of 2)'
+      )
+    ) {
+      return;
+    }
     setPlaceholders({});
   };
 
@@ -124,9 +138,7 @@ export const VariablesApiTab = ({
   );
 
   const generateCustomVariableId = () =>
-    `custom:${Date.now().toString(36)}:${Math.random()
-      .toString(36)
-      .slice(2, 8)}`;
+    `custom:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
 
   const handleAddCustomVariable = () => {
     setCustomVariablesState((previous) => [
@@ -187,16 +199,36 @@ export const VariablesApiTab = ({
             <div>
               <Subtitle2>Placeholder mapping</Subtitle2>
               <Body1>
-                Enter the keyword that should be replaced inside Word templates.
+                Select Edit to change the keywords replaced inside Word
+                templates, then Save to confirm your changes.
               </Body1>
             </div>
             <div className={styles.variablesActions}>
               <Caption1>{totalVariables} variables detected</Caption1>
+              {isEditing ? (
+                <>
+                  <Button
+                    size="small"
+                    appearance="primary"
+                    onClick={handleSave}
+                  >
+                    Save
+                  </Button>
+                  <Button size="small" onClick={handleCancel}>
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button size="small" appearance="primary" onClick={handleEdit}>
+                  Edit
+                </Button>
+              )}
               <Button
                 size="small"
                 appearance="secondary"
+                className={styles.clearPlaceholdersButton}
                 onClick={handleClearPlaceholders}
-                disabled={Object.keys(placeholders).length === 0}
+                disabled={!isEditing || Object.keys(placeholders).length === 0}
               >
                 Clear placeholders
               </Button>
@@ -251,6 +283,7 @@ export const VariablesApiTab = ({
                                 appearance="underline"
                                 placeholder="e.g. {{PROJECT_NAME}}"
                                 value={placeholders[row.id] ?? ''}
+                                readOnly={!isEditing}
                                 onChange={(_, data) =>
                                   handlePlaceholderChange(row.id, data.value)
                                 }
@@ -275,7 +308,11 @@ export const VariablesApiTab = ({
           <Caption1>{customVariables.length} variables</Caption1>
         </div>
         <div className={styles.customVariablesActions}>
-          <Button appearance="primary" onClick={handleAddCustomVariable}>
+          <Button
+            appearance="primary"
+            onClick={handleAddCustomVariable}
+            disabled={!isEditing}
+          >
             Add custom variable
           </Button>
         </div>
@@ -302,8 +339,12 @@ export const VariablesApiTab = ({
                         appearance="underline"
                         placeholder="Describe the value this placeholder should inject"
                         value={variable.name}
+                        readOnly={!isEditing}
                         onChange={(_, data) =>
-                          handleCustomVariableNameChange(variable.id, data.value)
+                          handleCustomVariableNameChange(
+                            variable.id,
+                            data.value
+                          )
                         }
                         aria-label="Custom variable description"
                       />
@@ -314,6 +355,7 @@ export const VariablesApiTab = ({
                         appearance="underline"
                         placeholder="e.g. {{CUSTOM_TOKEN}}"
                         value={placeholders[variable.id] ?? ''}
+                        readOnly={!isEditing}
                         onChange={(_, data) =>
                           handlePlaceholderChange(variable.id, data.value)
                         }
@@ -325,6 +367,7 @@ export const VariablesApiTab = ({
                         appearance="secondary"
                         size="small"
                         onClick={() => handleDeleteCustomVariable(variable.id)}
+                        disabled={!isEditing}
                       >
                         Delete
                       </Button>
