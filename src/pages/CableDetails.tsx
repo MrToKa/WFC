@@ -1,5 +1,5 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
-import { canEditProject, canReadCatalogs } from '@/utils/permissions';
+import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -1815,9 +1815,7 @@ export const CableDetails = () => {
               loading={versionsLoading}
               error={versionsError}
               onRetry={() => void loadVersions()}
-              canExport={Boolean(
-                token && (canReadCatalogs(user) || user?.role === 'technician'),
-              )}
+              canExport={canExportChangeLogs(user, token)}
             />
           </AccordionPanel>
         </AccordionItem>

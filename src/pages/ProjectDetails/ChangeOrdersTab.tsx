@@ -1,5 +1,5 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
-import { canEditProject } from '@/utils/permissions';
+import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
 import { useEffect, useMemo, useState } from 'react';
 import {
   AddRegular,
@@ -1107,7 +1107,7 @@ export const ChangeOrdersTab = ({
                 entries={savedDetails.changeLog}
                 showRevision
                 fileName={`${collection}-${savedDetails.title}-change-log`}
-                canExport={Boolean(token)}
+                canExport={canExportChangeLogs(currentUser, token)}
               />
             </AccordionPanel>
           </AccordionItem>

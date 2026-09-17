@@ -1,4 +1,4 @@
-import { canEditProject, canReadCatalogs } from '@/utils/permissions';
+import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Body1, Button, Spinner, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
@@ -217,6 +217,7 @@ export const ProjectDetails = () => {
   const canViewAll = canReadCatalogs(user);
   const { materialTrays } = useMaterialData(projectId, canViewAll);
   const canExport = Boolean(token && (canViewAll || user?.role === 'technician'));
+  const canExportHistory = canExportChangeLogs(user, token);
   const canReadFiles = canViewAll || user?.role === 'technician';
   const canManageCables = canEdit && Boolean(token);
 
@@ -1539,7 +1540,7 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'details' ? (
         <DetailsTab
-          canExport={canExport}
+          canExport={canExportHistory}
           styles={styles}
           project={project}
           formattedDates={formattedDates}
@@ -1564,7 +1565,7 @@ export const ProjectDetails = () => {
             <SectionChangeLog
               styles={styles}
               items={cableTypes}
-              canExport={canExport}
+              canExport={canExportHistory}
               fileName={`project-${project.projectNumber}-cable-types-change-log`}
               loading={cableTypesLoading}
               error={cableTypesError}
@@ -1613,7 +1614,7 @@ export const ProjectDetails = () => {
             <SectionChangeLog
               styles={styles}
               items={trays}
-              canExport={canExport}
+              canExport={canExportHistory}
               fileName={`project-${project.projectNumber}-trays-change-log`}
               loading={traysLoading}
               error={traysError}
@@ -1700,7 +1701,7 @@ export const ProjectDetails = () => {
               styles={styles}
               projectId={project.id}
               cables={cables}
-              canExport={canExport}
+              canExport={canExportHistory}
             />
           }
           canExport={canExport}
@@ -1793,7 +1794,7 @@ export const ProjectDetails = () => {
           styles={styles}
           projectId={project.id}
           token={canEdit ? token : null}
-          canExport={canExport}
+          canExport={canExportHistory}
         />
       ) : null}
 

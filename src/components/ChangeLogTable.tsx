@@ -51,7 +51,7 @@ export const ChangeLogTable = ({
   fileName,
   showItem = false,
   showRevision = false,
-  canExport = true,
+  canExport = false,
   loading = false,
   error,
   onRetry,
@@ -69,6 +69,7 @@ export const ChangeLogTable = ({
   const pagedEntries = sortedEntries.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const exportHistory = async () => {
+    if (!canExport || loading || error || exporting || !entries.length) return;
     setExporting(true);
     setExportError(null);
     try {

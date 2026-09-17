@@ -1,5 +1,5 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
-import { canEditProject, canReadCatalogs } from '@/utils/permissions';
+import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -860,7 +860,7 @@ export const CableTypeDetails = () => {
               entries={details.cableType.changeLog}
               label="Change tracker"
               fileName={`cable-type-${details.cableType.name}-change-log`}
-              canExport={canExport}
+              canExport={canExportChangeLogs(user, token)}
             />
           </AccordionPanel>
         </AccordionItem>

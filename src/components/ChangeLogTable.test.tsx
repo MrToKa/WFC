@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ChangeLogTable, type ChangeLogEntry } from './ChangeLogTable';
 import { exportChangeLog } from '@/utils/exportChangeLog';
+import { canExportChangeLogs } from '@/utils/permissions';
+import type { User } from '@/api/types/user';
 
 vi.mock('@/utils/exportChangeLog', () => ({ exportChangeLog: vi.fn() }));
 beforeEach(() => vi.resetAllMocks());
@@ -18,7 +20,14 @@ const entries: ChangeLogEntry[] = Array.from({ length: 23 }, (_, i) => ({
 }));
 const view = (items = entries, props = {}) => (
   <FluentProvider theme={webLightTheme}>
-    <ChangeLogTable entries={items} fileName="test-history" showItem showRevision {...props} />
+    <ChangeLogTable
+      entries={items}
+      fileName="test-history"
+      showItem
+      showRevision
+      canExport
+      {...props}
+    />
   </FluentProvider>
 );
 
@@ -38,7 +47,9 @@ it('paginates newest first, supports direct page selection, and clamps after del
   fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
   expect(screen.getByText('Change 12')).toBeVisible();
   rerender(view(entries.slice(0, 2)));
-  expect(screen.queryByRole('combobox', { name: 'Select change log page' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('combobox', { name: 'Select change log page' }),
+  ).not.toBeInTheDocument();
   expect(within(table).getAllByRole('row')).toHaveLength(3);
 });
 
@@ -81,4 +92,35 @@ it('allows retrying a failed export', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Export change log to Excel' }));
   await waitFor(() => expect(exportChangeLog).toHaveBeenCalledTimes(2));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it.each(['basic', 'technician', 'engineer', 'admin'] as const)(
+  'only exposes change log export to administrators: %s',
+  (role) => {
+    const user: User = {
+      id: 'user',
+      email: 'user@example.com',
+      firstName: null,
+      lastName: null,
+      role,
+      isAdmin: role === 'admin',
+      createdAt: '',
+      updatedAt: '',
+    };
+    render(view(entries, { canExport: canExportChangeLogs(user, 'token') }));
+    const button = screen.queryByRole('button', { name: 'Export change log to Excel' });
+    if (role === 'admin') expect(button).toBeEnabled();
+    else expect(button).not.toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Change log' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+    expect(canExportChangeLogs(user, null)).toBe(false);
+  },
+);
+
+it('does not allow exports without an explicit permission', () => {
+  render(view(entries, { canExport: undefined }));
+  expect(
+    screen.queryByRole('button', { name: 'Export change log to Excel' }),
+  ).not.toBeInTheDocument();
+  expect(canExportChangeLogs(null, 'token')).toBe(false);
 });

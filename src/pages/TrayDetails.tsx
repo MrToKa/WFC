@@ -1,4 +1,4 @@
-import { canEditProject, canReadCatalogs } from '@/utils/permissions';
+import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -3536,7 +3536,7 @@ export const TrayDetails = () => {
 
       <TrayChangeTracker
         tray={tray}
-        canExport={Boolean(token && (canReadCatalogs(user) || user?.role === 'technician'))}
+        canExport={canExportChangeLogs(user, token)}
       />
     </section>
   );

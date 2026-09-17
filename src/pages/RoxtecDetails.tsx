@@ -1,5 +1,5 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
-import { canEditProject, canReadCatalogs } from '@/utils/permissions';
+import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
@@ -772,7 +772,7 @@ export const RoxtecDetails = () => {
             <ChangeLogTable
               entries={changeLog}
               fileName={`roxtec-${entry.tag || roxtecId}-change-log`}
-              canExport={canExport}
+              canExport={canExportChangeLogs(user, token)}
             />
           </AccordionPanel>
         </AccordionItem>
