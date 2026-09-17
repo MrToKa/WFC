@@ -122,7 +122,7 @@ Project pages show whether editing is allowed. Engineers can edit project settin
 manage cables, trays, Roxtec, Change Orders, Internal NCRs and files, clear data, and delete assigned
 projects without entering the Admin panel. Global catalogs and templates remain read-only.
 
-Basic and Technician users cannot open Cables report, Change Orders, Internal NCRs, or Variables API.
+Basic and Technician users cannot open Cables MTOs, Change Orders, Internal NCRs, or Variables API.
 Basic users also cannot access Files or export data. Technicians can read/download project files and
 export the available tables, but cannot modify data, import, or download upload templates.
 

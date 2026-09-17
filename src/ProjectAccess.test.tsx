@@ -169,7 +169,7 @@ describe('basic user navigation and project controls', () => {
       expect(await screen.findByText(/P-001/)).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
       for (const name of [
-        'Cables report',
+        'Cables MTOs',
         'Change Orders',
         'Internal NCRs',
         'Files',
@@ -263,7 +263,7 @@ describe('Technician navigation and export controls', () => {
       mount('/projects/' + projectId + '?tab=' + tab);
       await screen.findByText(/P-001/);
       expect(screen.getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
-      for (const name of ['Cables report', 'Change Orders', 'Internal NCRs', 'Variables API']) {
+      for (const name of ['Cables MTOs', 'Change Orders', 'Internal NCRs', 'Variables API']) {
         expect(screen.queryByRole('tab', { name })).not.toBeInTheDocument();
       }
       expect(requests.some((path) => /report-summary|change-orders|internal-ncrs/.test(path))).toBe(false);

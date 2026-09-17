@@ -4175,7 +4175,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         }
       }
 
-      const summaryWorksheet = workbook.addWorksheet('Cables report', {
+      const summaryWorksheet = workbook.addWorksheet('Cables MTOs', {
         views: [{ state: 'frozen', ySplit: 2 }],
       });
 
@@ -4539,7 +4539,7 @@ cablesRouter.get('/template', authenticate, async (req: Request, res: Response):
 
   try {
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(exportView === 'report' ? 'Cables report' : 'Cables', {
+    const worksheet = workbook.addWorksheet(exportView === 'report' ? 'Cables MTOs' : 'Cables', {
       views: [{ state: 'frozen', ySplit: 1 }],
     });
 

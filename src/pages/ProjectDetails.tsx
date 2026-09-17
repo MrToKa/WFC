@@ -976,13 +976,13 @@ export const ProjectDetails = () => {
 
     sections.push({
       id: 'cable-report',
-      label: 'Cables report',
+      label: 'Cables MTOs',
       tables: [
         buildTableVariable({
           sectionId: 'cable-report',
           tableId: 'main',
           label: 'Main table',
-          displayName: 'Cables report main table',
+          displayName: 'Cables MTOs main table',
           recordCount: cables.length,
         }),
       ],
@@ -1528,7 +1528,7 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="trays">Trays</Tab>
-        {canViewAll ? <Tab value="cable-report">Cables report</Tab> : null}
+        {canViewAll ? <Tab value="cable-report">Cables MTOs</Tab> : null}
         {canViewAll ? <Tab value="change-orders">Change Orders</Tab> : null}
         {canViewAll ? <Tab value="internal-ncrs">Internal NCRs</Tab> : null}
         <Tab value="roxtec">Roxtec</Tab>
