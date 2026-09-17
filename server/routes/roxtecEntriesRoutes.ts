@@ -1,3 +1,4 @@
+import { recordRoxtecChanges } from '../services/roxtecChangeLogService.js';
 import type { PoolClient } from 'pg';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
@@ -75,7 +76,8 @@ export const roxtecEntriesRouter = (() => {
         [projectId]
       );
 
-      res.json({ entries: result.rows.map(mapRoxtecEntryRow) });
+      const history = await pool.query('SELECT roxtec_change_log FROM projects WHERE id = $1', [projectId]);
+      res.json({ entries: result.rows.map(mapRoxtecEntryRow), changeLog: history.rows[0]?.roxtec_change_log ?? [] });
     } catch (error) {
       console.error('Failed to list Roxtec entries', error);
       res.status(500).json({ error: 'Failed to load Roxtec entries' });
@@ -207,14 +209,15 @@ export const roxtecEntriesRouter = (() => {
           [projectId, nextId, revision, tag, type, description]
         );
 
-        await client.query('COMMIT');
-
         const entry = insertResult.rows[0];
         if (!entry) {
+          await client.query('ROLLBACK');
           res.status(500).json({ error: 'Failed to create Roxtec entry' });
           return;
         }
 
+        await recordRoxtecChanges(client, projectId, req.userId, null, entry);
+        await client.query('COMMIT');
         res.status(201).json({ entry: mapRoxtecEntryRow(entry) });
       } catch (error) {
         await client?.query('ROLLBACK').catch(() => undefined);
@@ -245,6 +248,7 @@ export const roxtecEntriesRouter = (() => {
       return;
     }
 
+    let client: PoolClient | undefined;
     try {
       const project = await ensureProjectExists(projectId);
       if (!project) {
@@ -261,7 +265,16 @@ export const roxtecEntriesRouter = (() => {
         res.status(400).json({ error: 'Revision, tag, and type are required' });
         return;
       }
-      const result = await pool.query<RoxtecEntryRow>(
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const previous = await client.query<RoxtecEntryRow>(
+        'SELECT * FROM project_roxtec_entries WHERE project_id = $1 AND id = $2 FOR UPDATE', [projectId, entryId]);
+      if (!previous.rows[0]) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Roxtec entry not found' });
+        return;
+      }
+      const result = await client.query<RoxtecEntryRow>(
         `
           UPDATE project_roxtec_entries
           SET
@@ -286,14 +299,20 @@ export const roxtecEntriesRouter = (() => {
 
       const entry = result.rows[0];
       if (!entry) {
+        await client.query('ROLLBACK');
         res.status(404).json({ error: 'Roxtec entry not found' });
         return;
       }
 
+      await recordRoxtecChanges(client, projectId, req.userId, previous.rows[0], entry);
+      await client.query('COMMIT');
       res.json({ entry: mapRoxtecEntryRow(entry) });
     } catch (error) {
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Failed to update Roxtec entry', error);
       res.status(500).json({ error: 'Failed to update Roxtec entry' });
+    } finally {
+      client?.release();
     }
   });
 
@@ -316,30 +335,39 @@ export const roxtecEntriesRouter = (() => {
       return;
     }
 
+    let client: PoolClient | undefined;
     try {
       const project = await ensureProjectExists(projectId);
       if (!project) {
         res.status(404).json({ error: 'Project not found' });
         return;
       }
-      const result = await pool.query(
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const result = await client.query<RoxtecEntryRow>(
         `
           DELETE FROM project_roxtec_entries
           WHERE project_id = $1 AND id = $2
-          RETURNING id;
+          RETURNING *;
         `,
         [projectId, entryId]
       );
 
       if (result.rowCount === 0) {
+        await client.query('ROLLBACK');
         res.status(404).json({ error: 'Roxtec entry not found' });
         return;
       }
 
+      await recordRoxtecChanges(client, projectId, req.userId, result.rows[0], null);
+      await client.query('COMMIT');
       res.status(204).send();
     } catch (error) {
+      await client?.query('ROLLBACK').catch(() => undefined);
       console.error('Failed to delete Roxtec entry', error);
       res.status(500).json({ error: 'Failed to delete Roxtec entry' });
+    } finally {
+      client?.release();
     }
   });
 

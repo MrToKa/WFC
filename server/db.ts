@@ -72,6 +72,9 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS change_log JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+    ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS roxtec_change_log JSONB NOT NULL DEFAULT '[]'::jsonb;
   `);
 
   await pool.query(`

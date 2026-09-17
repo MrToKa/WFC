@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Button,
   Caption1,
@@ -24,7 +28,7 @@ import {
   fetchRoxtecEntries,
   updateRoxtecEntry
 } from '@/api/roxtec';
-import type { RoxtecEntry } from '@/api/types';
+import type { ProjectChangeLogEntry, RoxtecEntry } from '@/api/types';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 
@@ -53,6 +57,7 @@ type RoxtecTabProps = {
 
 export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   const navigate = useNavigate();
+  const [changeLog, setChangeLog] = useState<ProjectChangeLogEntry[]>([]);
   const [entries, setEntries] = useState<RoxtecEntry[]>([]);
   const [draft, setDraft] = useState<RoxtecDraft>(emptyDraft);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +75,7 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
   const loadEntries = useCallback(async () => {
     if (!projectId) {
       setEntries([]);
+      setChangeLog([]);
       setIsLoading(false);
       return;
     }
@@ -79,10 +85,12 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
     try {
       const response = await fetchRoxtecEntries(projectId);
       setEntries(response.entries);
+      setChangeLog(response.changeLog ?? []);
     } catch (loadError) {
       console.error('Failed to load Roxtec entries', loadError);
       setError('Failed to load Roxtec entries.');
       setEntries([]);
+      setChangeLog([]);
     } finally {
       setIsLoading(false);
     }
@@ -478,6 +486,39 @@ export const RoxtecTab = ({ styles, projectId, token }: RoxtecTabProps) => {
           </table>
         </div>
       </div>
+      <Accordion collapsible defaultOpenItems={[]} key={projectId}>
+        <AccordionItem value="change-log" className={styles.panel}>
+          <AccordionHeader>Change log</AccordionHeader>
+          <AccordionPanel>
+            {changeLog?.length ? (
+              <div className={styles.tableContainer}>
+                <table className={styles.table} aria-label="Change log">
+                  <thead>
+                    <tr>
+                      {['Who', 'When', 'Changes'].map((label) => (
+                        <th key={label} className={styles.tableHeadCell}>{label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...changeLog].reverse().map((entry) => (
+                      <tr key={entry.id}>
+                        <td className={styles.tableCell}>{entry.userName}</td>
+                        <td className={styles.tableCell}>{new Date(entry.changedAt).toLocaleString()}</td>
+                        <td className={styles.tableCell}>
+                          <ul>{entry.changes.map((change, index) => <li key={index}>{change}</li>)}</ul>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>
+            )}
+          </AccordionPanel>
+        </AccordionItem>
+      </Accordion>
     </div>
   );
 };

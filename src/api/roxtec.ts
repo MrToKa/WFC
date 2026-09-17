@@ -1,10 +1,10 @@
 import { request } from './http';
-import type { RoxtecEntry } from './types';
+import type { ProjectChangeLogEntry, RoxtecEntry } from './types';
 
 export async function fetchRoxtecEntries(
   projectId: string
-): Promise<{ entries: RoxtecEntry[] }> {
-  return request<{ entries: RoxtecEntry[] }>(`/api/projects/${projectId}/roxtec`, {
+): Promise<{ entries: RoxtecEntry[]; changeLog: ProjectChangeLogEntry[] }> {
+  return request<{ entries: RoxtecEntry[]; changeLog: ProjectChangeLogEntry[] }>(`/api/projects/${projectId}/roxtec`, {
     method: 'GET'
   });
 }
