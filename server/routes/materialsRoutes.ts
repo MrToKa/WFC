@@ -1,5 +1,5 @@
 import { registerMaterialExportRoutes, filterMaterialExportRows } from '../utils/materialExcelExport.js';
-import type { PoolClient } from 'pg';
+import type { PoolClient, QueryResultRow } from 'pg';
 import { randomUUID } from 'crypto';
 import path from 'node:path';
 import type { Request, Response } from 'express';
@@ -8,7 +8,7 @@ import ExcelJS from 'exceljs';
 import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
-import { pool } from '../db.js';
+import { materialAuditPool as pool } from '../services/materialAuditPool.js';
 import {
   mapMaterialTrayRow,
   type MaterialTrayRow
@@ -119,7 +119,7 @@ const readImportWorkbook = (buffer: Buffer, res: Response): XLSX.WorkBook | null
 };
 
 type Queryable = {
-  query: <T = unknown>(
+  query: <T extends QueryResultRow = QueryResultRow>(
     text: string,
     params?: unknown[]
   ) => Promise<{ rows: T[] }>;

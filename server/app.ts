@@ -1,3 +1,5 @@
+import { materialChangeLogsRouter } from './routes/materialChangeLogsRoutes.js';
+import { withMaterialAuditActor } from './services/materialAuditContext.js';
 import cors from 'cors';
 import express, { type Express, type Request, type Response } from 'express';
 import { config } from './config.js';
@@ -40,7 +42,8 @@ export const createApp = (): Express => {
   app.use('/api/auth', authRouter);
   app.use('/api/users', userRouter);
   app.use('/api/admin', adminUsersRouter);
-  app.use('/api/materials', authenticate, requireCatalogAccess);
+  app.use('/api/materials', authenticate, requireCatalogAccess, withMaterialAuditActor);
+  app.use('/api/materials/change-logs', materialChangeLogsRouter);
   app.use('/api/templates', authenticate, requireCatalogAccess);
   app.use('/api/materials/cable-installation-materials', materialCableInstallationMaterialsRouter);
   app.use('/api/materials/tray-installation-materials', materialTrayInstallationMaterialsRouter);

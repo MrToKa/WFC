@@ -1,4 +1,11 @@
 import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
+import type { MaterialDetailsCategory, ProjectChangeLogEntry } from './types';
+
+export const fetchMaterialChangeLog = (
+  category: MaterialDetailsCategory,
+  materialId: string,
+): Promise<{ changeLog: ProjectChangeLogEntry[] }> =>
+  request(`/api/materials/change-logs/${category}/${materialId}`);
 import type {
   MaterialCableInstallationMaterial,
   MaterialCableInstallationMaterialImportSummary,

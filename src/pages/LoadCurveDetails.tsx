@@ -30,6 +30,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { LoadCurveChart } from './Materials/components/LoadCurveChart';
+import { MaterialChangeLogSection } from './Materials/components/MaterialChangeLogSection';
 
 type PointFormRow = {
   id?: string;
@@ -719,6 +720,11 @@ export const LoadCurveDetails = () => {
           </Body2>
         )}
       </div>
+      <MaterialChangeLogSection
+        category="load-curve"
+        materialId={loadCurve.id}
+        refreshKey={loadCurve}
+      />
     </section>
   );
 };

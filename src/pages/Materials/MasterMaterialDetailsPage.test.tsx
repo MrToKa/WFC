@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
+  fetchMaterialChangeLog: vi.fn().mockResolvedValue({ changeLog: [] }),
   fetchMaterialDetails: mocks.fetchDetails,
   fetchMaterialCableInstallationMaterials: mocks.fetchCableInstallationMaterials,
   fetchMaterialTrayInstallationMaterials: mocks.fetchTrayInstallationMaterials,

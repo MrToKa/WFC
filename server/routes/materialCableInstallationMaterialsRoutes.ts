@@ -10,7 +10,7 @@ import ExcelJS from 'exceljs';
 import { uploadExcelFile } from '../utils/excelUpload.js';
 import * as XLSX from 'xlsx';
 import { z } from 'zod';
-import { pool } from '../db.js';
+import { materialAuditPool as pool } from '../services/materialAuditPool.js';
 import {
   mapMaterialCableInstallationMaterialRow,
   type MaterialCableInstallationMaterialRow,

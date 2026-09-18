@@ -1,3 +1,4 @@
+import { initializeMaterialChangeLog } from './services/materialChangeLogSchema.js';
 import { Pool } from 'pg';
 import { config } from './config.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
@@ -258,19 +259,6 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
-    UPDATE cable_types AS ct
-    SET
-      material = COALESCE(ct.material, m.material),
-      description = COALESCE(ct.description, m.description),
-      manufacturer = COALESCE(ct.manufacturer, m.manufacturer),
-      part_no = COALESCE(ct.part_no, m.part_no),
-      remarks = COALESCE(ct.remarks, m.remarks)
-    FROM material_cable_types AS m
-    WHERE regexp_replace(lower(trim(ct.name)), '\\s+', ' ', 'g') =
-        regexp_replace(lower(trim(m.name)), '\\s+', ' ', 'g');
-  `);
-
-  await pool.query(`
     CREATE TABLE IF NOT EXISTS cable_type_default_materials (
       id UUID PRIMARY KEY,
       cable_type_id UUID NOT NULL REFERENCES cable_types(id) ON DELETE CASCADE,
@@ -334,6 +322,19 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS material_cable_types_name_lower_idx
       ON material_cable_types (LOWER(name));
+  `);
+
+  await pool.query(`
+    UPDATE cable_types AS ct
+    SET
+      material = COALESCE(ct.material, m.material),
+      description = COALESCE(ct.description, m.description),
+      manufacturer = COALESCE(ct.manufacturer, m.manufacturer),
+      part_no = COALESCE(ct.part_no, m.part_no),
+      remarks = COALESCE(ct.remarks, m.remarks)
+    FROM material_cable_types AS m
+    WHERE regexp_replace(lower(trim(ct.name)), '\\s+', ' ', 'g') =
+        regexp_replace(lower(trim(m.name)), '\\s+', ' ', 'g');
   `);
 
   await pool.query(`
@@ -950,37 +951,6 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM information_schema.table_constraints
-        WHERE constraint_name = 'material_trays_load_curve_id_fkey'
-          AND table_name = 'material_trays'
-      ) THEN
-        ALTER TABLE material_trays
-          ADD CONSTRAINT material_trays_load_curve_id_fkey
-          FOREIGN KEY (load_curve_id)
-          REFERENCES material_load_curves(id)
-          ON DELETE SET NULL;
-      END IF;
-    END $$;
-  `);
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS material_trays_load_curve_id_idx
-      ON material_trays (load_curve_id);
-  `);
-
-  await pool.query(`
-    UPDATE material_trays mt
-    SET load_curve_id = lc.id
-    FROM material_load_curves lc
-    WHERE lc.tray_id = mt.id
-      AND mt.load_curve_id IS NULL;
-  `);
-
-  await pool.query(`
     CREATE TABLE IF NOT EXISTS material_supports (
       id UUID PRIMARY KEY,
       support_type TEXT NOT NULL UNIQUE,
@@ -1019,6 +989,37 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS material_load_curves_tray_id_idx
       ON material_load_curves (tray_id);
+  `);
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'material_trays_load_curve_id_fkey'
+          AND table_name = 'material_trays'
+      ) THEN
+        ALTER TABLE material_trays
+          ADD CONSTRAINT material_trays_load_curve_id_fkey
+          FOREIGN KEY (load_curve_id)
+          REFERENCES material_load_curves(id)
+          ON DELETE SET NULL;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS material_trays_load_curve_id_idx
+      ON material_trays (load_curve_id);
+  `);
+
+  await pool.query(`
+    UPDATE material_trays mt
+    SET load_curve_id = lc.id
+    FROM material_load_curves lc
+    WHERE lc.tray_id = mt.id
+      AND mt.load_curve_id IS NULL;
   `);
 
   await pool.query(`
@@ -2279,6 +2280,7 @@ export async function initializeDatabase(): Promise<void> {
         END
       );
   `);
+  await initializeMaterialChangeLog(pool);
 }
 
 export async function shutdownDatabase(): Promise<void> {

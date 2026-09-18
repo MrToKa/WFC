@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Pool, PoolClient } from 'pg';
+import type { PoolClient, QueryResultRow } from 'pg';
 import {
   mapStandardMaterialAssignmentRow,
   type ExpandedStandardMaterial,
@@ -18,7 +18,9 @@ export type StandardMaterialInput = {
 };
 
 export type StandardMaterialUpdateInput = Partial<StandardMaterialInput>;
-type Queryable = Pick<PoolClient, 'query'> | Pick<Pool, 'query'>;
+type Queryable = {
+  query<T extends QueryResultRow>(sql: string, values?: unknown[]): Promise<{ rows: T[] }>;
+};
 
 export class StandardMaterialDomainError extends Error {
   constructor(

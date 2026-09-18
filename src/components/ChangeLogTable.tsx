@@ -146,17 +146,15 @@ export const ChangeLogTable = ({
               </tbody>
             </table>
           </div>
-          {totalPages > 1 ? (
-            <TablePagination
-              styles={styles}
-              page={currentPage}
-              totalPages={totalPages}
-              onPrevious={() => setPage(Math.max(1, currentPage - 1))}
-              onNext={() => setPage(Math.min(totalPages, currentPage + 1))}
-              onPageSelect={(next) => setPage(Math.max(1, Math.min(totalPages, next)))}
-              dropdownAriaLabel={`Select ${label.toLowerCase()} page`}
-            />
-          ) : null}
+          <TablePagination
+            styles={styles}
+            page={currentPage}
+            totalPages={totalPages}
+            onPrevious={() => setPage(Math.max(1, currentPage - 1))}
+            onNext={() => setPage(Math.min(totalPages, currentPage + 1))}
+            onPageSelect={(next) => setPage(Math.max(1, Math.min(totalPages, next)))}
+            dropdownAriaLabel={`Select ${label.toLowerCase()} page`}
+          />
         </>
       ) : !loading && !error ? (
         <Body1>No recorded changes yet. Future saved changes will appear here.</Body1>

@@ -28,6 +28,7 @@ import {
 import { StandardMaterialDialog } from './components/StandardMaterialDialog';
 import { MaterialEditDialog } from './components/MaterialEditDialog';
 import { StandardMaterialsSection } from './components/StandardMaterialsSection';
+import { MaterialChangeLogSection } from './components/MaterialChangeLogSection';
 import { MATERIAL_DETAILS_CAPABILITIES, materialsBackPath } from './materialCapabilities';
 
 type MasterMaterialDetailsPageProps<T extends StandardMaterialOwner> = {
@@ -242,6 +243,11 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
           onAdd={openAdd}
           onEdit={openEdit}
           onDelete={(assignment) => void remove(assignment)}
+        />
+        <MaterialChangeLogSection
+          category={category}
+          materialId={ownerId}
+          refreshKey={details}
         />
       </MaterialDetailsLayout>
       <StandardMaterialDialog

@@ -47,10 +47,22 @@ it('paginates newest first, supports direct page selection, and clamps after del
   fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
   expect(screen.getByText('Change 12')).toBeVisible();
   rerender(view(entries.slice(0, 2)));
-  expect(
-    screen.queryByRole('combobox', { name: 'Select change log page' }),
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: 'Select change log page' })).toHaveTextContent(
+    'Page 1',
+  );
+  expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   expect(within(table).getAllByRole('row')).toHaveLength(3);
+});
+
+it.each([1, 10])('shows pagination for a single page with %i entries', (count) => {
+  render(view(entries.slice(0, count)));
+  expect(screen.getByRole('combobox', { name: 'Select change log page' })).toHaveTextContent(
+    'Page 1',
+  );
+  expect(screen.getByText('of 1')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
 });
 
 it('exports every entry even from the last page, retaining item and revision columns', async () => {

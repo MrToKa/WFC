@@ -1,6 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { z } from 'zod';
-import { withTransaction } from '../utils/transaction.js';
+import { withMaterialTransaction as withTransaction } from '../services/materialAuditPool.js';
 import type { StandardMaterialOwnerCategory } from '../models/standardMaterial.js';
 import { authenticate, requireAdmin } from '../middleware.js';
 import {
