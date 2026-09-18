@@ -128,6 +128,7 @@ describe('Change Order workbook export', () => {
     const worksheet = workbook.getWorksheet('Internal NCR');
     expect(worksheet).toBeDefined();
     expect(workbook.getWorksheet('Change Order')).toBeUndefined();
+    expect(worksheet?.getCell('K3').value).toBe('Internal NCR - Discharge impulse lines');
     expect(worksheet?.model.merges).toEqual(expect.arrayContaining([...expectedHeaderMerges]));
     expect(worksheet?.getCell('A5').fill).toMatchObject({
       type: 'pattern',
@@ -446,7 +447,7 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('D2').value).toBe('Customer Ltd');
     expect(worksheet.getCell('D3').value).toBe('P-100');
     expect(worksheet.getCell('K1').value).toBe('Heat Pump Project');
-    expect(worksheet.getCell('K3').value).toBe('Discharge impulse lines');
+    expect(worksheet.getCell('K3').value).toBe('Change order - Discharge impulse lines');
     expect(worksheet.getCell('K1').font).toMatchObject({ bold: true, size: 26 });
     expect(worksheet.getCell('K3').font).toMatchObject({ bold: true, size: 20 });
     for (const address of ['K1', 'K3']) {

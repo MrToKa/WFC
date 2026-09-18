@@ -424,8 +424,11 @@ const populateDocumentHeader = (
   worksheet: ExcelJS.Worksheet,
   headerRowNumber: number,
   changeOrder: ChangeOrderDetails,
+  documentType: ChangeOrderDocumentType,
 ): void => {
   const reportDate = currentExcelDate();
+  const prefix = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change order';
+  const documentTitle = `${prefix} - ${changeOrder.title}`;
 
   if (headerRowNumber === 5) {
     // Current shared template: a four-row header with outlined merged blocks.
@@ -433,7 +436,7 @@ const populateDocumentHeader = (
     setMergedHeaderValue(worksheet, ['D2'], changeOrder.projectCustomer);
     setMergedHeaderValue(worksheet, ['D3'], changeOrder.projectReference ?? '');
     setMergedHeaderValue(worksheet, ['K1'], changeOrder.projectName);
-    setMergedHeaderValue(worksheet, ['K3'], changeOrder.title);
+    setMergedHeaderValue(worksheet, ['K3'], documentTitle);
     worksheet.getCell('Z1').value = escapeSpreadsheetText(changeOrder.preparedBy);
     worksheet.getCell('Z2').value = reportDate;
     worksheet.getCell('Z3').value = {
@@ -449,7 +452,7 @@ const populateDocumentHeader = (
   worksheet.getCell('B2').value = escapeSpreadsheetText(changeOrder.projectCustomer);
   worksheet.getCell('B3').value = escapeSpreadsheetText(changeOrder.projectReference ?? '');
   setMergedHeaderValue(worksheet, ['K1', 'F1'], changeOrder.projectName);
-  setMergedHeaderValue(worksheet, ['K2', 'F2'], changeOrder.title);
+  setMergedHeaderValue(worksheet, ['K2', 'F2'], documentTitle);
   worksheet.getCell('Z1').value = escapeSpreadsheetText(changeOrder.preparedBy);
   worksheet.getCell('Z2').value = reportDate;
   worksheet.getCell('Z3').value = escapeSpreadsheetText(changeOrder.revision);
@@ -591,7 +594,7 @@ export async function generateChangeOrderWorkbook(
   }
 
   worksheet.name = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
-  populateDocumentHeader(worksheet, headerRowNumber, changeOrder);
+  populateDocumentHeader(worksheet, headerRowNumber, changeOrder, documentType);
   styleDocumentTitles(worksheet);
 
   worksheet.autoFilter = `A${headerRowNumber}:${LAST_EXPORT_COLUMN}${lastItemRow}`;
