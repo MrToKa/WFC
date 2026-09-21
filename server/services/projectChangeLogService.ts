@@ -11,6 +11,8 @@ const labels: Record<string, string> = {
   secondaryTrayLength: 'Secondary tray length',
   supportDistance: 'Distance between supports',
   supportWeight: 'Support weight',
+  additionalBendingPercent: 'Additional % for bending',
+  endConnectionLength: 'For end connection',
   trayLoadSafetyFactor: 'Tray load safety factor',
   supportDistanceOverrides: 'Support overrides',
   trayPurposeTemplates: 'Tray report templates',

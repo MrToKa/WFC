@@ -19,6 +19,8 @@ export type ProjectRow = {
   secondary_tray_length: string | number | null;
   support_distance: string | number | null;
   support_weight: string | number | null;
+  additional_bending_percent: string | number;
+  end_connection_length: string | number;
   tray_load_safety_factor: string | number | null;
   support_distances: Record<string, unknown> | null;
   tray_purpose_templates: Record<string, unknown> | null;
@@ -38,6 +40,8 @@ export type PublicProject = {
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;
+  additionalBendingPercent: number;
+  endConnectionLength: number;
   trayLoadSafetyFactor: number | null;
   supportDistanceOverrides: Record<string, PublicTraySupportOverride>;
   trayPurposeTemplates: Record<string, PublicTrayPurposeTemplate>;
@@ -420,6 +424,8 @@ export const mapProjectRow = (row: ProjectRow): PublicProject => ({
   secondaryTrayLength: toNumberOrNull(row.secondary_tray_length),
   supportDistance: toNumberOrNull(row.support_distance),
   supportWeight: toNumberOrNull(row.support_weight),
+  additionalBendingPercent: toNumberOrNull(row.additional_bending_percent) ?? 10,
+  endConnectionLength: toNumberOrNull(row.end_connection_length) ?? 5,
   trayLoadSafetyFactor: toNumberOrNull(row.tray_load_safety_factor),
   supportDistanceOverrides: toSupportDistanceOverrides(row.support_distances),
   trayPurposeTemplates: toTrayPurposeTemplates(row.tray_purpose_templates),

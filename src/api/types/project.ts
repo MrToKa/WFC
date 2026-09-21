@@ -18,6 +18,8 @@ export type Project = {
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;
+  additionalBendingPercent: number;
+  endConnectionLength: number;
   trayLoadSafetyFactor: number | null;
   supportDistanceOverrides: Record<string, ProjectSupportOverride>;
   trayPurposeTemplates: Record<string, ProjectTrayPurposeTemplate>;

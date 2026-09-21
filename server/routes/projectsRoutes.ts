@@ -500,6 +500,8 @@ projectsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
             p.support_distance,
             p.support_weight,
             p.tray_load_safety_factor,
+            p.end_connection_length,
+            p.additional_bending_percent,
             p.cable_layout_settings,
             COALESCE(
               (
@@ -586,6 +588,8 @@ projectsRouter.post(
       supportDistance,
       supportWeight,
       trayLoadSafetyFactor,
+      additionalBendingPercent,
+      endConnectionLength,
       cableLayout,
       supportDistances,
       trayPurposeTemplates,
@@ -610,9 +614,11 @@ projectsRouter.post(
             support_distance,
             support_weight,
             tray_load_safety_factor,
-            cable_layout_settings
+            cable_layout_settings,
+            additional_bending_percent,
+            end_connection_length
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING id;
         `,
           [
@@ -629,6 +635,8 @@ projectsRouter.post(
             supportWeight ?? null,
             trayLoadSafetyFactor ?? null,
             normalizedCableLayout,
+            additionalBendingPercent ?? 10,
+            endConnectionLength ?? 5,
           ],
         );
 
@@ -754,6 +762,16 @@ projectsRouter.patch(
     if (parseResult.data.supportWeight !== undefined) {
       fields.push(`support_weight = $${index++}`);
       values.push(parseResult.data.supportWeight);
+    }
+
+    if (parseResult.data.additionalBendingPercent !== undefined) {
+      fields.push('additional_bending_percent = $' + index++);
+      values.push(parseResult.data.additionalBendingPercent);
+    }
+
+    if (parseResult.data.endConnectionLength !== undefined) {
+      fields.push('end_connection_length = $' + index++);
+      values.push(parseResult.data.endConnectionLength);
     }
 
     if (parseResult.data.trayLoadSafetyFactor !== undefined) {

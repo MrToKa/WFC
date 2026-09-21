@@ -1,3 +1,4 @@
+import { calculateAutoCableLength } from '@/utils/cableLength';
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -260,62 +261,6 @@ const formatCableMaterialSyncSummary = (summary: {
 const formatOptionalText = (value: string | null | undefined): string => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : '-';
-};
-
-const normalizeRoutingSegment = (value: string): string => value.trim().toLowerCase();
-
-const calculateAutoCableLength = (
-  routing: string | null | undefined,
-  trays: Tray[],
-  secondaryTrayLength: number | null | undefined,
-): number | null => {
-  const routingSegments =
-    routing
-      ?.split('/')
-      .map((segment) => segment.trim())
-      .filter((segment) => segment.length > 0) ?? [];
-
-  if (routingSegments.length === 0) {
-    return null;
-  }
-
-  const traysByName = new Map<string, Tray>();
-
-  for (const tray of trays) {
-    const key = normalizeRoutingSegment(tray.name);
-
-    if (key && !traysByName.has(key)) {
-      traysByName.set(key, tray);
-    }
-  }
-
-  let totalLengthM = 0;
-
-  for (const segment of routingSegments) {
-    if (normalizeRoutingSegment(segment) === 'secondary') {
-      if (
-        typeof secondaryTrayLength !== 'number' ||
-        !Number.isFinite(secondaryTrayLength) ||
-        secondaryTrayLength < 0
-      ) {
-        return null;
-      }
-
-      totalLengthM += secondaryTrayLength;
-      continue;
-    }
-
-    const tray = traysByName.get(normalizeRoutingSegment(segment));
-    const lengthMm = tray?.lengthMm;
-
-    if (typeof lengthMm !== 'number' || !Number.isFinite(lengthMm) || lengthMm < 0) {
-      return null;
-    }
-
-    totalLengthM += lengthMm / 1000;
-  }
-
-  return Math.ceil(totalLengthM * 1.1 + 5);
 };
 
 const formatCableVersionOption = (version: CableVersion): string => {
@@ -1214,8 +1159,20 @@ export const CableDetails = () => {
 
   const autoCalculatedLength = useMemo(
     () =>
-      calculateAutoCableLength(details?.cable.routing, projectTrays, project?.secondaryTrayLength),
-    [details?.cable.routing, project?.secondaryTrayLength, projectTrays],
+      calculateAutoCableLength(
+        details?.cable.routing,
+        projectTrays,
+        project?.secondaryTrayLength,
+        project?.additionalBendingPercent,
+        project?.endConnectionLength,
+      ),
+    [
+      details?.cable.routing,
+      project?.secondaryTrayLength,
+      project?.additionalBendingPercent,
+      project?.endConnectionLength,
+      projectTrays,
+    ],
   );
 
   const sourceMaterialDetails = details?.materialCableType;

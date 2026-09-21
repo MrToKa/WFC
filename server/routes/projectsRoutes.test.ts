@@ -62,6 +62,25 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('project mutations', () => {
+  it('persists cable length allowances and returns them after saving', async () => {
+    const saved = { ...projectRow, additional_bending_percent: '12.5', end_connection_length: '0' };
+    client.query.mockResolvedValue({ rowCount: 1, rows: [saved] });
+    const response = responseStub();
+    await handlerFor('patch', '/:projectId')(
+      { params: { projectId }, body: { additionalBendingPercent: 12.5, endConnectionLength: 0 } } as unknown as Request,
+      response,
+    );
+    expect(response.status).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('additional_bending_percent = $1, end_connection_length = $2'),
+      [12.5, 0, projectId],
+    );
+    expect(response.json).toHaveBeenCalledWith({ project: expect.objectContaining({
+      additionalBendingPercent: 12.5,
+      endConnectionLength: 0,
+    }) });
+  });
+
   it('saves history with the authenticated author in the project transaction', async () => {
     let reads = 0;
     client.query.mockImplementation(async (sql: string) => {

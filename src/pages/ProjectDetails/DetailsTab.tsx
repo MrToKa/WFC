@@ -31,6 +31,8 @@ type NumericFieldName =
   | 'secondaryTrayLength'
   | 'supportDistance'
   | 'supportWeight'
+  | 'additionalBendingPercent'
+  | 'endConnectionLength'
   | 'trayLoadSafetyFactor';
 
 type NumericFieldConfig = {
@@ -190,6 +192,28 @@ export const DetailsTab = ({
             </div>
           );
         })}
+      </div>
+      <div className={styles.panel}>
+        <Caption1>Automatic cable length calculation</Caption1>
+        <Body1>
+          Auto calculated length [m] = ceil(Total routing length [m] × (1 + Additional % for
+          bending / 100) + For end connection [m])
+        </Body1>
+        <Body1>
+          Current formula: ceil(Total routing length [m] × (1 +{' '}
+          {formatNumeric(project.additionalBendingPercent)} / 100) +{' '}
+          {formatNumeric(project.endConnectionLength)})
+        </Body1>
+        <Body1>
+          Total routing length is the sum of the tray lengths along the cable route, converted
+          from millimetres to metres. Each Secondary segment adds the project's Secondary tray
+          length.
+        </Body1>
+        <Caption1>
+          The formula applies the bending allowance and end connection length, then rounds up
+          to the next whole metre. No length is
+          calculated if the route is empty or a required segment length is missing or invalid.
+        </Caption1>
       </div>
       {supportDistanceOverrides.length > 0 ? (
         <div className={styles.panel}>

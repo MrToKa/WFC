@@ -24,6 +24,8 @@ export const ensureProjectExists = async (
         p.support_distance,
         p.support_weight,
         p.tray_load_safety_factor,
+        p.end_connection_length,
+        p.additional_bending_percent,
         p.cable_layout_settings,
         COALESCE(
           (

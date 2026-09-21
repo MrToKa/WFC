@@ -38,6 +38,8 @@ export async function createProject(
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;
+    additionalBendingPercent?: number;
+    endConnectionLength?: number;
     trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
     trayPurposeTemplates?: Record<string, ProjectTrayPurposeTemplateSelection>;
@@ -63,6 +65,8 @@ export async function updateProject(
     secondaryTrayLength?: number | null;
     supportDistance?: number | null;
     supportWeight?: number | null;
+    additionalBendingPercent?: number;
+    endConnectionLength?: number;
     trayLoadSafetyFactor?: number | null;
     supportDistances?: Record<string, ProjectSupportOverridePayload>;
     trayPurposeTemplates?: Record<string, ProjectTrayPurposeTemplateSelection>;

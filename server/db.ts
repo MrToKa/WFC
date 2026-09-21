@@ -95,6 +95,8 @@ export async function initializeDatabase(): Promise<void> {
 
   await pool.query(`
     ALTER TABLE projects
+    ADD COLUMN IF NOT EXISTS additional_bending_percent NUMERIC NOT NULL DEFAULT 10 CHECK (additional_bending_percent >= 0),
+    ADD COLUMN IF NOT EXISTS end_connection_length NUMERIC NOT NULL DEFAULT 5 CHECK (end_connection_length >= 0),
     ADD COLUMN IF NOT EXISTS tray_load_safety_factor NUMERIC;
   `);
 

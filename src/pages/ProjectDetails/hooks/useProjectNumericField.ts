@@ -17,6 +17,8 @@ type UpdatableNumericProjectField =
   | 'secondaryTrayLength'
   | 'supportDistance'
   | 'supportWeight'
+  | 'additionalBendingPercent'
+  | 'endConnectionLength'
   | 'trayLoadSafetyFactor';
 
 type NumericFieldLabelMap = Record<UpdatableNumericProjectField, string>;
@@ -25,6 +27,8 @@ export const NUMERIC_FIELD_LABELS: NumericFieldLabelMap = {
   secondaryTrayLength: 'Secondary tray length',
   supportDistance: 'Default distance between supports',
   supportWeight: 'Support weight',
+  additionalBendingPercent: 'Additional % for bending',
+  endConnectionLength: 'For end connection',
   trayLoadSafetyFactor: 'Tray load safety factor'
 };
 
@@ -32,6 +36,8 @@ const FIELD_DECIMAL_PLACES: Record<UpdatableNumericProjectField, number> = {
   secondaryTrayLength: 1,
   supportDistance: 1,
   supportWeight: 1,
+  additionalBendingPercent: 1,
+  endConnectionLength: 1,
   trayLoadSafetyFactor: 0
 };
 
@@ -113,6 +119,14 @@ export const useProjectNumericField = ({
     const parsed = parseNumberInput(input);
     if (parsed.error) {
       setError(parsed.error);
+      return;
+    }
+
+    if (
+      (field === 'additionalBendingPercent' || field === 'endConnectionLength') &&
+      parsed.numeric === null
+    ) {
+      setError('Enter a value of 0 or greater.');
       return;
     }
 

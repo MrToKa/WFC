@@ -530,6 +530,23 @@ export const ProjectDetails = () => {
     reloadProject,
   });
 
+  const additionalBendingPercentField = useProjectNumericField({
+    project,
+    field: 'additionalBendingPercent',
+    token,
+    isAdmin: canEdit,
+    showToast,
+    reloadProject,
+  });
+  const endConnectionLengthField = useProjectNumericField({
+    project,
+    field: 'endConnectionLength',
+    token,
+    isAdmin: canEdit,
+    showToast,
+    reloadProject,
+  });
+
   const numericFields = useMemo(
     () => [
       {
@@ -556,8 +573,27 @@ export const ProjectDetails = () => {
         unit: '%',
         ...trayLoadSafetyFactorField,
       },
+      {
+        field: 'additionalBendingPercent' as const,
+        label: NUMERIC_FIELD_LABELS.additionalBendingPercent,
+        unit: '%',
+        ...additionalBendingPercentField,
+      },
+      {
+        field: 'endConnectionLength' as const,
+        label: NUMERIC_FIELD_LABELS.endConnectionLength,
+        unit: 'm',
+        ...endConnectionLengthField,
+      },
     ],
-    [secondaryTrayLengthField, supportDistanceField, supportWeightField, trayLoadSafetyFactorField],
+    [
+      secondaryTrayLengthField,
+      supportDistanceField,
+      supportWeightField,
+      trayLoadSafetyFactorField,
+      additionalBendingPercentField,
+      endConnectionLengthField,
+    ],
   );
 
   const trayTypeDetails = useTrayTypeDetails({
@@ -898,6 +934,16 @@ export const ProjectDetails = () => {
         id: 'details:tray-load-safety-factor',
         name: 'Tray load safety factor',
         value: formatNumberWithUnit(project.trayLoadSafetyFactor, '%'),
+      },
+      {
+        id: 'details:additional-bending-percent',
+        name: 'Additional % for bending',
+        value: formatNumberWithUnit(project.additionalBendingPercent, '%'),
+      },
+      {
+        id: 'details:end-connection-length',
+        name: 'For end connection',
+        value: formatNumberWithUnit(project.endConnectionLength, 'm'),
       },
       {
         id: 'details:cable-spacing',

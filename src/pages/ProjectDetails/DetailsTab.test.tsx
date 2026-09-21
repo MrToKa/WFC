@@ -18,6 +18,8 @@ const fixture: Omit<DetailsProps, 'styles' | 'onTrayTemplateChange'> = {
     secondaryTrayLength: null,
     supportDistance: null,
     supportWeight: null,
+    additionalBendingPercent: 10,
+    endConnectionLength: 5,
     trayLoadSafetyFactor: null,
     supportDistanceOverrides: {},
     trayPurposeTemplates: {},

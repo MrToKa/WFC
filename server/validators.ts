@@ -123,6 +123,8 @@ const projectFieldSchema = {
   secondaryTrayLength: z.number().min(0).max(1_000_000).nullable().optional(),
   supportDistance: z.number().min(0).max(1_000_000).nullable().optional(),
   supportWeight: z.number().min(0).max(1_000_000).nullable().optional(),
+  additionalBendingPercent: z.number().finite().min(0).max(1_000_000).optional(),
+  endConnectionLength: z.number().finite().min(0).max(1_000_000).optional(),
   trayLoadSafetyFactor: z.number().min(0).max(1_000_000).nullable().optional(),
   supportDistances: z
     .record(z.string().trim().min(1).max(200), supportOverrideValueSchema)
@@ -145,6 +147,8 @@ export const updateProjectSchema = z
     secondaryTrayLength: projectFieldSchema.secondaryTrayLength,
     supportDistance: projectFieldSchema.supportDistance,
     supportWeight: projectFieldSchema.supportWeight,
+    additionalBendingPercent: projectFieldSchema.additionalBendingPercent,
+    endConnectionLength: projectFieldSchema.endConnectionLength,
     trayLoadSafetyFactor: projectFieldSchema.trayLoadSafetyFactor,
     supportDistances: projectFieldSchema.supportDistances,
     trayPurposeTemplates: projectFieldSchema.trayPurposeTemplates,
@@ -161,6 +165,8 @@ export const updateProjectSchema = z
       value.secondaryTrayLength !== undefined ||
       value.supportDistance !== undefined ||
       value.supportWeight !== undefined ||
+      value.additionalBendingPercent !== undefined ||
+      value.endConnectionLength !== undefined ||
       value.trayLoadSafetyFactor !== undefined ||
       value.supportDistances !== undefined ||
       value.trayPurposeTemplates !== undefined ||
