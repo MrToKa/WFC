@@ -12,6 +12,7 @@ import {
   DialogSurface,
   DialogTitle,
   Dropdown,
+  Field,
   Input,
   Option,
   Spinner,
@@ -33,7 +34,7 @@ import { useCableListColumns } from './hooks/useCableListColumns';
 import { CableListColumnsDialog } from './CableListColumnsDialog';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
-import type { CableFormState } from '../ProjectDetails.forms';
+import { CABLE_LIST_PAGE_SIZE_OPTIONS, type CableFormState } from '../ProjectDetails.forms';
 
 type CableListTabProps = {
   changeLog?: ReactNode;
@@ -88,6 +89,8 @@ type CableListTabProps = {
   isLoading: boolean;
   showPagination: boolean;
   page: number;
+  pageSize: number;
+  onPageSizeChange: (pageSize: number) => void;
   totalPages: number;
   onPreviousPage: () => void;
   onNextPage: () => void;
@@ -138,6 +141,8 @@ export const CableListTab = ({
   isLoading,
   showPagination,
   page,
+  pageSize,
+  onPageSizeChange,
   totalPages,
   onPreviousPage,
   onNextPage,
@@ -508,19 +513,41 @@ export const CableListTab = ({
               })}
             </tbody>
           </table>
-          {showPagination ? (
-            <TablePagination
-              styles={styles}
-              page={page}
-              totalPages={totalPages}
-              onPrevious={onPreviousPage}
-              onNext={onNextPage}
-              onPageSelect={onPageSelect}
-              dropdownAriaLabel="Select cable list page"
-            />
-          ) : null}
         </div>
       )}
+
+      <div className={styles.pagination}>
+        {!isLoading && !columnPreferences.loading && showPagination ? (
+          <TablePagination
+            styles={styles}
+            page={page}
+            totalPages={totalPages}
+            onPrevious={onPreviousPage}
+            onNext={onNextPage}
+            onPageSelect={onPageSelect}
+            dropdownAriaLabel="Select cable list page"
+          />
+        ) : null}
+        <Field
+          className={styles.rowsPerPageField}
+          label="Rows per page"
+          orientation="horizontal"
+        >
+          <Dropdown
+            className={styles.paginationDropdown}
+            size="small"
+            selectedOptions={[String(pageSize)]}
+            value={String(pageSize)}
+            onOptionSelect={(_, data) => onPageSizeChange(Number(data.optionValue))}
+          >
+            {CABLE_LIST_PAGE_SIZE_OPTIONS.map((size) => (
+              <Option key={size} value={String(size)}>
+                {String(size)}
+              </Option>
+            ))}
+          </Dropdown>
+        </Field>
+      </div>
 
       <Dialog
         open={versionsDialog.open}

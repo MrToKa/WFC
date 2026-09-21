@@ -235,6 +235,11 @@ export const useProjectDetailsStyles = makeStyles({
   paginationDropdown: {
     minWidth: '8rem',
   },
+  rowsPerPageField: {
+    display: 'flex',
+    alignItems: 'center',
+    whiteSpace: 'nowrap',
+  },
   variablesIntro: {
     display: 'flex',
     flexDirection: 'column',

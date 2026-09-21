@@ -29,6 +29,7 @@ import {
 
 import {
   CABLE_LIST_PER_PAGE,
+  CABLE_LIST_PAGE_SIZE_OPTIONS,
   CableFormErrors,
   CableFormState,
   buildCableInput,
@@ -109,6 +110,8 @@ type UseCableListSectionResult = {
   pagedCables: Cable[];
   totalCablePages: number;
   cablesPage: number;
+  cablesPageSize: number;
+  setCablesPageSize: (pageSize: number) => void;
   showCablePagination: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   inlineEditingEnabled: boolean;
@@ -193,6 +196,7 @@ export const useCableListSection = ({
   const [isGettingTemplate, setIsGettingTemplate] = useState<boolean>(false);
   const [pendingCableId, setPendingCableId] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(CABLE_LIST_PER_PAGE);
 
   const [isDialogOpen, setDialogOpen] = useState<boolean>(false);
   const [dialogMode, setDialogMode] = useState<CableDialogMode>('create');
@@ -301,20 +305,20 @@ export const useCableListSection = ({
     }
     return Math.max(
       1,
-      Math.ceil(filteredCables.length / CABLE_LIST_PER_PAGE)
+      Math.ceil(filteredCables.length / pageSize)
     );
-  }, [filteredCables.length]);
+  }, [filteredCables.length, pageSize]);
 
   const pagedCables = useMemo(() => {
     if (filteredCables.length === 0) {
       return [];
     }
-    const startIndex = (page - 1) * CABLE_LIST_PER_PAGE;
+    const startIndex = (page - 1) * pageSize;
     return filteredCables.slice(
       startIndex,
-      startIndex + CABLE_LIST_PER_PAGE
+      startIndex + pageSize
     );
-  }, [page, filteredCables]);
+  }, [page, pageSize, filteredCables]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -324,6 +328,14 @@ export const useCableListSection = ({
 
   const handleFilterTextChange = useCallback((value: string) => {
     setFilterText(value);
+    setPage(1);
+  }, []);
+
+  const handlePageSizeChange = useCallback((nextPageSize: number) => {
+    if (!CABLE_LIST_PAGE_SIZE_OPTIONS.some((option) => option === nextPageSize)) {
+      return;
+    }
+    setPageSize(nextPageSize);
     setPage(1);
   }, []);
 
@@ -889,17 +901,7 @@ export const useCableListSection = ({
 
       try {
         await deleteCable(token, projectSnapshot.id, cable.id);
-        setCables((previous: Cable[]) => {
-          const next = previous.filter((item) => item.id !== cable.id);
-          const nextPages = Math.max(
-            1,
-            Math.ceil(next.length / CABLE_LIST_PER_PAGE)
-          );
-          if (page > nextPages) {
-            setPage(nextPages);
-          }
-          return next;
-        });
+        setCables((previous: Cable[]) => previous.filter((item) => item.id !== cable.id));
         if (
           cableVersionsDialog.open &&
           cableVersionsDialog.cable &&
@@ -923,7 +925,6 @@ export const useCableListSection = ({
       cableVersionsDialog.cable,
       cableVersionsDialog.open,
       closeCableVersionsDialog,
-      page,
       projectSnapshot,
       showToast,
       token
@@ -1111,7 +1112,9 @@ export const useCableListSection = ({
     pagedCables,
     totalCablePages: totalPages,
     cablesPage: page,
-    showCablePagination: filteredCables.length > CABLE_LIST_PER_PAGE,
+    cablesPageSize: pageSize,
+    setCablesPageSize: handlePageSizeChange,
+    showCablePagination: totalPages > 1,
     fileInputRef,
     inlineEditingEnabled,
     setInlineEditingEnabled,

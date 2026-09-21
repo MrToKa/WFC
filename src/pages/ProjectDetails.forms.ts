@@ -13,6 +13,7 @@ import { parseNumberInput, toNullableString } from './ProjectDetails.utils';
 
 export const CABLE_TYPES_PER_PAGE = 10;
 export const CABLE_LIST_PER_PAGE = 10;
+export const CABLE_LIST_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 export const TRAYS_PER_PAGE = 10;
 export const PROJECT_FILES_PER_PAGE = 10;
 

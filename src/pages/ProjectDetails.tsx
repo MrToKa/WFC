@@ -270,6 +270,8 @@ export const ProjectDetails = () => {
     pagedCables,
     totalCablePages,
     cablesPage,
+    cablesPageSize,
+    setCablesPageSize,
     showCablePagination,
     cablesLoading,
     cablesRefreshing,
@@ -1795,6 +1797,8 @@ export const ProjectDetails = () => {
           isLoading={cablesLoading}
           showPagination={showCablePagination}
           page={cablesPage}
+          pageSize={cablesPageSize}
+          onPageSizeChange={setCablesPageSize}
           totalPages={totalCablePages}
           onPreviousPage={handleCablesPreviousPage}
           onNextPage={handleCablesNextPage}
