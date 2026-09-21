@@ -22,6 +22,7 @@ export type ExcelImportSummary = {
   inserted?: number;
   created?: number;
   updated?: number;
+  unchanged?: number;
   skipped?: number;
   imported?: number;
   importedPoints?: number;

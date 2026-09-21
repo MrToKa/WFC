@@ -99,6 +99,7 @@ const responseError = (status: number, payload: unknown, fallback: string): ApiE
         'inserted',
         'created',
         'updated',
+        'unchanged',
         'skipped',
         'imported',
         'importedPoints',

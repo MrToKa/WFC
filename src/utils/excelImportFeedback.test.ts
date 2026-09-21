@@ -84,6 +84,88 @@ describe('Excel import Snackbar', () => {
     expect(toast.body).toBe('"data.xlsx" — Materials: 3 added, 2 updated, 0 skipped.');
   });
 
+  it.each([
+    { inserted: 0, updated: 0, unchanged: 3 },
+    { inserted: 0, updated: 1, unchanged: 0 },
+    { inserted: 0, updated: 1, unchanged: 3 },
+    { inserted: 1, updated: 0, unchanged: 0 },
+    { inserted: 1, updated: 0, unchanged: 3 },
+    { inserted: 1, updated: 1, unchanged: 0 },
+    { inserted: 1, updated: 1, unchanged: 3 },
+  ])('reports valid new/updated/unchanged combinations as success: %j', (counts) => {
+    const toast = excelImportSuccessToast('---.xlsx', { ...counts, skipped: 0 }, 'Cables');
+    expect(toast.intent).toBe('success');
+    expect(toast.title).toBe(
+      counts.inserted + counts.updated === 0 ? 'No changes needed' : 'Excel import complete',
+    );
+    expect(toast.body).toContain(
+      `Cables: ${counts.inserted} added, ${counts.updated} updated, ${counts.unchanged} unchanged.`,
+    );
+    expect(toast.body).not.toMatch(/skipped|correct|upload|check.*workbook/i);
+    expect(toast.timeout).toBe(8000);
+    if (counts.inserted + counts.updated === 0) {
+      expect(toast.body).toContain('All rows already match the current data.');
+    }
+  });
+
+  it.each([
+    { inserted: 0, updated: 0, unchanged: 0 },
+    { inserted: 0, updated: 0, unchanged: 3 },
+    { inserted: 0, updated: 1, unchanged: 0 },
+    { inserted: 0, updated: 1, unchanged: 3 },
+    { inserted: 1, updated: 0, unchanged: 0 },
+    { inserted: 1, updated: 0, unchanged: 3 },
+    { inserted: 1, updated: 1, unchanged: 0 },
+    { inserted: 1, updated: 1, unchanged: 3 },
+  ])('still warns about genuinely skipped rows with any other counts: %j', (counts) => {
+    const toast = excelImportSuccessToast(
+      'data.xlsx',
+      {
+        ...counts,
+        skipped: 1,
+        issues: [{ row: 5, column: 'ID', message: 'Invalid ID.' }],
+      },
+      'Cables',
+    );
+    expect(toast.intent).toBe('warning');
+    expect(toast.title).not.toBe('No changes needed');
+    expect(toast.body).toContain(`${counts.unchanged} unchanged, 1 skipped.`);
+    expect(toast.body).toContain('Row 5, ID: Invalid ID.');
+    expect(toast.body).toContain('upload');
+    expect(toast.timeout).toBe(20000);
+  });
+
+  it.each([{ issues: [{ row: 2, column: 'ID', message: 'Check this row.' }] }, { totalIssues: 1 }])(
+    'does not hide reported issues just because all rows are unchanged: %j',
+    (details) => {
+      const toast = excelImportSuccessToast(
+        'data.xlsx',
+        { unchanged: 3, skipped: 0, ...details },
+        'Cables',
+      );
+      expect(toast.intent).toBe('warning');
+      expect(toast.title).toBe('Excel import completed with issues');
+      expect(toast.body).toContain('Review the reported issues.');
+    },
+  );
+
+  it.each([
+    { inserted: 0, updated: 1, unchanged: 3, skipped: 0 },
+    { inserted: 0, updated: 0, unchanged: 4, skipped: 0 },
+  ])(
+    'shows accurate committed totals after a refresh failure without requesting another upload: %j',
+    (summary) => {
+      const error = new ApiError(500, 'Cables imported but failed to refresh list');
+      error.summary = summary;
+      const toast = excelImportErrorToast(error, '---.xlsx');
+      expect(toast.intent).toBe('warning');
+      expect(toast.title).toBe('Import saved; refresh failed');
+      expect(toast.body).toContain(`${summary.unchanged} unchanged.`);
+      expect(toast.body).toContain('Refresh the page');
+      expect(toast.body).not.toContain('correct their values');
+    },
+  );
+
   it.each([{ imported: 4 }, { importedPoints: 4 }])('reports replacement imports', (summary) => {
     expect(excelImportSuccessToast('data.xlsx', summary, 'Points')).toMatchObject({
       intent: 'success',
@@ -113,6 +195,7 @@ describe('Excel import Snackbar', () => {
     { inserted: 0, updated: 0, skipped: 3 },
     { created: 0, updated: 0, skipped: 0 },
     { importedPoints: 0 },
+    { inserted: 0, updated: 0, unchanged: 0, skipped: 0 },
   ])('never reports success when no rows were imported', (summary) => {
     const toast = excelImportSuccessToast('empty.xlsx', summary, 'Materials');
     expect(toast.intent).toBe('warning');

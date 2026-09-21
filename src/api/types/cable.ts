@@ -111,6 +111,7 @@ export type CableInput = {
 export type CableImportSummary = {
   inserted: number;
   updated: number;
+  unchanged?: number;
   skipped: number;
 };
 

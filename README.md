@@ -93,6 +93,14 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
   - Text search and cable type filtering; sort columns by tag, type, from/to location, or routing.
   - Pagination to navigate large data sets.
   - Import and export to Excel; exports respect the active filter and sort selections.
+    Cable imports also accept partial worksheets: `ID` (or `Cable Id` / `Cable ID`) is required
+    and identifies cables within the current project. Only included columns are updated;
+    omitted columns and cables absent from the file are preserved. Blank cells clear optional
+    values; a supplied `Type` cannot be blank. New IDs require a valid project `Type`.
+    To edit and reimport a filtered export, include the ID column when exporting.
+    Import results count unchanged cables separately from skipped rows. Unchanged rows are a
+    successful outcome and do not need correction or another upload; importing the same values
+    again does not create extra revisions.
   - Administrators can manage all project data; Engineers can manage assigned projects. Administrators, Engineers, and Technicians can export their accessible project tables.
 - **Tray management** – CRUD, import, and export flows similar to the cable lists.
 - **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files

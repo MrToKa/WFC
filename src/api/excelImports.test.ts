@@ -86,6 +86,42 @@ describe.each(imports)('Excel upload %s', (path, upload) => {
 });
 
 describe('Excel upload response handling', () => {
+  it.each([200, 500])('preserves unchanged cable totals for HTTP %i', async (status) => {
+    const summary = { inserted: 0, updated: 1, unchanged: 3, skipped: 0 };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify(
+          status === 200
+            ? { summary, cables: [] }
+            : { error: 'Cables imported but failed to refresh list', summary },
+        ),
+        { status },
+      ),
+    );
+    const result = importCables('token', 'project', new File(['workbook'], '---.xlsx'));
+    if (status === 200) await expect(result).resolves.toEqual({ summary, cables: [] });
+    else await expect(result).rejects.toMatchObject({ status, summary });
+  });
+
+  it.each([-1, 1.5, '3', null])(
+    'ignores malformed unchanged counts in an error response: %j',
+    async (unchanged) => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: 'Cables imported but failed to refresh list',
+            summary: { updated: 1, unchanged },
+          }),
+          { status: 500 },
+        ),
+      );
+      const error = await importCables('token', 'project', new File(['workbook'], 'data.xlsx'))
+        .catch((reason: unknown) => reason);
+      expect(error).toMatchObject({ status: 500 });
+      expect((error as { summary: unknown }).summary).toEqual({ updated: 1 });
+    },
+  );
+
   it('preserves committed row counts when refreshing the result list fails', async () => {
     const summary = { inserted: 3, updated: 2, skipped: 0 };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(

@@ -70,29 +70,45 @@ export const excelImportSuccessToast = (
 ): ImportFeedback => {
   const added = summary.inserted ?? summary.created ?? 0;
   const updated = summary.updated ?? 0;
+  const unchanged = summary.unchanged ?? 0;
   const skipped = summary.skipped ?? 0;
   const replacementCount = summary.imported ?? summary.importedPoints;
   const imported = replacementCount ?? added + updated;
-  const warning = imported === 0 || skipped > 0;
+  const hasIssues = Boolean(summary.issues?.length) || (summary.totalIssues ?? 0) > 0;
+  const noRowsProcessed = imported === 0 && unchanged === 0;
+  const noChangesNeeded = imported === 0 && unchanged > 0 && skipped === 0 && !hasIssues;
+  const warning = noRowsProcessed || skipped > 0 || hasIssues;
   const counts =
     replacementCount === undefined
-      ? `${added} added, ${updated} updated, ${skipped} skipped.`
+      ? [
+          `${added} added`,
+          `${updated} updated`,
+          ...(summary.unchanged !== undefined ? [`${unchanged} unchanged`] : []),
+          ...(skipped > 0 || summary.unchanged === undefined ? [`${skipped} skipped`] : []),
+        ].join(', ') + '.'
       : `${replacementCount} imported.`;
   return {
-    title:
-      imported === 0
+    title: noChangesNeeded
+      ? 'No changes needed'
+      : noRowsProcessed
         ? 'No rows imported'
         : skipped > 0
           ? 'Excel import completed with skipped rows'
-          : 'Excel import complete',
+          : hasIssues
+            ? 'Excel import completed with issues'
+            : 'Excel import complete',
     body: [
       `"${fileName}" — ${itemLabel}: ${counts}`,
       formatIssues(summary.issues, summary.totalIssues),
-      imported === 0
-        ? 'Check that the workbook contains data rows and the required template columns, then upload it again.'
-        : skipped > 0
-          ? 'Review the skipped rows, correct their values and upload them again.'
-          : '',
+      noChangesNeeded
+        ? 'All rows already match the current data. No changes were needed.'
+        : noRowsProcessed
+          ? 'Check that the workbook contains data rows and the required template columns, then upload it again.'
+          : skipped > 0
+            ? 'Review the skipped rows, correct their values and upload them again.'
+            : hasIssues
+              ? 'Review the reported issues.'
+              : '',
     ]
       .filter(Boolean)
       .join('\n'),
