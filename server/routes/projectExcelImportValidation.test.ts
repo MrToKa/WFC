@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import ExcelJS from 'exceljs';
 import type { Request, Response, Router } from 'express';
 import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -470,11 +471,15 @@ describe('partial cable Excel imports', () => {
     } as unknown as Request, response as unknown as Response);
     expect(response.status).not.toHaveBeenCalled();
     expect(mocks.query.mock.calls[0][1]).toEqual([id, '%tray-01%']);
-    const workbook = XLSX.read(response.send.mock.calls[0][0], { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    expect(XLSX.utils.sheet_to_json(sheet, { header: 1 })).toEqual([['Cable Id', 'Tag'], [42, 'C42']]);
-    sheet.B2 = { t: 's', v: 'Edited in Excel' };
-    const result = await importBuffer(cablesRouter, XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(response.send.mock.calls[0][0]);
+    const sheet = workbook.getWorksheet('Cables')!;
+    expect(sheet.getRow(1).values).toEqual([undefined, 'Cable Id', 'Tag']);
+    expect(sheet.getRow(2).values).toEqual([undefined, 42, 'C42']);
+    expect(sheet.getCell('A2').protection?.locked ?? true).toBe(true);
+    expect(sheet.getCell('B2').protection.locked).toBe(false);
+    sheet.getCell('B2').value = 'Edited in Excel';
+    const result = await importBuffer(cablesRouter, Buffer.from(await workbook.xlsx.writeBuffer()));
     expect(result.status).not.toHaveBeenCalled();
     expect(cableUpdates()).toHaveLength(1);
     expect(cableUpdates()[0][1]).toEqual(['Edited in Excel', 'existing-cable']);

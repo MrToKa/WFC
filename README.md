@@ -98,6 +98,9 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
     omitted columns and cables absent from the file are preserved. Blank cells clear optional
     values; a supplied `Type` cannot be blank. New IDs require a valid project `Type`.
     To edit and reimport a filtered export, include the ID column when exporting.
+    In cable list exports, the ID column is locked with worksheet password `123`;
+    other exported columns remain editable. Cell formatting, column widths, row heights,
+    and Excel table filtering remain available while ID values stay protected.
     Import results count unchanged cables separately from skipped rows. Unchanged rows are a
     successful outcome and do not need correction or another upload; importing the same values
     again does not create extra revisions.

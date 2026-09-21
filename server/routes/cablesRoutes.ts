@@ -4511,6 +4511,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         selectedColumns === null || selectedColumns.has(column.key) ? [index] : [],
       );
       const columns = columnIndexes.map((index) => CABLE_LIST_EXPORT_COLUMNS[index]);
+      const hasIdColumn = columns.some((column) => column.key === 'cableId');
       const rows = result.rows.map((row) => {
         const values = buildCableListExportRow(row);
         return columnIndexes.map((index) => values[index]);
@@ -4550,6 +4551,18 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
           worksheetColumn.numFmt = '#,##0';
         }
       });
+
+      if (hasIdColumn) {
+        columns.forEach((column, index) => {
+          worksheet.getColumn(index + 1).protection = { locked: column.key === 'cableId' };
+        });
+        await worksheet.protect('123', {
+          autoFilter: true,
+          formatCells: true,
+          formatColumns: true,
+          formatRows: true,
+        });
+      }
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
