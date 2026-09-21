@@ -1,4 +1,5 @@
 import { request, ApiError, getApiBaseUrl, uploadExcelFile } from './http';
+import type { CableListColumnId } from './cableListPreferences';
 import type {
   CableType,
   Cable,
@@ -426,6 +427,7 @@ export async function exportCables(
     sortColumn?: CableSortColumn;
     sortDirection?: CableSortDirection;
     view?: 'list' | 'report' | 'change-tracker';
+    columns?: CableListColumnId[];
   },
 ): Promise<Blob> {
   const params = new URLSearchParams();
@@ -458,6 +460,10 @@ export async function exportCables(
 
   if (options?.view) {
     params.set('view', options.view);
+  }
+
+  if (options?.columns) {
+    params.set('columns', options.columns.join(','));
   }
 
   const query = params.toString();

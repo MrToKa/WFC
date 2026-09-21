@@ -1742,6 +1742,7 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'cable-list' ? (
         <CableListTab
+          key={user?.id}
           changeLog={
             <CableListChangeLog
               styles={styles}
@@ -1762,7 +1763,7 @@ export const ProjectDetails = () => {
           onRefresh={() => void reloadCables({ showSpinner: false })}
           onCreate={handleCreateCable}
           onImportClick={() => cablesFileInputRef.current?.click()}
-          onExport={() => void handleExportCables('list')}
+          onExport={(columns) => void handleExportCables('list', null, columns)}
           onExportChangeTracker={() => void handleExportCables('change-tracker')}
           onGetTemplate={() => void handleGetCablesTemplate('list')}
           onImportFileChange={handleImportCables}

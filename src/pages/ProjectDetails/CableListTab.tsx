@@ -15,22 +15,21 @@ import {
   Input,
   Option,
   Spinner,
-  Switch
+  Switch,
 } from '@fluentui/react-components';
 
-import {
-  CABLE_MTO_OPTIONS,
-  type Cable,
-  type CableType,
-  type CableVersion
-} from '@/api/client';
+import { CABLE_MTO_OPTIONS, type Cable, type CableType, type CableVersion } from '@/api/client';
 import type { CableSearchCriteria } from './hooks/useCableListSection';
 import {
   diffCableVersions,
   formatCableVersionTimestamp,
-  formatCableVersionUser
+  formatCableVersionUser,
 } from './cableVersionUtils';
 import { TablePagination } from './TablePagination';
+import { CABLE_LIST_COLUMNS, type CableListColumnId } from '@/api/cableListPreferences';
+import { useAuth } from '@/context/AuthContext';
+import { useCableListColumns } from './hooks/useCableListColumns';
+import { CableListColumnsDialog } from './CableListColumnsDialog';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
 import type { CableFormState } from '../ProjectDetails.forms';
@@ -49,7 +48,7 @@ type CableListTabProps = {
   onRefresh: () => void;
   onCreate: () => void;
   onImportClick: () => void;
-  onExport: () => void;
+  onExport: (columns: CableListColumnId[]) => void;
   onExportChangeTracker: () => void;
   onGetTemplate: () => void;
   onImportFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -64,20 +63,10 @@ type CableListTabProps = {
   cableTypes: CableType[];
   items: Cable[];
   drafts: Record<string, CableFormState>;
-  onDraftChange: (
-    cableId: string,
-    field: keyof CableFormState,
-    value: string
-  ) => void;
+  onDraftChange: (cableId: string, field: keyof CableFormState, value: string) => void;
   onTextFieldBlur: (
     cable: Cable,
-    field:
-      | 'revision'
-      | 'tag'
-      | 'fromLocation'
-      | 'toLocation'
-      | 'routing'
-      | 'designLength'
+    field: 'revision' | 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'designLength',
   ) => void;
   onInlineMtoChange: (cable: Cable, nextMto: string) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
@@ -151,485 +140,464 @@ export const CableListTab = ({
   totalPages,
   onPreviousPage,
   onNextPage,
-  onPageSelect
+  onPageSelect,
 }: CableListTabProps) => {
-  const selectedCriteria = useMemo<string[]>(
-    () => [filterCriteria],
-    [filterCriteria]
-  );
-  const showActions = Boolean(onDetails) || canManageCables;
+  const { token } = useAuth();
+  const columnPreferences = useCableListColumns(token);
+  const visibleColumns = new Set(columnPreferences.columns);
+  const selectedCriteria = useMemo<string[]>(() => [filterCriteria], [filterCriteria]);
+  const canShowActions = Boolean(onDetails) || canManageCables;
+  const showActions = canShowActions && visibleColumns.has('actions');
   const versionsDialogLabel =
     versionsDialog.cable?.tag?.trim() ||
     (versionsDialog.cable ? `Cable ${versionsDialog.cable.cableId}` : '');
 
   return (
     <div className={styles.tabPanel} role="tabpanel" aria-label="Cable list">
-    <div className={styles.actionsRow}>
-      <Button onClick={onRefresh} disabled={isRefreshing}>
-        {isRefreshing ? 'Refreshing...' : 'Refresh'}
-      </Button>
-      {canManageCables ? (
-        <>
-          <Button
-            appearance="primary"
-            onClick={onCreate}
-            disabled={cableTypes.length === 0}
-          >
-            Add cable
-          </Button>
-          {isAdmin ? (
-            <>
-              <Button onClick={onImportClick} disabled={isImporting}>
-                {isImporting ? 'Importing...' : 'Import from Excel'}
-              </Button>
-              <Button
-                appearance="secondary"
-                onClick={onGetTemplate}
-                disabled={isGettingTemplate}
-              >
-                {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
-              </Button>
-              <input
-                ref={fileInputRef}
-                className={styles.hiddenInput}
-                type="file"
-                accept=".xlsx"
-                onChange={onImportFileChange}
-              />
-            </>
-          ) : null}
-          <Switch
-            checked={inlineEditingEnabled}
-            label="Inline edit"
-            onChange={(_, data) =>
-              onInlineEditingToggle(Boolean(data.checked))
-            }
-            disabled={inlineUpdatingIds.size > 0}
-          />
-        </>
-      ) : null}
-      {canExport ? (
-        <>
-          <Button
-            appearance="secondary"
-            onClick={onExport}
-            disabled={isExporting}
-          >
-            {isExporting ? 'Exporting...' : 'Export to Excel'}
-          </Button>
-          <Button
-            appearance="secondary"
-            onClick={onExportChangeTracker}
-            disabled={isExporting}
-          >
-            {isExporting ? 'Exporting...' : 'Change tracker'}
-          </Button>
-        </>
-      ) : null}
-    </div>
-
-    <div className={styles.filtersRow}>
-      <Input
-        value={filterText}
-        placeholder="Filter cables"
-        onChange={(_, data) => onFilterTextChange(data.value)}
-        aria-label="Filter cables"
-      />
-      <Dropdown
-        selectedOptions={selectedCriteria}
-        value={
-          filterCriteria === 'all' ? 'All fields' :
-          filterCriteria === 'tag' ? 'Tag' :
-          filterCriteria === 'typeName' ? 'Type' :
-          filterCriteria === 'fromLocation' ? 'From location' :
-          filterCriteria === 'toLocation' ? 'To location' :
-          filterCriteria === 'routing' ? 'Routing' :
-          'Delivery'
-        }
-        onOptionSelect={(_, data) =>
-          onFilterCriteriaChange(data.optionValue as CableSearchCriteria)
-        }
-        aria-label="Search criteria"
-      >
-        <Option value="all">All fields</Option>
-        <Option value="tag">Tag</Option>
-        <Option value="typeName">Type</Option>
-        <Option value="fromLocation">From location</Option>
-        <Option value="toLocation">To location</Option>
-        <Option value="routing">Routing</Option>
-        <Option value="delivery">Delivery</Option>
-      </Dropdown>
-    </div>
-
-    {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
-
-    {isLoading ? (
-      <Spinner label="Loading cables..." />
-    ) : items.length === 0 ? (
-      <div className={styles.emptyState}>
-        <Caption1>No cables found</Caption1>
-        <Body1>
-          {canManageCables
-            ? isAdmin
-              ? 'Add a cable manually or import a list from Excel.'
-              : 'Add a cable manually to start building this list.'
-            : 'No cables have been recorded for this project yet.'}
-        </Body1>
-      </div>
-    ) : (
-      <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.tableHeadCell}>
-                ID
-              </th>
-              <th className={styles.tableHeadCell}>
-                Rev.
-              </th>
-              <th className={styles.tableHeadCell}>
-                MTO
-              </th>
-              <th className={styles.tableHeadCell}>
-                Tag
-              </th>
-              <th className={styles.tableHeadCell}>
-                Type
-              </th>
-              <th className={styles.tableHeadCell}>
-                From location
-              </th>
-              <th className={styles.tableHeadCell}>
-                To location
-              </th>
-              <th className={styles.tableHeadCell}>
-                Routing
-              </th>
-              <th
-                className={`${styles.tableHeadCell} ${styles.numericCell}`}
-              >
-                Design length [m]
-              </th>
-              {showActions ? (
-                <th className={styles.tableHeadCell}>Actions</th>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((cable) => {
-              const isBusy = pendingId === cable.id;
-              const draft = drafts[cable.id];
-              const isRowUpdating = inlineUpdatingIds.has(cable.id);
-              const disableActions = isBusy || isRowUpdating;
-              const currentCableType = cableTypes.find(
-                (type) => type.id === draft?.cableTypeId
-              );
-              return (
-                <tr key={cable.id}>
-                  <td className={styles.tableCell}>{cable.cableId}</td>
-                  <td className={styles.tableCell}>
-                    {isInlineEditable && draft ? (
-                      <Input
-                        size="small"
-                        value={draft.revision}
-                        onChange={(_, data) =>
-                          onDraftChange(cable.id, 'revision', data.value)
-                        }
-                        onBlur={() => onTextFieldBlur(cable, 'revision')}
-                        disabled={isRowUpdating}
-                        aria-label="Cable revision"
-                      />
-                    ) : (
-                      cable.revision ?? '-'
-                    )}
-                  </td>
-                  <td className={styles.tableCell}>
-                    {isInlineEditable && draft ? (
-                      <Dropdown
-                        size="small"
-                        placeholder="Select MTO"
-                        selectedOptions={draft.mto ? [draft.mto] : []}
-                        value={draft.mto || undefined}
-                        onOptionSelect={(_, data) => {
-                          const nextMto = data.optionValue ?? '';
-                          onDraftChange(cable.id, 'mto', nextMto);
-                          onInlineMtoChange(cable, nextMto);
-                        }}
-                        clearable
-                        disabled={isRowUpdating}
-                        aria-label="Cable MTO"
-                      >
-                        {CABLE_MTO_OPTIONS.map((option) => (
-                          <Option key={option} value={option}>
-                            {option}
-                          </Option>
-                        ))}
-                      </Dropdown>
-                    ) : (
-                      cable.mto ?? '-'
-                    )}
-                  </td>
-                  <td className={styles.tableCell}>
-                    {isInlineEditable && draft ? (
-                      <Input
-                        size="small"
-                        value={draft.tag}
-                        onChange={(_, data) =>
-                          onDraftChange(cable.id, 'tag', data.value)
-                        }
-                        onBlur={() => onTextFieldBlur(cable, 'tag')}
-                        disabled={isRowUpdating}
-                        aria-label="Cable tag"
-                      />
-                    ) : (
-                      cable.tag ?? '-'
-                    )}
-                  </td>
-                  <td className={styles.tableCell}>
-                    {isInlineEditable && draft ? (
-                      <Dropdown
-                        size="small"
-                        selectedOptions={
-                          draft.cableTypeId ? [draft.cableTypeId] : []
-                        }
-                        value={currentCableType?.name ?? ''}
-                        onOptionSelect={(_, data) => {
-                          const nextTypeId = data.optionValue ?? '';
-                          onDraftChange(cable.id, 'cableTypeId', nextTypeId);
-                          if (!data.optionValue) {
-                            return;
-                          }
-                          onInlineCableTypeChange(cable, data.optionValue);
-                        }}
-                        disabled={isRowUpdating}
-                        aria-label="Cable type"
-                      >
-                        {cableTypes.map((type) => (
-                          <Option key={type.id} value={type.id}>
-                            {type.name}
-                          </Option>
-                        ))}
-                      </Dropdown>
-                    ) : (
-                      cable.typeName
-                    )}
-                  </td>
-                  <td className={styles.tableCell}>
-                    {isInlineEditable && draft ? (
-                      <Input
-                        size="small"
-                        value={draft.fromLocation}
-                        onChange={(_, data) =>
-                          onDraftChange(cable.id, 'fromLocation', data.value)
-                        }
-                        onBlur={() => onTextFieldBlur(cable, 'fromLocation')}
-                        disabled={isRowUpdating}
-                        aria-label="From location"
-                      />
-                    ) : (
-                      cable.fromLocation ?? '-'
-                    )}
-                  </td>
-                  <td className={styles.tableCell}>
-                    {isInlineEditable && draft ? (
-                      <Input
-                        size="small"
-                        value={draft.toLocation}
-                        onChange={(_, data) =>
-                          onDraftChange(cable.id, 'toLocation', data.value)
-                        }
-                        onBlur={() => onTextFieldBlur(cable, 'toLocation')}
-                        disabled={isRowUpdating}
-                        aria-label="To location"
-                      />
-                    ) : (
-                      cable.toLocation ?? '-'
-                    )}
-                  </td>
-                  <td className={styles.tableCell}>
-                    {isInlineEditable && draft ? (
-                      <Input
-                        size="small"
-                        value={draft.routing}
-                        onChange={(_, data) =>
-                          onDraftChange(cable.id, 'routing', data.value)
-                        }
-                        onBlur={() => onTextFieldBlur(cable, 'routing')}
-                        disabled={isRowUpdating}
-                        aria-label="Routing"
-                      />
-                    ) : (
-                      cable.routing ?? '-'
-                    )}
-                  </td>
-                  <td
-                    className={`${styles.tableCell} ${styles.numericCell}`}
-                  >
-                    {isInlineEditable && draft ? (
-                      <Input
-                        size="small"
-                        type="number"
-                        min={0}
-                        value={draft.designLength}
-                        onChange={(_, data) =>
-                          onDraftChange(cable.id, 'designLength', data.value)
-                        }
-                        onBlur={() => onTextFieldBlur(cable, 'designLength')}
-                        disabled={isRowUpdating}
-                        aria-label="Design length"
-                      />
-                    ) : cable.designLength !== null ? (
-                      cable.designLength
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  {showActions ? (
-                    <td className={styles.tableCell}>
-                      <div className={styles.actionsCell}>
-                        {onDetails ? (
-                          <Button size="small" onClick={() => onDetails(cable)}>
-                            Details
-                          </Button>
-                        ) : null}
-                        <Button
-                          size="small"
-                          appearance="secondary"
-                          onClick={() => onOpenVersions(cable)}
-                          disabled={disableActions}
-                        >
-                          Revisions
-                        </Button>
-                        {canManageCables ? (
-                          <>
-                            <Button
-                              size="small"
-                              onClick={() => onEdit(cable)}
-                              disabled={disableActions}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="small"
-                              appearance="secondary"
-                              onClick={() => onDelete(cable)}
-                              disabled={disableActions}
-                            >
-                              Delete
-                            </Button>
-                          </>
-                        ) : null}
-                      </div>
-                    </td>
-                  ) : null}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {showPagination ? (
-          <TablePagination
-            styles={styles}
-            page={page}
-            totalPages={totalPages}
-            onPrevious={onPreviousPage}
-            onNext={onNextPage}
-            onPageSelect={onPageSelect}
-            dropdownAriaLabel="Select cable list page"
-          />
+      <div className={styles.actionsRow}>
+        <CableListColumnsDialog preferences={columnPreferences} showActions={canShowActions} />
+        <Button onClick={onRefresh} disabled={isRefreshing}>
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
+        {canManageCables ? (
+          <>
+            <Button appearance="primary" onClick={onCreate} disabled={cableTypes.length === 0}>
+              Add cable
+            </Button>
+            {isAdmin ? (
+              <>
+                <Button onClick={onImportClick} disabled={isImporting}>
+                  {isImporting ? 'Importing...' : 'Import from Excel'}
+                </Button>
+                <Button appearance="secondary" onClick={onGetTemplate} disabled={isGettingTemplate}>
+                  {isGettingTemplate ? 'Getting template...' : 'Get upload template'}
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  className={styles.hiddenInput}
+                  type="file"
+                  accept=".xlsx"
+                  onChange={onImportFileChange}
+                />
+              </>
+            ) : null}
+            <Switch
+              checked={inlineEditingEnabled}
+              label="Inline edit"
+              onChange={(_, data) => onInlineEditingToggle(Boolean(data.checked))}
+              disabled={inlineUpdatingIds.size > 0}
+            />
+          </>
+        ) : null}
+        {canExport ? (
+          <>
+            <Button
+              appearance="secondary"
+              onClick={() => onExport(columnPreferences.columns)}
+              disabled={isExporting || columnPreferences.loading}
+            >
+              {isExporting ? 'Exporting...' : 'Export to Excel'}
+            </Button>
+            <Button appearance="secondary" onClick={onExportChangeTracker} disabled={isExporting}>
+              {isExporting ? 'Exporting...' : 'Change tracker'}
+            </Button>
+          </>
         ) : null}
       </div>
-    )}
 
-    <Dialog
-      open={versionsDialog.open}
-      onOpenChange={(_, data) => {
-        if (!data.open) {
-          onCloseVersions();
-        }
-      }}
-    >
-      <DialogSurface className={styles.versionsDialogSurface}>
-        <DialogBody>
-          <DialogTitle>Cable revisions - {versionsDialogLabel}</DialogTitle>
-          <DialogContent className={styles.versionsDialogContent}>
-            {versionsDialog.loading ? (
-              <Spinner label="Loading revisions..." />
-            ) : versionsDialog.error ? (
-              <Body1 className={styles.errorText}>{versionsDialog.error}</Body1>
-            ) : versionsDialog.versions.length === 0 ? (
-              <Caption1>
-                No saved revisions yet. New cable changes will appear here.
-              </Caption1>
-            ) : (
-              <table className={styles.versionsDialogTable}>
-                <thead>
-                  <tr>
-                    <th className={styles.tableHeadCell}>Version</th>
-                    <th className={styles.tableHeadCell}>Revision</th>
-                    <th className={styles.tableHeadCell}>Change</th>
-                    <th className={styles.tableHeadCell}>Changed by</th>
-                    <th className={styles.tableHeadCell}>Changed at</th>
-                    <th className={styles.tableHeadCell}>Field changes</th>
+      <div className={styles.filtersRow}>
+        <Input
+          value={filterText}
+          placeholder="Filter cables"
+          onChange={(_, data) => onFilterTextChange(data.value)}
+          aria-label="Filter cables"
+        />
+        <Dropdown
+          selectedOptions={selectedCriteria}
+          value={
+            filterCriteria === 'all'
+              ? 'All fields'
+              : filterCriteria === 'tag'
+                ? 'Tag'
+                : filterCriteria === 'typeName'
+                  ? 'Type'
+                  : filterCriteria === 'fromLocation'
+                    ? 'From location'
+                    : filterCriteria === 'toLocation'
+                      ? 'To location'
+                      : filterCriteria === 'routing'
+                        ? 'Routing'
+                        : 'Delivery'
+          }
+          onOptionSelect={(_, data) =>
+            onFilterCriteriaChange(data.optionValue as CableSearchCriteria)
+          }
+          aria-label="Search criteria"
+        >
+          <Option value="all">All fields</Option>
+          <Option value="tag">Tag</Option>
+          <Option value="typeName">Type</Option>
+          <Option value="fromLocation">From location</Option>
+          <Option value="toLocation">To location</Option>
+          <Option value="routing">Routing</Option>
+          <Option value="delivery">Delivery</Option>
+        </Dropdown>
+      </div>
+
+      {error ? <Body1 className={styles.errorText}>{error}</Body1> : null}
+      {columnPreferences.loadError ? (
+        <div className={styles.actionsRow}>
+          <Body1 role="alert" className={styles.errorText}>
+            {columnPreferences.loadError}
+          </Body1>
+          <Button onClick={columnPreferences.reload}>Retry column settings</Button>
+        </div>
+      ) : null}
+
+      {isLoading || columnPreferences.loading ? (
+        <Spinner label="Loading cables..." />
+      ) : items.length === 0 ? (
+        <div className={styles.emptyState}>
+          <Caption1>No cables found</Caption1>
+          <Body1>
+            {canManageCables
+              ? isAdmin
+                ? 'Add a cable manually or import a list from Excel.'
+                : 'Add a cable manually to start building this list.'
+              : 'No cables have been recorded for this project yet.'}
+          </Body1>
+        </div>
+      ) : (
+        <div className={styles.tableContainer}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {CABLE_LIST_COLUMNS.filter(
+                  ({ id }) => id !== 'actions' && visibleColumns.has(id),
+                ).map(({ id, label }) => (
+                  <th
+                    key={id}
+                    className={
+                      id === 'designLength'
+                        ? `${styles.tableHeadCell} ${styles.numericCell}`
+                        : styles.tableHeadCell
+                    }
+                  >
+                    {label}
+                  </th>
+                ))}
+                {showActions ? <th className={styles.tableHeadCell}>Actions</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((cable) => {
+                const isBusy = pendingId === cable.id;
+                const draft = drafts[cable.id];
+                const isRowUpdating = inlineUpdatingIds.has(cable.id);
+                const disableActions = isBusy || isRowUpdating;
+                const currentCableType = cableTypes.find((type) => type.id === draft?.cableTypeId);
+                return (
+                  <tr key={cable.id}>
+                    {visibleColumns.has('cableId') ? (
+                      <td className={styles.tableCell}>{cable.cableId}</td>
+                    ) : null}
+                    {visibleColumns.has('revision') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Input
+                            size="small"
+                            value={draft.revision}
+                            onChange={(_, data) => onDraftChange(cable.id, 'revision', data.value)}
+                            onBlur={() => onTextFieldBlur(cable, 'revision')}
+                            disabled={isRowUpdating}
+                            aria-label="Cable revision"
+                          />
+                        ) : (
+                          (cable.revision ?? '-')
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('mto') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Dropdown
+                            size="small"
+                            placeholder="Select MTO"
+                            selectedOptions={draft.mto ? [draft.mto] : []}
+                            value={draft.mto || undefined}
+                            onOptionSelect={(_, data) => {
+                              const nextMto = data.optionValue ?? '';
+                              onDraftChange(cable.id, 'mto', nextMto);
+                              onInlineMtoChange(cable, nextMto);
+                            }}
+                            clearable
+                            disabled={isRowUpdating}
+                            aria-label="Cable MTO"
+                          >
+                            {CABLE_MTO_OPTIONS.map((option) => (
+                              <Option key={option} value={option}>
+                                {option}
+                              </Option>
+                            ))}
+                          </Dropdown>
+                        ) : (
+                          (cable.mto ?? '-')
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('tag') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Input
+                            size="small"
+                            value={draft.tag}
+                            onChange={(_, data) => onDraftChange(cable.id, 'tag', data.value)}
+                            onBlur={() => onTextFieldBlur(cable, 'tag')}
+                            disabled={isRowUpdating}
+                            aria-label="Cable tag"
+                          />
+                        ) : (
+                          (cable.tag ?? '-')
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('typeName') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Dropdown
+                            size="small"
+                            selectedOptions={draft.cableTypeId ? [draft.cableTypeId] : []}
+                            value={currentCableType?.name ?? ''}
+                            onOptionSelect={(_, data) => {
+                              const nextTypeId = data.optionValue ?? '';
+                              onDraftChange(cable.id, 'cableTypeId', nextTypeId);
+                              if (!data.optionValue) {
+                                return;
+                              }
+                              onInlineCableTypeChange(cable, data.optionValue);
+                            }}
+                            disabled={isRowUpdating}
+                            aria-label="Cable type"
+                          >
+                            {cableTypes.map((type) => (
+                              <Option key={type.id} value={type.id}>
+                                {type.name}
+                              </Option>
+                            ))}
+                          </Dropdown>
+                        ) : (
+                          cable.typeName
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('fromLocation') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Input
+                            size="small"
+                            value={draft.fromLocation}
+                            onChange={(_, data) =>
+                              onDraftChange(cable.id, 'fromLocation', data.value)
+                            }
+                            onBlur={() => onTextFieldBlur(cable, 'fromLocation')}
+                            disabled={isRowUpdating}
+                            aria-label="From location"
+                          />
+                        ) : (
+                          (cable.fromLocation ?? '-')
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('toLocation') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Input
+                            size="small"
+                            value={draft.toLocation}
+                            onChange={(_, data) =>
+                              onDraftChange(cable.id, 'toLocation', data.value)
+                            }
+                            onBlur={() => onTextFieldBlur(cable, 'toLocation')}
+                            disabled={isRowUpdating}
+                            aria-label="To location"
+                          />
+                        ) : (
+                          (cable.toLocation ?? '-')
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('routing') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Input
+                            size="small"
+                            value={draft.routing}
+                            onChange={(_, data) => onDraftChange(cable.id, 'routing', data.value)}
+                            onBlur={() => onTextFieldBlur(cable, 'routing')}
+                            disabled={isRowUpdating}
+                            aria-label="Routing"
+                          />
+                        ) : (
+                          (cable.routing ?? '-')
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('designLength') ? (
+                      <td className={`${styles.tableCell} ${styles.numericCell}`}>
+                        {isInlineEditable && draft ? (
+                          <Input
+                            size="small"
+                            type="number"
+                            min={0}
+                            value={draft.designLength}
+                            onChange={(_, data) =>
+                              onDraftChange(cable.id, 'designLength', data.value)
+                            }
+                            onBlur={() => onTextFieldBlur(cable, 'designLength')}
+                            disabled={isRowUpdating}
+                            aria-label="Design length"
+                          />
+                        ) : cable.designLength !== null ? (
+                          cable.designLength
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                    ) : null}
+                    {showActions ? (
+                      <td className={styles.tableCell}>
+                        <div className={styles.actionsCell}>
+                          {onDetails ? (
+                            <Button size="small" onClick={() => onDetails(cable)}>
+                              Details
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="small"
+                            appearance="secondary"
+                            onClick={() => onOpenVersions(cable)}
+                            disabled={disableActions}
+                          >
+                            Revisions
+                          </Button>
+                          {canManageCables ? (
+                            <>
+                              <Button
+                                size="small"
+                                onClick={() => onEdit(cable)}
+                                disabled={disableActions}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                size="small"
+                                appearance="secondary"
+                                onClick={() => onDelete(cable)}
+                                disabled={disableActions}
+                              >
+                                Delete
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
-                </thead>
-                <tbody>
-                  {versionsDialog.versions.map((version, index) => {
-                    const previousVersion =
-                      versionsDialog.versions[index + 1] ?? null;
-                    const changes = diffCableVersions(version, previousVersion);
-                    const changeLabel =
-                      version.changeType === 'create' ? 'Created' : 'Updated';
-                    const sourceLabel =
-                      version.changeSource === 'import'
-                        ? 'import'
-                        : 'manual save';
+                );
+              })}
+            </tbody>
+          </table>
+          {showPagination ? (
+            <TablePagination
+              styles={styles}
+              page={page}
+              totalPages={totalPages}
+              onPrevious={onPreviousPage}
+              onNext={onNextPage}
+              onPageSelect={onPageSelect}
+              dropdownAriaLabel="Select cable list page"
+            />
+          ) : null}
+        </div>
+      )}
 
-                    return (
-                      <tr key={version.id}>
-                        <td className={styles.tableCell}>
-                          v{version.versionNumber}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {version.revision ?? '-'}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {changeLabel} via {sourceLabel}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {formatCableVersionUser(version)}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {formatCableVersionTimestamp(version.changedAt)}
-                        </td>
-                        <td className={styles.tableCell}>
-                          {previousVersion === null ? (
-                            <Caption1>Initial snapshot</Caption1>
-                          ) : changes.length === 0 ? (
-                            <Caption1>No tracked field changes</Caption1>
-                          ) : (
-                            changes.map((change) => (
-                              <div key={change.label}>
-                                <strong>{change.label}:</strong>{' '}
-                                {change.previousValue} to {change.nextValue}
-                              </div>
-                            ))
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={onCloseVersions}>Close</Button>
-          </DialogActions>
-        </DialogBody>
-      </DialogSurface>
-    </Dialog>
-    {changeLog}
-  </div>
+      <Dialog
+        open={versionsDialog.open}
+        onOpenChange={(_, data) => {
+          if (!data.open) {
+            onCloseVersions();
+          }
+        }}
+      >
+        <DialogSurface className={styles.versionsDialogSurface}>
+          <DialogBody>
+            <DialogTitle>Cable revisions - {versionsDialogLabel}</DialogTitle>
+            <DialogContent className={styles.versionsDialogContent}>
+              {versionsDialog.loading ? (
+                <Spinner label="Loading revisions..." />
+              ) : versionsDialog.error ? (
+                <Body1 className={styles.errorText}>{versionsDialog.error}</Body1>
+              ) : versionsDialog.versions.length === 0 ? (
+                <Caption1>No saved revisions yet. New cable changes will appear here.</Caption1>
+              ) : (
+                <table className={styles.versionsDialogTable}>
+                  <thead>
+                    <tr>
+                      <th className={styles.tableHeadCell}>Version</th>
+                      <th className={styles.tableHeadCell}>Revision</th>
+                      <th className={styles.tableHeadCell}>Change</th>
+                      <th className={styles.tableHeadCell}>Changed by</th>
+                      <th className={styles.tableHeadCell}>Changed at</th>
+                      <th className={styles.tableHeadCell}>Field changes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versionsDialog.versions.map((version, index) => {
+                      const previousVersion = versionsDialog.versions[index + 1] ?? null;
+                      const changes = diffCableVersions(version, previousVersion);
+                      const changeLabel = version.changeType === 'create' ? 'Created' : 'Updated';
+                      const sourceLabel =
+                        version.changeSource === 'import' ? 'import' : 'manual save';
+
+                      return (
+                        <tr key={version.id}>
+                          <td className={styles.tableCell}>v{version.versionNumber}</td>
+                          <td className={styles.tableCell}>{version.revision ?? '-'}</td>
+                          <td className={styles.tableCell}>
+                            {changeLabel} via {sourceLabel}
+                          </td>
+                          <td className={styles.tableCell}>{formatCableVersionUser(version)}</td>
+                          <td className={styles.tableCell}>
+                            {formatCableVersionTimestamp(version.changedAt)}
+                          </td>
+                          <td className={styles.tableCell}>
+                            {previousVersion === null ? (
+                              <Caption1>Initial snapshot</Caption1>
+                            ) : changes.length === 0 ? (
+                              <Caption1>No tracked field changes</Caption1>
+                            ) : (
+                              changes.map((change) => (
+                                <div key={change.label}>
+                                  <strong>{change.label}:</strong> {change.previousValue} to{' '}
+                                  {change.nextValue}
+                                </div>
+                              ))
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={onCloseVersions}>Close</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+      {changeLog}
+    </div>
   );
 };

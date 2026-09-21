@@ -85,10 +85,14 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
 - **Cable list management** –
   - Inline editing for tag, cable type, from/to locations, and routing (with optimistic state updates).
   - Dialog-based create/edit forms with validation feedback.
+  - **Columns** lets every user choose their visible cable list columns and restore all columns.
+    Settings are saved to their own account across projects and devices. Keep at least one data
+    column selected; use **Save** to apply or **Cancel** to discard the selection.
+    Excel list exports contain only the currently visible data columns, in table order. The active
+    cable filter still determines the exported rows, including when filtering by a hidden column.
   - Text search and cable type filtering; sort columns by tag, type, from/to location, or routing.
   - Pagination to navigate large data sets.
-  - Import and export to Excel; exports respect the active filter and sort selections and no longer
-    include the cable ID column.
+  - Import and export to Excel; exports respect the active filter and sort selections.
   - Administrators can manage all project data; Engineers can manage assigned projects. Administrators, Engineers, and Technicians can export their accessible project tables.
 - **Tray management** – CRUD, import, and export flows similar to the cable lists.
 - **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files
@@ -133,6 +137,9 @@ registered account remains the bootstrap administrator.
 
 Restart the API server after updating to apply the idempotent database migration for Engineer.
 Existing roles and project assignments are preserved.
+
+Restart the API server after updating to enable personal cable list columns. The idempotent
+migration adds `users.cable_list_columns`; accounts without saved settings show all columns.
 
 ## Project Structure (high level)
 

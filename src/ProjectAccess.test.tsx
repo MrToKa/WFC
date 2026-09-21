@@ -76,6 +76,7 @@ beforeEach(() => {
       expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer basic-token');
       if (path === '/api/projects/' + otherProjectId) return json({ project: { ...project, id: otherProjectId, projectNumber: 'P-002', canEdit: false } });
       if (path === '/api/users/me') return json({ user: { ...basicUser, role } });
+      if (path === '/api/users/me/cable-list-columns') return json({ columns: ['cableId', 'revision', 'mto', 'tag', 'typeName', 'fromLocation', 'toLocation', 'routing', 'designLength', 'actions'] });
       if (path === '/api/projects') return json({ projects: role === 'engineer' ? [project] : [] });
       if (path === '/api/templates') return json({ files: [] });
       if (path.startsWith('/api/materials/')) {

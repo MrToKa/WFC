@@ -56,6 +56,7 @@ import {
 } from '../utils/catalogNameMatching.js';
 import {
   createCableSchema,
+  cableListColumnsSchema,
   createCableMaterialSchema,
   updateCableMaterialSchema,
   updateCableSchema,
@@ -4513,8 +4514,25 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         views: [{ state: 'frozen', ySplit: 1 }],
       });
 
-      const columns = CABLE_LIST_EXPORT_COLUMNS;
-      const rows = result.rows.map(buildCableListExportRow);
+      let selectedColumns: Set<string> | null = null;
+      if (req.query.columns !== undefined) {
+        const parsed = cableListColumnsSchema.safeParse({
+          columns: typeof req.query.columns === 'string' ? req.query.columns.split(',') : null,
+        });
+        if (!parsed.success) {
+          res.status(400).json({ error: parsed.error.flatten() });
+          return;
+        }
+        selectedColumns = new Set(parsed.data.columns.map((id) => id === 'typeName' ? 'type' : id));
+      }
+      const columnIndexes = CABLE_LIST_EXPORT_COLUMNS.flatMap((column, index) =>
+        selectedColumns === null || selectedColumns.has(column.key) ? [index] : [],
+      );
+      const columns = columnIndexes.map((index) => CABLE_LIST_EXPORT_COLUMNS[index]);
+      const rows = result.rows.map((row) => {
+        const values = buildCableListExportRow(row);
+        return columnIndexes.map((index) => values[index]);
+      });
 
       const table = worksheet.addTable({
         name: 'Cables',

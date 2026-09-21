@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CABLE_LIST_COLUMN_IDS } from './models/cableListColumns.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
 import { CHANGE_ORDER_SOURCE_CATALOGS } from './models/changeOrder.js';
 import { STANDARD_MATERIAL_UNITS } from './models/standardMaterial.js';
@@ -39,6 +40,18 @@ export const updateProfileSchema = z
   );
 
 export const adminUpdateUserSchema = updateProfileSchema;
+
+export const cableListColumnsSchema = z.object({
+  columns: z.array(z.enum(CABLE_LIST_COLUMN_IDS))
+    .min(1)
+    .max(CABLE_LIST_COLUMN_IDS.length)
+    .refine((columns) => new Set(columns).size === columns.length, {
+      message: 'Columns must be unique',
+    })
+    .refine((columns) => columns.some((column) => column !== 'actions'), {
+      message: 'Select at least one data column',
+    }),
+}).strict();
 
 const traySupportOverrideSchema = z
   .object({

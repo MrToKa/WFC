@@ -1,4 +1,5 @@
 import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
+import type { CableListColumnId } from '@/api/cableListPreferences';
 import type { ChangeEvent, FormEvent, RefObject } from 'react';
 import {
   useCallback,
@@ -124,7 +125,8 @@ type UseCableListSectionResult = {
   handleImportCables: (event: ChangeEvent<HTMLInputElement>) => Promise<void>;
   handleExportCables: (
     view?: 'list' | 'report' | 'change-tracker',
-    mto?: CableMtoOption | null
+    mto?: CableMtoOption | null,
+    columns?: CableListColumnId[]
   ) => Promise<void>;
   handleGetCablesTemplate: (view?: 'list' | 'report') => Promise<void>;
   handleCableDraftChange: (
@@ -989,7 +991,8 @@ export const useCableListSection = ({
   const handleExportCables = useCallback(
     async (
       view: 'list' | 'report' | 'change-tracker' = 'list',
-      mto: CableMtoOption | null = null
+      mto: CableMtoOption | null = null,
+      columns?: CableListColumnId[]
     ) => {
       if (!projectSnapshot || !exportToken) {
         showToast({
@@ -1007,7 +1010,8 @@ export const useCableListSection = ({
           filterText,
           criteria: filterCriteria,
           view,
-          mto
+          mto,
+          columns
         });
         const link = document.createElement('a');
         const url = window.URL.createObjectURL(blob);
@@ -1148,4 +1152,3 @@ export const useCableListSection = ({
     }
   };
 };
-

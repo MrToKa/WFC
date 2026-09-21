@@ -31,6 +31,11 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS cable_list_columns TEXT[];
+  `);
+
+  await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'basic'
       CHECK (role IN ('basic', 'technician', 'engineer', 'admin'));
     ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;

@@ -21,6 +21,7 @@ vi.mock('../auth.js', () => ({
 import { adminUsersRouter } from './adminUserRoutes.js';
 import { authRouter } from './authRoutes.js';
 import { userRouter } from './userRoutes.js';
+import { CABLE_LIST_COLUMN_IDS } from '../models/cableListColumns.js';
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 type Layer = {
@@ -64,6 +65,72 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.restoreAllMocks());
+
+describe('personal cable list columns', () => {
+  const path = '/me/cable-list-columns';
+  const requestWith = (body?: unknown, userId: string | undefined = 'actor-id') =>
+    ({ userId, body, params: { userId: 'someone-else' }, query: { userId: 'someone-else' } }) as unknown as Request;
+
+  it('loads defaults for an existing account without preferences', async () => {
+    mocks.query.mockResolvedValue({ rows: [{ cable_list_columns: null }] });
+    const response = responseStub();
+    await handlerFor(userRouter, 'get', path)(requestWith(), response);
+    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining('WHERE id = $1'), ['actor-id']);
+    expect(response.json).toHaveBeenCalledWith({ columns: CABLE_LIST_COLUMN_IDS });
+  });
+
+  it.each(['basic', 'technician', 'engineer', 'admin'])('saves and reloads only the %s account preferences', async (role) => {
+    const stored = new Map<string, string[]>([['someone-else', ['routing']]]);
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      const userId = params[sql.startsWith('UPDATE') ? 1 : 0] as string;
+      if (sql.startsWith('UPDATE')) stored.set(userId, params[0] as string[]);
+      return { rows: [{ cable_list_columns: stored.get(userId) ?? null }] };
+    });
+    const request = { ...requestWith({ columns: ['actions', 'tag', 'cableId'] }), role } as Request;
+    const response = responseStub();
+    await handlerFor(userRouter, 'put', path)(request, response);
+    expect(response.json).toHaveBeenCalledWith({ columns: ['cableId', 'tag', 'actions'] });
+    expect(stored.get('someone-else')).toEqual(['routing']);
+
+    const reloaded = responseStub();
+    await handlerFor(userRouter, 'get', path)(requestWith(), reloaded);
+    expect(reloaded.json).toHaveBeenCalledWith({ columns: ['cableId', 'tag', 'actions'] });
+  });
+
+  it.each([
+    {},
+    { columns: [] },
+    { columns: ['actions'] },
+    { columns: ['tag', 'tag'] },
+    { columns: ['unknown'] },
+    { columns: 'tag' },
+    { columns: ['tag'], userId: 'someone-else' },
+  ])('rejects invalid or account-targeting input: %j', async (body) => {
+    const response = responseStub();
+    await handlerFor(userRouter, 'put', path)(requestWith(body), response);
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it.each(['get', 'put'])('requires authentication for %s', async (method) => {
+    const response = responseStub();
+    await handlerFor(userRouter, method, path)({ body: { columns: ['tag'] } } as Request, response);
+    expect(response.status).toHaveBeenCalledWith(401);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it.each(['get', 'put'])('handles deleted accounts and database failures for %s', async (method) => {
+    mocks.query.mockResolvedValueOnce({ rows: [] });
+    const missing = responseStub();
+    await handlerFor(userRouter, method, path)(requestWith({ columns: ['tag'] }), missing);
+    expect(missing.status).toHaveBeenCalledWith(404);
+
+    mocks.query.mockRejectedValueOnce(new Error('Database unavailable'));
+    const failed = responseStub();
+    await handlerFor(userRouter, method, path)(requestWith({ columns: ['tag'] }), failed);
+    expect(failed.status).toHaveBeenCalledWith(500);
+  });
+});
 
 describe.each([
   { name: 'own profile', router: userRouter, path: '/me', targetId: 'actor-id' },
