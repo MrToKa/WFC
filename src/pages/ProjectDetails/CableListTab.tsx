@@ -16,6 +16,7 @@ import {
   Option,
   Spinner,
   Switch,
+  mergeClasses,
 } from '@fluentui/react-components';
 
 import { CABLE_MTO_OPTIONS, type Cable, type CableType, type CableVersion } from '@/api/client';
@@ -269,7 +270,7 @@ export const CableListTab = ({
         </div>
       ) : (
         <div className={styles.tableContainer}>
-          <table className={styles.table}>
+          <table className={mergeClasses(styles.table, styles.cableListTable)}>
             <thead>
               <tr>
                 {CABLE_LIST_COLUMNS.filter(

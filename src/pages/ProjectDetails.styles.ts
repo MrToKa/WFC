@@ -1,4 +1,18 @@
 import { makeStyles, shorthands, tokens } from '@fluentui/react-components';
+import { CABLE_LIST_COLUMNS } from '@/api/cableListPreferences';
+
+// Match visible column positions so hiding columns keeps highlights aligned.
+const cableListColumnHoverStyles = Object.fromEntries(
+  CABLE_LIST_COLUMNS.map((_, index) => [
+    `&:has(tr > :nth-child(${index + 1}):hover) tr > :nth-child(${index + 1})`,
+    {
+      backgroundColor: tokens.colorNeutralBackground2Hover,
+      ':hover': {
+        backgroundColor: tokens.colorBrandBackground2Hover,
+      },
+    },
+  ]),
+);
 
 export const useProjectDetailsStyles = makeStyles({
   root: {
@@ -119,6 +133,20 @@ export const useProjectDetailsStyles = makeStyles({
   table: {
     width: '100%',
     borderCollapse: 'collapse',
+  },
+  cableListTable: {
+    width: 'max-content',
+    minWidth: '100%',
+    '& th, & td': {
+      whiteSpace: 'nowrap',
+      wordBreak: 'normal',
+    },
+    '@media (hover: hover)': {
+      '& tbody tr:hover > td': {
+        backgroundColor: tokens.colorNeutralBackground2Hover,
+      },
+      ...cableListColumnHoverStyles,
+    },
   },
   tableHeadCell: {
     textAlign: 'left',
