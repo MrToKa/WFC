@@ -9,6 +9,7 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "types": ["node"],
+    "rootDir": "..",
     "outDir": "./dist"
   },
   "include": ["./**/*.ts", "./**/*.d.ts"]

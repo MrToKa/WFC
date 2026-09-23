@@ -36,7 +36,7 @@ export default [
     },
   },
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', 'shared/**/*.ts'],
     languageOptions: {
       ...typedLanguageOptions('./tsconfig.json'),
       globals: {

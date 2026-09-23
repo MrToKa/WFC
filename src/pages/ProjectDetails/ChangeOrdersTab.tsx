@@ -41,9 +41,11 @@ import {
   TableRow,
   Text,
   Title3,
+  ToggleButton,
   Toolbar,
   makeStyles,
   mergeClasses,
+  shorthands,
   tokens,
 } from '@fluentui/react-components';
 import {
@@ -66,6 +68,7 @@ import {
 import { useToast } from '@/context/ToastContext';
 import { ChangeOrderItemDialog } from './ChangeOrderItemDialog';
 import { ChangeOrderMaterialDialog } from './ChangeOrderMaterialDialog';
+import { ChangeOrderSummaryTable } from './ChangeOrderSummaryTable';
 import { useChangeOrders } from './hooks/useChangeOrders';
 
 const useStyles = makeStyles({
@@ -83,6 +86,31 @@ const useStyles = makeStyles({
   selector: {
     minWidth: '320px',
     flexGrow: 1,
+  },
+  viewButtons: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalS,
+    flexShrink: 0,
+  },
+  viewButton: {
+    color: tokens.colorBrandForeground1,
+    backgroundColor: tokens.colorBrandBackground2,
+    ...shorthands.borderColor(tokens.colorBrandStroke1),
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+      backgroundColor: tokens.colorBrandBackground2,
+      ...shorthands.borderColor(tokens.colorBrandStroke1),
+    },
+    '&[aria-pressed="true"]': {
+      color: tokens.colorNeutralForegroundOnBrand,
+      backgroundColor: tokens.colorBrandBackground,
+      ...shorthands.borderColor(tokens.colorBrandBackground),
+      ':hover': {
+        color: tokens.colorNeutralForegroundOnBrand,
+        backgroundColor: tokens.colorBrandBackgroundHover,
+        ...shorthands.borderColor(tokens.colorBrandBackgroundHover),
+      },
+    },
   },
   card: {
     border: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -234,6 +262,7 @@ export const ChangeOrdersTab = ({
   const [pendingAction, setPendingAction] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [expandedParentIds, setExpandedParentIds] = useState<Set<string>>(() => new Set());
+  const [materialView, setMaterialView] = useState<'detailed' | 'compact'>('detailed');
 
   const [materialsEditing, setMaterialsEditing] = useState(false);
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
@@ -259,6 +288,7 @@ export const ChangeOrdersTab = ({
 
   useEffect(() => {
     setMaterialsEditing(false);
+    setMaterialView('detailed');
     setDraftDetails(null);
     setOperations([]);
     setNewRevision(false);
@@ -320,6 +350,7 @@ export const ChangeOrdersTab = ({
 
   const startMaterials = (createRevision: boolean): void => {
     if (!canEdit || !savedDetails) return;
+    setMaterialView('detailed');
     setNewRevision(createRevision);
     setOperations([]);
     setDraftDetails({
@@ -804,7 +835,10 @@ export const ChangeOrdersTab = ({
                 <Button
                   icon={<AddRegular />}
                   disabled={newMode || !selectedId || headerDirty || materialsLocked}
-                  onClick={() => setMaterialDialogOpen(true)}
+                  onClick={() => {
+                    setMaterialView('detailed');
+                    setMaterialDialogOpen(true);
+                  }}
                 >
                   Add material
                 </Button>
@@ -825,6 +859,24 @@ export const ChangeOrdersTab = ({
               >
                 {exporting ? 'Exporting…' : 'Export Excel'}
               </Button>
+              {!newMode && items.length > 0 ? (
+                <div className={styles.viewButtons} role="group" aria-label="Materials view">
+                  <ToggleButton
+                    className={styles.viewButton}
+                    checked={materialView === 'detailed'}
+                    onClick={() => setMaterialView('detailed')}
+                  >
+                    Detailed view
+                  </ToggleButton>
+                  <ToggleButton
+                    className={styles.viewButton}
+                    checked={materialView === 'compact'}
+                    onClick={() => setMaterialView('compact')}
+                  >
+                    Compact view
+                  </ToggleButton>
+                </div>
+              ) : null}
             </div>
             {materialsEditing ? (
               <Text>
@@ -838,207 +890,217 @@ export const ChangeOrdersTab = ({
               <Text>No materials have been added.</Text>
             ) : (
               <>
-                <div className={styles.tableWrap}>
-                  <Table size="small" aria-label={`${labels.singular} items`}>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHeaderCell>Item</TableHeaderCell>
-                        <TableHeaderCell>Description</TableHeaderCell>
-                        <TableHeaderCell>Design Qty</TableHeaderCell>
-                        <TableHeaderCell>Order Qty</TableHeaderCell>
-                        <TableHeaderCell>Spare Qty</TableHeaderCell>
-                        <TableHeaderCell>Unit</TableHeaderCell>
-                        <TableHeaderCell>Packaging</TableHeaderCell>
-                        <TableHeaderCell>Ordered</TableHeaderCell>
-                        <TableHeaderCell>Manufacturer</TableHeaderCell>
-                        <TableHeaderCell>Part No.</TableHeaderCell>
-                        <TableHeaderCell>Price/pcs</TableHeaderCell>
-                        <TableHeaderCell>Total Price</TableHeaderCell>
-                        <TableHeaderCell>Actions</TableHeaderCell>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((item, index) => {
-                        if (
-                          item.lineKind === 'inherited' &&
-                          item.parentItemId &&
-                          !expandedParentIds.has(item.parentItemId)
-                        ) {
-                          return null;
-                        }
+                {materialView === 'compact' ? (
+                  <ChangeOrderSummaryTable
+                    items={items}
+                    documentLabel={labels.singular}
+                    canEdit={canEdit}
+                  />
+                ) : (
+                  <div className={styles.tableWrap}>
+                    <Table size="small" aria-label={`${labels.singular} items`}>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHeaderCell>Item</TableHeaderCell>
+                          <TableHeaderCell>Description</TableHeaderCell>
+                          <TableHeaderCell>Design Qty</TableHeaderCell>
+                          <TableHeaderCell>Order Qty</TableHeaderCell>
+                          <TableHeaderCell>Spare Qty</TableHeaderCell>
+                          <TableHeaderCell>Unit</TableHeaderCell>
+                          <TableHeaderCell>Packaging</TableHeaderCell>
+                          <TableHeaderCell>Ordered</TableHeaderCell>
+                          <TableHeaderCell>Manufacturer</TableHeaderCell>
+                          <TableHeaderCell>Part No.</TableHeaderCell>
+                          <TableHeaderCell>Price/pcs</TableHeaderCell>
+                          <TableHeaderCell>Total Price</TableHeaderCell>
+                          <TableHeaderCell>Actions</TableHeaderCell>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item, index) => {
+                          if (
+                            item.lineKind === 'inherited' &&
+                            item.parentItemId &&
+                            !expandedParentIds.has(item.parentItemId)
+                          ) {
+                            return null;
+                          }
 
-                        const hasInheritedItems = parentIdsWithInheritedItems.has(item.id);
-                        const inheritedItemsExpanded = expandedParentIds.has(item.id);
-                        const mainItemIndex = mainItemIndexes.get(item.id);
-                        // Match Excel's full-package quantity; orderQuantity stores unrounded demand.
-                        const displayedOrderQuantity =
-                          item.packagingQuantity !== null &&
-                          item.packagingQuantity > 0 &&
-                          item.orderedQuantity !== null
-                            ? item.packagingQuantity * item.orderedQuantity
-                            : item.orderQuantity;
+                          const hasInheritedItems = parentIdsWithInheritedItems.has(item.id);
+                          const inheritedItemsExpanded = expandedParentIds.has(item.id);
+                          const mainItemIndex = mainItemIndexes.get(item.id);
+                          // Match Excel's full-package quantity; orderQuantity stores unrounded demand.
+                          const displayedOrderQuantity =
+                            item.packagingQuantity !== null &&
+                            item.packagingQuantity > 0 &&
+                            item.orderedQuantity !== null
+                              ? item.packagingQuantity * item.orderedQuantity
+                              : item.orderQuantity;
 
-                        return (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <div className={styles.itemCell}>
-                                <span>{index + 1}</span>
-                                {hasInheritedItems ? (
-                                  <Button
-                                    size="small"
-                                    appearance="subtle"
-                                    className={styles.expansionButton}
-                                    icon={
-                                      inheritedItemsExpanded ? (
-                                        <ChevronDownRegular />
-                                      ) : (
-                                        <ChevronRightRegular />
-                                      )
-                                    }
-                                    aria-label={`${
-                                      inheritedItemsExpanded ? 'Collapse' : 'Expand'
-                                    } inherited standard materials for item ${index + 1}`}
-                                    aria-expanded={inheritedItemsExpanded}
-                                    title={
-                                      inheritedItemsExpanded
-                                        ? 'Hide inherited standard materials'
-                                        : 'Show inherited standard materials'
-                                    }
-                                    onClick={() => toggleInheritedItems(item.id)}
-                                  />
+                          return (
+                            <TableRow key={item.id}>
+                              <TableCell>
+                                <div className={styles.itemCell}>
+                                  <span>{index + 1}</span>
+                                  {hasInheritedItems ? (
+                                    <Button
+                                      size="small"
+                                      appearance="subtle"
+                                      className={styles.expansionButton}
+                                      icon={
+                                        inheritedItemsExpanded ? (
+                                          <ChevronDownRegular />
+                                        ) : (
+                                          <ChevronRightRegular />
+                                        )
+                                      }
+                                      aria-label={`${
+                                        inheritedItemsExpanded ? 'Collapse' : 'Expand'
+                                      } inherited standard materials for item ${index + 1}`}
+                                      aria-expanded={inheritedItemsExpanded}
+                                      title={
+                                        inheritedItemsExpanded
+                                          ? 'Hide inherited standard materials'
+                                          : 'Show inherited standard materials'
+                                      }
+                                      onClick={() => toggleInheritedItems(item.id)}
+                                    />
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div>{item.descriptionEn}</div>
+                                {item.lineKind === 'inherited' ? (
+                                  <Caption1 className={styles.inherited}>
+                                    Inherited Standard Material
+                                    {item.parentItemId
+                                      ? ` for ${itemsById.get(item.parentItemId)?.descriptionEn ?? 'parent material'}`
+                                      : ''}
+                                    {item.quantityPerParent !== null &&
+                                    item.quantityPerParent !== undefined
+                                      ? ` · ${item.quantityPerParent} per ${
+                                          item.parentItemId &&
+                                          itemsById.get(item.parentItemId)?.sourceCatalog ===
+                                            'cable-type'
+                                            ? 'cable'
+                                            : 'parent'
+                                        }`
+                                      : ''}
+                                  </Caption1>
                                 ) : null}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div>{item.descriptionEn}</div>
-                              {item.lineKind === 'inherited' ? (
-                                <Caption1 className={styles.inherited}>
-                                  Inherited Standard Material
-                                  {item.parentItemId
-                                    ? ` for ${itemsById.get(item.parentItemId)?.descriptionEn ?? 'parent material'}`
-                                    : ''}
-                                  {item.quantityPerParent !== null &&
-                                  item.quantityPerParent !== undefined
-                                    ? ` · ${item.quantityPerParent} per ${
-                                        item.parentItemId &&
-                                        itemsById.get(item.parentItemId)?.sourceCatalog ===
-                                          'cable-type'
-                                          ? 'cable'
-                                          : 'parent'
-                                      }`
-                                    : ''}
-                                </Caption1>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className={styles.numeric}>{item.designQuantity}</TableCell>
-                            <TableCell className={styles.numeric}>
-                              {displayedOrderQuantity}
-                            </TableCell>
-                            <TableCell
-                              className={mergeClasses(
-                                styles.numeric,
-                                item.spareQuantity < 0 && styles.warning,
-                              )}
-                            >
-                              {item.spareQuantity}
-                            </TableCell>
-                            <TableCell>{item.unit ?? '—'}</TableCell>
-                            <TableCell>
-                              {[item.packaging, item.packagingQuantity, item.packagingUnit]
-                                .filter((part) => part !== null && part !== '')
-                                .join(' ') || '—'}
-                            </TableCell>
-                            <TableCell>
-                              {[item.orderedQuantity, item.orderedUnit]
-                                .filter((part) => part !== null && part !== '')
-                                .join(' ') || '—'}
-                            </TableCell>
-                            <TableCell>{item.manufacturer ?? '—'}</TableCell>
-                            <TableCell>{item.manufacturerPartNo ?? '—'}</TableCell>
-                            <TableCell className={styles.numeric}>
-                              {formatMoney(item.unitPrice)}
-                            </TableCell>
-                            <TableCell className={styles.numeric}>
-                              {formatMoney(item.totalPrice)}
-                            </TableCell>
-                            <TableCell>
-                              <div className={styles.actions}>
-                                {canEdit ? (
-                                  <Button
-                                    size="small"
-                                    appearance="subtle"
-                                    icon={<EditRegular />}
-                                    aria-label={`Edit item ${index + 1}`}
-                                    title="Edit"
-                                    disabled={materialsLocked}
-                                    onClick={() => setEditingItem(item)}
-                                  />
-                                ) : null}
-                                {canEdit ? (
-                                  <Button
-                                    size="small"
-                                    appearance="subtle"
-                                    icon={<CopyRegular />}
-                                    aria-label={`Duplicate item ${index + 1}`}
-                                    title={
-                                      item.lineKind === 'inherited'
-                                        ? 'Duplicate as main material'
-                                        : 'Duplicate'
-                                    }
-                                    disabled={materialsLocked}
-                                    onClick={() => void duplicateItem(item)}
-                                  />
-                                ) : null}
-                                {canEdit ? (
-                                  <Button
-                                    size="small"
-                                    appearance="subtle"
-                                    icon={<DeleteRegular />}
-                                    aria-label={`Delete item ${index + 1}`}
-                                    title={`Remove from this ${labels.singular}`}
-                                    disabled={materialsLocked}
-                                    onClick={() => void removeItem(item)}
-                                  />
-                                ) : null}
-                                {canEdit ? (
-                                  <Button
-                                    size="small"
-                                    appearance="subtle"
-                                    icon={<ArrowUpRegular />}
-                                    aria-label={`Move item ${index + 1} up`}
-                                    title="Move up"
-                                    disabled={
-                                      mainItemIndex === undefined ||
-                                      mainItemIndex === 0 ||
-                                      materialsLocked
-                                    }
-                                    onClick={() => void moveItem(item.id, -1)}
-                                  />
-                                ) : null}
-                                {canEdit ? (
-                                  <Button
-                                    size="small"
-                                    appearance="subtle"
-                                    icon={<ArrowDownRegular />}
-                                    aria-label={`Move item ${index + 1} down`}
-                                    title="Move down"
-                                    disabled={
-                                      mainItemIndex === undefined ||
-                                      mainItemIndex === mainItems.length - 1 ||
-                                      materialsLocked ||
-                                      mainItems.length === 0
-                                    }
-                                    onClick={() => void moveItem(item.id, 1)}
-                                  />
-                                ) : null}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                              </TableCell>
+                              <TableCell className={styles.numeric}>
+                                {item.designQuantity}
+                              </TableCell>
+                              <TableCell className={styles.numeric}>
+                                {displayedOrderQuantity}
+                              </TableCell>
+                              <TableCell
+                                className={mergeClasses(
+                                  styles.numeric,
+                                  item.spareQuantity < 0 && styles.warning,
+                                )}
+                              >
+                                {item.spareQuantity}
+                              </TableCell>
+                              <TableCell>{item.unit ?? '—'}</TableCell>
+                              <TableCell>
+                                {[item.packaging, item.packagingQuantity, item.packagingUnit]
+                                  .filter((part) => part !== null && part !== '')
+                                  .join(' ') || '—'}
+                              </TableCell>
+                              <TableCell>
+                                {[item.orderedQuantity, item.orderedUnit]
+                                  .filter((part) => part !== null && part !== '')
+                                  .join(' ') || '—'}
+                              </TableCell>
+                              <TableCell>{item.manufacturer ?? '—'}</TableCell>
+                              <TableCell>{item.manufacturerPartNo ?? '—'}</TableCell>
+                              <TableCell className={styles.numeric}>
+                                {formatMoney(item.unitPrice)}
+                              </TableCell>
+                              <TableCell className={styles.numeric}>
+                                {formatMoney(item.totalPrice)}
+                              </TableCell>
+                              <TableCell>
+                                <div className={styles.actions}>
+                                  {canEdit ? (
+                                    <Button
+                                      size="small"
+                                      appearance="subtle"
+                                      icon={<EditRegular />}
+                                      aria-label={`Edit item ${index + 1}`}
+                                      title="Edit"
+                                      disabled={materialsLocked}
+                                      onClick={() => setEditingItem(item)}
+                                    />
+                                  ) : null}
+                                  {canEdit ? (
+                                    <Button
+                                      size="small"
+                                      appearance="subtle"
+                                      icon={<CopyRegular />}
+                                      aria-label={`Duplicate item ${index + 1}`}
+                                      title={
+                                        item.lineKind === 'inherited'
+                                          ? 'Duplicate as main material'
+                                          : 'Duplicate'
+                                      }
+                                      disabled={materialsLocked}
+                                      onClick={() => void duplicateItem(item)}
+                                    />
+                                  ) : null}
+                                  {canEdit ? (
+                                    <Button
+                                      size="small"
+                                      appearance="subtle"
+                                      icon={<DeleteRegular />}
+                                      aria-label={`Delete item ${index + 1}`}
+                                      title={`Remove from this ${labels.singular}`}
+                                      disabled={materialsLocked}
+                                      onClick={() => void removeItem(item)}
+                                    />
+                                  ) : null}
+                                  {canEdit ? (
+                                    <Button
+                                      size="small"
+                                      appearance="subtle"
+                                      icon={<ArrowUpRegular />}
+                                      aria-label={`Move item ${index + 1} up`}
+                                      title="Move up"
+                                      disabled={
+                                        mainItemIndex === undefined ||
+                                        mainItemIndex === 0 ||
+                                        materialsLocked
+                                      }
+                                      onClick={() => void moveItem(item.id, -1)}
+                                    />
+                                  ) : null}
+                                  {canEdit ? (
+                                    <Button
+                                      size="small"
+                                      appearance="subtle"
+                                      icon={<ArrowDownRegular />}
+                                      aria-label={`Move item ${index + 1} down`}
+                                      title="Move down"
+                                      disabled={
+                                        mainItemIndex === undefined ||
+                                        mainItemIndex === mainItems.length - 1 ||
+                                        materialsLocked ||
+                                        mainItems.length === 0
+                                      }
+                                      onClick={() => void moveItem(item.id, 1)}
+                                    />
+                                  ) : null}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </>
             )}
           </div>

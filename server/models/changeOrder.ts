@@ -1,3 +1,7 @@
+import { calculateLineTotal, calculateSpareQuantity } from '../../shared/changeOrderSummary.js';
+
+export { calculateLineTotal, calculateSpareQuantity };
+
 export const CHANGE_ORDER_SOURCE_CATALOGS = [
   'cable-type',
   'cable-installation-material',
@@ -174,27 +178,6 @@ export const toFiniteNumber = (value: string | number | null | undefined): numbe
   const numeric = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 };
-
-export const calculateSpareQuantity = (
-  designQuantity: number,
-  orderQuantity: number,
-  packagingQuantity?: number | null,
-  orderedQuantity?: number | null,
-): number => {
-  if (
-    packagingQuantity !== null &&
-    packagingQuantity !== undefined &&
-    packagingQuantity > 0 &&
-    orderedQuantity !== null &&
-    orderedQuantity !== undefined
-  ) {
-    return orderedQuantity * packagingQuantity - designQuantity;
-  }
-  return orderQuantity - designQuantity;
-};
-
-export const calculateLineTotal = (orderQuantity: number, unitPrice: number): number =>
-  orderQuantity * unitPrice;
 
 export const calculateChangeOrderTotal = (
   items: ReadonlyArray<Pick<ChangeOrderItem, 'orderQuantity' | 'unitPrice'>>,

@@ -194,8 +194,19 @@ describe('ChangeOrdersTab', () => {
       </ToastProvider></FluentProvider>);
       fireEvent.click(await screen.findByRole('button', { name: 'Open Existing order' }));
       await screen.findByRole('cell', { name: 'Widget support' });
-      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Existing order');
+      await waitFor(() =>
+        expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Existing order'),
+      );
       expect(screen.getByRole('textbox', { name: 'Title' })).toBeDisabled();
+      const documentName = collection === 'internal-ncrs' ? 'Internal NCR' : 'Change Order';
+      fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+      expect(
+        screen.getByRole('table', { name: `${documentName} material summary` }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Compact view' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
       for (const button of screen.queryAllByRole('button')) expect(button.textContent).not.toMatch(/New Change Order|New Internal NCR|Delete Change Order|Delete Internal NCR|Edit materials|Save materials|Save header|Add material/);
       const exportButton = screen.getByRole('button', { name: 'Export Excel' });
       expect(exportButton).toBeEnabled();
@@ -206,6 +217,267 @@ describe('ChangeOrdersTab', () => {
       expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    ['change-orders', 'Change Order'],
+    ['internal-ncrs', 'Internal NCR'],
+  ] as const)(
+    'summarizes all %s materials like Excel and preserves the detailed rows',
+    async (collection, documentName) => {
+      const api = await import('@/api/client');
+      const parent = {
+        ...details.items[0],
+        designQuantity: 1,
+        orderQuantity: 1,
+        spareQuantity: 0,
+        packagingQuantity: 1,
+        orderedQuantity: 1,
+        totalPrice: 4,
+      };
+      const repeatedMaterial: ChangeOrderDetails['items'][number] = {
+        ...details.items[0],
+        sourceCatalog: 'cable-installation-material',
+        sourceMaterialId: '66666666-6666-4666-8666-666666666666',
+        descriptionEn: 'Cable cleat',
+        designQuantity: 10,
+        orderQuantity: 16,
+        spareQuantity: 90,
+        packaging: 'Box',
+        packagingQuantity: 100,
+        packagingUnit: 'pcs',
+        minimumOrderQuantity: 100,
+        orderMeasurement: 'pcs',
+        orderedQuantity: 1,
+        orderedUnit: 'box',
+        totalPrice: 400,
+        tagNo: 'TAG-A',
+        revisionNumber: '00',
+      };
+      const inheritedDetails: ChangeOrderDetails = {
+        ...details,
+        itemCount: 4,
+        totalPrice: 1204,
+        items: [
+          parent,
+          {
+            ...repeatedMaterial,
+            id: 'inherited-cleat-1',
+            sortOrder: 2,
+            lineKind: 'inherited',
+            parentItemId: parent.id,
+          },
+          {
+            ...repeatedMaterial,
+            id: 'inherited-cleat-2',
+            sortOrder: 3,
+            lineKind: 'inherited',
+            parentItemId: parent.id,
+            designQuantity: 20,
+            orderQuantity: 20,
+            spareQuantity: 80,
+            tagNo: 'TAG-B',
+            revisionNumber: '02',
+          },
+          {
+            ...repeatedMaterial,
+            id: 'manual-cleat',
+            sortOrder: 4,
+            lineKind: 'manual',
+            parentItemId: null,
+            designQuantity: 15,
+            orderQuantity: 15,
+            spareQuantity: 85,
+            revisionNumber: '01',
+          },
+        ],
+      };
+      vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({ changeOrder: inheritedDetails });
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <ToastProvider>
+            <ChangeOrdersTab
+              project={project}
+              token="token"
+              currentUser={user}
+              collection={collection}
+            />
+          </ToastProvider>
+        </FluentProvider>,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Existing order' }));
+      const detailedTable = await screen.findByRole('table', { name: `${documentName} items` });
+      expect(screen.getByRole('button', { name: 'Detailed view' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(detailedTable).getAllByText('Cable cleat')).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+      const summary = screen.getByRole('table', { name: `${documentName} material summary` });
+      expect(screen.queryByRole('table', { name: `${documentName} items` })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Compact view' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(within(summary).getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual([
+        'Item No.', 'Design Qty', 'Order Qty', 'Spare Qty', 'Unit', 'Packaging',
+        'Packaging Qty', 'Unit', 'Ordered Qty', 'Unit', 'Description (EN)',
+        'Dimension [mm]', 'Material', 'Weight [kg]',
+        'Clear description of content of a set and type designation', 'Price/pcs',
+        'Total Price', 'Country of origin', 'Pos./TAG-No', 'Drawing No.',
+        'Revision number', 'Certificates', 'Original Equipment Manufacturer',
+        'Manufacturer Part No.', 'ACS barcode', 'Remarks',
+      ]);
+      const summaryRows = within(summary).getAllByRole('row');
+      expect(summaryRows).toHaveLength(4);
+      const cleatRow = within(summary).getByRole('cell', { name: 'Cable cleat' }).closest('tr')!;
+      const cells = within(cleatRow).getAllByRole('cell');
+      expect(cells.slice(0, 10).map((cell) => cell.textContent)).toEqual([
+        '2', '45', '100', '55', 'pcs', 'Box', '100', 'pcs', '1', 'box',
+      ]);
+      expect(cells[16]).toHaveTextContent('400.00');
+      expect(cells[18]).toHaveTextContent('TAG-A, TAG-B');
+      expect(cells[20]).toHaveTextContent('02');
+      expect(within(summary).getByText('TOTAL:').closest('tr')).toHaveTextContent('404.00');
+      expect(within(summary).queryByRole('button')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Detailed view' }));
+      expect(screen.getByRole('button', {
+        name: 'Expand inherited standard materials for item 1',
+      })).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(screen.getByRole('button', {
+        name: 'Expand inherited standard materials for item 1',
+      }));
+      const expandedTable = screen.getByRole('table', { name: `${documentName} items` });
+      expect(within(expandedTable).getAllByText('Cable cleat')).toHaveLength(3);
+      expect(within(expandedTable).getAllByRole('cell', { name: '400.00' })).toHaveLength(3);
+      fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Detailed view' }));
+      expect(screen.getByRole('button', {
+        name: 'Collapse inherited standard materials for item 1',
+      })).toHaveAttribute('aria-expanded', 'true');
+      expect(within(screen.getByRole('table', { name: `${documentName} items` }))
+        .getAllByText('Cable cleat')).toHaveLength(3);
+      expect(api.fetchChangeOrder).toHaveBeenCalledOnce();
+      for (const write of [
+        api.updateChangeOrder, api.previewChangeOrderMaterials, api.saveChangeOrderMaterials,
+        api.addChangeOrderItem, api.updateChangeOrderItem, api.deleteChangeOrderItem,
+        api.duplicateChangeOrderItem, api.reorderChangeOrderItems,
+      ]) {
+        expect(write).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('formats compact quantities and expands long tag lists without changing the data', async () => {
+    const api = await import('@/api/client');
+    const tags = Array.from({ length: 7 }, (_, index) => `=P1=LA${index + 1}=BQB10=WGA1`).join(', ');
+    const summaryDetails: ChangeOrderDetails = {
+      ...details,
+      items: [{
+        ...details.items[0],
+        designQuantity: 1.5999999999999999,
+        orderQuantity: 2,
+        packagingQuantity: 1,
+        orderedQuantity: 2,
+        weightKg: 0.062,
+        tagNo: tags,
+      }],
+    };
+    vi.mocked(api.fetchChangeOrder).mockResolvedValueOnce({ changeOrder: summaryDetails });
+    // jsdom has no layout. Simulate a tag list exceeding the three-line preview.
+    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.textContent === tags ? 200 : 0;
+      });
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(60);
+    onTestFinished(() => { scrollHeight.mockRestore(); clientHeight.mockRestore(); });
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+    await openExistingOrder();
+    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    const summary = screen.getByRole('table', { name: 'Change Order material summary' });
+    const row = within(summary).getByRole('cell', { name: 'Widget support' }).closest('tr')!;
+    const cells = within(row).getAllByRole('cell');
+    expect(cells[1]).toHaveTextContent(/^1\.6$/);
+    expect(cells[2]).toHaveTextContent(/^2$/);
+    expect(cells[3]).toHaveTextContent(/^0\.4$/);
+    expect(cells[13]).toHaveTextContent(/^0\.062$/);
+    const expand = within(row).getByRole('button', { name: 'Show all Pos./TAG-No for item 1' });
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(expand);
+    const collapse = within(row).getByRole('button', { name: 'Collapse Pos./TAG-No for item 1' });
+    expect(collapse).toHaveAttribute('aria-expanded', 'true');
+    expect(cells[18]).toHaveTextContent(tags);
+    fireEvent.click(collapse);
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+    expect(summaryDetails.items[0].designQuantity).toBe(1.5999999999999999);
+    expect(api.previewChangeOrderMaterials).not.toHaveBeenCalled();
+    expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+  });
+
+  it('preserves the material draft across views and returns to detailed view for editing', async () => {
+    const api = await import('@/api/client');
+    const changed: ChangeOrderDetails = {
+      ...details,
+      totalPrice: 80,
+      items: [{
+        ...details.items[0],
+        orderQuantity: 20,
+        spareQuantity: 8,
+        packagingQuantity: 1,
+        orderedQuantity: 20,
+        totalPrice: 80,
+      }],
+    };
+    vi.mocked(api.previewChangeOrderMaterials).mockResolvedValueOnce({ changeOrder: changed });
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} />
+        </ToastProvider>
+      </FluentProvider>,
+    );
+    await openExistingOrder();
+    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    unlockMaterials();
+    expect(screen.getByRole('button', { name: 'Detailed view' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
+    fireEvent.change(screen.getByLabelText('Order Qty'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save item' }))
+      .not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    const summary = screen.getByRole('table', { name: 'Change Order material summary' });
+    const row = within(summary).getByRole('cell', { name: 'Widget support' }).closest('tr')!;
+    expect(within(row).getAllByRole('cell')[2]).toHaveTextContent('20');
+    expect(within(summary).getByText('TOTAL:').closest('tr')).toHaveTextContent('80.00');
+    expect(screen.getByRole('button', { name: 'Save materials' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Detailed view' }));
+    const detailedRow = screen.getByRole('button', { name: 'Edit item 1' }).closest('tr')!;
+    expect(within(detailedRow).getAllByRole('cell')[3]).toHaveTextContent('20');
+    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
+    expect(screen.getByRole('button', { name: 'Detailed view' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const materialDialog = screen.getByRole('dialog');
+    expect(await within(materialDialog).findByText('No matching materials found.'))
+      .toBeInTheDocument();
+    fireEvent.click(within(materialDialog).getByRole('button', { name: 'Close' }));
+    expect(api.previewChangeOrderMaterials).toHaveBeenCalledOnce();
+    expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+    expect(api.updateChangeOrderItem).not.toHaveBeenCalled();
+  });
 
   it.each(['change-orders', 'internal-ncrs'] as const)(
     'locks materials in %s and saves a revision with author and history only on Save materials',

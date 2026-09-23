@@ -28,7 +28,7 @@ COPY --from=build ["/app/Template files", "./Template files"]
 USER node
 EXPOSE 4000
 
-CMD ["node", "server/dist/index.js"]
+CMD ["node", "server/dist/server/index.js"]
 
 FROM nginx:alpine AS web-runtime
 
