@@ -873,7 +873,7 @@ export const ChangeOrdersTab = ({
                     checked={materialView === 'compact'}
                     onClick={() => setMaterialView('compact')}
                   >
-                    Compact view
+                    Export view
                   </ToggleButton>
                 </div>
               ) : null}

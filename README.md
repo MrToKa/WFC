@@ -107,7 +107,7 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
   - Administrators can manage all project data; Engineers can manage assigned projects. Administrators, Engineers, and Technicians can export their accessible project tables.
 - **Tray management** – CRUD, import, and export flows similar to the cable lists.
 - **Change Orders and Internal NCRs** – Materials open in **Detailed view**. Switch to
-  **Compact view** for the Excel summary: matching materials, including inherited Standard
+  **Export view** for the Excel summary: matching materials, including inherited Standard
   Materials, are grouped with combined quantities, recalculated packages, and a total price.
   Switch back to Detailed view to edit individual rows; switching preserves unsaved changes.
 - **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files

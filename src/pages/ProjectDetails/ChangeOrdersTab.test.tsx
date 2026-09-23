@@ -199,11 +199,11 @@ describe('ChangeOrdersTab', () => {
       );
       expect(screen.getByRole('textbox', { name: 'Title' })).toBeDisabled();
       const documentName = collection === 'internal-ncrs' ? 'Internal NCR' : 'Change Order';
-      fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
       expect(
         screen.getByRole('table', { name: `${documentName} material summary` }),
       ).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Compact view' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: 'Export view' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
@@ -312,10 +312,10 @@ describe('ChangeOrdersTab', () => {
       );
       expect(within(detailedTable).getAllByText('Cable cleat')).toHaveLength(1);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
       const summary = screen.getByRole('table', { name: `${documentName} material summary` });
       expect(screen.queryByRole('table', { name: `${documentName} items` })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Compact view' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: 'Export view' })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
@@ -351,7 +351,7 @@ describe('ChangeOrdersTab', () => {
       const expandedTable = screen.getByRole('table', { name: `${documentName} items` });
       expect(within(expandedTable).getAllByText('Cable cleat')).toHaveLength(3);
       expect(within(expandedTable).getAllByRole('cell', { name: '400.00' })).toHaveLength(3);
-      fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
       fireEvent.click(screen.getByRole('button', { name: 'Detailed view' }));
       expect(screen.getByRole('button', {
         name: 'Collapse inherited standard materials for item 1',
@@ -400,7 +400,7 @@ describe('ChangeOrdersTab', () => {
       </FluentProvider>,
     );
     await openExistingOrder();
-    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
     const summary = screen.getByRole('table', { name: 'Change Order material summary' });
     const row = within(summary).getByRole('cell', { name: 'Widget support' }).closest('tr')!;
     const cells = within(row).getAllByRole('cell');
@@ -444,7 +444,7 @@ describe('ChangeOrdersTab', () => {
       </FluentProvider>,
     );
     await openExistingOrder();
-    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
     unlockMaterials();
     expect(screen.getByRole('button', { name: 'Detailed view' })).toHaveAttribute(
       'aria-pressed',
@@ -455,7 +455,7 @@ describe('ChangeOrdersTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Save item' }))
       .not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
     const summary = screen.getByRole('table', { name: 'Change Order material summary' });
     const row = within(summary).getByRole('cell', { name: 'Widget support' }).closest('tr')!;
     expect(within(row).getAllByRole('cell')[2]).toHaveTextContent('20');
@@ -464,7 +464,7 @@ describe('ChangeOrdersTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Detailed view' }));
     const detailedRow = screen.getByRole('button', { name: 'Edit item 1' }).closest('tr')!;
     expect(within(detailedRow).getAllByRole('cell')[3]).toHaveTextContent('20');
-    fireEvent.click(screen.getByRole('button', { name: 'Compact view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add material' }));
     expect(screen.getByRole('button', { name: 'Detailed view' })).toHaveAttribute(
       'aria-pressed',
