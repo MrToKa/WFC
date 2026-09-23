@@ -70,6 +70,7 @@ export const StandardMaterialsSection = ({
           <Table aria-label="Standard Materials">
             <TableHeader>
               <TableRow>
+                <TableHeaderCell>Type</TableHeaderCell>
                 <TableHeaderCell>Material</TableHeaderCell>
                 <TableHeaderCell>Quantity</TableHeaderCell>
                 <TableHeaderCell>Unit</TableHeaderCell>
@@ -81,6 +82,7 @@ export const StandardMaterialsSection = ({
               {items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.referencedMaterial.type}</TableCell>
+                  <TableCell>{item.referencedMaterial.material ?? '—'}</TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{item.unit}</TableCell>
                   <TableCell>{item.remarks ?? '—'}</TableCell>
