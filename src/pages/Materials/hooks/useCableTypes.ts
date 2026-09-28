@@ -405,13 +405,13 @@ export const useCableTypes = ({
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete cable types.',
+          body: 'You need to be signed in as an admin to mark obsolete: cable types.',
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete cable type "${cableType.name}"? This action cannot be undone.`,
+        `Mark obsolete: cable type "${cableType.name}"? It will leave the active catalog. Existing references and history will be preserved.`,
       );
 
       if (!confirmed) {
@@ -430,12 +430,12 @@ export const useCableTypes = ({
           }
           return next;
         });
-        showToast({ intent: 'success', title: 'Cable type deleted' });
+        showToast({ intent: 'success', title: 'Cable type marked obsolete' });
       } catch (err) {
         console.error('Delete material cable type failed', err);
         showToast({
           intent: 'error',
-          title: 'Failed to delete cable type',
+          title: 'Failed to mark obsolete: cable type',
           body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {

@@ -177,7 +177,9 @@ const invokeImport = async (
       }
       if (
         sql.includes(`FROM ${catalog.table}`) &&
-        (sql.includes('WHERE lower(') || sql.includes('WHERE LOWER('))
+        (sql.includes('WHERE lower(') ||
+          sql.includes('WHERE LOWER(') ||
+          sql.includes('BTRIM(manufacturer)'))
       ) {
         return {
           rowCount: existing ? 1 : 0,
@@ -194,7 +196,7 @@ const invokeImport = async (
   const { response, json, status } = responseStub();
   const request = {
     file: {
-      buffer: workbookBuffer(row),
+      buffer: workbookBuffer({ Manufacturer: 'ABB', 'Part No.': 'A1', ...row }),
       originalname: 'legacy-materials.xlsx',
     },
   } as unknown as Request;
@@ -240,20 +242,23 @@ describe('material catalog import prices', () => {
 describe('material catalog import connection failures', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it.each(catalogCases)('returns a JSON error for $name when a connection fails', async (catalog) => {
-    vi.clearAllMocks();
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    databaseMocks.pool.query.mockResolvedValue({ rowCount: 0, rows: [] });
-    databaseMocks.pool.connect.mockRejectedValue(new Error('Database unavailable'));
-    const { response, status, json } = responseStub();
-    const request = {
-      file: { buffer: workbookBuffer(catalog.row), originalname: 'materials.xlsx' },
-    } as unknown as Request;
+  it.each(catalogCases)(
+    'returns a JSON error for $name when a connection fails',
+    async (catalog) => {
+      vi.clearAllMocks();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      databaseMocks.pool.query.mockResolvedValue({ rowCount: 0, rows: [] });
+      databaseMocks.pool.connect.mockRejectedValue(new Error('Database unavailable'));
+      const { response, status, json } = responseStub();
+      const request = {
+        file: { buffer: workbookBuffer(catalog.row), originalname: 'materials.xlsx' },
+      } as unknown as Request;
 
-    await findImportHandler(catalog.router, catalog.path)(request, response);
+      await findImportHandler(catalog.router, catalog.path)(request, response);
 
-    expect(databaseMocks.pool.connect).toHaveBeenCalledOnce();
-    expect(status).toHaveBeenCalledWith(500);
-    expect(json).toHaveBeenCalledWith({ error: expect.any(String) });
-  });
+      expect(databaseMocks.pool.connect).toHaveBeenCalledOnce();
+      expect(status).toHaveBeenCalledWith(500);
+      expect(json).toHaveBeenCalledWith({ error: expect.any(String) });
+    },
+  );
 });

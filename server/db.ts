@@ -1,8 +1,8 @@
+import { initializeMaterialIdentity } from './services/materialIdentitySchema.js';
 import { initializeMaterialChangeLog } from './services/materialChangeLogSchema.js';
 import { Pool } from 'pg';
 import { config } from './config.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
-
 export const pool = new Pool({
   connectionString: config.databaseUrl,
 });
@@ -327,11 +327,6 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS material_cable_types_name_lower_idx
-      ON material_cable_types (LOWER(name));
-  `);
-
-  await pool.query(`
     UPDATE cable_types AS ct
     SET
       material = COALESCE(ct.material, m.material),
@@ -341,7 +336,13 @@ export async function initializeDatabase(): Promise<void> {
       remarks = COALESCE(ct.remarks, m.remarks)
     FROM material_cable_types AS m
     WHERE regexp_replace(lower(trim(ct.name)), '\\s+', ' ', 'g') =
-        regexp_replace(lower(trim(m.name)), '\\s+', ' ', 'g');
+        regexp_replace(lower(trim(m.name)), '\\s+', ' ', 'g')
+      AND NOT EXISTS (
+        SELECT 1 FROM material_cable_types other
+        WHERE other.id <> m.id
+          AND regexp_replace(lower(trim(other.name)), '\\s+', ' ', 'g') =
+              regexp_replace(lower(trim(m.name)), '\\s+', ' ', 'g')
+      );
   `);
 
   await pool.query(`
@@ -397,11 +398,6 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS material_cable_installation_materials_type_lower_idx
-      ON material_cable_installation_materials (LOWER(type));
-  `);
-
-  await pool.query(`
     CREATE TABLE IF NOT EXISTS material_tray_installation_materials (
       id UUID PRIMARY KEY,
       type TEXT NOT NULL,
@@ -426,11 +422,6 @@ export async function initializeDatabase(): Promise<void> {
       CONSTRAINT material_tray_installation_materials_packaging_check
         CHECK (packaging IN ('m', 'Package', 'Box', 'Drum', 'pcs'))
     );
-  `);
-
-  await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS material_tray_installation_materials_type_lower_idx
-      ON material_tray_installation_materials (LOWER(type));
   `);
 
   // These catalogs have the same fields as Tray Installation Materials, with
@@ -459,7 +450,6 @@ export async function initializeDatabase(): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
-      CREATE UNIQUE INDEX IF NOT EXISTS ${table}_type_lower_idx ON ${table} (LOWER(type));
     `);
   }
 
@@ -2287,6 +2277,7 @@ export async function initializeDatabase(): Promise<void> {
         END
       );
   `);
+  await initializeMaterialIdentity(pool);
   await initializeMaterialChangeLog(pool);
 }
 

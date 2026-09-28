@@ -64,6 +64,7 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
   onDetails?: (cableType: T) => void;
   onEdit: (cableType: T) => void;
   onDelete: (cableType: T) => void;
+  deleteActionLabel?: string;
   formatNumeric: (value: number | null) => string;
   showPagination: boolean;
   page: number;
@@ -108,6 +109,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
   onDetails,
   onEdit,
   onDelete,
+  deleteActionLabel = 'Delete',
   formatNumeric,
   showPagination,
   page,
@@ -313,7 +315,7 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
                                   onClick={() => onDelete(cableType)}
                                   disabled={isBusy}
                                 >
-                                  Delete
+                                  {deleteActionLabel}
                                 </Button>
                               </>
                             ) : null}

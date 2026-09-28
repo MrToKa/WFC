@@ -576,13 +576,13 @@ const useInstallationMaterials = ({
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: `You need to be signed in as an admin to delete ${catalog.pluralLabel}.`,
+          body: `You need to be signed in as an admin to mark obsolete: ${catalog.pluralLabel}.`,
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete ${catalog.singularLabel} "${item.type}"? This action cannot be undone.`,
+        `Mark obsolete: ${catalog.singularLabel} "${item.type}"? It will leave the active catalog. Existing references and history will be preserved.`,
       );
 
       if (!confirmed) {
@@ -601,12 +601,12 @@ const useInstallationMaterials = ({
           }
           return next;
         });
-        showToast({ intent: 'success', title: `${catalog.singularTitle} deleted` });
+        showToast({ intent: 'success', title: `${catalog.singularTitle} marked obsolete` });
       } catch (err) {
         console.error(`Delete ${catalog.singularLabel} failed`, err);
         showToast({
           intent: 'error',
-          title: `Failed to delete ${catalog.singularLabel}`,
+          title: `Failed to mark obsolete: ${catalog.singularLabel}`,
           body: err instanceof ApiError ? err.message : undefined,
         });
       } finally {

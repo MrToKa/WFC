@@ -265,7 +265,7 @@ export const CableInstallationMaterialsTab = ({
                                 onClick={() => onDelete(item)}
                                 disabled={isBusy}
                               >
-                                Delete
+                                Mark obsolete
                               </Button>
                             </>
                           ) : null}

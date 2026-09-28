@@ -1,5 +1,10 @@
 import type { WorkSheet } from 'xlsx';
-import { validateExcelImport, type ExcelImportColumn } from './excelImport.js';
+import {
+  getExcelRowNumber,
+  readExcelImportRows,
+  validateExcelImport,
+  type ExcelImportColumn,
+} from './excelImport.js';
 
 /** Catalog imports use the same limits and enum values as manual material editing. */
 export const validateMaterialExcelImport = (
@@ -8,8 +13,8 @@ export const validateMaterialExcelImport = (
   kind: 'cable-type' | 'installation-material',
 ) => {
   const rules: Record<string, Omit<ExcelImportColumn, 'headers'>> = {
-    name: { required: true, unique: true, maxLength: 200 },
-    type: { required: true, unique: true, maxLength: 200 },
+    name: { required: true, maxLength: 200 },
+    type: { required: true, maxLength: 200 },
     purpose: { maxLength: kind === 'cable-type' ? 500 : 2000 },
     diameter: { type: 'number', min: 0, max: 1_000_000 },
     weight: { type: 'number', min: 0, max: 1_000_000 },
@@ -21,7 +26,7 @@ export const validateMaterialExcelImport = (
     dimensionMm: { maxLength: 500 },
     source: { maxLength: 2000, httpUrl: true },
   };
-  return validateExcelImport(
+  const issues = validateExcelImport(
     worksheet,
     Object.entries(aliases).map(([key, headers]) => ({
       headers,
@@ -29,4 +34,31 @@ export const validateMaterialExcelImport = (
       ...rules[key],
     })),
   );
+  const seen = new Map<string, number>();
+  for (const [index, row] of readExcelImportRows(worksheet, []).entries()) {
+    const readIdentity = (headers: readonly string[]) => {
+      const header = headers.find((candidate) => candidate in row);
+      return header
+        ? String(row[header] ?? '')
+            .trim()
+            .toLowerCase()
+        : '';
+    };
+    const manufacturer = readIdentity(aliases.manufacturer);
+    const partNo = readIdentity(aliases.partNo);
+    if (!manufacturer || !partNo) continue;
+    const key = JSON.stringify([manufacturer, partNo]);
+    const rowNumber = getExcelRowNumber(row, index);
+    const previous = seen.get(key);
+    if (previous !== undefined) {
+      issues.push({
+        row: rowNumber,
+        column: 'Manufacturer + Part No.',
+        message: `Duplicate Manufacturer + Part No.; it already appears on row ${previous}.`,
+      });
+    } else {
+      seen.set(key, rowNumber);
+    }
+  }
+  return issues;
 };

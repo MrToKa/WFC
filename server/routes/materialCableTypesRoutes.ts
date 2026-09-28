@@ -1,3 +1,10 @@
+import {
+  materialIdentityPredicate,
+  materialIdentityConflict,
+  isMaterialIdentityConflict,
+  isMaterialDeletionBlocked,
+  materialDeletionBlockedMessage,
+} from '../utils/materialIdentity.js';
 import { registerMaterialExportRoutes, filterMaterialExportRows } from '../utils/materialExcelExport.js';
 import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
 import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
@@ -16,7 +23,6 @@ import { authenticate, requireAdmin } from '../middleware.js';
 import { listStandardMaterialAssignments } from '../services/standardMaterialService.js';
 import { createMaterialCableTypeSchema, updateMaterialCableTypeSchema } from '../validators.js';
 import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
-
 
 const MATERIAL_CABLE_EXCEL_HEADERS = {
   name: 'Type',
@@ -88,7 +94,7 @@ materialCableTypesRouter.get('/', async (_req: Request, res: Response): Promise<
     const result = await pool.query<MaterialCableTypeRow>(
       `
           ${selectMaterialCableTypesQuery}
-          ORDER BY name ASC;
+          WHERE obsolete_at IS NULL ORDER BY name ASC;
         `,
     );
 
@@ -129,23 +135,6 @@ materialCableTypesRouter.post(
     } = parseResult.data;
 
     try {
-      const duplicateResult = await pool.query<{ id: string }>(
-        `
-          SELECT id
-          FROM material_cable_types
-          WHERE lower(name) = lower($1)
-          LIMIT 1;
-        `,
-        [name],
-      );
-
-      if ((duplicateResult.rowCount ?? 0) > 0) {
-        res.status(409).json({
-          error: 'A material cable type with this name already exists',
-        });
-        return;
-      }
-
       const result = await pool.query<MaterialCableTypeRow>(
         `
           INSERT INTO material_cable_types (
@@ -206,6 +195,10 @@ materialCableTypesRouter.post(
 
       res.status(201).json({ cableType: mapMaterialCableTypeRow(result.rows[0]) });
     } catch (error) {
+      if (isMaterialIdentityConflict(error)) {
+        res.status(409).json({ error: materialIdentityConflict });
+        return;
+      }
       console.error('Create material cable type error', error);
       res.status(500).json({ error: 'Failed to create cable type' });
     }
@@ -253,30 +246,6 @@ materialCableTypesRouter.patch(
     let index = 1;
 
     if (name !== undefined) {
-      try {
-        const duplicateResult = await pool.query<{ id: string }>(
-          `
-            SELECT id
-            FROM material_cable_types
-            WHERE lower(name) = lower($1)
-              AND id <> $2
-            LIMIT 1;
-          `,
-          [name, cableTypeId],
-        );
-
-        if ((duplicateResult.rowCount ?? 0) > 0) {
-          res.status(409).json({
-            error: 'A material cable type with this name already exists',
-          });
-          return;
-        }
-      } catch (error) {
-        console.error('Duplicate material cable type check error', error);
-        res.status(500).json({ error: 'Failed to update cable type' });
-        return;
-      }
-
       updates.push(`name = $${index++}`);
       values.push(name.trim());
     }
@@ -385,6 +354,10 @@ materialCableTypesRouter.patch(
 
       res.json({ cableType: mapMaterialCableTypeRow(cableType) });
     } catch (error) {
+      if (isMaterialIdentityConflict(error)) {
+        res.status(409).json({ error: materialIdentityConflict });
+        return;
+      }
       console.error('Update material cable type error', error);
       res.status(500).json({ error: 'Failed to update cable type' });
     }
@@ -406,8 +379,10 @@ materialCableTypesRouter.delete(
     try {
       const result = await pool.query(
         `
-          DELETE FROM material_cable_types
-          WHERE id = $1;
+          UPDATE material_cable_types SET obsolete_at = NOW(),
+          obsolete_by = NULLIF(current_setting('wfc.material_actor', true), '')::uuid,
+          updated_at = NOW()
+          WHERE id = $1 AND obsolete_at IS NULL;
         `,
         [cableTypeId],
       );
@@ -419,8 +394,12 @@ materialCableTypesRouter.delete(
 
       res.status(204).send();
     } catch (error) {
-      console.error('Delete material cable type error', error);
-      res.status(500).json({ error: 'Failed to delete cable type' });
+      console.error('Mark obsolete material cable type error', error);
+      if (isMaterialDeletionBlocked(error)) {
+        res.status(409).json({ error: materialDeletionBlockedMessage });
+        return;
+      }
+      res.status(500).json({ error: 'Failed to mark obsolete: cable type' });
     }
   },
 );
@@ -476,7 +455,6 @@ materialCableTypesRouter.post(
     };
 
     const prepared: Array<{
-      key: string;
       name: string;
       purpose: string | null;
       material: string | null;
@@ -491,8 +469,6 @@ materialCableTypesRouter.post(
       orderMeasurement: 'pcs' | 'pack' | 'meters';
       packaging: 'm' | 'Package' | 'Box' | 'Drum' | 'pcs';
     }> = [];
-
-    const seenKeys = new Set<string>();
 
     const readNumeric = (raw: unknown): number | null => {
       if (raw === undefined || raw === null) {
@@ -536,17 +512,7 @@ materialCableTypesRouter.post(
         continue;
       }
 
-      const key = name.toLowerCase();
-
-      if (seenKeys.has(key)) {
-        summary.skipped += 1;
-        continue;
-      }
-
-      seenKeys.add(key);
-
       prepared.push({
-        key,
         name,
         purpose: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.purpose)),
         material: readString(readCell(row, MATERIAL_CABLE_EXCEL_HEADER_ALIASES.material)),
@@ -592,7 +558,7 @@ materialCableTypesRouter.post(
         const existing = await pool.query<MaterialCableTypeRow>(
           `
             ${selectMaterialCableTypesQuery}
-            ORDER BY name ASC;
+            WHERE obsolete_at IS NULL ORDER BY name ASC;
           `,
         );
 
@@ -616,22 +582,15 @@ materialCableTypesRouter.post(
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const existingResult = await client.query<MaterialCableTypeRow>(
-        `
-          ${selectMaterialCableTypesQuery}
-          WHERE lower(name) = ANY($1::text[]);
-        `,
-        [prepared.map((row) => row.key)],
-      );
-
-      const existingMap = new Map<string, MaterialCableTypeRow>();
-
-      for (const existing of existingResult.rows) {
-        existingMap.set(existing.name.toLowerCase(), existing);
-      }
-
       for (const row of prepared) {
-        const existing = existingMap.get(row.key);
+        const existingResult = await client.query<MaterialCableTypeRow>(
+          `SELECT id FROM material_cable_types WHERE ${materialIdentityPredicate} LIMIT 2`,
+          [row.manufacturer, row.partNo],
+        );
+        if (existingResult.rows.length > 1) {
+          throw Object.assign(new Error('Correct the existing duplicate product identities before importing.'), { code: '23505' });
+        }
+        const existing = existingResult.rows[0];
 
         if (existing) {
           await client.query(
@@ -650,6 +609,7 @@ materialCableTypesRouter.post(
                 minimum_order_quantity = $10,
                 order_measurement = $11,
                 packaging = $12,
+                name = $14,
                 updated_at = NOW()
               WHERE id = $13;
             `,
@@ -667,6 +627,7 @@ materialCableTypesRouter.post(
               row.orderMeasurement,
               row.packaging,
               existing.id,
+              row.name,
             ],
           );
           summary.updated += 1;
@@ -715,6 +676,12 @@ materialCableTypesRouter.post(
       await client.query('COMMIT');
     } catch (error) {
       await client?.query('ROLLBACK').catch(() => undefined);
+      if (isMaterialIdentityConflict(error)) {
+        res.status(409).json({
+          error: materialIdentityConflict + '. Import cancelled. No data was changed.',
+        });
+        return;
+      }
       console.error('Import material cable types error', error);
       res.status(500).json({ error: 'Failed to import cable types' });
       return;
@@ -726,7 +693,7 @@ materialCableTypesRouter.post(
       const refreshed = await pool.query<MaterialCableTypeRow>(
         `
           ${selectMaterialCableTypesQuery}
-          ORDER BY name ASC;
+          WHERE obsolete_at IS NULL ORDER BY name ASC;
         `,
       );
 
@@ -838,7 +805,7 @@ registerMaterialExportRoutes(
       const result = await pool.query<MaterialCableTypeRow>(
         `
           ${selectMaterialCableTypesQuery}
-          ORDER BY name ASC;
+          WHERE obsolete_at IS NULL ORDER BY name ASC;
         `,
       );
 

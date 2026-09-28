@@ -110,18 +110,108 @@ describe.each(catalogs)('$name Excel validation', ({ router, weight }) => {
   it('reports actual Excel row numbers after blank rows and case-insensitive duplicates', async () => {
     const response = await invoke(
       router,
-      XLSX.utils.aoa_to_sheet([['Type', 'Price'], ['Material', 1], [], [' material ', 2], ['', 3]]),
+      XLSX.utils.aoa_to_sheet([
+        ['Type', 'Price', 'Manufacturer', 'Part No.'],
+        ['Material', 1, 'ABB', 'A1'],
+        [],
+        ['Other type', 2, ' abb ', 'a1'],
+        ['', 3],
+      ]),
     );
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.json).toHaveBeenCalledWith(
       expect.objectContaining({
         issues: expect.arrayContaining([
-          { row: 4, column: 'Type', message: expect.stringContaining('row 2') },
+          { row: 4, column: 'Manufacturer + Part No.', message: expect.stringContaining('row 2') },
           { row: 5, column: 'Type', message: 'A value is required.' },
         ]),
       }),
     );
     expect(databaseMocks.pool.connect).not.toHaveBeenCalled();
+  });
+
+  it('imports repeated Types, distinct part numbers, and the same part number from different manufacturers', async () => {
+    const response = await invoke(
+      router,
+      XLSX.utils.json_to_sheet([
+        { Type: 'Sensor', Manufacturer: 'ABB', 'Part No.': 'A1' },
+        { Type: 'Sensor', Manufacturer: 'ABB', 'Part No.': 'A2' },
+        { Type: 'Sensor', Manufacturer: 'Other', 'Part No.': 'A1' },
+      ]),
+    );
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: { inserted: 3, updated: 0, skipped: 0 },
+      }),
+    );
+    const client = await databaseMocks.pool.connect.mock.results[0].value;
+    const inserts = client.query.mock.calls.filter(([sql]: [string]) =>
+      sql.includes('INSERT INTO'),
+    );
+    expect(inserts).toHaveLength(3);
+  });
+
+  it('updates by product identity and also updates its Type', async () => {
+    const query = vi
+      .fn<
+        (sql: string, values?: unknown[]) => Promise<{ rows: { id: string }[]; rowCount: number }>
+      >()
+      .mockImplementation(async (sql) => ({
+        rows: sql.includes('SELECT id FROM') ? [{ id: 'existing-product' }] : [],
+        rowCount: 1,
+      }));
+    databaseMocks.pool.connect.mockResolvedValue({ query, release: vi.fn() });
+    const response = await invoke(
+      router,
+      XLSX.utils.json_to_sheet([{ Type: 'Renamed sensor', Manufacturer: 'ABB', 'Part No.': 'A1' }]),
+    );
+    expect(response.status).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('BTRIM(manufacturer)'), [
+      'ABB',
+      'A1',
+    ]);
+    const update = query.mock.calls.find(([sql]) => sql.includes('UPDATE '));
+    expect(update?.[0]).toMatch(/(?:type|name) = \$14/);
+    expect(update?.[1]).toEqual(expect.arrayContaining(['existing-product', 'Renamed sensor']));
+    expect(response.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        summary: { inserted: 0, updated: 1, skipped: 0 },
+      }),
+    );
+  });
+
+  it('rolls back the whole import on a database uniqueness conflict', async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes('INSERT INTO')) throw { code: '23505' };
+      return { rows: [], rowCount: 0 };
+    });
+    databaseMocks.pool.connect.mockResolvedValue({ query, release: vi.fn() });
+    const response = await invoke(
+      router,
+      XLSX.utils.json_to_sheet([{ Type: 'Sensor', Manufacturer: 'ABB', 'Part No.': 'A1' }]),
+    );
+    expect(response.status).toHaveBeenCalledWith(409);
+    expect(response.json).toHaveBeenCalledWith({
+      error: expect.stringContaining('Manufacturer + Part No.'),
+    });
+    expect(query).toHaveBeenCalledWith('ROLLBACK');
+    expect(query).not.toHaveBeenCalledWith('COMMIT');
+  });
+
+  it('does not choose an arbitrary record when legacy product identities are duplicated', async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => ({
+      rows: sql.includes('SELECT id FROM') ? [{ id: 'first' }, { id: 'second' }] : [],
+      rowCount: 2,
+    }));
+    databaseMocks.pool.connect.mockResolvedValue({ query, release: vi.fn() });
+    const response = await invoke(
+      router,
+      XLSX.utils.json_to_sheet([{ Type: 'Sensor', Manufacturer: 'ABB', 'Part No.': 'A1' }]),
+    );
+    expect(response.status).toHaveBeenCalledWith(409);
+    expect(query.mock.calls.some(([sql]) => /INSERT INTO|UPDATE /.test(sql))).toBe(false);
+    expect(query).toHaveBeenCalledWith('ROLLBACK');
   });
 
   it.each([

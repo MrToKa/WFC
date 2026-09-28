@@ -133,7 +133,7 @@ describe.each(catalogs)('$category catalog', (catalog) => {
     });
   });
 
-  it('rejects invalid input and reports duplicate types as conflicts', async () => {
+  it('rejects invalid input and reports duplicate product identities as conflicts', async () => {
     const invalid = await invoke(catalog.router, 'post', '/', {
       body: { type: '', unitPrice: -1 },
     });
@@ -165,10 +165,13 @@ describe.each(catalogs)('$category catalog', (catalog) => {
     });
   });
 
-  it('deletes catalog entries and reports referenced materials as conflicts', async () => {
+  it('marks catalog entries obsolete without physically deleting them', async () => {
     const input = { params: { [catalog.idParam]: id } };
     const response = await invoke(catalog.router, 'delete', `/:${catalog.idParam}`, input);
-    expect(database.query).toHaveBeenCalledWith(`DELETE FROM ${catalog.table} WHERE id = $1`, [id]);
+    expect(database.query).toHaveBeenCalledWith(
+      expect.stringContaining(`UPDATE ${catalog.table} SET obsolete_at = NOW()`),
+      [id],
+    );
     expect(response.status).toHaveBeenCalledWith(204);
     database.query.mockRejectedValueOnce({ code: '23503' });
     const conflict = await invoke(catalog.router, 'delete', `/:${catalog.idParam}`, input);

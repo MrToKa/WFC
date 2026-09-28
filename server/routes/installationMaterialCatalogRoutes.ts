@@ -1,3 +1,10 @@
+import {
+  materialIdentityPredicate,
+  materialIdentityConflict,
+  isMaterialIdentityConflict,
+  isMaterialDeletionBlocked,
+  materialDeletionBlockedMessage,
+} from '../utils/materialIdentity.js';
 import { registerMaterialExportRoutes, filterMaterialExportRows } from '../utils/materialExcelExport.js';
 import { excelImportError, readExcelImportRows } from '../utils/excelImport.js';
 import { validateMaterialExcelImport } from '../utils/materialExcelImport.js';
@@ -22,7 +29,6 @@ import {
   updateMaterialTrayInstallationMaterialSchema,
 } from '../validators.js';
 import { registerStandardMaterialMutationRoutes } from './standardMaterialRoutes.js';
-
 
 const EXCEL_HEADERS = {
   type: 'Type',
@@ -193,7 +199,7 @@ export const createInstallationMaterialCatalogRouter = (
   router.get('/', async (_req: Request, res: Response): Promise<void> => {
     try {
       const result = await pool.query<MaterialTrayInstallationMaterialRow>(
-        `${selectMaterialsQuery} ORDER BY type ASC`,
+        `${selectMaterialsQuery} WHERE obsolete_at IS NULL ORDER BY type ASC`,
       );
       res.json({
         [config.collectionKey]: result.rows.map(mapMaterialTrayInstallationMaterialRow),
@@ -247,7 +253,7 @@ export const createInstallationMaterialCatalogRouter = (
       } catch (error) {
         if (isPostgresError(error, '23505')) {
           res.status(409).json({
-            error: `A material ${config.label.toLowerCase()} with this type already exists`,
+            error: materialIdentityConflict,
           });
           return;
         }
@@ -327,7 +333,7 @@ export const createInstallationMaterialCatalogRouter = (
       } catch (error) {
         if (isPostgresError(error, '23505')) {
           res.status(409).json({
-            error: `A material ${config.label.toLowerCase()} with this type already exists`,
+            error: materialIdentityConflict,
           });
           return;
         }
@@ -349,7 +355,10 @@ export const createInstallationMaterialCatalogRouter = (
       }
 
       try {
-        const result = await pool.query(`DELETE FROM ${config.table} WHERE id = $1`, [materialId]);
+        const result = await pool.query(`UPDATE ${config.table} SET obsolete_at = NOW(),
+          obsolete_by = NULLIF(current_setting('wfc.material_actor', true), '')::uuid,
+          updated_at = NOW()
+          WHERE id = $1 AND obsolete_at IS NULL`, [materialId]);
         if (result.rowCount === 0) {
           res.status(404).json({ error: `${config.label} not found` });
           return;
@@ -362,15 +371,18 @@ export const createInstallationMaterialCatalogRouter = (
           });
           return;
         }
-        console.error(`Delete material ${config.label.toLowerCase()} error`, error);
-        res.status(500).json({ error: `Failed to delete ${config.label.toLowerCase()}` });
+        console.error(`Mark obsolete material ${config.label.toLowerCase()} error`, error);
+        if (isMaterialDeletionBlocked(error)) {
+          res.status(409).json({ error: materialDeletionBlockedMessage });
+          return;
+        }
+        res.status(500).json({ error: `Failed to mark obsolete: ${config.label.toLowerCase()}` });
       }
     },
   );
 
   type ImportRow = Record<string, unknown>;
   type PreparedImportRow = {
-    key: string;
     type: string;
     purpose: string | null;
     material: string | null;
@@ -419,18 +431,15 @@ export const createInstallationMaterialCatalogRouter = (
     skipped: number;
   } => {
     const prepared: PreparedImportRow[] = [];
-    const seenKeys = new Set<string>();
     let skipped = 0;
 
     for (const row of rows) {
       const rawType = readCell(row, EXCEL_HEADER_ALIASES.type);
       const type = String(rawType ?? '').trim();
-      const key = type.toLowerCase();
-      if (!type || seenKeys.has(key)) {
+      if (!type) {
         skipped += 1;
         continue;
       }
-      seenKeys.add(key);
 
       const rawOrderMeasurement = readString(readCell(row, EXCEL_HEADER_ALIASES.orderMeasurement));
       const orderMeasurement =
@@ -450,7 +459,6 @@ export const createInstallationMaterialCatalogRouter = (
           : 'pcs';
 
       prepared.push({
-        key,
         type,
         purpose: readString(readCell(row, EXCEL_HEADER_ALIASES.purpose)),
         material: readString(readCell(row, EXCEL_HEADER_ALIASES.material)),
@@ -514,9 +522,12 @@ export const createInstallationMaterialCatalogRouter = (
         await client.query('BEGIN');
         for (const row of prepared) {
           const existing = await client.query<{ id: string }>(
-            `SELECT id FROM ${config.table} WHERE lower(type) = $1 LIMIT 1`,
-            [row.key],
+            `SELECT id FROM ${config.table} WHERE ${materialIdentityPredicate} LIMIT 2`,
+            [row.manufacturer, row.partNo],
           );
+          if (existing.rows.length > 1) {
+            throw Object.assign(new Error('Correct the existing duplicate product identities before importing.'), { code: '23505' });
+          }
           const existingId = existing.rows[0]?.id;
           if (existingId) {
             await client.query(
@@ -525,7 +536,7 @@ export const createInstallationMaterialCatalogRouter = (
                  part_no = $5, dimension_mm = $6, weight_kg = $7,
                  unit_price = COALESCE($8, unit_price),
                  minimum_order_quantity = $9, order_measurement = $10,
-                 packaging = $11, source = $12, updated_at = NOW()
+                 packaging = $11, source = $12, type = $14, updated_at = NOW()
              WHERE id = $13`,
               [
                 row.purpose,
@@ -541,6 +552,7 @@ export const createInstallationMaterialCatalogRouter = (
                 row.packaging,
                 row.source,
                 existingId,
+                row.type,
               ],
             );
             summary.updated += 1;
@@ -574,6 +586,12 @@ export const createInstallationMaterialCatalogRouter = (
         await client.query('COMMIT');
       } catch (error) {
         await client?.query('ROLLBACK').catch(() => undefined);
+        if (isMaterialIdentityConflict(error)) {
+          res.status(409).json({
+            error: materialIdentityConflict + '. Import cancelled. No data was changed.',
+          });
+          return;
+        }
         console.error(`Import material ${config.label.toLowerCase()}s error`, error);
         res.status(500).json({ error: `Failed to import ${config.label.toLowerCase()}s` });
         return;
@@ -583,7 +601,7 @@ export const createInstallationMaterialCatalogRouter = (
 
       try {
         const refreshed = await pool.query<MaterialTrayInstallationMaterialRow>(
-          `${selectMaterialsQuery} ORDER BY type ASC`,
+          `${selectMaterialsQuery} WHERE obsolete_at IS NULL ORDER BY type ASC`,
         );
         res.json({
           summary,
@@ -622,7 +640,7 @@ export const createInstallationMaterialCatalogRouter = (
     async (_req: Request, res: Response): Promise<void> => {
       try {
         const result = await pool.query<MaterialTrayInstallationMaterialRow>(
-          `${selectMaterialsQuery} ORDER BY type ASC`,
+          `${selectMaterialsQuery} WHERE obsolete_at IS NULL ORDER BY type ASC`,
         );
         const rows = filterMaterialExportRows(result.rows, res).map((row) => [
           row.type ?? '',

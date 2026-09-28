@@ -271,4 +271,25 @@ describe('material catalog price PATCH routes', () => {
     expect(mutation?.sql).toContain('unit_price = $1');
     expect(mutation?.values).toEqual([1.98, id]);
   });
+
+  it.each(catalogCases.slice(0, 5))(
+    'reports database identity conflicts when editing $name',
+    async (catalog) => {
+      databaseMocks.pool.query.mockRejectedValue({ code: '23505' });
+      for (const body of [{ manufacturer: 'ABB' }, { partNo: 'A1' }]) {
+        const { response, json, status } = responseStub();
+        await findPatchHandler(catalog.router, catalog.path)(
+          {
+            params: { [catalog.paramName]: id },
+            body,
+          } as unknown as Request,
+          response,
+        );
+        expect(status).toHaveBeenCalledWith(409);
+        expect(json).toHaveBeenCalledWith({
+          error: 'A material with this Manufacturer + Part No. already exists',
+        });
+      }
+    },
+  );
 });

@@ -473,6 +473,7 @@ export const Materials = () => {
             }
             onEdit={cableTypesHook.openEditCableTypeDialog}
             onDelete={(cableType) => void cableTypesHook.handleDeleteCableType(cableType)}
+            deleteActionLabel="Mark obsolete"
             formatNumeric={formatNumeric}
             showPagination={cableTypesHook.showCableTypePagination}
             page={cableTypesHook.cableTypePage}
