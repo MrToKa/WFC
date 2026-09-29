@@ -35,7 +35,6 @@ import {
   updateMaterialInstrument,
   updateMaterialInstrumentInstallationMaterial,
 } from '@/api/client';
-import { CABLE_TYPES_PER_PAGE } from '../../ProjectDetails.forms';
 import {
   buildMaterialCableInstallationMaterialInput,
   emptyCableInstallationMaterialForm,
@@ -67,6 +66,7 @@ type CableInstallationMaterialDialogController = {
 };
 
 type UseCableInstallationMaterialsParams = {
+  pageSize?: number;
   token: string | null;
   isAdmin: boolean;
   showToast: ShowToast;
@@ -220,10 +220,12 @@ const useInstallationMaterials = ({
   token,
   isAdmin,
   showToast,
+  pageSize = 10,
   catalog,
 }: UseCableInstallationMaterialsParams & {
   catalog: InstallationMaterialsCatalog;
 }): UseCableInstallationMaterialsResult => {
+  const loadRequestId = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [cableInstallationMaterials, setCableInstallationMaterials] = useState<
@@ -349,29 +351,27 @@ const useInstallationMaterials = ({
     if (filteredCableInstallationMaterials.length === 0) {
       return 1;
     }
-    return Math.max(1, Math.ceil(filteredCableInstallationMaterials.length / CABLE_TYPES_PER_PAGE));
-  }, [filteredCableInstallationMaterials.length]);
+    return Math.max(1, Math.ceil(filteredCableInstallationMaterials.length / pageSize));
+  }, [filteredCableInstallationMaterials.length, pageSize]);
 
   const pagedCableInstallationMaterials = useMemo(() => {
     if (filteredCableInstallationMaterials.length === 0) {
       return [];
     }
-    const startIndex = (page - 1) * CABLE_TYPES_PER_PAGE;
-    return filteredCableInstallationMaterials.slice(startIndex, startIndex + CABLE_TYPES_PER_PAGE);
-  }, [filteredCableInstallationMaterials, page]);
+    const startIndex = (page - 1) * pageSize;
+    return filteredCableInstallationMaterials.slice(startIndex, startIndex + pageSize);
+  }, [filteredCableInstallationMaterials, page, pageSize]);
 
   useEffect(() => {
-    const nextPage = Math.max(
-      1,
-      Math.ceil(filteredCableInstallationMaterials.length / CABLE_TYPES_PER_PAGE),
-    );
+    const nextPage = Math.max(1, Math.ceil(filteredCableInstallationMaterials.length / pageSize));
     if (page > nextPage) {
       setPage(nextPage);
     }
-  }, [filteredCableInstallationMaterials.length, page]);
+  }, [filteredCableInstallationMaterials.length, page, pageSize]);
 
   const reloadCableInstallationMaterials = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
+      const requestId = ++loadRequestId.current;
       if (showSpinner) {
         setIsLoading(true);
       } else {
@@ -382,9 +382,11 @@ const useInstallationMaterials = ({
 
       try {
         const items = await catalog.fetchAll();
+        if (requestId !== loadRequestId.current) return;
         setCableInstallationMaterials(sortCableInstallationMaterials(items));
         setPage(1);
       } catch (err) {
+        if (requestId !== loadRequestId.current) return;
         console.error(`Failed to load ${catalog.pluralLabel}`, err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
@@ -400,8 +402,10 @@ const useInstallationMaterials = ({
           setError(`Failed to load ${catalog.pluralLabel}.`);
         }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (requestId === loadRequestId.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
     [catalog, sortCableInstallationMaterials],
@@ -409,6 +413,9 @@ const useInstallationMaterials = ({
 
   useEffect(() => {
     void reloadCableInstallationMaterials({ showSpinner: true });
+    return () => {
+      loadRequestId.current += 1;
+    };
   }, [reloadCableInstallationMaterials]);
 
   const goToPreviousPage = useCallback(() => {
@@ -595,7 +602,7 @@ const useInstallationMaterials = ({
         await catalog.remove(token, item.id);
         setCableInstallationMaterials((previous) => {
           const next = previous.filter((existingItem) => existingItem.id !== item.id);
-          const nextPages = Math.max(1, Math.ceil(next.length / CABLE_TYPES_PER_PAGE));
+          const nextPages = Math.max(1, Math.ceil(next.length / pageSize));
           if (page > nextPages) {
             setPage(nextPages);
           }
@@ -613,7 +620,7 @@ const useInstallationMaterials = ({
         setPendingCableInstallationMaterialId(null);
       }
     },
-    [catalog, isAdmin, page, showToast, token],
+    [catalog, isAdmin, page, pageSize, showToast, token],
   );
 
   const handleImportCableInstallationMaterials = useCallback(
@@ -732,8 +739,7 @@ const useInstallationMaterials = ({
     pagedCableInstallationMaterials,
     totalCableInstallationMaterialPages: totalPages,
     cableInstallationMaterialPage: page,
-    showCableInstallationMaterialPagination:
-      filteredCableInstallationMaterials.length > CABLE_TYPES_PER_PAGE,
+    showCableInstallationMaterialPagination: filteredCableInstallationMaterials.length > pageSize,
     fileInputRef,
     searchText,
     searchCriteria,

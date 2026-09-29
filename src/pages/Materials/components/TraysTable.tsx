@@ -21,6 +21,8 @@ type TraysTableProps = {
   token: string | null;
   page: number;
   totalPages: number;
+  pageSize?: number;
+  onPageSizeChange?: (size: number) => void;
   onSetPage: (page: number) => void;
   hasFilters?: boolean;
   paginationStyles: Pick<FilterableTableSectionStyles, 'pagination' | 'paginationDropdown'>;
@@ -53,6 +55,8 @@ export const TraysTable = ({
   token,
   page,
   totalPages,
+  pageSize,
+  onPageSizeChange,
   onSetPage,
   hasFilters = false,
   paginationStyles,
@@ -184,8 +188,10 @@ export const TraysTable = ({
           </tbody>
         </table>
       </div>
-      {totalPages > 1 ? (
+      {totalPages > 1 || pageSize !== undefined ? (
         <TablePagination
+          pageSize={pageSize}
+          onPageSizeChange={onPageSizeChange}
           styles={paginationStyles}
           page={page}
           totalPages={totalPages}

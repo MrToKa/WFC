@@ -1,6 +1,6 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Body1, Button, Tab, TabList, TabValue, Title3 } from '@fluentui/react-components';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { useStyles } from './Materials/Materials.styles';
@@ -31,6 +31,15 @@ import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { useProjectDetailsStyles } from './ProjectDetails.styles';
 import { MATERIAL_DETAILS_CAPABILITIES } from './Materials/materialCapabilities';
 
+type MaterialsListState = {
+  path: string;
+  page: number;
+  pageSizes: Record<string, number>;
+  searchText: string;
+  searchCriteria: string;
+  facet: string;
+};
+
 export const Materials = () => {
   const styles = useStyles();
   const cableTypesStyles = useProjectDetailsStyles();
@@ -39,6 +48,12 @@ export const Materials = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const location = useLocation();
+  const [returnState] = useState<MaterialsListState | undefined>(
+    () => location.state?.materialsList,
+  );
+  const [restorePhase, setRestorePhase] = useState(returnState ? 'filters' : 'done');
+  const [pageSizes, setPageSizes] = useState<Record<string, number>>(returnState?.pageSizes ?? {});
   const isAdmin = Boolean(user?.isAdmin);
   const selectedTab = parseMaterialsTab(searchParams.get('tab'));
 
@@ -79,22 +94,45 @@ export const Materials = () => {
     [weightFormatter],
   );
 
-  const traysHook = useTrays({ token, isAdmin, showToast });
-  const supportsHook = useSupports({ token, isAdmin, showToast });
-  const loadCurvesHook = useLoadCurves({ token, isAdmin, showToast });
-  const cableTypesHook = useCableTypes({ token, isAdmin, showToast });
+  const traysHook = useTrays({ token, isAdmin, showToast, pageSize: pageSizes.trays ?? 10 });
+  const supportsHook = useSupports({
+    token,
+    isAdmin,
+    showToast,
+    pageSize: pageSizes.supports ?? 10,
+  });
+  const loadCurvesHook = useLoadCurves({
+    token,
+    isAdmin,
+    showToast,
+    pageSize: pageSizes.loadCurves ?? 10,
+  });
+  const cableTypesHook = useCableTypes({
+    token,
+    isAdmin,
+    showToast,
+    pageSize: pageSizes.cableTypes ?? 10,
+  });
   const cableInstallationMaterialsHook = useCableInstallationMaterials({
+    pageSize: pageSizes.cableInstallationMaterials ?? 10,
     token,
     isAdmin,
     showToast,
   });
   const trayInstallationMaterialsHook = useTrayInstallationMaterials({
+    pageSize: pageSizes.trayInstallationMaterials ?? 10,
     token,
     isAdmin,
     showToast,
   });
-  const instrumentsHook = useInstruments({ token, isAdmin, showToast });
+  const instrumentsHook = useInstruments({
+    token,
+    isAdmin,
+    showToast,
+    pageSize: pageSizes.instruments ?? 10,
+  });
   const instrumentInstallationMaterialsHook = useInstrumentInstallationMaterials({
+    pageSize: pageSizes.instrumentInstallationMaterials ?? 10,
     token,
     isAdmin,
     showToast,
@@ -130,6 +168,99 @@ export const Materials = () => {
   const catalogHook = selectedCatalog?.hook;
   const templateImagesHook = useTemplateImages({ token, showToast });
 
+  const activeFilterHook =
+    selectedTab === 'trays'
+      ? traysHook
+      : selectedTab === 'supports'
+        ? supportsHook
+        : (catalogHook ?? cableTypesHook);
+  const activePage =
+    selectedTab === 'trays'
+      ? traysHook.trayPage
+      : selectedTab === 'supports'
+        ? supportsHook.supportPage
+        : selectedTab === 'loadCurves'
+          ? loadCurvesHook.loadCurvePage
+          : catalogHook
+            ? catalogHook.cableInstallationMaterialPage
+            : cableTypesHook.cableTypePage;
+  const setActivePage =
+    selectedTab === 'trays'
+      ? traysHook.setTrayPage
+      : selectedTab === 'supports'
+        ? supportsHook.setSupportPage
+        : selectedTab === 'loadCurves'
+          ? loadCurvesHook.setLoadCurvePage
+          : catalogHook
+            ? catalogHook.goToPage
+            : cableTypesHook.goToPage;
+  const activeLoading =
+    selectedTab === 'trays'
+      ? traysHook.isLoadingTrays
+      : selectedTab === 'supports'
+        ? supportsHook.isLoadingSupports
+        : selectedTab === 'loadCurves'
+          ? loadCurvesHook.isLoadingLoadCurves
+          : catalogHook
+            ? catalogHook.cableInstallationMaterialsLoading
+            : cableTypesHook.cableTypesLoading;
+
+  useEffect(() => {
+    if (!returnState || restorePhase === 'done') return;
+    if (restorePhase === 'filters') {
+      if (selectedTab !== 'loadCurves') {
+        activeFilterHook.setSearchText(returnState.searchText);
+        if (selectedTab === 'trays' || selectedTab === 'supports') {
+          const hook = selectedTab === 'trays' ? traysHook : supportsHook;
+          hook.setSearchCriteria(
+            returnState.searchCriteria as Parameters<typeof hook.setSearchCriteria>[0],
+          );
+          hook.setManufacturerFilter(returnState.facet);
+        } else if (catalogHook) {
+          catalogHook.setSearchCriteria(
+            returnState.searchCriteria as Parameters<typeof catalogHook.setSearchCriteria>[0],
+          );
+          catalogHook.setPurposeFilter(returnState.facet);
+        } else {
+          cableTypesHook.setSearchCriteria(
+            returnState.searchCriteria as Parameters<typeof cableTypesHook.setSearchCriteria>[0],
+          );
+          cableTypesHook.setPurposeFilter(returnState.facet);
+        }
+      }
+      setRestorePhase('page');
+    } else if (!activeLoading) {
+      setActivePage(returnState.page);
+      setRestorePhase('done');
+    }
+  }, [
+    returnState,
+    restorePhase,
+    selectedTab,
+    activeFilterHook,
+    traysHook,
+    supportsHook,
+    catalogHook,
+    cableTypesHook,
+    activeLoading,
+    setActivePage,
+  ]);
+
+  const openMaterialDetails = (path: string) => {
+    const materialsList: MaterialsListState = {
+      path: location.pathname + location.search,
+      page: activePage,
+      pageSizes,
+      searchText: activeFilterHook.searchText,
+      searchCriteria: activeFilterHook.searchCriteria,
+      facet:
+        'manufacturerFilter' in activeFilterHook
+          ? activeFilterHook.manufacturerFilter
+          : activeFilterHook.purposeFilter,
+    };
+    navigate(path, { state: { materialsList } });
+  };
+
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
       const nextTab = parseMaterialsTab(String(data.value));
@@ -152,6 +283,15 @@ export const Materials = () => {
   const loadCurveTotalPages = loadCurvesHook.loadCurvePagination
     ? loadCurvesHook.loadCurvePagination.totalPages
     : 1;
+  const handlePageSizeChange = (size: number) => {
+    if (![10, 25, 50, 100].includes(size)) return;
+    setPageSizes((previous) => ({ ...previous, [selectedTab]: size }));
+    if (catalogHook) catalogHook.goToPage(1);
+    else if (selectedTab === 'trays') traysHook.setTrayPage(1);
+    else if (selectedTab === 'supports') supportsHook.setSupportPage(1);
+    else if (selectedTab === 'loadCurves') loadCurvesHook.setLoadCurvePage(1);
+    else cableTypesHook.goToPage(1);
+  };
   const selectedTabLabel =
     selectedCatalog?.label ??
     (selectedTab === 'trays'
@@ -191,6 +331,8 @@ export const Materials = () => {
       <div className={styles.tabPanel} role="tabpanel" aria-label={selectedTabLabel}>
         {selectedCatalog && catalogHook ? (
           <CableInstallationMaterialsTab
+            pageSize={pageSizes[selectedTab] ?? 10}
+            onPageSizeChange={handlePageSizeChange}
             styles={cableTypesStyles}
             isAdmin={isAdmin}
             isRefreshing={catalogHook.cableInstallationMaterialsRefreshing}
@@ -220,7 +362,9 @@ export const Materials = () => {
             items={catalogHook.pagedCableInstallationMaterials}
             pendingId={catalogHook.pendingCableInstallationMaterialId}
             onDetails={(item) =>
-              navigate(MATERIAL_DETAILS_CAPABILITIES[selectedCatalog.category].route(item.id))
+              openMaterialDetails(
+                MATERIAL_DETAILS_CAPABILITIES[selectedCatalog.category].route(item.id),
+              )
             }
             onEdit={catalogHook.openEditCableInstallationMaterialDialog}
             onDelete={(item) => void catalogHook.handleDeleteCableInstallationMaterial(item)}
@@ -297,6 +441,8 @@ export const Materials = () => {
               onManufacturerFilterChange={traysHook.setManufacturerFilter}
             />
             <TraysTable
+              pageSize={pageSizes[selectedTab] ?? 10}
+              onPageSizeChange={handlePageSizeChange}
               trays={traysHook.trays}
               isLoading={traysHook.isLoadingTrays}
               error={traysHook.traysError}
@@ -307,7 +453,9 @@ export const Materials = () => {
               formatNumeric={formatNumeric}
               formatWeight={formatWeight}
               onEdit={traysHook.openTrayEditDialog}
-              onDetails={(tray) => navigate(MATERIAL_DETAILS_CAPABILITIES.tray.route(tray.id))}
+              onDetails={(tray) =>
+                openMaterialDetails(MATERIAL_DETAILS_CAPABILITIES.tray.route(tray.id))
+              }
               onDelete={traysHook.handleTrayDelete}
               onAssignLoadCurve={traysHook.openTrayLoadCurveDialog}
               token={token}
@@ -379,6 +527,8 @@ export const Materials = () => {
               onManufacturerFilterChange={supportsHook.setManufacturerFilter}
             />
             <SupportsTable
+              pageSize={pageSizes[selectedTab] ?? 10}
+              onPageSizeChange={handlePageSizeChange}
               supports={supportsHook.supports}
               isLoading={supportsHook.isLoadingSupports}
               error={supportsHook.supportsError}
@@ -389,7 +539,7 @@ export const Materials = () => {
               formatWeight={formatWeight}
               onEdit={supportsHook.openSupportEditDialog}
               onDetails={(support) =>
-                navigate(MATERIAL_DETAILS_CAPABILITIES.support.route(support.id))
+                openMaterialDetails(MATERIAL_DETAILS_CAPABILITIES.support.route(support.id))
               }
               onDelete={supportsHook.handleSupportDelete}
               token={token}
@@ -422,6 +572,8 @@ export const Materials = () => {
             </div>
 
             <LoadCurvesGrid
+              pageSize={pageSizes[selectedTab] ?? 10}
+              onPageSizeChange={handlePageSizeChange}
               loadCurves={loadCurvesHook.loadCurves}
               isLoading={loadCurvesHook.isLoadingLoadCurves}
               isRefreshing={loadCurvesHook.isRefreshingLoadCurves}
@@ -431,7 +583,7 @@ export const Materials = () => {
               page={loadCurvesHook.loadCurvePage}
               totalPages={loadCurveTotalPages}
               onSetPage={loadCurvesHook.setLoadCurvePage}
-              onView={(loadCurve) => navigate(`/materials/load-curves/${loadCurve.id}`)}
+              onView={(loadCurve) => openMaterialDetails(`/materials/load-curves/${loadCurve.id}`)}
               onEdit={loadCurvesHook.openLoadCurveEditDialog}
               onDelete={loadCurvesHook.handleLoadCurveDelete}
               gridClassName={styles.loadCurvesGrid}
@@ -444,6 +596,8 @@ export const Materials = () => {
           </>
         ) : (
           <CableTypesTab
+            pageSize={pageSizes[selectedTab] ?? 10}
+            onPageSizeChange={handlePageSizeChange}
             styles={cableTypesStyles}
             isAdmin={isAdmin}
             isRefreshing={cableTypesHook.cableTypesRefreshing}
@@ -469,7 +623,7 @@ export const Materials = () => {
             items={cableTypesHook.pagedCableTypes}
             pendingId={cableTypesHook.pendingCableTypeId}
             onDetails={(cableType) =>
-              navigate(MATERIAL_DETAILS_CAPABILITIES['cable-type'].route(cableType.id))
+              openMaterialDetails(MATERIAL_DETAILS_CAPABILITIES['cable-type'].route(cableType.id))
             }
             onEdit={cableTypesHook.openEditCableTypeDialog}
             onDelete={(cableType) => void cableTypesHook.handleDeleteCableType(cableType)}

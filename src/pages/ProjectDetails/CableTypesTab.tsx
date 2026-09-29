@@ -69,6 +69,8 @@ type CableTypesTabProps<T extends CableTypesTabItem> = {
   showPagination: boolean;
   page: number;
   totalPages: number;
+  pageSize?: number;
+  onPageSizeChange?: (size: number) => void;
   paginationHandlers: PaginationHandlers;
   includeTabPanelRole?: boolean;
   emptyStateTitle?: string;
@@ -114,6 +116,8 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
   showPagination,
   page,
   totalPages,
+  pageSize,
+  onPageSizeChange,
   paginationHandlers,
   includeTabPanelRole = true,
   emptyStateTitle = 'No cable types found',
@@ -328,8 +332,10 @@ export const CableTypesTab = <T extends CableTypesTabItem>({
               </tbody>
             </table>
           </div>
-          {showPagination ? (
+          {showPagination || pageSize !== undefined ? (
             <TablePagination
+              pageSize={pageSize}
+              onPageSizeChange={onPageSizeChange}
               styles={styles}
               page={page}
               totalPages={totalPages}

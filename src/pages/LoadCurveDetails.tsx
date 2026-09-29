@@ -1,6 +1,6 @@
 import { excelImportErrorToast, excelImportSuccessToast } from '@/utils/excelImportFeedback';
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Body1,
   Body2,
@@ -191,6 +191,15 @@ const parsePointValue = (value: string): { value?: number; error?: string } => {
 export const LoadCurveDetails = () => {
   const styles = useStyles();
   const navigate = useNavigate();
+  const location = useLocation();
+  const materialsList = location.state?.materialsList;
+  const returnToMaterials = () => {
+    const path =
+      typeof materialsList?.path === 'string' && materialsList.path.startsWith('/materials?')
+        ? materialsList.path
+        : '/materials?tab=loadCurves';
+    navigate(path, { state: materialsList ? { materialsList } : undefined });
+  };
   const { loadCurveId } = useParams<{ loadCurveId: string }>();
   const { user, token } = useAuth();
   const { showToast } = useToast();
@@ -496,7 +505,7 @@ export const LoadCurveDetails = () => {
           <Title2 id="load-curve-heading">Load curve details</Title2>
           <Body1 className={styles.errorText}>{error}</Body1>
           <div className={styles.headerActions}>
-            <Button appearance="primary" onClick={() => navigate('/materials?tab=loadCurves')}>
+            <Button appearance="primary" onClick={returnToMaterials}>
               Back to materials
             </Button>
             <Button onClick={() => loadData()}>Retry</Button>
@@ -533,7 +542,7 @@ export const LoadCurveDetails = () => {
     <section className={styles.root} aria-labelledby="load-curve-heading">
       <div className={styles.header}>
         <div className={styles.headerActions}>
-          <Button appearance="secondary" onClick={() => navigate('/materials?tab=loadCurves')}>
+          <Button appearance="secondary" onClick={returnToMaterials}>
             Back to materials
           </Button>
           <Button onClick={() => loadData()} disabled={isMutating}>

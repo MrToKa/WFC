@@ -10,10 +10,15 @@ import {
   fetchAllMaterialSupports,
   getMaterialSupportTemplate,
   importMaterialSupports,
-  updateMaterialSupport
+  updateMaterialSupport,
 } from '@/api/client';
 import { SupportFormErrors, SupportFormState, initialSupportForm } from '../Materials.types';
-import { buildTimestampedFileName, downloadBlob, parseNumberInput, toFormValue } from '../Materials.utils';
+import {
+  buildTimestampedFileName,
+  downloadBlob,
+  parseNumberInput,
+  toFormValue,
+} from '../Materials.utils';
 import { useMaterialCatalogFilter } from './useMaterialCatalogFilter';
 
 type ShowToast = (props: {
@@ -23,12 +28,13 @@ type ShowToast = (props: {
 }) => void;
 
 type UseSupportsParams = {
+  pageSize?: number;
   token: string | null;
   isAdmin: boolean;
   showToast: ShowToast;
 };
 
-export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) => {
+export const useSupports = ({ token, isAdmin, showToast, pageSize = 10 }: UseSupportsParams) => {
   const [allSupports, setAllSupports] = useState<MaterialSupport[]>([]);
   const {
     pagedItems: supports,
@@ -37,7 +43,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     setPage: setSupportPage,
     filteredItems,
     ...filters
-  } = useMaterialCatalogFilter(allSupports);
+  } = useMaterialCatalogFilter(allSupports, pageSize);
   const loadRequestId = useRef(0);
   const [supportsError, setSupportsError] = useState<string | null>(null);
   const [isLoadingSupports, setIsLoadingSupports] = useState<boolean>(true);
@@ -56,34 +62,33 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
 
   const supportFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const loadSupports = useCallback(
-    async (_page: number, options?: { silent?: boolean }) => {
-      const requestId = ++loadRequestId.current;
-      setIsRefreshingSupports(Boolean(options?.silent));
-      setIsLoadingSupports(!options?.silent);
-      setSupportsError(null);
+  const loadSupports = useCallback(async (_page: number, options?: { silent?: boolean }) => {
+    const requestId = ++loadRequestId.current;
+    setIsRefreshingSupports(Boolean(options?.silent));
+    setIsLoadingSupports(!options?.silent);
+    setSupportsError(null);
 
-      try {
-        const result = await fetchAllMaterialSupports();
-        if (requestId !== loadRequestId.current) return;
-        setAllSupports(result.supports);
-      } catch (error) {
-        if (requestId !== loadRequestId.current) return;
-        console.error('Fetch material supports failed', error);
-        setSupportsError('Failed to load supports. Please try again.');
-      } finally {
-        if (requestId === loadRequestId.current) {
-          setIsRefreshingSupports(false);
-          setIsLoadingSupports(false);
-        }
+    try {
+      const result = await fetchAllMaterialSupports();
+      if (requestId !== loadRequestId.current) return;
+      setAllSupports(result.supports);
+    } catch (error) {
+      if (requestId !== loadRequestId.current) return;
+      console.error('Fetch material supports failed', error);
+      setSupportsError('Failed to load supports. Please try again.');
+    } finally {
+      if (requestId === loadRequestId.current) {
+        setIsRefreshingSupports(false);
+        setIsLoadingSupports(false);
       }
-    },
-    []
-  );
+    }
+  }, []);
 
   useEffect(() => {
     void loadSupports(1);
-    return () => { loadRequestId.current += 1; };
+    return () => {
+      loadRequestId.current += 1;
+    };
   }, [loadSupports]);
 
   const openSupportCreateDialog = useCallback(() => {
@@ -109,7 +114,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       packaging: support.packaging,
       unitPrice: String(support.unitPrice),
       imageTemplateId: support.imageTemplateId,
-      source: support.source ?? ''
+      source: support.source ?? '',
     });
     setSupportFormErrors({});
     setIsSupportDialogOpen(true);
@@ -129,7 +134,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         setSupportForm((previous) => ({ ...previous, [field]: data.value }));
         setSupportFormErrors((previous) => ({ ...previous, [field]: undefined }));
       },
-    []
+    [],
   );
 
   const handleSupportImageTemplateChange = useCallback((templateId: string | null) => {
@@ -145,7 +150,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to manage supports.'
+          body: 'You need to be signed in as an admin to manage supports.',
         });
         return;
       }
@@ -213,7 +218,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             packaging: supportForm.packaging,
             unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
-            source: supportForm.source.trim() || null
+            source: supportForm.source.trim() || null,
           });
           showToast({ intent: 'success', title: 'Support added' });
 
@@ -232,7 +237,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
             packaging: supportForm.packaging,
             unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
-            source: supportForm.source.trim() || null
+            source: supportForm.source.trim() || null,
           });
           showToast({ intent: 'success', title: 'Support updated' });
           await loadSupports(supportPage, { silent: true });
@@ -244,19 +249,19 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         if (error instanceof ApiError && error.status === 409) {
           setSupportFormErrors((previous) => ({
             ...previous,
-            type: 'A support with this type already exists'
+            type: 'A support with this type already exists',
           }));
         } else if (error instanceof ApiError && error.status === 400) {
           showToast({
             intent: 'error',
             title: 'Failed to save support',
-            body: error.message
+            body: error.message,
           });
         } else {
           showToast({
             intent: 'error',
             title: 'Failed to save support',
-            body: 'Please try again.'
+            body: 'Please try again.',
           });
         }
       } finally {
@@ -272,8 +277,8 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       supportDialogMode,
       supportForm,
       supportPage,
-      token
-    ]
+      token,
+    ],
   );
 
   const handleSupportImportClick = useCallback(() => {
@@ -281,7 +286,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to import supports.'
+        body: 'You need to be signed in as an admin to import supports.',
       });
       return;
     }
@@ -301,7 +306,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to import supports.'
+          body: 'You need to be signed in as an admin to import supports.',
         });
         return;
       }
@@ -318,7 +323,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         setIsImportingSupports(false);
       }
     },
-    [isAdmin, loadSupports, showToast, supportPage, token]
+    [isAdmin, loadSupports, showToast, supportPage, token],
   );
 
   const handleExportSupports = useCallback(async () => {
@@ -336,13 +341,13 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         showToast({
           intent: 'error',
           title: 'Export endpoint unavailable',
-          body: 'Please restart the API server after updating it.'
+          body: 'Please restart the API server after updating it.',
         });
       } else {
         showToast({
           intent: 'error',
           title: 'Failed to export supports',
-          body: 'Please try again.'
+          body: 'Please try again.',
         });
       }
     } finally {
@@ -355,7 +360,7 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.'
+        body: 'You need to be signed in as an admin to get the template.',
       });
       return;
     }
@@ -371,13 +376,13 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         showToast({
           intent: 'error',
           title: 'Template endpoint unavailable',
-          body: 'Please restart the API server after updating it.'
+          body: 'Please restart the API server after updating it.',
         });
       } else {
         showToast({
           intent: 'error',
           title: 'Failed to get template',
-          body: error instanceof ApiError ? error.message : undefined
+          body: error instanceof ApiError ? error.message : undefined,
         });
       }
     } finally {
@@ -391,13 +396,13 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete supports.'
+          body: 'You need to be signed in as an admin to delete supports.',
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete support '${support.type}'? This action cannot be undone.`
+        `Delete support '${support.type}'? This action cannot be undone.`,
       );
       if (!confirmed) {
         return;
@@ -414,13 +419,13 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
         showToast({
           intent: 'error',
           title: 'Failed to delete support',
-          body: 'Please try again.'
+          body: 'Please try again.',
         });
       } finally {
         setSupportPendingId(null);
       }
     },
-    [isAdmin, loadSupports, showToast, supportPage, token]
+    [isAdmin, loadSupports, showToast, supportPage, token],
   );
 
   return {
@@ -454,6 +459,6 @@ export const useSupports = ({ token, isAdmin, showToast }: UseSupportsParams) =>
     handleSupportImportChange,
     handleExportSupports,
     handleGetSupportTemplate,
-    handleSupportDelete
+    handleSupportDelete,
   };
 };

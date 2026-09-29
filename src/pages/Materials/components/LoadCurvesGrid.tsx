@@ -1,5 +1,7 @@
-import { Body1, Button, Spinner } from '@fluentui/react-components';
+import { Body1, Spinner } from '@fluentui/react-components';
 import type { MaterialLoadCurve } from '@/api/client';
+import { TablePagination } from '../../ProjectDetails/TablePagination';
+import { useProjectDetailsStyles } from '../../ProjectDetails.styles';
 import { LoadCurveCard } from './LoadCurveCard';
 
 type LoadCurvesGridProps = {
@@ -11,6 +13,8 @@ type LoadCurvesGridProps = {
   pendingId: string | null;
   page: number;
   totalPages: number;
+  pageSize?: number;
+  onPageSizeChange?: (size: number) => void;
   onSetPage: (page: number) => void;
   onView: (loadCurve: MaterialLoadCurve) => void;
   onEdit: (loadCurve: MaterialLoadCurve) => void;
@@ -32,6 +36,8 @@ export const LoadCurvesGrid = ({
   pendingId,
   page,
   totalPages,
+  pageSize,
+  onPageSizeChange,
   onSetPage,
   onView,
   onEdit,
@@ -41,12 +47,13 @@ export const LoadCurvesGrid = ({
   chartClassName,
   footerClassName,
   emptyStateClassName,
-  paginationClassName
+  paginationClassName,
 }: LoadCurvesGridProps) => {
+  const paginationStyles = useProjectDetailsStyles();
   if (isLoading && !isRefreshing) {
     return (
       <div className={emptyStateClassName}>
-        <Spinner label='Loading load curves...' />
+        <Spinner label="Loading load curves..." />
       </div>
     );
   }
@@ -86,25 +93,17 @@ export const LoadCurvesGrid = ({
         ))}
       </div>
       <div className={paginationClassName}>
-        <Button
-          size='small'
-          onClick={() => onSetPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-        >
-          Previous
-        </Button>
-        <Body1>
-          Page {Math.max(1, Math.min(page, Math.max(1, totalPages)))} of {Math.max(1, totalPages)}
-        </Body1>
-        <Button
-          size='small'
-          onClick={() =>
-            onSetPage(totalPages > 0 ? Math.min(totalPages, page + 1) : page)
-          }
-          disabled={totalPages > 0 ? page >= totalPages : true}
-        >
-          Next
-        </Button>
+        <TablePagination
+          styles={paginationStyles}
+          page={page}
+          totalPages={Math.max(1, totalPages)}
+          onPrevious={() => onSetPage(Math.max(1, page - 1))}
+          onNext={() => onSetPage(Math.min(totalPages, page + 1))}
+          onPageSelect={onSetPage}
+          dropdownAriaLabel="Select load curves page"
+          pageSize={pageSize}
+          onPageSizeChange={onPageSizeChange}
+        />
       </div>
     </>
   );

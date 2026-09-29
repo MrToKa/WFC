@@ -13,10 +13,15 @@ import {
   fetchMaterialLoadCurveSummaries,
   importMaterialTrays,
   getMaterialTrayTemplate,
-  updateMaterialTray
+  updateMaterialTray,
 } from '@/api/client';
 import { TrayFormErrors, TrayFormState, initialTrayForm } from '../Materials.types';
-import { buildTimestampedFileName, downloadBlob, parseNumberInput, toFormValue } from '../Materials.utils';
+import {
+  buildTimestampedFileName,
+  downloadBlob,
+  parseNumberInput,
+  toFormValue,
+} from '../Materials.utils';
 import { useMaterialCatalogFilter } from './useMaterialCatalogFilter';
 
 type ShowToast = (props: {
@@ -26,12 +31,13 @@ type ShowToast = (props: {
 }) => void;
 
 type UseTraysParams = {
+  pageSize?: number;
   token: string | null;
   isAdmin: boolean;
   showToast: ShowToast;
 };
 
-export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
+export const useTrays = ({ token, isAdmin, showToast, pageSize = 10 }: UseTraysParams) => {
   const [allTrays, setAllTrays] = useState<MaterialTray[]>([]);
   const {
     pagedItems: trays,
@@ -40,7 +46,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     setPage: setTrayPage,
     filteredItems,
     ...filters
-  } = useMaterialCatalogFilter(allTrays);
+  } = useMaterialCatalogFilter(allTrays, pageSize);
   const loadRequestId = useRef(0);
   const [traysError, setTraysError] = useState<string | null>(null);
   const [isLoadingTrays, setIsLoadingTrays] = useState<boolean>(true);
@@ -60,9 +66,9 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
   const [isTrayLoadCurveDialogOpen, setIsTrayLoadCurveDialogOpen] = useState<boolean>(false);
   const [trayLoadCurveTray, setTrayLoadCurveTray] = useState<MaterialTray | null>(null);
   const [trayLoadCurveSelection, setTrayLoadCurveSelection] = useState<string>('');
-  const [trayLoadCurveSummaries, setTrayLoadCurveSummaries] = useState<
-    MaterialLoadCurveSummary[]
-  >([]);
+  const [trayLoadCurveSummaries, setTrayLoadCurveSummaries] = useState<MaterialLoadCurveSummary[]>(
+    [],
+  );
   const [isLoadingTrayLoadCurves, setIsLoadingTrayLoadCurves] = useState<boolean>(false);
   const [isSubmittingTrayLoadCurve, setIsSubmittingTrayLoadCurve] = useState<boolean>(false);
   const [trayLoadCurveError, setTrayLoadCurveError] = useState<string | null>(null);
@@ -70,34 +76,33 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
 
   const trayFileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const loadTrays = useCallback(
-    async (_page: number, options?: { silent?: boolean }) => {
-      const requestId = ++loadRequestId.current;
-      setIsRefreshingTrays(Boolean(options?.silent));
-      setIsLoadingTrays(!options?.silent);
-      setTraysError(null);
+  const loadTrays = useCallback(async (_page: number, options?: { silent?: boolean }) => {
+    const requestId = ++loadRequestId.current;
+    setIsRefreshingTrays(Boolean(options?.silent));
+    setIsLoadingTrays(!options?.silent);
+    setTraysError(null);
 
-      try {
-        const result = await fetchAllMaterialTrays();
-        if (requestId !== loadRequestId.current) return;
-        setAllTrays(result.trays);
-      } catch (error) {
-        if (requestId !== loadRequestId.current) return;
-        console.error('Fetch material trays failed', error);
-        setTraysError('Failed to load trays. Please try again.');
-      } finally {
-        if (requestId === loadRequestId.current) {
-          setIsRefreshingTrays(false);
-          setIsLoadingTrays(false);
-        }
+    try {
+      const result = await fetchAllMaterialTrays();
+      if (requestId !== loadRequestId.current) return;
+      setAllTrays(result.trays);
+    } catch (error) {
+      if (requestId !== loadRequestId.current) return;
+      console.error('Fetch material trays failed', error);
+      setTraysError('Failed to load trays. Please try again.');
+    } finally {
+      if (requestId === loadRequestId.current) {
+        setIsRefreshingTrays(false);
+        setIsLoadingTrays(false);
       }
-    },
-    []
-  );
+    }
+  }, []);
 
   useEffect(() => {
     void loadTrays(1);
-    return () => { loadRequestId.current += 1; };
+    return () => {
+      loadRequestId.current += 1;
+    };
   }, [loadTrays]);
 
   const loadTrayLoadCurves = useCallback(async () => {
@@ -138,7 +143,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       packaging: tray.packaging,
       unitPrice: String(tray.unitPrice),
       imageTemplateId: tray.imageTemplateId,
-      source: tray.source ?? ''
+      source: tray.source ?? '',
     });
     setTrayFormErrors({});
     setIsTrayDialogOpen(true);
@@ -158,7 +163,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to assign load curves.'
+          body: 'You need to be signed in as an admin to assign load curves.',
         });
         return;
       }
@@ -168,7 +173,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       setIsTrayLoadCurveDialogOpen(true);
       void loadTrayLoadCurves();
     },
-    [isAdmin, loadTrayLoadCurves, showToast]
+    [isAdmin, loadTrayLoadCurves, showToast],
   );
 
   const closeTrayLoadCurveDialog = useCallback(() => {
@@ -179,13 +184,10 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     setTrayLoadCurveError(null);
   }, []);
 
-  const handleTrayLoadCurveChange = useCallback(
-    (_event: unknown, data: OptionOnSelectData) => {
-      setTrayLoadCurveSelection(data.optionValue ?? '');
-      setTrayLoadCurveError(null);
-    },
-    []
-  );
+  const handleTrayLoadCurveChange = useCallback((_event: unknown, data: OptionOnSelectData) => {
+    setTrayLoadCurveSelection(data.optionValue ?? '');
+    setTrayLoadCurveError(null);
+  }, []);
 
   const handleTrayLoadCurveSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -195,7 +197,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to assign load curves.'
+          body: 'You need to be signed in as an admin to assign load curves.',
         });
         return;
       }
@@ -214,12 +216,12 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       setTrayLoadCurvePendingId(trayLoadCurveTray.id);
       try {
         await updateMaterialTray(token, trayLoadCurveTray.id, {
-          loadCurveId: trayLoadCurveSelection === '' ? null : trayLoadCurveSelection
+          loadCurveId: trayLoadCurveSelection === '' ? null : trayLoadCurveSelection,
         });
 
         showToast({
           intent: 'success',
-          title: trayLoadCurveSelection ? 'Load curve assigned to tray' : 'Load curve unassigned'
+          title: trayLoadCurveSelection ? 'Load curve assigned to tray' : 'Load curve unassigned',
         });
         await loadTrays(trayPage, { silent: true });
         closeTrayLoadCurveDialog();
@@ -230,13 +232,13 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
           showToast({
             intent: 'error',
             title: 'Load curve not found',
-            body: 'Refresh and try again.'
+            body: 'Refresh and try again.',
           });
         } else {
           showToast({
             intent: 'error',
             title: 'Failed to update load curve assignment',
-            body: 'Please try again.'
+            body: 'Please try again.',
           });
         }
       } finally {
@@ -252,8 +254,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       token,
       trayLoadCurveSelection,
       trayLoadCurveTray,
-      trayPage
-    ]
+      trayPage,
+    ],
   );
 
   const handleTrayFieldChange = useCallback(
@@ -262,7 +264,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         setTrayForm((previous) => ({ ...previous, [field]: data.value }));
         setTrayFormErrors((previous) => ({ ...previous, [field]: undefined }));
       },
-    []
+    [],
   );
 
   const handleTrayImageTemplateChange = useCallback((templateId: string | null) => {
@@ -278,7 +280,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to manage trays.'
+          body: 'You need to be signed in as an admin to manage trays.',
         });
         return;
       }
@@ -347,7 +349,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             packaging: trayForm.packaging,
             unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
-            source: trayForm.source.trim() || null
+            source: trayForm.source.trim() || null,
           });
           showToast({ intent: 'success', title: 'Tray added' });
 
@@ -366,7 +368,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
             packaging: trayForm.packaging,
             unitPrice: unitPriceResult.numeric ?? 0,
             imageTemplateId,
-            source: trayForm.source.trim() || null
+            source: trayForm.source.trim() || null,
           });
           showToast({ intent: 'success', title: 'Tray updated' });
           await loadTrays(trayPage, { silent: true });
@@ -378,19 +380,19 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         if (error instanceof ApiError && error.status === 409) {
           setTrayFormErrors((previous) => ({
             ...previous,
-            type: 'A tray with this type already exists'
+            type: 'A tray with this type already exists',
           }));
         } else if (error instanceof ApiError && error.status === 400) {
           showToast({
             intent: 'error',
             title: 'Failed to save tray',
-            body: error.message
+            body: error.message,
           });
         } else {
           showToast({
             intent: 'error',
             title: 'Failed to save tray',
-            body: 'Please try again.'
+            body: 'Please try again.',
           });
         }
       } finally {
@@ -406,8 +408,8 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       token,
       trayDialogMode,
       trayForm,
-      trayPage
-    ]
+      trayPage,
+    ],
   );
 
   const handleTrayImportClick = useCallback(() => {
@@ -415,7 +417,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to import trays.'
+        body: 'You need to be signed in as an admin to import trays.',
       });
       return;
     }
@@ -435,7 +437,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to import trays.'
+          body: 'You need to be signed in as an admin to import trays.',
         });
         return;
       }
@@ -452,7 +454,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         setIsImportingTrays(false);
       }
     },
-    [isAdmin, loadTrays, showToast, token, trayPage]
+    [isAdmin, loadTrays, showToast, token, trayPage],
   );
 
   const handleExportTrays = useCallback(async () => {
@@ -470,13 +472,13 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Export endpoint unavailable',
-          body: 'Please restart the API server after updating it.'
+          body: 'Please restart the API server after updating it.',
         });
       } else {
         showToast({
           intent: 'error',
           title: 'Failed to export trays',
-          body: 'Please try again.'
+          body: 'Please try again.',
         });
       }
     } finally {
@@ -489,7 +491,7 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'You need to be signed in as an admin to get the template.'
+        body: 'You need to be signed in as an admin to get the template.',
       });
       return;
     }
@@ -505,13 +507,13 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Template endpoint unavailable',
-          body: 'Please restart the API server after updating it.'
+          body: 'Please restart the API server after updating it.',
         });
       } else {
         showToast({
           intent: 'error',
           title: 'Failed to get template',
-          body: error instanceof ApiError ? error.message : undefined
+          body: error instanceof ApiError ? error.message : undefined,
         });
       }
     } finally {
@@ -525,14 +527,12 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete trays.'
+          body: 'You need to be signed in as an admin to delete trays.',
         });
         return;
       }
 
-      const confirmed = window.confirm(
-        `Delete tray '${tray.type}'? This action cannot be undone.`
-      );
+      const confirmed = window.confirm(`Delete tray '${tray.type}'? This action cannot be undone.`);
       if (!confirmed) {
         return;
       }
@@ -548,13 +548,13 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
         showToast({
           intent: 'error',
           title: 'Failed to delete tray',
-          body: 'Please try again.'
+          body: 'Please try again.',
         });
       } finally {
         setTrayPendingId(null);
       }
     },
-    [isAdmin, loadTrays, showToast, token, trayPage]
+    [isAdmin, loadTrays, showToast, token, trayPage],
   );
 
   return {
@@ -601,6 +601,6 @@ export const useTrays = ({ token, isAdmin, showToast }: UseTraysParams) => {
     handleTrayImportChange,
     handleExportTrays,
     handleGetTrayTemplate,
-    handleTrayDelete
+    handleTrayDelete,
   };
 };

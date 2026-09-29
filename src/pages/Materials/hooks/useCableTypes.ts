@@ -14,7 +14,6 @@ import {
   updateMaterialCableType,
 } from '@/api/client';
 import {
-  CABLE_TYPES_PER_PAGE,
   CableTypeFormErrors,
   CableTypeFormState,
   buildMaterialCableTypeInput,
@@ -43,6 +42,7 @@ type CableTypeDialogController = {
 };
 
 type UseCableTypesParams = {
+  pageSize?: number;
   token: string | null;
   isAdmin: boolean;
   showToast: ShowToast;
@@ -103,7 +103,9 @@ export const useCableTypes = ({
   token,
   isAdmin,
   showToast,
+  pageSize = 10,
 }: UseCableTypesParams): UseCableTypesResult => {
+  const loadRequestId = useRef(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [cableTypes, setCableTypes] = useState<MaterialCableType[]>([]);
@@ -195,26 +197,27 @@ export const useCableTypes = ({
     if (filteredCableTypes.length === 0) {
       return 1;
     }
-    return Math.max(1, Math.ceil(filteredCableTypes.length / CABLE_TYPES_PER_PAGE));
-  }, [filteredCableTypes.length]);
+    return Math.max(1, Math.ceil(filteredCableTypes.length / pageSize));
+  }, [filteredCableTypes.length, pageSize]);
 
   const pagedCableTypes = useMemo(() => {
     if (filteredCableTypes.length === 0) {
       return [];
     }
-    const startIndex = (page - 1) * CABLE_TYPES_PER_PAGE;
-    return filteredCableTypes.slice(startIndex, startIndex + CABLE_TYPES_PER_PAGE);
-  }, [filteredCableTypes, page]);
+    const startIndex = (page - 1) * pageSize;
+    return filteredCableTypes.slice(startIndex, startIndex + pageSize);
+  }, [filteredCableTypes, page, pageSize]);
 
   useEffect(() => {
-    const nextPage = Math.max(1, Math.ceil(filteredCableTypes.length / CABLE_TYPES_PER_PAGE));
+    const nextPage = Math.max(1, Math.ceil(filteredCableTypes.length / pageSize));
     if (page > nextPage) {
       setPage(nextPage);
     }
-  }, [filteredCableTypes.length, page]);
+  }, [filteredCableTypes.length, page, pageSize]);
 
   const reloadCableTypes = useCallback(
     async ({ showSpinner = true }: { showSpinner?: boolean } = {}) => {
+      const requestId = ++loadRequestId.current;
       if (showSpinner) {
         setIsLoading(true);
       } else {
@@ -225,9 +228,11 @@ export const useCableTypes = ({
 
       try {
         const response = await fetchMaterialCableTypes();
+        if (requestId !== loadRequestId.current) return;
         setCableTypes(sortCableTypes(response.cableTypes));
         setPage(1);
       } catch (err) {
+        if (requestId !== loadRequestId.current) return;
         console.error('Failed to load material cable types', err);
         if (err instanceof ApiError) {
           if (err.status === 404) {
@@ -243,8 +248,10 @@ export const useCableTypes = ({
           setError('Failed to load cable types.');
         }
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (requestId === loadRequestId.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
     [sortCableTypes],
@@ -252,6 +259,9 @@ export const useCableTypes = ({
 
   useEffect(() => {
     void reloadCableTypes({ showSpinner: true });
+    return () => {
+      loadRequestId.current += 1;
+    };
   }, [reloadCableTypes]);
 
   const goToPreviousPage = useCallback(() => {
@@ -424,7 +434,7 @@ export const useCableTypes = ({
         await deleteMaterialCableType(token, cableType.id);
         setCableTypes((previous: MaterialCableType[]) => {
           const next = previous.filter((item) => item.id !== cableType.id);
-          const nextPages = Math.max(1, Math.ceil(next.length / CABLE_TYPES_PER_PAGE));
+          const nextPages = Math.max(1, Math.ceil(next.length / pageSize));
           if (page > nextPages) {
             setPage(nextPages);
           }
@@ -442,7 +452,7 @@ export const useCableTypes = ({
         setPendingCableTypeId(null);
       }
     },
-    [isAdmin, page, showToast, token],
+    [isAdmin, page, showToast, token, pageSize],
   );
 
   const handleImportCableTypes = useCallback(
@@ -561,7 +571,7 @@ export const useCableTypes = ({
     pagedCableTypes,
     totalCableTypePages: totalPages,
     cableTypePage: page,
-    showCableTypePagination: filteredCableTypes.length > CABLE_TYPES_PER_PAGE,
+    showCableTypePagination: filteredCableTypes.length > pageSize,
     fileInputRef,
     searchText,
     searchCriteria,

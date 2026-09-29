@@ -52,6 +52,8 @@ type CableInstallationMaterialsTabProps = {
   showPagination: boolean;
   page: number;
   totalPages: number;
+  pageSize?: number;
+  onPageSizeChange?: (size: number) => void;
   paginationHandlers: PaginationHandlers;
   includeTabPanelRole?: boolean;
   catalogLabel?: string;
@@ -91,6 +93,8 @@ export const CableInstallationMaterialsTab = ({
   showPagination,
   page,
   totalPages,
+  pageSize,
+  onPageSizeChange,
   paginationHandlers,
   includeTabPanelRole = true,
   catalogLabel = 'Cable installation materials',
@@ -277,8 +281,10 @@ export const CableInstallationMaterialsTab = ({
               </tbody>
             </table>
           </div>
-          {showPagination ? (
+          {showPagination || pageSize !== undefined ? (
             <TablePagination
+              pageSize={pageSize}
+              onPageSizeChange={onPageSizeChange}
               styles={styles}
               page={page}
               totalPages={totalPages}

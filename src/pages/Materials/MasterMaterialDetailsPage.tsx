@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ApiError,
   createStandardMaterial,
@@ -51,6 +51,15 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   const params = useParams();
   const ownerId = params[idParam] ?? '';
   const navigate = useNavigate();
+  const location = useLocation();
+  const materialsList = location.state?.materialsList;
+  const returnToMaterials = () => {
+    const path =
+      typeof materialsList?.path === 'string' && materialsList.path.startsWith('/materials?')
+        ? materialsList.path
+        : backPath;
+    navigate(path, { state: materialsList ? { materialsList } : undefined });
+  };
   const { user, token } = useAuth();
   const { showToast } = useToast();
   const capability = MATERIAL_DETAILS_CAPABILITIES[category];
@@ -204,7 +213,7 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
   };
 
   const goBack = (): void => {
-    void navigate(backPath);
+    returnToMaterials();
   };
 
   const editMaterial = (): void => {
@@ -244,11 +253,7 @@ export const MasterMaterialDetailsPage = <T extends StandardMaterialOwner>({
           onEdit={openEdit}
           onDelete={(assignment) => void remove(assignment)}
         />
-        <MaterialChangeLogSection
-          category={category}
-          materialId={ownerId}
-          refreshKey={details}
-        />
+        <MaterialChangeLogSection category={category} materialId={ownerId} refreshKey={details} />
       </MaterialDetailsLayout>
       <StandardMaterialDialog
         open={dialogOpen}

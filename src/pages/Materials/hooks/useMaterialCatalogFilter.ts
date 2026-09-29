@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { MaterialSupport, MaterialTray, PaginationMeta } from '@/api/client';
-import { PAGE_SIZE } from '../Materials.types';
 
 export type MaterialCatalogSearchCriteria =
   | 'all'
@@ -34,7 +33,7 @@ const getSearchValues = (
   price: item.unitPrice,
 });
 
-export const useMaterialCatalogFilter = <T extends CatalogItem>(items: T[]) => {
+export const useMaterialCatalogFilter = <T extends CatalogItem>(items: T[], pageSize = 10) => {
   const [requestedPage, setRequestedPage] = useState(1);
   const [searchText, setSearchTextValue] = useState('');
   const [searchCriteria, setSearchCriteriaValue] = useState<MaterialCatalogSearchCriteria>('all');
@@ -91,15 +90,15 @@ export const useMaterialCatalogFilter = <T extends CatalogItem>(items: T[]) => {
     });
   }, [items, manufacturerFilter, numberFormatter, searchCriteria, searchText, weightFormatter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
   const page = Math.min(requestedPage, totalPages);
   const pagedItems = useMemo(
-    () => filteredItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filteredItems, page],
+    () => filteredItems.slice((page - 1) * pageSize, page * pageSize),
+    [filteredItems, page, pageSize],
   );
   const pagination: PaginationMeta = {
     page,
-    pageSize: PAGE_SIZE,
+    pageSize: pageSize,
     totalItems: filteredItems.length,
     totalPages,
   };

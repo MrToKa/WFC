@@ -1,6 +1,7 @@
+import { StrictMode } from 'react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   MaterialCableInstallationMaterial,
@@ -9,6 +10,8 @@ import type {
   MaterialTray,
 } from '@/api/client';
 import { Materials } from './Materials';
+import { MasterMaterialDetailsPage } from './Materials/MasterMaterialDetailsPage';
+import { MATERIAL_DETAILS_CAPABILITIES } from './Materials/materialCapabilities';
 
 const apiMocks = vi.hoisted(() => ({
   cableTypes: vi.fn(),
@@ -24,6 +27,17 @@ vi.mock('@/api/client', async (importOriginal) => {
   const pagination = { page: 1, pageSize: 20, totalPages: 1, totalItems: 0 };
   return {
     ...(await importOriginal<typeof import('@/api/client')>()),
+    fetchMaterialDetails: vi.fn().mockResolvedValue({
+      category: { label: 'Material' },
+      material: {
+        id: 'detail',
+        name: 'Material details',
+        createdAt: '2026-09-06',
+        updatedAt: '2026-09-06',
+      },
+      standardMaterials: [],
+    }),
+    fetchMaterialChangeLog: vi.fn().mockResolvedValue({ changeLog: [] }),
     fetchMaterialTrays: vi.fn().mockResolvedValue({ trays: [], pagination }),
     fetchMaterialSupports: vi.fn().mockResolvedValue({ supports: [], pagination }),
     fetchAllMaterialTrays: apiMocks.trays,
@@ -96,7 +110,7 @@ beforeEach(() => {
 });
 
 const selectOption = (dropdownLabel: string, optionName: string) => {
-  fireEvent.click(screen.getByLabelText(dropdownLabel));
+  fireEvent.click(screen.getByRole('combobox', { name: dropdownLabel }));
   fireEvent.click(screen.getByRole('option', { name: optionName }));
 };
 
@@ -145,76 +159,180 @@ describe('Materials category navigation', () => {
 });
 
 describe('Materials catalog filtering and pagination', () => {
-  it.each(catalogs)('filters and pages the full $label catalog', async (catalog) => {
-    apiMocks[catalog.key].mockResolvedValue({ [catalog.key]: catalogItems });
-    const catalogName = catalog.label.toLowerCase();
-    const pageDropdownLabel = `Select ${catalogName} page`;
-    const manufacturerFacet = 'manufacturerFacet' in catalog && catalog.manufacturerFacet;
-    const facetLabel = manufacturerFacet ? 'Filter by manufacturer' : 'Filter by purpose';
-    const facetValue = manufacturerFacet ? 'ACME' : 'Control';
-    const facetReset = manufacturerFacet ? 'All manufacturers' : 'All purposes';
+  it.each(catalogs)(
+    'filters and pages the full $label catalog',
+    async (catalog) => {
+      apiMocks[catalog.key].mockResolvedValue({ [catalog.key]: catalogItems });
+      const catalogName = catalog.label.toLowerCase();
+      const pageDropdownLabel = `Select ${catalogName} page`;
+      const manufacturerFacet = 'manufacturerFacet' in catalog && catalog.manufacturerFacet;
+      const facetLabel = manufacturerFacet ? 'Filter by manufacturer' : 'Filter by purpose';
+      const facetValue = manufacturerFacet ? 'ACME' : 'Control';
+      const facetReset = manufacturerFacet ? 'All manufacturers' : 'All purposes';
 
-    render(
-      <FluentProvider theme={webLightTheme}>
-        <MemoryRouter initialEntries={[`/materials?tab=${catalog.key}`]}>
-          <Materials />
-        </MemoryRouter>
-      </FluentProvider>,
-    );
+      render(
+        <FluentProvider theme={webLightTheme}>
+          <MemoryRouter initialEntries={[`/materials?tab=${catalog.key}`]}>
+            <Materials />
+          </MemoryRouter>
+        </FluentProvider>,
+      );
 
-    await screen.findByText('Catalog item 01');
-    expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
-    expect(screen.queryByText('Catalog item 11')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      await screen.findByText('Catalog item 01');
+      expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
+      expect(screen.queryByText('Catalog item 11')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByText('Catalog item 11')).toBeInTheDocument();
-    expect(screen.queryByText('Catalog item 01')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      expect(screen.getByText('Catalog item 11')).toBeInTheDocument();
+      expect(screen.queryByText('Catalog item 01')).not.toBeInTheDocument();
 
-    selectOption(pageDropdownLabel, 'Page 3');
-    expect(screen.getByText('Catalog item 21')).toBeInTheDocument();
-    expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(5);
-    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
-    selectOption(pageDropdownLabel, 'Page 2');
-    expect(screen.getByText('Catalog item 11')).toBeInTheDocument();
+      selectOption(pageDropdownLabel, 'Page 3');
+      expect(screen.getByText('Catalog item 21')).toBeInTheDocument();
+      expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(5);
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      selectOption(pageDropdownLabel, 'Page 2');
+      expect(screen.getByText('Catalog item 11')).toBeInTheDocument();
 
-    const search = screen.getByLabelText(`Filter ${catalogName}`);
-    fireEvent.change(search, { target: { value: '  CATALOG item 2  ' } });
-    expect(screen.getByText('Catalog item 20')).toBeInTheDocument();
-    expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
-    expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(6);
-    expect(screen.queryByRole('combobox', { name: pageDropdownLabel })).not.toBeInTheDocument();
+      const search = screen.getByLabelText(`Filter ${catalogName}`);
+      fireEvent.change(search, { target: { value: '  CATALOG item 2  ' } });
+      expect(screen.getByText('Catalog item 20')).toBeInTheDocument();
+      expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
+      expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(6);
+      expect(screen.getByRole('combobox', { name: pageDropdownLabel })).toHaveTextContent('Page 1');
 
-    fireEvent.change(search, { target: { value: '' } });
-    expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    selectOption(facetLabel, facetValue);
-    expect(screen.getByText('Catalog item 02')).toBeInTheDocument();
-    expect(screen.queryByText('Catalog item 01')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      fireEvent.change(search, { target: { value: '' } });
+      expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      selectOption(facetLabel, facetValue);
+      expect(screen.getByText('Catalog item 02')).toBeInTheDocument();
+      expect(screen.queryByText('Catalog item 01')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
 
-    fireEvent.change(search, { target: { value: 'Catalog item 2' } });
-    expect(screen.getByText('Catalog item 20')).toBeInTheDocument();
-    expect(screen.getByText('Catalog item 22')).toBeInTheDocument();
-    expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
-    expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(4);
-    expect(screen.queryByText('Catalog item 21')).not.toBeInTheDocument();
+      fireEvent.change(search, { target: { value: 'Catalog item 2' } });
+      expect(screen.getByText('Catalog item 20')).toBeInTheDocument();
+      expect(screen.getByText('Catalog item 22')).toBeInTheDocument();
+      expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
+      expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(4);
+      expect(screen.queryByText('Catalog item 21')).not.toBeInTheDocument();
 
-    selectOption('Search criteria', manufacturerFacet ? 'Manufacturer' : 'Purpose');
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    selectOption('Search criteria', 'primaryCriterion' in catalog ? catalog.primaryCriterion : 'Type');
-    expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
+      selectOption('Search criteria', manufacturerFacet ? 'Manufacturer' : 'Purpose');
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      selectOption(
+        'Search criteria',
+        'primaryCriterion' in catalog ? catalog.primaryCriterion : 'Type',
+      );
+      expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
 
-    fireEvent.change(search, { target: { value: 'missing catalog item' } });
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: pageDropdownLabel })).not.toBeInTheDocument();
-    fireEvent.change(search, { target: { value: '' } });
-    selectOption(facetLabel, facetReset);
-    expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
-    expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
-    expect(apiMocks[catalog.key]).toHaveBeenCalledOnce();
-    expect(showToast).not.toHaveBeenCalled();
-  }, 15000);
+      fireEvent.change(search, { target: { value: 'missing catalog item' } });
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: pageDropdownLabel })).not.toBeInTheDocument();
+      fireEvent.change(search, { target: { value: '' } });
+      selectOption(facetLabel, facetReset);
+      expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
+      expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
+      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      selectOption('Rows per page', '25');
+      expect(screen.getByText('Catalog item 01')).toBeInTheDocument();
+      expect(screen.getByText('Catalog item 24')).toBeInTheDocument();
+      expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(25);
+      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      for (const size of ['50', '100']) {
+        selectOption('Rows per page', size);
+        expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(25);
+      }
+      selectOption('Rows per page', '10');
+      expect(screen.getAllByRole('row', { hidden: true })).toHaveLength(11);
+      expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+      expect(apiMocks[catalog.key]).toHaveBeenCalledOnce();
+      expect(showToast).not.toHaveBeenCalled();
+    },
+    15000,
+  );
+});
+
+describe('Returning from material details', () => {
+  it.each(catalogs)(
+    'restores the page, page size and filters for $label',
+    async (catalog) => {
+      const items = Array.from({ length: 80 }, (_, index) => ({
+        ...catalogItems[index % catalogItems.length],
+        id: 'return-' + index,
+        name: 'Return item ' + String(index + 1).padStart(2, '0'),
+        type: 'Return item ' + String(index + 1).padStart(2, '0'),
+      }));
+      let resolveStaleRequest!: (value: unknown) => void;
+      let requests = 0;
+      apiMocks[catalog.key].mockImplementation(() => {
+        requests += 1;
+        if (requests === 3)
+          return new Promise((resolve) => {
+            resolveStaleRequest = resolve;
+          });
+        return Promise.resolve({ [catalog.key]: items });
+      });
+      const capability = Object.values(MATERIAL_DETAILS_CAPABILITIES).find(
+        (value) => value.tab === catalog.key,
+      )!;
+      render(
+        <StrictMode>
+          <FluentProvider theme={webLightTheme}>
+            <MemoryRouter initialEntries={['/materials?tab=' + catalog.key]}>
+              <Routes>
+                <Route path="/materials" element={<Materials />} />
+                <Route
+                  path="/materials/:category/:materialId"
+                  element={
+                    <MasterMaterialDetailsPage
+                      category={capability.category}
+                      idParam="materialId"
+                      getTitle={() => 'Material details'}
+                      getProperties={() => []}
+                    />
+                  }
+                />
+              </Routes>
+            </MemoryRouter>
+          </FluentProvider>
+        </StrictMode>,
+      );
+      await screen.findByText('Return item 01');
+      fireEvent.change(screen.getByLabelText('Filter ' + catalog.label.toLowerCase()), {
+        target: { value: 'Return item' },
+      });
+      const manufacturer = 'manufacturerFacet' in catalog;
+      selectOption(
+        manufacturer ? 'Filter by manufacturer' : 'Filter by purpose',
+        manufacturer ? 'ACME' : 'Control',
+      );
+      selectOption('Rows per page', '25');
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      const tableBefore = screen.getByRole('table').textContent;
+      expect(
+        screen.getByRole('combobox', { name: 'Select ' + catalog.label.toLowerCase() + ' page' }),
+      ).toHaveTextContent('Page 2');
+      fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+      fireEvent.click(await screen.findByRole('button', { name: 'Back to Materials' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: 'Select ' + catalog.label.toLowerCase() + ' page' }),
+        ).toHaveTextContent('Page 2'),
+      );
+      expect(screen.getByRole('combobox', { name: 'Rows per page' })).toHaveTextContent('25');
+      await act(async () => {
+        resolveStaleRequest({ [catalog.key]: items });
+      });
+      expect(
+        screen.getByRole('combobox', { name: 'Select ' + catalog.label.toLowerCase() + ' page' }),
+      ).toHaveTextContent('Page 2');
+      expect(screen.getByRole('table').textContent).toBe(tableBefore);
+      expect(screen.getByLabelText('Filter ' + catalog.label.toLowerCase())).toHaveValue(
+        'Return item',
+      );
+    },
+    15000,
+  );
 });

@@ -9,14 +9,9 @@ import {
   createMaterialLoadCurve,
   deleteMaterialLoadCurve,
   fetchMaterialLoadCurves,
-  updateMaterialLoadCurve
+  updateMaterialLoadCurve,
 } from '@/api/client';
-import {
-  LoadCurveFormErrors,
-  LoadCurveFormState,
-  initialLoadCurveForm,
-  PAGE_SIZE
-} from '../Materials.types';
+import { LoadCurveFormErrors, LoadCurveFormState, initialLoadCurveForm } from '../Materials.types';
 import { normalizePagination } from '../Materials.utils';
 
 type ShowToast = (props: {
@@ -26,6 +21,7 @@ type ShowToast = (props: {
 }) => void;
 
 type UseLoadCurvesParams = {
+  pageSize?: number;
   token: string | null;
   isAdmin: boolean;
   showToast: ShowToast;
@@ -43,10 +39,15 @@ const validateLoadCurveForm = (form: LoadCurveFormState): LoadCurveFormErrors =>
 
 const buildLoadCurvePayload = (form: LoadCurveFormState): MaterialLoadCurveInput => ({
   name: form.name.trim(),
-  description: form.description.trim() === '' ? null : form.description.trim()
+  description: form.description.trim() === '' ? null : form.description.trim(),
 });
 
-export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams) => {
+export const useLoadCurves = ({
+  token,
+  isAdmin,
+  showToast,
+  pageSize = 10,
+}: UseLoadCurvesParams) => {
   const [loadCurves, setLoadCurves] = useState<MaterialLoadCurve[]>([]);
   const [loadCurvePagination, setLoadCurvePagination] = useState<PaginationMeta | null>(null);
   const [loadCurvePage, setLoadCurvePage] = useState<number>(1);
@@ -72,7 +73,7 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
       setLoadCurvesError(null);
 
       try {
-        const result = await fetchMaterialLoadCurves({ page, pageSize: PAGE_SIZE });
+        const result = await fetchMaterialLoadCurves({ page, pageSize });
 
         if (result.pagination.totalItems === 0 && page !== 1) {
           setLoadCurvePage(1);
@@ -101,7 +102,7 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         }
       }
     },
-    []
+    [pageSize],
   );
 
   useEffect(() => {
@@ -113,7 +114,7 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
       showToast({
         intent: 'error',
         title: 'Admin access required',
-        body: 'Only administrators can create load curves.'
+        body: 'Only administrators can create load curves.',
       });
       return;
     }
@@ -130,7 +131,7 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'Only administrators can edit load curves.'
+          body: 'Only administrators can edit load curves.',
         });
         return;
       }
@@ -138,12 +139,12 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
       setEditingLoadCurve(loadCurve);
       setLoadCurveForm({
         name: loadCurve.name,
-        description: loadCurve.description ?? ''
+        description: loadCurve.description ?? '',
       });
       setLoadCurveFormErrors({});
       setIsLoadCurveDialogOpen(true);
     },
-    [isAdmin, showToast]
+    [isAdmin, showToast],
   );
 
   const closeLoadCurveDialog = useCallback(() => {
@@ -160,7 +161,7 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         setLoadCurveForm((previous) => ({ ...previous, [field]: data.value }));
         setLoadCurveFormErrors((previous) => ({ ...previous, [field]: undefined }));
       },
-    []
+    [],
   );
 
   const handleLoadCurveSubmit = useCallback(
@@ -171,7 +172,7 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to save load curves.'
+          body: 'You need to be signed in as an admin to save load curves.',
         });
         return;
       }
@@ -204,13 +205,13 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         if (error instanceof ApiError && error.status === 409) {
           setLoadCurveFormErrors((previous) => ({
             ...previous,
-            name: 'A load curve with this name already exists'
+            name: 'A load curve with this name already exists',
           }));
         } else {
           showToast({
             intent: 'error',
             title: 'Failed to save load curve',
-            body: 'Please try again.'
+            body: 'Please try again.',
           });
         }
       } finally {
@@ -226,8 +227,8 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
       editingLoadCurve,
       closeLoadCurveDialog,
       loadLoadCurves,
-      loadCurvePage
-    ]
+      loadCurvePage,
+    ],
   );
 
   const handleLoadCurveDelete = useCallback(
@@ -236,13 +237,13 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         showToast({
           intent: 'error',
           title: 'Admin access required',
-          body: 'You need to be signed in as an admin to delete load curves.'
+          body: 'You need to be signed in as an admin to delete load curves.',
         });
         return;
       }
 
       const confirmed = window.confirm(
-        `Delete load curve '${loadCurve.name}'? This action cannot be undone.`
+        `Delete load curve '${loadCurve.name}'? This action cannot be undone.`,
       );
       if (!confirmed) {
         return;
@@ -268,7 +269,7 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
         showToast({
           intent: 'error',
           title: 'Failed to delete load curve',
-          body: 'Please try again.'
+          body: 'Please try again.',
         });
       } finally {
         setLoadCurvePendingId(null);
@@ -281,8 +282,8 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
       loadCurves.length,
       loadCurvePagination,
       loadLoadCurves,
-      loadCurvePage
-    ]
+      loadCurvePage,
+    ],
   );
 
   return {
@@ -306,6 +307,6 @@ export const useLoadCurves = ({ token, isAdmin, showToast }: UseLoadCurvesParams
     closeLoadCurveDialog,
     handleLoadCurveFieldChange,
     handleLoadCurveSubmit,
-    handleLoadCurveDelete
+    handleLoadCurveDelete,
   };
 };
