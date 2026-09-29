@@ -38,8 +38,9 @@ export const initializeMaterialChangeLog = async (pool: Pick<Pool, 'query'>): Pr
       item_key := CASE WHEN TG_ARGV[2] = 'point' THEN row_data ->> 'point_order'
                        ELSE row_data ->> 'id' END;
       IF TG_ARGV[2] = 'standard-material' THEN
-        EXECUTE format('SELECT type FROM %I WHERE id = $1', TG_ARGV[3])
-          INTO item_label USING (row_data ->> 'referenced_material_id')::uuid;
+        SELECT type INTO item_label FROM standard_material_catalog
+          WHERE id = (row_data ->> 'referenced_material_id')::uuid
+            AND category = row_data ->> 'referenced_material_category';
       END IF;
       actor_id := NULLIF(current_setting('wfc.material_actor', true), '')::uuid;
       SELECT COALESCE(NULLIF(btrim(concat_ws(' ', first_name, last_name)), ''), email)

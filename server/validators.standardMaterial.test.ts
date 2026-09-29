@@ -15,6 +15,29 @@ import {
 } from './validators.js';
 
 describe('Standard Material validators', () => {
+  it.each([
+    'cable-type',
+    'cable-installation-material',
+    'tray',
+    'tray-installation-material',
+    'instrument',
+    'instrument-installation-material',
+    'support',
+  ])('accepts the %s reference category', (referencedMaterialCategory) => {
+    expect(
+      createStandardMaterialSchema.safeParse({
+        referencedMaterialCategory,
+        referencedMaterialId: '00000000-0000-4000-8000-000000000001',
+        quantity: 1,
+        unit: 'pcs',
+      }).success,
+    ).toBe(true);
+  });
+  it('rejects unsupported reference categories', () => {
+    expect(
+      updateStandardMaterialSchema.safeParse({ referencedMaterialCategory: 'load-curve' }).success,
+    ).toBe(false);
+  });
   it('accepts canonical units and a finite positive quantity', () => {
     expect(
       createStandardMaterialSchema.safeParse({

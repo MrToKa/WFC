@@ -1,3 +1,4 @@
+import { initializeStandardMaterialCategories } from './services/standardMaterialCategorySchema.js';
 import { initializeMaterialIdentity } from './services/materialIdentitySchema.js';
 import { initializeMaterialChangeLog } from './services/materialChangeLogSchema.js';
 import { Pool } from 'pg';
@@ -1415,6 +1416,9 @@ export async function initializeDatabase(): Promise<void> {
       cloned_type TEXT;
       clone_attempt INTEGER;
     BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'material_tray_installation_standard_materials'
+          AND column_name = 'referenced_material_category') THEN RETURN; END IF;
       SELECT attnum
       INTO referenced_attnum
       FROM pg_attribute
@@ -2278,6 +2282,7 @@ export async function initializeDatabase(): Promise<void> {
       );
   `);
   await initializeMaterialIdentity(pool);
+  await initializeStandardMaterialCategories(pool);
   await initializeMaterialChangeLog(pool);
 }
 

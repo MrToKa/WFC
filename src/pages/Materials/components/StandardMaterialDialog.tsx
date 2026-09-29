@@ -13,17 +13,24 @@ import {
   Textarea,
 } from '@fluentui/react-components';
 import type {
-  MaterialCableInstallationMaterial,
-  MaterialTrayInstallationMaterial,
   StandardMaterialAssignment,
   StandardMaterialInput,
   StandardMaterialUnit,
+  StandardMaterialOwnerCategory,
 } from '@/api/client';
+
+import {
+  STANDARD_MATERIAL_CATEGORIES,
+  type StandardMaterialCatalogItem,
+} from '../standardMaterialCategories';
 
 type StandardMaterialDialogProps = {
   open: boolean;
   assignment: StandardMaterialAssignment | null;
-  catalog: Array<MaterialCableInstallationMaterial | MaterialTrayInstallationMaterial>;
+  catalog: StandardMaterialCatalogItem[];
+  catalogCategory?: StandardMaterialOwnerCategory;
+  onCategoryChange?: (category: StandardMaterialOwnerCategory) => void;
+  catalogLoading?: boolean;
   catalogItemLabel?: string;
   ownerMaterialId: string;
   excludeOwnerFromCatalog: boolean;
@@ -36,6 +43,9 @@ export const StandardMaterialDialog = ({
   open,
   assignment,
   catalog,
+  catalogCategory,
+  onCategoryChange,
+  catalogLoading = false,
   catalogItemLabel = 'Cable Installation Material',
   ownerMaterialId,
   excludeOwnerFromCatalog,
@@ -50,10 +60,15 @@ export const StandardMaterialDialog = ({
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const options = useMemo(
-    () => catalog.filter((item) => !excludeOwnerFromCatalog || item.id !== ownerMaterialId),
-    [catalog, excludeOwnerFromCatalog, ownerMaterialId],
-  );
+  const options = useMemo(() => {
+    const current =
+      assignment && (!catalogCategory || assignment.referencedMaterialCategory === catalogCategory)
+        ? assignment.referencedMaterial
+        : null;
+    const items =
+      current && !catalog.some((item) => item.id === current.id) ? [...catalog, current] : catalog;
+    return items.filter((item) => !excludeOwnerFromCatalog || item.id !== ownerMaterialId);
+  }, [catalog, excludeOwnerFromCatalog, ownerMaterialId, assignment, catalogCategory]);
 
   const purposeOptions = useMemo(() => {
     const uniquePurposes = new Map<string, string>();
@@ -79,14 +94,22 @@ export const StandardMaterialDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    const assignedMaterial = options.find((item) => item.id === assignment?.referencedMaterialId);
+    const sameCategory =
+      !catalogCategory || assignment?.referencedMaterialCategory === catalogCategory;
+    const assignedMaterial = sameCategory
+      ? options.find((item) => item.id === assignment?.referencedMaterialId)
+      : undefined;
     setPurpose(assignedMaterial?.purpose?.trim() ?? '');
-    setReferencedMaterialId(assignment?.referencedMaterialId ?? options[0]?.id ?? '');
+    setReferencedMaterialId(assignedMaterial?.id ?? options[0]?.id ?? '');
+  }, [assignment, open, options, catalogCategory]);
+
+  useEffect(() => {
+    if (!open) return;
     setQuantity(assignment ? String(assignment.quantity) : '1');
     setUnit(assignment?.unit ?? 'pcs');
     setRemarks(assignment?.remarks ?? '');
     setError(null);
-  }, [assignment, open, options]);
+  }, [assignment, open]);
 
   const handlePurposeChange = (nextPurpose: string): void => {
     setPurpose(nextPurpose);
@@ -104,7 +127,7 @@ export const StandardMaterialDialog = ({
   const submit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     const numericQuantity = Number(quantity);
-    if (!referencedMaterialId) {
+    if (catalogLoading || !filteredOptions.some((item) => item.id === referencedMaterialId)) {
       setError(`Select a ${catalogItemLabel}.`);
       return;
     }
@@ -115,6 +138,7 @@ export const StandardMaterialDialog = ({
     setError(null);
     await onSave({
       referencedMaterialId,
+      ...(catalogCategory ? { referencedMaterialCategory: catalogCategory } : {}),
       quantity: numericQuantity,
       unit,
       remarks: remarks.trim() === '' ? null : remarks.trim(),
@@ -130,6 +154,28 @@ export const StandardMaterialDialog = ({
               {assignment ? 'Edit Standard Material' : 'Add Standard Material'}
             </DialogTitle>
             <DialogContent>
+              {catalogCategory && onCategoryChange ? (
+                <Field label="Material category">
+                  <Select
+                    aria-label="Material category"
+                    value={catalogCategory}
+                    disabled={saving}
+                    onChange={(event) => {
+                      setPurpose('');
+                      setReferencedMaterialId('');
+                      setError(null);
+                      onCategoryChange(event.target.value as StandardMaterialOwnerCategory);
+                    }}
+                  >
+                    {STANDARD_MATERIAL_CATEGORIES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : null}
+              {catalogLoading ? <div role="status">Loading materials...</div> : null}
               <Field label="Purpose">
                 <Select
                   aria-label="Purpose"
@@ -197,7 +243,11 @@ export const StandardMaterialDialog = ({
               <Button appearance="secondary" onClick={onDismiss} disabled={saving}>
                 Cancel
               </Button>
-              <Button appearance="primary" type="submit" disabled={saving}>
+              <Button
+                appearance="primary"
+                type="submit"
+                disabled={saving || catalogLoading || !referencedMaterialId}
+              >
                 {saving ? 'Saving...' : 'Save'}
               </Button>
             </DialogActions>

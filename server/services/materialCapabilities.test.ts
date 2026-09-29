@@ -13,22 +13,23 @@ describe('Standard Material catalog capabilities', () => {
     },
   );
 
-  it('uses Tray Installation Materials as children of the matching owner category', () => {
-    expect(MATERIAL_CAPABILITIES['tray-installation-material']).toMatchObject({
-      referencedMaterialCategory: 'tray-installation-material',
-      referencedMaterialTable: 'material_tray_installation_materials',
-    });
-  });
+  it.each<StandardMaterialOwnerCategory>(['tray', 'support', 'tray-installation-material'])(
+    'uses Tray Installation Materials for %s',
+    (category) => {
+      expect(MATERIAL_CAPABILITIES[category]).toMatchObject({
+        referencedMaterialCategory: 'tray-installation-material',
+        referencedMaterialTable: 'material_tray_installation_materials',
+      });
+    },
+  );
 
-  it.each<StandardMaterialOwnerCategory>([
-    'cable-type',
-    'cable-installation-material',
-    'tray',
-    'support',
-  ])('keeps Cable Installation Materials as children of %s', (category) => {
-    expect(MATERIAL_CAPABILITIES[category]).toMatchObject({
-      referencedMaterialCategory: 'cable-installation-material',
-      referencedMaterialTable: 'material_cable_installation_materials',
-    });
-  });
+  it.each<StandardMaterialOwnerCategory>(['cable-type', 'cable-installation-material'])(
+    'keeps Cable Installation Materials as children of %s',
+    (category) => {
+      expect(MATERIAL_CAPABILITIES[category]).toMatchObject({
+        referencedMaterialCategory: 'cable-installation-material',
+        referencedMaterialTable: 'material_cable_installation_materials',
+      });
+    },
+  );
 });

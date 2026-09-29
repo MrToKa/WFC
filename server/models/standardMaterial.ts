@@ -12,11 +12,7 @@ export const STANDARD_MATERIAL_UNITS = ['pcs', 'meters', 'pcs/m'] as const;
 
 export type StandardMaterialOwnerCategory = (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
 
-export const STANDARD_MATERIAL_REFERENCE_CATEGORIES = [
-  'cable-installation-material',
-  'tray-installation-material',
-  'instrument-installation-material',
-] as const;
+export const STANDARD_MATERIAL_REFERENCE_CATEGORIES = STANDARD_MATERIAL_OWNER_CATEGORIES;
 
 export type StandardMaterialReferenceCategory =
   (typeof STANDARD_MATERIAL_REFERENCE_CATEGORIES)[number];

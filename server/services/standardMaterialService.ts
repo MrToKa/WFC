@@ -11,6 +11,7 @@ import {
 import { getMaterialCapability } from './materialCapabilities.js';
 
 export type StandardMaterialInput = {
+  referencedMaterialCategory?: StandardMaterialOwnerCategory;
   referencedMaterialId: string;
   quantity: number;
   unit: StandardMaterialUnit;
@@ -46,7 +47,7 @@ const assignmentSelect = (category: StandardMaterialOwnerCategory, whereClause: 
       a.${capability.assignmentOwnerColumn} AS owner_id,
       '${category}'::text AS owner_category,
       a.referenced_material_id,
-      '${capability.referencedMaterialCategory}'::text AS referenced_material_category,
+      a.referenced_material_category,
       child.type AS referenced_material_name,
       child.purpose AS referenced_material_purpose,
       child.material AS referenced_material_material,
@@ -65,8 +66,8 @@ const assignmentSelect = (category: StandardMaterialOwnerCategory, whereClause: 
       a.created_at,
       a.updated_at
     FROM ${capability.assignmentTable} a
-    JOIN ${capability.referencedMaterialTable} child
-      ON child.id = a.referenced_material_id
+    JOIN standard_material_catalog child
+      ON child.id = a.referenced_material_id AND child.category = a.referenced_material_category
     ${whereClause}
   `;
 };
@@ -287,25 +288,21 @@ const assertAssignmentValid = async (
   ignoredAssignmentId?: string,
 ): Promise<void> => {
   const capability = getMaterialCapability(category);
+  const referenceCategory =
+    input.referencedMaterialCategory ?? capability.referencedMaterialCategory;
+  const reference = getMaterialCapability(referenceCategory);
   if (!(await ownerExists(queryable, category, ownerId))) {
     throw new StandardMaterialDomainError('OWNER_NOT_FOUND', 'Owner material was not found.');
   }
   if (
-    !(await referencedMaterialExists(
-      queryable,
-      capability.referencedMaterialTable,
-      input.referencedMaterialId,
-    ))
+    !(await referencedMaterialExists(queryable, reference.ownerTable, input.referencedMaterialId))
   ) {
     throw new StandardMaterialDomainError(
       'REFERENCED_MATERIAL_NOT_FOUND',
-      `Referenced ${capability.referencedMaterialLabel} was not found.`,
+      `Referenced ${reference.label} was not found.`,
     );
   }
-  if (
-    category === capability.referencedMaterialCategory &&
-    ownerId === input.referencedMaterialId
-  ) {
+  if (category === referenceCategory && ownerId === input.referencedMaterialId) {
     throw new StandardMaterialDomainError('SELF_REFERENCE', 'A material cannot reference itself.');
   }
 
@@ -313,9 +310,10 @@ const assertAssignmentValid = async (
     `SELECT id FROM ${capability.assignmentTable}
      WHERE ${capability.assignmentOwnerColumn} = $1
        AND referenced_material_id = $2
+       AND referenced_material_category = $4
        AND ($3::uuid IS NULL OR id <> $3)
      LIMIT 1`,
-    [ownerId, input.referencedMaterialId, ignoredAssignmentId ?? null],
+    [ownerId, input.referencedMaterialId, ignoredAssignmentId ?? null, referenceCategory],
   );
   if (duplicate.rows[0]) {
     throw new StandardMaterialDomainError(
@@ -334,7 +332,7 @@ const assertAssignmentValid = async (
     ownerId,
     ownerCategory: category,
     referencedMaterialId: input.referencedMaterialId,
-    referencedMaterialCategory: capability.referencedMaterialCategory,
+    referencedMaterialCategory: referenceCategory,
     referencedMaterial: {
       id: input.referencedMaterialId,
       type: '',
@@ -370,8 +368,8 @@ export const createStandardMaterialAssignment = async (
   const id = randomUUID();
   await client.query(
     `INSERT INTO ${capability.assignmentTable} (
-       id, ${capability.assignmentOwnerColumn}, referenced_material_id, quantity, unit, remarks
-     ) VALUES ($1, $2, $3, $4, $5, $6)`,
+       id, ${capability.assignmentOwnerColumn}, referenced_material_id, quantity, unit, remarks, referenced_material_category
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       id,
       ownerId,
@@ -379,6 +377,7 @@ export const createStandardMaterialAssignment = async (
       input.quantity,
       input.unit,
       normalizeRemarks(input.remarks),
+      input.referencedMaterialCategory ?? capability.referencedMaterialCategory,
     ],
   );
   const assignments = await listStandardMaterialAssignments(client, category, ownerId);
@@ -397,11 +396,12 @@ export const updateStandardMaterialAssignment = async (
   const capability = getMaterialCapability(category);
   const currentResult = await client.query<{
     referenced_material_id: string;
+    referenced_material_category: StandardMaterialOwnerCategory;
     quantity: string | number;
     unit: StandardMaterialUnit;
     remarks: string | null;
   }>(
-    `SELECT referenced_material_id, quantity, unit, remarks
+    `SELECT referenced_material_id, referenced_material_category, quantity, unit, remarks
      FROM ${capability.assignmentTable}
      WHERE id = $1 AND ${capability.assignmentOwnerColumn} = $2
      LIMIT 1`,
@@ -415,6 +415,8 @@ export const updateStandardMaterialAssignment = async (
     );
   }
   const merged: StandardMaterialInput = {
+    referencedMaterialCategory:
+      input.referencedMaterialCategory ?? current.referenced_material_category,
     referencedMaterialId: input.referencedMaterialId ?? current.referenced_material_id,
     quantity: input.quantity ?? Number(current.quantity),
     unit: input.unit ?? current.unit,
@@ -423,7 +425,7 @@ export const updateStandardMaterialAssignment = async (
   await assertAssignmentValid(client, category, ownerId, merged, assignmentId);
   await client.query(
     `UPDATE ${capability.assignmentTable}
-     SET referenced_material_id = $3, quantity = $4, unit = $5, remarks = $6, updated_at = NOW()
+     SET referenced_material_id = $3, quantity = $4, unit = $5, remarks = $6, referenced_material_category = $7, updated_at = NOW()
      WHERE id = $1 AND ${capability.assignmentOwnerColumn} = $2`,
     [
       assignmentId,
@@ -432,6 +434,7 @@ export const updateStandardMaterialAssignment = async (
       merged.quantity,
       merged.unit,
       normalizeRemarks(merged.remarks),
+      merged.referencedMaterialCategory,
     ],
   );
   const assignments = await listStandardMaterialAssignments(client, category, ownerId);

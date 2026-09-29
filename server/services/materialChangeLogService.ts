@@ -44,6 +44,7 @@ const labels: Record<string, string> = {
   image_template_id: 'Image template',
   tray_id: 'Tray',
   referenced_material_id: 'Material ID',
+  referenced_material_category: 'Material category',
   quantity: 'Quantity',
   unit: 'Unit',
   span_m: 'Span [m]',

@@ -246,10 +246,7 @@ export const STANDARD_MATERIAL_OWNER_CATEGORIES = [
 export type StandardMaterialOwnerCategory = (typeof STANDARD_MATERIAL_OWNER_CATEGORIES)[number];
 export type MaterialDetailsCategory = StandardMaterialOwnerCategory | 'load-curve';
 export type StandardMaterialUnit = 'pcs' | 'meters' | 'pcs/m';
-export type StandardMaterialReferenceCategory =
-  | 'cable-installation-material'
-  | 'tray-installation-material'
-  | 'instrument-installation-material';
+export type StandardMaterialReferenceCategory = StandardMaterialOwnerCategory;
 
 export type MaterialCategoryMetadata = {
   key: MaterialDetailsCategory;
@@ -286,6 +283,7 @@ export type StandardMaterialAssignment = {
 };
 
 export type StandardMaterialInput = {
+  referencedMaterialCategory?: StandardMaterialReferenceCategory;
   referencedMaterialId: string;
   quantity: number;
   unit: StandardMaterialUnit;
