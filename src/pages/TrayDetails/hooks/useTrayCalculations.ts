@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { Project, Tray, Cable, MaterialSupport } from '../../../api/client';
 import { SupportCalculationResult } from '../TrayDetails.types';
-import { isGroundingPurpose } from '../TrayDetails.utils';
 import { calculateTraySpanLoad, isValidWeight } from '../loadAssessment';
 
 export const useTrayCalculations = (
@@ -100,24 +99,22 @@ export const useTrayCalculations = (
   }, [project, tray, supportOverride, overrideSupport]);
 
   // Keep drawing/grouping order aligned with the tray table (# column).
-  const nonGroundingCables = useMemo(
-    () =>
-      trayCables
-        .filter((cable) => !isGroundingPurpose(cable.purpose))
-        .sort((a, b) => a.cableId - b.cableId),
+  const sortedTrayCables = useMemo(
+    () => [...trayCables].sort((a, b) => a.cableId - b.cableId),
     [trayCables],
   );
 
   const cablesWeightLoadPerMeterKg = useMemo(() => {
     if (
-      nonGroundingCables.some((cable) => !isValidWeight(cable.weightKgPerM)) ||
+      sortedTrayCables.some((cable) => !isValidWeight(cable.weightKgPerM)) ||
       !isValidWeight(trefoilClampsWeightKgPerM) ||
       (includeGroundingCable && !isValidWeight(groundingCableWeightKgPerM))
     )
       return null;
-    const total = nonGroundingCables.reduce((sum, cable) => sum + (cable.weightKgPerM ?? 0), 0);
+    // The optional tray grounding conductor is additional to routed schedule cables.
+    const total = sortedTrayCables.reduce((sum, cable) => sum + (cable.weightKgPerM ?? 0), 0);
     return total + (includeGroundingCable ? (groundingCableWeightKgPerM ?? 0) : 0) + (trefoilClampsWeightKgPerM ?? 0);
-  }, [nonGroundingCables, groundingCableWeightKgPerM, includeGroundingCable, trefoilClampsWeightKgPerM]);
+  }, [sortedTrayCables, groundingCableWeightKgPerM, includeGroundingCable, trefoilClampsWeightKgPerM]);
 
   const supportWeightPerMeterKg = supportCalculations.weightPerMeterKg;
   const trayLengthMeters = supportCalculations.lengthMeters;
@@ -166,7 +163,7 @@ export const useTrayCalculations = (
     supportOverride,
     overrideSupport,
     supportCalculations,
-    nonGroundingCables,
+    sortedTrayCables,
     cablesWeightLoadPerMeterKg,
     trayWeightLoadPerMeterKg,
     trayTotalOwnWeightKg,

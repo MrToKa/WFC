@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
 import type { Cable, Tray } from '@/api/client';
 import {
   TrayDrawingService,
@@ -6,6 +7,10 @@ import {
   type ProjectLayoutConfig,
 } from './trayDrawingService';
 import { TREFOIL_CLAMPS } from './trefoilClamps';
+import { render, renderHook, screen, within } from '@testing-library/react';
+import { filterCablesByTray } from './TrayDetails.utils';
+import { useTrayCalculations } from './hooks/useTrayCalculations';
+import { CablesTableSection } from './components/CablesTableSection';
 import {
   DEFAULT_CATEGORY_SETTINGS,
   DEFAULT_CABLE_SPACING,
@@ -124,6 +129,53 @@ const draw = (
 };
 
 describe('trefoil clamps in the tray concept', () => {
+  it.each([false, true])(
+    'keeps the routed RZ1-K grounding cable in the MV table and drawing with clamps=%s',
+    (clamps) => {
+      const phases = Array.from({ length: 12 }, (_, index) => ({
+        ...cable(index + 1, 35, 'MV'),
+        tag: `WBB${index + 1}`,
+        routing: '/A034/A103/A128/A106/UNDERGROUND_PIPE/A108',
+        weightKgPerM: 2.5,
+      }));
+      const grounding = {
+        ...cable(642, 25, 'Grounding'),
+        tag: '=H1=KF1=MAA1=XBC1=WEB1',
+        typeName: 'RZ1-K GREEN/YELLOW 0.6/1 kV 1x185mm²',
+        routing: '/A034/A103/A128/A106/UNDERGROUND_PIPE/A108',
+        weightKgPerM: 2,
+      };
+      const unrelated = { ...grounding, id: 'unrelated', cableId: 643, routing: '/SECONDARY/A007' };
+      const routed = filterCablesByTray([grounding, unrelated, ...phases], 'A128');
+      const { result } = renderHook(() =>
+        useTrayCalculations(null, null, routed, {}, 5, null, false),
+      );
+      const scheduled = result.current.sortedTrayCables;
+      expect(scheduled).toEqual([...phases, grounding]);
+      expect(result.current.cablesWeightLoadPerMeterKg).toBe(32);
+      render(
+        createElement(CablesTableSection, {
+          trayCables: scheduled,
+          cablesError: null,
+          styles: {},
+          numberFormatter: new Intl.NumberFormat('en'),
+        }),
+      );
+      const row = screen.getByText(grounding.tag).closest('tr')!;
+      expect(within(row).getAllByRole('cell')[0].textContent).toBe('13');
+      expect(within(row).getByText(grounding.typeName)).toBeTruthy();
+
+      const drawing = draw(scheduled, 'mv', clamps, true, 85, {}, { spacingMm: 0 });
+      expect(drawing.cableArcs).toHaveLength(13);
+      expect(drawing.ctx.fillText).toHaveBeenCalledWith('13', expect.any(Number), expect.any(Number));
+      const groundingCircle = drawing.cableArcs.find((arc) => arc.radius === 12.5)!;
+      expect(groundingCircle.x).toBeGreaterThan(
+        Math.max(...drawing.cableArcs.filter((arc) => arc.radius === 17.5).map((arc) => arc.x)),
+      );
+      expect(drawing.summary.trefoilClamps?.flatMap((group) => group.cables)).not.toContain(grounding);
+    },
+  );
+
   const spacingCases = (['power', 'mv', 'vfd'] as const).flatMap((purpose) =>
     [false, true].flatMap((rotation) =>
       (['0', '1D', '2D'] as const).flatMap((mode) =>

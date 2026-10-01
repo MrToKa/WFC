@@ -51,11 +51,30 @@ describe('tray load calculation', () => {
     );
     expect(result.current.traySpanLoadKnPerM).toBeNull();
   });
-  it('includes the selected grounding cable once', () => {
+  it('keeps routed grounding cables in schedule order and counts their weight with the option disabled', () => {
+    const grounding = { ...cable(2, 'Grounding'), cableId: 642 };
+    const mv = { ...cable(15, 'MV'), cableId: 1 };
+    const cables = [grounding, mv];
+    const { result } = renderHook(() =>
+      useTrayCalculations(project, tray, cables, {}, 5, null, false),
+    );
+    expect(result.current.sortedTrayCables).toEqual([mv, grounding]);
+    expect(cables).toEqual([grounding, mv]);
+    expect(result.current.cablesWeightLoadPerMeterKg).toBe(17);
+    expect(result.current.traySpanLoadKnPerM).toBeCloseTo(calculateTraySpanLoad(5, 17)!);
+  });
+  it('refuses partial totals when a routed grounding cable has no weight', () => {
+    const { result } = renderHook(() =>
+      useTrayCalculations(project, tray, [cable(15, 'MV'), cable(null, 'Grounding')], {}, 5, null),
+    );
+    expect(result.current.cablesWeightLoadPerMeterKg).toBeNull();
+    expect(result.current.traySpanLoadKnPerM).toBeNull();
+  });
+  it('adds the optional tray grounding conductor once alongside routed grounding cables', () => {
     const { result } = renderHook(() =>
       useTrayCalculations(project, tray, [cable(15), cable(2, 'Grounding')], {}, 5, 2, true),
     );
-    expect(result.current.cablesWeightLoadPerMeterKg).toBe(17);
+    expect(result.current.cablesWeightLoadPerMeterKg).toBe(19);
   });
   it('uses zero cable mass for an empty tray', () => {
     const { result } = renderHook(() => useTrayCalculations(project, tray, [], {}, 5, null));
@@ -66,10 +85,10 @@ describe('tray load calculation', () => {
     const { result } = renderHook(() =>
       useTrayCalculations(project, tray, [cable(15), cable(2, 'Grounding')], {}, 5, 2, true, 0.5112),
     );
-    expect(result.current.cablesWeightLoadPerMeterKg).toBeCloseTo(17.5112);
-    expect(result.current.cablesTotalWeightKg).toBeCloseTo(175.112);
-    expect(result.current.totalWeightKg).toBeCloseTo(825.112);
-    expect(result.current.traySpanLoadKnPerM).toBeCloseTo(calculateTraySpanLoad(5, 17.5112)!);
+    expect(result.current.cablesWeightLoadPerMeterKg).toBeCloseTo(19.5112);
+    expect(result.current.cablesTotalWeightKg).toBeCloseTo(195.112);
+    expect(result.current.totalWeightKg).toBeCloseTo(845.112);
+    expect(result.current.traySpanLoadKnPerM).toBeCloseTo(calculateTraySpanLoad(5, 19.5112)!);
   });
   it('refuses a partial assessment when enabled clamp mass is unknown', () => {
     const { result } = renderHook(() =>

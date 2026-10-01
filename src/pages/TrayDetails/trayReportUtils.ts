@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 
 import type { Project, Tray, Cable, ProjectFile, CableType } from '@/api/client';
 import type { SupportCalculationResult, ChartEvaluation } from './TrayDetails.types';
-import { isGroundingPurpose, KN_PER_KG } from './TrayDetails.utils';
+import { KN_PER_KG } from './TrayDetails.utils';
 import { calculateTraySpanLoad, getLoadCapacityMetrics } from './loadAssessment';
 import {
   PROJECT_FILE_CATEGORIES,
@@ -333,7 +333,7 @@ export const buildTrayPlaceholderValues = (
     trefoilClampsWeightKgPerM >= 0;
   const cablesWeightPerMeterFormula =
     cablesWeightLoadPerMeterKg !== null && hasKnownTrefoilClampWeight
-      ? `Sum of ${trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)).length} routed cable weights${includeGroundingCable ? ' plus grounding cable' : ''}${trefoilClampsWeightKgPerM! > 0 ? ' plus trefoil clamps' : ''} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} kg/m`
+      ? `Sum of ${trayCables.length} routed cable weights${includeGroundingCable ? ' plus grounding cable' : ''}${trefoilClampsWeightKgPerM! > 0 ? ' plus trefoil clamps' : ''} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} kg/m`
       : null;
 
   const cablesTotalWeightFormula =
@@ -655,7 +655,6 @@ export const buildTrayPlaceholderValues = (
   addValue('tray-details:free-space-verification', freeStatus);
 
   const cableUnitWeights = [...trayCables]
-    .filter((cable) => !isGroundingPurpose(cable.purpose))
     .sort((a, b) => a.cableId - b.cableId)
     .map((cable) => cable.weightKgPerM);
   if (includeGroundingCable) cableUnitWeights.push(context.groundingCableWeightKgPerM);

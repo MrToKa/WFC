@@ -140,7 +140,7 @@ describe('tray report Variables API', () => {
     expect(bundle.values['tray-details:load-reserve']).toBe('0.51464 kN/m');
     expect(bundle.values['tray-details:load-verification']).toMatch(/^PASS/);
   });
-  it('shows each routed cable unit mass in schedule order and counts grounding once', () => {
+  it('shows every routed cable mass and adds the optional grounding conductor once', () => {
     const context = createContext();
     context.trayCables = [
       { ...context.trayCables[0], cableId: 2, weightKgPerM: 2 },
@@ -149,14 +149,34 @@ describe('tray report Variables API', () => {
     ];
     context.includeGroundingCable = true;
     context.groundingCableWeightKgPerM = 0.5;
-    context.cablesWeightLoadPerMeterKg = 3.5;
+    context.cablesWeightLoadPerMeterKg = 4;
     expect(
       buildTrayPlaceholderValues(context).values['tray-details:cables-weight-sum-formula'],
-    ).toBe('1 + 2 + 0.5 = 3.5 kg/m');
+    ).toBe('1 + 2 + 0.5 + 0.5 = 4 kg/m');
     context.cablesWeightLoadPerMeterKg = null;
     expect(
       buildTrayPlaceholderValues(context).values['tray-details:cables-weight-sum-formula'],
     ).toBe('*****');
+  });
+  it('keeps routed grounding mass in the report when the optional conductor is disabled', () => {
+    const context = createContext();
+    const grounding = {
+      ...context.trayCables[0],
+      cableId: 642,
+      tag: '=H1=KF1=MAA1=XBC1=WEB1',
+      typeName: 'RZ1-K GREEN/YELLOW 0.6/1 kV 1x185mm²',
+      weightKgPerM: 2,
+      purpose: 'Grounding',
+    };
+    context.trayCables.push(grounding);
+    context.includeGroundingCable = false;
+    context.cablesWeightLoadPerMeterKg = 17;
+    const bundle = buildTrayPlaceholderValues(context);
+    expect(bundle.values['tray-details:cables-weight-sum-formula']).toBe('15 + 2 = 17 kg/m');
+    expect(bundle.values['tray-details:cables-weight-load-per-meter']).toBe(
+      'Sum of 2 routed cable weights = 17 kg/m',
+    );
+    expect(bundle.tables['tray-details:cables-table'].rows[1]).toContain(grounding.tag);
   });
   it('includes clamp mass once in the component sum and carries the combined load through totals', () => {
     const context = createContext();
@@ -168,20 +188,20 @@ describe('tray report Variables API', () => {
     context.includeGroundingCable = true;
     context.groundingCableWeightKgPerM = 0.5;
     context.trefoilClampsWeightKgPerM = 0.25;
-    context.cablesWeightLoadPerMeterKg = 3.75;
-    context.cablesTotalWeightKg = 37.5;
-    context.totalWeightLoadPerMeterKg = 9.95;
-    context.totalWeightKg = 99.5;
+    context.cablesWeightLoadPerMeterKg = 4.25;
+    context.cablesTotalWeightKg = 42.5;
+    context.totalWeightLoadPerMeterKg = 10.45;
+    context.totalWeightKg = 104.5;
     const values = buildTrayPlaceholderValues(context).values;
-    expect(values['tray-details:cables-weight-sum-formula']).toBe('1 + 2 + 0.5 + 0.25 = 3.75 kg/m');
+    expect(values['tray-details:cables-weight-sum-formula']).toBe('1 + 2 + 0.5 + 0.5 + 0.25 = 4.25 kg/m');
     expect(values['tray-details:cables-weight-load-per-meter']).toBe(
-      'Sum of 2 routed cable weights plus grounding cable plus trefoil clamps = 3.75 kg/m',
+      'Sum of 3 routed cable weights plus grounding cable plus trefoil clamps = 4.25 kg/m',
     );
-    expect(values['tray-details:cables-total-weight']).toBe('3.75 * 10 = 37.5 kg');
-    expect(values['tray-details:total-weight-load-per-meter']).toBe('6.2 + 3.75 = 9.95 kg/m');
-    expect(values['tray-details:total-weight']).toBe('62 + 37.5 = 99.5 kg');
+    expect(values['tray-details:cables-total-weight']).toBe('4.25 * 10 = 42.5 kg');
+    expect(values['tray-details:total-weight-load-per-meter']).toBe('6.2 + 4.25 = 10.45 kg/m');
+    expect(values['tray-details:total-weight']).toBe('62 + 42.5 = 104.5 kg');
     expect(values['tray-details:span-load-formula']).toBe(
-      '(3.75 + 5) x 9.80665 / 1000 = 0.085808 kN/m',
+      '(4.25 + 5) x 9.80665 / 1000 = 0.090712 kN/m',
     );
   });
   it('preserves the original component formula when clamp mass is zero or omitted', () => {

@@ -1087,7 +1087,7 @@ export const TrayDetails = () => {
     supportOverride,
     overrideSupport,
     supportCalculations,
-    nonGroundingCables,
+    sortedTrayCables,
     cablesWeightLoadPerMeterKg,
     trayWeightLoadPerMeterKg,
     trayTotalOwnWeightKg,
@@ -1248,7 +1248,7 @@ export const TrayDetails = () => {
   const cableBundles: CableBundleMap = useMemo(() => {
     const bundles: CableBundleMap = {};
 
-    for (const cable of nonGroundingCables) {
+    for (const cable of sortedTrayCables) {
       const category = matchCableCategory(cable.purpose);
       if (!category) {
         continue;
@@ -1272,7 +1272,7 @@ export const TrayDetails = () => {
     }
 
     return bundles;
-  }, [nonGroundingCables, activeCustomBundleRanges]);
+  }, [sortedTrayCables, activeCustomBundleRanges]);
 
   const isUsingCustomBundles = Boolean(bundleOverrides?.useCustom);
 
@@ -1381,7 +1381,7 @@ export const TrayDetails = () => {
     () =>
       calculateTrayFreeSpaceMetrics({
         tray,
-        cables: nonGroundingCables,
+        cables: sortedTrayCables,
         layout: activeProjectCableLayout ?? null,
         spacingBetweenCablesMm: projectCableSpacingMm,
         considerBundleSpacingAsFree,
@@ -1391,7 +1391,7 @@ export const TrayDetails = () => {
       considerBundleSpacingAsFree,
       activeProjectCableLayout,
       layoutSummary,
-      nonGroundingCables,
+      sortedTrayCables,
       projectCableSpacingMm,
       tray
     ]
@@ -1455,7 +1455,7 @@ export const TrayDetails = () => {
       const summary = trayDrawingServiceRef.current.drawTrayLayout(
         canvasElement,
         tray,
-        nonGroundingCables,
+        sortedTrayCables,
         cableBundles,
         6,
         projectCableSpacingMm,
@@ -1471,7 +1471,7 @@ export const TrayDetails = () => {
     }
   }, [
     tray,
-    nonGroundingCables,
+    sortedTrayCables,
     cableBundles,
     projectCableSpacingMm,
     effectiveLayoutConfig,
@@ -1639,7 +1639,7 @@ export const TrayDetails = () => {
   const cableWeightComponents = useMemo(() => {
     const weights: number[] = [];
 
-    for (const cable of nonGroundingCables) {
+    for (const cable of sortedTrayCables) {
       const weight = cable.weightKgPerM;
       if (weight !== null && !Number.isNaN(weight)) {
         weights.push(weight);
@@ -1655,7 +1655,7 @@ export const TrayDetails = () => {
     }
 
     return weights;
-  }, [nonGroundingCables, groundingCableWeightKgPerM, useTrefoilClamps, trefoilClampWeightKgPerM]);
+  }, [sortedTrayCables, groundingCableWeightKgPerM, useTrefoilClamps, trefoilClampWeightKgPerM]);
 
   const trayWeightLoadPerMeterFormula = useMemo(() => {
     if (
@@ -3384,7 +3384,7 @@ export const TrayDetails = () => {
 
       {/* Cables Section */}
       <CablesTableSection
-        trayCables={nonGroundingCables}
+        trayCables={sortedTrayCables}
         cablesError={cablesError}
         styles={styles}
         numberFormatter={numberFormatter}
