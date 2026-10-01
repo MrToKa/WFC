@@ -193,7 +193,9 @@ describe('tray report Variables API', () => {
     context.totalWeightLoadPerMeterKg = 10.45;
     context.totalWeightKg = 104.5;
     const values = buildTrayPlaceholderValues(context).values;
-    expect(values['tray-details:cables-weight-sum-formula']).toBe('1 + 2 + 0.5 + 0.5 + 0.25 = 4.25 kg/m');
+    expect(values['tray-details:cables-weight-sum-formula']).toBe(
+      '1 + 2 + 0.5 + 0.5 + 0.25 = 4.25 kg/m',
+    );
     expect(values['tray-details:cables-weight-load-per-meter']).toBe(
       'Sum of 3 routed cable weights plus grounding cable plus trefoil clamps = 4.25 kg/m',
     );
@@ -375,72 +377,90 @@ describe('Word export', () => {
     );
     expect(xml).toContain('TRAYNAME old');
   });
-  it('generates the shipped template entirely through Variables API, including images and cable table', async () => {
-    const context = createContext();
-    const bundle = buildTrayPlaceholderValues(context);
-    const replacements: Record<string, string> = {},
-      tables: Record<string, (typeof bundle.tables)[string]> = {},
-      images: Record<
-        string,
-        {
-          data: Uint8Array;
-          widthEmu: number;
-          heightEmu: number;
-          fileName: string;
-          contentType: string;
-        }
-      > = {};
-    // A valid transparent PNG is enough to test OOXML image packaging.
-    const png = Uint8Array.from(
-      Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
-        'base64',
-      ),
-    );
-    for (const [rowId, token] of Object.entries(TRAY_REPORT_PLACEHOLDERS)) {
-      if (bundle.tables[rowId]) tables[token] = bundle.tables[rowId];
-      else if (bundle.images[rowId])
-        images[token] = {
-          data: png,
-          widthEmu: 914400,
-          heightEmu: 457200,
-          fileName: rowId.replace(/:/g, '-'),
-          contentType: 'image/png',
-        };
-      else replacements[token] = bundle.values[rowId];
-    }
-    const templateBytes = Uint8Array.from(
-      readFileSync('Template files/ReportMacroTemplate_LV.docx'),
-    );
-    const template = new Blob([templateBytes]);
-    const output = await replaceDocxPlaceholders(template, replacements, { tables, images });
-    const bytes = await blobBytes(output);
-    const zip = await JSZip.loadAsync(bytes);
-    const xml = await zip.file('word/document.xml')!.async('string');
-    expect(xml).not.toMatch(/\{\{[A-Z]+\}\}/);
-    expect(xml).toContain('PASS - Design load');
-    expect(xml).toContain('LV-C001');
-    expect(xml).toContain('w:tblHeader');
-    expect(xml.match(/<w:drawing>/g)).toHaveLength(3);
-    expect(xml).toContain('w:tblGrid');
-    const drawingIds: string[] = [];
-    for (const name of Object.keys(zip.files).filter((name) => /^word\/.*\.xml$/.test(name))) {
-      const part = await zip.file(name)!.async('string');
-      expect(part).not.toMatch(/\{\{[A-Z]+\}\}/);
-      const doc = new DOMParser().parseFromString(part, 'application/xml');
-      for (const node of Array.from(
-        doc.getElementsByTagNameNS(
-          'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
-          'docPr',
+  it.each(['LV', 'MV'])(
+    'generates the shipped %s template entirely through Variables API, including images and cable table',
+    async (voltage) => {
+      const context = createContext();
+      const bundle = buildTrayPlaceholderValues(context);
+      const replacements: Record<string, string> = {},
+        tables: Record<string, (typeof bundle.tables)[string]> = {},
+        images: Record<
+          string,
+          {
+            data: Uint8Array;
+            widthEmu: number;
+            heightEmu: number;
+            fileName: string;
+            contentType: string;
+          }
+        > = {};
+      // A valid transparent PNG is enough to test OOXML image packaging.
+      const png = Uint8Array.from(
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==',
+          'base64',
         ),
-      ))
-        drawingIds.push(node.getAttribute('id')!);
-    }
-    expect(new Set(drawingIds).size).toBe(drawingIds.length);
-    expect(await zip.file('[Content_Types].xml')!.async('string')).toContain('image/png');
-    if (process.env.REPORT_QA) {
-      mkdirSync('.data/report-qa', { recursive: true });
-      writeFileSync('.data/report-qa/filled-example.docx', Buffer.from(bytes));
-    }
-  });
+      );
+      for (const [rowId, token] of Object.entries(TRAY_REPORT_PLACEHOLDERS)) {
+        if (bundle.tables[rowId]) tables[token] = bundle.tables[rowId];
+        else if (bundle.images[rowId])
+          images[token] = {
+            data: png,
+            widthEmu: 914400,
+            heightEmu: 457200,
+            fileName: rowId.replace(/:/g, '-'),
+            contentType: 'image/png',
+          };
+        else replacements[token] = bundle.values[rowId];
+      }
+      const templateBytes = Uint8Array.from(
+        readFileSync(`Template files/ReportMacroTemplate_${voltage}.docx`),
+      );
+      const template = new Blob([templateBytes]);
+      const output = await replaceDocxPlaceholders(template, replacements, { tables, images });
+      const bytes = await blobBytes(output);
+      const zip = await JSZip.loadAsync(bytes);
+      const xml = await zip.file('word/document.xml')!.async('string');
+      expect(xml).not.toMatch(/\{\{[A-Z]+\}\}/);
+      expect(xml).toContain('PASS - Design load');
+      expect(xml).toContain('LV-C001');
+      expect(xml).toContain('w:tblHeader');
+      expect(xml.match(/<w:drawing>/g)).toHaveLength(voltage === 'MV' ? 5 : 3);
+      if (voltage === 'MV') {
+        expect(xml).toContain(
+          'The minimum distance of cable bundle/trefoil is 2x outer cable diameter (2d).',
+        );
+        expect(xml).toContain('A maximum cable length difference of 3% can be accepted');
+        expect(xml).toContain('No free space is considered.');
+        expect(xml.indexOf('Picture 3  Trefoil cables formation')).toBeLessThan(
+          xml.lastIndexOf('Assessment results'),
+        );
+        expect(xml.indexOf('Picture 4  Minimum distance')).toBeLessThan(
+          xml.lastIndexOf('Assessment results'),
+        );
+        expect(xml).toContain('Picture 5  MV cable distribution');
+      }
+      expect(xml).toContain('w:tblGrid');
+      const drawingIds: string[] = [];
+      for (const name of Object.keys(zip.files).filter((name) => /^word\/.*\.xml$/.test(name))) {
+        const part = await zip.file(name)!.async('string');
+        expect(part).not.toMatch(/\{\{[A-Z]+\}\}/);
+        const doc = new DOMParser().parseFromString(part, 'application/xml');
+        for (const node of Array.from(
+          doc.getElementsByTagNameNS(
+            'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+            'docPr',
+          ),
+        ))
+          drawingIds.push(node.getAttribute('id')!);
+      }
+      expect(new Set(drawingIds).size).toBe(drawingIds.length);
+      expect(await zip.file('[Content_Types].xml')!.async('string')).toContain('image/png');
+      if (process.env.REPORT_QA) {
+        mkdirSync('.data/report-qa', { recursive: true });
+        const exampleName = voltage === 'LV' ? 'filled-example' : 'filled-example-MV';
+        writeFileSync(`.data/report-qa/${exampleName}.docx`, Buffer.from(bytes));
+      }
+    },
+  );
 });

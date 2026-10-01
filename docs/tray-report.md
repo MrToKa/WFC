@@ -1,5 +1,13 @@
 # LV cable tray report
 
+## MV template
+
+`Template files/ReportMacroTemplate_MV.docx` uses the same Variables API placeholders, branding and section order as the LV template. Upload it to the project's Word files and assign it to the MV tray purpose. The assessments remain immediately before the final cable laying concept page.
+
+The MV wording explains phase cables grouped in trefoil, actual bundle footprints and spacing, enabled clamp envelopes and the equivalent clamp mass already included in the cable load. The individual mass summation and component summary both use existing Variables API values. No additional mappings are required. The original MV installation text and both trefoil figures are retained: minimum separation 2d, parallel cable lengths and the conditional 3% length allowance, including the original statement that no free space is considered. These installation requirements appear before the geometric width calculations; the latter report the selected layout and do not verify separation or cable lengths. The distributed-load conclusion does not claim to verify short-circuit restraint or ampacity. Pictures 3 and 4 are the retained trefoil figures; Picture 5 is the final route distribution.
+
+Rebuild MV after any LV template change with `scripts/build-mv-tray-report-template.py`. The builder copies the LV package, adapts the specified body text and title/subject metadata, and inserts the retained trefoil images from `Template files/report-assets` with unique image IDs and relationships. It preserves styles, page geometry, branding images, header/footer and fields, and stops if an expected LV adaptation slot has changed.
+
 The supplied `Template files/ReportMacroTemplate_LV.docx` uses the Variables API row IDs defined in `src/pages/TrayDetails/trayReportVariables.ts`. The exporter resolves its standard placeholders automatically, even when a project has no saved mappings. Existing project-specific mappings remain usable alongside the standard tokens. In Project details → Variables API, select Edit → Use tray report placeholders → Save to populate missing mappings without replacing existing ones.
 
 Upload the updated Word template to the project's Word files and assign it to the LV tray purpose in Project details. Generate report on Tray details downloads the populated document and saves it to the project files. Updating the repository file does not replace templates already uploaded to a project.
