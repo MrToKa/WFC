@@ -39,6 +39,20 @@ describe('VariablesApiTab editing', () => {
     vi.restoreAllMocks();
   });
 
+  it('adds standard report mappings on Save and preserves existing project mappings', () => {
+    setProjectPlaceholders('project-1', { 'tray-details:name': '{{CUSTOM_TRAY}}' });
+    render(<TestTab />);
+    expect(screen.getByRole('button', { name: 'Use tray report placeholders' })).toBeDisabled();
+    click('Edit');
+    click('Use tray report placeholders');
+    expect(getProjectPlaceholders('project-1')).toEqual({ 'tray-details:name': '{{CUSTOM_TRAY}}' });
+    click('Save');
+    expect(getProjectPlaceholders('project-1')['tray-details:name']).toBe('{{CUSTOM_TRAY}}');
+    expect(getProjectPlaceholders('project-1')['tray-details:load-utilization']).toBe(
+      '{{LOADUTILIZATION}}',
+    );
+  });
+
   it('keeps edits and new custom variables out of storage until Save', () => {
     render(<TestTab />);
     const placeholder = screen.getByLabelText('Placeholder for Project name');

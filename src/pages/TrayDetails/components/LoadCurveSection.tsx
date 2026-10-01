@@ -1,3 +1,4 @@
+import { getLoadCapacityMetrics } from '../loadAssessment';
 import React, { useRef, useEffect, useCallback, type MutableRefObject } from 'react';
 import { Caption1, Body1, Spinner } from '@fluentui/react-components';
 import { MaterialLoadCurve, MaterialTray, MaterialLoadCurvePoint } from '../../../api/client';
@@ -18,7 +19,12 @@ interface LoadCurveSectionProps {
   chartPointSpanDisplay: string;
   chartPointLoadDisplay: string;
   chartVerticalLines: Array<{ span: number; toLoad: number; color: string }> | null;
-  chartHorizontalLines: Array<{ load: number; toSpan: number; color: string; label: string }> | null;
+  chartHorizontalLines: Array<{
+    load: number;
+    toSpan: number;
+    color: string;
+    label: string;
+  }> | null;
   chartSummary: { text: string | null; color: string | undefined };
   numberFormatter: Intl.NumberFormat;
   styles: Record<string, string>;
@@ -45,8 +51,12 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
   numberFormatter,
   styles,
   refreshKey,
-  canvasRef: externalCanvasRef
+  canvasRef: externalCanvasRef,
 }) => {
+  const capacityMetrics = getLoadCapacityMetrics(
+    chartEvaluation,
+    chartEvaluation.marker?.load ?? null,
+  );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingServiceRef = useRef<LoadCurveDrawingService | null>(null);
 
@@ -57,7 +67,7 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
         externalCanvasRef.current = node;
       }
     },
-    [externalCanvasRef]
+    [externalCanvasRef],
   );
 
   const drawLoadCurve = useCallback(() => {
@@ -71,7 +81,7 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
     }
 
     try {
-      const title = selectedMaterialTray?.loadCurveName 
+      const title = selectedMaterialTray?.loadCurveName
         ? `Load Curve: ${selectedMaterialTray.loadCurveName}`
         : undefined;
 
@@ -84,7 +94,7 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
         chartVerticalLines,
         chartHorizontalLines,
         chartSummary.text,
-        chartSummary.color
+        chartSummary.color,
       );
       return true;
     } catch (error) {
@@ -99,7 +109,7 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
     chartHorizontalLines,
     chartSummary.text,
     chartSummary.color,
-    selectedMaterialTray?.loadCurveName
+    selectedMaterialTray?.loadCurveName,
   ]);
 
   useEffect(() => {
@@ -151,18 +161,14 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
         <div className={styles.field}>
           <Caption1>Safety factor [%]</Caption1>
           <Body1>
-            {safetyFactorPercent !== null
-              ? numberFormatter.format(safetyFactorPercent)
-              : 'Not set'}
+            {safetyFactorPercent !== null ? numberFormatter.format(safetyFactorPercent) : 'Not set'}
           </Body1>
         </div>
       </div>
       {safetyFactorStatusMessage ? (
         <Body1 className={styles.errorText}>{safetyFactorStatusMessage}</Body1>
       ) : null}
-      {loadCurveError ? (
-        <Body1 className={styles.errorText}>{loadCurveError}</Body1>
-      ) : null}
+      {loadCurveError ? <Body1 className={styles.errorText}>{loadCurveError}</Body1> : null}
       {selectedLoadCurveId === null ? (
         <Body1 className={styles.emptyState}>
           Assign a load curve to this tray type to visualise support limits.
@@ -174,21 +180,19 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
           Unable to display load curve data. Try refreshing the page.
         </Body1>
       ) : chartLoadCurvePoints.length === 0 ? (
-        <Body1 className={styles.emptyState}>
-          The assigned load curve has no data points.
-        </Body1>
+        <Body1 className={styles.emptyState}>The assigned load curve has no data points.</Body1>
       ) : (
         <>
           <div className={styles.chartWrapper}>
-            <canvas 
-              ref={handleCanvasRef} 
+            <canvas
+              ref={handleCanvasRef}
               className={styles.chartCanvas}
-              style={{ 
-                display: 'block', 
-                width: '100%', 
+              style={{
+                display: 'block',
+                width: '100%',
                 maxWidth: '100%',
                 border: '1px solid #e0e0e0',
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
               }}
             />
           </div>
@@ -201,15 +205,29 @@ export const LoadCurveSection: React.FC<LoadCurveSectionProps> = ({
               <Body1>{chartPointSpanDisplay}</Body1>
             </div>
             <div className={styles.field}>
-              <Caption1>Calculated point load [kN/m]</Caption1>
+              <Caption1>Cables plus tray design load [kN/m]</Caption1>
               <Body1>{chartPointLoadDisplay}</Body1>
             </div>
+            <div className={styles.field}>
+              <Caption1>Load basis</Caption1>
+              <Body1>Cables plus tray own weight; support weight excluded.</Body1>
+            </div>
+            {capacityMetrics.utilizationPercent !== null ? (
+              <>
+                <div className={styles.field}>
+                  <Caption1>Load capacity utilization [%]</Caption1>
+                  <Body1>{numberFormatter.format(capacityMetrics.utilizationPercent)}</Body1>
+                </div>
+                <div className={styles.field}>
+                  <Caption1>Remaining design load capacity [kN/m]</Caption1>
+                  <Body1>{numberFormatter.format(capacityMetrics.reserveKnPerM!)}</Body1>
+                </div>
+              </>
+            ) : null}
             {chartEvaluation.limitHighlight ? (
               <div className={styles.field}>
                 <Caption1>{chartEvaluation.limitHighlight.label} [m]</Caption1>
-                <Body1>
-                  {numberFormatter.format(chartEvaluation.limitHighlight.span)}
-                </Body1>
+                <Body1>{numberFormatter.format(chartEvaluation.limitHighlight.span)}</Body1>
               </div>
             ) : null}
             {chartEvaluation.allowableLoadAtSpan !== null ? (

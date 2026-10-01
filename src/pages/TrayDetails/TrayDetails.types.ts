@@ -24,13 +24,14 @@ export type LoadCurveChartStatus =
   | 'loading'
   | 'awaiting-data'
   | 'no-points'
+  | 'invalid-curve'
   | 'ok'
   | 'too-long'
   | 'too-short'
   | 'load-too-high';
 
-export type GroundingSelection = { 
-  include: boolean; 
+export type GroundingSelection = {
+  include: boolean;
   typeId: string | null;
 };
 
@@ -52,4 +53,9 @@ export type ChartEvaluation = {
   minSpan: number | null;
   maxSpan: number | null;
   allowableLoadAtSpan: number | null;
+  maxAllowableSpan: number | null;
+  interpolation: {
+    from: { spanM: number; loadKnPerM: number };
+    to: { spanM: number; loadKnPerM: number };
+  } | null;
 };

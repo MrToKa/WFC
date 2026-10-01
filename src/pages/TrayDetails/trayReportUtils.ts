@@ -1,42 +1,31 @@
 import JSZip from 'jszip';
 
-import type {
-  Project,
-  Tray,
-  Cable,
-  ProjectFile,
-  CableType
-} from '@/api/client';
-import type {
-  SupportCalculationResult,
-  ChartEvaluation
-} from './TrayDetails.types';
-import { isGroundingPurpose } from './TrayDetails.utils';
+import type { Project, Tray, Cable, ProjectFile, CableType } from '@/api/client';
+import type { SupportCalculationResult, ChartEvaluation } from './TrayDetails.types';
+import { isGroundingPurpose, KN_PER_KG } from './TrayDetails.utils';
+import { calculateTraySpanLoad, getLoadCapacityMetrics } from './loadAssessment';
 import {
   PROJECT_FILE_CATEGORIES,
   PROJECT_FILE_CATEGORY_LABELS,
   getProjectFileCategory,
-  type ProjectFileCategory
+  type ProjectFileCategory,
 } from '../ProjectDetails/projectFileUtils';
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const REL_NS =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const RELS_NS =
-  'http://schemas.openxmlformats.org/package/2006/relationships';
+const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-const WP_NS =
-  'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
 export const MISSING_VALUE_PLACEHOLDER = '*****';
 
 export const GROUNDING_CABLE_NOTE_TEXT =
-  '\r\n \tNote: Bare grounding copper cable {cableType} is included in the calculations. The cable itself will be mounted on the outside of the board of the tray and it is not included in the free space calculations.';
+  'Bare grounding copper cable {cableType} is included in the weight and load calculations. It is mounted outside the tray side rail and excluded from free width calculations.';
 
 const buildGroundingCableNote = (
   includeGroundingCable: boolean,
-  groundingCableTypeLabel: string | null | undefined
+  groundingCableTypeLabel: string | null | undefined,
 ): string => {
   if (!includeGroundingCable) {
     return '';
@@ -126,7 +115,7 @@ export type TrayPlaceholderContext = {
 export const canvasToBlob = (
   canvas: HTMLCanvasElement,
   type: string,
-  quality?: number
+  quality?: number,
 ): Promise<Blob> =>
   new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -138,7 +127,7 @@ export const canvasToBlob = (
         resolve(blob);
       },
       type,
-      quality
+      quality,
     );
   });
 
@@ -150,11 +139,8 @@ const fallbackText = (value: string | null | undefined): string => {
   return trimmed === '' ? MISSING_VALUE_PLACEHOLDER : trimmed;
 };
 
-const formatNumber = (
-  formatter: Intl.NumberFormat,
-  value: number | null | undefined
-): string => {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+const formatNumber = (formatter: Intl.NumberFormat, value: number | null | undefined): string => {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return MISSING_VALUE_PLACEHOLDER;
   }
   return formatter.format(value);
@@ -163,7 +149,7 @@ const formatNumber = (
 const formatNumberWithUnit = (
   formatter: Intl.NumberFormat,
   value: number | null | undefined,
-  unit: string
+  unit: string,
 ): string => {
   const formatted = formatNumber(formatter, value);
   return formatted === MISSING_VALUE_PLACEHOLDER
@@ -171,11 +157,8 @@ const formatNumberWithUnit = (
     : `${formatted} ${unit}`;
 };
 
-const formatPercent = (
-  formatter: Intl.NumberFormat,
-  value: number | null | undefined
-): string => {
-  if (value === null || value === undefined || Number.isNaN(value)) {
+const formatPercent = (formatter: Intl.NumberFormat, value: number | null | undefined): string => {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return MISSING_VALUE_PLACEHOLDER;
   }
   return `${formatter.format(value)} %`;
@@ -188,10 +171,7 @@ const formatBoolean = (value: boolean | null | undefined): string => {
   return value ? 'Yes' : 'No';
 };
 
-const formatRowCount = (
-  formatter: Intl.NumberFormat,
-  count: number | null | undefined
-): string => {
+const formatRowCount = (formatter: Intl.NumberFormat, count: number | null | undefined): string => {
   if (count === null || count === undefined || Number.isNaN(count)) {
     return '0 rows';
   }
@@ -203,7 +183,7 @@ const formatRowCount = (
 const buildTableSummary = (
   formatter: Intl.NumberFormat,
   count: number | null | undefined,
-  note?: string
+  note?: string,
 ): string => {
   const parts = [note ?? 'Entire table export'];
   if (count !== null && count !== undefined && Number.isFinite(count)) {
@@ -214,7 +194,7 @@ const buildTableSummary = (
 
 const formatDateTime = (
   formatter: Intl.DateTimeFormat,
-  value: string | null | undefined
+  value: string | null | undefined,
 ): string => {
   if (!value) {
     return '-';
@@ -227,7 +207,7 @@ const formatDateTime = (
 };
 
 export const buildTrayPlaceholderValues = (
-  context: TrayPlaceholderContext
+  context: TrayPlaceholderContext,
 ): TrayPlaceholderValueBundle => {
   const {
     project,
@@ -252,7 +232,6 @@ export const buildTrayPlaceholderValues = (
     cablesTotalWeightKg,
     totalWeightLoadPerMeterKg,
     totalWeightKg,
-    groundingCableWeightKgPerM,
     projectCableSpacingMm,
     considerBundleSpacingAsFree,
     minFreeSpacePercent,
@@ -269,7 +248,7 @@ export const buildTrayPlaceholderValues = (
     loadCurveImageFileName,
     bundlesImageFileName,
     materialTrayMetadata,
-    currentUserDisplay
+    currentUserDisplay,
   } = context;
 
   const values: Record<string, string> = {};
@@ -288,11 +267,9 @@ export const buildTrayPlaceholderValues = (
       : null;
 
   const usefulTrayHeightFormula =
-    trayHeightSourceMm !== null &&
-    trayRungHeightMm !== null &&
-    usefulTrayHeightMm !== null
+    trayHeightSourceMm !== null && trayRungHeightMm !== null && usefulTrayHeightMm !== null
       ? `${numberFormatter.format(trayHeightSourceMm)} - ${numberFormatter.format(
-          trayRungHeightMm
+          trayRungHeightMm,
         )} = ${numberFormatter.format(usefulTrayHeightMm)} mm`
       : null;
 
@@ -304,9 +281,9 @@ export const buildTrayPlaceholderValues = (
     trayFreeSpacePercent !== null &&
     !Number.isNaN(trayFreeSpacePercent)
       ? `((${numberFormatter.format(trayWidthSourceMm)} - ${numberFormatter.format(
-          trayOccupiedWidthMm
+          trayOccupiedWidthMm,
         )}) / ${numberFormatter.format(trayWidthSourceMm)}) * 100 = ${percentageFormatter.format(
-          trayFreeSpacePercent
+          trayFreeSpacePercent,
         )} %`
       : null;
 
@@ -326,28 +303,12 @@ export const buildTrayPlaceholderValues = (
   const supportsWeightPerPiece = supportCalculations.weightPerPieceKg;
   const supportDistanceMeters = supportCalculations.distanceMeters;
 
-  const cableWeightComponents: number[] = [];
-  for (const cable of trayCables) {
-    if (isGroundingPurpose(cable.purpose)) {
-      continue;
-    }
-    if (typeof cable.weightKgPerM === 'number' && !Number.isNaN(cable.weightKgPerM)) {
-      cableWeightComponents.push(cable.weightKgPerM);
-    }
-  }
-  if (
-    groundingCableWeightKgPerM !== null &&
-    !Number.isNaN(groundingCableWeightKgPerM)
-  ) {
-    cableWeightComponents.push(groundingCableWeightKgPerM);
-  }
-
   const trayWeightLoadPerMeterFormula =
     trayWeightPerMeterKg !== null &&
     supportsWeightPerMeter !== null &&
     trayWeightLoadPerMeterKg !== null
       ? `${numberFormatter.format(trayWeightPerMeterKg)} + ${numberFormatter.format(
-          supportsWeightPerMeter
+          supportsWeightPerMeter,
         )} = ${numberFormatter.format(trayWeightLoadPerMeterKg)} kg/m`
       : null;
 
@@ -357,17 +318,13 @@ export const buildTrayPlaceholderValues = (
     trayLengthMeters > 0 &&
     trayTotalOwnWeightKg !== null
       ? `${numberFormatter.format(trayWeightLoadPerMeterKg)} * ${numberFormatter.format(
-          trayLengthMeters
+          trayLengthMeters,
         )} = ${numberFormatter.format(trayTotalOwnWeightKg)} kg`
       : null;
 
   const cablesWeightPerMeterFormula =
-    cablesWeightLoadPerMeterKg !== null && cableWeightComponents.length > 0
-      ? `${cableWeightComponents
-          .map((value) => numberFormatter.format(value))
-          .join(' + ')} = ${numberFormatter.format(
-          cablesWeightLoadPerMeterKg
-        )} kg/m`
+    cablesWeightLoadPerMeterKg !== null
+      ? `Sum of ${trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)).length} routed cable weights${includeGroundingCable ? ' plus grounding cable' : ''} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} kg/m`
       : null;
 
   const cablesTotalWeightFormula =
@@ -376,7 +333,7 @@ export const buildTrayPlaceholderValues = (
     trayLengthMeters > 0 &&
     cablesTotalWeightKg !== null
       ? `${numberFormatter.format(cablesWeightLoadPerMeterKg)} * ${numberFormatter.format(
-          trayLengthMeters
+          trayLengthMeters,
         )} = ${numberFormatter.format(cablesTotalWeightKg)} kg`
       : null;
 
@@ -385,25 +342,21 @@ export const buildTrayPlaceholderValues = (
     cablesWeightLoadPerMeterKg !== null &&
     totalWeightLoadPerMeterKg !== null
       ? `${numberFormatter.format(trayWeightLoadPerMeterKg)} + ${numberFormatter.format(
-          cablesWeightLoadPerMeterKg
+          cablesWeightLoadPerMeterKg,
         )} = ${numberFormatter.format(totalWeightLoadPerMeterKg)} kg/m`
       : null;
 
   const totalWeightFormula =
-    trayTotalOwnWeightKg !== null &&
-    cablesTotalWeightKg !== null &&
-    totalWeightKg !== null
+    trayTotalOwnWeightKg !== null && cablesTotalWeightKg !== null && totalWeightKg !== null
       ? `${numberFormatter.format(trayTotalOwnWeightKg)} + ${numberFormatter.format(
-          cablesTotalWeightKg
+          cablesTotalWeightKg,
         )} = ${numberFormatter.format(totalWeightKg)} kg`
       : null;
 
   const supportsTotalWeightFormula =
-    supportsCount !== null &&
-    supportsWeightPerPiece !== null &&
-    supportsTotalWeight !== null
+    supportsCount !== null && supportsWeightPerPiece !== null && supportsTotalWeight !== null
       ? `${numberFormatter.format(supportsCount)} * ${numberFormatter.format(
-          supportsWeightPerPiece
+          supportsWeightPerPiece,
         )} = ${numberFormatter.format(supportsTotalWeight)} kg`
       : null;
 
@@ -413,21 +366,24 @@ export const buildTrayPlaceholderValues = (
     trayLengthMeters > 0 &&
     supportsWeightPerMeter !== null
       ? `${numberFormatter.format(supportsTotalWeight)} / ${numberFormatter.format(
-          trayLengthMeters
+          trayLengthMeters,
         )} = ${numberFormatter.format(supportsWeightPerMeter)} kg/m`
       : null;
 
+  const baseSegments =
+    trayLengthMeters !== null && supportDistanceMeters !== null && supportDistanceMeters > 0
+      ? Math.floor(trayLengthMeters / supportDistanceMeters)
+      : null;
+  const supportRemainder =
+    baseSegments !== null && trayLengthMeters !== null && supportDistanceMeters !== null
+      ? trayLengthMeters - baseSegments * supportDistanceMeters
+      : null;
   const supportsCountFormula =
-    trayLengthMeters !== null &&
-    trayLengthMeters > 0 &&
+    baseSegments !== null &&
+    supportRemainder !== null &&
     supportDistanceMeters !== null &&
-    supportDistanceMeters > 0 &&
     supportsCount !== null
-      ? `${numberFormatter.format(trayLengthMeters)} / ${numberFormatter.format(
-          supportDistanceMeters
-        )} ≈ ${numberFormatter.format(
-          trayLengthMeters / supportDistanceMeters
-        )} = ${numberFormatter.format(supportsCount)}`
+      ? `floor(${numberFormatter.format(trayLengthMeters!)} / ${numberFormatter.format(supportDistanceMeters)}) = ${baseSegments}; remainder = ${numberFormatter.format(supportRemainder)} m; N = max(2, ${baseSegments} + 1)${baseSegments >= 1 && supportRemainder > supportDistanceMeters * 0.2 ? ' + 1' : ''} = ${supportsCount}`
       : null;
 
   // Detail section
@@ -437,84 +393,54 @@ export const buildTrayPlaceholderValues = (
   addValue('details:manager', fallbackText(project.manager));
   addValue('details:description', fallbackText(project.description));
   addValue('details:current-user', fallbackText(currentUserDisplay));
-  addValue(
-    'details:created-at',
-    formatDateTime(dateTimeFormatter, project.createdAt)
-  );
-  addValue(
-    'details:updated-at',
-    formatDateTime(dateTimeFormatter, project.updatedAt)
-  );
+  addValue('details:created-at', formatDateTime(dateTimeFormatter, project.createdAt));
+  addValue('details:updated-at', formatDateTime(dateTimeFormatter, project.updatedAt));
   addValue(
     'details:secondary-tray-length',
-    formatNumberWithUnit(numberFormatter, project.secondaryTrayLength, 'm')
+    formatNumberWithUnit(numberFormatter, project.secondaryTrayLength, 'm'),
   );
   addValue(
     'details:support-distance',
-    formatNumberWithUnit(numberFormatter, project.supportDistance, 'm')
+    formatNumberWithUnit(numberFormatter, project.supportDistance, 'm'),
   );
   addValue(
     'details:support-weight',
-    formatNumberWithUnit(numberFormatter, project.supportWeight, 'kg')
+    formatNumberWithUnit(numberFormatter, project.supportWeight, 'kg'),
   );
   addValue(
     'details:tray-load-safety-factor',
-    formatNumberWithUnit(numberFormatter, project.trayLoadSafetyFactor, '%')
+    formatNumberWithUnit(numberFormatter, project.trayLoadSafetyFactor, '%'),
   );
   addValue(
     'details:cable-spacing',
-    formatNumberWithUnit(numberFormatter, projectCableSpacingMm, 'mm')
+    formatNumberWithUnit(numberFormatter, projectCableSpacingMm, 'mm'),
   );
-  addValue(
-    'details:bundle-spacing-free',
-    formatBoolean(considerBundleSpacingAsFree)
-  );
-  addValue(
-    'details:min-free-space',
-    formatPercent(percentageFormatter, minFreeSpacePercent)
-  );
-  addValue(
-    'details:max-free-space',
-    formatPercent(percentageFormatter, maxFreeSpacePercent)
-  );
+  addValue('details:bundle-spacing-free', formatBoolean(considerBundleSpacingAsFree));
+  addValue('details:min-free-space', formatPercent(percentageFormatter, minFreeSpacePercent));
+  addValue('details:max-free-space', formatPercent(percentageFormatter, maxFreeSpacePercent));
 
   // Detail tables
   addValue(
     'table:details:tray-report-templates',
-    buildTableSummary(
-      numberFormatter,
-      trayTemplatePurposeCount,
-      'Tray report templates table'
-    )
+    buildTableSummary(numberFormatter, trayTemplatePurposeCount, 'Tray report templates table'),
   );
 
   // Cable/cables list tables
   addValue(
     'table:cables:main',
-    buildTableSummary(
-      numberFormatter,
-      projectCableTypes.length,
-      'Cable types table'
-    )
+    buildTableSummary(numberFormatter, projectCableTypes.length, 'Cable types table'),
   );
   addValue(
     'table:cable-list:main',
-    buildTableSummary(
-      numberFormatter,
-      projectCables.length,
-      'Cables list table'
-    )
+    buildTableSummary(numberFormatter, projectCables.length, 'Cables list table'),
   );
-  addValue(
-    'table:trays:main',
-    buildTableSummary(numberFormatter, trays.length, 'Trays table')
-  );
+  addValue('table:trays:main', buildTableSummary(numberFormatter, trays.length, 'Trays table'));
 
   const fileCounts: Record<ProjectFileCategory, number> = {
     word: 0,
     excel: 0,
     pdf: 0,
-    images: 0
+    images: 0,
   };
 
   for (const file of projectFiles) {
@@ -530,8 +456,8 @@ export const buildTrayPlaceholderValues = (
       buildTableSummary(
         numberFormatter,
         fileCounts[category] ?? 0,
-        `${PROJECT_FILE_CATEGORY_LABELS[category]} files table`
-      )
+        `${PROJECT_FILE_CATEGORY_LABELS[category]} files table`,
+      ),
     );
   }
 
@@ -540,33 +466,21 @@ export const buildTrayPlaceholderValues = (
   addValue('tray-details:type', fallbackText(tray.type));
   addValue('tray-details:manufacturer', fallbackText(materialTrayMetadata?.manufacturer));
   addValue('tray-details:purpose', fallbackText(tray.purpose));
-  addValue(
-    'tray-details:width',
-    formatNumberWithUnit(numberFormatter, trayWidthSourceMm, 'mm')
-  );
-  addValue(
-    'tray-details:height',
-    formatNumberWithUnit(numberFormatter, trayHeightSourceMm, 'mm')
-  );
-  addValue(
-    'tray-details:length',
-    formatNumberWithUnit(numberFormatter, tray.lengthMm, 'mm')
-  );
+  addValue('tray-details:width', formatNumberWithUnit(numberFormatter, trayWidthSourceMm, 'mm'));
+  addValue('tray-details:height', formatNumberWithUnit(numberFormatter, trayHeightSourceMm, 'mm'));
+  addValue('tray-details:length', formatNumberWithUnit(numberFormatter, tray.lengthMm, 'mm'));
   addValue(
     'tray-details:occupied-space',
-    formatNumberWithUnit(numberFormatter, trayOccupiedWidthMm, 'mm')
+    formatNumberWithUnit(numberFormatter, trayOccupiedWidthMm, 'mm'),
   );
   addValue(
     'tray-details:free-space',
     trayFreeSpaceFormula ??
       (trayFreeSpacePercent === null
         ? MISSING_VALUE_PLACEHOLDER
-        : formatPercent(percentageFormatter, trayFreeSpacePercent))
+        : formatPercent(percentageFormatter, trayFreeSpacePercent)),
   );
-  addValue(
-    'tray-details:grounding-flag',
-    formatBoolean(includeGroundingCable)
-  );
+  addValue('tray-details:grounding-flag', formatBoolean(includeGroundingCable));
   const groundingCableTypeDisplay = includeGroundingCable
     ? fallbackText(groundingCableTypeName)
     : 'Not included';
@@ -574,145 +488,224 @@ export const buildTrayPlaceholderValues = (
   addValue('tray-details:grounding-type', groundingCableTypeDisplay);
   values['tray-details:grounding-note'] = buildGroundingCableNote(
     includeGroundingCable,
-    includeGroundingCable ? groundingCableTypeDisplay : null
+    includeGroundingCable ? groundingCableTypeDisplay : null,
   );
   addValue(
     'tray-details:rung-height',
-    formatNumberWithUnit(numberFormatter, trayRungHeightMm, 'mm')
+    formatNumberWithUnit(numberFormatter, trayRungHeightMm, 'mm'),
   );
   addValue(
     'tray-details:useful-height',
-    usefulTrayHeightFormula ??
-      formatNumberWithUnit(numberFormatter, usefulTrayHeightMm, 'mm')
+    usefulTrayHeightFormula ?? formatNumberWithUnit(numberFormatter, usefulTrayHeightMm, 'mm'),
   );
   addValue(
     'tray-details:material-weight-per-meter',
-    formatNumberWithUnit(numberFormatter, trayMaterialWeightPerMeterKg, 'kg/m')
+    formatNumberWithUnit(numberFormatter, trayMaterialWeightPerMeterKg, 'kg/m'),
   );
   addValue(
     'tray-details:tray-type-image',
     trayTypeImageAvailable
-      ? materialTrayMetadata?.imageTemplateFileName ?? 'Tray type illustration'
-      : MISSING_VALUE_PLACEHOLDER
+      ? (materialTrayMetadata?.imageTemplateFileName ?? 'Tray type illustration')
+      : MISSING_VALUE_PLACEHOLDER,
   );
-  addValue(
-    'tray-details:created-at',
-    formatDateTime(dateTimeFormatter, tray.createdAt)
-  );
-  addValue(
-    'tray-details:updated-at',
-    formatDateTime(dateTimeFormatter, tray.updatedAt)
-  );
+  addValue('tray-details:created-at', formatDateTime(dateTimeFormatter, tray.createdAt));
+  addValue('tray-details:updated-at', formatDateTime(dateTimeFormatter, tray.updatedAt));
 
   // Load curve
-  addValue(
-    'tray-details:load-curve-name',
-    fallbackText(selectedLoadCurveName)
-  );
+  addValue('tray-details:load-curve-name', fallbackText(selectedLoadCurveName));
   addValue(
     'tray-details:safety-factor',
-    formatNumberWithUnit(numberFormatter, safetyFactorPercent, '%')
+    formatNumberWithUnit(numberFormatter, safetyFactorPercent, '%'),
   );
-  addValue(
-    'tray-details:calculated-span',
-    formatNumber(numberFormatter, chartSpanMeters)
-  );
-  addValue(
-    'tray-details:calculated-load',
-    formatNumber(numberFormatter, safetyAdjustedLoadKnPerM)
-  );
+  addValue('tray-details:calculated-span', formatNumber(numberFormatter, chartSpanMeters));
+  addValue('tray-details:calculated-load', formatNumber(numberFormatter, safetyAdjustedLoadKnPerM));
   const limitHighlight = chartEvaluation.limitHighlight;
   addValue(
     'tray-details:limit-highlight',
     limitHighlight && !Number.isNaN(limitHighlight.span)
-      ? `${limitHighlight.label}: ${formatNumber(
-          numberFormatter,
-          limitHighlight.span
-        )} m`
-      : 'Not applicable'
+      ? `${limitHighlight.label}: ${formatNumber(numberFormatter, limitHighlight.span)} m`
+      : 'Not applicable',
   );
   addValue(
     'tray-details:allowable-load',
-    formatNumber(numberFormatter, chartEvaluation.allowableLoadAtSpan)
+    formatNumber(numberFormatter, chartEvaluation.allowableLoadAtSpan),
   );
   const loadCurveStatus =
     safetyFactorStatusMessage ?? chartEvaluation.message ?? 'Status unavailable';
   addValue('tray-details:load-curve-status', loadCurveStatus);
   addValue('tray-details:load-curve-canvas', loadCurveImageFileName);
 
+  // Load verification uses the same evaluation as the Tray details chart.
+  const spanLoad = calculateTraySpanLoad(trayWeightPerMeterKg, cablesWeightLoadPerMeterKg);
+  const spanMass = spanLoad === null ? null : spanLoad / KN_PER_KG;
+  const metrics = getLoadCapacityMetrics(chartEvaluation, safetyAdjustedLoadKnPerM);
+  const calcFormatter = new Intl.NumberFormat(numberFormatter.resolvedOptions().locale, {
+    maximumFractionDigits: 6,
+  });
+  const f = (value: number) => calcFormatter.format(value);
+  const factor =
+    safetyFactorPercent !== null && Number.isFinite(safetyFactorPercent) && safetyFactorPercent >= 0
+      ? 1 + safetyFactorPercent / 100
+      : null;
+  addValue('tray-details:reported-at', dateTimeFormatter.format(new Date()));
+  addValue(
+    'tray-details:tray-weight-per-meter',
+    formatNumberWithUnit(numberFormatter, trayWeightPerMeterKg, 'kg/m'),
+  );
+  addValue('tray-details:span-mass', formatNumberWithUnit(numberFormatter, spanMass, 'kg/m'));
+  addValue(
+    'tray-details:span-load-formula',
+    spanLoad !== null && trayWeightPerMeterKg !== null && cablesWeightLoadPerMeterKg !== null
+      ? `(${f(cablesWeightLoadPerMeterKg)} + ${f(trayWeightPerMeterKg)}) x 9.80665 / 1000 = ${f(spanLoad)} kN/m`
+      : null,
+  );
+  addValue(
+    'tray-details:design-load-formula',
+    spanLoad !== null && factor !== null && safetyAdjustedLoadKnPerM !== null
+      ? `${f(spanLoad)} x (1 + ${f(safetyFactorPercent!)} / 100) = ${f(safetyAdjustedLoadKnPerM)} kN/m`
+      : null,
+  );
+  const interpolation = chartEvaluation.interpolation;
+  addValue(
+    'tray-details:allowable-load-formula',
+    interpolation && chartSpanMeters !== null && chartEvaluation.allowableLoadAtSpan !== null
+      ? interpolation.from.spanM === interpolation.to.spanM
+        ? `Published curve point at ${f(interpolation.from.spanM)} m: ${f(chartEvaluation.allowableLoadAtSpan)} kN/m`
+        : `${f(interpolation.from.loadKnPerM)} + ((${f(chartSpanMeters)} - ${f(interpolation.from.spanM)}) / (${f(interpolation.to.spanM)} - ${f(interpolation.from.spanM)})) x (${f(interpolation.to.loadKnPerM)} - ${f(interpolation.from.loadKnPerM)}) = ${f(chartEvaluation.allowableLoadAtSpan)} kN/m`
+      : 'Not available within the documented curve range',
+  );
+  addValue(
+    'tray-details:load-utilization',
+    formatPercent(percentageFormatter, metrics.utilizationPercent),
+  );
+  addValue(
+    'tray-details:load-reserve',
+    formatNumberWithUnit(calcFormatter, metrics.reserveKnPerM, 'kN/m'),
+  );
+  addValue(
+    'tray-details:load-reserve-percent',
+    formatPercent(percentageFormatter, metrics.reservePercent),
+  );
+  addValue(
+    'tray-details:load-utilization-formula',
+    metrics.utilizationPercent !== null
+      ? `${f(safetyAdjustedLoadKnPerM!)} / ${f(chartEvaluation.allowableLoadAtSpan!)} x 100 = ${f(metrics.utilizationPercent)} %`
+      : null,
+  );
+  addValue(
+    'tray-details:load-reserve-formula',
+    metrics.reserveKnPerM !== null
+      ? `${f(chartEvaluation.allowableLoadAtSpan!)} - ${f(safetyAdjustedLoadKnPerM!)} = ${f(metrics.reserveKnPerM)} kN/m`
+      : null,
+  );
+  addValue(
+    'tray-details:max-allowable-span',
+    formatNumberWithUnit(calcFormatter, chartEvaluation.maxAllowableSpan, 'm'),
+  );
+  addValue(
+    'tray-details:load-range',
+    chartEvaluation.minSpan !== null && chartEvaluation.maxSpan !== null
+      ? `${f(chartEvaluation.minSpan)} to ${f(chartEvaluation.maxSpan)} m`
+      : null,
+  );
+  const verified = chartEvaluation.status === 'ok';
+  const exceeded =
+    chartEvaluation.allowableLoadAtSpan !== null &&
+    ['too-long', 'load-too-high'].includes(chartEvaluation.status);
+  addValue(
+    'tray-details:load-verification',
+    verified
+      ? 'PASS - Design load is within the allowable load at the selected support spacing.'
+      : exceeded
+        ? 'FAIL - Design load exceeds the allowable load at the selected support spacing.'
+        : `NOT VERIFIED - ${loadCurveStatus}`,
+  );
+  addValue(
+    'tray-details:free-space-percent',
+    formatPercent(percentageFormatter, trayFreeSpacePercent),
+  );
+  const validFree =
+    trayFreeSpacePercent !== null &&
+    Number.isFinite(trayFreeSpacePercent) &&
+    trayWidthSourceMm !== null &&
+    trayWidthSourceMm > 0;
+  const freeStatus = !validFree
+    ? 'NOT VERIFIED - Complete tray width and cable layout data are required.'
+    : trayFreeSpacePercent! < 0
+      ? 'FAIL - Cable layout exceeds the tray width.'
+      : minFreeSpacePercent !== null && trayFreeSpacePercent! < minFreeSpacePercent
+        ? 'FAIL - Free width is below the project minimum.'
+        : maxFreeSpacePercent !== null && trayFreeSpacePercent! > maxFreeSpacePercent
+          ? 'OUTSIDE TARGET - Free width exceeds the project maximum.'
+          : minFreeSpacePercent === null && maxFreeSpacePercent === null
+            ? 'Free width calculated; project limits are not configured.'
+            : 'PASS - Free width is within the configured project limits.';
+  addValue('tray-details:free-space-verification', freeStatus);
+
   // Weight calculations
   addValue(
     'tray-details:weight-load-per-meter',
-    trayWeightLoadPerMeterFormula ??
-      formatNumber(numberFormatter, trayWeightLoadPerMeterKg)
+    trayWeightLoadPerMeterFormula ?? formatNumber(numberFormatter, trayWeightLoadPerMeterKg),
   );
   addValue(
     'tray-details:total-own-weight',
-    trayTotalOwnWeightFormula ??
-      formatNumber(numberFormatter, trayTotalOwnWeightKg)
+    trayTotalOwnWeightFormula ?? formatNumber(numberFormatter, trayTotalOwnWeightKg),
   );
   addValue(
     'tray-details:cables-weight-load-per-meter',
-    cablesWeightPerMeterFormula ??
-      formatNumber(numberFormatter, cablesWeightLoadPerMeterKg)
+    cablesWeightPerMeterFormula ?? formatNumber(numberFormatter, cablesWeightLoadPerMeterKg),
   );
   addValue(
     'tray-details:cables-total-weight',
-    cablesTotalWeightFormula ??
-      formatNumber(numberFormatter, cablesTotalWeightKg)
+    cablesTotalWeightFormula ?? formatNumber(numberFormatter, cablesTotalWeightKg),
   );
   addValue(
     'tray-details:total-weight-load-per-meter',
-    totalWeightLoadPerMeterFormula ??
-      formatNumber(numberFormatter, totalWeightLoadPerMeterKg)
+    totalWeightLoadPerMeterFormula ?? formatNumber(numberFormatter, totalWeightLoadPerMeterKg),
   );
   addValue(
     'tray-details:total-weight',
-    totalWeightFormula ?? formatNumber(numberFormatter, totalWeightKg)
+    totalWeightFormula ?? formatNumber(numberFormatter, totalWeightKg),
   );
 
   // Cables listing
   addValue(
     'tray-details:cables-table',
-    `${formatRowCount(numberFormatter, trayCables.length)} on tray`
+    `${formatRowCount(numberFormatter, trayCables.length)} on tray`,
   );
 
   // Supports section
   addValue('tray-details:support-type', fallbackText(supportTypeDisplay));
   addValue(
     'tray-details:support-length',
-    formatNumberWithUnit(numberFormatter, supportLengthMm, 'mm')
+    formatNumberWithUnit(numberFormatter, supportLengthMm, 'mm'),
   );
   addValue(
     'tray-details:support-distance',
-    formatNumberWithUnit(numberFormatter, supportDistanceMeters, 'm')
+    formatNumberWithUnit(numberFormatter, supportDistanceMeters, 'm'),
   );
   addValue(
     'tray-details:supports-count',
-    supportsCountFormula ?? formatNumber(numberFormatter, supportsCount)
+    supportsCountFormula ?? formatNumber(numberFormatter, supportsCount),
   );
   addValue(
     'tray-details:support-weight-per-piece',
-    formatNumber(numberFormatter, supportCalculations.weightPerPieceKg)
+    formatNumber(numberFormatter, supportCalculations.weightPerPieceKg),
   );
   addValue(
     'tray-details:supports-total-weight',
-    supportsTotalWeightFormula ??
-      formatNumber(numberFormatter, supportCalculations.totalWeightKg)
+    supportsTotalWeightFormula ?? formatNumber(numberFormatter, supportCalculations.totalWeightKg),
   );
   addValue(
     'tray-details:supports-weight-per-meter',
     supportsWeightPerMeterFormula ??
-      formatNumber(numberFormatter, supportCalculations.weightPerMeterKg)
+      formatNumber(numberFormatter, supportCalculations.weightPerMeterKg),
   );
 
   // Visualization
   addValue('tray-details:concept-canvas', bundlesImageFileName);
 
-  tablesById['tray-details:cables-table'] = buildTrayCablesTable(
-    trayCables,
-    numberFormatter
-  );
+  tablesById['tray-details:cables-table'] = buildTrayCablesTable(trayCables, numberFormatter);
 
   imagesById['tray-details:load-curve-canvas'] = 'loadCurve';
   imagesById['tray-details:concept-canvas'] = 'bundles';
@@ -723,26 +716,20 @@ export const buildTrayPlaceholderValues = (
   return {
     values,
     tables: tablesById,
-    images: imagesById
+    images: imagesById,
   };
 };
 
 const buildTrayCablesTable = (
   cables: Cable[],
-  numberFormatter: Intl.NumberFormat
+  numberFormatter: Intl.NumberFormat,
 ): WordTableDefinition => {
-  const headers = [
-    'No.',
-    'Cable name',
-    'Cable type',
-    'Cable diameter mm',
-    'Cable weight kg/m'
-  ];
+  const headers = ['No.', 'Cable name', 'Cable type', 'Cable diameter mm', 'Cable weight kg/m'];
 
   if (cables.length === 0) {
     return {
       headers,
-      rows: [['-', 'No cables on this tray', '-', '-', '-']]
+      rows: [['-', 'No cables on this tray', '-', '-', '-']],
     };
   }
 
@@ -761,46 +748,61 @@ const buildTrayCablesTable = (
 
     const name = cable.tag?.trim() || String(cable.cableId) || 'Unnamed cable';
 
-    return [
-      numberFormatter.format(index + 1),
-      name,
-      cable.typeName ?? 'N/A',
-      diameter,
-      weight
-    ];
+    return [numberFormatter.format(index + 1), name, cable.typeName ?? 'N/A', diameter, weight];
   });
 
   return {
     headers,
-    rows
+    rows,
   };
 };
 
-const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&');
+const escapeRegExp = (value: string): string => value.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&');
 
-const encodeXml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
-const replaceXmlPlaceholders = (
-  xml: string,
-  replacements: Record<string, string>
-): string => {
-  let nextXml = xml;
-  for (const [placeholder, rawValue] of Object.entries(replacements)) {
-    if (!placeholder) {
-      continue;
+const replaceXmlPlaceholders = (xml: string, replacements: Record<string, string>): string => {
+  const entries = Object.entries(replacements).filter(([token]) => token.length > 0);
+  if (entries.length === 0) return xml;
+  const expression = new RegExp(
+    entries
+      .map(([token]) => token)
+      .sort((a, b) => b.length - a.length)
+      .map(escapeRegExp)
+      .join('|'),
+    'g',
+  );
+  const xmlDoc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (xmlDoc.getElementsByTagName('parsererror').length)
+    throw new Error('Invalid Word XML in report template.');
+  for (const paragraph of Array.from(xmlDoc.getElementsByTagNameNS(WORD_NS, 'p'))) {
+    const nodes = Array.from(paragraph.getElementsByTagNameNS(WORD_NS, 't')).filter(
+      (node) => findAncestorParagraph(node) === paragraph,
+    );
+    const original = nodes.map((node) => node.textContent ?? '');
+    const combined = original.join('');
+    const matches = [...combined.matchAll(expression)];
+    // Right-to-left edits retain the original character offsets and run formatting.
+    for (const match of matches.reverse()) {
+      const start = match.index!;
+      const end = start + match[0].length;
+      let offset = 0;
+      let inserted = false;
+      nodes.forEach((node, index) => {
+        const nodeStart = offset;
+        offset += original[index].length;
+        if (offset <= start || nodeStart >= end) return;
+        const text = node.textContent ?? '';
+        const localStart = Math.max(0, start - nodeStart);
+        const localEnd = Math.min(original[index].length, end - nodeStart);
+        node.textContent =
+          text.slice(0, localStart) +
+          (inserted ? '' : (replacements[match[0]] ?? '')) +
+          text.slice(localEnd);
+        node.setAttribute('xml:space', 'preserve');
+        inserted = true;
+      });
     }
-    const safeValue = rawValue ?? '';
-    const regex = new RegExp(escapeRegExp(placeholder), 'g');
-    nextXml = nextXml.replace(regex, encodeXml(safeValue));
   }
-  return nextXml;
+  return new XMLSerializer().serializeToString(xmlDoc);
 };
 
 export const replaceDocxPlaceholders = async (
@@ -809,23 +811,21 @@ export const replaceDocxPlaceholders = async (
   options?: {
     tables?: Record<string, WordTableDefinition>;
     images?: Record<string, DocxImageDefinition>;
-  }
+  },
 ): Promise<Blob> => {
   const zip = await JSZip.loadAsync(templateBlob);
 
   const specialPlaceholders = new Set([
     ...(options?.tables ? Object.keys(options.tables) : []),
-    ...(options?.images ? Object.keys(options.images) : [])
+    ...(options?.images ? Object.keys(options.images) : []),
   ]);
 
   const textOnlyReplacements = Object.fromEntries(
-    Object.entries(replacements).filter(
-      ([placeholder]) => !specialPlaceholders.has(placeholder)
-    )
+    Object.entries(replacements).filter(([placeholder]) => !specialPlaceholders.has(placeholder)),
   );
 
   const targetFiles = Object.keys(zip.files).filter(
-    (fileName) => fileName.startsWith('word/') && fileName.endsWith('.xml')
+    (fileName) => fileName.startsWith('word/') && fileName.endsWith('.xml'),
   );
 
   await Promise.all(
@@ -837,7 +837,7 @@ export const replaceDocxPlaceholders = async (
       const content = await file.async('string');
       const updated = replaceXmlPlaceholders(content, textOnlyReplacements);
       zip.file(fileName, updated);
-    })
+    }),
   );
 
   let imageRelIds: Record<string, string> = {};
@@ -859,14 +859,11 @@ export const replaceDocxPlaceholders = async (
       let modified = false;
 
       if (options?.tables) {
-        modified =
-          injectTablesIntoDocument(xmlDoc, options.tables) || modified;
+        modified = injectTablesIntoDocument(xmlDoc, options.tables) || modified;
       }
 
       if (options?.images) {
-        modified =
-          injectImagesIntoDocument(xmlDoc, options.images, imageRelIds) ||
-          modified;
+        modified = injectImagesIntoDocument(xmlDoc, options.images, imageRelIds) || modified;
       }
 
       if (modified) {
@@ -880,7 +877,7 @@ export const replaceDocxPlaceholders = async (
 
 const embedImages = async (
   zip: JSZip,
-  images: Record<string, DocxImageDefinition>
+  images: Record<string, DocxImageDefinition>,
 ): Promise<Record<string, string>> => {
   const relsPath = 'word/_rels/document.xml.rels';
   const relsFile = zip.file(relsPath);
@@ -892,9 +889,7 @@ const embedImages = async (
   const serializer = new XMLSerializer();
   const relsXml = await relsFile.async('string');
   const relsDoc = parser.parseFromString(relsXml, 'application/xml');
-  const relationships = Array.from(
-    relsDoc.getElementsByTagName('Relationship')
-  );
+  const relationships = Array.from(relsDoc.getElementsByTagName('Relationship'));
 
   let maxRelId = relationships.reduce((max, rel) => {
     const currentId = rel.getAttribute('Id') ?? '';
@@ -908,22 +903,18 @@ const embedImages = async (
   for (const [placeholder, imageDef] of Object.entries(images)) {
     const extension = imageDef.contentType.includes('png') ? 'png' : 'jpeg';
     const safeName =
-      sanitizeMediaFileName(imageDef.fileName) ||
-      `generated-${Date.now()}-${mediaIndex}`;
+      sanitizeMediaFileName(imageDef.fileName) || `generated-${Date.now()}-${mediaIndex}`;
     const mediaFileName = `${safeName}.${extension}`;
     const mediaPath = `word/media/${mediaFileName}`;
 
     zip.file(mediaPath, imageDef.data);
 
-    const relationshipElement = relsDoc.createElementNS(
-      RELS_NS,
-      'Relationship'
-    );
+    const relationshipElement = relsDoc.createElementNS(RELS_NS, 'Relationship');
     const nextRelId = `rId${++maxRelId}`;
     relationshipElement.setAttribute('Id', nextRelId);
     relationshipElement.setAttribute(
       'Type',
-      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
+      'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
     );
     relationshipElement.setAttribute('Target', `media/${mediaFileName}`);
     relsDoc.documentElement?.appendChild(relationshipElement);
@@ -932,17 +923,33 @@ const embedImages = async (
   }
 
   zip.file(relsPath, serializer.serializeToString(relsDoc));
+  const contentTypesPath = '[Content_Types].xml';
+  const contentTypesXml = await zip.file(contentTypesPath)?.async('string');
+  if (!contentTypesXml) throw new Error('Document content types part not found.');
+  const typesDoc = parser.parseFromString(contentTypesXml, 'application/xml');
+  const typesNs = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  for (const image of Object.values(images)) {
+    const extension = image.contentType.includes('png') ? 'png' : 'jpeg';
+    const existing = Array.from(typesDoc.getElementsByTagNameNS(typesNs, 'Default'));
+    if (!existing.some((node) => node.getAttribute('Extension') === extension)) {
+      const type = typesDoc.createElementNS(typesNs, 'Default');
+      type.setAttribute('Extension', extension);
+      type.setAttribute('ContentType', extension === 'png' ? 'image/png' : 'image/jpeg');
+      typesDoc.documentElement.appendChild(type);
+    }
+  }
+  zip.file(contentTypesPath, serializer.serializeToString(typesDoc));
   return relationshipMap;
 };
 
 const injectTablesIntoDocument = (
   xmlDoc: Document,
-  tables: Record<string, WordTableDefinition>
+  tables: Record<string, WordTableDefinition>,
 ): boolean => {
   let modified = false;
   for (const [placeholder, definition] of Object.entries(tables)) {
     const replaced = replaceParagraphWithNode(xmlDoc, placeholder, () =>
-      createTableNode(xmlDoc, definition)
+      createTableNode(xmlDoc, definition),
     );
     modified = replaced || modified;
   }
@@ -952,8 +959,15 @@ const injectTablesIntoDocument = (
 const injectImagesIntoDocument = (
   xmlDoc: Document,
   images: Record<string, DocxImageDefinition>,
-  relationshipIds: Record<string, string>
+  relationshipIds: Record<string, string>,
 ): boolean => {
+  drawingCounter =
+    Math.max(
+      0,
+      ...Array.from(xmlDoc.getElementsByTagNameNS(WP_NS, 'docPr')).map(
+        (node) => Number(node.getAttribute('id')) || 0,
+      ),
+    ) + 1;
   let modified = false;
   for (const [placeholder, imageDef] of Object.entries(images)) {
     const relId = relationshipIds[placeholder];
@@ -966,8 +980,8 @@ const injectImagesIntoDocument = (
         relId,
         imageDef.widthEmu,
         imageDef.heightEmu,
-        imageDef.description ?? 'Inserted image'
-      )
+        imageDef.description ?? 'Inserted image',
+      ),
     );
     modified = replaced || modified;
   }
@@ -977,21 +991,17 @@ const injectImagesIntoDocument = (
 const replaceParagraphWithNode = (
   xmlDoc: Document,
   placeholder: string,
-  nodeFactory: () => Node
+  nodeFactory: () => Node,
 ): boolean => {
-  const textNodes = Array.from(
-    xmlDoc.getElementsByTagNameNS(WORD_NS, 't')
-  );
+  const paragraphs = Array.from(xmlDoc.getElementsByTagNameNS(WORD_NS, 'p'));
   let replaced = false;
-
-  for (const textNode of textNodes) {
-    if (textNode.textContent?.trim() === placeholder) {
-      const paragraph = findAncestorParagraph(textNode);
-      if (paragraph && paragraph.parentNode) {
-        const replacementNode = nodeFactory();
-        paragraph.parentNode.replaceChild(replacementNode, paragraph);
-        replaced = true;
-      }
+  for (const paragraph of paragraphs) {
+    const text = Array.from(paragraph.getElementsByTagNameNS(WORD_NS, 't'))
+      .map((node) => node.textContent ?? '')
+      .join('');
+    if (text.trim() === placeholder && paragraph.parentNode) {
+      paragraph.parentNode.replaceChild(nodeFactory(), paragraph);
+      replaced = true;
     }
   }
 
@@ -1013,12 +1023,24 @@ const findAncestorParagraph = (node: Node | null): Element | null => {
   return null;
 };
 
-const createTableNode = (
-  xmlDoc: Document,
-  definition: WordTableDefinition
-): Element => {
+const createTableNode = (xmlDoc: Document, definition: WordTableDefinition): Element => {
   const table = xmlDoc.createElementNS(WORD_NS, 'w:tbl');
   const tblPr = xmlDoc.createElementNS(WORD_NS, 'w:tblPr');
+  const style = xmlDoc.createElementNS(WORD_NS, 'w:tblStyle');
+  style.setAttributeNS(WORD_NS, 'w:val', 'ReportTable');
+  tblPr.appendChild(style);
+  const width = xmlDoc.createElementNS(WORD_NS, 'w:tblW');
+  width.setAttributeNS(WORD_NS, 'w:w', '5000');
+  width.setAttributeNS(WORD_NS, 'w:type', 'pct');
+  tblPr.appendChild(width);
+  const margins = xmlDoc.createElementNS(WORD_NS, 'w:tblCellMar');
+  for (const side of ['top', 'bottom', 'left', 'right']) {
+    const margin = xmlDoc.createElementNS(WORD_NS, `w:${side}`);
+    margin.setAttributeNS(WORD_NS, 'w:w', '90');
+    margin.setAttributeNS(WORD_NS, 'w:type', 'dxa');
+    margins.appendChild(margin);
+  }
+  tblPr.appendChild(margins);
   const tblBorders = xmlDoc.createElementNS(WORD_NS, 'w:tblBorders');
 
   const borders: Array<{ tag: string; size: string }> = [
@@ -1027,14 +1049,18 @@ const createTableNode = (
     { tag: 'w:bottom', size: '8' },
     { tag: 'w:right', size: '8' },
     { tag: 'w:insideH', size: '4' },
-    { tag: 'w:insideV', size: '4' }
+    { tag: 'w:insideV', size: '4' },
   ];
 
   for (const border of borders) {
     const borderElement = xmlDoc.createElementNS(WORD_NS, border.tag);
-    borderElement.setAttributeNS(WORD_NS, 'w:val', 'single');
+    borderElement.setAttributeNS(
+      WORD_NS,
+      'w:val',
+      ['w:left', 'w:right', 'w:insideV'].includes(border.tag) ? 'nil' : 'single',
+    );
     borderElement.setAttributeNS(WORD_NS, 'w:sz', border.size);
-    borderElement.setAttributeNS(WORD_NS, 'w:color', 'auto');
+    borderElement.setAttributeNS(WORD_NS, 'w:color', 'DCE3EA');
     tblBorders.appendChild(borderElement);
   }
 
@@ -1054,25 +1080,33 @@ const createTableNode = (
   return table;
 };
 
-const createTableRow = (
-  xmlDoc: Document,
-  cells: string[],
-  bold: boolean
-): Element => {
+const createTableRow = (xmlDoc: Document, cells: string[], bold: boolean): Element => {
   const rowElement = xmlDoc.createElementNS(WORD_NS, 'w:tr');
+  const properties = xmlDoc.createElementNS(WORD_NS, 'w:trPr');
+  properties.appendChild(xmlDoc.createElementNS(WORD_NS, 'w:cantSplit'));
+  if (bold) properties.appendChild(xmlDoc.createElementNS(WORD_NS, 'w:tblHeader'));
+  rowElement.appendChild(properties);
   cells.forEach((cellText) => {
     rowElement.appendChild(createTableCell(xmlDoc, cellText, bold));
   });
   return rowElement;
 };
 
-const createTableCell = (
-  xmlDoc: Document,
-  text: string,
-  bold: boolean
-): Element => {
+const createTableCell = (xmlDoc: Document, text: string, bold: boolean): Element => {
   const cell = xmlDoc.createElementNS(WORD_NS, 'w:tc');
+  const cellProperties = xmlDoc.createElementNS(WORD_NS, 'w:tcPr');
+  if (bold) {
+    const shade = xmlDoc.createElementNS(WORD_NS, 'w:shd');
+    shade.setAttributeNS(WORD_NS, 'w:fill', 'E9EFF5');
+    cellProperties.appendChild(shade);
+  }
+  cell.appendChild(cellProperties);
   const paragraph = xmlDoc.createElementNS(WORD_NS, 'w:p');
+  const pPr = xmlDoc.createElementNS(WORD_NS, 'w:pPr');
+  const spacing = xmlDoc.createElementNS(WORD_NS, 'w:spacing');
+  spacing.setAttributeNS(WORD_NS, 'w:after', '0');
+  pPr.appendChild(spacing);
+  paragraph.appendChild(pPr);
   const run = xmlDoc.createElementNS(WORD_NS, 'w:r');
 
   if (bold) {
@@ -1099,7 +1133,7 @@ const createImageParagraph = (
   relationshipId: string,
   widthEmu: number,
   heightEmu: number,
-  description: string
+  description: string,
 ): Element => {
   const paragraph = xmlDoc.createElementNS(WORD_NS, 'w:p');
   const paragraphProps = xmlDoc.createElementNS(WORD_NS, 'w:pPr');
@@ -1134,24 +1168,15 @@ const createImageParagraph = (
   docPr.setAttribute('name', description);
   inline.appendChild(docPr);
 
-  const cNvGraphicFramePr = xmlDoc.createElementNS(
-    WP_NS,
-    'wp:cNvGraphicFramePr'
-  );
-  const graphicLocks = xmlDoc.createElementNS(
-    DRAWING_NS,
-    'a:graphicFrameLocks'
-  );
+  const cNvGraphicFramePr = xmlDoc.createElementNS(WP_NS, 'wp:cNvGraphicFramePr');
+  const graphicLocks = xmlDoc.createElementNS(DRAWING_NS, 'a:graphicFrameLocks');
   graphicLocks.setAttribute('noChangeAspect', '1');
   cNvGraphicFramePr.appendChild(graphicLocks);
   inline.appendChild(cNvGraphicFramePr);
 
   const graphic = xmlDoc.createElementNS(DRAWING_NS, 'a:graphic');
   const graphicData = xmlDoc.createElementNS(DRAWING_NS, 'a:graphicData');
-  graphicData.setAttribute(
-    'uri',
-    'http://schemas.openxmlformats.org/drawingml/2006/picture'
-  );
+  graphicData.setAttribute('uri', 'http://schemas.openxmlformats.org/drawingml/2006/picture');
 
   const picture = xmlDoc.createElementNS(PIC_NS, 'pic:pic');
 
