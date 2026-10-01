@@ -1,4 +1,14 @@
 export const TRAY_REPORT_VARIABLES = [
+  {
+    id: 'tray-details:cables-weight-sum-formula',
+    name: 'Individual cable unit masses summation [kg/m]',
+    placeholder: '{{CABLEWEIGHTSUM}}',
+  },
+  {
+    id: 'tray-details:occupied-width-formula',
+    name: 'Occupied installation width calculation [mm]',
+    placeholder: '{{OCCUPIEDWIDTHFORMULA}}',
+  },
   { id: 'tray-details:reported-at', name: 'Report generated at', placeholder: '{{REPORTDATE}}' },
   {
     id: 'tray-details:tray-weight-per-meter',
@@ -83,6 +93,7 @@ export const TRAY_REPORT_PLACEHOLDERS: Record<string, string> = {
   'details:project-name': '{{PROJECTNAME}}',
   'details:customer': '{{CUSTOMER}}',
   'details:current-user': '{{PREPAREDBY}}',
+  'details:manager': '{{MANAGER}}',
   'details:cable-spacing': '{{CABLESPACING}}',
   'details:bundle-spacing-free': '{{BUNDLESPACINGFREE}}',
   'details:min-free-space': '{{MINFREEWIDTH}}',

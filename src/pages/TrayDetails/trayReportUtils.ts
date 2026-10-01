@@ -39,6 +39,7 @@ const buildGroundingCableNote = (
 };
 
 export type WordTableDefinition = {
+  columnWidthsTwips?: number[];
   headers: string[];
   rows: string[][];
 };
@@ -71,6 +72,7 @@ export type TrayPlaceholderContext = {
   trayTemplatePurposeCount: number;
   trayFreeSpacePercent: number | null;
   trayOccupiedWidthMm: number | null;
+  occupiedWidthFormula?: string | null;
   includeGroundingCable: boolean;
   groundingCableTypeName: string | null;
   supportCalculations: SupportCalculationResult;
@@ -220,6 +222,7 @@ export const buildTrayPlaceholderValues = (
     trayTemplatePurposeCount,
     trayFreeSpacePercent,
     trayOccupiedWidthMm,
+    occupiedWidthFormula,
     includeGroundingCable,
     groundingCableTypeName,
     supportCalculations,
@@ -280,9 +283,9 @@ export const buildTrayPlaceholderValues = (
     !Number.isNaN(trayOccupiedWidthMm) &&
     trayFreeSpacePercent !== null &&
     !Number.isNaN(trayFreeSpacePercent)
-      ? `((${numberFormatter.format(trayWidthSourceMm)} - ${numberFormatter.format(
+      ? `${trayOccupiedWidthMm > trayWidthSourceMm ? 'max(0, ' : ''}((${numberFormatter.format(trayWidthSourceMm)} - ${numberFormatter.format(
           trayOccupiedWidthMm,
-        )}) / ${numberFormatter.format(trayWidthSourceMm)}) * 100 = ${percentageFormatter.format(
+        )}) / ${numberFormatter.format(trayWidthSourceMm)}) * 100${trayOccupiedWidthMm > trayWidthSourceMm ? ')' : ''} = ${percentageFormatter.format(
           trayFreeSpacePercent,
         )} %`
       : null;
@@ -631,7 +634,10 @@ export const buildTrayPlaceholderValues = (
     trayWidthSourceMm > 0;
   const freeStatus = !validFree
     ? 'NOT VERIFIED - Complete tray width and cable layout data are required.'
-    : trayFreeSpacePercent! < 0
+    : trayFreeSpacePercent! < 0 ||
+        (trayOccupiedWidthMm !== null &&
+          trayWidthSourceMm !== null &&
+          trayOccupiedWidthMm > trayWidthSourceMm)
       ? 'FAIL - Cable layout exceeds the tray width.'
       : minFreeSpacePercent !== null && trayFreeSpacePercent! < minFreeSpacePercent
         ? 'FAIL - Free width is below the project minimum.'
@@ -641,6 +647,24 @@ export const buildTrayPlaceholderValues = (
             ? 'Free width calculated; project limits are not configured.'
             : 'PASS - Free width is within the configured project limits.';
   addValue('tray-details:free-space-verification', freeStatus);
+
+  const cableUnitWeights = [...trayCables]
+    .filter((cable) => !isGroundingPurpose(cable.purpose))
+    .sort((a, b) => a.cableId - b.cableId)
+    .map((cable) => cable.weightKgPerM);
+  if (includeGroundingCable) cableUnitWeights.push(context.groundingCableWeightKgPerM);
+  const cableWeightSum =
+    cablesWeightLoadPerMeterKg !== null &&
+    cableUnitWeights.every(
+      (weight) => typeof weight === 'number' && Number.isFinite(weight) && weight >= 0,
+    )
+      ? `${cableUnitWeights.length ? cableUnitWeights.map((weight) => numberFormatter.format(weight!)).join(' + ') : '0'} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} kg/m`
+      : null;
+  addValue('tray-details:cables-weight-sum-formula', cableWeightSum);
+  addValue(
+    'tray-details:occupied-width-formula',
+    occupiedWidthFormula ?? formatNumberWithUnit(numberFormatter, trayOccupiedWidthMm, 'mm'),
+  );
 
   // Weight calculations
   addValue(
@@ -754,6 +778,7 @@ const buildTrayCablesTable = (
   return {
     headers,
     rows,
+    columnWidthsTwips: [500, 3400, 3100, 1450, 1300],
   };
 };
 
@@ -863,7 +888,20 @@ export const replaceDocxPlaceholders = async (
       }
 
       if (options?.images) {
-        modified = injectImagesIntoDocument(xmlDoc, options.images, imageRelIds) || modified;
+        let nextDrawingId = 1;
+        for (const partName of targetFiles) {
+          const part = await zip.file(partName)?.async('string');
+          if (!part) continue;
+          const partDoc = parser.parseFromString(part, 'application/xml');
+          for (const properties of Array.from(partDoc.getElementsByTagNameNS(WP_NS, 'docPr'))) {
+            nextDrawingId = Math.max(
+              nextDrawingId,
+              (Number(properties.getAttribute('id')) || 0) + 1,
+            );
+          }
+        }
+        modified =
+          injectImagesIntoDocument(xmlDoc, options.images, imageRelIds, nextDrawingId) || modified;
       }
 
       if (modified) {
@@ -960,14 +998,9 @@ const injectImagesIntoDocument = (
   xmlDoc: Document,
   images: Record<string, DocxImageDefinition>,
   relationshipIds: Record<string, string>,
+  nextDrawingId: number,
 ): boolean => {
-  drawingCounter =
-    Math.max(
-      0,
-      ...Array.from(xmlDoc.getElementsByTagNameNS(WP_NS, 'docPr')).map(
-        (node) => Number(node.getAttribute('id')) || 0,
-      ),
-    ) + 1;
+  drawingCounter = nextDrawingId;
   let modified = false;
   for (const [placeholder, imageDef] of Object.entries(images)) {
     const relId = relationshipIds[placeholder];
@@ -1066,35 +1099,68 @@ const createTableNode = (xmlDoc: Document, definition: WordTableDefinition): Ele
 
   tblPr.appendChild(tblBorders);
   table.appendChild(tblPr);
+  if (definition.columnWidthsTwips) {
+    const grid = xmlDoc.createElementNS(WORD_NS, 'w:tblGrid');
+    for (const width of definition.columnWidthsTwips) {
+      const col = xmlDoc.createElementNS(WORD_NS, 'w:gridCol');
+      col.setAttributeNS(WORD_NS, 'w:w', String(width));
+      grid.appendChild(col);
+    }
+    table.appendChild(grid);
+  }
 
   if (definition.headers?.length) {
-    const headerRow = createTableRow(xmlDoc, definition.headers, true);
+    const headerRow = createTableRow(
+      xmlDoc,
+      definition.headers,
+      true,
+      definition.columnWidthsTwips,
+    );
     table.appendChild(headerRow);
   }
 
   for (const row of definition.rows) {
-    const dataRow = createTableRow(xmlDoc, row, false);
+    const dataRow = createTableRow(xmlDoc, row, false, definition.columnWidthsTwips);
     table.appendChild(dataRow);
   }
 
   return table;
 };
 
-const createTableRow = (xmlDoc: Document, cells: string[], bold: boolean): Element => {
+const createTableRow = (
+  xmlDoc: Document,
+  cells: string[],
+  bold: boolean,
+  widths?: number[],
+): Element => {
   const rowElement = xmlDoc.createElementNS(WORD_NS, 'w:tr');
   const properties = xmlDoc.createElementNS(WORD_NS, 'w:trPr');
   properties.appendChild(xmlDoc.createElementNS(WORD_NS, 'w:cantSplit'));
   if (bold) properties.appendChild(xmlDoc.createElementNS(WORD_NS, 'w:tblHeader'));
   rowElement.appendChild(properties);
-  cells.forEach((cellText) => {
-    rowElement.appendChild(createTableCell(xmlDoc, cellText, bold));
+  cells.forEach((cellText, index) => {
+    rowElement.appendChild(createTableCell(xmlDoc, cellText, bold, widths?.[index]));
   });
   return rowElement;
 };
 
-const createTableCell = (xmlDoc: Document, text: string, bold: boolean): Element => {
+const createTableCell = (
+  xmlDoc: Document,
+  text: string,
+  bold: boolean,
+  width?: number,
+): Element => {
   const cell = xmlDoc.createElementNS(WORD_NS, 'w:tc');
   const cellProperties = xmlDoc.createElementNS(WORD_NS, 'w:tcPr');
+  if (width !== undefined) {
+    const cellWidth = xmlDoc.createElementNS(WORD_NS, 'w:tcW');
+    cellWidth.setAttributeNS(WORD_NS, 'w:w', String(width));
+    cellWidth.setAttributeNS(WORD_NS, 'w:type', 'dxa');
+    cellProperties.appendChild(cellWidth);
+  }
+  const alignment = xmlDoc.createElementNS(WORD_NS, 'w:vAlign');
+  alignment.setAttributeNS(WORD_NS, 'w:val', 'center');
+  cellProperties.appendChild(alignment);
   if (bold) {
     const shade = xmlDoc.createElementNS(WORD_NS, 'w:shd');
     shade.setAttributeNS(WORD_NS, 'w:fill', 'E9EFF5');

@@ -140,6 +140,41 @@ describe('tray report Variables API', () => {
     expect(bundle.values['tray-details:load-reserve']).toBe('0.51464 kN/m');
     expect(bundle.values['tray-details:load-verification']).toMatch(/^PASS/);
   });
+  it('shows each routed cable unit mass in schedule order and counts grounding once', () => {
+    const context = createContext();
+    context.trayCables = [
+      { ...context.trayCables[0], cableId: 2, weightKgPerM: 2 },
+      { ...context.trayCables[0], cableId: 1, weightKgPerM: 1 },
+      { ...context.trayCables[0], cableId: 3, weightKgPerM: 0.5, purpose: 'Grounding' },
+    ];
+    context.includeGroundingCable = true;
+    context.groundingCableWeightKgPerM = 0.5;
+    context.cablesWeightLoadPerMeterKg = 3.5;
+    expect(
+      buildTrayPlaceholderValues(context).values['tray-details:cables-weight-sum-formula'],
+    ).toBe('1 + 2 + 0.5 = 3.5 kg/m');
+    context.cablesWeightLoadPerMeterKg = null;
+    expect(
+      buildTrayPlaceholderValues(context).values['tray-details:cables-weight-sum-formula'],
+    ).toBe('*****');
+  });
+  it('exports the occupied-width calculation from the actual Tray details layout', () => {
+    const context = createContext();
+    context.occupiedWidthFormula = '140 + 10 = 150 mm';
+    expect(buildTrayPlaceholderValues(context).values['tray-details:occupied-width-formula']).toBe(
+      '140 + 10 = 150 mm',
+    );
+  });
+  it('shows the zero clamp and fails a layout that exceeds the tray width', () => {
+    const context = createContext();
+    context.trayOccupiedWidthMm = 650;
+    context.trayFreeSpacePercent = 0;
+    context.minFreeSpacePercent = null;
+    context.maxFreeSpacePercent = null;
+    const values = buildTrayPlaceholderValues(context).values;
+    expect(values['tray-details:free-space']).toBe('max(0, ((600 - 650) / 600) * 100) = 0 %');
+    expect(values['tray-details:free-space-verification']).toMatch(/^FAIL/);
+  });
   it('reports an overload with a negative reserve', () => {
     const context = createContext();
     context.safetyAdjustedLoadKnPerM = 0.9;
@@ -196,6 +231,55 @@ describe('tray report Variables API', () => {
 });
 
 describe('Word export', () => {
+  it('preserves the reference calculation order and places all conclusions before the final picture', async () => {
+    const zip = await JSZip.loadAsync(readFileSync('Template files/ReportMacroTemplate_LV.docx'));
+    const xml = await zip.file('word/document.xml')!.async('string');
+    const document = new DOMParser().parseFromString(xml, 'application/xml');
+    const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const text = Array.from(document.getElementsByTagNameNS(ns, 'p'))
+      .map((p) => p.textContent ?? '')
+      .join('\n');
+    const headings = Array.from(document.getElementsByTagNameNS(ns, 'p'))
+      .filter((p) =>
+        /^Heading/.test(p.getElementsByTagNameNS(ns, 'pStyle')[0]?.getAttribute('w:val') ?? ''),
+      )
+      .map((p) => p.textContent ?? '');
+    const titles = [
+      'Cable tray dimensions',
+      'Support dimensions',
+      'Cables laying on the tray',
+      'Weight calculations',
+      'Supports weight calculations',
+      'Tray own weight calculations',
+      'Cables on tray weight calculations',
+      'Total weight',
+      'Tray loading calculations',
+      'Free space calculations',
+      'Space occupied by cables',
+      'Cable tray free space',
+      'Assessment results',
+      'Cable laying concept',
+    ];
+    for (let index = 1; index < titles.length; index += 1)
+      expect(headings.indexOf(titles[index])).toBeGreaterThan(headings.indexOf(titles[index - 1]));
+    const assessment = text.lastIndexOf('Assessment results');
+    const finalPage = text.indexOf('Cable laying concept');
+    for (const token of [
+      '{{LOADVERIFICATION}}',
+      '{{FREEWIDTHVERIFICATION}}',
+      '{{LOADUTILIZATIONFORMULA}}',
+      '{{LOADRESERVEFORMULA}}',
+    ]) {
+      expect(text.indexOf(token)).toBeGreaterThan(assessment);
+      expect(text.indexOf(token)).toBeLessThan(finalPage);
+      expect(text.split(token)).toHaveLength(2);
+    }
+    const finalHeading = Array.from(document.getElementsByTagNameNS(ns, 'p')).find(
+      (p) => p.textContent === 'Cable laying concept',
+    )!;
+    expect(finalHeading.getElementsByTagNameNS(ns, 'pageBreakBefore')).toHaveLength(1);
+  });
+
   it('replaces split Word runs, preserves surrounding formatting, and escapes XML', async () => {
     const input = await inputBlob(
       paragraphXml(
@@ -265,6 +349,21 @@ describe('Word export', () => {
     expect(xml).toContain('LV-C001');
     expect(xml).toContain('w:tblHeader');
     expect(xml.match(/<w:drawing>/g)).toHaveLength(3);
+    expect(xml).toContain('w:tblGrid');
+    const drawingIds: string[] = [];
+    for (const name of Object.keys(zip.files).filter((name) => /^word\/.*\.xml$/.test(name))) {
+      const part = await zip.file(name)!.async('string');
+      expect(part).not.toMatch(/\{\{[A-Z]+\}\}/);
+      const doc = new DOMParser().parseFromString(part, 'application/xml');
+      for (const node of Array.from(
+        doc.getElementsByTagNameNS(
+          'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+          'docPr',
+        ),
+      ))
+        drawingIds.push(node.getAttribute('id')!);
+    }
+    expect(new Set(drawingIds).size).toBe(drawingIds.length);
     expect(await zip.file('[Content_Types].xml')!.async('string')).toContain('image/png');
     if (process.env.REPORT_QA) {
       mkdirSync('.data/report-qa', { recursive: true });

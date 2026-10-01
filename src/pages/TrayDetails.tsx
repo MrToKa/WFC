@@ -178,7 +178,7 @@ const MAX_IMAGE_WIDTH_EMU = 6.4 * EMUS_PER_INCH;
 const MAX_IMAGE_HEIGHT_EMU = 9 * EMUS_PER_INCH;
 const FULL_PAGE_IMAGE_WIDTH_EMU = 6.4 * EMUS_PER_INCH;
 const FULL_PAGE_TARGET_HEIGHT_EMU = 7.5 * EMUS_PER_INCH;
-const TRAY_TEMPLATE_MAX_HEIGHT_EMU = 2.2 * EMUS_PER_INCH;
+const TRAY_TEMPLATE_MAX_HEIGHT_EMU = 4.5 * EMUS_PER_INCH;
 
 type PendingImagePlaceholder = {
   blob: Blob;
@@ -2547,6 +2547,7 @@ export const TrayDetails = () => {
       trayTemplatePurposeCount,
       trayFreeSpacePercent: freeSpaceMetrics.freeWidthPercent,
       trayOccupiedWidthMm: freeSpaceMetrics.occupiedWidthMm,
+      occupiedWidthFormula,
       includeGroundingCable,
       groundingCableTypeName: groundingCableDisplay ?? null,
       supportCalculations,
@@ -2585,6 +2586,8 @@ export const TrayDetails = () => {
     projectCables,
     trayTemplatePurposeCount,
     freeSpaceMetrics.freeWidthPercent,
+    freeSpaceMetrics.occupiedWidthMm,
+    occupiedWidthFormula,
     includeGroundingCable,
     groundingCableDisplay,
     supportCalculations,

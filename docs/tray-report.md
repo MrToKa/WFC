@@ -4,6 +4,12 @@ The supplied `Template files/ReportMacroTemplate_LV.docx` uses the Variables API
 
 Upload the updated Word template to the project's Word files and assign it to the LV tray purpose in Project details. Generate report on Tray details downloads the populated document and saves it to the project files. Updating the repository file does not replace templates already uploaded to a project.
 
+## Report structure
+
+The template follows the previous report's explanatory order: cover with tray and support dimensions; routed cable schedule; support, tray, cable and combined weight calculations; numerical tray loading and manufacturer curve; tray geometry and free-space calculations. Each calculation is introduced in prose and followed by its numerical formula. Individual cable unit masses are summed in schedule order, including the selected grounding cable once.
+
+All load and free-space assessment conclusions, utilization and reserve calculations are collected in the Assessment results section. This section is immediately before the final cable laying concept, which starts on its own page. The reference customer and ACS logos, page frame and identification footer are retained; the footer uses current Variables API values rather than old release/revision approvals. Branding assets are in `Template files/report-assets`.
+
 ## Calculation basis
 
 - Inventory totals retain cables, tray and support masses.
@@ -20,7 +26,7 @@ The curve check verifies the distributed tray load only; it does not establish t
 
 ## Additional Variables API values
 
-The report includes generated date, tray mass excluding supports, span mass, unfactored and design load calculations, capacity interpolation, utilization and its formula, signed reserve and its formula, reserve percentage, maximum allowable span within the supplied curve, documented span range, load conclusion, free-width percentage and its conclusion. Definitions and standard placeholder tokens are shared by the editor and exporter in `trayReportVariables.ts`.
+The report includes generated date, tray mass excluding supports, span mass, unfactored and design load calculations, capacity interpolation, utilization and its formula, signed reserve and its formula, reserve percentage, maximum allowable span within the supplied curve, documented span range, load conclusion, free-width percentage and its conclusion, individual cable mass summation and occupied-width calculation. Definitions and standard placeholder tokens are shared by the editor and exporter in `trayReportVariables.ts`.
 
 Word text replacements support placeholders split across multiple runs, XML-special characters and overlapping old/new token names. Cable table headers repeat across pages, and image content types are added to the Word package.
 
