@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Cable, Tray } from '@/api/client';
-import { TrayDrawingService, type CategoryLayoutConfig } from './trayDrawingService';
+import {
+  TrayDrawingService,
+  type CategoryLayoutConfig,
+  type ProjectLayoutConfig,
+} from './trayDrawingService';
 import { TREFOIL_CLAMPS } from './trefoilClamps';
+import {
+  DEFAULT_CATEGORY_SETTINGS,
+  DEFAULT_CABLE_SPACING,
+} from '../ProjectDetails/hooks/cableLayoutDefaults';
 
 const cable = (id: number, diameterMm = 35, purpose = 'power', fromLocation = 'A') =>
   ({ id: `cable-${id}`, cableId: id, diameterMm, purpose, fromLocation, toLocation: 'B' }) as Cable;
@@ -35,20 +43,40 @@ const draw = (
   phaseRotation = false,
   heightMm = 150,
   extraBundles: Record<string, Record<string, Cable[]>> = {},
+  options: {
+    layout?: Partial<ProjectLayoutConfig>;
+    scale?: number;
+    spacingMm?: number;
+    bundles?: Record<string, Cable[]>;
+  } = {},
 ) => {
   const arcs: Array<{ x: number; y: number; radius: number }> = [];
   const pathPoints: Array<{ x: number; y: number }> = [];
+  const strokes: Array<{
+    points: Array<{ x: number; y: number }>;
+    width: number;
+    filled: boolean;
+  }> = [];
+  let currentPath: Array<{ x: number; y: number }> = [];
+  let filled = false;
   const recordPoints = (...coordinates: number[]) => {
     for (let index = 0; index < coordinates.length; index += 2) {
       pathPoints.push({ x: coordinates[index], y: coordinates[index + 1] });
+      currentPath.push({ x: coordinates[index], y: coordinates[index + 1] });
     }
   };
   const ctx = {
+    lineWidth: 1,
     save: vi.fn(),
     restore: vi.fn(),
-    beginPath: vi.fn(),
+    beginPath: vi.fn(() => {
+      currentPath = [];
+      filled = false;
+    }),
     closePath: vi.fn(),
-    fill: vi.fn(),
+    fill: vi.fn(() => {
+      filled = true;
+    }),
     stroke: vi.fn(),
     fillRect: vi.fn(),
     strokeRect: vi.fn(),
@@ -61,6 +89,9 @@ const draw = (
     rotate: vi.fn(),
     arc: (x: number, y: number, radius: number) => arcs.push({ x, y, radius }),
   };
+  ctx.stroke.mockImplementation(() => {
+    strokes.push({ points: [...currentPath], width: ctx.lineWidth, filled });
+  });
   const canvas = { width: 0, height: 0, getContext: () => ctx };
   Object.assign(ctx, { canvas });
   const tray = { widthMm: 600, heightMm, name: 'T1' } as Tray;
@@ -68,20 +99,191 @@ const draw = (
     ...cables,
     ...Object.values(extraBundles).flatMap((bundles) => Object.values(bundles).flat()),
   ];
+  const layout = config(purpose, phaseRotation);
+  Object.assign(layout[purpose], options.layout);
+  layout[purpose].cableSpacing = options.spacingMm ?? layout[purpose].cableSpacing;
   const summary = new TrayDrawingService().drawTrayLayout(
     canvas as unknown as HTMLCanvasElement,
     tray,
     allCables,
-    { [purpose]: { '30.1-40': cables }, ...extraBundles },
-    1,
-    15,
-    config(purpose, phaseRotation),
+    { [purpose]: options.bundles ?? { '30.1-40': cables }, ...extraBundles },
+    options.scale ?? 1,
+    options.spacingMm ?? 15,
+    layout,
     { useTrefoilClamps: clamps },
   )!;
-  return { summary, ctx, canvas, cableArcs: arcs, pathPoints };
+  const clampOutlines = strokes
+    .filter((stroke) => stroke.filled && stroke.points.length > 35)
+    .map((stroke) => ({
+      left: Math.min(...stroke.points.map((point) => point.x)) - stroke.width / 2,
+      right: Math.max(...stroke.points.map((point) => point.x)) + stroke.width / 2,
+    }));
+  return { summary, ctx, canvas, cableArcs: arcs, pathPoints, clampOutlines };
 };
 
 describe('trefoil clamps in the tray concept', () => {
+  const spacingCases = (['power', 'mv', 'vfd'] as const).flatMap((purpose) =>
+    [false, true].flatMap((rotation) =>
+      (['0', '1D', '2D'] as const).flatMap((mode) =>
+        [false, true].flatMap((spacingEnabled) =>
+          [1, 5].map((scale) => ({ purpose, rotation, mode, scale, spacingEnabled })),
+        ),
+      ),
+    ),
+  );
+  it.each(spacingCases)(
+    'places $purpose trefoils with $mode spacing, rotation=$rotation, legacy spacing=$spacingEnabled at scale $scale',
+    ({ purpose, rotation, mode, scale, spacingEnabled }) => {
+      const { cableArcs, clampOutlines } = draw(
+        Array.from({ length: 6 }, (_, index) => cable(index + 1, 35, purpose)),
+        purpose,
+        true,
+        rotation,
+        150,
+        purpose === 'vfd' ? { mv: { '0-8': [cable(10, 8, 'mv')] } } : {},
+        { scale, layout: { bundleSpacing: mode, trefoilSpacingBetweenBundles: spacingEnabled } },
+      );
+      expect(clampOutlines).toHaveLength(2);
+      const frames = [...clampOutlines].sort((a, b) => a.left - b.left);
+      if (mode === '0') {
+        expect((frames[1].left - frames[0].right) / scale).toBeCloseTo(5);
+      } else {
+        const trefoilArcs = cableArcs.filter((arc) => arc.radius === (35 * scale) / 2);
+        const groups = [trefoilArcs.slice(0, 3), trefoilArcs.slice(3, 6)]
+          .map((arcs) => ({
+            left: Math.min(...arcs.map((arc) => arc.x - arc.radius)),
+            right: Math.max(...arcs.map((arc) => arc.x + arc.radius)),
+          }))
+          .sort((a, b) => a.left - b.left);
+        expect((groups[1].left - groups[0].right) / scale).toBeCloseTo(mode === '1D' ? 35 : 70);
+      }
+    },
+  );
+
+  it('honors 2D with the default MV settings and four clamped trefoils', () => {
+    expect(DEFAULT_CATEGORY_SETTINGS.mv.bundleSpacing).toBe('2D');
+    expect(DEFAULT_CATEGORY_SETTINGS.mv.trefoilSpacingBetweenBundles).toBe(false);
+    const { cableArcs, summary } = draw(
+      Array.from({ length: 12 }, (_, index) => cable(index + 1, 35, 'mv')),
+      'mv',
+      true,
+      true,
+      100,
+      {},
+      { scale: 6, spacingMm: DEFAULT_CABLE_SPACING, layout: DEFAULT_CATEGORY_SETTINGS.mv },
+    );
+    const groups = [0, 3, 6, 9].map((index) => {
+      const arcs = cableArcs.slice(index, index + 3);
+      return {
+        left: Math.min(...arcs.map((arc) => arc.x - arc.radius)),
+        right: Math.max(...arcs.map((arc) => arc.x + arc.radius)),
+      };
+    });
+    for (let index = 1; index < groups.length; index++) {
+      expect((groups[index].left - groups[index - 1].right) / 6).toBeCloseTo(70);
+    }
+    expect(summary.occupiedWidthWithBundleSpacingMm).toBeCloseTo(506);
+  });
+
+  it('uses 5 mm clamp clearance when bundle spacing is explicitly zero', () => {
+    const { clampOutlines } = draw(
+      Array.from({ length: 6 }, (_, index) => cable(index + 1)),
+      'power',
+      true,
+      false,
+      150,
+      {},
+      { layout: { bundleSpacing: '0', trefoilSpacingBetweenBundles: true } },
+    );
+    expect(clampOutlines[1].left - clampOutlines[0].right).toBeCloseTo(5);
+  });
+
+  it('preserves bundle spacing for different cable sizes when clamps are disabled', () => {
+    const cables = [38, 35, 33].flatMap((diameter, group) =>
+      Array.from({ length: 3 }, (_, index) => cable(group * 3 + index + 1, diameter)),
+    );
+    const { cableArcs, clampOutlines } = draw(
+      cables,
+      'power',
+      false,
+      false,
+      150,
+      {},
+      { layout: { bundleSpacing: '1D', trefoilSpacingBetweenBundles: true } },
+    );
+    expect(clampOutlines).toHaveLength(0);
+    const groups = [0, 3, 6].map((index) => {
+      const arcs = cableArcs.slice(index, index + 3);
+      return {
+        left: Math.min(...arcs.map((arc) => arc.x - arc.radius)),
+        right: Math.max(...arcs.map((arc) => arc.x + arc.radius)),
+      };
+    });
+    expect(groups[1].left - groups[0].right).toBeCloseTo(38);
+    expect(groups[2].left - groups[1].right).toBeCloseTo(38);
+  });
+
+  it.each([false, true])(
+    'keeps the legacy spacing toggle effective without clamps: %s',
+    (spacingEnabled) => {
+      const { cableArcs } = draw(
+        Array.from({ length: 6 }, (_, index) => cable(index + 1)),
+        'power',
+        false,
+        false,
+        150,
+        {},
+        { layout: { bundleSpacing: '2D', trefoilSpacingBetweenBundles: spacingEnabled } },
+      );
+      const firstRight = Math.max(...cableArcs.slice(0, 3).map((arc) => arc.x + arc.radius));
+      const secondLeft = Math.min(...cableArcs.slice(3, 6).map((arc) => arc.x - arc.radius));
+      expect(secondLeft - firstRight).toBeCloseTo(spacingEnabled ? 70 : 15);
+    },
+  );
+
+  it.each(
+    (['mv', 'vfd'] as const).flatMap((purpose) =>
+      [false, true].flatMap((rotation) =>
+        (['0', '1D', '2D'] as const).flatMap((mode) =>
+          [false, true].map((spacingEnabled) => ({ purpose, rotation, mode, spacingEnabled })),
+        ),
+      ),
+    ),
+  )(
+    'spaces adjacent diameter bundles for $purpose/$mode, rotation=$rotation, legacy spacing=$spacingEnabled',
+    ({ purpose, rotation, mode, spacingEnabled }) => {
+      const smaller = [cable(1, 35, purpose), cable(2, 35, purpose), cable(3, 35, purpose)];
+      const larger = [cable(4, 40, purpose), cable(5, 40, purpose), cable(6, 40, purpose)];
+      const { cableArcs, clampOutlines } = draw(
+        [...smaller, ...larger],
+        purpose,
+        true,
+        rotation,
+        150,
+        purpose === 'vfd' ? { mv: { '0-8': [cable(10, 8, 'mv')] } } : {},
+        {
+          scale: 5,
+          layout: { bundleSpacing: mode, trefoilSpacingBetweenBundles: spacingEnabled },
+          bundles: { '30.1-40': smaller, '40.1-45': larger },
+        },
+      );
+      const frames = [...clampOutlines].sort((a, b) => a.left - b.left);
+      expect(frames).toHaveLength(2);
+      if (mode === '0') {
+        expect((frames[1].left - frames[0].right) / 5).toBeCloseTo(5);
+      } else {
+        const trefoilArcs = cableArcs.filter((arc) => arc.radius >= (35 * 5) / 2);
+        const groups = [trefoilArcs.slice(0, 3), trefoilArcs.slice(3, 6)]
+          .map((arcs) => ({
+            left: Math.min(...arcs.map((arc) => arc.x - arc.radius)),
+            right: Math.max(...arcs.map((arc) => arc.x + arc.radius)),
+          }))
+          .sort((a, b) => a.left - b.left);
+        expect((groups[1].left - groups[0].right) / 5).toBeCloseTo(mode === '1D' ? 40 : 80);
+      }
+    },
+  );
+
   it.each(TREFOIL_CLAMPS)('renders $model and reserves its catalog width and height', (clamp) => {
     const diameter = (clamp.minDiameterMm + clamp.maxDiameterMm) / 2;
     const { summary, ctx, canvas, cableArcs, pathPoints } = draw(
@@ -159,7 +361,7 @@ describe('trefoil clamps in the tray concept', () => {
         [6, 5, 4],
       ]);
       expect(cableArcs).toHaveLength(6);
-      expect(summary.occupiedWidthWithBundleSpacingMm).toBe(187);
+      expect(summary.occupiedWidthWithBundleSpacingMm).toBeCloseTo(170.7978142077);
     },
   );
 

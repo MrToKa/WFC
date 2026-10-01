@@ -5,6 +5,28 @@ type ClampFormation = {
   positions: Array<{ left: number; bottomOffset: number; diameterMm: number }>;
 };
 
+export const getTrefoilClampHorizontalLayout = (
+  widthPx: number,
+  cableLeft: number,
+  cableRight: number,
+  scale: number,
+) => {
+  const outlineWidth = Math.max(1, 0.35 * scale);
+  const bandWidth = ((cableRight - cableLeft) * 23) / 366;
+  const frameLeft = Math.max(outlineWidth / 2, cableLeft - bandWidth);
+  const frameRight = Math.min(widthPx - outlineWidth / 2, cableRight + bandWidth);
+  const cableWidthRatio = (cableRight - cableLeft) / widthPx;
+  const contourFit = Math.max(0, Math.min(1, (cableWidthRatio - 0.65) / 0.15));
+  return {
+    outlineWidth,
+    frameLeft,
+    frameRight,
+    contourFit,
+    leftPx: (frameLeft - outlineWidth / 2) * contourFit,
+    rightPx: widthPx + (frameRight - (widthPx - outlineWidth / 2)) * contourFit,
+  };
+};
+
 export const getTrefoilClampBaseHeightMm = (
   clamp: TrefoilClamp,
   formationHeightMm: number,
@@ -36,14 +58,14 @@ export const drawTrefoilClamp = (
   const cableRight = Math.max(
     ...formation.positions.map((position) => position.left + position.diameterMm * scale),
   );
-  const outlineWidth = Math.max(1, 0.35 * scale);
   // W1 reserves the catalog envelope. A smaller cable within the clamp's
   // range must not stretch the side band to fill the unused envelope.
-  const bandWidth = ((cableRight - cableLeft) * 23) / 366;
-  const frameLeft = Math.max(outlineWidth / 2, cableLeft - bandWidth);
-  const frameRight = Math.min(formation.widthPx - outlineWidth / 2, cableRight + bandWidth);
-  const cableWidthRatio = (cableRight - cableLeft) / formation.widthPx;
-  const contourFit = Math.max(0, Math.min(1, (cableWidthRatio - 0.65) / 0.15));
+  const { outlineWidth, frameLeft, frameRight, contourFit } = getTrefoilClampHorizontalLayout(
+    formation.widthPx,
+    cableLeft,
+    cableRight,
+    scale,
+  );
 
   // Piecewise mapping retains the source drawing's bent frame and hardware,
   // while keeping the cables circular and the full envelope within W1 / H.
