@@ -2307,6 +2307,9 @@ export class TrayDrawingService {
     this.drawBaseTrayStructure(context, drawingData);
     this.drawCableBundles(context, drawingData);
     this.drawSeparators(context, drawingData);
+    if (drawingData.useTrefoilClamps) {
+      this.drawTrayTopEdge(context, drawingData);
+    }
     return this.buildLayoutSummary(drawingData, effectiveSpacingMm);
   }
 
@@ -2402,11 +2405,36 @@ export class TrayDrawingService {
 
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 1;
-    ctx.strokeRect(originX, originY, trayWidthPx, usableHeightPx);
+    if (data.useTrefoilClamps) {
+      // Leave the top edge for the final pass, keeping a uniform line weight.
+      ctx.beginPath();
+      ctx.moveTo(originX, originY);
+      ctx.lineTo(originX, originY + usableHeightPx);
+      ctx.lineTo(originX + trayWidthPx, originY + usableHeightPx);
+      ctx.lineTo(originX + trayWidthPx, originY);
+      ctx.stroke();
+    } else {
+      ctx.strokeRect(originX, originY, trayWidthPx, usableHeightPx);
+    }
     ctx.strokeRect(originX, originY + trayHeightPx - rungHeightPx, trayWidthPx, rungHeightPx);
 
     ctx.fillStyle = '#d3d3d3';
     ctx.fillRect(originX, originY + trayHeightPx - rungHeightPx, trayWidthPx, rungHeightPx);
+  }
+
+  private drawTrayTopEdge(ctx: CanvasRenderingContext2D, data: TrayDrawingData) {
+    // Draw last so the white cable and clamp fills cannot interrupt the edge.
+    ctx.save();
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(TrayConstants.canvasMargin, data.originY);
+    ctx.lineTo(
+      TrayConstants.canvasMargin + (data.tray.widthMm ?? 0) * data.canvasScale,
+      data.originY,
+    );
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawWidthLabel(

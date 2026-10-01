@@ -118,7 +118,9 @@ const draw = (
       left: Math.min(...stroke.points.map((point) => point.x)) - stroke.width / 2,
       right: Math.max(...stroke.points.map((point) => point.x)) + stroke.width / 2,
     }));
-  return { summary, ctx, canvas, cableArcs: arcs, pathPoints, clampOutlines };
+  // The first four and last two points draw the tray edges, outside the clamps.
+  const geometryPoints = clamps ? pathPoints.slice(4, -2) : pathPoints;
+  return { summary, ctx, canvas, cableArcs: arcs, pathPoints: geometryPoints, clampOutlines };
 };
 
 describe('trefoil clamps in the tray concept', () => {
