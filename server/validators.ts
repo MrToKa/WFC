@@ -581,6 +581,8 @@ const trayStringField = z.string().trim().max(500).optional();
 
 const trayNumericField = z.number().min(0).max(1_000_000).nullable().optional();
 
+const trefoilClampSpacingField = z.number().finite().positive().max(1_000_000).optional();
+
 export const createTraySchema = z
   .object({
     name: z.string().trim().min(1).max(200),
@@ -589,6 +591,8 @@ export const createTraySchema = z
     widthMm: trayNumericField,
     heightMm: trayNumericField,
     lengthMm: trayNumericField,
+    useTrefoilClamps: z.boolean().optional(),
+    trefoilClampSpacingMm: trefoilClampSpacingField,
   })
   .strict();
 
@@ -602,6 +606,8 @@ export const updateTraySchema = z
     lengthMm: trayNumericField,
     includeGroundingCable: z.boolean().optional(),
     groundingCableTypeId: z.union([z.string().trim().uuid(), z.null()]).optional(),
+    useTrefoilClamps: z.boolean().optional(),
+    trefoilClampSpacingMm: trefoilClampSpacingField,
   })
   .strict()
   .refine(
@@ -613,7 +619,9 @@ export const updateTraySchema = z
       value.heightMm !== undefined ||
       value.lengthMm !== undefined ||
       value.includeGroundingCable !== undefined ||
-      value.groundingCableTypeId !== undefined,
+      value.groundingCableTypeId !== undefined ||
+      value.useTrefoilClamps !== undefined ||
+      value.trefoilClampSpacingMm !== undefined,
     { message: 'At least one field must be provided' },
   );
 

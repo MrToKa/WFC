@@ -885,6 +885,17 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    ALTER TABLE trays
+    ADD COLUMN IF NOT EXISTS use_trefoil_clamps BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+
+  await pool.query(`
+    ALTER TABLE trays
+    ADD COLUMN IF NOT EXISTS trefoil_clamp_spacing_mm NUMERIC NOT NULL DEFAULT 600
+      CHECK (trefoil_clamp_spacing_mm > 0 AND trefoil_clamp_spacing_mm <= 1000000);
+  `);
+
+  await pool.query(`
     DO $$
     BEGIN
       IF NOT EXISTS (

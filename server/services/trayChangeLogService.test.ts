@@ -20,6 +20,26 @@ const tray: TrayRow = {
 };
 
 describe('tray change history', () => {
+  it('treats missing clamp preferences as the default settings', () => {
+    expect(
+      describeTrayChanges(tray, {
+        ...tray,
+        use_trefoil_clamps: false,
+        trefoil_clamp_spacing_mm: '600.00',
+      }),
+    ).toEqual([]);
+  });
+
+  it('describes clamp preferences and spacing changes', () => {
+    expect(
+      describeTrayChanges(tray, {
+        ...tray,
+        use_trefoil_clamps: true,
+        trefoil_clamp_spacing_mm: 900,
+      }),
+    ).toEqual(['Use trefoil clamps: No → Yes', 'Trefoil clamp spacing [mm]: 600 → 900']);
+  });
+
   it('ignores numeric formatting, timestamps and equivalent empty settings', () => {
     expect(
       describeTrayChanges(tray, {

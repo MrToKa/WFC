@@ -62,6 +62,23 @@ describe('tray load calculation', () => {
     expect(result.current.cablesWeightLoadPerMeterKg).toBe(0);
     expect(result.current.traySpanLoadKnPerM).toBeCloseTo(0.04903325, 8);
   });
+  it('includes clamps once in cable load, total weight and span assessment', () => {
+    const { result } = renderHook(() =>
+      useTrayCalculations(project, tray, [cable(15), cable(2, 'Grounding')], {}, 5, 2, true, 0.5112),
+    );
+    expect(result.current.cablesWeightLoadPerMeterKg).toBeCloseTo(17.5112);
+    expect(result.current.cablesTotalWeightKg).toBeCloseTo(175.112);
+    expect(result.current.totalWeightKg).toBeCloseTo(825.112);
+    expect(result.current.traySpanLoadKnPerM).toBeCloseTo(calculateTraySpanLoad(5, 17.5112)!);
+  });
+  it('refuses a partial assessment when enabled clamp mass is unknown', () => {
+    const { result } = renderHook(() =>
+      useTrayCalculations(project, tray, [cable(15)], {}, 5, null, false, null),
+    );
+    expect(result.current.cablesWeightLoadPerMeterKg).toBeNull();
+    expect(result.current.totalWeightKg).toBeNull();
+    expect(result.current.traySpanLoadKnPerM).toBeNull();
+  });
 });
 
 describe('manufacturer curve verification', () => {

@@ -95,6 +95,8 @@ const selectTraysQuery = `
     length_mm,
     include_grounding_cable,
     grounding_cable_type_id,
+    use_trefoil_clamps,
+    trefoil_clamp_spacing_mm,
     change_log,
     created_at,
     updated_at
@@ -489,7 +491,16 @@ traysRouter.post(
       return;
     }
 
-    const { name, type, purpose, widthMm, heightMm, lengthMm } = parseResult.data;
+    const {
+      name,
+      type,
+      purpose,
+      widthMm,
+      heightMm,
+      lengthMm,
+      useTrefoilClamps,
+      trefoilClampSpacingMm,
+    } = parseResult.data;
 
     let client: PoolClient | undefined;
     try {
@@ -505,9 +516,11 @@ traysRouter.post(
             purpose,
             width_mm,
             height_mm,
-            length_mm
+            length_mm,
+            use_trefoil_clamps,
+            trefoil_clamp_spacing_mm
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
           RETURNING
             id,
             project_id,
@@ -519,6 +532,8 @@ traysRouter.post(
             length_mm,
             include_grounding_cable,
             grounding_cable_type_id,
+            use_trefoil_clamps,
+            trefoil_clamp_spacing_mm,
             created_at,
             updated_at;
         `,
@@ -531,6 +546,8 @@ traysRouter.post(
           widthMm ?? null,
           heightMm ?? null,
           lengthMm ?? null,
+          useTrefoilClamps ?? false,
+          trefoilClampSpacingMm ?? 600,
         ],
       );
 
@@ -585,6 +602,8 @@ traysRouter.patch(
       lengthMm,
       includeGroundingCable,
       groundingCableTypeId,
+      useTrefoilClamps,
+      trefoilClampSpacingMm,
     } = parseResult.data;
 
     if (groundingCableTypeId !== undefined && groundingCableTypeId !== null) {
@@ -671,6 +690,14 @@ traysRouter.patch(
       fields.push(`grounding_cable_type_id = $${index++}`);
       values.push(groundingCableTypeId);
     }
+    if (useTrefoilClamps !== undefined) {
+      fields.push(`use_trefoil_clamps = $${index++}`);
+      values.push(useTrefoilClamps);
+    }
+    if (trefoilClampSpacingMm !== undefined) {
+      fields.push(`trefoil_clamp_spacing_mm = $${index++}`);
+      values.push(trefoilClampSpacingMm);
+    }
 
     fields.push(`updated_at = NOW()`);
 
@@ -704,6 +731,8 @@ traysRouter.patch(
             length_mm,
             include_grounding_cable,
             grounding_cable_type_id,
+            use_trefoil_clamps,
+            trefoil_clamp_spacing_mm,
             change_log,
             created_at,
             updated_at;

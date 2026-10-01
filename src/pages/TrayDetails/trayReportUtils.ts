@@ -86,6 +86,7 @@ export type TrayPlaceholderContext = {
   totalWeightLoadPerMeterKg: number | null;
   totalWeightKg: number | null;
   groundingCableWeightKgPerM: number | null;
+  trefoilClampsWeightKgPerM?: number | null;
   projectCableSpacingMm: number;
   considerBundleSpacingAsFree: boolean;
   minFreeSpacePercent: number | null;
@@ -235,6 +236,7 @@ export const buildTrayPlaceholderValues = (
     cablesTotalWeightKg,
     totalWeightLoadPerMeterKg,
     totalWeightKg,
+    trefoilClampsWeightKgPerM = 0,
     projectCableSpacingMm,
     considerBundleSpacingAsFree,
     minFreeSpacePercent,
@@ -325,9 +327,13 @@ export const buildTrayPlaceholderValues = (
         )} = ${numberFormatter.format(trayTotalOwnWeightKg)} kg`
       : null;
 
+  const hasKnownTrefoilClampWeight =
+    typeof trefoilClampsWeightKgPerM === 'number' &&
+    Number.isFinite(trefoilClampsWeightKgPerM) &&
+    trefoilClampsWeightKgPerM >= 0;
   const cablesWeightPerMeterFormula =
-    cablesWeightLoadPerMeterKg !== null
-      ? `Sum of ${trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)).length} routed cable weights${includeGroundingCable ? ' plus grounding cable' : ''} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} kg/m`
+    cablesWeightLoadPerMeterKg !== null && hasKnownTrefoilClampWeight
+      ? `Sum of ${trayCables.filter((cable) => !isGroundingPurpose(cable.purpose)).length} routed cable weights${includeGroundingCable ? ' plus grounding cable' : ''}${trefoilClampsWeightKgPerM! > 0 ? ' plus trefoil clamps' : ''} = ${numberFormatter.format(cablesWeightLoadPerMeterKg)} kg/m`
       : null;
 
   const cablesTotalWeightFormula =
@@ -653,6 +659,7 @@ export const buildTrayPlaceholderValues = (
     .sort((a, b) => a.cableId - b.cableId)
     .map((cable) => cable.weightKgPerM);
   if (includeGroundingCable) cableUnitWeights.push(context.groundingCableWeightKgPerM);
+  if (trefoilClampsWeightKgPerM !== 0) cableUnitWeights.push(trefoilClampsWeightKgPerM);
   const cableWeightSum =
     cablesWeightLoadPerMeterKg !== null &&
     cableUnitWeights.every(
@@ -677,7 +684,8 @@ export const buildTrayPlaceholderValues = (
   );
   addValue(
     'tray-details:cables-weight-load-per-meter',
-    cablesWeightPerMeterFormula ?? formatNumber(numberFormatter, cablesWeightLoadPerMeterKg),
+    cablesWeightPerMeterFormula ??
+      formatNumber(numberFormatter, hasKnownTrefoilClampWeight ? cablesWeightLoadPerMeterKg : null),
   );
   addValue(
     'tray-details:cables-total-weight',

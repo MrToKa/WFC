@@ -12,6 +12,7 @@ export const useTrayCalculations = (
   trayWeightPerMeterKg: number | null,
   groundingCableWeightKgPerM: number | null,
   includeGroundingCable = false,
+  trefoilClampsWeightKgPerM: number | null = 0,
 ) => {
   const supportOverride = useMemo(() => {
     if (!project || !tray || !tray.type) {
@@ -110,12 +111,13 @@ export const useTrayCalculations = (
   const cablesWeightLoadPerMeterKg = useMemo(() => {
     if (
       nonGroundingCables.some((cable) => !isValidWeight(cable.weightKgPerM)) ||
+      !isValidWeight(trefoilClampsWeightKgPerM) ||
       (includeGroundingCable && !isValidWeight(groundingCableWeightKgPerM))
     )
       return null;
     const total = nonGroundingCables.reduce((sum, cable) => sum + (cable.weightKgPerM ?? 0), 0);
-    return total + (includeGroundingCable ? (groundingCableWeightKgPerM ?? 0) : 0);
-  }, [nonGroundingCables, groundingCableWeightKgPerM, includeGroundingCable]);
+    return total + (includeGroundingCable ? (groundingCableWeightKgPerM ?? 0) : 0) + (trefoilClampsWeightKgPerM ?? 0);
+  }, [nonGroundingCables, groundingCableWeightKgPerM, includeGroundingCable, trefoilClampsWeightKgPerM]);
 
   const supportWeightPerMeterKg = supportCalculations.weightPerMeterKg;
   const trayLengthMeters = supportCalculations.lengthMeters;

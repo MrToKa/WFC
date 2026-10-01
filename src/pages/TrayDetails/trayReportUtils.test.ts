@@ -158,6 +158,59 @@ describe('tray report Variables API', () => {
       buildTrayPlaceholderValues(context).values['tray-details:cables-weight-sum-formula'],
     ).toBe('*****');
   });
+  it('includes clamp mass once in the component sum and carries the combined load through totals', () => {
+    const context = createContext();
+    context.trayCables = [
+      { ...context.trayCables[0], cableId: 2, weightKgPerM: 2 },
+      { ...context.trayCables[0], cableId: 1, weightKgPerM: 1 },
+      { ...context.trayCables[0], cableId: 3, weightKgPerM: 0.5, purpose: 'Grounding' },
+    ];
+    context.includeGroundingCable = true;
+    context.groundingCableWeightKgPerM = 0.5;
+    context.trefoilClampsWeightKgPerM = 0.25;
+    context.cablesWeightLoadPerMeterKg = 3.75;
+    context.cablesTotalWeightKg = 37.5;
+    context.totalWeightLoadPerMeterKg = 9.95;
+    context.totalWeightKg = 99.5;
+    const values = buildTrayPlaceholderValues(context).values;
+    expect(values['tray-details:cables-weight-sum-formula']).toBe('1 + 2 + 0.5 + 0.25 = 3.75 kg/m');
+    expect(values['tray-details:cables-weight-load-per-meter']).toBe(
+      'Sum of 2 routed cable weights plus grounding cable plus trefoil clamps = 3.75 kg/m',
+    );
+    expect(values['tray-details:cables-total-weight']).toBe('3.75 * 10 = 37.5 kg');
+    expect(values['tray-details:total-weight-load-per-meter']).toBe('6.2 + 3.75 = 9.95 kg/m');
+    expect(values['tray-details:total-weight']).toBe('62 + 37.5 = 99.5 kg');
+    expect(values['tray-details:span-load-formula']).toBe(
+      '(3.75 + 5) x 9.80665 / 1000 = 0.085808 kN/m',
+    );
+  });
+  it('preserves the original component formula when clamp mass is zero or omitted', () => {
+    const context = createContext();
+    const omitted = buildTrayPlaceholderValues(context).values;
+    context.trefoilClampsWeightKgPerM = 0;
+    const disabled = buildTrayPlaceholderValues(context).values;
+    expect(disabled['tray-details:cables-weight-sum-formula']).toBe('15 = 15 kg/m');
+    expect(disabled['tray-details:cables-weight-load-per-meter']).toBe(
+      'Sum of 1 routed cable weights = 15 kg/m',
+    );
+    expect(disabled['tray-details:cables-weight-sum-formula']).toBe(
+      omitted['tray-details:cables-weight-sum-formula'],
+    );
+    expect(disabled['tray-details:cables-weight-load-per-meter']).toBe(
+      omitted['tray-details:cables-weight-load-per-meter'],
+    );
+  });
+  it.each([null, Number.NaN, Number.POSITIVE_INFINITY, -1])(
+    'does not publish a partial component sum when clamp mass is %s',
+    (trefoilClampsWeightKgPerM) => {
+      const values = buildTrayPlaceholderValues({
+        ...createContext(),
+        trefoilClampsWeightKgPerM,
+      }).values;
+      expect(values['tray-details:cables-weight-sum-formula']).toBe('*****');
+      expect(values['tray-details:cables-weight-load-per-meter']).toBe('*****');
+    },
+  );
   it('exports the occupied-width calculation from the actual Tray details layout', () => {
     const context = createContext();
     context.occupiedWidthFormula = '140 + 10 = 150 mm';

@@ -12,6 +12,8 @@ export type Tray = {
   lengthMm: number | null;
   includeGroundingCable: boolean;
   groundingCableTypeId: string | null;
+  useTrefoilClamps?: boolean;
+  trefoilClampSpacingMm?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -25,4 +27,6 @@ export type TrayInput = {
   lengthMm?: number | null;
   includeGroundingCable?: boolean;
   groundingCableTypeId?: string | null;
+  useTrefoilClamps?: boolean;
+  trefoilClampSpacingMm?: number;
 };

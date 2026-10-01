@@ -19,6 +19,8 @@ All load and free-space assessment conclusions, utilization and reserve calculat
 - Utilization is design load divided by allowable load, in percent. Reserve is allowable load minus design load; a negative reserve records an overload.
 - A PASS uses unrounded numbers at the selected span. Missing cable weights, a missing selected grounding cable weight, invalid curve points or spans outside the documented range cannot yield a PASS.
 - Grounding mass is counted once when selected. It is excluded from the bundle width calculation.
+- When **Use Trefoild clamps** is enabled, the actual rendered trefoil groups select from all 23 Vulcan+ trefoil models in `Template files/vulcan-data-sheet-ds03v9e.pdf`. The range must fit all three cable diameters; overlapping ranges use the closest midpoint to the largest diameter. For example, 35 mm selects VRT+04 (33-38 mm, 284 g), and 40 mm selects VRT+05 (36-42 mm, 319 g).
+- Clamp spacing is saved per tray and defaults to 600 mm. Each group uses `ceil(tray length / clamp spacing) + 1` clamps, including both ends. The resulting total mass divided by tray length is included once in cable load, combined inventory, span load and report formulas. Missing dimensions or an unsupported group prevents a complete clamp/load assessment. Clamped cables touch, and the concept drawing includes the selected clamp's width and height.
 - Width calculations use the actual bundle layout from Tray details, including its cable and bundle spacing options. Free width is not cable cross-sectional area or volume.
 - Support counts retain the existing application rule: `n = floor(route length / support spacing)`, then `max(2, n + 1)`, with one extra support if n is at least one and the remaining length exceeds 20% of the spacing.
 
