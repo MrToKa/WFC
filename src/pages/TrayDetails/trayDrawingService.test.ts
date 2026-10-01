@@ -147,7 +147,7 @@ describe('trefoil clamps in the tray concept', () => {
       );
       expect(clampOutlines).toHaveLength(2);
       const frames = [...clampOutlines].sort((a, b) => a.left - b.left);
-      if (mode === '0') {
+      if (!spacingEnabled || mode === '0') {
         expect((frames[1].left - frames[0].right) / scale).toBeCloseTo(5);
       } else {
         const trefoilArcs = cableArcs.filter((arc) => arc.radius === (35 * scale) / 2);
@@ -162,10 +162,10 @@ describe('trefoil clamps in the tray concept', () => {
     },
   );
 
-  it('honors 2D with the default MV settings and four clamped trefoils', () => {
+  it('uses minimum clearance with the default MV spacing toggle disabled', () => {
     expect(DEFAULT_CATEGORY_SETTINGS.mv.bundleSpacing).toBe('2D');
     expect(DEFAULT_CATEGORY_SETTINGS.mv.trefoilSpacingBetweenBundles).toBe(false);
-    const { cableArcs, summary } = draw(
+    const { clampOutlines } = draw(
       Array.from({ length: 12 }, (_, index) => cable(index + 1, 35, 'mv')),
       'mv',
       true,
@@ -174,17 +174,9 @@ describe('trefoil clamps in the tray concept', () => {
       {},
       { scale: 6, spacingMm: DEFAULT_CABLE_SPACING, layout: DEFAULT_CATEGORY_SETTINGS.mv },
     );
-    const groups = [0, 3, 6, 9].map((index) => {
-      const arcs = cableArcs.slice(index, index + 3);
-      return {
-        left: Math.min(...arcs.map((arc) => arc.x - arc.radius)),
-        right: Math.max(...arcs.map((arc) => arc.x + arc.radius)),
-      };
-    });
-    for (let index = 1; index < groups.length; index++) {
-      expect((groups[index].left - groups[index - 1].right) / 6).toBeCloseTo(70);
+    for (let index = 1; index < clampOutlines.length; index++) {
+      expect((clampOutlines[index].left - clampOutlines[index - 1].right) / 6).toBeCloseTo(5);
     }
-    expect(summary.occupiedWidthWithBundleSpacingMm).toBeCloseTo(506);
   });
 
   it('uses 5 mm clamp clearance when bundle spacing is explicitly zero', () => {
@@ -271,7 +263,7 @@ describe('trefoil clamps in the tray concept', () => {
       );
       const frames = [...clampOutlines].sort((a, b) => a.left - b.left);
       expect(frames).toHaveLength(2);
-      if (mode === '0') {
+      if (!spacingEnabled || mode === '0') {
         expect((frames[1].left - frames[0].right) / 5).toBeCloseTo(5);
       } else {
         const trefoilArcs = cableArcs.filter((arc) => arc.radius >= (35 * 5) / 2);

@@ -645,9 +645,8 @@ class CableBundleDrawer {
     };
     const currentBounds = bounds(current);
     const nextBounds = bounds(next);
-    // Clamped trefoils follow the selected bundle spacing directly. The
-    // legacy spacing checkbox applies only to formations without clamps.
-    const mode = layout.bundleSpacing;
+    // An unchecked trefoil spacing toggle always means minimum clamp clearance.
+      const mode = layout.trefoilSpacingBetweenBundles ? layout.bundleSpacing : '0';
     // The cursor reserves W1. Subtract the reserved side margins so spacing
     // is measured between the cables (1D/2D) or visible clamp edges (0).
     const gap = (mode === '0' ? 5 : diameter * (mode === '2D' ? 2 : 1)) * data.canvasScale;
