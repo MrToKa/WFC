@@ -78,6 +78,9 @@ import {
 } from './TrayDetails/TrayDetails.utils';
 import { TrayFormState, TrayFormErrors } from './TrayDetails/TrayDetails.types';
 import { TrayChangeTracker } from './TrayDetails/components/TrayChangeTracker';
+import { TrefoilClampControls } from './TrayDetails/components/TrefoilClampControls';
+import { useTrefoilClampSettings } from './TrayDetails/hooks/useTrefoilClampSettings';
+import { calculateTrefoilClampWeight } from './TrayDetails/trefoilClamps';
 import {
   TrayDetailsHeader,
   CablesTableSection,
@@ -956,6 +959,13 @@ export const TrayDetails = () => {
     });
   }, [selectedMaterialTray, isEditing]);
 
+  const {
+    useTrefoilClamps,
+    trefoilClampSpacingMm,
+    trefoilClampSettingsSaving,
+    saveTrefoilClampSettings,
+  } = useTrefoilClampSettings(projectId, tray, token, showToast, setTray, setTrays);
+
   // Grounding cable logic
   const groundingHook = useGroundingCable(
     projectId,
@@ -994,7 +1004,7 @@ export const TrayDetails = () => {
 
   // Auto-select fallback grounding cable type if needed
   useEffect(() => {
-    if (!trayId || !includeGroundingCable || groundingPreferenceSaving) {
+    if (!trayId || !includeGroundingCable || groundingPreferenceSaving || trefoilClampSettingsSaving || isEditing) {
       return;
     }
 
@@ -1029,6 +1039,8 @@ export const TrayDetails = () => {
     groundingCableTypes,
     currentGroundingPreference,
     groundingPreferenceSaving,
+    trefoilClampSettingsSaving,
+    isEditing,
     persistGroundingPreference,
     setGroundingSelectionsByTrayId
   ]);
@@ -1054,6 +1066,12 @@ export const TrayDetails = () => {
   }, [formValues.weightKgPerM, selectedMaterialTray]);
 
   // All calculations using custom hook
+  const trefoilClampCalculation = useMemo(
+    () => calculateTrefoilClampWeight(layoutSummary?.trefoilClamps, tray?.lengthMm, trefoilClampSpacingMm),
+    [layoutSummary?.trefoilClamps, tray?.lengthMm, trefoilClampSpacingMm],
+  );
+  const trefoilClampWeightKgPerM = useTrefoilClamps ? trefoilClampCalculation.weightPerMeterKg : 0;
+
   const calculations = useTrayCalculations(
     project,
     tray,
@@ -1061,14 +1079,15 @@ export const TrayDetails = () => {
     materialSupportsById,
     trayWeightPerMeterKg,
     groundingCableWeightKgPerM,
-    includeGroundingCable
+    includeGroundingCable,
+    trefoilClampWeightKgPerM
   );
 
   const {
     supportOverride,
     overrideSupport,
     supportCalculations,
-    nonGroundingCables,
+    sortedTrayCables,
     cablesWeightLoadPerMeterKg,
     trayWeightLoadPerMeterKg,
     trayTotalOwnWeightKg,
@@ -1229,7 +1248,7 @@ export const TrayDetails = () => {
   const cableBundles: CableBundleMap = useMemo(() => {
     const bundles: CableBundleMap = {};
 
-    for (const cable of nonGroundingCables) {
+    for (const cable of sortedTrayCables) {
       const category = matchCableCategory(cable.purpose);
       if (!category) {
         continue;
@@ -1253,7 +1272,7 @@ export const TrayDetails = () => {
     }
 
     return bundles;
-  }, [nonGroundingCables, activeCustomBundleRanges]);
+  }, [sortedTrayCables, activeCustomBundleRanges]);
 
   const isUsingCustomBundles = Boolean(bundleOverrides?.useCustom);
 
@@ -1362,7 +1381,7 @@ export const TrayDetails = () => {
     () =>
       calculateTrayFreeSpaceMetrics({
         tray,
-        cables: nonGroundingCables,
+        cables: sortedTrayCables,
         layout: activeProjectCableLayout ?? null,
         spacingBetweenCablesMm: projectCableSpacingMm,
         considerBundleSpacingAsFree,
@@ -1372,7 +1391,7 @@ export const TrayDetails = () => {
       considerBundleSpacingAsFree,
       activeProjectCableLayout,
       layoutSummary,
-      nonGroundingCables,
+      sortedTrayCables,
       projectCableSpacingMm,
       tray
     ]
@@ -1436,12 +1455,12 @@ export const TrayDetails = () => {
       const summary = trayDrawingServiceRef.current.drawTrayLayout(
         canvasElement,
         tray,
-        nonGroundingCables,
+        sortedTrayCables,
         cableBundles,
         6,
         projectCableSpacingMm,
         effectiveLayoutConfig,
-        { rungHeightMm: selectedRungHeightMm ?? undefined }
+        { rungHeightMm: selectedRungHeightMm ?? undefined, useTrefoilClamps }
       );
       setLayoutSummary(summary ?? null);
       return summary !== null;
@@ -1452,11 +1471,12 @@ export const TrayDetails = () => {
     }
   }, [
     tray,
-    nonGroundingCables,
+    sortedTrayCables,
     cableBundles,
     projectCableSpacingMm,
     effectiveLayoutConfig,
-    selectedRungHeightMm
+    selectedRungHeightMm,
+    useTrefoilClamps
   ]);
 
   useEffect(() => {
@@ -1619,7 +1639,7 @@ export const TrayDetails = () => {
   const cableWeightComponents = useMemo(() => {
     const weights: number[] = [];
 
-    for (const cable of nonGroundingCables) {
+    for (const cable of sortedTrayCables) {
       const weight = cable.weightKgPerM;
       if (weight !== null && !Number.isNaN(weight)) {
         weights.push(weight);
@@ -1630,8 +1650,12 @@ export const TrayDetails = () => {
       weights.push(groundingCableWeightKgPerM);
     }
 
+    if (useTrefoilClamps && trefoilClampWeightKgPerM !== null) {
+      weights.push(trefoilClampWeightKgPerM);
+    }
+
     return weights;
-  }, [nonGroundingCables, groundingCableWeightKgPerM]);
+  }, [sortedTrayCables, groundingCableWeightKgPerM, useTrefoilClamps, trefoilClampWeightKgPerM]);
 
   const trayWeightLoadPerMeterFormula = useMemo(() => {
     if (
@@ -2529,8 +2553,8 @@ export const TrayDetails = () => {
   }, [chartEvaluation.limitHighlight, numberFormatter]);
 
   const loadCurveRefreshKey = useMemo(
-    () => `${includeGroundingCable}-${selectedGroundingCableTypeId ?? 'none'}-${groundingCableWeightKgPerM ?? 'na'}`,
-    [includeGroundingCable, selectedGroundingCableTypeId, groundingCableWeightKgPerM]
+    () => `${includeGroundingCable}-${selectedGroundingCableTypeId ?? 'none'}-${groundingCableWeightKgPerM ?? 'na'}-${useTrefoilClamps}-${trefoilClampWeightKgPerM ?? 'na'}`,
+    [includeGroundingCable, selectedGroundingCableTypeId, groundingCableWeightKgPerM, useTrefoilClamps, trefoilClampWeightKgPerM]
   );
 
   const trayReportBaseContext = useMemo<TrayReportBaseContext | null>(() => {
@@ -2561,6 +2585,7 @@ export const TrayDetails = () => {
       totalWeightLoadPerMeterKg,
       totalWeightKg,
       groundingCableWeightKgPerM,
+      trefoilClampsWeightKgPerM: trefoilClampWeightKgPerM,
       projectCableSpacingMm,
       considerBundleSpacingAsFree,
       minFreeSpacePercent,
@@ -2601,6 +2626,7 @@ export const TrayDetails = () => {
     totalWeightLoadPerMeterKg,
     totalWeightKg,
     groundingCableWeightKgPerM,
+    trefoilClampWeightKgPerM,
     projectCableSpacingMm,
     considerBundleSpacingAsFree,
     minFreeSpacePercent,
@@ -3358,7 +3384,7 @@ export const TrayDetails = () => {
 
       {/* Cables Section */}
       <CablesTableSection
-        trayCables={nonGroundingCables}
+        trayCables={sortedTrayCables}
         cablesError={cablesError}
         styles={styles}
         numberFormatter={numberFormatter}
@@ -3403,7 +3429,7 @@ export const TrayDetails = () => {
         <Caption1>Cables on tray weight calculations</Caption1>
         <GroundingCableControls
           includeGroundingCable={includeGroundingCable}
-          groundingPreferenceSaving={groundingPreferenceSaving}
+          groundingPreferenceSaving={groundingPreferenceSaving || trefoilClampSettingsSaving || isEditing}
           isAdmin={canEdit}
           projectCableTypesLoading={projectCableTypesLoading}
           projectCableTypesError={projectCableTypesError}
@@ -3416,9 +3442,36 @@ export const TrayDetails = () => {
           formatCableTypeLabel={formatCableTypeLabel}
           styles={styles}
         />
+        <TrefoilClampControls
+          useTrefoilClamps={useTrefoilClamps}
+          saving={trefoilClampSettingsSaving || groundingPreferenceSaving || isEditing}
+          canEdit={canEdit}
+          spacingMm={trefoilClampSpacingMm}
+          onToggle={(_event, data) => {
+            if (canEdit && !groundingPreferenceSaving && !isEditing) {
+              void saveTrefoilClampSettings({ useTrefoilClamps: Boolean(data.checked) });
+            }
+          }}
+          onSpacingSave={(spacingMm) => {
+            if (canEdit && !groundingPreferenceSaving && !isEditing) {
+              void saveTrefoilClampSettings({ trefoilClampSpacingMm: spacingMm });
+            }
+          }}
+          summaries={trefoilClampCalculation.rows.map(({ clamp, groupCount, totalCount }) =>
+            `${clamp.model}: ${clamp.minDiameterMm}-${clamp.maxDiameterMm} mm, ${clamp.weightGrams} g/pc, ${groupCount} trefoil group(s), ${totalCount ?? '-'} clamp(s)`,
+          )}
+          issues={trefoilClampCalculation.issues}
+          groupCount={trefoilClampCalculation.groupCount}
+          totalCount={trefoilClampCalculation.totalCount}
+          totalWeightKg={trefoilClampCalculation.totalWeightKg}
+          weightPerMeterKg={trefoilClampCalculation.weightPerMeterKg}
+          styles={styles}
+        />
         {cablesWeightLoadPerMeterKg === null ? (
           <Body1 className={styles.emptyState}>
-            No cables with weight data available for calculations.
+            {useTrefoilClamps
+              ? 'Complete cable weights and trefoil clamp data are required for calculations.'
+              : 'No cables with weight data available for calculations.'}
           </Body1>
         ) : null}
         <div className={styles.grid}>

@@ -51,6 +51,8 @@ beforeEach(() => {
     length_mm: 3000,
     include_grounding_cable: false,
     grounding_cable_type_id: null,
+    use_trefoil_clamps: false,
+    trefoil_clamp_spacing_mm: 600,
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
     change_log: [],
@@ -61,14 +63,20 @@ beforeEach(() => {
     if (sql.includes('FROM users')) return { rows: [{ name: 'Editor' }] };
     if (sql.includes('FROM trays')) return { rows: [{ ...stored }], rowCount: 1 };
     if (sql.includes('INSERT INTO trays')) {
-      stored = { ...stored, id: values![0] as string, length_mm: values![7] as number };
+      stored = {
+        ...stored,
+        id: values![0] as string,
+        length_mm: values![7] as number,
+        use_trefoil_clamps: (values![8] as boolean | undefined) ?? false,
+        trefoil_clamp_spacing_mm: (values![9] as number | undefined) ?? 600,
+      };
       return { rows: [{ ...stored }], rowCount: 1 };
     }
     if (sql.includes('UPDATE trays') && !sql.includes('change_log =')) {
-      stored = {
-        ...stored,
-        length_mm: (sql.includes('tray_type = $1') ? values![4] : values![0]) as number,
-      };
+      const assignments = sql.slice(sql.indexOf('SET'), sql.indexOf('WHERE'));
+      for (const [, field, parameter] of assignments.matchAll(/(\w+) = \$(\d+)/g)) {
+        stored = { ...stored, [field]: values![Number(parameter) - 1] };
+      }
       return { rows: [{ ...stored }], rowCount: 1 };
     }
     return { rows: [], rowCount: 1 };
@@ -77,6 +85,80 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('tray history transactions', () => {
+  it('returns the persisted clamp preferences when listing trays', async () => {
+    stored.use_trefoil_clamps = true;
+    stored.trefoil_clamp_spacing_mm = '750';
+    const res = response();
+    await handler('get', '/')(request({}), res);
+    expect(database.query).toHaveBeenCalledWith(
+      expect.stringContaining('trefoil_clamp_spacing_mm'),
+      ['project'],
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      trays: [expect.objectContaining({ useTrefoilClamps: true, trefoilClampSpacingMm: 750 })],
+    });
+  });
+
+  it('saves the clamp preferences and records both changes in the same transaction', async () => {
+    const res = response();
+    await handler('patch', '/:trayId')(
+      request({ useTrefoilClamps: true, trefoilClampSpacingMm: 750 }),
+      res,
+    );
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('use_trefoil_clamps = $1, trefoil_clamp_spacing_mm = $2'),
+      [true, 750, 'tray', 'project'],
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      tray: expect.objectContaining({
+        useTrefoilClamps: true,
+        trefoilClampSpacingMm: 750,
+        changeLog: [
+          expect.objectContaining({
+            changes: ['Use trefoil clamps: No → Yes', 'Trefoil clamp spacing [mm]: 600 → 750'],
+          }),
+        ],
+      }),
+    });
+    expect(client.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+
+  it('retains the spacing when disabling clamps', async () => {
+    stored.use_trefoil_clamps = true;
+    stored.trefoil_clamp_spacing_mm = 750;
+    const res = response();
+    await handler('patch', '/:trayId')(request({ useTrefoilClamps: false }), res);
+    expect(res.json).toHaveBeenCalledWith({
+      tray: expect.objectContaining({ useTrefoilClamps: false, trefoilClampSpacingMm: 750 }),
+    });
+  });
+
+  it.each([0, -1, Number.POSITIVE_INFINITY, Number.NaN, 1_000_001, null])(
+    'rejects invalid clamp spacing %s before opening a transaction',
+    async (trefoilClampSpacingMm) => {
+      const res = response();
+      await handler('patch', '/:trayId')(request({ trefoilClampSpacingMm }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(database.connect).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    { input: {}, enabled: false, spacing: 600 },
+    { input: { useTrefoilClamps: true, trefoilClampSpacingMm: 900 }, enabled: true, spacing: 900 },
+  ])('creates a tray with the default or explicit clamp preferences', async ({ input, enabled, spacing }) => {
+    const res = response();
+    await handler('post', '/')(request({ name: 'T1', ...input }), res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('use_trefoil_clamps'),
+      [expect.any(String), 'project', 'T1', null, null, null, null, null, enabled, spacing],
+    );
+    expect(res.json).toHaveBeenCalledWith({
+      tray: expect.objectContaining({ useTrefoilClamps: enabled, trefoilClampSpacingMm: spacing }),
+    });
+  });
+
   it('locks the tray and commits its update and history together', async () => {
     const res = response();
     await handler('patch', '/:trayId')(request({ lengthMm: 4000 }), res);

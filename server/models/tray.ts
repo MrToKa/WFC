@@ -12,6 +12,8 @@ export type TrayRow = {
   length_mm: string | number | null;
   include_grounding_cable: boolean | null;
   grounding_cable_type_id: string | null;
+  use_trefoil_clamps?: boolean | null;
+  trefoil_clamp_spacing_mm?: string | number | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -40,6 +42,8 @@ export type PublicTray = {
   lengthMm: number | null;
   includeGroundingCable: boolean;
   groundingCableTypeId: string | null;
+  useTrefoilClamps: boolean;
+  trefoilClampSpacingMm: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -56,6 +60,8 @@ export const mapTrayRow = (row: TrayRow): PublicTray => ({
   lengthMm: toNumberOrNull(row.length_mm),
   includeGroundingCable: Boolean(row.include_grounding_cable),
   groundingCableTypeId: row.grounding_cable_type_id ?? null,
+  useTrefoilClamps: Boolean(row.use_trefoil_clamps),
+  trefoilClampSpacingMm: toNumberOrNull(row.trefoil_clamp_spacing_mm ?? null) ?? 600,
   createdAt: toIsoString(row.created_at),
   updatedAt: toIsoString(row.updated_at)
 });

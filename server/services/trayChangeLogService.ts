@@ -12,6 +12,8 @@ const fields = {
   lengthMm: 'Length [mm]',
   includeGroundingCable: 'Include grounding cable',
   groundingCableTypeId: 'Grounding cable type ID',
+  useTrefoilClamps: 'Use trefoil clamps',
+  trefoilClampSpacingMm: 'Trefoil clamp spacing [mm]',
 } as const;
 
 const format = (value: unknown): string => {
