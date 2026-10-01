@@ -1,23 +1,14 @@
+import { TRAY_REPORT_PLACEHOLDERS } from '../TrayDetails/trayReportVariables';
 import { useEffect, useMemo, useState } from 'react';
 
-import {
-  Body1,
-  Button,
-  Caption1,
-  Input,
-  Spinner,
-  Subtitle2
-} from '@fluentui/react-components';
+import { Body1, Button, Caption1, Input, Spinner, Subtitle2 } from '@fluentui/react-components';
 
 import type { ProjectDetailsStyles } from '../ProjectDetails.styles';
-import {
-  getProjectPlaceholders,
-  setProjectPlaceholders
-} from '@/utils/projectPlaceholders';
+import { getProjectPlaceholders, setProjectPlaceholders } from '@/utils/projectPlaceholders';
 import {
   getCustomVariables,
   setCustomVariables,
-  type CustomVariable
+  type CustomVariable,
 } from '@/utils/customVariablesStorage';
 
 export type VariablesApiRow = {
@@ -49,14 +40,14 @@ export const VariablesApiTab = ({
   styles,
   projectId,
   sections,
-  isLoading
+  isLoading,
 }: VariablesApiTabProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [placeholders, setPlaceholders] = useState<Record<string, string>>(() =>
-    getProjectPlaceholders(projectId)
+    getProjectPlaceholders(projectId),
   );
-  const [customVariables, setCustomVariablesState] = useState<CustomVariable[]>(
-    () => getCustomVariables(projectId)
+  const [customVariables, setCustomVariablesState] = useState<CustomVariable[]>(() =>
+    getCustomVariables(projectId),
   );
 
   useEffect(() => {
@@ -100,7 +91,7 @@ export const VariablesApiTab = ({
 
       return {
         ...previous,
-        [rowId]: value
+        [rowId]: value,
       };
     });
   };
@@ -115,7 +106,7 @@ export const VariablesApiTab = ({
     if (
       !window.confirm(
         'Confirm clearing all placeholders, including custom variable placeholders. ' +
-          'Click Save afterwards to save this change, or Cancel to restore them. (2 of 2)'
+          'Click Save afterwards to save this change, or Cancel to restore them. (2 of 2)',
       )
     ) {
       return;
@@ -128,13 +119,10 @@ export const VariablesApiTab = ({
       sections.reduce(
         (sectionTotal, section) =>
           sectionTotal +
-          section.tables.reduce(
-            (tableTotal, table) => tableTotal + table.rows.length,
-            0
-          ),
-        0
+          section.tables.reduce((tableTotal, table) => tableTotal + table.rows.length, 0),
+        0,
       ) + customVariables.length,
-    [sections, customVariables.length]
+    [sections, customVariables.length],
   );
 
   const generateCustomVariableId = () =>
@@ -143,22 +131,18 @@ export const VariablesApiTab = ({
   const handleAddCustomVariable = () => {
     setCustomVariablesState((previous) => [
       ...previous,
-      { id: generateCustomVariableId(), name: '' }
+      { id: generateCustomVariableId(), name: '' },
     ]);
   };
 
   const handleCustomVariableNameChange = (id: string, name: string) => {
     setCustomVariablesState((previous) =>
-      previous.map((variable) =>
-        variable.id === id ? { ...variable, name } : variable
-      )
+      previous.map((variable) => (variable.id === id ? { ...variable, name } : variable)),
     );
   };
 
   const handleDeleteCustomVariable = (id: string) => {
-    setCustomVariablesState((previous) =>
-      previous.filter((variable) => variable.id !== id)
-    );
+    setCustomVariablesState((previous) => previous.filter((variable) => variable.id !== id));
     setPlaceholders((previous) => {
       if (!(id in previous)) {
         return previous;
@@ -183,8 +167,7 @@ export const VariablesApiTab = ({
         <div className={styles.panel}>
           <Body1>No project data available for constructing variables.</Body1>
           <Caption1>
-            Ensure cables, trays, files, and templates are loaded to populate
-            this view.
+            Ensure cables, trays, files, and templates are loaded to populate this view.
           </Caption1>
         </div>
       </div>
@@ -199,19 +182,15 @@ export const VariablesApiTab = ({
             <div>
               <Subtitle2>Placeholder mapping</Subtitle2>
               <Body1>
-                Select Edit to change the keywords replaced inside Word
-                templates, then Save to confirm your changes.
+                Select Edit to change the keywords replaced inside Word templates, then Save to
+                confirm your changes.
               </Body1>
             </div>
             <div className={styles.variablesActions}>
               <Caption1>{totalVariables} variables detected</Caption1>
               {isEditing ? (
                 <>
-                  <Button
-                    size="small"
-                    appearance="primary"
-                    onClick={handleSave}
-                  >
+                  <Button size="small" appearance="primary" onClick={handleSave}>
                     Save
                   </Button>
                   <Button size="small" onClick={handleCancel}>
@@ -225,6 +204,15 @@ export const VariablesApiTab = ({
               )}
               <Button
                 size="small"
+                disabled={!isEditing}
+                onClick={() =>
+                  setPlaceholders((previous) => ({ ...TRAY_REPORT_PLACEHOLDERS, ...previous }))
+                }
+              >
+                Use tray report placeholders
+              </Button>
+              <Button
+                size="small"
                 appearance="secondary"
                 className={styles.clearPlaceholdersButton}
                 onClick={handleClearPlaceholders}
@@ -235,9 +223,11 @@ export const VariablesApiTab = ({
             </div>
           </div>
           <Caption1>
-            Values are stored per project in your browser only. Use consistent
-            tokens such as {'{{PROJECT_NAME}}'} to match the text you will place
-            inside the Word template.
+            Values are stored per project in your browser only. Use consistent tokens such as{' '}
+            {'{{PROJECT_NAME}}'} to match the text you will place inside the Word template. The
+            supplied tray report template uses the standard tray report placeholders; these are
+            resolved automatically during export. Use tray report placeholders fills any missing
+            mappings without replacing your existing settings.
           </Caption1>
         </div>
       </div>
@@ -247,19 +237,13 @@ export const VariablesApiTab = ({
           <div className={styles.variablesSectionHeader}>
             <Subtitle2>{section.label}</Subtitle2>
             <Caption1>
-              {section.tables.reduce(
-                (count, table) => count + table.rows.length,
-                0
-              )}{' '}
-              variables
+              {section.tables.reduce((count, table) => count + table.rows.length, 0)} variables
             </Caption1>
           </div>
           <div className={styles.variablesTables}>
             {section.tables.map((table) => (
               <div key={table.id} className={styles.variablesTableGroup}>
-                <Caption1 className={styles.variablesTableTitle}>
-                  {table.label}
-                </Caption1>
+                <Caption1 className={styles.variablesTableTitle}>{table.label}</Caption1>
                 {table.rows.length === 0 ? (
                   <Body1>No variables found for this table.</Body1>
                 ) : (
@@ -268,9 +252,7 @@ export const VariablesApiTab = ({
                       <thead>
                         <tr>
                           <th className={styles.tableHeadCell}>Variable</th>
-                          <th className={styles.tableHeadCell}>
-                            Word placeholder
-                          </th>
+                          <th className={styles.tableHeadCell}>Word placeholder</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -284,9 +266,7 @@ export const VariablesApiTab = ({
                                 placeholder="e.g. {{PROJECT_NAME}}"
                                 value={placeholders[row.id] ?? ''}
                                 readOnly={!isEditing}
-                                onChange={(_, data) =>
-                                  handlePlaceholderChange(row.id, data.value)
-                                }
+                                onChange={(_, data) => handlePlaceholderChange(row.id, data.value)}
                                 aria-label={`Placeholder for ${row.name}`}
                               />
                             </td>
@@ -308,18 +288,12 @@ export const VariablesApiTab = ({
           <Caption1>{customVariables.length} variables</Caption1>
         </div>
         <div className={styles.customVariablesActions}>
-          <Button
-            appearance="primary"
-            onClick={handleAddCustomVariable}
-            disabled={!isEditing}
-          >
+          <Button appearance="primary" onClick={handleAddCustomVariable} disabled={!isEditing}>
             Add custom variable
           </Button>
         </div>
         {customVariables.length === 0 ? (
-          <Body1 className={styles.emptyState}>
-            No custom variables added yet.
-          </Body1>
+          <Body1 className={styles.emptyState}>No custom variables added yet.</Body1>
         ) : (
           <div className={styles.tableContainer}>
             <table className={styles.table}>
@@ -341,10 +315,7 @@ export const VariablesApiTab = ({
                         value={variable.name}
                         readOnly={!isEditing}
                         onChange={(_, data) =>
-                          handleCustomVariableNameChange(
-                            variable.id,
-                            data.value
-                          )
+                          handleCustomVariableNameChange(variable.id, data.value)
                         }
                         aria-label="Custom variable description"
                       />
@@ -356,9 +327,7 @@ export const VariablesApiTab = ({
                         placeholder="e.g. {{CUSTOM_TOKEN}}"
                         value={placeholders[variable.id] ?? ''}
                         readOnly={!isEditing}
-                        onChange={(_, data) =>
-                          handlePlaceholderChange(variable.id, data.value)
-                        }
+                        onChange={(_, data) => handlePlaceholderChange(variable.id, data.value)}
                         aria-label="Custom variable placeholder"
                       />
                     </td>

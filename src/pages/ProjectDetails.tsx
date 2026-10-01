@@ -1,3 +1,4 @@
+import { TRAY_REPORT_VARIABLES } from './TrayDetails/trayReportVariables';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -1177,6 +1178,10 @@ export const ProjectDetails = () => {
         value: describeDynamicValue(formatDateTime(sampleTray?.updatedAt ?? null)),
       },
     ]);
+
+    pushTraySection('report-verification', 'Tray report calculations and verification',
+      TRAY_REPORT_VARIABLES.map(({ id, name }) => ({ id, name, value: calculatedValueNote }))
+    );
 
     pushTraySection('load-curve', 'Tray load curve', [
       {

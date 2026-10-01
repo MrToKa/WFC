@@ -1,3 +1,4 @@
+import { TRAY_REPORT_PLACEHOLDERS } from './TrayDetails/trayReportVariables';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -173,11 +174,11 @@ type TrayReportBaseContext = Omit<
 
 const EMUS_PER_PIXEL = 9525;
 const EMUS_PER_INCH = 914400;
-const MAX_IMAGE_WIDTH_EMU = 6.5 * EMUS_PER_INCH;
+const MAX_IMAGE_WIDTH_EMU = 6.4 * EMUS_PER_INCH;
 const MAX_IMAGE_HEIGHT_EMU = 9 * EMUS_PER_INCH;
-const FULL_PAGE_IMAGE_WIDTH_EMU = 6.8 * EMUS_PER_INCH;
-const FULL_PAGE_TARGET_HEIGHT_EMU = 9 * EMUS_PER_INCH;
-const TRAY_TEMPLATE_MAX_HEIGHT_EMU = 6 * EMUS_PER_INCH;
+const FULL_PAGE_IMAGE_WIDTH_EMU = 6.4 * EMUS_PER_INCH;
+const FULL_PAGE_TARGET_HEIGHT_EMU = 7.5 * EMUS_PER_INCH;
+const TRAY_TEMPLATE_MAX_HEIGHT_EMU = 4.5 * EMUS_PER_INCH;
 
 type PendingImagePlaceholder = {
   blob: Blob;
@@ -1059,7 +1060,8 @@ export const TrayDetails = () => {
     trayCables,
     materialSupportsById,
     trayWeightPerMeterKg,
-    groundingCableWeightKgPerM
+    groundingCableWeightKgPerM,
+    includeGroundingCable
   );
 
   const {
@@ -1073,14 +1075,14 @@ export const TrayDetails = () => {
     cablesTotalWeightKg,
     totalWeightLoadPerMeterKg,
     totalWeightKg,
-    totalWeightLoadPerMeterKn
+    traySpanLoadKnPerM
   } = calculations;
 
   // Safety factor calculations
   const safetyFactorPercent = project?.trayLoadSafetyFactor ?? null;
   const safetyFactorMissing = project !== null && project.trayLoadSafetyFactor === null;
   const safetyFactorHasError =
-    project !== null && safetyFactorPercent !== null && safetyFactorPercent < 0;
+    project !== null && safetyFactorPercent !== null && (!Number.isFinite(safetyFactorPercent) || safetyFactorPercent < 0);
   const safetyFactorMultiplier =
     safetyFactorHasError || safetyFactorPercent === null
       ? null
@@ -1097,11 +1099,11 @@ export const TrayDetails = () => {
   const safetyFactorBlocking = safetyFactorHasError || safetyFactorMissing;
 
   const safetyAdjustedLoadKnPerM = useMemo(() => {
-    if (totalWeightLoadPerMeterKn === null || safetyFactorMultiplier === null) {
+    if (cablesError || traySpanLoadKnPerM === null || safetyFactorMultiplier === null) {
       return null;
     }
-    return totalWeightLoadPerMeterKn * safetyFactorMultiplier;
-  }, [totalWeightLoadPerMeterKn, safetyFactorMultiplier]);
+    return traySpanLoadKnPerM * safetyFactorMultiplier;
+  }, [cablesError, traySpanLoadKnPerM, safetyFactorMultiplier]);
 
   // Load curve evaluation
   const chartSpanMeters = supportCalculations.distanceMeters;
@@ -2545,6 +2547,7 @@ export const TrayDetails = () => {
       trayTemplatePurposeCount,
       trayFreeSpacePercent: freeSpaceMetrics.freeWidthPercent,
       trayOccupiedWidthMm: freeSpaceMetrics.occupiedWidthMm,
+      occupiedWidthFormula,
       includeGroundingCable,
       groundingCableTypeName: groundingCableDisplay ?? null,
       supportCalculations,
@@ -2583,6 +2586,8 @@ export const TrayDetails = () => {
     projectCables,
     trayTemplatePurposeCount,
     freeSpaceMetrics.freeWidthPercent,
+    freeSpaceMetrics.occupiedWidthMm,
+    occupiedWidthFormula,
     includeGroundingCable,
     groundingCableDisplay,
     supportCalculations,
@@ -2818,15 +2823,6 @@ export const TrayDetails = () => {
       }
     }
 
-    if (Object.keys(storedPlaceholders).length === 0) {
-      showToast({
-        intent: 'error',
-        title: 'No placeholders configured',
-        body: 'Map placeholders in the Variables tab before generating a report.'
-      });
-      return;
-    }
-
     if (
       placeholdersSourceKey &&
       placeholdersSourceKey !== canonicalProjectId
@@ -2904,7 +2900,10 @@ export const TrayDetails = () => {
         customPlaceholderTokens.add(placeholderToken);
       }
 
-      for (const [rowId, placeholder] of Object.entries(storedPlaceholders)) {
+      for (const [rowId, placeholder] of [
+        ...Object.entries(TRAY_REPORT_PLACEHOLDERS),
+        ...Object.entries(storedPlaceholders),
+      ]) {
         if (customVariableIds.has(rowId)) {
           continue;
         }
@@ -2936,6 +2935,7 @@ export const TrayDetails = () => {
             fileNameForBlob = loadCurve;
             description = 'Tray load curve visualization';
             layout = 'default';
+            maxHeightEmu = 3 * EMUS_PER_INCH;
           } else if (imageSource === 'bundles') {
             sourceBlob = docBundlesBlob;
             fileNameForBlob = bundles;
