@@ -309,7 +309,31 @@ export const getChangeOrder = async (
   documentType: ChangeOrderDocumentType,
   changeOrderId: string,
   queryable: Pick<PoolClient, 'query'> | typeof pool = pool,
+  revision?: string,
 ): Promise<ChangeOrderDetails | null> => {
+  if (queryable === pool) {
+    const client = await pool.connect();
+    try {
+      // Header, available revisions, and materials must share one database
+      // snapshot when another user commits a new revision during the read.
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const details = await getChangeOrder(
+        projectId,
+        documentType,
+        changeOrderId,
+        client,
+        revision,
+      );
+      await client.query('COMMIT');
+      return details;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   const headerResult = await queryable.query<ChangeOrderRow>(
     `
       SELECT
@@ -328,6 +352,34 @@ export const getChangeOrder = async (
   );
   const row = headerResult.rows[0];
   if (!row) return null;
+
+  const revisionResult = await queryable.query<{ revision: string }>(
+    `SELECT history.revision
+     FROM project_change_order_revisions history
+     JOIN project_change_orders change_order ON change_order.id = history.change_order_id
+     WHERE history.change_order_id = $1
+       AND change_order.project_id = $2
+       AND change_order.document_type = $3
+     ORDER BY history.created_at DESC, history.revision DESC`,
+    [changeOrderId, projectId, documentType],
+  );
+  const revisions = [row.revision, ...revisionResult.rows.map((entry) => entry.revision)].filter(
+    (value, index, values) => values.indexOf(value) === index,
+  );
+  if (revision !== undefined && revision !== row.revision) {
+    const snapshotResult = await queryable.query<{ snapshot: ChangeOrderDetails }>(
+      `SELECT history.snapshot
+       FROM project_change_order_revisions history
+       JOIN project_change_orders change_order ON change_order.id = history.change_order_id
+       WHERE history.change_order_id = $1
+         AND change_order.project_id = $2
+         AND change_order.document_type = $3
+         AND history.revision = $4`,
+      [changeOrderId, projectId, documentType, revision],
+    );
+    const snapshot = snapshotResult.rows[0]?.snapshot;
+    return snapshot ? { ...snapshot, revisions, latestRevision: row.revision } : null;
+  }
 
   const itemResult = await queryable.query<ChangeOrderItemRow>(
     `SELECT ${qualifiedItemColumns('item')}
@@ -350,6 +402,8 @@ export const getChangeOrder = async (
     totalPrice: calculateChangeOrderTotal(items),
     items,
     changeLog: row.change_log ?? [],
+    revisions,
+    latestRevision: row.revision,
   };
 };
 
@@ -1225,10 +1279,24 @@ export const applyChangeOrderMaterials = async (
     if (!before) throw new Error('Document could not be loaded');
     const revision = input.newRevision ? nextChangeOrderRevision(before.revision) : before.revision;
     if (input.newRevision) {
-      await client.query('UPDATE project_change_orders SET revision = $2 WHERE id = $1', [
-        changeOrderId,
-        revision,
-      ]);
+      if (!preview) {
+        const snapshot = { ...before };
+        delete snapshot.revisions;
+        delete snapshot.latestRevision;
+        // Freeze the complete previous document under the existing row lock,
+        // before catalog synchronization and any material changes.
+        await client.query(
+          `INSERT INTO project_change_order_revisions (change_order_id, revision, snapshot)
+           VALUES ($1, $2, $3::jsonb)`,
+          [changeOrderId, before.revision, JSON.stringify(snapshot)],
+        );
+      }
+      await client.query(
+        `UPDATE project_change_orders
+         SET revision = $2, report_date = COALESCE($3::date, CURRENT_DATE)
+         WHERE id = $1`,
+        [changeOrderId, revision, input.reportDate ?? null],
+      );
     }
     await synchronizeChangeOrderMaterialOrdering(client, projectId, documentType, changeOrderId);
     for (const operation of input.operations) {
@@ -1335,10 +1403,21 @@ export const applyChangeOrderMaterials = async (
       };
     }
     const changes = describeMaterialChanges(before.items, after.items);
-    if (input.newRevision) changes.unshift(`Revision: ${before.revision} → ${revision}.`);
+    if (input.newRevision) {
+      if (before.reportDate !== after.reportDate) {
+        changes.unshift(`Report Date: ${before.reportDate} → ${after.reportDate}.`);
+      }
+      changes.unshift(`Revision: ${before.revision} → ${revision}.`);
+    }
     if (preview || changes.length === 0) {
       await client.query('ROLLBACK');
-      return { ...after, updatedAt: before.updatedAt, preparedBy: before.preparedBy };
+      return {
+        ...after,
+        updatedAt: before.updatedAt,
+        preparedBy: before.preparedBy,
+        revisions: before.revisions,
+        latestRevision: before.latestRevision,
+      };
     }
     await recordChangeOrderChanges(client, changeOrderId, userId, revision, changes);
     after = await getChangeOrder(projectId, documentType, changeOrderId, client);

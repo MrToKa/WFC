@@ -9,7 +9,11 @@ import {
   type ChangeOrderDocumentType,
   type ChangeOrderItem,
 } from '../models/changeOrder.js';
-import { consolidateChangeOrderItems as consolidateChangeOrderItemsForExport } from '../../shared/changeOrderSummary.js';
+import {
+  changeOrderSummaryGroupingKey,
+  consolidateChangeOrderSummaryGroup,
+  consolidateChangeOrderItems as consolidateChangeOrderItemsForExport,
+} from '../../shared/changeOrderSummary.js';
 
 export { consolidateChangeOrderItemsForExport };
 export { newestRevisionNumber } from '../../shared/changeOrderSummary.js';
@@ -200,8 +204,11 @@ const styleDocumentTitles = (worksheet: ExcelJS.Worksheet): void => {
   }
 };
 
-const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: number): void => {
-  const rowNumber = row.number;
+const exportItemValues = (
+  item: ChangeOrderItem,
+  rowNumber: number,
+  itemNumber: number,
+): ExcelJS.CellValue[] => {
   const packagedOrderQuantity = (item.packagingQuantity ?? 0) * (item.orderedQuantity ?? 0);
   const values: Array<ExcelJS.CellValue> = [
     itemNumber,
@@ -237,7 +244,11 @@ const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: numb
     toText(item.acsBarcode),
     toText(item.remarks),
   ];
-  values.forEach((value, index) => {
+  return values;
+};
+
+const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: number): void => {
+  exportItemValues(item, row.number, itemNumber).forEach((value, index) => {
     row.getCell(index + 1).value = value;
   });
 
@@ -247,6 +258,69 @@ const setItemValues = (row: ExcelJS.Row, item: ChangeOrderItem, itemNumber: numb
   row.getCell(14).numFmt = '#,##0.###';
   row.getCell(16).numFmt = '#,##0.00 [$€-1]';
   row.getCell(17).numFmt = '#,##0.00 [$€-1]';
+};
+
+const highlightCell = (cell: ExcelJS.Cell): void => {
+  // Imported cells can share styles, including merged header blocks.
+  // Copy before changing the fill so unchanged cells retain their formatting.
+  cell.style = {
+    ...cloneStyle(cell.style),
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } },
+  };
+};
+
+const displayedCellValue = (value: ExcelJS.CellValue): string | number | boolean | null => {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'object') return value;
+  if ('result' in value) return displayedCellValue(value.result);
+  if (value instanceof Date) return value.toISOString();
+  throw new Error('Unsupported Change Order comparison value');
+};
+
+const highlightMaterialChanges = (
+  row: ExcelJS.Row,
+  item: ChangeOrderItem,
+  previousItems: readonly ChangeOrderItem[],
+  changedContributionColumns: ReadonlySet<number>,
+): void => {
+  const currentValues = exportItemValues(item, row.number, 0);
+  if (previousItems.length === 0) {
+    currentValues.forEach((value, index) => {
+      if (index > 0 && displayedCellValue(value) !== null) highlightCell(row.getCell(index + 1));
+    });
+    return;
+  }
+
+  const previousValues = exportItemValues(
+    consolidateChangeOrderSummaryGroup(previousItems),
+    row.number,
+    0,
+  );
+  const previousGroups = consolidateChangeOrderItemsForExport([...previousItems]).map((previous) =>
+    exportItemValues(previous, row.number, 0),
+  );
+  // Compare formula results, not row references. Previous prices/package sizes
+  // may form several old summary positions that now merge into one position.
+  const summedColumns = new Set([2, 3, 4, 9, 17]);
+  const separateColumns = new Set([7, 14, 16]);
+  currentValues.forEach((value, index) => {
+    const column = index + 1;
+    if (column === 1) return; // Renumbering surviving rows is not a material change.
+    const current = displayedCellValue(value);
+    let changed: boolean;
+    if (summedColumns.has(column)) {
+      const previousResults = previousGroups.map((values) => displayedCellValue(values[index]));
+      const previous = previousResults.every((value) => value === null)
+        ? null
+        : previousResults.reduce<number>((sum, value) => sum + Number(value ?? 0), 0);
+      changed = current !== previous;
+    } else if (separateColumns.has(column)) {
+      changed = previousGroups.some((values) => current !== displayedCellValue(values[index]));
+    } else {
+      changed = current !== displayedCellValue(previousValues[index]);
+    }
+    if (changed || changedContributionColumns.has(column)) highlightCell(row.getCell(column));
+  });
 };
 
 const resolveDefaultTemplatePath = async (): Promise<string> => {
@@ -287,16 +361,18 @@ const findTotalRowNumber = (worksheet: ExcelJS.Worksheet, dataStartRowNumber: nu
   throw new ChangeOrderTemplateError('Change Order template Total row is missing');
 };
 
+const mergedHeaderAddress = (worksheet: ExcelJS.Worksheet, candidates: string[]): string =>
+  candidates.find((candidate) => {
+    const cell = worksheet.getCell(candidate);
+    return cell.isMerged || cell.value !== null;
+  }) ?? candidates[0];
+
 const setMergedHeaderValue = (
   worksheet: ExcelJS.Worksheet,
   candidates: string[],
   value: string,
 ): void => {
-  const address =
-    candidates.find((candidate) => {
-      const cell = worksheet.getCell(candidate);
-      return cell.isMerged || cell.value !== null;
-    }) ?? candidates[0];
+  const address = mergedHeaderAddress(worksheet, candidates);
   worksheet.getCell(address).value = escapeSpreadsheetText(value);
 };
 
@@ -309,7 +385,7 @@ const populateDocumentHeader = (
   changeOrder: ChangeOrderDetails,
   documentType: ChangeOrderDocumentType,
 ): void => {
-  const reportDate = currentExcelDate();
+  const reportDate = new Date(`${changeOrder.reportDate}T00:00:00.000Z`);
   const prefix = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change order';
   const documentTitle = `${prefix} - ${changeOrder.title}`;
 
@@ -339,6 +415,30 @@ const populateDocumentHeader = (
   worksheet.getCell('Z1').value = escapeSpreadsheetText(changeOrder.preparedBy);
   worksheet.getCell('Z2').value = reportDate;
   worksheet.getCell('Z3').value = escapeSpreadsheetText(changeOrder.revision);
+};
+
+const highlightHeaderChanges = (
+  worksheet: ExcelJS.Worksheet,
+  headerRowNumber: number,
+  current: ChangeOrderDetails,
+  previous: ChangeOrderDetails,
+): void => {
+  const currentLayout = headerRowNumber === 5;
+  const fields: Array<[keyof ChangeOrderDetails, string[][]]> = [
+    ['projectName', currentLayout ? [['D1'], ['K1']] : [['B1'], ['K1', 'F1']]],
+    ['projectCustomer', [[currentLayout ? 'D2' : 'B2']]],
+    ['projectReference', [[currentLayout ? 'D3' : 'B3']]],
+    ['title', [currentLayout ? ['K3'] : ['K2', 'F2']]],
+    ['preparedBy', [['Z1']]],
+    ['reportDate', currentLayout ? [['Z2'], ['Z3']] : [['Z2']]],
+    ['revision', [[currentLayout ? 'Z4' : 'Z3']]],
+  ];
+  for (const [field, addresses] of fields) {
+    if ((current[field] ?? '') === (previous[field] ?? '')) continue;
+    for (const candidates of addresses) {
+      highlightCell(worksheet.getCell(mergedHeaderAddress(worksheet, candidates)).master);
+    }
+  }
 };
 
 export const normalizeSpreadsheetFontOrder = (stylesXml: string): string =>
@@ -404,6 +504,7 @@ export async function generateChangeOrderWorkbook(
   changeOrder: ChangeOrderDetails,
   templatePath?: string,
   documentType: ChangeOrderDocumentType = 'change-order',
+  previousChangeOrder?: ChangeOrderDetails,
 ): Promise<Buffer> {
   if (changeOrder.items.length === 0) {
     const documentName = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
@@ -412,7 +513,57 @@ export async function generateChangeOrderWorkbook(
       `${article} ${documentName} must contain at least one material row`,
     );
   }
-  const exportItems = consolidateChangeOrderItemsForExport(changeOrder.items);
+  const previousItemsById = new Map(previousChangeOrder?.items.map((item) => [item.id, item]));
+  const comparisonGroups = new Map<string, ChangeOrderItem[]>();
+  const changedGroups = new Set<string>();
+  const changedContributionColumns = new Map<string, Set<number>>();
+  const revisionMetadata = new Set<keyof ChangeOrderItem>([
+    'id',
+    'changeOrderId',
+    'sortOrder',
+    'createdAt',
+    'updatedAt',
+    'revisionNumber',
+  ]);
+  for (const item of changeOrder.items) {
+    if (!previousChangeOrder) break;
+    const previous = previousItemsById.get(item.id);
+    const key = changeOrderSummaryGroupingKey(item);
+    if (previous) {
+      const group = comparisonGroups.get(key) ?? [];
+      group.push(previous);
+      comparisonGroups.set(key, group);
+    }
+    const materialChanged =
+      !previous ||
+      (Object.keys(item) as Array<keyof ChangeOrderItem>).some(
+        (field) =>
+          !revisionMetadata.has(field) &&
+          JSON.stringify(item[field] ?? null) !== JSON.stringify(previous[field] ?? null),
+      );
+    const columns = changedContributionColumns.get(key) ?? new Set<number>();
+    const currentValues = exportItemValues(consolidateChangeOrderSummaryGroup([item]), 1, 0);
+    const previousValues = previous
+      ? exportItemValues(consolidateChangeOrderSummaryGroup([previous]), 1, 0)
+      : [];
+    // Keep constituent differences even when joined text or summed quantities
+    // happen to stay the same in the consolidated position.
+    currentValues.forEach((value, index) => {
+      if (index > 0 && displayedCellValue(value) !== displayedCellValue(previousValues[index])) {
+        columns.add(index + 1);
+      }
+    });
+    if (materialChanged) {
+      changedGroups.add(key);
+      columns.add(21); // The changed summary position belongs to the selected revision.
+    }
+    changedContributionColumns.set(key, columns);
+  }
+  const exportItems = consolidateChangeOrderItemsForExport(changeOrder.items).map((item) =>
+    changedGroups.has(changeOrderSummaryGroupingKey(item))
+      ? { ...item, revisionNumber: changeOrder.revision }
+      : item,
+  );
 
   const workbook = new ExcelJS.Workbook();
   const resolvedTemplatePath = templatePath ?? (await resolveDefaultTemplatePath());
@@ -461,6 +612,15 @@ export async function generateChangeOrderWorkbook(
     const row = worksheet.getRow(dataStartRowNumber + index);
     applyRowTemplate(row, dataTemplate);
     setItemValues(row, item, index + 1);
+    if (previousChangeOrder) {
+      // Deleted source rows are excluded from the comparison and the export.
+      highlightMaterialChanges(
+        row,
+        item,
+        comparisonGroups.get(changeOrderSummaryGroupingKey(item)) ?? [],
+        changedContributionColumns.get(changeOrderSummaryGroupingKey(item)) ?? new Set(),
+      );
+    }
   });
 
   const lastItemRow = headerRowNumber + exportItems.length;
@@ -479,6 +639,9 @@ export async function generateChangeOrderWorkbook(
   worksheet.name = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order';
   populateDocumentHeader(worksheet, headerRowNumber, changeOrder, documentType);
   styleDocumentTitles(worksheet);
+  if (previousChangeOrder) {
+    highlightHeaderChanges(worksheet, headerRowNumber, changeOrder, previousChangeOrder);
+  }
 
   worksheet.autoFilter = `A${headerRowNumber}:${LAST_EXPORT_COLUMN}${lastItemRow}`;
   worksheet.pageSetup.printArea = `A1:${LAST_EXPORT_COLUMN}${totalRowNumber}`;

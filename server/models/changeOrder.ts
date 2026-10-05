@@ -145,6 +145,8 @@ export type ChangeOrderDetails = ChangeOrderSummary & {
   createdBy: string | null;
   items: ChangeOrderItem[];
   changeLog?: ChangeOrderLogEntry[];
+  revisions?: string[];
+  latestRevision?: string;
 };
 
 export type ChangeOrderLogEntry = {

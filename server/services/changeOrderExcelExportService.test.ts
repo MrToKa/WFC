@@ -2,7 +2,11 @@ import path from 'node:path';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
-import type { ChangeOrderDetails, ChangeOrderItem } from '../models/changeOrder.js';
+import type {
+  ChangeOrderDetails,
+  ChangeOrderDocumentType,
+  ChangeOrderItem,
+} from '../models/changeOrder.js';
 import {
   consolidateChangeOrderItemsForExport,
   currentExcelDate,
@@ -103,6 +107,301 @@ const reopen = async (
 };
 
 describe('Change Order workbook export', () => {
+  const yellowFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+  const comparedWorksheet = async (
+    current: ChangeOrderDetails,
+    previous: ChangeOrderDetails,
+    documentType: ChangeOrderDocumentType = 'change-order',
+  ): Promise<ExcelJS.Worksheet> => {
+    const buffer = await generateChangeOrderWorkbook(current, templatePath, documentType, previous);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+    return workbook.worksheets[0];
+  };
+
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'highlights changed header and material cells in %s and omits deleted rows',
+    async (documentType) => {
+      const original = {
+        ...createItem(1),
+        designQuantity: 10,
+        orderQuantity: 10,
+        packagingQuantity: 1,
+        orderedQuantity: 10,
+        unitPrice: 4,
+      };
+      const previous = {
+        ...createDetails(2),
+        revision: '00',
+        items: [original, { ...createItem(3), descriptionEn: 'Deleted material' }],
+      };
+      const current = {
+        ...previous,
+        revision: '01',
+        latestRevision: '01',
+        reportDate: '2026-10-05',
+        preparedBy: 'New editor',
+        title: 'Updated title',
+        projectReference: 'P-101',
+        items: [
+          {
+            ...original,
+            designQuantity: 12,
+            orderQuantity: 20,
+            orderedQuantity: 20,
+            unitPrice: 5,
+            revisionNumber: '01',
+            remarks: 'Changed remarks',
+          },
+          { ...createItem(2), descriptionEn: 'Added material' },
+        ],
+      };
+      const originalInputs = structuredClone({ current, previous });
+      const worksheet = await comparedWorksheet(current, previous, documentType);
+      for (const address of [
+        'D3',
+        'K3',
+        'Z1',
+        'Z2',
+        'Z3',
+        'Z4',
+        'B6',
+        'C6',
+        'D6',
+        'I6',
+        'P6',
+        'Q6',
+        'U6',
+        'Z6',
+        'B7',
+        'K7',
+        'P7',
+        'U7',
+      ]) {
+        expect(worksheet.getCell(address).fill, address).toMatchObject(yellowFill);
+      }
+      for (const address of ['D1', 'D2', 'K1', 'A6', 'E6', 'G6', 'K6', 'N6', 'W6', 'R7']) {
+        expect(worksheet.getCell(address).fill, address).not.toMatchObject(yellowFill);
+      }
+      expect(worksheet.getCell('Z2').value).toEqual(new Date('2026-10-05T00:00:00.000Z'));
+      expect(worksheet.getCell('C6').value).toMatchObject({ formula: 'G6*I6', result: 20 });
+      expect(worksheet.getCell('Q6').value).toMatchObject({ formula: 'P6*C6', result: 100 });
+      expect(worksheet.getCell('U7').value).toBe('01');
+      expect(worksheet.getColumn('K').values).not.toContain('Deleted material');
+      expect(worksheet.getCell('P8').value).toBe('TOTAL:');
+      expect({ current, previous }).toEqual(originalInputs);
+    },
+  );
+
+  it('does not highlight surviving rows after deletion, renumbering, or reordering', async () => {
+    const previous = createDetails(3);
+    const current = {
+      ...previous,
+      revision: '03',
+      items: [previous.items[2], previous.items[1]].map((item, index) => ({
+        ...item,
+        sortOrder: index,
+        updatedAt: '2026-10-05T00:00:00.000Z',
+      })),
+    };
+    const worksheet = await comparedWorksheet(current, previous);
+    for (const row of [6, 7]) {
+      for (let column = 1; column <= 26; column++) {
+        expect(worksheet.getRow(row).getCell(column).fill).not.toMatchObject(yellowFill);
+      }
+    }
+    expect(worksheet.getCell('K6').value).toBe('Material 3');
+    expect(worksheet.getCell('K7').value).toBe('Material 2');
+    expect(worksheet.getCell('P8').value).toBe('TOTAL:');
+    expect(worksheet.getCell('Z2').fill).not.toMatchObject(yellowFill);
+  });
+
+  it('highlights changed metres in consolidated positions without colouring unchanged fields', async () => {
+    const material = {
+      ...createItem(1),
+      descriptionEn: 'Cable',
+      unit: 'm',
+      designQuantity: 10,
+      orderQuantity: 10,
+      packagingQuantity: 1,
+      orderedQuantity: 10,
+    };
+    const previous = {
+      ...createDetails(0),
+      revision: '00',
+      items: [material, { ...material, id: 'second-line' }],
+    };
+    const current = {
+      ...previous,
+      revision: '01',
+      items: [
+        material,
+        {
+          ...material,
+          id: 'second-line',
+          designQuantity: 20,
+          orderQuantity: 20,
+          orderedQuantity: 20,
+        },
+      ],
+    };
+    const worksheet = await comparedWorksheet(current, previous);
+    for (const address of ['B6', 'C6', 'I6', 'Q6', 'U6'])
+      expect(worksheet.getCell(address).fill).toMatchObject(yellowFill);
+    for (const address of ['D6', 'E6', 'G6', 'K6', 'P6'])
+      expect(worksheet.getCell(address).fill).not.toMatchObject(yellowFill);
+    expect(worksheet.getCell('B6').value).toBe(30);
+    expect(worksheet.getCell('U6').value).toBe('01');
+    expect(worksheet.getCell('P7').value).toBe('TOTAL:');
+  });
+
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'marks consolidated %s contributions and their revision when quantity changes cancel out',
+    async (documentType) => {
+      const material = {
+        ...createItem(1),
+        descriptionEn: 'Cable',
+        designQuantity: 10,
+        orderQuantity: 10,
+        packagingQuantity: 1,
+        orderedQuantity: 10,
+      };
+      const previous = {
+        ...createDetails(0),
+        revision: '00',
+        items: [material, { ...material, id: 'second-line' }],
+      };
+      const current = {
+        ...previous,
+        revision: '01',
+        items: previous.items.map((item, index) => ({
+          ...item,
+          designQuantity: index === 0 ? 15 : 5,
+          orderQuantity: index === 0 ? 15 : 5,
+          orderedQuantity: index === 0 ? 15 : 5,
+        })),
+      };
+      const worksheet = await comparedWorksheet(current, previous, documentType);
+      expect(worksheet.getCell('B6').value).toBe(20);
+      expect(worksheet.getCell('C6').value).toMatchObject({ result: 20 });
+      expect(worksheet.getCell('I6').value).toBe(20);
+      expect(worksheet.getCell('Q6').value).toMatchObject({ result: 90 });
+      expect(worksheet.getCell('U6').value).toBe('01');
+      for (const address of ['B6', 'C6', 'I6', 'Q6', 'U6'])
+        expect(worksheet.getCell(address).fill, address).toMatchObject(yellowFill);
+      for (const address of ['A6', 'D6', 'E6', 'G6', 'K6', 'P6'])
+        expect(worksheet.getCell(address).fill, address).not.toMatchObject(yellowFill);
+      expect(worksheet.getCell('P7').value).toBe('TOTAL:');
+    },
+  );
+
+  it('marks a changed constituent even when the joined text stays the same', async () => {
+    const material = { ...createItem(1), tagNo: 'TAG-1' };
+    const previous = {
+      ...createDetails(0),
+      revision: '00',
+      items: [
+        material,
+        { ...material, id: 'second-line', tagNo: 'TAG-2' },
+        { ...material, id: 'third-line' },
+      ],
+    };
+    const current = {
+      ...previous,
+      revision: '01',
+      items: previous.items.map((item) =>
+        item.id === 'third-line' ? { ...item, tagNo: 'TAG-2' } : item,
+      ),
+    };
+    const worksheet = await comparedWorksheet(current, previous);
+    expect(worksheet.getCell('S6').value).toBe('TAG-1, TAG-2');
+    expect(worksheet.getCell('S6').fill).toMatchObject(yellowFill);
+    expect(worksheet.getCell('U6').value).toBe('01');
+    expect(worksheet.getCell('U6').fill).toMatchObject(yellowFill);
+    for (const address of ['B6', 'C6', 'I6', 'K6', 'P6', 'Q6'])
+      expect(worksheet.getCell(address).fill, address).not.toMatchObject(yellowFill);
+  });
+
+  it('ignores deleted contributions to a consolidated position', async () => {
+    const material = { ...createItem(1), descriptionEn: 'Grouped support' };
+    const previous = {
+      ...createDetails(0),
+      items: [material, { ...material, id: 'deleted-copy', tagNo: 'Removed tag' }],
+    };
+    const current = { ...previous, revision: '03', items: [material] };
+    const worksheet = await comparedWorksheet(current, previous);
+    for (let column = 1; column <= 26; column++) {
+      expect(worksheet.getRow(6).getCell(column).fill).not.toMatchObject(yellowFill);
+    }
+    expect(worksheet.getCell('S6').value).toBeNull();
+  });
+
+  it('tracks prices when summary groups split or merge without colouring unchanged quantities', async () => {
+    const material = {
+      ...createItem(1),
+      descriptionEn: 'Same material',
+      designQuantity: 10,
+      orderQuantity: 10,
+      packagingQuantity: 1,
+      orderedQuantity: 10,
+    };
+    const previous = { ...createDetails(0), items: [material, { ...material, id: 'second-line' }] };
+    const changed = { ...previous, items: [{ ...material, unitPrice: 9 }, previous.items[1]] };
+    const split = await comparedWorksheet(changed, previous);
+    for (const address of ['P6', 'Q6'])
+      expect(split.getCell(address).fill).toMatchObject(yellowFill);
+    for (const address of ['B6', 'C6', 'I6', 'P7', 'Q7'])
+      expect(split.getCell(address).fill).not.toMatchObject(yellowFill);
+    const merged = await comparedWorksheet(previous, changed);
+    for (const address of ['P6', 'Q6'])
+      expect(merged.getCell(address).fill).toMatchObject(yellowFill);
+    for (const address of ['B6', 'C6', 'I6'])
+      expect(merged.getCell(address).fill).not.toMatchObject(yellowFill);
+  });
+
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'exports the persisted Header date in %s without requiring revision metadata',
+    async (documentType) => {
+      const buffer = await generateChangeOrderWorkbook(
+        createDetails(1),
+        templatePath,
+        documentType,
+      );
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+      expect(workbook.worksheets[0].getCell('Z2').value).toEqual(
+        new Date('2026-07-29T00:00:00.000Z'),
+      );
+      expect(workbook.worksheets[0].getCell('Z3').value).toMatchObject({
+        formula: 'Z2+28',
+        result: new Date('2026-08-26T00:00:00.000Z'),
+      });
+    },
+  );
+
+  it('exports frozen header and material data from the selected historical revision', async () => {
+    const frozen = {
+      ...createDetails(1),
+      revision: '00',
+      latestRevision: '02',
+      revisions: ['02', '00'],
+    };
+    const unchanged = structuredClone(frozen);
+    const buffer = await generateChangeOrderWorkbook(frozen, templatePath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+    const worksheet = workbook.getWorksheet('Change Order')!;
+    expect(worksheet.getCell('Z4').value).toBe('00');
+    expect(worksheet.getCell('Z2').value).toEqual(new Date('2026-07-29T00:00:00.000Z'));
+    expect(worksheet.getCell('Z1').value).toBe(frozen.preparedBy);
+    expect(worksheet.getCell('D1').value).toBe(frozen.projectName);
+    expect(worksheet.getCell('D2').value).toBe(frozen.projectCustomer);
+    expect(worksheet.getCell('C6').value).toMatchObject({ formula: 'G6*I6', result: 10 });
+    expect(worksheet.getCell('I6').value).toBe(frozen.items[0].orderedQuantity);
+    expect(worksheet.getCell('P6').value).toBe(frozen.items[0].unitPrice);
+    expect(frozen).toEqual(unchanged);
+  });
+
   it('names the export after the Change Order title', () => {
     expect(sanitizeChangeOrderFileName('Discharge impulse lines')).toBe(
       'Change order - Discharge impulse lines.xlsx',

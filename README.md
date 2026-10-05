@@ -110,6 +110,17 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
   **Export view** for the Excel summary: matching materials, including inherited Standard
   Materials, are grouped with combined quantities, recalculated packages, and a total price.
   Switch back to Detailed view to edit individual rows; switching preserves unsaved changes.
+  A new revision automatically sets the Header date to the current local date. Saving it
+  preserves the previous header and materials. **Revision** becomes a
+  dropdown to browse the saved versions; earlier revisions are read-only, and Excel exports
+  use the selected version. Revision snapshots are captured from this update onward;
+  earlier revisions cannot be reconstructed from the change log.
+  Excel highlights changed header and material cells in yellow against the preceding saved
+  revision, including new material values. Deleted materials are omitted and do not cause
+  highlights on unchanged remaining positions or their numbering.
+  When a constituent of a consolidated position changes, the position shows the selected
+  revision and highlights its revision number and affected cells, even if the combined value
+  stays the same.
 - **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files
   stored in MinIO object storage.
 - **Template library** – Administrators can manage a global set of shared templates available from

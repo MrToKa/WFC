@@ -15,6 +15,9 @@ export type ChangeOrderCollection = (typeof CHANGE_ORDER_COLLECTIONS)[number];
 const basePath = (projectId: string, collection: ChangeOrderCollection = 'change-orders'): string =>
   `/api/projects/${projectId}/${collection}`;
 
+const revisionQuery = (revision?: string): string =>
+  revision === undefined ? '' : `?revision=${encodeURIComponent(revision)}`;
+
 export async function fetchChangeOrders(
   token: string,
   projectId: string,
@@ -28,8 +31,11 @@ export async function fetchChangeOrder(
   projectId: string,
   changeOrderId: string,
   collection: ChangeOrderCollection = 'change-orders',
+  revision?: string,
 ): Promise<{ changeOrder: ChangeOrderDetails }> {
-  return request(`${basePath(projectId, collection)}/${changeOrderId}`, { token });
+  return request(`${basePath(projectId, collection)}/${changeOrderId}${revisionQuery(revision)}`, {
+    token,
+  });
 }
 
 export async function createChangeOrder(
@@ -202,10 +208,11 @@ export async function exportChangeOrder(
   changeOrderId: string,
   changeOrderTitle: string,
   collection: ChangeOrderCollection = 'change-orders',
+  revision?: string,
 ): Promise<{ blob: Blob; fileName: string }> {
   const documentName = collection === 'internal-ncrs' ? 'Internal NCR' : 'Change Order';
   const response = await fetch(
-    `${getApiBaseUrl()}${basePath(projectId, collection)}/${changeOrderId}/export`,
+    `${getApiBaseUrl()}${basePath(projectId, collection)}/${changeOrderId}/export${revisionQuery(revision)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
     },

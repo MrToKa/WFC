@@ -860,6 +860,7 @@ export const changeOrderMaterialsSchema = z
   .object({
     expectedUpdatedAt: z.string().datetime(),
     newRevision: z.boolean(),
+    reportDate: changeOrderDateSchema.optional(),
     operations: z
       .array(
         z.discriminatedUnion('type', [

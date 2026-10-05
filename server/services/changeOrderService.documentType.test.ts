@@ -41,16 +41,12 @@ describe('Change Order document type scoping', () => {
     expect(queryCall(databaseMocks.query, 0)[0]).toContain('co.document_type = $2');
     expect(queryCall(databaseMocks.query, 0)[1]).toEqual(['project-id', 'internal-ncr']);
 
-    databaseMocks.query.mockResolvedValueOnce({ rows: [] });
-    await expect(getChangeOrder('project-id', 'internal-ncr', 'document-id')).resolves.toBeNull();
-    expect(queryCall(databaseMocks.query, 1)[0]).toContain('co.document_type = $2');
-    expect(queryCall(databaseMocks.query, 1)[1]).toEqual([
-      'project-id',
-      'internal-ncr',
-      'document-id',
-    ]);
-
     clientQuery.mockResolvedValue({ rows: [] });
+    await expect(getChangeOrder('project-id', 'internal-ncr', 'document-id')).resolves.toBeNull();
+    expect(queryCall(clientQuery, 1)[0]).toContain('co.document_type = $2');
+    expect(queryCall(clientQuery, 1)[1]).toEqual(['project-id', 'internal-ncr', 'document-id']);
+
+    clientQuery.mockClear();
     await expect(
       updateChangeOrder(
         'project-id',
@@ -67,8 +63,8 @@ describe('Change Order document type scoping', () => {
     await expect(deleteChangeOrder('project-id', 'internal-ncr', 'document-id')).resolves.toBe(
       false,
     );
-    expect(queryCall(databaseMocks.query, 2)[0]).toContain('document_type = $3');
-    expect(queryCall(databaseMocks.query, 2)[1]).toEqual([
+    expect(queryCall(databaseMocks.query, 1)[0]).toContain('document_type = $3');
+    expect(queryCall(databaseMocks.query, 1)[1]).toEqual([
       'document-id',
       'project-id',
       'internal-ncr',

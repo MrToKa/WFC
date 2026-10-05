@@ -25,7 +25,7 @@ export const calculateLineTotal = (orderQuantity: number, unitPrice: number): nu
 // used by several cable lines with different tags or other report text. Those
 // values are joined below. Numeric values that drive package and price formulas
 // remain in the key so the consolidated row keeps valid calculations.
-const summaryGroupingKey = (item: ChangeOrderItem): string =>
+export const changeOrderSummaryGroupingKey = (item: ChangeOrderItem): string =>
   JSON.stringify([
     item.sourceCatalog,
     item.sourceMaterialId,
@@ -70,7 +70,9 @@ export const newestRevisionNumber = (items: readonly ChangeOrderItem[]): string 
   return newest;
 };
 
-const consolidateSummaryGroup = (items: readonly ChangeOrderItem[]): ChangeOrderItem => {
+export const consolidateChangeOrderSummaryGroup = (
+  items: readonly ChangeOrderItem[],
+): ChangeOrderItem => {
   const first = items[0];
   if (!first) {
     throw new Error('Cannot consolidate an empty Change Order export group');
@@ -132,11 +134,11 @@ export const consolidateChangeOrderItems = (
   const groups = new Map<string, ChangeOrderItem[]>();
 
   for (const item of items) {
-    const key = summaryGroupingKey(item);
+    const key = changeOrderSummaryGroupingKey(item);
     const group = groups.get(key);
     if (group) group.push(item);
     else groups.set(key, [item]);
   }
 
-  return Array.from(groups.values(), consolidateSummaryGroup);
+  return Array.from(groups.values(), consolidateChangeOrderSummaryGroup);
 };

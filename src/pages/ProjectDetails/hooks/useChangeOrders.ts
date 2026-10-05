@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
 import {
   fetchChangeOrder,
   fetchChangeOrders,
@@ -24,15 +24,38 @@ export const useChangeOrders = (
 ) => {
   const [changeOrders, setChangeOrders] = useState<ChangeOrderSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [details, setDetails] = useState<ChangeOrderDetails | null>(null);
+  const [details, setDetailsState] = useState<ChangeOrderDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRequest = useRef(0);
   const detailsRequest = useRef(0);
   const currentSelection = useRef<string | null>(null);
+  const currentDetails = useRef<ChangeOrderDetails | null>(null);
+  const currentRevision = useRef<string | undefined>(undefined);
+  const currentContext = useRef({ collection, projectId, token });
+  currentContext.current = { collection, projectId, token };
+
+  const isCurrentContext = useCallback(
+    (): boolean =>
+      currentContext.current.collection === collection &&
+      currentContext.current.projectId === projectId &&
+      currentContext.current.token === token,
+    [collection, projectId, token],
+  );
+
+  const setDetails = useCallback((next: SetStateAction<ChangeOrderDetails | null>): void => {
+    const value = typeof next === 'function' ? next(currentDetails.current) : next;
+    currentDetails.current = value;
+    currentRevision.current =
+      value?.latestRevision !== undefined && value.revision !== value.latestRevision
+        ? value.revision
+        : undefined;
+    setDetailsState(value);
+  }, []);
 
   const loadList = useCallback(async (): Promise<ChangeOrderSummary[]> => {
+    if (!isCurrentContext()) return [];
     const request = ++listRequest.current;
     if (!token) {
       setChangeOrders([]);
@@ -43,24 +66,26 @@ export const useChangeOrders = (
     setError(null);
     try {
       const response = await fetchChangeOrders(token, projectId, collection);
-      if (request !== listRequest.current) return [];
+      if (request !== listRequest.current || !isCurrentContext()) return [];
       setChangeOrders(response.changeOrders);
       return response.changeOrders;
     } catch (caught) {
-      if (request !== listRequest.current) return [];
+      if (request !== listRequest.current || !isCurrentContext()) return [];
       setError(caught instanceof Error ? caught.message : `Failed to load ${pluralLabel}`);
       return [];
     } finally {
-      if (request === listRequest.current) setLoading(false);
+      if (request === listRequest.current && isCurrentContext()) setLoading(false);
     }
-  }, [collection, pluralLabel, projectId, token]);
+  }, [collection, isCurrentContext, pluralLabel, projectId, token]);
 
-  const selectChangeOrder = useCallback(
-    async (id: string | null): Promise<void> => {
+  const loadDetails = useCallback(
+    async (id: string | null, revision?: string, keepDetails = false): Promise<void> => {
+      if (!isCurrentContext()) return;
       const request = ++detailsRequest.current;
       currentSelection.current = id;
       setSelectedId(id);
-      setDetails(null);
+      if (!keepDetails) setDetails(null);
+      currentRevision.current = revision;
       if (!id || !token) {
         setDetailsLoading(false);
         return;
@@ -68,26 +93,47 @@ export const useChangeOrders = (
       setDetailsLoading(true);
       setError(null);
       try {
-        const response = await fetchChangeOrder(token, projectId, id, collection);
-        if (request !== detailsRequest.current) return;
+        const response =
+          revision === undefined
+            ? await fetchChangeOrder(token, projectId, id, collection)
+            : await fetchChangeOrder(token, projectId, id, collection, revision);
+        if (request !== detailsRequest.current || !isCurrentContext()) return;
         setDetails(response.changeOrder);
       } catch (caught) {
-        if (request !== detailsRequest.current) return;
+        if (request !== detailsRequest.current || !isCurrentContext()) return;
+        setDetails(currentDetails.current);
         setError(caught instanceof Error ? caught.message : `Failed to load ${singularLabel}`);
       } finally {
-        if (request === detailsRequest.current) setDetailsLoading(false);
+        if (request === detailsRequest.current && isCurrentContext()) setDetailsLoading(false);
       }
     },
-    [collection, projectId, singularLabel, token],
+    [collection, isCurrentContext, projectId, setDetails, singularLabel, token],
+  );
+
+  const selectChangeOrder = useCallback(
+    (id: string | null): Promise<void> => loadDetails(id),
+    [loadDetails],
+  );
+
+  const selectRevision = useCallback(
+    async (revision: string): Promise<void> => {
+      if (!currentSelection.current || !token) return;
+      await loadDetails(currentSelection.current, revision, true);
+    },
+    [loadDetails, token],
   );
 
   const refreshCurrent = useCallback(async (): Promise<void> => {
     const request = listRequest.current + 1;
     await loadList();
-    if (request === listRequest.current && currentSelection.current) {
-      await selectChangeOrder(currentSelection.current);
+    if (request === listRequest.current && isCurrentContext() && currentSelection.current) {
+      await loadDetails(
+        currentSelection.current,
+        currentRevision.current,
+        currentRevision.current !== undefined,
+      );
     }
-  }, [loadList, selectChangeOrder]);
+  }, [isCurrentContext, loadDetails, loadList]);
 
   useEffect(() => {
     currentSelection.current = null;
@@ -113,6 +159,7 @@ export const useChangeOrders = (
     setDetails,
     loadList,
     selectChangeOrder,
+    selectRevision,
     refreshCurrent,
   };
 };

@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChangeOrderItemRow, ChangeOrderRow } from '../models/changeOrder.js';
+import type {
+  ChangeOrderDetails,
+  ChangeOrderItemRow,
+  ChangeOrderRow,
+} from '../models/changeOrder.js';
 import { mapChangeOrderItemRow } from '../models/changeOrder.js';
 
 const database = vi.hoisted(() => ({ connect: vi.fn(), query: vi.fn() }));
@@ -27,9 +31,12 @@ import {
 } from './changeOrderService.js';
 
 const timestamp = '2026-09-14T10:00:00.000Z';
+const currentDate = '2026-10-05';
 const originalHeader = {
   id: 'document',
   project_id: 'project',
+  project_name: 'Original project',
+  project_customer: 'Original customer',
   document_type: 'change-order',
   title: 'Order',
   project_reference: null,
@@ -59,6 +66,7 @@ const originalItem = {
 let header: ChangeOrderRow;
 let items: ChangeOrderItemRow[];
 let inheritedUpdates: Array<Partial<ChangeOrderItemRow> & { id: string }>;
+let snapshots: Map<string, ChangeOrderDetails>;
 const query = vi.fn();
 const release = vi.fn();
 
@@ -67,16 +75,29 @@ beforeEach(() => {
   header = structuredClone(originalHeader);
   items = [structuredClone(originalItem)];
   inheritedUpdates = [];
+  snapshots = new Map();
   let initialHeader: ChangeOrderRow;
   let initialItems: ChangeOrderItemRow[];
+  let initialSnapshots: Map<string, ChangeOrderDetails>;
   database.connect.mockResolvedValue({ query, release });
   query.mockImplementation(async (sql: string, values: unknown[] = []) => {
     if (sql === 'BEGIN') {
       initialHeader = structuredClone(header);
       initialItems = structuredClone(items);
+      initialSnapshots = structuredClone(snapshots);
     } else if (sql === 'ROLLBACK') {
       header = initialHeader;
       items = initialItems;
+      snapshots = initialSnapshots;
+    } else if (sql.includes('INSERT INTO project_change_order_revisions')) {
+      const revision = values[1] as string;
+      if (snapshots.has(revision)) throw new Error('Duplicate revision snapshot');
+      snapshots.set(revision, JSON.parse(values[2] as string));
+    } else if (sql.includes('SELECT history.revision')) {
+      return { rows: [...snapshots.keys()].reverse().map((revision) => ({ revision })) };
+    } else if (sql.includes('SELECT history.snapshot')) {
+      const snapshot = snapshots.get(values[3] as string);
+      return { rows: snapshot ? [{ snapshot: structuredClone(snapshot) }] : [] };
     } else if (
       sql.includes('SELECT * FROM project_change_orders') ||
       sql.includes('SELECT id FROM project_change_orders') ||
@@ -89,7 +110,14 @@ beforeEach(() => {
             : [],
       };
     } else if (sql.includes('co.*')) {
-      return { rows: [{ ...structuredClone(header), item_count: items.length }] };
+      return {
+        rows:
+          values[0] === header.project_id &&
+          values[1] === header.document_type &&
+          values[2] === header.id
+            ? [{ ...structuredClone(header), item_count: items.length }]
+            : [],
+      };
     } else if (sql.includes('AS name')) {
       return { rows: [{ name: 'Latest Editor' }] };
     } else if (sql.includes('change_log = change_log ||')) {
@@ -113,6 +141,7 @@ beforeEach(() => {
       }
     } else if (sql.includes('SET revision = $2')) {
       header.revision = values[1] as string;
+      header.report_date = (values[2] as string | null) ?? currentDate;
     } else if (sql.includes('DELETE FROM project_change_order_items i')) {
       const item = items.find(
         (row) =>
@@ -203,6 +232,237 @@ beforeEach(() => {
 
 const update = { type: 'update' as const, itemId: 'material', input: { orderQuantity: 7 } };
 const input = { expectedUpdatedAt: timestamp, newRevision: false, operations: [update] };
+
+describe('document revision snapshots', () => {
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'sets the new %s revision date and preserves the previous revision date',
+    async (documentType) => {
+      header.document_type = documentType;
+      // The browser's local date can differ from the database calendar date.
+      const reportDate = '2026-10-06';
+      const result = await applyChangeOrderMaterials(
+        'project',
+        documentType,
+        'document',
+        'editor',
+        {
+          ...input,
+          newRevision: true,
+          reportDate,
+          operations: [],
+        },
+      );
+      expect(result).toMatchObject({ revision: '01', reportDate });
+      expect(result?.changeLog?.[0].changes).toContain('Report Date: 2026-09-14 → 2026-10-06.');
+      expect(snapshots.get('00')?.reportDate).toBe(originalHeader.report_date);
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('report_date = COALESCE($3::date, CURRENT_DATE)'),
+        ['document', '01', reportDate],
+      );
+    },
+  );
+
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'previews the new %s date without changing the saved header',
+    async (documentType) => {
+      header.document_type = documentType;
+      const result = await applyChangeOrderMaterials(
+        'project',
+        documentType,
+        'document',
+        'editor',
+        {
+          ...input,
+          newRevision: true,
+          reportDate: currentDate,
+          operations: [],
+        },
+        true,
+      );
+      expect(result).toMatchObject({ revision: '01', reportDate: currentDate });
+      expect(header.report_date).toBe(originalHeader.report_date);
+      expect(snapshots.size).toBe(0);
+      expect(query).not.toHaveBeenCalledWith('COMMIT');
+    },
+  );
+
+  it('keeps the header date when editing the current revision', async () => {
+    const result = await applyChangeOrderMaterials(
+      'project',
+      'change-order',
+      'document',
+      'editor',
+      {
+        ...input,
+        reportDate: currentDate,
+      },
+    );
+    expect(result?.reportDate).toBe(originalHeader.report_date);
+    expect(header.report_date).toBe(originalHeader.report_date);
+  });
+
+  it('keeps a public read in one repeatable read transaction across a concurrent revision commit', async () => {
+    const readHeader = structuredClone(header);
+    const readItems = structuredClone(items);
+    const readQuery = vi.fn(async (sql: string) => {
+      if (sql.includes('co.*')) {
+        // Simulate the live tables changing after the transaction reads its header.
+        header.revision = '01';
+        items[0].order_quantity = 7;
+        return { rows: [{ ...readHeader, item_count: readItems.length }] };
+      }
+      if (sql.includes('FROM project_change_order_items item')) return { rows: readItems };
+      return { rows: [] };
+    });
+    database.connect.mockResolvedValue({ query: readQuery, release });
+    const details = await getChangeOrder('project', 'change-order', 'document', undefined, '00');
+    expect(details).toMatchObject({
+      revision: '00',
+      latestRevision: '00',
+      items: [{ orderQuantity: 2 }],
+    });
+    expect(header.revision).toBe('01');
+    expect(items[0].order_quantity).toBe(7);
+    expect(readQuery.mock.calls[0]).toEqual(['BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY']);
+    expect(readQuery.mock.calls.at(-1)).toEqual(['COMMIT']);
+    expect(database.query).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('rolls back and releases a failed public read', async () => {
+    const readQuery = vi.fn(async (sql: string) => {
+      if (sql.includes('co.*')) return { rows: [structuredClone(header)] };
+      if (sql.includes('SELECT history.revision')) throw new Error('Read failed');
+      return { rows: [] };
+    });
+    database.connect.mockResolvedValue({ query: readQuery, release });
+    await expect(getChangeOrder('project', 'change-order', 'document')).rejects.toThrow(
+      'Read failed',
+    );
+    expect(readQuery.mock.calls.at(-1)).toEqual(['ROLLBACK']);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'reads complete frozen revisions and keeps only the latest %s revision live',
+    async (documentType) => {
+      header.document_type = documentType;
+      const original = await getChangeOrder('project', documentType, 'document', { query });
+      const first = await applyChangeOrderMaterials('project', documentType, 'document', 'editor', {
+        ...input,
+        newRevision: true,
+      });
+      expect(first).toMatchObject({
+        revision: '01',
+        revisions: ['01', '00'],
+        latestRevision: '01',
+      });
+      expect(snapshots.get('00')).not.toHaveProperty('revisions');
+      expect(snapshots.get('00')).not.toHaveProperty('latestRevision');
+      const sql = query.mock.calls.map(([statement]) => String(statement));
+      expect(
+        sql.findIndex((statement) =>
+          statement.includes('INSERT INTO project_change_order_revisions'),
+        ),
+      ).toBeLessThan(sql.findIndex((statement) => statement.includes('WITH source AS')));
+
+      header.title = 'Changed title';
+      header.project_name = 'Renamed project';
+      header.project_customer = 'New customer';
+      const second = await applyChangeOrderMaterials(
+        'project',
+        documentType,
+        'document',
+        'editor',
+        {
+          expectedUpdatedAt: first!.updatedAt,
+          newRevision: true,
+          operations: [{ type: 'delete', itemId: 'material' }],
+        },
+      );
+      expect(second).toMatchObject({ revision: '02', revisions: ['02', '01', '00'], items: [] });
+
+      const historical = await getChangeOrder('project', documentType, 'document', { query }, '00');
+      expect(historical).toEqual({
+        ...original,
+        revisions: ['02', '01', '00'],
+        latestRevision: '02',
+      });
+      expect(
+        await getChangeOrder('project', documentType, 'document', { query }, '01'),
+      ).toMatchObject({ title: 'Changed title', totalPrice: 21, items: [{ orderQuantity: 7 }] });
+      expect(await getChangeOrder('project', documentType, 'document', { query }, '02')).toEqual(
+        second,
+      );
+      expect(await getChangeOrder('project', documentType, 'document', { query })).toEqual(second);
+
+      // Text history by itself cannot recreate a previous full document.
+      header.change_log!.push({
+        id: 'old',
+        userId: 'editor',
+        userName: 'Editor',
+        changedAt: timestamp,
+        revision: '99',
+        changes: ['Legacy edit'],
+      });
+      expect(await getChangeOrder('project', documentType, 'document', { query }, '99')).toBeNull();
+      expect(
+        await getChangeOrder('another-project', documentType, 'document', { query }, '00'),
+      ).toBeNull();
+      expect(
+        await getChangeOrder(
+          'project',
+          documentType === 'change-order' ? 'internal-ncr' : 'change-order',
+          'document',
+          { query },
+          '00',
+        ),
+      ).toBeNull();
+    },
+  );
+
+  it('never writes a snapshot for previews, normal edits, or failed saves', async () => {
+    const preview = await applyChangeOrderMaterials(
+      'project',
+      'change-order',
+      'document',
+      'editor',
+      {
+        ...input,
+        newRevision: true,
+        operations: [],
+      },
+      true,
+    );
+    expect(preview).toMatchObject({ revision: '01', revisions: ['00'], latestRevision: '00' });
+    expect(snapshots.size).toBe(0);
+    expect(
+      query.mock.calls.some(([sql]) =>
+        String(sql).includes('INSERT INTO project_change_order_revisions'),
+      ),
+    ).toBe(false);
+
+    const edited = await applyChangeOrderMaterials(
+      'project',
+      'change-order',
+      'document',
+      'editor',
+      input,
+    );
+    expect(edited).toMatchObject({ revision: '00', revisions: ['00'] });
+    expect(snapshots.size).toBe(0);
+    await expect(
+      applyChangeOrderMaterials('project', 'change-order', 'document', 'editor', {
+        ...input,
+        expectedUpdatedAt: edited!.updatedAt,
+        newRevision: true,
+        operations: [update, { ...update, itemId: 'missing' }],
+      }),
+    ).rejects.toThrow('A material could not be changed');
+    expect(snapshots.size).toBe(0);
+    expect(header.revision).toBe('00');
+  });
+});
 
 describe('material editing transaction', () => {
   it.each(['change-order', 'internal-ncr'] as const)(
@@ -524,7 +784,10 @@ describe('material editing transaction', () => {
       );
       expect(result?.revision).toBe('01');
       expect(result?.items[0].revisionNumber).toBe('00');
-      expect(result?.changeLog?.[0].changes).toEqual(['Revision: 00 → 01.']);
+      expect(result?.changeLog?.[0].changes).toEqual([
+        'Revision: 00 → 01.',
+        `Report Date: 2026-09-14 → ${currentDate}.`,
+      ]);
     },
   );
 

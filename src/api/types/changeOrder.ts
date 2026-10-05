@@ -72,6 +72,8 @@ export type ChangeOrderDetails = ChangeOrderSummary & {
   createdBy: string | null;
   items: ChangeOrderItem[];
   changeLog?: ChangeOrderLogEntry[];
+  revisions?: string[];
+  latestRevision?: string;
 };
 
 export type ChangeOrderLogEntry = {
@@ -93,6 +95,7 @@ export type ChangeOrderMaterialOperation =
 export type ChangeOrderMaterialsInput = {
   expectedUpdatedAt: string;
   newRevision: boolean;
+  reportDate?: string;
   operations: ChangeOrderMaterialOperation[];
 };
 

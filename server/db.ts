@@ -1919,6 +1919,18 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_change_order_revisions (
+      change_order_id UUID NOT NULL REFERENCES project_change_orders(id) ON DELETE CASCADE,
+      revision TEXT NOT NULL,
+      snapshot JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+      PRIMARY KEY (change_order_id, revision),
+      CONSTRAINT project_change_order_revisions_revision_not_empty CHECK (btrim(revision) <> ''),
+      CONSTRAINT project_change_order_revisions_snapshot_object CHECK (jsonb_typeof(snapshot) = 'object')
+    );
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS project_change_order_items (
       id UUID PRIMARY KEY,
       change_order_id UUID NOT NULL REFERENCES project_change_orders(id) ON DELETE CASCADE,

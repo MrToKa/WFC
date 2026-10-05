@@ -1,6 +1,6 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AddRegular,
   ArrowDownRegular,
@@ -244,6 +244,7 @@ export const ChangeOrdersTab = ({
     setDetails,
     loadList,
     selectChangeOrder,
+    selectRevision,
   } = useChangeOrders(project.id, token, {
     collection,
     singularLabel: labels.singular,
@@ -270,10 +271,20 @@ export const ChangeOrdersTab = ({
   const [draftDetails, setDraftDetails] = useState<ChangeOrderDetails | null>(null);
   const [operations, setOperations] = useState<ChangeOrderMaterialOperation[]>([]);
   const [savingMaterials, setSavingMaterials] = useState(false);
+  const [requestedRevision, setRequestedRevision] = useState<string | null>(null);
+  const revisionRequest = useRef(0);
   const details = draftDetails ?? savedDetails;
+  const viewingHistoricalRevision =
+    !!savedDetails?.latestRevision && savedDetails.revision !== savedDetails.latestRevision;
+  const documentEditable = canEdit && !viewingHistoricalRevision && !detailsLoading;
+  const activeRevision = requestedRevision ?? details?.revision ?? header.revision;
+  const availableRevisions = savedDetails?.revisions ?? [savedDetails?.revision ?? header.revision];
+  const revisionOptions = availableRevisions.includes(activeRevision)
+    ? availableRevisions
+    : [activeRevision, ...availableRevisions];
   const materialsDirty = materialsEditing && (operations.length > 0 || newRevision);
   const materialBusy = pendingAction || addingMaterial || savingItem || savingMaterials;
-  const materialsLocked = !canEdit || !materialsEditing || materialBusy;
+  const materialsLocked = !documentEditable || !materialsEditing || materialBusy;
 
   useEffect(() => {
     if (!savedDetails) return;
@@ -284,6 +295,8 @@ export const ChangeOrdersTab = ({
 
   useEffect(() => {
     setExpandedParentIds(new Set());
+    setRequestedRevision(null);
+    revisionRequest.current += 1;
   }, [selectedId]);
 
   useEffect(() => {
@@ -297,6 +310,8 @@ export const ChangeOrdersTab = ({
     setRevisionDialogOpen(false);
     setHeaderDirty(false);
     setNewMode(false);
+    setRequestedRevision(null);
+    revisionRequest.current += 1;
   }, [project.id, collection, token, canEdit]);
 
   const items = details?.items ?? [];
@@ -349,12 +364,13 @@ export const ChangeOrdersTab = ({
     (!headerDirty && !materialsDirty) || window.confirm('Discard unsaved document changes?');
 
   const startMaterials = (createRevision: boolean): void => {
-    if (!canEdit || !savedDetails) return;
+    if (!documentEditable || !savedDetails) return;
     setMaterialView('detailed');
     setNewRevision(createRevision);
     setOperations([]);
     setDraftDetails({
       ...savedDetails,
+      reportDate: createRevision ? localDate() : savedDetails.reportDate,
       revision: createRevision
         ? String(
             (/^\d+$/.test(savedDetails.revision) ? BigInt(savedDetails.revision) : 0n) + 1n,
@@ -368,7 +384,7 @@ export const ChangeOrdersTab = ({
   const stageMaterialOperation = async (
     operation: ChangeOrderMaterialOperation,
   ): Promise<ChangeOrderDetails> => {
-    if (!canEdit || !token || !selectedId || !savedDetails || !materialsEditing)
+    if (!documentEditable || !token || !selectedId || !savedDetails || !materialsEditing)
       throw new Error('Start editing materials first.');
     const nextOperations = [...operations, operation];
     const response = await previewChangeOrderMaterials(
@@ -378,6 +394,7 @@ export const ChangeOrdersTab = ({
       {
         expectedUpdatedAt: savedDetails.updatedAt,
         newRevision,
+        ...(newRevision ? { reportDate: details?.reportDate ?? localDate() } : {}),
         operations: nextOperations,
       },
       collection,
@@ -388,7 +405,14 @@ export const ChangeOrdersTab = ({
   };
 
   const saveMaterials = async (): Promise<void> => {
-    if (!canEdit || !token || !selectedId || !savedDetails || !materialsEditing || materialBusy)
+    if (
+      !documentEditable ||
+      !token ||
+      !selectedId ||
+      !savedDetails ||
+      !materialsEditing ||
+      materialBusy
+    )
       return;
     setSavingMaterials(true);
     try {
@@ -399,6 +423,7 @@ export const ChangeOrdersTab = ({
         {
           expectedUpdatedAt: savedDetails.updatedAt,
           newRevision,
+          ...(newRevision ? { reportDate: details?.reportDate ?? localDate() } : {}),
           operations,
         },
         collection,
@@ -425,6 +450,27 @@ export const ChangeOrdersTab = ({
     await selectChangeOrder(id || null);
   };
 
+  const chooseRevision = async (revision: string): Promise<void> => {
+    if (
+      !savedDetails ||
+      revision === (requestedRevision ?? savedDetails.revision) ||
+      materialsEditing ||
+      materialBusy ||
+      savingHeader ||
+      exporting ||
+      !canLeave()
+    )
+      return;
+    resetMaterials();
+    setHeader(toHeader(savedDetails));
+    setHeaderDirty(false);
+    setExpandedParentIds(new Set());
+    const request = ++revisionRequest.current;
+    setRequestedRevision(revision);
+    await selectRevision(revision);
+    if (request === revisionRequest.current) setRequestedRevision(null);
+  };
+
   const startNew = async (): Promise<void> => {
     if (!canEdit) return;
     if (!canLeave()) return;
@@ -436,13 +482,13 @@ export const ChangeOrdersTab = ({
   };
 
   const setHeaderField = (field: keyof ChangeOrderHeaderInput, value: string): void => {
-    if (!canEdit) return;
+    if (!documentEditable) return;
     setHeader((current) => ({ ...current, [field]: value }));
     setHeaderDirty(true);
   };
 
   const saveHeader = async (): Promise<void> => {
-    if (!canEdit || !token) return;
+    if (!documentEditable || !token) return;
     if (
       !header.title.trim() ||
       !header.preparedBy.trim() ||
@@ -483,7 +529,7 @@ export const ChangeOrdersTab = ({
   };
 
   const removeChangeOrder = async (): Promise<void> => {
-    if (!canEdit) return;
+    if (!documentEditable) return;
     if (
       !token ||
       !selectedId ||
@@ -648,6 +694,7 @@ export const ChangeOrdersTab = ({
         selectedId,
         details.title,
         collection,
+        details.revision,
       );
       const url = URL.createObjectURL(result.blob);
       const link = document.createElement('a');
@@ -709,7 +756,14 @@ export const ChangeOrdersTab = ({
         {canEdit ? (
           <Button
             icon={<DeleteRegular />}
-            disabled={!selectedId || newMode || materialBusy || materialsEditing || savingHeader}
+            disabled={
+              !documentEditable ||
+              !selectedId ||
+              newMode ||
+              materialBusy ||
+              materialsEditing ||
+              savingHeader
+            }
             onClick={() => void removeChangeOrder()}
           >
             Delete {labels.singular}
@@ -725,29 +779,39 @@ export const ChangeOrdersTab = ({
       {detailsLoading ? <Spinner label={`Loading ${labels.singular}`} /> : null}
       {loading ? <Spinner label={`Loading ${labels.plural}`} /> : null}
 
-      {(newMode || details) && !detailsLoading ? (
+      {newMode || details ? (
         <>
+          {viewingHistoricalRevision ? (
+            <MessageBar intent="info">
+              <MessageBarBody>
+                Viewing revision {savedDetails?.revision} (read-only).
+                {canEdit
+                  ? ` Select the latest revision (${savedDetails?.latestRevision}) to edit this document.`
+                  : ''}
+              </MessageBarBody>
+            </MessageBar>
+          ) : null}
           <div className={styles.card}>
             <Title3>Header</Title3>
             <div className={styles.fixedInfo}>
               <Body1>
-                <strong>Project:</strong> {project.name}
+                <strong>Project:</strong> {details?.projectName ?? project.name}
               </Body1>
               <Body1>
-                <strong>Customer:</strong> {project.customer}
+                <strong>Customer:</strong> {details?.projectCustomer ?? project.customer}
               </Body1>
             </div>
             <div className={styles.headerGrid}>
               <Field label="Title" required>
                 <Input
-                  disabled={!canEdit || materialsEditing || savingHeader}
+                  disabled={!documentEditable || materialsEditing || savingHeader}
                   value={header.title}
                   onChange={(_, data) => setHeaderField('title', data.value)}
                 />
               </Field>
               <Field label="Project reference">
                 <Input
-                  disabled={!canEdit || materialsEditing || savingHeader}
+                  disabled={!documentEditable || materialsEditing || savingHeader}
                   value={header.projectReference ?? ''}
                   onChange={(_, data) => setHeaderField('projectReference', data.value)}
                 />
@@ -759,19 +823,32 @@ export const ChangeOrdersTab = ({
                 <Input
                   aria-label="Date"
                   type="date"
-                  disabled={!canEdit || materialsEditing || savingHeader}
-                  value={header.reportDate}
+                  disabled={!documentEditable || materialsEditing || savingHeader}
+                  value={
+                    materialsEditing
+                      ? (details?.reportDate ?? header.reportDate)
+                      : header.reportDate
+                  }
                   onChange={(_, data) => setHeaderField('reportDate', data.value)}
                 />
               </Field>
               <Field label="Revision" required>
-                <Input
-                  aria-label="Revision"
-                  value={
-                    materialsEditing ? (details?.revision ?? header.revision) : header.revision
-                  }
-                  disabled
-                />
+                {!newMode && revisionOptions.length > 1 ? (
+                  <Select
+                    aria-label="Revision"
+                    value={activeRevision}
+                    onChange={(event) => void chooseRevision(event.target.value)}
+                    disabled={materialsEditing || materialBusy || savingHeader || exporting}
+                  >
+                    {revisionOptions.map((revision) => (
+                      <option key={revision} value={revision}>
+                        {revision}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input aria-label="Revision" value={activeRevision} disabled />
+                )}
               </Field>
             </div>
             <Toolbar>
@@ -779,7 +856,12 @@ export const ChangeOrdersTab = ({
                 <Button
                   appearance="primary"
                   icon={<SaveRegular />}
-                  disabled={materialsEditing || savingHeader || (!newMode && !headerDirty)}
+                  disabled={
+                    !documentEditable ||
+                    materialsEditing ||
+                    savingHeader ||
+                    (!newMode && !headerDirty)
+                  }
                   onClick={() => void saveHeader()}
                 >
                   {savingHeader ? 'Saving…' : 'Save'}
@@ -796,6 +878,7 @@ export const ChangeOrdersTab = ({
                 <Button
                   icon={<EditRegular />}
                   disabled={
+                    !documentEditable ||
                     newMode ||
                     !selectedId ||
                     headerDirty ||
@@ -853,6 +936,7 @@ export const ChangeOrdersTab = ({
                   editingItem !== null ||
                   items.length === 0 ||
                   exporting ||
+                  detailsLoading ||
                   pendingAction
                 }
                 onClick={() => void download()}
@@ -894,7 +978,7 @@ export const ChangeOrdersTab = ({
                   <ChangeOrderSummaryTable
                     items={items}
                     documentLabel={labels.singular}
-                    canEdit={canEdit}
+                    canEdit={documentEditable}
                   />
                 ) : (
                   <div className={styles.tableWrap}>
@@ -958,6 +1042,7 @@ export const ChangeOrdersTab = ({
                                         inheritedItemsExpanded ? 'Collapse' : 'Expand'
                                       } inherited standard materials for item ${index + 1}`}
                                       aria-expanded={inheritedItemsExpanded}
+                                      disabled={detailsLoading}
                                       title={
                                         inheritedItemsExpanded
                                           ? 'Hide inherited standard materials'

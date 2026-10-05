@@ -30,6 +30,16 @@ import {
 } from '../validators.js';
 
 const uuidSchema = z.string().uuid();
+const revisionQuerySchema = z.string().trim().min(1).max(50).optional();
+
+const parseRequestedRevision = (req: Request, res: Response): string | undefined | null => {
+  const parsed = revisionQuerySchema.safeParse(req.query?.revision);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'revision must be a non-empty string of at most 50 characters' });
+    return null;
+  }
+  return parsed.data;
+};
 
 const parseIds = (
   req: Request,
@@ -102,11 +112,15 @@ export const createChangeOrdersRouter = (documentType: ChangeOrderDocumentType):
 
   router.get('/:changeOrderId', async (req: Request, res: Response): Promise<void> => {
     if (!parseIds(req, res, ['changeOrderId'])) return;
+    const revision = parseRequestedRevision(req, res);
+    if (revision === null) return;
     try {
       const changeOrder = await getChangeOrder(
         req.params.projectId,
         documentType,
         req.params.changeOrderId,
+        undefined,
+        revision,
       );
       if (!changeOrder) {
         res.status(404).json({ error: `${labels.singular} not found` });
@@ -315,17 +329,41 @@ export const createChangeOrdersRouter = (documentType: ChangeOrderDocumentType):
 
   router.get('/:changeOrderId/export', async (req: Request, res: Response): Promise<void> => {
     if (!parseIds(req, res, ['changeOrderId'])) return;
+    const revision = parseRequestedRevision(req, res);
+    if (revision === null) return;
     try {
       const changeOrder = await getChangeOrder(
         req.params.projectId,
         documentType,
         req.params.changeOrderId,
+        undefined,
+        revision,
       );
       if (!changeOrder) {
         res.status(404).json({ error: `${labels.singular} not found` });
         return;
       }
-      const workbook = await generateChangeOrderWorkbook(changeOrder, undefined, documentType);
+      const revisions = changeOrder.revisions ?? [];
+      const revisionIndex = revisions.indexOf(changeOrder.revision);
+      const previousRevision = revisionIndex >= 0 ? revisions[revisionIndex + 1] : undefined;
+      const previousChangeOrder =
+        previousRevision === undefined
+          ? null
+          : await getChangeOrder(
+              req.params.projectId,
+              documentType,
+              req.params.changeOrderId,
+              undefined,
+              previousRevision,
+            );
+      const workbook = previousChangeOrder
+        ? await generateChangeOrderWorkbook(
+            changeOrder,
+            undefined,
+            documentType,
+            previousChangeOrder,
+          )
+        : await generateChangeOrderWorkbook(changeOrder, undefined, documentType);
       const fileName = sanitizeChangeOrderFileName(changeOrder.title, documentType);
       res.setHeader(
         'Content-Type',

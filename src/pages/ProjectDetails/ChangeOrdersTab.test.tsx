@@ -211,7 +211,7 @@ describe('ChangeOrdersTab', () => {
       const exportButton = screen.getByRole('button', { name: 'Export Excel' });
       expect(exportButton).toBeEnabled();
       fireEvent.click(exportButton);
-      await waitFor(() => expect(api.exportChangeOrder).toHaveBeenCalledWith('token', project.id, details.id, details.title, collection));
+      await waitFor(() => expect(api.exportChangeOrder).toHaveBeenCalledWith('token', project.id, details.id, details.title, collection, details.revision));
       expect(api.updateChangeOrder).not.toHaveBeenCalled();
       expect(api.previewChangeOrderMaterials).not.toHaveBeenCalled();
       expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
@@ -483,13 +483,18 @@ describe('ChangeOrdersTab', () => {
     'locks materials in %s and saves a revision with author and history only on Save materials',
     async (collection) => {
       const api = await import('@/api/client');
+      const now = new Date();
+      const revisionDate = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
       const changed = {
         ...details,
         revision: '01',
+        reportDate: revisionDate,
         items: [{ ...details.items[0], orderQuantity: 20, revisionNumber: '01' }],
       };
       const saved = {
         ...changed,
+        revisions: ['01', '00'],
+        latestRevision: '01',
         preparedBy: 'Latest Editor',
         updatedAt: '2026-09-14T12:00:00.000Z',
         changeLog: [
@@ -536,6 +541,7 @@ describe('ChangeOrdersTab', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit materials' }));
       fireEvent.click(screen.getByRole('button', { name: 'New revision' }));
       expect(screen.getByLabelText('Revision')).toHaveValue('01');
+      expect(screen.getByLabelText('Date')).toHaveValue(revisionDate);
       expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
       expect(screen.getByRole('button', { name: 'Export Excel' })).toBeDisabled();
       fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
@@ -552,6 +558,7 @@ describe('ChangeOrdersTab', () => {
       );
       expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
       expect(api.updateChangeOrderItem).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Date')).toHaveValue(revisionDate);
       expect(
         vi.mocked(api.previewChangeOrderMaterials).mock.calls[0][3].operations[0],
       ).toMatchObject({
@@ -573,6 +580,11 @@ describe('ChangeOrdersTab', () => {
       );
       expect(screen.getByRole('button', { name: 'Edit item 1' })).toBeDisabled();
       expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled();
+      expect(screen.getByLabelText('Date')).toHaveValue(revisionDate);
+      expect(screen.getByRole('combobox', { name: 'Revision' })).toBeEnabled();
+      expect(
+        within(screen.getByRole('combobox', { name: 'Revision' })).getAllByRole('option').map((option) => option.textContent),
+      ).toEqual(['01', '00']);
       fireEvent.click(screen.getByRole('button', { name: 'Change log' }));
       const history = screen.getByRole('table', { name: 'Change log' });
       expect(within(history).getByText('Latest Editor')).toBeInTheDocument();
@@ -584,13 +596,113 @@ describe('ChangeOrdersTab', () => {
         expect.objectContaining({
           expectedUpdatedAt: details.updatedAt,
           newRevision: true,
+          reportDate: revisionDate,
           operations: [expect.objectContaining({ type: 'update', itemId: details.items[0].id })],
         }),
         collection,
       );
     },
+    60_000,
+  );
+
+  it.each(['change-orders', 'internal-ncrs'] as const)(
+    'shows frozen header and materials in %s and exports the selected revision',
+    async (collection) => {
+      const api = await import('@/api/client');
+      const latest: ChangeOrderDetails = {
+        ...details,
+        title: 'Revised order',
+        revision: '01',
+        latestRevision: '01',
+        revisions: ['01', '00'],
+        totalPrice: 80,
+        reportDate: '2026-09-14',
+        items: [{ ...details.items[0], descriptionEn: 'Revised support', orderQuantity: 20, totalPrice: 80 }],
+      };
+      const historical: ChangeOrderDetails = {
+        ...details,
+        latestRevision: '01',
+        revisions: ['01', '00'],
+        projectName: 'Original project',
+        projectCustomer: 'Original customer',
+      };
+      vi.mocked(api.fetchChangeOrder).mockImplementation(async (_token, _project, _id, _collection, revision) => ({
+        changeOrder: revision === '00' ? historical : latest,
+      }));
+      vi.mocked(api.exportChangeOrder).mockResolvedValue({ blob: new Blob(['excel']), fileName: 'order.xlsx' });
+      vi.stubGlobal('URL', class extends URL {
+        static createObjectURL = vi.fn(() => 'blob:export');
+        static revokeObjectURL = vi.fn();
+      });
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+      onTestFinished(() => { click.mockRestore(); vi.unstubAllGlobals(); });
+      render(
+        <FluentProvider theme={webLightTheme}><ToastProvider>
+          <ChangeOrdersTab project={project} token="token" currentUser={user} collection={collection} />
+        </ToastProvider></FluentProvider>,
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Open Existing order' }));
+      await screen.findByRole('cell', { name: 'Revised support' });
+      const revision = screen.getByRole('combobox', { name: 'Revision' });
+      expect(revision).toHaveValue('01');
+      expect(revision).toBeEnabled();
+      fireEvent.change(revision, { target: { value: '00' } });
+      await screen.findByRole('cell', { name: 'Widget support' });
+      expect(api.fetchChangeOrder).toHaveBeenLastCalledWith('token', project.id, details.id, collection, '00');
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(details.title);
+      expect(screen.getByLabelText('Date')).toHaveValue(details.reportDate);
+      expect(screen.getByText('Original project')).toBeInTheDocument();
+      expect(screen.getByText('Original customer')).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Title' })).toBeDisabled();
+      expect(screen.getByLabelText('Date')).toBeDisabled();
+      const documentName = collection === 'internal-ncrs' ? 'Internal NCR' : 'Change Order';
+      for (const name of ['Save', 'Edit materials', 'Save materials', 'Add material', `Delete ${documentName}`, 'Edit item 1']) {
+        expect(screen.getByRole('button', { name })).toBeDisabled();
+      }
+      expect(screen.getByRole('combobox', { name: 'Revision' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Export Excel' }));
+      await waitFor(() => expect(api.exportChangeOrder).toHaveBeenCalledWith('token', project.id, details.id, details.title, collection, '00'));
+      await waitFor(() => expect(screen.getByRole('combobox', { name: 'Revision' })).toBeEnabled());
+      fireEvent.change(screen.getByRole('combobox', { name: 'Revision' }), { target: { value: '01' } });
+      await screen.findByRole('cell', { name: 'Revised support' });
+      expect(screen.getByRole('textbox', { name: 'Title' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled();
+      expect(api.updateChangeOrder).not.toHaveBeenCalled();
+      expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
+    },
     30_000,
   );
+
+  it('keeps unsaved header changes when a revision switch is declined and locks the selector while editing materials', async () => {
+    const api = await import('@/api/client');
+    const latest = { ...details, revision: '01', latestRevision: '01', revisions: ['01', '00'] };
+    const historical = { ...details, latestRevision: '01', revisions: ['01', '00'] };
+    vi.mocked(api.fetchChangeOrder).mockImplementation(async (_token, _project, _id, _collection, revision) => ({
+      changeOrder: revision === '00' ? historical : latest,
+    }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    onTestFinished(() => confirm.mockRestore());
+    render(
+      <FluentProvider theme={webLightTheme}><ToastProvider>
+        <ChangeOrdersTab project={project} token="token" currentUser={user} />
+      </ToastProvider></FluentProvider>,
+    );
+    await openExistingOrder();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'Unsaved title' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Revision' }), { target: { value: '00' } });
+    expect(confirm).toHaveBeenCalledWith('Discard unsaved document changes?');
+    expect(api.fetchChangeOrder).toHaveBeenCalledOnce();
+    expect(screen.getByRole('combobox', { name: 'Revision' })).toHaveValue('01');
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Unsaved title');
+    confirm.mockReturnValue(true);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Revision' }), { target: { value: '00' } });
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Revision' })).toHaveValue('00'));
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(details.title);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Revision' }), { target: { value: '01' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled());
+    unlockMaterials();
+    expect(screen.getByRole('combobox', { name: 'Revision' })).toBeDisabled();
+  }, 30_000);
 
   it('can keep revision 00 and cancel a new revision without saving', async () => {
     const api = await import('@/api/client');
@@ -604,6 +716,7 @@ describe('ChangeOrdersTab', () => {
     await openExistingOrder();
     unlockMaterials();
     expect(screen.getByLabelText('Revision')).toHaveValue('00');
+    expect(screen.getByLabelText('Date')).toHaveValue(details.reportDate);
     fireEvent.click(screen.getByRole('button', { name: 'Save materials' }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Edit materials' })).toBeEnabled(),
@@ -627,6 +740,7 @@ describe('ChangeOrdersTab', () => {
     expect(confirm).toHaveBeenCalledOnce();
     confirm.mockRestore();
     expect(screen.getByLabelText('Revision')).toHaveValue('00');
+    expect(screen.getByLabelText('Date')).toHaveValue(details.reportDate);
     expect(screen.getByRole('button', { name: 'Add material' })).toBeDisabled();
     expect(api.saveChangeOrderMaterials).not.toHaveBeenCalled();
   });

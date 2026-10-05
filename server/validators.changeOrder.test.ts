@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addChangeOrderItemSchema,
+  changeOrderMaterialsSchema,
   createChangeOrderSchema,
   reorderChangeOrderItemsSchema,
   updateChangeOrderItemSchema,
@@ -10,6 +11,20 @@ import {
 const validId = '11111111-1111-4111-8111-111111111111';
 
 describe('Change Order validation', () => {
+  it('accepts a local revision date and rejects invalid calendar dates', () => {
+    const input = {
+      expectedUpdatedAt: '2026-10-05T12:00:00.000Z',
+      newRevision: true,
+      operations: [],
+    };
+    expect(changeOrderMaterialsSchema.safeParse(input).success).toBe(true);
+    expect(
+      changeOrderMaterialsSchema.safeParse({ ...input, reportDate: '2026-10-05' }).success,
+    ).toBe(true);
+    expect(
+      changeOrderMaterialsSchema.safeParse({ ...input, reportDate: '2026-02-30' }).success,
+    ).toBe(false);
+  });
   it('accepts a valid header and rejects empty titles and invalid dates', () => {
     expect(
       createChangeOrderSchema.safeParse({
