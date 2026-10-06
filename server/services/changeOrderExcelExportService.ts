@@ -479,6 +479,81 @@ export const trimWorksheetAfterRow = (worksheetXml: string, lastRow: number): st
 export const currentExcelDate = (now = new Date()): Date =>
   new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
+const addRevisionHistoryWorksheet = (
+  workbook: ExcelJS.Workbook,
+  changeOrder: ChangeOrderDetails,
+): void => {
+  const worksheet = workbook.addWorksheet('Revision history', {
+    views: [{ state: 'frozen', ySplit: 4 }],
+    pageSetup: {
+      orientation: 'landscape',
+      paperSize: 9,
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+    },
+  });
+  worksheet.columns = [{ width: 12 }, { width: 23 }, { width: 25 }, { width: 110 }];
+  for (const row of [1, 2, 3]) worksheet.mergeCells(`A${row}:D${row}`);
+  worksheet.getCell('A1').value = 'Revision history';
+  worksheet.getCell('A1').font = { name: 'Calibri', size: 18, bold: true };
+  worksheet.getRow(1).height = 28;
+  worksheet.getCell('A2').value = escapeSpreadsheetText(changeOrder.title);
+  worksheet.getCell('A2').font = { name: 'Calibri', size: 12, bold: true };
+  worksheet.getCell('A3').value = `History through revision ${changeOrder.revision}`;
+  worksheet.getRow(2).height = 22;
+  worksheet.getRow(3).height = 22;
+  const header = worksheet.getRow(4);
+  header.values = ['Revision', 'Date / time (UTC)', 'Changed by', 'Change'];
+  header.height = 24;
+  header.eachCell((cell) => {
+    cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+    cell.alignment = { vertical: 'middle', wrapText: true };
+  });
+
+  // Historical snapshots carry their own log, so later revisions never leak
+  // into an export of an earlier revision. Keep every individual recorded edit.
+  const entries = [...(changeOrder.changeLog ?? [])].sort(
+    (first, second) => Date.parse(first.changedAt) - Date.parse(second.changedAt),
+  );
+  for (const entry of entries) {
+    for (const change of entry.changes) {
+      const changedAt = new Date(entry.changedAt);
+      const row = worksheet.addRow([
+        escapeSpreadsheetText(entry.revision),
+        Number.isFinite(changedAt.getTime()) ? changedAt : escapeSpreadsheetText(entry.changedAt),
+        escapeSpreadsheetText(entry.userName),
+        escapeSpreadsheetText(change),
+      ]);
+      row.getCell(1).numFmt = '@';
+      row.getCell(2).numFmt = 'yyyy-mm-dd hh:mm:ss';
+      const descriptionLines = change
+        .split(/\r?\n/)
+        .reduce((lines, line) => lines + Math.max(1, Math.ceil(line.length / 100)), 0);
+      row.height = Math.min(409, Math.max(30, descriptionLines * 15 + 8));
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.font = { name: 'Calibri', size: 11 };
+        cell.alignment = { vertical: 'top', wrapText: true };
+        cell.border = { bottom: { style: 'hair', color: { argb: 'FFD9E2F3' } } };
+        if (row.number % 2 === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F5FA' } };
+        }
+      });
+    }
+  }
+  if (worksheet.rowCount === 4) {
+    worksheet.mergeCells('A5:D5');
+    worksheet.getCell('A5').value = 'No recorded changes for this revision.';
+    worksheet.getCell('A5').font = { name: 'Calibri', size: 11, italic: true };
+    worksheet.getRow(5).height = 24;
+  } else {
+    worksheet.autoFilter = `A4:D${worksheet.rowCount}`;
+  }
+  worksheet.pageSetup.printArea = `A1:D${worksheet.rowCount}`;
+  worksheet.pageSetup.printTitlesRow = '4:4';
+};
+
 const makeExcelDesktopCompatible = async (
   output: Buffer,
   totalRowNumber: number,
@@ -654,6 +729,7 @@ export async function generateChangeOrderWorkbook(
   calculationProperties.forceFullCalc = true;
   calculationProperties.calcMode = 'auto';
 
+  addRevisionHistoryWorksheet(workbook, changeOrder);
   const output = await workbook.xlsx.writeBuffer();
   return makeExcelDesktopCompatible(Buffer.from(output), totalRowNumber);
 }

@@ -6,6 +6,7 @@ import type {
   ChangeOrderDetails,
   ChangeOrderDocumentType,
   ChangeOrderItem,
+  ChangeOrderLogEntry,
 } from '../models/changeOrder.js';
 import {
   consolidateChangeOrderItemsForExport,
@@ -95,6 +96,19 @@ const createDetails = (count: number): ChangeOrderDetails => {
   };
 };
 
+const createLogEntry = (
+  revision: string,
+  changedAt: string,
+  changes: string[],
+): ChangeOrderLogEntry => ({
+  id: `log-${revision}`,
+  userId: 'editor-id',
+  userName: 'History Editor',
+  changedAt,
+  revision,
+  changes,
+});
+
 const reopen = async (
   count: number,
 ): Promise<{ workbook: ExcelJS.Workbook; worksheet: ExcelJS.Worksheet; buffer: Buffer }> => {
@@ -118,6 +132,117 @@ describe('Change Order workbook export', () => {
     await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
     return workbook.worksheets[0];
   };
+
+  it.each(['change-order', 'internal-ncr'] as const)(
+    'adds a second sheet with complete recorded %s revision history in chronological order',
+    async (documentType) => {
+      const creation = 'Document created.';
+      const removed = 'Removed material "Deleted cable" (item 2, order quantity 30).';
+      const quantity = '"Cable" (item 1): Order Quantity: 10 → 20.';
+      const price = '"Cable" (item 1): Unit Price: 4 → 5.';
+      const date = 'Report Date: 2026-07-29 → 2026-10-06.';
+      const added =
+        'Added inherited material "Support" (item 3, design quantity 2, order quantity 4, unit price 5).';
+      const details = {
+        ...createDetails(1),
+        changeLog: [
+          createLogEntry('02', '2026-10-06T09:30:00.000Z', [price, date, added]),
+          createLogEntry('00', '2026-07-29T10:00:00.000Z', [creation]),
+          createLogEntry('01', '2026-08-01T14:15:00.000Z', [removed, quantity]),
+        ],
+      };
+      const original = structuredClone(details);
+      const buffer = await generateChangeOrderWorkbook(details, templatePath, documentType);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+      expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual([
+        documentType === 'internal-ncr' ? 'Internal NCR' : 'Change Order',
+        'Revision history',
+      ]);
+      const history = workbook.worksheets[1];
+      expect(history.getCell('A2').value).toBe(details.title);
+      expect(history.getCell('A3').value).toBe('History through revision 02');
+      expect(history.getRow(4).values).toEqual([
+        undefined,
+        'Revision',
+        'Date / time (UTC)',
+        'Changed by',
+        'Change',
+      ]);
+      expect(
+        Array.from({ length: 6 }, (_, index) => history.getCell(`D${index + 5}`).value),
+      ).toEqual([creation, removed, quantity, price, date, added]);
+      expect(
+        Array.from({ length: 6 }, (_, index) => history.getCell(`A${index + 5}`).value),
+      ).toEqual(['00', '01', '01', '02', '02', '02']);
+      expect(history.getCell('A6').numFmt).toBe('@');
+      expect(history.getCell('B6').value).toEqual(new Date('2026-08-01T14:15:00.000Z'));
+      expect(history.getCell('B6').numFmt).toBe('yyyy-mm-dd hh:mm:ss');
+      expect(history.getCell('C6').value).toBe('History Editor');
+      expect(history.getCell('D6').alignment.wrapText).toBe(true);
+      expect(history.getCell('D4').font.bold).toBe(true);
+      expect(history.autoFilter).toBe('A4:D10');
+      expect(history.views[0]).toMatchObject({ state: 'frozen', ySplit: 4 });
+      expect(history.pageSetup.printArea).toBe('A1:D10');
+      expect(history.pageSetup.printTitlesRow).toBe('4:4');
+      expect(workbook.worksheets[0].getColumn('K').values).not.toContain('Deleted cable');
+      const archive = await JSZip.loadAsync(buffer);
+      const historyXml = await archive.file('xl/worksheets/sheet2.xml')?.async('string');
+      expect(historyXml).toContain('<autoFilter ref="A4:D10"');
+      expect(historyXml).toContain('<row r="10"');
+      expect(historyXml).not.toContain('<conditionalFormatting');
+      expect(details).toEqual(original);
+    },
+  );
+
+  it.each([undefined, []])(
+    'keeps the second sheet when the change log is %s',
+    async (changeLog) => {
+      const buffer = await generateChangeOrderWorkbook(
+        { ...createDetails(1), changeLog },
+        templatePath,
+      );
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+      const history = workbook.getWorksheet('Revision history')!;
+      expect(workbook.worksheets).toHaveLength(2);
+      expect(history.getCell('A5').value).toBe('No recorded changes for this revision.');
+      expect(history.rowCount).toBe(5);
+      expect(history.pageSetup.printArea).toBe('A1:D5');
+      expect(history.autoFilter).toBeUndefined();
+    },
+  );
+
+  it('escapes spreadsheet text and wraps long multiline history descriptions', async () => {
+    const description = '=1+1\n' + 'A long material description. '.repeat(10);
+    const details = {
+      ...createDetails(1),
+      title: '=SUM(A1:A2)',
+      changeLog: [
+        {
+          ...createLogEntry('=1+1', '2026-10-06T09:00:00.000Z', [
+            description,
+            '+unsafe',
+            '-unsafe',
+            '@unsafe',
+          ]),
+          userName: '=HYPERLINK("example")',
+        },
+      ],
+    };
+    const buffer = await generateChangeOrderWorkbook(details, templatePath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Uint8Array.from(buffer).buffer);
+    const history = workbook.getWorksheet('Revision history')!;
+    expect(history.getCell('A2').value).toBe("'=SUM(A1:A2)");
+    expect(history.getCell('A5').value).toBe("'=1+1");
+    expect(history.getCell('C5').value).toBe('\'=HYPERLINK("example")');
+    expect(history.getCell('D5').value).toBe(`'${description}`);
+    expect(history.getCell('D6').value).toBe("'+unsafe");
+    expect(history.getCell('D7').value).toBe("'-unsafe");
+    expect(history.getCell('D8').value).toBe("'@unsafe");
+    expect(history.getRow(5).height).toBeGreaterThan(history.getRow(6).height!);
+  });
 
   it.each(['change-order', 'internal-ncr'] as const)(
     'highlights changed header and material cells in %s and omits deleted rows',
@@ -385,6 +510,7 @@ describe('Change Order workbook export', () => {
       revision: '00',
       latestRevision: '02',
       revisions: ['02', '00'],
+      changeLog: [createLogEntry('00', '2026-07-29T10:00:00.000Z', ['Document created.'])],
     };
     const unchanged = structuredClone(frozen);
     const buffer = await generateChangeOrderWorkbook(frozen, templatePath);
@@ -399,6 +525,11 @@ describe('Change Order workbook export', () => {
     expect(worksheet.getCell('C6').value).toMatchObject({ formula: 'G6*I6', result: 10 });
     expect(worksheet.getCell('I6').value).toBe(frozen.items[0].orderedQuantity);
     expect(worksheet.getCell('P6').value).toBe(frozen.items[0].unitPrice);
+    const history = workbook.getWorksheet('Revision history')!;
+    expect(history.getCell('A3').value).toBe('History through revision 00');
+    expect(history.getCell('A5').value).toBe('00');
+    expect(history.getCell('D5').value).toBe('Document created.');
+    expect(history.rowCount).toBe(5);
     expect(frozen).toEqual(unchanged);
   });
 
