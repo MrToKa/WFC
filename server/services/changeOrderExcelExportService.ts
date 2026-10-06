@@ -737,6 +737,7 @@ export async function generateChangeOrderWorkbook(
 export const sanitizeChangeOrderFileName = (
   title: string,
   documentType: ChangeOrderDocumentType = 'change-order',
+  revision?: string,
 ): string => {
   const clean = (value: string): string =>
     value
@@ -745,5 +746,6 @@ export const sanitizeChangeOrderFileName = (
       .trim()
       .slice(0, 100);
   const prefix = documentType === 'internal-ncr' ? 'Internal NCR' : 'Change order';
-  return `${prefix} - ${clean(title) || 'report'}.xlsx`;
+  const revisionSuffix = revision === undefined ? '' : ` - Rev. ${clean(revision)}`;
+  return `${prefix} - ${clean(title) || 'report'}${revisionSuffix}.xlsx`;
 };

@@ -10,17 +10,17 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('Change Order export filename', () => {
   it('uses the Change Order title in the client fallback filename', () => {
-    expect(buildChangeOrderExportFileName('GDS ESD cables')).toBe(
-      'Change order - GDS ESD cables.xlsx',
+    expect(buildChangeOrderExportFileName('GDS ESD cables', 'Change order', '01')).toBe(
+      'Change order - GDS ESD cables - Rev. 01.xlsx',
     );
-    expect(buildChangeOrderExportFileName('  Area 1: cable/order  ')).toBe(
-      'Change order - Area 1 cable order.xlsx',
+    expect(buildChangeOrderExportFileName('  Area 1: cable/order  ', 'Change order', '00')).toBe(
+      'Change order - Area 1 cable order - Rev. 00.xlsx',
     );
   });
 
   it('supports the Internal NCR export filename', () => {
-    expect(buildChangeOrderExportFileName('Cable damage', 'Internal NCR')).toBe(
-      'Internal NCR - Cable damage.xlsx',
+    expect(buildChangeOrderExportFileName('Cable damage', 'Internal NCR', '02')).toBe(
+      'Internal NCR - Cable damage - Rev. 02.xlsx',
     );
   });
 
@@ -104,5 +104,8 @@ describe.each(['change-orders', 'internal-ncrs'] as const)('%s revision requests
     );
     if (revision === undefined) expect(fetchMock.mock.calls[0]?.[0]).not.toContain('?');
     expect(response.blob).toBe(blob);
+    expect(response.fileName).toBe(
+      `${collection === 'internal-ncrs' ? 'Internal NCR' : 'Change order'} - Cable damage${revision === undefined ? '' : ' - Rev. Rev 1+ &'}.xlsx`,
+    );
   });
 });

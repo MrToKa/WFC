@@ -94,6 +94,7 @@ describe('document revision read and export routes', () => {
         documentType,
         previous,
       );
+      expect(sanitizeChangeOrderFileName).toHaveBeenCalledWith(selected.title, documentType, '01');
       expect(res.send).toHaveBeenCalledWith(Buffer.from('highlighted-workbook'));
     },
   );
@@ -131,6 +132,7 @@ describe('document revision read and export routes', () => {
       }
       expect(res.json).toHaveBeenCalledWith({ changeOrder: frozen });
       expect(generateChangeOrderWorkbook).toHaveBeenCalledWith(frozen, undefined, documentType);
+      expect(sanitizeChangeOrderFileName).toHaveBeenCalledWith(frozen.title, documentType, '00');
       expect(res.send).toHaveBeenCalledWith(Buffer.from('frozen-workbook'));
     },
   );

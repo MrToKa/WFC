@@ -193,13 +193,16 @@ const readExportError = async (response: Response, documentName: string): Promis
 export const buildChangeOrderExportFileName = (
   title: string,
   documentName = 'Change order',
+  revision?: string,
 ): string => {
-  const safeTitle = title
-    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 100);
-  return `${documentName} - ${safeTitle || 'report'}.xlsx`;
+  const clean = (value: string): string =>
+    value
+      .replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 100);
+  const revisionSuffix = revision === undefined ? '' : ` - Rev. ${clean(revision)}`;
+  return `${documentName} - ${clean(title) || 'report'}${revisionSuffix}.xlsx`;
 };
 
 export async function exportChangeOrder(
@@ -229,6 +232,7 @@ export async function exportChangeOrder(
       buildChangeOrderExportFileName(
         changeOrderTitle,
         collection === 'internal-ncrs' ? 'Internal NCR' : 'Change order',
+        revision,
       ),
   };
 }

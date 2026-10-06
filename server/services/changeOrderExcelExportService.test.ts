@@ -534,17 +534,17 @@ describe('Change Order workbook export', () => {
   });
 
   it('names the export after the Change Order title', () => {
-    expect(sanitizeChangeOrderFileName('Discharge impulse lines')).toBe(
-      'Change order - Discharge impulse lines.xlsx',
+    expect(sanitizeChangeOrderFileName('Discharge impulse lines', 'change-order', '01')).toBe(
+      'Change order - Discharge impulse lines - Rev. 01.xlsx',
     );
-    expect(sanitizeChangeOrderFileName('  Area 1: cable/order  ')).toBe(
-      'Change order - Area 1 cable order.xlsx',
+    expect(sanitizeChangeOrderFileName('  Area 1: cable/order  ', 'change-order', '00')).toBe(
+      'Change order - Area 1 cable order - Rev. 00.xlsx',
     );
   });
 
   it('uses Internal NCR branding while reusing the Change Order workbook template', async () => {
-    expect(sanitizeChangeOrderFileName('Area 1: cable/order', 'internal-ncr')).toBe(
-      'Internal NCR - Area 1 cable order.xlsx',
+    expect(sanitizeChangeOrderFileName('Area 1: cable/order', 'internal-ncr', '02')).toBe(
+      'Internal NCR - Area 1 cable order - Rev. 02.xlsx',
     );
 
     const buffer = await generateChangeOrderWorkbook(

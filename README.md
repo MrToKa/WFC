@@ -124,6 +124,7 @@ API on `http://localhost:9000` and its admin console on `http://localhost:9001`.
   Excel exports also include a **Revision history** sheet with all recorded changes through
   the selected revision: revision number, date/time (UTC), author, and description, including
   added/deleted materials and old/new quantities, prices, and header values.
+  Export filenames end with the selected revision, for example ` - Rev. 01.xlsx`.
 - **Project attachments** – Upload and manage project-related Word, Excel, PDF, and image files
   stored in MinIO object storage.
 - **Template library** – Administrators can manage a global set of shared templates available from
