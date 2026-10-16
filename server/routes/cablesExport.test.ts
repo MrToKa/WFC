@@ -140,7 +140,7 @@ it('exports only selected data columns in table order, with matching numeric val
 });
 
 it.each(['routing', 'all'])(
-  'preserves the existing %s filter, type, MTO and sorting even for hidden fields',
+  'preserves the existing %s filter, type and MTO while sorting by ascending ID',
   async (criteria) => {
     const query = {
       view: 'list',
@@ -159,7 +159,7 @@ it.each(['routing', 'all'])(
     expect(originalQuery[0]).toContain('c.cable_type_id = $2');
     expect(originalQuery[0]).toContain('c.mto = $4');
     expect(originalQuery[0]).toContain(
-      "ORDER BY LOWER(COALESCE(c.routing, '')) DESC, c.cable_id ASC",
+      'ORDER BY c.cable_id ASC',
     );
     expect(originalQuery[1]).toEqual(['project', 'type-1', '%tray-01%', 'LV']);
     expect(sheet.getRow(1).values).toEqual([undefined, 'Tag']);
@@ -184,5 +184,13 @@ it.each(['', 'actions', 'unknown', 'tag,tag', ['tag', 'routing']])(
     const response = await runExport({ view: 'list', columns });
     expect(response.status).toHaveBeenCalledWith(400);
     expect(response.send).not.toHaveBeenCalled();
+  },
+);
+
+it.each([{}, { sortColumn: 'tag', sortDirection: 'desc' }, { sortColumn: 'cableId', sortDirection: 'desc' }])(
+  'always requests ascending ID order for cable list exports: %j',
+  async (sorting) => {
+    await runExport({ view: 'list', ...sorting });
+    expect(database.query.mock.calls[0][0]).toContain('ORDER BY c.cable_id ASC;');
   },
 );

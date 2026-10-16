@@ -4487,7 +4487,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         `
             ${selectCablesQuery}
             ${whereClause}
-            ORDER BY ${sortExpression} ${normalizedSortDirection}, c.cable_id ASC;
+            ORDER BY c.cable_id ASC;
           `,
         values,
       );
