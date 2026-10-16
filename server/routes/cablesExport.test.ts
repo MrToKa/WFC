@@ -194,3 +194,21 @@ it.each([{}, { sortColumn: 'tag', sortDirection: 'desc' }, { sortColumn: 'cableI
     expect(database.query.mock.calls[0][0]).toContain('ORDER BY c.cable_id ASC;');
   },
 );
+
+it('writes the actual Cable Id cells in numeric ascending order before generating Excel', async () => {
+  database.query.mockResolvedValue({
+    rows: [880, 881, 2128, 1, 2, 3, 4, 854, 855, 10].map((id) => ({
+      cable_id: id,
+      tag: `Cable ${id}`,
+    })),
+  });
+  const sheet = await readSheet(await runExport({ view: 'list', columns: 'cableId,tag' }));
+  const ids = [];
+  const tags = [];
+  for (let row = 2; row <= sheet.rowCount; row++) {
+    ids.push(sheet.getCell(row, 1).value);
+    tags.push(sheet.getCell(row, 2).value);
+  }
+  expect(ids).toEqual([1, 2, 3, 4, 10, 854, 855, 880, 881, 2128]);
+  expect(tags).toEqual(ids.map((id) => `Cable ${id}`));
+});

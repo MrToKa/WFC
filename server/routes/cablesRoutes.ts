@@ -4512,7 +4512,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       );
       const columns = columnIndexes.map((index) => CABLE_LIST_EXPORT_COLUMNS[index]);
       const hasIdColumn = columns.some((column) => column.key === 'cableId');
-      const rows = result.rows.map((row) => {
+      const rows = [...result.rows].sort((a, b) => a.cable_id - b.cable_id).map((row) => {
         const values = buildCableListExportRow(row);
         return columnIndexes.map((index) => values[index]);
       });
