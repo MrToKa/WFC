@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-17",
+  "kind": "Independent read-only PF-0 document/contract review",
+  "status": "PASS",
+  "scope": "Baseline, specification, illustrative contracts, parity catalogue and report; root performs final integrity/preservation execution separately",
+  "productionCodeReviewedAsImplementation": false,
+  "testsOrDockerOperationsByReviewer": false,
+  "findings": [
+    {
+      "id": "REVIEW-01",
+      "concern": "A calculation-input revision alone might not detect later manual/imported routing or design-length edits",
+      "resolution": "Proposed cableWriteRevision independently binds destination values/manual lock; proposal and Apply expected fields include it; manual/import changes invalidate atomically",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "REVIEW-02",
+      "concern": "Rereading dependencies before commit can leave a race",
+      "resolution": "Specification requires authorization and dependency/version protection through commit; an unprotected READ COMMITTED reread is explicitly insufficient",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "REVIEW-03",
+      "concern": "Source matrix and display offset composition were ambiguous",
+      "resolution": "Proposed canonical right-handed Z-up metre frame and explicit forward/inverse rebasing equations; no duplicate transforms; real SDK equivalence is a PF-2 gate",
+      "status": "RESOLVED"
+    },
+    {
+      "id": "REVIEW-04",
+      "concern": "Native capture source paths omitted Services directory",
+      "resolution": "Corrected RoutingSession.cs and TrayMeshReader.cs to AddinRibbon/Services and checked actual endpoint/mesh capture lines",
+      "status": "RESOLVED"
+    }
+  ],
+  "parentCorrections": [
+    "Removed unsupported claim of an existing native route export implementation",
+    "Used design-length recalculation rather than financial pricing terminology"
+  ],
+  "remainingSemanticBlockers": [],
+  "limitations": [
+    "Does not prove web/native/converted-model parity",
+    "Final file integrity, cleanup and original environment preservation are separate checks"
+  ]
+}
