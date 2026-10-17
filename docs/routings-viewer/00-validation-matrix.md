@@ -699,3 +699,14 @@ Evidence roots: **E11**=`C:/Users/todor.chankov/Documents/Codex/2026-10-17/wfc-a
 | DOC-16 | PASS (historical Stage0 only) | `docs/routings-viewer/00-baseline.md`; `docs/routings-viewer/00-specification.md` | SOURCE/release; R:Stage0 | N:BASELINE/SOURCE/REVIEW/BUILD; R:Stage0 documents | HistoricalStage0stoppointonly; subsequentdirectrequestsauthorizedstages1–11,notautomaticunsolicitedwork. Original Stage0 PASS retained as a historical statement. Later direct user requests authorize subsequent stages and merge/publication. |
 
 The nine final gates and the exact human acceptance scenario are in [11-integration-acceptance.md](11-integration-acceptance.md#final-gates). TECHNICAL_CANDIDATE_LOCALHOST/OFFLINE_RUNTIME/OPERATIONS_EVIDENCE_APPLICABILITY/PATHFINDER_INDEPENDENCE are PASS; OTHER_MACHINE_RESTORE/FRESH_ENGINE_PORTABILITY/LAN_HTTPS_OTHER_ENVIRONMENTS/USER_ACCEPTANCE are NOT_RUN; FINAL_ACCEPTANCE is BLOCKED. ARC-09/AUTH-13/OPS-08 are not fully closed by their local partial proof; PREP-02 has no new real conversion. GitHub publication authorization does not create a CI PASS. Historical blocked cleanup remains separately recorded; no retry/workaround/global prune was used.
+
+
+### Stage11 follow-up — native Ghost visibility (17.10.2026)
+
+The prior Stage11 release and evidence retain their historical scope. User feedback identified that forced 0.025 fade opacity made context nearly invisible. This follow-up retains the native SDK 0.1 opacity with the existing light preset. See [follow-up report](11-ghost-visibility-followup.md).
+
+| Criteria | Result | Evidence and scope | Remaining limit |
+|---|---|---|---|
+| UI-06; OPS-01/02/03 | PASS | Actual Manual and Cable native Ghost compared at an identical camera with observer-only old-opacity and Ghost-OFF controls; 74 runtime tests pass. Native material/variant opacity is preserved. | Dense overlapping geometry is darker; user visual acceptance remains NOT_RUN. |
+| ARC-02; OPS-07 | Runtime PASS; browser PARTIAL | Separate normal production flow verifies Manual/Cables repeat and Clear from OFF. Exact ON/dispose/cancel restoration passes in the 74 runtime tests. Original business hashes and unaffected containers are preserved. | All three overall browser attempts retain FAIL; native visual comparison is PARTIAL overall. Last Cable ON activation sent no SHOW_ROUTE, viewer stayed READY; cause unresolved, dispose not reached. Earlier model retirement remains unclassified. |
+| OPS-04/05/12 | Unchanged scope | Same SDK, API/session protocol, geometry and engineering data. New web image 4ff3f916… only. Own fixture traffic is restricted to loopback; original Stage11 security/restore evidence remains historical. | Other machine, fresh engine, LAN HTTPS, user and final acceptance gates are unchanged. |
