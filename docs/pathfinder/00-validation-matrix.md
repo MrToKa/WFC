@@ -64,3 +64,18 @@ The first table accepts PF-0 **contracts and evidence**, not the future implemen
 PF-0 technical completion requires its deliverable rows to pass or to identify a concrete evidence limitation without hiding an unfulfilled deliverable. It does not require future PF-2/PF-7 parity checks to pass now. A missing real-model oracle is a PF-2/PF-7 dependency; it does not prevent extracting the existing pure core in PF-1.
 
 PF-1 readiness means the reference source, mathematical contract, accepted decisions, fixture provenance and proposed boundaries are usable. If an unresolved question affects PF-1 inputs, state it explicitly. Do not silently infer acceptance or advance to PF-1.
+
+## PF-1 execution — appended 17 October 2026
+
+The preceding sections remain the frozen PF-0 observation. The user's subsequent explicit automation/start instruction authorizes PF-1 and later stages. This table records the new implementation and does not relabel PF-0 checks.
+
+| ID | Current scope / evidence | Result |
+|---|---|---|
+| PF1-CORE-01 | Extracted separate DLL; eleven source files byte-identical; 105 original regression checks; 43 frozen cases replayed | PASS |
+| PF1-API-01 | Strict local stdio worker/adapter, exact points/metrics/decimal values, bounded input, cancellation and hard process deadline; 215 boundary/parity checks | PASS |
+| PF1-REVIEW-01 | Exact decimal rounding/underflow and `/LIMIT1` classification review findings resolved with fresh checks | PASS |
+| PF1-ISO-01 | Source/environment audit preserves original three checkouts, local modifications and thirteen containers | PASS |
+| PF1-CLEAN-01 | No PF-1 containers or disposable source clones; required ignored builds retained; inherited PF-0 denied child untouched | PASS for PF-1 scope; inherited PF0-CLEAN-01 remains BLOCKED |
+| PF2-GEO-01 and later rows | No new native/converted, application UI, authorization, jobs or Apply behavior verified in PF-1 | NOT_RUN |
+
+See [PF-1 report](01-stage-report.md), [core delivery](01-core-extraction.md) and their linked fresh evidence. Final human acceptance and integration authorization remain separate.

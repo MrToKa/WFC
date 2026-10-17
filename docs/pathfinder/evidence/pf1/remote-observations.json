@@ -1,0 +1,187 @@
+{
+  "stage": "PF-1",
+  "purpose": "Read-only remote baseline for next-stage handoff; no CI execution or publication",
+  "observations": [
+    {
+      "label": "wfc-head",
+      "url": "https://api.github.com/repos/MrToKa/WFC/branches/main",
+      "observedAtUtc": "2026-10-17T20:40:10.015Z",
+      "status": "PASS",
+      "selected": {
+        "name": "main",
+        "sha": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00"
+      }
+    },
+    {
+      "label": "pf-head",
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/branches/master",
+      "observedAtUtc": "2026-10-17T20:40:10.017Z",
+      "status": "PASS",
+      "selected": {
+        "name": "master",
+        "sha": "45c24bf5f433f13e102600b36f20327c77961d0a"
+      }
+    },
+    {
+      "label": "wfc-open-prs",
+      "url": "https://api.github.com/repos/MrToKa/WFC/pulls?state=open&per_page=100",
+      "observedAtUtc": "2026-10-17T20:40:10.017Z",
+      "status": "PASS",
+      "selected": [
+        {
+          "number": 1,
+          "title": "Add Roxtec routing filters and matching cables table",
+          "state": "open",
+          "head": "fc81f5e250625afec76ed38f877ad7b790447dbb",
+          "ref": "codex/add-routings-filter-for-cables-list",
+          "reviewer": "MrToKa"
+        }
+      ]
+    },
+    {
+      "label": "pf-open-prs",
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/pulls?state=open&per_page=100",
+      "observedAtUtc": "2026-10-17T20:40:10.017Z",
+      "status": "PASS",
+      "selected": []
+    },
+    {
+      "label": "wfc-branches",
+      "url": "https://api.github.com/repos/MrToKa/WFC/branches?per_page=100",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": [
+        {
+          "name": "AI-suggestion-implementation",
+          "sha": "6a1684516976d5fb4afdb4fd77f17b6a7b4ba326"
+        },
+        {
+          "name": "Ellis_Vulcan",
+          "sha": "47a9084eb55bea18496af36bb1861931322f55e0"
+        },
+        {
+          "name": "codex/add-routings-filter-for-cables-list",
+          "sha": "fc81f5e250625afec76ed38f877ad7b790447dbb"
+        },
+        {
+          "name": "codex/professional-tray-report",
+          "sha": "8b48388726985f8fa51aa6be897d2d9227bac757"
+        },
+        {
+          "name": "main",
+          "sha": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00"
+        }
+      ]
+    },
+    {
+      "label": "pf-branches",
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/branches?per_page=100",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": [
+        {
+          "name": "VMbranch",
+          "sha": "33d344a41fba07d2d4263beba4fd8aedc6057848"
+        },
+        {
+          "name": "codex/optional-background-transparency",
+          "sha": "5a60a3d6ae5bebe5e53923d1a4736fc38a69c6f2"
+        },
+        {
+          "name": "codex/path-lookup",
+          "sha": "b5edd1e98ddaaaa5ac38008a4e7af383e274c488"
+        },
+        {
+          "name": "codex/route-names-from-hierarchy",
+          "sha": "33c1070fc89bfdcabbcd108f218bbaab224a120a"
+        },
+        {
+          "name": "codex/two-tab-routing-poc",
+          "sha": "8f4d1f870c446133b1c1bd8dc926f3165abdebcf"
+        },
+        {
+          "name": "master",
+          "sha": "45c24bf5f433f13e102600b36f20327c77961d0a"
+        }
+      ]
+    },
+    {
+      "label": "wfc-reviews",
+      "url": "https://api.github.com/repos/MrToKa/WFC/pulls/1/reviews",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": [
+        {
+          "state": "COMMENTED",
+          "reviewer": "copilot-pull-request-reviewer[bot]"
+        },
+        {
+          "state": "COMMENTED",
+          "reviewer": "chatgpt-codex-connector[bot]"
+        }
+      ]
+    },
+    {
+      "label": "WFC-statuses",
+      "url": "https://api.github.com/repos/MrToKa/WFC/commits/e1ef20202598bb4d3d78e4772cbbb9747ec23a00/status",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": {
+        "state": "pending",
+        "totalCount": 0,
+        "statusCount": 0
+      }
+    },
+    {
+      "label": "WFC-checks",
+      "url": "https://api.github.com/repos/MrToKa/WFC/commits/e1ef20202598bb4d3d78e4772cbbb9747ec23a00/check-runs",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": {
+        "totalCount": 0,
+        "checks": []
+      }
+    },
+    {
+      "label": "WFC-runs",
+      "url": "https://api.github.com/repos/MrToKa/WFC/actions/runs?head_sha=e1ef20202598bb4d3d78e4772cbbb9747ec23a00&per_page=100",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": {
+        "totalCount": 0,
+        "runs": []
+      }
+    },
+    {
+      "label": "PathFinder-statuses",
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/commits/45c24bf5f433f13e102600b36f20327c77961d0a/status",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": {
+        "state": "pending",
+        "totalCount": 0,
+        "statusCount": 0
+      }
+    },
+    {
+      "label": "PathFinder-checks",
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/commits/45c24bf5f433f13e102600b36f20327c77961d0a/check-runs",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": {
+        "totalCount": 0,
+        "checks": []
+      }
+    },
+    {
+      "label": "PathFinder-runs",
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/actions/runs?head_sha=45c24bf5f433f13e102600b36f20327c77961d0a&per_page=100",
+      "observedAtUtc": "2026-10-17T20:40:19.398Z",
+      "status": "PASS",
+      "selected": {
+        "totalCount": 0,
+        "runs": []
+      }
+    }
+  ]
+}
