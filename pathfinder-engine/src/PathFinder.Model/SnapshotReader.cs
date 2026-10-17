@@ -63,6 +63,7 @@ public static class SnapshotReader
             if (item.ExternalId is not null) Text(item.ExternalId, "externalId", 1024);
             if (item.DbId is { } dbId && (dbId < 0 || !dbIds.Add(dbId))) throw new ArgumentException("Invalid/duplicate version-local dbId.");
             Text(item.Name, "object.name", 2048, true);
+            if (item.GeometryRole is not ("hierarchy" or "object" or "routing-leaf")) throw new ArgumentException("Unknown object geometry role.");
             if (item.RouteName is not null) Text(item.RouteName, "routeName", 2048, true);
             if (item.ShapeName is not null) Text(item.ShapeName, "shapeName", 2048, true);
             if (item.LeafToRootNames is null || item.LeafToRootNames.Length == 0 || item.LeafToRootNames.Length > limits.MaximumDepth) throw new ArgumentException("Hierarchy evidence outside budget.");
@@ -79,6 +80,7 @@ public static class SnapshotReader
             if (item.CategoryAssignmentSource == "unassigned" && item.AllowedCategories.Length != 0) throw new ArgumentException("Unassigned category cannot contain inferred planning assignments.");
             Bounds(item.Bounds);
             if (item.Fragments is null) throw new ArgumentException("Fragments cannot be null.");
+            if (item.GeometryRole == "hierarchy" && item.Fragments.Length != 0) throw new ArgumentException("Hierarchy-only objects cannot carry physical fragment meshes.");
             foreach (var fragment in item.Fragments)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -108,6 +110,9 @@ public static class SnapshotReader
                 Bounds(face.Bounds);
             }
         }
+        var parentIdentities = snapshot.Objects.Where(item => item.ParentId is not null).Select(item => item.ParentId!).ToHashSet(StringComparer.Ordinal);
+        if (snapshot.Objects.Any(item => item.GeometryRole == "routing-leaf" && parentIdentities.Contains(item.Id)))
+            throw new ArgumentException("A routing-leaf cannot be the parent of another inventory object.");
         _ = Visibility(snapshot, limits, cancellation); // Validates parents/cycles before any fitting or cache write.
     }
 
@@ -115,15 +120,16 @@ public static class SnapshotReader
     {
         var objects = snapshot.Objects.ToDictionary(x => x.Id, StringComparer.Ordinal);
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var depths = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var item in snapshot.Objects)
         {
             cancellation.ThrowIfCancellationRequested();
             if (result.ContainsKey(item.Id)) continue;
             var path = new List<SnapshotObject>(); var seen = new HashSet<string>(StringComparer.Ordinal);
-            var current = item; string ancestor = "visible";
+            var current = item; string ancestor = "visible"; int ancestorDepth = 0;
             while (true)
             {
-                if (result.TryGetValue(current.Id, out ancestor!)) break;
+                if (result.TryGetValue(current.Id, out ancestor!)) { ancestorDepth = depths[current.Id]; break; }
                 if (!seen.Add(current.Id) || path.Count >= limits.MaximumDepth) throw new ArgumentException("Cyclic or over-depth object hierarchy.");
                 path.Add(current);
                 if (current.ParentId is null) { ancestor = "visible"; break; }
@@ -137,8 +143,10 @@ public static class SnapshotReader
             for (var i = path.Count - 1; i >= 0; i--)
             {
                 var node = path[i];
+                if (++ancestorDepth > limits.MaximumDepth) throw new ArgumentException("Object hierarchy total depth exceeds its budget.");
                 ancestor = ancestor == "hidden" || node.NativeHidden == true ? "hidden" : ancestor == "unknown" || node.NativeHidden is null ? "unknown" : "visible";
                 result[node.Id] = ancestor;
+                depths[node.Id] = ancestorDepth;
             }
         }
         return result;

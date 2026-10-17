@@ -16,7 +16,7 @@ administrator permissions, accepted parity proof or cable write capability.
 | `model` | Project/version-local identity; lowercase `contentSha256`; optional `sourceContentSha256`. A package content fingerprint and original NWD SHA256 are different evidence and must be named honestly in capture provenance. |
 | `capture` | Source kind (`converted`, `native`, `synthetic`), adapter version, evidence hashes and explicit completeness/unit/transform/native-visibility/source-correspondence flags. These flags are evidence declarations, not trust or acceptance tokens. |
 | `coordinates` | `vertexFrame=canonical-world-metres`; original units and optional scale; optional full source/root matrix; canonical offset; declared display-to-world matrix. All matrices are invertible binary64, 16-value column-major affine transforms. |
-| `objects[]` | Version-local `id`, optional parent/external/dbId; names/hierarchy/properties; nullable own `nativeHidden`; explicit planning exclusion; optional route/shape labels; category assignment source and allowed categories; canonical world bounds; fragments/optional face evidence. |
+| `objects[]` | Version-local `id`, optional parent/external/dbId; required `geometryRole`; names/hierarchy/properties; nullable own `nativeHidden`; explicit planning exclusion; optional route/shape labels; category assignment source and allowed categories; canonical world bounds; fragments/optional face evidence. |
 | `fragments[]` | Version-local fragment identity, canonical XYZ vertices, indexed triangles, recorded optional source-fragment-to-world matrix and `transformAlreadyApplied=true`. Matrices record provenance and are never applied again inside Model. |
 | `faceExtents[]` | Optional canonical min/max and sample counts for the six named world AABB faces. |
 
@@ -27,6 +27,18 @@ property. `unassigned` requires an empty category array and remains unresolved;
 Instrumentation maps to Control. All/MV/LV/Control test selection is represented
 as the explicit array `['MV','LV','Control']`, never silently inferred.
 
+Every object declares `geometryRole` as `hierarchy`, `object` or `routing-leaf`.
+Only explicitly selected `routing-leaf` objects enter tray fitting. A logical
+owner/ancestor with a tray name cannot create a second AABB fallback segment.
+`hierarchy` objects cannot carry physical fragment meshes. A `routing-leaf`
+cannot be the parent of another inventory object. Generic physical `object`
+records retain their bounds/equipment-reference evidence and never become tray
+segments through inherited route labels. An intentionally selected routing
+leaf with missing mesh retains the existing explicit, review-required fallback.
+Capture normalizers must state role derivation rather than guess it from a
+duplicated displayed label; complete inventory and selected geometry stay
+distinct scopes.
+
 Version-local IDs/dbIds/fragment IDs must be unique within the snapshot.
 External identity collisions remain separate candidates and produce ambiguity
 diagnostics. A complete inventory cannot reference absent parents; a partial
@@ -34,6 +46,8 @@ selection can, but its effective visibility becomes unknown. Ancestor cycles
 and excessive depth fail. A hidden ancestor excludes its descendants. Unknown
 native visibility produces provisional fitting and `needs_review`; transient
 Viewer visibility is never substituted for native planning evidence.
+Actual linked hierarchy depth is memoized and checked independently of object
+ordering, including when each parent was validated earlier in the inventory.
 
 Canonical transform equations are:
 

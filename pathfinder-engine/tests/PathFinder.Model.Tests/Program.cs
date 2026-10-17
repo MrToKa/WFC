@@ -42,6 +42,8 @@ internal static class Program
             Invalidation(fixture, cache, cold);
             Visibility(fixture, scratch);
             InvalidInputs(fixture);
+            HierarchyDepth(fixture);
+            QueuedCancellation(fixture, scratch);
             CacheFailures(fixture, scratch);
             FrozenGeometry(root, scratch);
             using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
@@ -107,12 +109,20 @@ internal static class Program
         Check("cache-invalidates:explicit-exclusion", excluded.Key != baseline.Key && excluded.Segments.Count == 0, "Exclusion identities/version are hash-bound.");
         Reject("unknown-exclusion", () => cache.GetOrBuild(Bytes(fixture), new ModelBuildRules { ExcludedObjectIds = ["unknown"] }));
         Reject("unknown-rule-version", () => cache.GetOrBuild(Bytes(fixture), new ModelBuildRules { Version = "future-unreviewed-v2" }));
+        var inventory = (JsonObject)fixture.DeepClone(); var equipment = inventory["objects"]![0]!.DeepClone();
+        equipment["id"] = "equipment-2"; equipment["dbId"] = 2; equipment["geometryRole"] = "object"; equipment["fragments"] = new JsonArray();
+        inventory["objects"]!.AsArray().Add(equipment);
+        var multiExcluded = cache.GetOrBuild(Bytes(inventory), new ModelBuildRules { ExcludedObjectIds = ["tray-1", "equipment-2"] });
+        Check("multiple-exclusions-validated-against-object-index", multiExcluded.Objects.All(item => item.Visibility == "excluded") && multiExcluded.Segments.Count == 0,
+            "All valid identities are resolved through one ordinal object index, including non-tray objects.");
+        Reject("unknown-exclusion-after-valid-identities", () => cache.GetOrBuild(Bytes(inventory), new ModelBuildRules { ExcludedObjectIds = ["tray-1", "equipment-2", "zz-unknown"] }));
     }
     private static void Visibility(JsonObject fixture, string scratch)
     {
         var hidden = (JsonObject)fixture.DeepClone();
         var rootObject = hidden["objects"]![0]!.DeepClone();
         rootObject["id"] = "root"; rootObject["routeName"] = null; rootObject["name"] = "Root";
+        rootObject["geometryRole"] = "hierarchy";
         rootObject["leafToRootNames"] = new JsonArray("Root"); rootObject["nativeHidden"] = true; rootObject["fragments"] = new JsonArray(); rootObject["dbId"] = 2;
         hidden["objects"]![0]!["parentId"] = "root";
         hidden["objects"]!.AsArray().Add(rootObject);
@@ -132,12 +142,37 @@ internal static class Program
         var unassigned = (JsonObject)fixture.DeepClone(); unassigned["objects"]![0]!["categoryAssignmentSource"] = "unassigned"; unassigned["objects"]![0]!["allowedCategories"] = new JsonArray();
         var noCategory = new FittedModelCache(Path.Combine(scratch, "category-required")).GetOrBuild(Bytes(unassigned));
         Check("category-is-explicit-planning-input", noCategory.Segments[0].AllowedCategories == CableCategory.None && noCategory.Diagnostics.Any(d => d.Contains("category_required", StringComparison.Ordinal)), "Missing assignment remains unresolved, without inference from tray properties.");
+        var ownerInventory = (JsonObject)fixture.DeepClone();
+        var owner = ownerInventory["objects"]![0]!.DeepClone(); owner["id"] = "tray-owner"; owner["dbId"] = 2;
+        owner["geometryRole"] = "hierarchy"; owner["name"] = "Owner /BC001"; owner["routeName"] = "/BC001";
+        owner["leafToRootNames"] = new JsonArray("Owner /BC001", "Root"); owner["fragments"] = new JsonArray();
+        ownerInventory["objects"]![0]!["parentId"] = "tray-owner"; ownerInventory["objects"]!.AsArray().Add(owner);
+        var ownerModel = new FittedModelCache(Path.Combine(scratch, "owner-role")).GetOrBuild(Bytes(ownerInventory));
+        Check("hierarchy-owner-never-inherits-fallback-tray", ownerModel.Objects.Count == 2 && ownerModel.Segments.Count == 1
+            && ownerModel.Segments[0].Id == "tray-1" && ownerModel.Objects.Single(item => item.Id == "tray-owner").GeometryRole == "hierarchy",
+            "A named logical tray owner and its physical leaf must not both become routing geometry.");
+        var equipmentInventory = (JsonObject)fixture.DeepClone(); equipmentInventory["objects"]![0]!["geometryRole"] = "object";
+        var equipment = new FittedModelCache(Path.Combine(scratch, "equipment-role")).GetOrBuild(Bytes(equipmentInventory));
+        Check("generic-object-keeps-equipment-anchor-not-tray", equipment.Segments.Count == 0 && equipment.Objects[0].GeometryRole == "object"
+            && equipment.Objects[0].BottomCentreMetres.X == 5, "A physical equipment object with inherited tray labels remains an object/anchor candidate.");
+        var missingMeshLeaf = (JsonObject)fixture.DeepClone(); missingMeshLeaf["objects"]![0]!["fragments"] = new JsonArray();
+        var fallbackLeaf = new FittedModelCache(Path.Combine(scratch, "leaf-fallback")).GetOrBuild(Bytes(missingMeshLeaf));
+        Check("explicit-routing-leaf-preserves-diagnosed-empty-mesh-fallback", fallbackLeaf.Segments.Count == 1 && fallbackLeaf.Readiness == "needs_review"
+            && fallbackLeaf.Diagnostics.Any(d => d.Contains("no retained fragment mesh", StringComparison.Ordinal)), "Only an explicitly selected leaf can retain the existing intentional mesh fallback.");
     }
     private static void InvalidInputs(JsonObject fixture)
     {
         foreach (var (name, edit) in new (string, Action<JsonObject>)[]
         {
             ("unknown-schema", j => j["schemaVersion"] = "unrecognized"), ("unknown-field", j => j["ignored"] = true),
+            ("missing-geometry-role", j => j["objects"]![0]!.AsObject().Remove("geometryRole")),
+            ("unknown-geometry-role", j => j["objects"]![0]!["geometryRole"] = "auto-inferred"),
+            ("hierarchy-with-physical-mesh", j => j["objects"]![0]!["geometryRole"] = "hierarchy"),
+            ("routing-leaf-with-child", j =>
+            {
+                var child = j["objects"]![0]!.DeepClone(); child["id"] = "child"; child["dbId"] = 2; child["parentId"] = "tray-1";
+                child["fragments"] = new JsonArray(); j["objects"]!.AsArray().Add(child);
+            }),
             ("source-space-not-canonical", j => j["coordinates"]!["vertexFrame"] = "fragment-local"),
             ("unapplied-transform", j => j["objects"]![0]!["fragments"]![0]!["transformAlreadyApplied"] = false),
             ("missing-source-matrix-with-verified-transform", j => j["coordinates"]!["sourceToWorldMetres"] = null),
@@ -165,6 +200,46 @@ internal static class Program
         Reject("vertex-limit", () => SnapshotReader.Read(Bytes(fixture), new ModelLimits { MaximumVertices = 2 }));
         Reject("triangle-limit", () => SnapshotReader.Read(Bytes(fixture), new ModelLimits { MaximumTriangles = 0 }));
         Reject("byte-limit", () => SnapshotReader.Read(Bytes(fixture), new ModelLimits { MaximumBytes = 10 }));
+    }
+    private static void HierarchyDepth(JsonObject fixture)
+    {
+        foreach (var reverse in new[] { false, true })
+        {
+            var chain = (JsonObject)fixture.DeepClone();
+            var objects = Enumerable.Range(0, 4).Select(index =>
+            {
+                var item = fixture["objects"]![0]!.DeepClone(); item["id"] = "depth-" + index;
+                item["parentId"] = index == 0 ? null : "depth-" + (index - 1); item["dbId"] = index;
+                item["geometryRole"] = "hierarchy"; item["fragments"] = new JsonArray(); item["leafToRootNames"] = new JsonArray("short-evidence");
+                return item;
+            }).ToArray();
+            chain["objects"] = new JsonArray((reverse ? objects.Reverse() : objects).ToArray());
+            Reject("hierarchy-total-depth-" + (reverse ? "deep-first" : "root-first"), () => SnapshotReader.Read(Bytes(chain), new ModelLimits { MaximumDepth = 3 }));
+            var accepted = SnapshotReader.Read(Bytes(chain), new ModelLimits { MaximumDepth = 4 });
+            Check("hierarchy-exact-depth-" + (reverse ? "deep-first" : "root-first"), accepted.Objects.Length == 4, "Actual linked depth limit is independent of inventory ordering and short name evidence.");
+        }
+    }
+    private static void QueuedCancellation(JsonObject fixture, string scratch)
+    {
+        var cache = new FittedModelCache(Path.Combine(scratch, "queued-cancel"));
+        var field = typeof(FittedModelCache).GetField("gate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var preparationGate = field.GetValue(cache)!;
+        using var cancellation = new CancellationTokenSource();
+        Task<bool>? waiting = null;
+        Monitor.Enter(preparationGate);
+        try
+        {
+            waiting = Task.Run(() =>
+            {
+                try { cache.GetOrBuild(Bytes(fixture), cancellation: cancellation.Token); return false; }
+                catch (OperationCanceledException) { return true; }
+            });
+            cancellation.CancelAfter(50);
+            Check("cancel-while-waiting-for-other-model-fit", waiting.Wait(2000) && waiting.Result,
+                "An explicitly held preparation gate cannot postpone cancellation until the other fit completes.");
+        }
+        finally { Monitor.Exit(preparationGate); }
+        waiting.GetAwaiter().GetResult();
     }
     private static void CacheFailures(JsonObject fixture, string scratch)
     {
@@ -252,7 +327,7 @@ internal static class Program
          "model":{"projectId":"project-1","modelVersionId":"model-1","contentSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sourceContentSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
          "capture":{"adapterVersion":"synthetic-adapter-v1","sourceKind":"synthetic","inventoryComplete":true,"geometryComplete":true,"unitsVerified":true,"transformsVerified":true,"planningVisibilityKnown":true,"sourceLinkVerified":true,"evidenceSha256":[]},
          "coordinates":{"vertexFrame":"canonical-world-metres","sourceUnits":"metres","metresPerSourceUnit":1,"sourceToWorldMetres":[1,0,0,0,0,1,0,0,0,0,1,0,1000000,2000000,3000000,1],"globalOffsetMetres":[1000000,2000000,3000000],"displayToWorldMetres":[1,0,0,0,0,1,0,0,0,0,1,0,1000000,2000000,3000000,1]},
-         "objects":[{"id":"tray-1","parentId":null,"externalId":null,"dbId":1,"name":"STRAIGHT","leafToRootNames":["STRAIGHT","/BC001","Root"],"properties":[],"nativeHidden":false,"planningExcluded":false,"routeName":"/BC001","shapeName":"STRAIGHT","categoryAssignmentSource":"synthetic","allowedCategories":["Control"],"bounds":{"minimum":[0,-0.5,0],"maximum":[10,0.5,1]},"fragments":[{"id":"fragment-1","vertices":[[0,-0.5,0],[10,-0.5,0],[0,0.5,0]],"triangleIndices":[0,1,2],"fragmentToWorldMetres":[1,0,0,0,0,1,0,0,0,0,1,0,1000000,2000000,3000000,1],"transformAlreadyApplied":true}]}]}
+         "objects":[{"id":"tray-1","parentId":null,"externalId":null,"dbId":1,"name":"STRAIGHT","geometryRole":"routing-leaf","leafToRootNames":["STRAIGHT","/BC001","Root"],"properties":[],"nativeHidden":false,"planningExcluded":false,"routeName":"/BC001","shapeName":"STRAIGHT","categoryAssignmentSource":"synthetic","allowedCategories":["Control"],"bounds":{"minimum":[0,-0.5,0],"maximum":[10,0.5,1]},"fragments":[{"id":"fragment-1","vertices":[[0,-0.5,0],[10,-0.5,0],[0,0.5,0]],"triangleIndices":[0,1,2],"fragmentToWorldMetres":[1,0,0,0,0,1,0,0,0,0,1,0,1000000,2000000,3000000,1],"transformAlreadyApplied":true}]}]}
         """)!.AsObject();
     private static string FindRoot()
     {

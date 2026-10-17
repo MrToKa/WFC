@@ -1,0 +1,121 @@
+{
+  "schemaVersion": "pathfinder.modelcheck.final-pipeline-consistency.v1",
+  "scope": "actual-converted-final-capture-replay-no-native-parity",
+  "observedAtUtc": "2026-10-17T21:15:08.3093655+00:00",
+  "cases": [
+    {
+      "case": "01",
+      "sourceSnapshotSha256": "878b5e78703e3e9b250078828a71eb45739af091ca6e1b2f9194bac4ba7bfccb",
+      "previousReceipt": "docs/pathfinder/evidence/pf2/model-actual-converted-lookup-01-20261017T2107Z.json",
+      "finalReceipt": "docs/pathfinder/evidence/pf2/model-actual-final-converted-lookup-01-20261017T2115Z.json",
+      "previousReceiptSha256": "e1ddeb890bd9efff1a7941371d8f2a58c49e2b2cf0ad999c552a92b52d5910f2",
+      "finalReceiptSha256": "48e426c8baa7e411009581aab839cfab05e5e6296bd7c1eabf515eaebaf334fe",
+      "sameRouteJsonAsPrevious": true,
+      "sameFittedSegmentsJsonAsPrevious": true,
+      "sameCountsJsonAsPrevious": true,
+      "cache": {
+        "key": "8196c4d50167384fb369224593d912edd43cb8b153ad6aa35a73b6ad9a15cf24",
+        "snapshotSha256": "878b5e78703e3e9b250078828a71eb45739af091ca6e1b2f9194bac4ba7bfccb",
+        "rulesSha256": "d3411818d04d3cf47a3ff0fdd5f7e3d375bab74af1a7d837de2e841d6977c112",
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "firstReadWasDiskHit": false,
+        "memoryHitSameReference": true,
+        "restoredDiskHit": true,
+        "sameSegments": true,
+        "sameRoute": true,
+        "sameCounters": true,
+        "sameDiagnostics": true
+      },
+      "performance": {
+        "firstFitOrReadMilliseconds": 763.9874,
+        "memoryReadMilliseconds": 3.0469,
+        "diskRestoreMilliseconds": 275.3283,
+        "lookupMilliseconds": 940.8879,
+        "elapsedMilliseconds": 2841.5662,
+        "peakWorkingSetBytes": 151674880,
+        "hardWorkerBudgetMilliseconds": 120000
+      },
+      "counts": {
+        "objects": 68,
+        "routingLeaves": 68,
+        "fragments": 257,
+        "vertices": 91934,
+        "triangles": 93738,
+        "fittedSegments": 68,
+        "fitting": {
+          "validatedBends": 0,
+          "fallbackBends": 17,
+          "validatedStraights": 27,
+          "fallbackStraights": 24,
+          "fallbackClearances": 0
+        },
+        "unassignedCategoryObjects": 68,
+        "unknownNativeVisibilityObjects": 68
+      },
+      "routeLengthMetersR": "107.55007443085563",
+      "pathPointCount": 156,
+      "gapCount": 8,
+      "gapLengthMetersR": "4.0474224489976445",
+      "readiness": "needs_review",
+      "diagnosticChecksStatus": "PASS"
+    },
+    {
+      "case": "02",
+      "sourceSnapshotSha256": "0c6350c86c1ef0165fa8920383fccb92d66bd52ce864ba46d0bab7856441889d",
+      "previousReceipt": "docs/pathfinder/evidence/pf2/model-actual-converted-lookup-02-20261017T2107Z.json",
+      "finalReceipt": "docs/pathfinder/evidence/pf2/model-actual-final-converted-lookup-02-20261017T2115Z.json",
+      "previousReceiptSha256": "d106f88c2835a7e2d424a479cc3f1497ce2f2346d1b22bc273c741deee8eb642",
+      "finalReceiptSha256": "18c8f4c233bab7f248bfc5d4a2b9bab22831a1788dcc09ba0f473218e2ab6849",
+      "sameRouteJsonAsPrevious": true,
+      "sameFittedSegmentsJsonAsPrevious": true,
+      "sameCountsJsonAsPrevious": true,
+      "cache": {
+        "key": "b9b185ffe890d5ec2da3eb5a401df11757bc182a9b08a4cef225b21f0a7fcc17",
+        "snapshotSha256": "0c6350c86c1ef0165fa8920383fccb92d66bd52ce864ba46d0bab7856441889d",
+        "rulesSha256": "d3411818d04d3cf47a3ff0fdd5f7e3d375bab74af1a7d837de2e841d6977c112",
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "firstReadWasDiskHit": false,
+        "memoryHitSameReference": true,
+        "restoredDiskHit": true,
+        "sameSegments": true,
+        "sameRoute": true,
+        "sameCounters": true,
+        "sameDiagnostics": true
+      },
+      "performance": {
+        "firstFitOrReadMilliseconds": 470.6375,
+        "memoryReadMilliseconds": 1.1887,
+        "diskRestoreMilliseconds": 247.3212,
+        "lookupMilliseconds": 354.24,
+        "elapsedMilliseconds": 1537.8962,
+        "peakWorkingSetBytes": 96251904,
+        "hardWorkerBudgetMilliseconds": 120000
+      },
+      "counts": {
+        "objects": 26,
+        "routingLeaves": 26,
+        "fragments": 99,
+        "vertices": 34674,
+        "triangles": 35772,
+        "fittedSegments": 26,
+        "fitting": {
+          "validatedBends": 0,
+          "fallbackBends": 7,
+          "validatedStraights": 10,
+          "fallbackStraights": 9,
+          "fallbackClearances": 0
+        },
+        "unassignedCategoryObjects": 26,
+        "unknownNativeVisibilityObjects": 26
+      },
+      "routeLengthMetersR": "37.050260813690024",
+      "pathPointCount": 59,
+      "gapCount": 4,
+      "gapLengthMetersR": "1.4685352921601158",
+      "readiness": "needs_review",
+      "diagnosticChecksStatus": "PASS"
+    }
+  ],
+  "nativeParity": "NOT_ESTABLISHED",
+  "engineeringAccepted": false
+}

@@ -18,6 +18,10 @@ it restores centreline/port data and reconstructs physical surface BVHs through
 the unchanged public Core factory. It **does not cache RouteCalculator's graph**:
 that graph is built for each calculation. Raw snapshot bytes, rules, exclusions,
 resource limits and the pinned Core version participate in the cache key.
+Explicit exclusions are checked against one ordinal object-identity index;
+validation is linear in the inventory plus exclusion counts. Waiting for
+another preparation operation is cancellable without waiting for that fit to
+finish.
 
 Payload SHA256, manifest identities, bounded reads and atomic individual-file
 publication detect corruption/stale/incomplete entries. Incomplete/corrupt
@@ -33,6 +37,9 @@ engineering-write authorization: `ReadyForEngineeringWrites` is always false.
 Native visibility includes ancestors; Ghost, camera occlusion and isolation are
 deliberately absent from the planning input. Unknown visibility is reported and
 fitted provisionally; it does not silently disappear from the route map.
+Every inventory record has an explicit geometry role. Only `routing-leaf`
+records become tray segments; generic objects retain equipment anchor evidence
+and hierarchy owners cannot accidentally create duplicate fallback geometry.
 
 For a visible equipment object the stored reference is the centre of the bottom
 face of its canonical world AABB. Hidden/unknown objects retain their visibility
@@ -41,8 +48,10 @@ state; consumers must resolve that state before accepting a location binding.
 Default limits are explicit implementation ceilings, not measured proof that
 the plant fits: 256 MiB JSON, 1,000,000 objects, 100,000 fragments, 5,000,000
 vertices/triangles, hierarchy depth 512 and two in-memory fitted models. Real
-capture integration/performance and a process-level preparation deadline remain
-pending. Parsing is bounded; cancellation is checked between validation/fitting
+plant integration/performance remain pending. The separate ModelCheck diagnostic
+CLI has exercised two actual selected converted networks with a hard worker
+deadline; this is not complete plant capacity or production supervision.
+Parsing is bounded; cancellation is checked between validation/fitting
 operations and follows the unchanged Core's cooperative cancellation behavior.
 
 Run the isolated synthetic tests from the WFC worktree root:

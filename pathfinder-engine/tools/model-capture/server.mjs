@@ -20,6 +20,7 @@ let totalSavedBytes = 0;
 let reservedBytes = 0;
 const maximumBody = 32 * 1024 * 1024;
 const maximumSaved = 2 * 1024 * 1024 * 1024;
+const requestDiagnostics = [];
 for (const name of await fs.readdir(captureRoot)) {
   const stat = await fs.lstat(path.join(captureRoot, name));
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Capture directory contains an unexpected non-regular file.');
@@ -42,6 +43,11 @@ const server = http.createServer(async (req, res) => {
   try {
     if (![ `127.0.0.1:${port}`, `localhost:${port}` ].includes(req.headers.host)) return send(res, 403, { error: 'Loopback host required.' });
     const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname !== '/diagnostics.json') res.once('finish', () => {
+      requestDiagnostics.push({ method: req.method, path: url.pathname, status: res.statusCode });
+      if (requestDiagnostics.length > 1024) requestDiagnostics.shift();
+    });
+    if (req.method === 'GET' && url.pathname === '/diagnostics.json') return send(res, 200, { requests: requestDiagnostics });
     if (req.method === 'GET' && url.pathname === '/bootstrap.json') return send(res, 200, {
       token, package: { packageId: manifest.packageId, contentFingerprint: manifest.contentFingerprint, packageSha256: verification.package.sha256, source: manifest.source, entrypoint: '/model/' + manifest.entrypoint },
       limits: { maximumBody, maximumSaved }, sdkVersion: '7.130.0'
@@ -68,6 +74,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed.' });
     if (url.pathname === '/') return await staticFile(res, here, 'index.html');
     if (url.pathname === '/capture.mjs') return await staticFile(res, here, 'capture.mjs');
+    if (url.pathname === '/mesh-indices.mjs') return await staticFile(res, here, 'mesh-indices.mjs');
     if (url.pathname.startsWith('/sdk/')) return await staticFile(res, path.join(root, 'viewer-runtime/sdk/7.130.0'), decodeURIComponent(url.pathname.slice(5)));
     if (url.pathname.startsWith('/model/')) {
       const name = decodeURIComponent(url.pathname.slice(7));

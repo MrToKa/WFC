@@ -38,6 +38,27 @@ process identity, creation time, executable path and `-Embedding` command line.
 Existing or visible user processes are preserved. The helper never saves the
 model. Licence or account prompts must not be automated.
 
+### Documented command-line alternative
+
+`Run-NativeOracleCli.ps1` launches a separately owned hidden `Roamer.exe`
+directly, opening the owned NWD copy and dynamically loading/executing the
+unique plugin with `-OpenFile`, `-AddPluginAssembly`, `-ExecuteAddInPlugin`,
+then `-Exit`. It requests a native log, disables progress and source cache
+creation, and uses no save or registration switch. These switches are described
+in Autodesk's [Command Line Switches](https://help.autodesk.com/cloudhelp/2022/ENU/Navisworks/files/GUID-3891FB9F-7BF1-4510-A1EE-121E975C0ACE.htm)
+reference. That retrieved documentation is for2022; the receipt separately
+records what actually ran in installed2027.
+
+The CLI supervisor records PID, executable, creation time and the full unique
+command line. Before any timeout termination it revalidates all four values.
+It requires an actual valid capture, not a successful process exit alone.
+The first alternative attempt started the native host but was blocked by
+`NOT Authorized` / `entitlement not found`; no reference data was produced.
+The exact evidence and source preservation are in
+`native-cli-20261017-205543-1c5519fe.json` and
+`native-cli-license-diagnosis.json`. No repeated attempt, account interaction
+or licence/registration change followed that result.
+
 ## Capture contract
 
 `capture.json` has schema `native-oracle.capture.v1`. It retains host/source

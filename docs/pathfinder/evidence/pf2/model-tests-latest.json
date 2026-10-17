@@ -2,13 +2,13 @@
   "stage": "PF-2",
   "scope": "synthetic-model-contract-transform-fitted-cache",
   "status": "PASS",
-  "observedAtUtc": "2026-10-17T20:51:18.5614627+00:00",
-  "passedChecks": 68,
+  "observedAtUtc": "2026-10-17T20:58:40.6644054+00:00",
+  "passedChecks": 82,
   "failedChecks": 0,
-  "elapsedMilliseconds": 402,
-  "peakWorkingSetBytes": 50135040,
-  "scratchDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\.pf2-work/model-tests-2733f823d57d477ba5e338a7d9a08cc9",
-  "sourceSnapshotSha256": "cd45bb9d220c5b6d1a7ecb24ec0173249eabd03920a96ccab14a7671c2d11814",
+  "elapsedMilliseconds": 447,
+  "peakWorkingSetBytes": 51429376,
+  "scratchDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine/.scratch/model-tests-85a11ecad9c74a5185395aeaeff5322b",
+  "sourceSnapshotSha256": "003c075d7f7808837caba3497f54c369428fabb41e5d243a171453a8f57504e2",
   "realNativeConvertedParity": "NOT_ESTABLISHED_BY_SYNTHETIC_TESTS",
   "reusableRoutingGraph": false,
   "limits": {
@@ -153,6 +153,16 @@
       "detail": "ArgumentException: Unknown rules or invalid exclusion identities."
     },
     {
+      "name": "multiple-exclusions-validated-against-object-index",
+      "status": "PASS",
+      "detail": "All valid identities are resolved through one ordinal object index, including non-tray objects."
+    },
+    {
+      "name": "unknown-exclusion-after-valid-identities",
+      "status": "PASS",
+      "detail": "ArgumentException: Exclusion references unknown object identity."
+    },
+    {
       "name": "effective-native-hidden-ancestor",
       "status": "PASS",
       "detail": "Native hidden ancestor excludes visible child."
@@ -178,6 +188,21 @@
       "detail": "Missing assignment remains unresolved, without inference from tray properties."
     },
     {
+      "name": "hierarchy-owner-never-inherits-fallback-tray",
+      "status": "PASS",
+      "detail": "A named logical tray owner and its physical leaf must not both become routing geometry."
+    },
+    {
+      "name": "generic-object-keeps-equipment-anchor-not-tray",
+      "status": "PASS",
+      "detail": "A physical equipment object with inherited tray labels remains an object/anchor candidate."
+    },
+    {
+      "name": "explicit-routing-leaf-preserves-diagnosed-empty-mesh-fallback",
+      "status": "PASS",
+      "detail": "Only an explicitly selected leaf can retain the existing intentional mesh fallback."
+    },
+    {
       "name": "snapshot-rejects:unknown-schema",
       "status": "PASS",
       "detail": "ArgumentException: Unsupported snapshot schema."
@@ -186,6 +211,26 @@
       "name": "snapshot-rejects:unknown-field",
       "status": "PASS",
       "detail": "JsonException: The JSON property \u0027ignored\u0027 could not be mapped to any .NET member contained in type \u0027PathFinder.Model.ModelSnapshot\u0027."
+    },
+    {
+      "name": "snapshot-rejects:missing-geometry-role",
+      "status": "PASS",
+      "detail": "JsonException: JSON deserialization for type \u0027PathFinder.Model.SnapshotObject\u0027 was missing required properties including: \u0027geometryRole\u0027."
+    },
+    {
+      "name": "snapshot-rejects:unknown-geometry-role",
+      "status": "PASS",
+      "detail": "ArgumentException: Unknown object geometry role."
+    },
+    {
+      "name": "snapshot-rejects:hierarchy-with-physical-mesh",
+      "status": "PASS",
+      "detail": "ArgumentException: Hierarchy-only objects cannot carry physical fragment meshes."
+    },
+    {
+      "name": "snapshot-rejects:routing-leaf-with-child",
+      "status": "PASS",
+      "detail": "ArgumentException: A routing-leaf cannot be the parent of another inventory object."
     },
     {
       "name": "snapshot-rejects:source-space-not-canonical",
@@ -230,7 +275,7 @@
     {
       "name": "snapshot-rejects:parent-cycle",
       "status": "PASS",
-      "detail": "ArgumentException: Cyclic or over-depth object hierarchy."
+      "detail": "ArgumentException: A routing-leaf cannot be the parent of another inventory object."
     },
     {
       "name": "snapshot-rejects:missing-parent-complete",
@@ -301,6 +346,31 @@
       "name": "byte-limit",
       "status": "PASS",
       "detail": "ArgumentException: Snapshot byte budget exceeded."
+    },
+    {
+      "name": "hierarchy-total-depth-root-first",
+      "status": "PASS",
+      "detail": "ArgumentException: Object hierarchy total depth exceeds its budget."
+    },
+    {
+      "name": "hierarchy-exact-depth-root-first",
+      "status": "PASS",
+      "detail": "Actual linked depth limit is independent of inventory ordering and short name evidence."
+    },
+    {
+      "name": "hierarchy-total-depth-deep-first",
+      "status": "PASS",
+      "detail": "ArgumentException: Cyclic or over-depth object hierarchy."
+    },
+    {
+      "name": "hierarchy-exact-depth-deep-first",
+      "status": "PASS",
+      "detail": "Actual linked depth limit is independent of inventory ordering and short name evidence."
+    },
+    {
+      "name": "cancel-while-waiting-for-other-model-fit",
+      "status": "PASS",
+      "detail": "An explicitly held preparation gate cannot postpone cancellation until the other fit completes."
     },
     {
       "name": "disk-cache-corruption-detected",

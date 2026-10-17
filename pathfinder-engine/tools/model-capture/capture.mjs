@@ -1,3 +1,5 @@
+import { enumerateTriangleIndices } from './mesh-indices.mjs';
+
 const $ = id => document.getElementById(id);
 const pause = () => new Promise(resolve => setTimeout(resolve, 0));
 const log = message => { $('activity').textContent += message + '\n'; $('activity').scrollTop = $('activity').scrollHeight; };
@@ -13,7 +15,11 @@ const controls = ['inventory', 'routes', 'capture', 'entire'];
 function active() { if (cancellation?.signal.aborted) throw new DOMException('Capture cancelled.', 'AbortError'); }
 async function save(name, value) {
   active();
-  const response = await fetch('/capture?name=' + encodeURIComponent(name), { method: 'POST', headers: { 'content-type': 'application/json', 'x-capture-token': boot.token }, body: JSON.stringify(value), signal: cancellation?.signal });
+  const body = JSON.stringify(value, (key, item) => {
+    if (typeof item === 'number' && !Number.isFinite(item)) throw new Error('Non-finite capture numeric field: ' + key);
+    return item;
+  });
+  const response = await fetch('/capture?name=' + encodeURIComponent(name), { method: 'POST', headers: { 'content-type': 'application/json', 'x-capture-token': boot.token }, body, signal: cancellation?.signal });
   const receipt = await response.json();
   if (!response.ok) throw new Error(receipt.error);
   return receipt;
@@ -30,8 +36,15 @@ function canonical(point) {
   const scale = metadata.metresPerDisplayUnit;
   return [(point.x + offset[0]) * scale, (point.y + offset[1]) * scale, (point.z + offset[2]) * scale];
 }
+function doubleMatrix() {
+  const Matrix = Autodesk.Viewing.Private.LmvMatrix4;
+  if (typeof Matrix !== 'function') throw new Error('Pinned SDK binary64 matrix API unavailable.');
+  const matrix = new Matrix(true);
+  if (!(matrix.elements instanceof Float64Array)) throw new Error('Binary64 matrix storage is required.');
+  return matrix;
+}
 function canonicalMatrix(displayMatrix) {
-  return new THREE.Matrix4().fromArray(metadata.displayToWorldMetres).multiply(displayMatrix);
+  return doubleMatrix().fromArray(metadata.displayToWorldMetres).multiply(displayMatrix);
 }
 function hierarchy(id) {
   const result = [], seen = new Set();
@@ -46,7 +59,10 @@ function hierarchy(id) {
 async function index() {
   if (nodeIds) return;
   const ids = [tree.getRootId()];
+  const seenIds = new Set(ids);
   tree.enumNodeChildren(tree.getRootId(), id => {
+    if (seenIds.has(id)) return;
+    seenIds.add(id);
     ids.push(id);
     return ids.length > limits.objects;
   }, true);
@@ -140,7 +156,7 @@ async function captureRoute(caseId, routeText) {
   let verticesTotal = 0, trianglesTotal = 0, fragmentTotal = 0, capturedObjects = 0;
   const fragments = model.getFragmentList();
   const reader = Autodesk.Viewing.Private;
-  if (typeof reader.enumMeshVertices !== 'function' || typeof reader.enumMeshIndices !== 'function') throw new Error('Pinned SDK mesh enumeration API unavailable.');
+  if (typeof reader.enumMeshVertices !== 'function' || typeof reader.enumMeshTriangles !== 'function') throw new Error('Pinned SDK mesh enumeration API unavailable.');
   for (const record of selected.values()) {
     active();
     const objectFragments = [], bounds = new THREE.Box3();
@@ -152,7 +168,7 @@ async function captureRoute(caseId, routeText) {
         diagnostics.push(`Fragment ${fragmentId} is non-triangle display geometry and is not used as a tray mesh.`);
         continue;
       }
-      const original = new THREE.Matrix4(), display = new THREE.Matrix4();
+      const original = doubleMatrix(), display = doubleMatrix();
       fragments.getOriginalWorldMatrix(fragmentId, original); fragments.getWorldMatrix(fragmentId, display);
       const world = canonicalMatrix(display);
       const localVertices = [], vertices = [], triangleIndices = [];
@@ -164,7 +180,7 @@ async function captureRoute(caseId, routeText) {
         bounds.expandByPoint(canonicalPoint);
         if (++verticesTotal > limits.vertices) throw new Error('Selected vertex budget exceeded.');
       });
-      reader.enumMeshIndices(geometry, (a, b, c) => {
+      enumerateTriangleIndices(geometry, reader, (a, b, c) => {
         if (![a,b,c].every(value => Number.isInteger(value) && value >= 0 && value < vertices.length && vertices[value])) throw new Error('Invalid SDK triangle index.');
         triangleIndices.push(a, b, c);
         if (++trianglesTotal > limits.triangles) throw new Error('Selected triangle budget exceeded.');
@@ -172,7 +188,7 @@ async function captureRoute(caseId, routeText) {
       if (vertices.some(value => !value) || triangleIndices.length === 0) throw new Error('Decoded mesh has missing vertices or no triangles.');
       const sample = localVertices[0];
       const forward = new THREE.Vector3(...sample).applyMatrix4(world);
-      const recovered = forward.clone().applyMatrix4(world.clone().invert());
+      const recovered = forward.clone().applyMatrix4(doubleMatrix().copy(world).invert());
       const inverseError = recovered.distanceTo(new THREE.Vector3(...sample));
       objectFragments.push({ id: `fragment:${fragmentId}`, fragmentId, geometryId: fragments.getGeometryId?.(fragmentId) ?? null,
         vertices, triangleIndices, fragmentToWorldMetres: clean(world), transformAlreadyApplied: true,
@@ -230,22 +246,26 @@ try {
   await new Promise((resolve, reject) => {
     const loaded = () => { viewer.removeEventListener(viewing.GEOMETRY_LOADED_EVENT, loaded); resolve(); };
     viewer.addEventListener(viewing.GEOMETRY_LOADED_EVENT, loaded);
-    viewer.addEventListener(viewing.PROGRESS_UPDATE_EVENT, event => { if (event.percent) $('status').textContent = `Loading copied model: ${Math.round(event.percent)}%`; });
-    viewer.loadModel(boot.package.entrypoint, {}, value => { model = value; if (model.isLoadDone?.()) loaded(); }, error => reject(new Error('Local model load failed: ' + error)));
+    viewer.addEventListener(viewing.PROGRESS_UPDATE_EVENT, event => { if (event.percent && !metadata) $('status').textContent = `Loading copied model: ${Math.round(event.percent)}%`; });
+    viewer.loadModel(new URL(boot.package.entrypoint, window.location.href).href, {}, value => { model = value; if (model.isLoadDone?.()) loaded(); }, error => reject(new Error('Local model load failed: ' + error)));
   });
   tree = await new Promise((resolve, reject) => model.getObjectTree(resolve, reject));
   const data = model.getData();
   const scale = model.getUnitScale(), up = model.getUpVector();
   const offset = clean(model.getGlobalOffset?.() ?? data.globalOffset ?? { x: 0, y: 0, z: 0 });
   if (!(scale > 0) || !Number.isFinite(scale) || !up || Math.abs(up[0]) > 1e-12 || Math.abs(up[1]) > 1e-12 || Math.abs(up[2]-1) > 1e-12) throw new Error('Actual units/up convention needs an explicit adapter; capture refused.');
-  const displayToWorld = new THREE.Matrix4().makeScale(scale, scale, scale);
-  displayToWorld.setPosition(offset[0]*scale, offset[1]*scale, offset[2]*scale);
+  const displayToWorld = doubleMatrix().makeScale(scale, scale, scale);
+  // Pinned THREE uses the Vector3-only setPosition overload. Assigning numeric
+  // arguments there produces undefined translation values (JSON nulls).
+  displayToWorld.elements[12] = offset[0] * scale;
+  displayToWorld.elements[13] = offset[1] * scale;
+  displayToWorld.elements[14] = offset[2] * scale;
   metadata = { distanceUnit: model.getUnitString(), metresPerDisplayUnit: scale, upVector: up, globalOffsetDisplayUnits: offset,
     globalOffsetMetres: offset.map(value => value*scale), displayToWorldMetres: clean(displayToWorld),
     modelTransform: clean(model.getModelTransform?.()), placementTransform: clean(model.getPlacementTransform?.()),
     sourceMetadata: data.metadata, sdkBounds: clean(data.bbox?.min) ? { minimum: clean(data.bbox.min), maximum: clean(data.bbox.max) } : null,
     displayRenderer: viewer.impl.isWebGPU() ? 'WebGPU' : 'WebGL', planningVisibilityKnown: false, sourceLinkVerified: false,
-    sourceToWorldMetres: clean(new THREE.Matrix4().makeScale(scale,scale,scale)),
+    sourceToWorldMetres: clean(doubleMatrix().makeScale(scale,scale,scale)), matrixPrecision: 'binary64',
     matrixComposition: 'canonicalVertex = displayToWorldMetres * sdk.getWorldMatrix(fragmentId) * decodedLocalVertex; world/root placement is already included by SDK; no second root transform applied.' };
   $('metadata').textContent = JSON.stringify({ metadata, limits }, null, 2);
   viewer.setLightPreset(7); viewer.setQualityLevel(false, true); viewer.fitToView();

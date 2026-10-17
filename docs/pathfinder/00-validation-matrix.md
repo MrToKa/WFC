@@ -79,3 +79,29 @@ The preceding sections remain the frozen PF-0 observation. The user's subsequent
 | PF2-GEO-01 and later rows | No new native/converted, application UI, authorization, jobs or Apply behavior verified in PF-1 | NOT_RUN |
 
 See [PF-1 report](01-stage-report.md), [core delivery](01-core-extraction.md) and their linked fresh evidence. Final human acceptance and integration authorization remain separate.
+
+## PF-2 partial execution — 18 October 2026, Europe/Kiev
+
+This is a blocked partial stage, not acceptance or a PF-3 handoff. Original
+PF-0 and PF-1 observations above remain historical at their stated revisions.
+Current source hashes and original-environment preservation are recorded by the
+new PF-2 isolation receipt; the unchanged Core was not refactored.
+
+| ID | Actual scope / evidence | Result |
+|---|---|---|
+| PF2-CONTRACT-01 | Strict canonical snapshot, binary64 transforms, explicit leaf/owner roles, order-independent hierarchy depth, bounded fitting/cache, cancellation/corruption controls; 82 synthetic checks | PASS at synthetic scope |
+| PF2-NORM-01 | Raw hash closure, finite geometry, reviewed pair contract and comparator negative controls; 27 checks including hierarchy 512/513 in both orders | PASS at synthetic scope |
+| PF2-SDK-01 | Pinned SDK indexed/nonindexed triangle enumeration and actual fragment winding/order; 6 checks; fresh actual UI captures after correction | PASS at captured scope |
+| PF2-CAPTURE-01 | Actual offline rendering, 438,155-object complete hierarchy / 664,556 fragments; two selected captures 68/26 leaves, final strict normalization, zero internal matrix/sample residual | PASS at inventory/selected-mesh scope; full plant geometry NOT_RUN |
+| PF2-CACHE-01 | Bounded ModelCheck CLI smoke 9 checks; two actual selected network fits and exact memory/disk restoration of paths/segments/counters/diagnostics | PASS at diagnostic scope; graph per calculation |
+| PF2-GEO-01 | Independent same-source native/converted fitting, topology, full path/design parity; native CLI exits 2 with entitlement not found before capture | BLOCKED; no native comparison or engineering tolerance established |
+| PF2-ID-01 | Version-local IDs/hierarchy and actual recorded SDK transforms verified internally; independent native identity/units/root/visibility/source correspondence absent | BLOCKED for independent agreement; internal checks partial scope only |
+| PF2-GRAPH-01 | Reviewed endpoint-dependent graph semantics; reusable final graph/preparation API and plant capacity not implemented/proven | NOT_IMPLEMENTED / NOT_RUN |
+| PF2-LENGTH-01 | Actual diagnostic totals 107.55007443085563m / 37.050260813690024m differ from historical rounded 100.972m / 35.299m; reported fallback bends/straights; no authoritative paired fixture | BLOCKED; unresolved difference, no engineering acceptance |
+| PF2-OPS-01 | Temporary owned loopback server/browser stopped/closed; no stage containers; original repositories/dirty files/container identities preserved by `isolation-1792271766371.json` | PASS at preservation/owned-runtime scope; database content audit not claimed |
+| PF2-CLEAN-01 | Required ignored copies/captures/cache retained for resume; two earlier automatic approval removal denials not retried | BLOCKED for denied children; no new deletion attempted |
+| PF3-LOC-01 and later | No new tab/location/jobs/Apply integration; automation PAUSED pending authorized complete native reference | NOT_STARTED |
+
+See [PF-2 report](02-stage-report.md), [computational boundary](02-model-geometry.md)
+and linked compact evidence. Automatic continuation was paused at the concrete
+external licence blocker; no successful-stage or user-acceptance claim follows.

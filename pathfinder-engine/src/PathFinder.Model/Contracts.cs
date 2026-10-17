@@ -70,6 +70,7 @@ public sealed record SnapshotObject
     public string? ExternalId { get; init; }
     public int? DbId { get; init; }
     public required string Name { get; init; }
+    public required string GeometryRole { get; init; }
     public required string[] LeafToRootNames { get; init; }
     public required ObjectProperty[] Properties { get; init; }
     public required bool? NativeHidden { get; init; }
@@ -101,7 +102,7 @@ public sealed record ModelBuildRules
     public string CategoryMappingVersion { get; init; } = "wfc-mto-v1";
     public string[] ExcludedObjectIds { get; init; } = [];
 }
-public sealed record PreparedObject(string Id, string? ExternalId, int? DbId, string Name,
+public sealed record PreparedObject(string Id, string? ExternalId, int? DbId, string Name, string GeometryRole,
     string? ResolvedRouteName, string ShapeName, string Visibility, RoutePoint BottomCentreMetres);
 public sealed record GeometryCounts(int ValidatedBends, int FallbackBends, int ValidatedStraights,
     int FallbackStraights, int FallbackClearances);

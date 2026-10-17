@@ -37,12 +37,19 @@ public sealed class FittedModelCache
         var snapshotHash = SnapshotReader.Sha256(snapshotJson.Span);
         var rulesHash = SnapshotReader.Sha256(JsonSerializer.SerializeToUtf8Bytes(new { rules, limits }, SnapshotReader.JsonOptions));
         var key = SnapshotReader.Sha256(Encoding.UTF8.GetBytes("pf2.fitted-cache.v1\n" + EngineVersion + "\n" + snapshotHash + "\n" + rulesHash));
-        lock (gate)
+        while (!Monitor.TryEnter(gate, 50)) cancellation.ThrowIfCancellationRequested();
+        try
         {
             cancellation.ThrowIfCancellationRequested();
             if (memory.TryGetValue(key, out var hit)) return hit;
             var snapshot = SnapshotReader.Read(snapshotJson, limits, cancellation);
-            if (rules.ExcludedObjectIds.Any(id => !snapshot.Objects.Any(item => item.Id == id))) throw new ArgumentException("Exclusion references unknown object identity.");
+            var objectIdentities = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in snapshot.Objects) { cancellation.ThrowIfCancellationRequested(); objectIdentities.Add(item.Id); }
+            foreach (var excludedId in rules.ExcludedObjectIds)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                if (!objectIdentities.Contains(excludedId)) throw new ArgumentException("Exclusion references unknown object identity.");
+            }
             var state = PrepareInputs(snapshot, rules, cancellation);
             var payloadPath = CachePath(key, ".fit.json");
             var manifestPath = CachePath(key, ".manifest.json");
@@ -79,6 +86,7 @@ public sealed class FittedModelCache
             memory.Add(key, result); order.Enqueue(key);
             return result;
         }
+        finally { Monitor.Exit(gate); }
     }
 
     private InputState PrepareInputs(ModelSnapshot snapshot, ModelBuildRules rules, CancellationToken cancellation)
@@ -106,8 +114,10 @@ public sealed class FittedModelCache
             var bottom = new RoutePoint((item.Bounds.Minimum[0] + item.Bounds.Maximum[0]) / 2,
                 (item.Bounds.Minimum[1] + item.Bounds.Maximum[1]) / 2, item.Bounds.Minimum[2]);
             var state = item.PlanningExcluded || excluded.Contains(item.Id) ? "excluded" : visibility[item.Id];
-            objects.Add(new PreparedObject(item.Id, item.ExternalId, item.DbId, item.Name, routeName, shapeName, state, bottom));
-            if (string.IsNullOrWhiteSpace(routeName)) continue;
+            objects.Add(new PreparedObject(item.Id, item.ExternalId, item.DbId, item.Name, item.GeometryRole, routeName, shapeName, state, bottom));
+            if (item.GeometryRole != "routing-leaf") continue;
+            if (string.IsNullOrWhiteSpace(routeName))
+            { review = true; diagnostics.Add(item.Id + ": missing_route_label for explicitly selected routing-leaf."); continue; }
             if (state is "hidden" or "excluded") { diagnostics.Add(item.Id + ": explicitly excluded from routing by native visibility/planning rules."); continue; }
             if (state == "unknown") { review = true; diagnostics.Add(item.Id + ": native ancestor visibility unknown; fitted provisionally, not engineering-ready."); }
             if (item.CategoryAssignmentSource == "unassigned" || item.AllowedCategories.Length == 0)
