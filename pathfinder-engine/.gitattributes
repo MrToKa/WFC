@@ -1,2 +1,3 @@
 src/PathFinder.Core/Routing/** -text whitespace=cr-at-eol,-blank-at-eof
 tests/PathFinder.Regression/*.cs -text whitespace=cr-at-eol,-blank-at-eof
+tools/PathFinder.NativeOracle/Pinned/** -text whitespace=cr-at-eol,-blank-at-eof
