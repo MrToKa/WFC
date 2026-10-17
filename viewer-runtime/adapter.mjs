@@ -81,6 +81,11 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       active(signal);
       const viewing = window.Autodesk?.Viewing;
       if (!viewing || window.LMV_VIEWER_VERSION !== SDK_VERSION) throw safeError('SDK_UNSUPPORTED');
+      if (typeof viewing.FeatureFlags?.set !== 'function' || !viewing.PublicFeatureFlags?.WebGPU) throw safeError('SDK_UNSUPPORTED');
+      // The pinned SDK's WebGPU renderer draws Ghost as edges only. Use WebGL
+      // for translucent surfaces, including when WebGPU was previously saved.
+      // Initializer locks feature flags, so choose the renderer before it runs.
+      viewing.FeatureFlags.set(viewing.PublicFeatureFlags.WebGPU, false);
       await new Promise((resolve, reject) => {
         let settled = false;
         const abort = () => finish(interrupted());

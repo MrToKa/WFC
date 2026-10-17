@@ -76,13 +76,13 @@ function fixture(t, { preference = true, renderPass = false, resetPassOnIsolatio
   return { controller, viewer, calls, meshes, disposed, baseFade, initialVariant, model, originalMaterials, beforeMaterials };
 }
 
-test('enforces the Ghost render pass without reducing native material opacity when a true preference does not notify', async t => {
+test('enforces the Ghost render pass and proof-of-concept surface opacity when a true preference does not notify', async t => {
   const f = fixture(t, { preference: true, renderPass: false, resetPassOnIsolation: true });
   const result = await f.controller.showRoute('BC1/BC2');
   assert.equal(result.drawableCount, 2); assert.equal(result.lineCount, 1);
   assert.deepEqual(f.viewer.isolated, [2, 3]);
   assert.equal(f.viewer.preference, true); assert.equal(f.viewer.impl.showGhosting, true);
-  assert.equal(f.baseFade.opacity, 0.1); assert.equal(f.initialVariant.opacity, 0.3);
+  assert.equal(f.baseFade.opacity, 0.025); assert.equal(f.initialVariant.opacity, 0.025);
   assert.ok(f.calls.findIndex(call => call[0] === 'isolate') < f.calls.findLastIndex(call => call[0] === 'render-pass' && call[1] === true));
   assert.deepEqual(f.originalMaterials, f.beforeMaterials);
   assert.ok(f.meshes.length > 0);
@@ -97,12 +97,12 @@ test('enforces the Ghost render pass without reducing native material opacity wh
   assert.deepEqual(f.originalMaterials, f.beforeMaterials);
 });
 
-test('repeated A→B preserves native fade opacity and restores exact original preference/pass and all variants', async t => {
+test('repeated A→B uses proof-of-concept opacity and restores exact original preference/pass and all variants', async t => {
   const f = fixture(t, { preference: false, renderPass: false });
   await f.controller.showRoute('BC1');
   const lateVariant = { opacity: 0.65 }; f.baseFade.variants.push(lateVariant);
   await f.controller.showRoute('BC2');
-  assert.deepEqual(f.viewer.isolated, [3]); assert.equal(f.viewer.impl.showGhosting, true); assert.equal(lateVariant.opacity, 0.65);
+  assert.deepEqual(f.viewer.isolated, [3]); assert.equal(f.viewer.impl.showGhosting, true); assert.equal(lateVariant.opacity, 0.025);
   f.controller.fitRoute(); assert.deepEqual(f.calls.at(-1), ['fit', [3]]);
   f.controller.clearRoute();
   assert.equal(f.viewer.preference, false); assert.equal(f.viewer.impl.showGhosting, false);

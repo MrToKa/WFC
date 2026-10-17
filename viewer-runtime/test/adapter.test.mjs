@@ -7,7 +7,8 @@ const turn = () => new Promise(resolve => setImmediate(resolve));
 
 function sdkFixture(options = {}) {
   const assets = [], viewers = [], evidence = [];
-  const facts = { observerDisconnects: 0, finishes: 0, replacements: 0, propertyReads: 0, isolated: [], initializeOptions: null };
+  const facts = { observerDisconnects: 0, finishes: 0, replacements: 0, propertyReads: 0, isolated: [], initializeOptions: null,
+    featureFlagWrites: [], webgpuEnabled: true, webgpuAtInitialization: null };
   const tree = { getRootId: () => 1, getChildCount: id => id === 1 ? 2 : 0,
     enumNodeChildren(id, callback) { if (id === 1) for (const child of [2, 3]) { if (callback(child)) break; } },
     getNodeName: id => ({ 1: 'Model', 2: 'BC1', 3: options.ambiguous ? 'ＢＣ１' : 'BC2' })[id],
@@ -43,7 +44,9 @@ function sdkFixture(options = {}) {
     finish() { facts.finishes++; }
   }
   const viewing = { GuiViewer3D: Viewer, GEOMETRY_LOADED_EVENT: 'geometry', PROGRESS_UPDATE_EVENT: 'progress', ERROR_EVENT: 'error',
-    Initializer(value, callback) { facts.initializeOptions = value; if (options.initializer) options.initializer(callback); else callback(); } };
+    PublicFeatureFlags: options.missingWebGPUFlag ? {} : { WebGPU: 'ENABLE_WEBGPU' },
+    FeatureFlags: options.missingFeatureFlags ? undefined : { set(flag, value) { facts.featureFlagWrites.push([flag, value]); facts.webgpuEnabled = value; } },
+    Initializer(value, callback) { facts.initializeOptions = value; facts.webgpuAtInitialization = facts.webgpuEnabled; if (options.initializer) options.initializer(callback); else callback(); } };
   const document = { createElement(tag) { const element = new EventTarget(); element.tagName = tag; element.remove = () => { element.removed = true; }; return element; },
     head: { append(element) { assets.push(element); if (!options.pendingAssets) queueMicrotask(() => element.dispatchEvent(new Event(options.assetError ? 'error' : 'load'))); } } };
   const window = { document, location: { origin: 'http://localhost:18085' }, LMV_VIEWER_VERSION: options.version ?? '7.130.0', Autodesk: { Viewing: viewing }, THREE: {},
@@ -62,7 +65,18 @@ test('SDK initialization uses pinned local assets, explicit local worker root an
   assert.equal(options.env, 'Local'); assert.equal(options.shouldInitializeAuth, false); assert.equal(options.useCredentials, true); assert.equal(options.useCookie, true);
   assert.equal(options.disableAnalytics, true); assert.equal(options.useADP, false); assert.match(options.lmvResourceRoot, /\/sdk\/$/);
   assert.equal(Object.hasOwn(options, 'getAccessToken'), false);
+  assert.deepEqual(f.facts.featureFlagWrites, [['ENABLE_WEBGPU', false]]);
+  assert.equal(f.facts.webgpuAtInitialization, false);
   await f.adapter.initialize(); assert.equal(f.assets.length, 2); f.adapter.dispose();
+  assert.equal(f.facts.featureFlagWrites.length, 1);
+});
+
+test('missing renderer feature flag API fails before SDK initialization instead of allowing edges-only Ghost', async () => {
+  for (const options of [{ missingFeatureFlags: true }, { missingWebGPUFlag: true }]) {
+    const f = sdkFixture(options);
+    await assert.rejects(f.adapter.initialize(), { code: 'SDK_UNSUPPORTED' });
+    assert.equal(f.facts.initializeOptions, null); assert.equal(f.viewers.length, 0);
+  }
 });
 
 test('wrong SDK version and asset failure remain controlled, no SDK model is started', async () => {

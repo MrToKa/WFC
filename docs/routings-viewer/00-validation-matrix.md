@@ -710,3 +710,13 @@ The prior Stage11 release and evidence retain their historical scope. User feedb
 | UI-06; OPS-01/02/03 | PASS | Actual Manual and Cable native Ghost compared at an identical camera with observer-only old-opacity and Ghost-OFF controls; 74 runtime tests pass. Native material/variant opacity is preserved. | Dense overlapping geometry is darker; user visual acceptance remains NOT_RUN. |
 | ARC-02; OPS-07 | Runtime PASS; browser PARTIAL | Separate normal production flow verifies Manual/Cables repeat and Clear from OFF. Exact ON/dispose/cancel restoration passes in the 74 runtime tests. Original business hashes and unaffected containers are preserved. | All three overall browser attempts retain FAIL; native visual comparison is PARTIAL overall. Last Cable ON activation sent no SHOW_ROUTE, viewer stayed READY; cause unresolved, dispose not reached. Earlier model retirement remains unclassified. |
 | OPS-04/05/12 | Unchanged scope | Same SDK, API/session protocol, geometry and engineering data. New web image 4ff3f916… only. Own fixture traffic is restricted to loopback; original Stage11 security/restore evidence remains historical. | Other machine, fresh engine, LAN HTTPS, user and final acceptance gates are unchanged. |
+
+### Stage11 follow-up — Ghost surfaces and renderer selection (17.10.2026)
+
+The opacity follow-up remains historical. SDK7.130 WebGPU draws edges-only Ghost; this release selects WebGL before Initializer to provide translucent surfaces even when webgpu=true is stored. See [renderer parity report](11-ghost-renderer-parity.md).
+
+| Scope | Result | Evidence | Limit |
+|---|---|---|---|
+| UI-06: Ghost surface capability | PASS |75 runtime tests; actual pinned-SDK empty-viewer smoke with saved WebGPU=true produces WebGL, edgesOnly=false, native opacity0.1 before a route; active routes use POC0.025 with exact restoration; production build and served-source binding. | User's original exact backend remains unconfirmed; headless smoke is not hardware/full-model proof. Normal user-Brave visual checks are recorded separately. |
+| Initialization/preference isolation | PASS | Public feature flag set before SDK lock, once per successful iframe initialization; saved preference unchanged. Independent review and missing-API controlled-failure tests. | No SDK distribution change; no preference clearing. |
+| Broader lifecycle/security/operations | Unchanged scope | Original Stage11 and opacity-follow-up evidence retains its exact historical scope; before/after business hashes and original service states recorded for this deployment. | Prior extended browser attempts remain FAIL/PARTIAL. External/user acceptance gates remain open. |

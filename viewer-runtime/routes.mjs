@@ -38,8 +38,9 @@ export function createRouteController(viewer, { signal } = {}) {
     captureGhostState();
     viewer.setGhosting(true);
     captureGhostState();
-    // Keep the SDK's native Ghost opacity; reducing it makes context disappear
-    // against the light background, especially when fitting a cable route.
+    // The adapter pins WebGL for filled Ghost surfaces. Match the proof of
+    // concept's opacity without making dense overlapping geometry too dark.
+    for (const material of ghostState.materials.keys()) material.opacity = 0.025;
     // setGhosting writes a preference and may be a no-op when it is already true.
     // Enforce this viewer's actual hidden-object render pass after isolation too.
     viewer.impl.toggleGhosting(true);
