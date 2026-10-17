@@ -13,6 +13,10 @@ Branch: `pf-2-model-geometry-20261017`, inheriting PF-1 `db1b76ec` and earlier
 PF-2 checkpoint `f4d46ab`. This continuation is saved in the subsequent local
 checkpoint commit; its parent plus file/source hashes are recorded in the new
 receipts. There is no push, PR, merge, deployment or original-app update.
+The implementation/evidence checkpoint is `491c11c4398038854dd71674ee77df0c51661fff`;
+[its exact 61 changed files](evidence/pf2/changed-files-491c11c.json) are retained
+as a local manifest. This accompanying progress index is a documentation-only
+follow-up; it does not relabel the blocked stage or redate earlier checks.
 
 | Check and actual scope | Result / evidence |
 |---|---|

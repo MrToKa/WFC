@@ -6,6 +6,7 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
 - Current branch: `pf-2-model-geometry-20261017`.
+- Current implementation/evidence checkpoint: `491c11c4398038854dd71674ee77df0c51661fff` (blocked partial PF-2, not stage completion). The accompanying progress index is committed separately; inspect live HEAD on resume.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
 - Canonical reference: PathFinder `45c24bf5f433f13e102600b36f20327c77961d0a`.
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
