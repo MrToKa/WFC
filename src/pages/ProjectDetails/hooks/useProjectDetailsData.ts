@@ -4,6 +4,7 @@ import { ApiError, Project, fetchProject } from '@/api/client';
 
 type UseProjectDetailsDataParams = {
   projectId?: string;
+  token?: string | null;
 };
 
 type UseProjectDetailsDataResult = {
@@ -16,18 +17,22 @@ type UseProjectDetailsDataResult = {
 
 export const useProjectDetailsData = ({
   projectId,
+  token,
 }: UseProjectDetailsDataParams): UseProjectDetailsDataResult => {
   const [project, setProject] = useState<Project | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const latestRequest = useRef(0);
+  const identity = useMemo(() => ({ projectId, token }), [projectId, token]);
+  const [settledIdentity, setSettledIdentity] = useState<typeof identity | null>(null);
 
   const loadProject = useCallback(async () => {
     const request = ++latestRequest.current;
-    if (!projectId) {
-      setError('Project not found.');
+    if (!projectId || token === null || token === '') {
+      setError(!projectId ? 'Project not found.' : 'Sign in to view this project.');
       setProject(null);
       setIsLoading(false);
+      setSettledIdentity(identity);
       return;
     }
 
@@ -35,7 +40,7 @@ export const useProjectDetailsData = ({
     setError(null);
 
     try {
-      const response = await fetchProject(projectId);
+      const response = await (typeof token === 'string' ? fetchProject(projectId, token) : fetchProject(projectId));
       if (request !== latestRequest.current) return;
       setProject(response.project);
     } catch (err) {
@@ -50,9 +55,12 @@ export const useProjectDetailsData = ({
       setError(message);
       setProject(null);
     } finally {
-      if (request === latestRequest.current) setIsLoading(false);
+      if (request === latestRequest.current) {
+        setIsLoading(false);
+        setSettledIdentity(identity);
+      }
     }
-  }, [projectId]);
+  }, [projectId, token, identity]);
 
   useEffect(() => {
     setProject(null);
@@ -62,8 +70,9 @@ export const useProjectDetailsData = ({
     };
   }, [loadProject]);
 
+  const currentProject = settledIdentity === identity ? project : null;
   const formattedDates = useMemo(() => {
-    if (!project) {
+    if (!currentProject) {
       return null;
     }
 
@@ -74,15 +83,15 @@ export const useProjectDetailsData = ({
       }).format(new Date(value));
 
     return {
-      created: format(project.createdAt),
-      updated: format(project.updatedAt),
+      created: format(currentProject.createdAt),
+      updated: format(currentProject.updatedAt),
     };
-  }, [project]);
+  }, [currentProject]);
 
   return {
-    project,
-    projectLoading: isLoading,
-    projectError: error,
+    project: currentProject,
+    projectLoading: isLoading || settledIdentity !== identity,
+    projectError: settledIdentity === identity ? error : null,
     formattedDates,
     reloadProject: loadProject,
   };

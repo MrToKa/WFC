@@ -15,6 +15,7 @@ const AdminPanel = lazyPage(() => import('@/pages/AdminPanel'), 'AdminPanel');
 const CableDetails = lazyPage(() => import('@/pages/CableDetails'), 'CableDetails');
 const CableTypeDetails = lazyPage(() => import('@/pages/CableTypeDetails'), 'CableTypeDetails');
 const ProjectDetails = lazyPage(() => import('@/pages/ProjectDetails'), 'ProjectDetails');
+const ViewerHarness = lazyPage(() => import('@/viewer/ViewerHarness'), 'ViewerHarness');
 const RoxtecDetails = lazyPage(() => import('@/pages/RoxtecDetails'), 'RoxtecDetails');
 const TrayDetails = lazyPage(() => import('@/pages/TrayDetails'), 'TrayDetails');
 const Projects = lazyPage(() => import('@/pages/Projects'), 'Projects');
@@ -55,6 +56,10 @@ export const routes: RouteObject[] = [
     path: '/',
     element: <AppShell />,
     children: [
+      ...(import.meta.env.VITE_VIEWER_HARNESS === 'true' ? [{
+        path: 'projects/:projectId/viewer-harness',
+        element: <RequireAuth><ViewerHarness /></RequireAuth>,
+      }] : []),
       {
         index: true,
         element: (

@@ -2,7 +2,7 @@ import { FluentProvider, webLightTheme } from '@fluentui/react-components';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import {
   createCableMaterial,
   deleteCableMaterial,
@@ -105,6 +105,19 @@ const renderDetails = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Tabster needs a visible viewport and layout parents to activate modal focus in jsdom.
+  const viewport = vi
+    .spyOn(document.body, 'getBoundingClientRect')
+    .mockReturnValue(new DOMRect(0, 0, 1024, 768));
+  const offsetParent = vi
+    .spyOn(HTMLElement.prototype, 'offsetParent', 'get')
+    .mockImplementation(function (this: HTMLElement) {
+      return this.parentElement;
+    });
+  onTestFinished(() => {
+    viewport.mockRestore();
+    offsetParent.mockRestore();
+  });
   vi.mocked(fetchCableDetails).mockResolvedValue({
     cable,
     materialCableType: null,
@@ -139,8 +152,10 @@ it('selects a catalog material in a wide dialog, opens its editor and saves its 
     },
   });
   renderDetails();
-  await user.click(await screen.findByRole('button', { name: 'Add cable material' }));
-  const catalog = screen.getByRole('dialog', { name: 'Add material to cable materials' });
+  const addMaterialButton = await screen.findByRole('button', { name: 'Add cable material' });
+  await waitFor(() => expect(addMaterialButton).toBeEnabled());
+  await user.click(addMaterialButton);
+  const catalog = await screen.findByRole('dialog', { name: 'Add material to cable materials' });
   expect(catalog).toHaveStyle({ width: '1200px', maxWidth: 'calc(100vw - 32px)' });
   const table = await within(catalog).findByRole('table', { name: 'Available materials' });
   expect(within(catalog).getByLabelText('Catalog category')).toHaveValue(
@@ -182,8 +197,10 @@ it('keeps the catalog open after an add failure and allows retrying', async () =
   const user = userEvent.setup();
   vi.mocked(createCableMaterial).mockRejectedValueOnce(new Error('Unable to add'));
   renderDetails();
-  await user.click(await screen.findByRole('button', { name: 'Add cable material' }));
-  const catalog = screen.getByRole('dialog', { name: 'Add material to cable materials' });
+  const addMaterialButton = await screen.findByRole('button', { name: 'Add cable material' });
+  await waitFor(() => expect(addMaterialButton).toBeEnabled());
+  await user.click(addMaterialButton);
+  const catalog = await screen.findByRole('dialog', { name: 'Add material to cable materials' });
   const table = await within(catalog).findByRole('table', { name: 'Available materials' });
   const addButton = within(table).getAllByText('Add', { selector: 'button' })[0];
   await user.click(addButton);
@@ -298,8 +315,10 @@ it('rejects a material that is already on the cable without sending another crea
     cableMaterials: [{ ...material, name: '  CLEAT  ' }],
   });
   renderDetails();
-  await user.click(await screen.findByRole('button', { name: 'Add cable material' }));
-  const catalog = screen.getByRole('dialog', { name: 'Add material to cable materials' });
+  const addMaterialButton = await screen.findByRole('button', { name: 'Add cable material' });
+  await waitFor(() => expect(addMaterialButton).toBeEnabled());
+  await user.click(addMaterialButton);
+  const catalog = await screen.findByRole('dialog', { name: 'Add material to cable materials' });
   const table = await within(catalog).findByRole('table', { name: 'Available materials' });
   await user.click(within(table).getAllByText('Add', { selector: 'button' })[0]);
   expect(createCableMaterial).not.toHaveBeenCalled();

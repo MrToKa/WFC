@@ -21,6 +21,7 @@ export type ProjectDetailsTab =
   | 'details'
   | 'cables'
   | 'cable-list'
+  | 'routings-viewer'
   | 'trays'
   | 'roxtec'
   | 'files'

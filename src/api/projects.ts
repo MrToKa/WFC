@@ -20,10 +20,12 @@ export async function fetchProjects(): Promise<{ projects: Project[] }> {
 }
 
 export async function fetchProject(
-  projectId: string
+  projectId: string,
+  token?: string
 ): Promise<{ project: Project }> {
   return request<{ project: Project }>(`/api/projects/${projectId}`, {
-    method: 'GET'
+    method: 'GET',
+    token
   });
 }
 

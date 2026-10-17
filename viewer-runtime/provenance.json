@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "sdkVersion": "7.130.0",
+  "vendorManifestSha256": "747540a153fb18809c428d8ed177aa8a296cff1b5175ab85445e0a2ebdb36d75",
+  "sdkFiles": 206,
+  "sdkBytes": 82552768,
+  "originalSources": [
+    {
+      "path": "wwwroot/viewer.js",
+      "bytes": 7147,
+      "sha256": "60e3714fa86e190abdf909a9965165ab6c75dee97fdd7cdc8efe651cd363ea7e"
+    },
+    {
+      "path": "wwwroot/routes.mjs",
+      "bytes": 9448,
+      "sha256": "52379fa685034e82a47f1fde518bd385e56642cb70eb1111a282663a75bbffc4"
+    },
+    {
+      "path": "wwwroot/route-geometry.mjs",
+      "bytes": 32801,
+      "sha256": "4d10d66dca31f10b82926693a0e7438e68f448047f3f991baabb82f6ed2573fa"
+    },
+    {
+      "path": "test/fixtures/route-c-regression.json",
+      "bytes": 18882,
+      "sha256": "8368d5a9602d45205aead5fdabd2ff9b4d3d41ad5f8f370a7506c7bb6c4cc67d"
+    }
+  ],
+  "policy": "Original sources are read-only. Geometry bytes are unchanged; controller and transport are adapted for protocol and cancellation."
+}

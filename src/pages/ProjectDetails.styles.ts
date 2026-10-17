@@ -30,6 +30,7 @@ export const useProjectDetailsStyles = makeStyles({
     flexDirection: 'column',
     gap: '0.5rem',
   },
+  projectTitle: { minWidth: 0, maxWidth: '100%', overflowWrap: 'anywhere' },
   headerRow: {
     display: 'flex',
     flexWrap: 'wrap',

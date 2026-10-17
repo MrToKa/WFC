@@ -1,0 +1,69 @@
+# Existing application services; PostgreSQL and MinIO remain external and untouched.
+# scripts/update-local-app.ps1 reuses credentials from the current backend process.
+name: wfc-app
+services:
+  backend:
+    image: wfc/backend:local
+    build:
+      context: .
+      target: api-runtime
+      args:
+        VITE_VIEWER_HARNESS: "false"
+    restart: unless-stopped
+    stop_grace_period: 45s
+    environment:
+      NODE_ENV: production
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      API_USE_HTTPS: ${API_USE_HTTPS:-false}
+      DATABASE_URL: ${DATABASE_URL:?Use the existing backend environment}
+      JWT_SECRET: ${JWT_SECRET:?Use the existing backend environment}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://127.0.0.1:5180}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:?Use the existing backend environment}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Use the existing backend environment}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Use the existing backend environment}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_BUCKET_PROJECTS: ${MINIO_BUCKET_PROJECTS:-wfc-project-files}
+      MINIO_BUCKET_TEMPLATES: ${MINIO_BUCKET_TEMPLATES:-wfc-template-files}
+      MINIO_URL_EXPIRY_SECONDS: ${MINIO_URL_EXPIRY_SECONDS:-900}
+      WFC_MODEL_BUCKET: ${WFC_MODEL_BUCKET:-wfc-models}
+      WFC_MODEL_IMPORT_ROOT: /var/lib/wfc/model-imports
+      WFC_VIEWER_ALLOWED_ORIGINS: http://127.0.0.1:5180,http://localhost:5180
+      WFC_VIEWER_ALLOW_HTTP_LOOPBACK: "true"
+      WFC_VIEWER_TRUST_PROXY: "true"
+    volumes:
+      - model-imports:/var/lib/wfc/model-imports
+    networks:
+      application:
+        aliases: [api]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+  frontend:
+    image: wfc/frontend:local
+    build:
+      context: .
+      target: web-runtime
+      args:
+        VITE_API_URL: /
+        VITE_VIEWER_HARNESS: "false"
+    restart: unless-stopped
+    ports: ["127.0.0.1:5180:80"]
+    networks: [application]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+networks:
+  application:
+    external: true
+    name: wfc-app_application
+volumes:
+  model-imports:

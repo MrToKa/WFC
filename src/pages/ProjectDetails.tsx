@@ -28,6 +28,7 @@ import { CableListTab } from './ProjectDetails/CableListTab';
 import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
+import { RoutingsViewerTab } from './ProjectDetails/RoutingsViewerTab';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
 import { CableListChangeLog, SectionChangeLog } from './ProjectDetails/SectionChangeLog';
@@ -187,6 +188,7 @@ const VALID_TABS: ProjectDetailsTab[] = [
   'details',
   'cables',
   'cable-list',
+  'routings-viewer',
   'trays',
   'roxtec',
   'files',
@@ -213,10 +215,11 @@ export const ProjectDetails = () => {
   const { showToast } = useToast();
 
   const { project, projectLoading, projectError, formattedDates, reloadProject } =
-    useProjectDetailsData({ projectId });
+    useProjectDetailsData({ projectId, token });
   const canEdit = canEditProject(user, project, projectId);
   const canViewAll = canReadCatalogs(user);
-  const { materialTrays } = useMaterialData(projectId, canViewAll);
+  const routingTabRequested = searchParams.get('tab') === 'routings-viewer';
+  const { materialTrays } = useMaterialData(routingTabRequested ? undefined : projectId, canViewAll && !routingTabRequested);
   const canExport = Boolean(token && (canViewAll || user?.role === 'technician'));
   const canExportHistory = canExportChangeLogs(user, token);
   const canReadFiles = canViewAll || user?.role === 'technician';
@@ -265,6 +268,8 @@ export const ProjectDetails = () => {
   > | null>(null);
 
   const canonicalProjectId = project?.id ?? projectId ?? null;
+  // Manual routing owns its fresh full tray read and does not load the cable tables.
+  const tableProjectId = selectedTab === 'routings-viewer' ? undefined : projectId;
 
   const {
     cables,
@@ -309,9 +314,9 @@ export const ProjectDetails = () => {
     setFilterCriteria: setCableFilterCriteria,
     cableDialog,
   } = useCableListSection({
-    projectId,
+    projectId: tableProjectId,
     project,
-    token: canEdit ? token : null,
+    token: canEdit && tableProjectId ? token : null,
     exportToken: canExport ? token : null,
     showToast,
   });
@@ -373,9 +378,9 @@ export const ProjectDetails = () => {
     handleGetCableTypesTemplate,
     cableTypeDialog,
   } = useCableTypesSection({
-    projectId,
+    projectId: tableProjectId,
     project,
-    token: canEdit ? token : null,
+    token: canEdit && tableProjectId ? token : null,
     exportToken: canExport ? token : null,
     showToast,
     onMutate: () => void reloadCables({ showSpinner: false }),
@@ -410,9 +415,9 @@ export const ProjectDetails = () => {
     handleGetTraysTemplate,
     trayDialog,
   } = useTraysSection({
-    projectId,
+    projectId: tableProjectId,
     project,
-    token: canEdit ? token : null,
+    token: canEdit && tableProjectId ? token : null,
     exportToken: canExport ? token : null,
     showToast,
   });
@@ -605,8 +610,8 @@ export const ProjectDetails = () => {
   });
 
   const { supports, supportsLoading, supportsError } = useMaterialSupports({
-    isAdmin: canEdit,
-    projectId,
+    isAdmin: canEdit && selectedTab !== 'routings-viewer',
+    projectId: tableProjectId,
     showToast,
   });
 
@@ -1565,7 +1570,7 @@ export const ProjectDetails = () => {
     <section className={styles.root} aria-labelledby="project-details-heading">
       <div className={styles.header}>
         <div className={styles.headerRow}>
-          <Title3 id="project-details-heading">
+          <Title3 id="project-details-heading" className={styles.projectTitle}>
             {project.projectNumber} &mdash; {project.name}
           </Title3>
         </div>
@@ -1582,6 +1587,7 @@ export const ProjectDetails = () => {
         <Tab value="details">Details</Tab>
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
+        <Tab value="routings-viewer">Routings viewer</Tab>
         <Tab value="trays">Trays</Tab>
         {canViewAll ? <Tab value="cable-report">Cables MTOs</Tab> : null}
         {canViewAll ? <Tab value="change-orders">Change Orders</Tab> : null}
@@ -1591,6 +1597,10 @@ export const ProjectDetails = () => {
         {canViewAll ? <Tab value="variables-api">Variables API</Tab> : null}
       </TabList>
 
+      {selectedTab === 'routings-viewer' ? (
+        <RoutingsViewerTab projectId={projectId ?? null} loadedProjectId={project.id} token={token} />
+      ) : null}
+
       {selectedTab === 'details' ? (
         <DetailsTab
           canExport={canExportHistory}
@@ -1598,6 +1608,8 @@ export const ProjectDetails = () => {
           project={project}
           formattedDates={formattedDates}
           isAdmin={canEdit}
+          modelProjectId={projectId ?? null}
+          modelToken={token}
           cableSpacingField={cableSpacingField}
           cableCategoryCards={cableCategoryCards}
           customBundleRanges={customBundleRangesController}

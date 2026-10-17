@@ -1,91 +1,32 @@
 # Portable WFC deployment and migration
 
-This configuration runs the complete WFC stack on Docker Desktop:
+Use the [Stage 10 runbook](routings-viewer/10-operations-backup-restore.md) for coherent backup, offline delivery, fresh restore, integrity and independent Preparer operations. Its [execution report](routings-viewer/10-stage-report.md) separates implementation, actual checks and remaining acceptance.
 
-- `wfc-web`: React production build served by Nginx
-- `wfc-api`: Express/Node.js API
-- `wfc-postgres`: PostgreSQL 18
-- `wfc-minio`: object storage and console
+The working installation uses the wfc-app API/frontend project, an existing PostgreSQL container with a Docker volume, separate MinIO data and a model-import staging volume. Do not infer actual data locations from the older docker-compose.yml provisioning template. The backup tool discovers the selected containers' real endpoints/mounts and requires all application workers explicitly.
 
-Persistent data stays under `.data/`, which is excluded from Git. Secrets stay in `.env`, which is
-also excluded from Git. Never commit `.env` or a backup containing it.
+## Supported migration route
 
-## First installation on a Windows desktop
+1. Freeze deployment/other maintenance and supply an inventory covering the actual build, including untracked Viewer sources and local SDK. Use the exact verified operations-helper image ID.
+2. Run `scripts/backup-wfc.ps1` with `DestinationRoot`, `PostgresContainer`, `MinioContainer`, all `AppContainer`/`WebContainer` values, `HelperImage`, `SourceInventory` and a new `PrivateConfigOut` outside the destination. Exact examples are in the runbook. The backup gives each writer 45 seconds to stop and records forced exits honestly. It then terminates remaining client backends of the selected PostgreSQL database and requires zero remaining before inventory/audit. It stops MinIO before DB/storage capture, verifies every archive and transports five exact image roles. Source resume/readiness precedes the complete marker; `finally` also checks the original service states after a failure. Inspect both the command result and `resume.json`.
+3. Run the bundled verifier: `node <complete-directory>/wfc-ops.mjs verify --backup <complete-directory>`. Preserve the complete backup, protected private configuration and original portable model ZIP. Legacy/incomplete directories do not receive the new guarantees.
+4. Transfer the entire verified directory and separately protected configuration. The directory includes four flat, hash-pinned operator modules (`wfc-ops.mjs`, `docker.mjs`, `manifest.mjs`, `archives.mjs`) and the API/web/PostgreSQL/MinIO/helper image archives. Node 24, a compatible local Linux Docker Engine and adequate host/Docker disk space are target prerequisites. Restore needs no npm, original checkout, APS, SDK downloads or Preparer; it performs no image pull/build/install. ID-only image validation precedes load and does not replace source image tags. A partially present OCI platform index is accepted only with its pinned index, reachable selected config and verified included blobs; it does not transport or fetch other architectures.
+5. Run the bundled `wfc-ops.mjs restore` with `--backup`, `--private-config`, a new `--target-root`, a new `--project` beginning `wfc-restore-`, and a free `--http-port`. The checkout's `scripts/restore-wfc.ps1` offers the equivalent `BackupPath`, `PrivateConfig`, `TargetRoot`, `Project` and `HttpPort` parameters when available. Canonical business/registry comparison, durable login tombstones, target-only JWT rotation and full raw model SHA/size checks precede API/web creation. Exact ownership/network/volume/mount identities are retained in the target marker.
+6. Require fresh authorized login and verify the selected model and project data. Importing another ZIP uses the existing authenticated Stage 4 HTTP/operator workflow; the Details model section only lists ready versions and explicitly saves a selection. It does not upload a ZIP or show a fingerprint/full report. Retain diagnostic quarantine on failure and retry into another fresh target.
 
-1. Install Git and Docker Desktop and start Docker Desktop.
-2. Clone the repository and enter it:
+ReplaceExistingData is disabled and always refused. Existing roots/volumes, foreign names and port conflicts are refused. Restore never replaces the working installation or silently chooses another model.
 
-   ```powershell
-   git clone https://github.com/MrToKa/WFC.git
-   Set-Location WFC
-   ```
+The restored database, MinIO and API share a private internal network. Only web also joins its dedicated non-internal front network, with the selected port published on `127.0.0.1`. A real host `GET /health` must return the bounded expected JSON before restore is ready. This makes localhost reachable; it is not a general egress sandbox or a LAN/TLS configuration. Missing/corrupt resources leave `failed-quarantine` without API/web creation and mark proven integrity failure unavailable. Transient storage failure also refuses exposure while preserving prior health. Retain the failed target for diagnosis.
 
-3. Generate local secrets and start all services:
+The supported database migration profile is a custom dump of the API's selected database with `--no-owner --no-acl`, restored through the saved PostgreSQL image's initialization role/database: `POSTGRES_USER` defaults to `postgres`, and `POSTGRES_DB` defaults to that role. The checked original installation uses that default profile. Additional cluster roles, databases and tablespaces are not supplied by this single-database dump; they require their own verified procedure.
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\setup-wfc.ps1 -Start
-   ```
+## Local application updates
 
-4. Open WFC at `http://localhost:5173`. MinIO administration is available at
-   `http://localhost:9001`.
+`scripts/update-local-app.ps1 -BuildOnly` builds without replacing running services. To deploy already verified images without rebuilding, provide both `-VerifiedApiImage` and `-VerifiedWebImage` as exact locally available IDs; both existing app services must be running. The deployment pins the previous images for rollback, explicitly allows 45 seconds to stop, avoids pulls and checks readiness. On failure it attempts to restore previous images. Database, MinIO, staging and project selection are retained. Review the operation result and actual service health before further work. This update command is not a coherent backup; preserve a verified backup before maintenance.
 
-For access from another computer over the VPN/LAN, use the desktop computer's hostname or IP,
-for example `http://DESKTOP-NAME:5173`, and allow inbound TCP 5173 in Windows Firewall only for the
-trusted network/VPN profile.
+## Scope and secrets
 
-## Create a complete backup
+Current validation covers localhost HTTP on the tested Windows/Docker Desktop host. A second physical computer, another architecture, LAN/VPN hostnames, HTTPS and other browsers require their own validation. The older setup script/Compose template provisions a new development stack; it is not a verified restore or a shortcut around quarantine.
 
-Run from the repository root:
+Keep .env and real credentials out of Git, images, public evidence and raw logs. Operator configuration is separate and access restricted; model/database archives also contain private business data. WFC consuming a prepared model needs no Autodesk credentials. The independent Preparer has separate configuration and expired-proof/history constraints. In PowerShell 7, reopen its preserved live instance with matching `-Mode live` and the operator-preserved `-PriceProofPath`/`-PriceProofSha256`; the launcher's default closed mode is only for a matching closed instance. This does not renew proof or enable cloud operations. Its complete backup requires a stopped coherent store with unsafe locks absent; unknown/live/foreign locks are refused and retained diagnostically, not repaired or accepted by rewriting history.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\backup-wfc.ps1
-```
-
-The script creates a timestamped folder under `D:\WFC Back-ups` (created automatically) containing:
-
-- a PostgreSQL custom-format dump;
-- all MinIO objects;
-- the local `.env` and Compose configuration;
-- backup metadata and a SHA-256 checksum for the database dump.
-
-It auto-detects both the new container names (`wfc-postgres`, `wfc-minio`) and the current legacy
-names (`wfc_app`, `minio`). You can also pass `-PostgresContainer` and `-MinioContainer` explicitly.
-
-MinIO is stopped briefly while its data is copied. PostgreSQL remains online because `pg_dump`
-creates a consistent logical backup. Treat the backup as sensitive because it contains `.env`.
-
-## Restore on a new desktop
-
-1. Clone the repository and copy the complete backup folder to the new computer. If the old
-   installation had no root `.env`, the restore script generates new local secrets automatically.
-2. Restore into a fresh checkout:
-
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\restore-wfc.ps1 `
-       -BackupPath "D:\WFC Back-ups\WFC_Backup_YYYY-MM-DD_HH-mm-ss"
-   ```
-
-3. Open `http://localhost:5173` and verify users, projects, uploaded files, and templates.
-
-The restore script refuses to overwrite an existing PostgreSQL data directory unless
-`-ReplaceExistingData` is supplied. Use that switch only when the target data can be replaced.
-
-## Useful operations
-
-```powershell
-docker compose ps
-docker compose logs -f api
-docker compose up -d --build
-docker compose down
-```
-
-`docker compose down` does not delete the bind-mounted `.data` folders. Do not add `-v` to cleanup
-commands unless you have verified the exact target and have a tested backup.
-
-## Security notes
-
-- The setup script creates fresh random PostgreSQL, MinIO, and JWT secrets.
-- Existing credentials previously committed to Git must be considered exposed and replaced.
-- Keep the repository source free of secrets; only `.env.example` belongs in Git.
-- Restrict ports 5173, 5434, 9000, and 9001 to the local machine or trusted VPN/LAN where possible.
-- A backup is valid only after a test restore confirms both database records and MinIO files.
+Full model audits are explicit operations; `/health` alone does not prove database, storage or model integrity. Default retention is report-only and preserves published and ambiguous resources. Apply-recovery is limited to existing ownership-bounded unpublished reconciliation on a verified target with its API stopped. It does not select/promote a model or impose a deletion deadline. Cleanup requires exact ownership checks and must not globally prune Docker or remove historical backups. No RPO/RTO has been agreed; measured results belong to the Stage 10 report, and a same-computer restore does not prove another machine or user acceptance.

@@ -1,7 +1,7 @@
 import { act, cleanup, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ThemeProvider } from '@/app/ThemeProvider';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/context/ToastContext';
@@ -75,6 +75,11 @@ beforeEach(() => {
         return json({ user: basicUser, token: 'basic-token', expiresInSeconds: 3600 });
       expect(new Headers(options?.headers).get('Authorization')).toBe('Bearer basic-token');
       if (path === '/api/projects/' + otherProjectId) return json({ project: { ...project, id: otherProjectId, projectNumber: 'P-002', canEdit: false } });
+      for (const modelProjectId of [projectId, otherProjectId]) {
+        if (path === `/api/projects/${modelProjectId}/model-versions`) return json({ versions: [], selection: {
+          projectId: modelProjectId, activeModelVersionId: null, selectionRevision: 0, updatedAt: '2026-01-01T00:00:00.000Z',
+        } });
+      }
       if (path === '/api/users/me') return json({ user: { ...basicUser, role } });
       if (path === '/api/users/me/cable-list-columns') return json({ columns: ['cableId', 'revision', 'mto', 'tag', 'typeName', 'fromLocation', 'toLocation', 'routing', 'designLength', 'actions'] });
       if (path === '/api/projects') return json({ projects: role === 'engineer' ? [project] : [] });
@@ -136,6 +141,77 @@ afterEach(async () => {
   // Let pending catalog loads settle while the API mock is still installed.
   await act(async () => {});
   vi.unstubAllGlobals();
+});
+
+describe('project model selection permissions', () => {
+  it.each([
+    ['basic', false], ['technician', false], ['engineer', false], ['engineer', true],
+  ] as const)('shows 3D model metadata for %s with edit grant %s without an initial mutation', async (userRole, editable) => {
+    role = userRole;
+    projectEditable = editable;
+    mount(`/projects/${projectId}?tab=details`);
+    const region = await screen.findByRole('region', { name: '3D model' });
+    await within(region).findByText('No model selected');
+    if (editable) {
+      expect(within(region).getByRole('combobox', { name: 'Model version' })).toBeEnabled();
+      expect(within(region).getByRole('button', { name: 'Save' })).toBeDisabled();
+    } else {
+      expect(within(region).queryByRole('combobox')).not.toBeInTheDocument();
+      expect(within(region).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    }
+    expect(requests).toContain(`/api/projects/${projectId}/model-versions`);
+    expect(mutations).toEqual([]);
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(requests.some(path => path.includes('/viewer-sessions/') || path.includes('/viewer-runtime/'))).toBe(false);
+  });
+});
+
+describe('read-access Routings viewer tab', () => {
+  it.each([
+    ['basic', false], ['technician', false], ['engineer', false], ['engineer', true],
+  ] as const)('opens directly for %s with edit grant %s without loading the cable or tray tables', async (userRole, editable) => {
+    role = userRole; projectEditable = editable;
+    mount(`/projects/${projectId}?tab=routings-viewer`);
+    expect(await screen.findByText('No model is selected. Select a prepared model in Details before opening the viewer.')).toBeInTheDocument();
+    const tabs = within(screen.getByRole('tablist', { name: 'Project sections' }));
+    const sections = tabs.getAllByRole('tab');
+    const index = sections.indexOf(tabs.getByRole('tab', { name: 'Routings viewer' }));
+    expect(sections[index - 1]).toBe(tabs.getByRole('tab', { name: 'Cables list' }));
+    expect(sections[index + 1]).toBe(tabs.getByRole('tab', { name: 'Trays' }));
+    expect(sections[index]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /^Cables$/ })).toBeEnabled();
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(requests.filter(path => [`/api/projects/${projectId}/cables`, `/api/projects/${projectId}/cable-types`, `/api/projects/${projectId}/trays`].includes(path))).toEqual([]);
+    expect(requests.filter(path => path.startsWith('/api/materials/') || path === `/api/projects/${projectId}/tray-data`)).toEqual([]);
+    expect(mutations).toEqual([]);
+  });
+
+  it('follows tab URL history and removes the viewer UI when leaving the active tab', async () => {
+    const router = mount(`/projects/${projectId}?tab=routings-viewer`);
+    await screen.findByRole('region', { name: 'Routings viewer' });
+    await act(() => router.navigate(`/projects/${projectId}?tab=details`));
+    await screen.findByRole('region', { name: '3D model' });
+    expect(screen.queryByRole('region', { name: 'Routings viewer' })).not.toBeInTheDocument();
+    await act(() => router.navigate(-1));
+    expect(await screen.findByRole('region', { name: 'Routings viewer' })).toBeInTheDocument();
+    await act(() => router.navigate(1));
+    await screen.findByRole('region', { name: '3D model' });
+    expect(screen.queryByRole('region', { name: 'Routings viewer' })).not.toBeInTheDocument();
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+
+  it('makes Routings viewer reachable with the existing project tab keyboard navigation', async () => {
+    // Tabster ignores jsdom's zero-sized, parentless layout when moving focus.
+    const viewport = vi.spyOn(document.body, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768));
+    const offsetParent = vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(function (this: HTMLElement) { return this.parentElement; });
+    onTestFinished(() => { viewport.mockRestore(); offsetParent.mockRestore(); });
+    mount(`/projects/${projectId}?tab=cable-list`);
+    const tabs = within(await screen.findByRole('tablist', { name: 'Project sections' }));
+    const cables = tabs.getByRole('tab', { name: 'Cables list' }); cables.focus();
+    await userEvent.keyboard('{ArrowRight}{Enter}');
+    await waitFor(() => expect(tabs.getByRole('tab', { name: 'Routings viewer' })).toHaveAttribute('aria-selected', 'true'));
+    expect(await screen.findByRole('region', { name: 'Routings viewer' })).toBeInTheDocument();
+  });
 });
 
 describe('basic user navigation and project controls', () => {

@@ -1,0 +1,11 @@
+{
+  "name": "routings-model-package",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24 <25" },
+  "exports": "./index.mjs",
+  "bin": { "routings-package": "./cli.mjs" },
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "dependencies": {}
+}

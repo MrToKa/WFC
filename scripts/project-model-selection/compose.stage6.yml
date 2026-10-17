@@ -1,0 +1,201 @@
+name: wfc-project-model-selection-stage6
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  API_HOST: 0.0.0.0
+  API_PORT: 4000
+  CLIENT_ORIGIN: "false"
+  DATABASE_URL: postgresql://stage4:stage4-fixture-only@postgres:5432/wfc_model_registry_stage4
+  JWT_SECRET: stage4-fixture-jwt-only
+  BCRYPT_ROUNDS: 4
+  MINIO_ENDPOINT: minio
+  MINIO_PORT: 9000
+  MINIO_USE_SSL: "false"
+  MINIO_ACCESS_KEY: stage4fixture
+  MINIO_SECRET_KEY: stage4-fixture-only
+  MINIO_BUCKET_PROJECTS: stage4-project-files
+  MINIO_BUCKET_TEMPLATES: stage4-template-files
+  WFC_MODEL_BUCKET: stage4-models
+  WFC_MODEL_IMPORT_ROOT: /var/lib/wfc/model-imports
+  WFC_MODEL_IMPORT_CONCURRENCY: 1
+  WFC_VIEWER_ALLOWED_ORIGINS: ${STAGE6_ALLOWED_ORIGINS:?Missing explicit isolated origins}
+  WFC_VIEWER_ALLOW_HTTP_LOOPBACK: 'true'
+  WFC_VIEWER_TRUST_PROXY: 'true'
+
+x-api: &api
+  image: ${STAGE6_API_IMAGE:?Run the isolated Stage 4 runner first}
+  restart: "no"
+  init: true
+  environment: *api-environment
+  volumes:
+    - staging:/var/lib/wfc/model-imports
+  networks:
+    - backend
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+    interval: 3s
+    timeout: 3s
+    retries: 80
+    start_period: 10s
+  labels:
+    codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID:?Missing isolated run identity}
+
+services:
+  dev:
+    image: ${STAGE6_TEST_IMAGE}
+    restart: 'no'
+    init: true
+    command: ['npm', 'run', 'dev', '--', '--host', '0.0.0.0', '--port', '5173', '--strictPort']
+    environment:
+      VITE_API_URL: /
+      VITE_VIEWER_HARNESS: 'true'
+      WFC_API_PROXY_TARGET: http://api:4000
+    ports:
+      - '127.0.0.1:${STAGE6_DEV_PORT:-15186}:5173'
+    networks: [front, backend]
+    depends_on:
+      api:
+        condition: service_healthy
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+
+  postgres:
+    image: postgres:18@sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751
+    restart: "no"
+    environment:
+      POSTGRES_USER: stage4
+      POSTGRES_PASSWORD: stage4-fixture-only
+      POSTGRES_DB: wfc_model_registry_stage4
+    volumes:
+      - postgres:/var/lib/postgresql
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "stage4", "-d", "wfc_model_registry_stage4"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+
+  minio:
+    image: minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    restart: "no"
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: stage4fixture
+      MINIO_ROOT_PASSWORD: stage4-fixture-only
+    volumes:
+      - minio:/data
+    networks:
+      - backend
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+
+  storage-ready:
+    image: ${STAGE6_API_IMAGE}
+    restart: "no"
+    entrypoint: ["node", "--input-type=module", "-e"]
+    command:
+      - "for(let i=0;i<90;i++){try{const r=await fetch('http://minio:9000/minio/health/ready',{signal:AbortSignal.timeout(1500)});if(r.ok)process.exit(0);}catch{}await new Promise(r=>setTimeout(r,500));}process.exit(1);"
+    networks:
+      - backend
+    depends_on:
+      minio:
+        condition: service_started
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+
+  api:
+    <<: *api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage-ready:
+        condition: service_completed_successfully
+
+  api2:
+    <<: *api
+    # The existing full WFC schema initializer is serialized on first fixture startup.
+    depends_on:
+      api:
+        condition: service_healthy
+
+  proxy:
+    image: ${STAGE6_WEB_IMAGE:?Run the isolated Stage 4 runner first}
+    restart: "no"
+    ports:
+      - "127.0.0.1:${STAGE6_PROXY_PORT:-18086}:80"
+    volumes:
+      - type: bind
+        source: ${STAGE6_PROXY_CONFIG:?Missing generated proxy configuration}
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+    networks:
+      - front
+      - backend
+    depends_on:
+      api:
+        condition: service_healthy
+      api2:
+        condition: service_healthy
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+
+  tests:
+    image: ${STAGE6_TEST_IMAGE:?Run the isolated Stage 4 runner first}
+    profiles: ["tests"]
+    restart: "no"
+    init: true
+    environment:
+      <<: *api-environment
+      STAGE6_RUN_ID: ${STAGE6_RUN_ID}
+      MODEL_REGISTRY_FIXTURE: isolated-stage4
+      MODEL_REGISTRY_EVIDENCE: /evidence/model-registry-integration.json
+      WFC_MODEL_REGISTRY_TEST_DATABASE_URL: postgresql://stage4:stage4-fixture-only@postgres:5432/wfc_model_registry_stage4
+      WFC_MODEL_REGISTRY_BASE_URL: http://proxy
+      WFC_MODEL_REGISTRY_API2_URL: http://api2:4000
+      STAGE4_API_WORKER_A: http://api:4000
+      STAGE4_API_WORKER_B: http://api2:4000
+      STAGE6_API_WORKER_A: http://api:4000
+      STAGE6_API_WORKER_B: http://api2:4000
+    volumes:
+      - staging:/var/lib/wfc/model-imports
+      - type: bind
+        source: ${STAGE6_PRIMARY_ZIP:?Missing read-only primary package}
+        target: /packages/aalborg-svf-stage3.zip
+        read_only: true
+      - type: bind
+        source: ${STAGE6_SECONDARY_ZIP:?Missing read-only second package}
+        target: /packages/aalborg-svf-v1.zip
+        read_only: true
+      - type: bind
+        source: ${STAGE6_EVIDENCE_DIR:?Missing isolated evidence directory}
+        target: /evidence
+    networks:
+      - backend
+    depends_on:
+      proxy:
+        condition: service_started
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+
+networks:
+  front:
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+  backend:
+    internal: true
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+
+volumes:
+  postgres:
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+  minio:
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}
+  staging:
+    labels:
+      codex.stage6.project-model-selection-fixture: ${STAGE6_RUN_ID}

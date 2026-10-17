@@ -1,6 +1,6 @@
 import { useState, type ComponentProps } from 'react';
 import { FluentProvider, webLightTheme } from '@fluentui/react-components';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useProjectDetailsStyles } from '../ProjectDetails.styles';
 import { DetailsTab } from './DetailsTab';
@@ -126,6 +126,32 @@ const StatefulDetails = ({
 };
 
 describe('DetailsTab tray report templates', () => {
+  it('keeps the separate model section visible for read-only project access', () => {
+    render(<StatefulDetails onSave={vi.fn(async () => {})} canEdit={false} />);
+    expect(screen.getByRole('region', { name: '3D model' })).toBeInTheDocument();
+  });
+
+  it('preserves numeric field draft and explicit save handlers independently of model selection', () => {
+    const change = vi.fn();
+    const save = vi.fn(async () => {});
+    const traySave = vi.fn(async () => {});
+    const NumericDetails = () => {
+      const styles = useProjectDetailsStyles();
+      return <FluentProvider theme={webLightTheme}><DetailsTab {...fixture} styles={styles} onTrayTemplateChange={traySave} numericFields={[{
+        field: 'additionalBendingPercent', label: 'Additional bending', input: '10', decimals: 0,
+        error: null, saving: false, onInputChange: change, onSave: save,
+      }]} /></FluentProvider>;
+    };
+    render(<NumericDetails />);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Update value' }), { target: { value: '15' } });
+    expect(change).toHaveBeenCalledExactlyOnceWith('15');
+    const numericCard = screen.getByText('Additional bending').parentElement;
+    expect(numericCard).not.toBeNull();
+    fireEvent.click(within(numericCard!).getByRole('button', { name: 'Save' }));
+    expect(save).toHaveBeenCalledOnce();
+    expect(traySave).not.toHaveBeenCalled();
+  });
+
   it('initially collapses the change tracker and opens it on demand', () => {
     render(<StatefulDetails onSave={vi.fn(async () => {})} />);
     const toggle = screen.getByRole('button', { name: 'Change tracker' });

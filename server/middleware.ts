@@ -19,6 +19,8 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     const payload = verifyAccessToken(token);
     req.userId = payload.sub;
     req.userEmail = payload.email;
+    req.loginId = typeof payload.jti === 'string' && z.string().uuid().safeParse(payload.jti).success ? payload.jti : undefined;
+    req.loginExpiresAt = typeof payload.exp === 'number' && Number.isSafeInteger(payload.exp) ? payload.exp * 1000 : undefined;
     // Nested routers must preserve permissions already resolved from the database.
     if (!req.role) req.isAdmin = payload.isAdmin === true;
     next();
@@ -92,7 +94,8 @@ export function requireProjectReadOnly(req: Request, res: Response, next: NextFu
   const isTrayExport = req.role === 'technician' && req.method === 'POST' &&
     /^\/[0-9a-f-]+\/trays\/export\/?$/i.test(req.path);
   const isEngineerProjectRequest = req.role === 'engineer' && /^\/[0-9a-f-]+(?:\/|$)/i.test(req.path);
-  if (req.isAdmin || isEngineerProjectRequest || req.method === 'GET' || req.method === 'HEAD' || isTrayExport) {
+  const isViewerControl = isViewerSessionReadControl(req.method,req.path,true);
+  if (req.isAdmin || isEngineerProjectRequest || req.method === 'GET' || req.method === 'HEAD' || isTrayExport || isViewerControl) {
     next();
     return;
   }
@@ -103,11 +106,22 @@ export function requireProjectReadOnly(req: Request, res: Response, next: NextFu
 const basicProjectReadPaths = [
   /^\/$/,
   /^\/(cable-types|cables|trays|roxtec|tray-data)\/?$/i,
+  /^\/model-versions\/?$/i,
+  /^\/model-imports\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i,
+  /^\/model-versions\/[0-9a-f-]{36}\/viewer-sessions\/[0-9a-f-]{36}\/(descriptor|resources\/.+)$/i,
   /^\/cable-types\/[0-9a-f-]+\/details\/?$/i,
   /^\/cables\/[0-9a-f-]+\/(details|versions)\/?$/i,
   /^\/trays\/[0-9a-f-]+\/?$/i,
   /^\/roxtec\/\d+\/?$/i,
 ];
+
+// Exact capability exceptions only; all other project POST/DELETE sections retain their gates.
+function isViewerSessionReadControl(method: string,path: string,withProject: boolean): boolean {
+  const id = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  const base = `${withProject ? `/${id}` : ''}/model-versions/${id}/viewer-sessions`;
+  return method === 'POST' && new RegExp(`^${base}(?:/${id}/renew)?/?$`,'i').test(path)
+    || method === 'DELETE' && new RegExp(`^${base}/${id}/?$`,'i').test(path);
+}
 
 const technicianFileReadPaths = [
   /^\/files\/?$/i,
@@ -177,7 +191,7 @@ export async function requireProjectAccess(
       req.canEditProject = result.rows.length > 0;
       const isRead = ['GET', 'HEAD'].includes(req.method) && engineerReadPaths.some((path) => path.test(req.path));
       const isTrayExport = req.method === 'POST' && /^\/trays\/export\/?$/i.test(req.path);
-      if (req.canEditProject || isRead || isTrayExport) next();
+      if (req.canEditProject || isRead || isTrayExport || isViewerSessionReadControl(req.method,req.path,false)) next();
       else res.status(403).json({ error: 'Project editing permission required' });
     } catch (error) {
       console.error('Project permission check failed', error);
@@ -196,7 +210,8 @@ export async function requireProjectAccess(
       !['list', 'change-tracker'].includes(req.query.view.toLowerCase()));
   const isAllowedRead = isRead && (basicProjectReadPaths.some((path) => path.test(req.path)) ||
     (isTechnician && technicianFileReadPaths.some((path) => path.test(req.path))));
-  if ((!isAllowedRead && !isExport) || (isExport && isCableReportExport)) {
+  const isViewerControl = isViewerSessionReadControl(req.method,req.path,false);
+  if ((!isAllowedRead && !isExport && !isViewerControl) || (isExport && isCableReportExport)) {
     res.status(403).json({ error: 'This action or project section requires administrator access' });
     return;
   }

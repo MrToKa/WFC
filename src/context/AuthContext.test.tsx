@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from './AuthContext';
 import { ApiError, type User } from '@/api/client';
+import { watchViewerLogin } from '@/viewer/loginLifecycle';
 
 const mocks = vi.hoisted(() => ({
   fetchUser: vi.fn(),
@@ -46,6 +47,48 @@ beforeEach(() => {
 });
 
 describe('authentication request races', () => {
+  it('disposes locally before sending login revoke, clears credentials and reports a failed revoke honestly', async () => {
+    const order: string[] = [];
+    const unwatch = watchViewerLogin('old-token', () => order.push('dispose'));
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
+      order.push('revoke');
+      expect(options?.headers).toEqual({ Authorization: 'Bearer old-token' });
+      throw new TypeError('Offline');
+    });
+    const { result } = renderHook(useAuth, { wrapper });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    act(() => result.current.signOut());
+    expect(order).toEqual(['dispose', 'revoke']);
+    expect(result.current.token).toBeNull();
+    await waitFor(() => expect(result.current.viewerLogoutStatus).toBe('failed'));
+    expect(fetch).toHaveBeenCalledWith('/api/viewer-sessions/revoke-login', expect.objectContaining({ method: 'POST' }));
+    unwatch(); fetch.mockRestore();
+  });
+
+  it('responds to same-login cross-tab logout and ignores another login', async () => {
+    const dispose = vi.fn();
+    const unwatch = watchViewerLogin('old-token', dispose);
+    const { result } = renderHook(useAuth, { wrapper });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'wfc_auth_token', oldValue: 'independent-token', newValue: null })));
+    expect(result.current.token).toBe('old-token');
+    expect(dispose).not.toHaveBeenCalled();
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'wfc_auth_token', oldValue: 'old-token', newValue: null })));
+    expect(result.current.token).toBeNull();
+    expect(dispose).toHaveBeenCalledTimes(1);
+    unwatch();
+  });
+
+  it('does not remove a newer independent login from storage when an old tab signs out', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
+    const { result } = renderHook(useAuth, { wrapper });
+    await waitFor(() => expect(result.current.initializing).toBe(false));
+    window.localStorage.setItem('wfc_auth_token', 'independent-login');
+    act(() => result.current.signOut());
+    expect(result.current.token).toBeNull();
+    expect(window.localStorage.getItem('wfc_auth_token')).toBe('independent-login');
+    await waitFor(() => expect(result.current.viewerLogoutStatus).toBe('acknowledged'));
+  });
   it.each(['refresh', 'profile'] as const)(
     'does not restore a user when %s finishes after sign-out',
     async (operation) => {

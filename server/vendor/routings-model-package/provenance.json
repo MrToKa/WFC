@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "module": "routings-model-package",
+  "version": "1.0.0",
+  "upstreamInventory": {
+    "sha256": "314818762db3ff18405091cb170f2a8c3fbab5b8595b319721ebfbd8a757389a",
+    "fileCount": 24,
+    "totalBytes": 216308
+  },
+  "runtimeInventorySha256": "140b5c914eb38f916e6410914d868c7083c888eefaa17011d645a29d7d57ec79",
+  "fileCount": 12,
+  "totalBytes": 105418,
+  "policy": "The listed runtime files are unchanged copies. WFC owns this provenance file and index.d.mts; no SDK or Preparer runtime is distributed.",
+  "files": [
+    {
+      "path": "index.mjs",
+      "bytes": 384,
+      "sha256": "aca7736e76f44c7fc6faf43f7e945037bf77a5c3354674317c9d42e338ebb172"
+    },
+    {
+      "path": "lib/errors.mjs",
+      "bytes": 300,
+      "sha256": "2f136c5dd116a18731603de9c94a25585b29ef252d1a75bd4eca733d4951cf00"
+    },
+    {
+      "path": "lib/io.mjs",
+      "bytes": 7101,
+      "sha256": "c96f8854826facee3aed32941b40b902a8463a8b598c84615595130193f85a38"
+    },
+    {
+      "path": "lib/json.mjs",
+      "bytes": 4135,
+      "sha256": "0a52725da1241966857ce89a97a087d77c30bb89c9cf6774dcf2df5c1b5a456d"
+    },
+    {
+      "path": "lib/limits.mjs",
+      "bytes": 1114,
+      "sha256": "0fdc3d0f6f3c370ab0240f92d1912f7816b8adb50ffd1354d8d49d11896e277b"
+    },
+    {
+      "path": "lib/manifest.mjs",
+      "bytes": 8773,
+      "sha256": "0e258ebd8fba309fa51cb4c5733c589a5addfd7e809d299fa47a42285ae07fc5"
+    },
+    {
+      "path": "lib/pack.mjs",
+      "bytes": 13893,
+      "sha256": "973937415ef8cf2358c980154fe8577f348d7b89c9a5778bf3bb3016e5923683"
+    },
+    {
+      "path": "lib/paths.mjs",
+      "bytes": 4060,
+      "sha256": "2b8643eb1c0c74cac595c0e0a285bc680081cc06cdd7518e72c67dec110d905e"
+    },
+    {
+      "path": "lib/profile.mjs",
+      "bytes": 29899,
+      "sha256": "8929f28333f83a65e4715bf1e835bf079d30f3e67c70722293a3f46e92f153a4"
+    },
+    {
+      "path": "lib/verify.mjs",
+      "bytes": 5544,
+      "sha256": "8b3c3daae8b4594c3ade1ab34ca79b38de83eb9d52a7d7a072b96fa4907da7fb"
+    },
+    {
+      "path": "lib/zip.mjs",
+      "bytes": 29926,
+      "sha256": "9eed08971fd0b12c4d5101264de8030eb8ad558c03239feb4099c1515989eb20"
+    },
+    {
+      "path": "package.json",
+      "bytes": 289,
+      "sha256": "2c12fb61b0ffdbbba55fa8dafe44efa2975d8c5b54eb09f7418a564c6499c370"
+    }
+  ]
+}

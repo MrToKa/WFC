@@ -24,6 +24,7 @@ import { traysRouter } from './traysRoutes.js';
 import { projectFilesRouter } from './projectFilesRoutes.js';
 import { changeOrdersRouter, internalNcrsRouter } from './changeOrdersRoutes.js';
 import { projectTrayDataRouter } from './projectTrayDataRoutes.js';
+import { modelRegistryRouter } from './modelRegistryRoutes.js';
 
 const projectsRouter = Router();
 projectsRouter.use(authenticate, loadCurrentUserRole, requireProjectReadOnly);
@@ -984,6 +985,7 @@ projectsRouter.delete(
 );
 
 projectsRouter.use('/:projectId/cable-types', cableTypesRouter);
+projectsRouter.use('/:projectId', modelRegistryRouter);
 projectsRouter.use('/:projectId/cables', cablesRouter);
 projectsRouter.use('/:projectId/roxtec', roxtecEntriesRouter);
 projectsRouter.use('/:projectId/trays', traysRouter);

@@ -4,7 +4,10 @@ coverage/
 *.log
 
 .env
+.env.*
+!.env.example
 server/.env
 .data/
 backups/
 
+public/viewer-runtime/

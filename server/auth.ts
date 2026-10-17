@@ -7,6 +7,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   isAdmin?: boolean;
+  jti?: string;
   iat?: number;
   exp?: number;
 }
@@ -38,7 +39,7 @@ export function signAccessToken(
 ): AuthToken {
   const expiresInSeconds = 60 * 60 * 24 * 7; // 7 days
   const token = jwt.sign(
-    { sub: userId, email, isAdmin } satisfies Omit<JwtPayload, 'iat' | 'exp'>,
+    { sub: userId, email, isAdmin, jti: randomUUID() } satisfies Omit<JwtPayload, 'iat' | 'exp'>,
     config.jwtSecret,
     { expiresIn: expiresInSeconds }
   );

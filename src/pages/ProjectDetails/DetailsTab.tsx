@@ -26,6 +26,7 @@ import type {
 } from './hooks/useCableLayoutSettings';
 import type { CustomBundleRangesController } from './hooks/useCustomBundleRanges';
 import { CABLE_CATEGORY_CONFIG, CABLE_CATEGORY_ORDER } from './hooks/cableLayoutDefaults';
+import { ProjectModelSection } from './ProjectModelSection';
 
 type NumericFieldName =
   | 'secondaryTrayLength'
@@ -79,6 +80,8 @@ type DetailsTabProps = {
   project: Project;
   formattedDates: FormattedDates;
   isAdmin: boolean;
+  modelProjectId?: string | null;
+  modelToken?: string | null;
   cableSpacingField: CableSpacingController;
   cableCategoryCards: CableCategoryController[];
   customBundleRanges: CustomBundleRangesController;
@@ -104,6 +107,8 @@ export const DetailsTab = ({
   project,
   formattedDates,
   isAdmin,
+  modelProjectId = null,
+  modelToken = null,
   cableSpacingField,
   cableCategoryCards,
   customBundleRanges,
@@ -143,6 +148,12 @@ export const DetailsTab = ({
         <Caption1>Project manager</Caption1>
         <Body1>{project.manager ? project.manager : 'No manager specified.'}</Body1>
       </div>
+      <ProjectModelSection
+        className={styles.panel}
+        projectId={modelProjectId}
+        token={modelToken}
+        canEdit={Boolean(isAdmin && modelToken && project.id === modelProjectId)}
+      />
       <div className={styles.numericFieldsRow}>
         {numericFields.map((field) => {
           const currentValue = project[field.field];
@@ -206,7 +217,7 @@ export const DetailsTab = ({
         </Body1>
         <Body1>
           Total routing length is the sum of the tray lengths along the cable route, converted
-          from millimetres to metres. Each Secondary segment adds the project's Secondary tray
+          from millimetres to metres. Each Secondary segment adds the project&apos;s Secondary tray
           length.
         </Body1>
         <Caption1>

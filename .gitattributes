@@ -1,0 +1,8 @@
+# The pinned verifier distribution must retain its audited byte hashes on every checkout.
+server/vendor/routings-model-package/** -text
+# Preserve the trusted SDK and unchanged route geometry byte for byte.
+viewer-runtime/sdk/** -text
+viewer-runtime/route-geometry.mjs -text
+viewer-runtime/test/fixtures/route-c-regression.json -text
+viewer-runtime/test/route-geometry.test.mjs -text
+viewer-runtime/test/legacy-routes.test.mjs -text

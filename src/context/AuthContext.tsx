@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { invalidateViewerLogin, revokeViewerLogin, type RevokeOutcome } from '@/viewer/loginLifecycle';
 import { readStoredToken, TOKEN_STORAGE_KEY } from '@/api/session';
 import {
   createContext,
@@ -40,6 +41,7 @@ type AuthContextValue = {
   user: User | null;
   token: string | null;
   initializing: boolean;
+  viewerLogoutStatus: RevokeOutcome | 'pending' | null;
   signIn: (credentials: Credentials) => Promise<void>;
   signUp: (input: Registration) => Promise<void>;
   signOut: () => void;
@@ -65,13 +67,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setTokenState] = useState<string | null>(() => readStoredToken());
   const [initializing, setInitializing] = useState(true);
+  const [viewerLogoutStatus, setViewerLogoutStatus] = useState<RevokeOutcome | 'pending' | null>(null);
   const currentToken = useRef(token);
   const authOperation = useRef(0);
 
   const setToken = useCallback((value: string | null) => {
+    const previousToken = currentToken.current;
+    if (currentToken.current !== value) invalidateViewerLogin(currentToken.current);
     currentToken.current = value;
     setTokenState(value);
-    persistToken(value);
+    if (value !== null || readStoredToken() === previousToken) persistToken(value);
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -156,10 +161,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const signOut = useCallback(() => {
-    authOperation.current += 1;
+    const oldToken = currentToken.current;
+    const operation = ++authOperation.current;
+    invalidateViewerLogin(oldToken);
+    if (oldToken) {
+      setViewerLogoutStatus('pending');
+      // Capture the old credential before clearing it. No late result can restore login.
+      void revokeViewerLogin(oldToken).then((outcome) => {
+        if (authOperation.current === operation) setViewerLogoutStatus(outcome);
+      });
+    }
     setUser(null);
     setToken(null);
   }, [setToken]);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      // Tabs with an independent login are not revoked by another login's logout.
+      if (event.key !== TOKEN_STORAGE_KEY || !event.oldValue || event.oldValue !== currentToken.current || event.newValue === event.oldValue) return;
+      ++authOperation.current;
+      invalidateViewerLogin(currentToken.current);
+      currentToken.current = null;
+      setTokenState(null);
+      setUser(null);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const updateProfileAction = useCallback(
     async (input: ProfileUpdate) => {
@@ -190,6 +218,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user,
       token,
       initializing,
+      viewerLogoutStatus,
       signIn,
       signUp,
       signOut,
@@ -201,6 +230,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user,
       token,
       initializing,
+      viewerLogoutStatus,
       signIn,
       signUp,
       signOut,

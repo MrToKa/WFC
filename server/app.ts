@@ -17,9 +17,11 @@ import { projectsRouter } from './routes/projectsRoutes.js';
 import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
 import { authenticate, requireCatalogAccess } from './middleware.js';
+import { createViewerSessionRouter } from './routes/viewerSessionRoutes.js';
 
 export const createApp = (): Express => {
   const app = express();
+  app.use(createViewerSessionRouter());
 
   app.use(
     cors({

@@ -156,6 +156,20 @@ const user: User = {
 describe('ChangeOrdersTab', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // Tabster treats jsdom's zero-sized body as a hidden iframe. Every modal
+    // needs a visible viewport and layout parents to activate its focus scope.
+    const viewport = vi
+      .spyOn(document.body, 'getBoundingClientRect')
+      .mockReturnValue(new DOMRect(0, 0, 1024, 768));
+    const offsetParent = vi
+      .spyOn(HTMLElement.prototype, 'offsetParent', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.parentElement;
+      });
+    onTestFinished(() => {
+      viewport.mockRestore();
+      offsetParent.mockRestore();
+    });
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -455,7 +469,7 @@ describe('ChangeOrdersTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Save item' }))
       .not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Export view' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Export view' }));
     const summary = screen.getByRole('table', { name: 'Change Order material summary' });
     const row = within(summary).getByRole('cell', { name: 'Widget support' }).closest('tr')!;
     expect(within(row).getAllByRole('cell')[2]).toHaveTextContent('20');
@@ -565,12 +579,12 @@ describe('ChangeOrdersTab', () => {
         type: 'update',
         input: expect.not.objectContaining({ revisionNumber: expect.anything() }),
       });
-      fireEvent.click(screen.getByRole('button', { name: 'Edit item 1' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit item 1' }));
       expect(screen.getByLabelText('Revision number')).toHaveValue('01');
       expect(screen.getByLabelText('Revision number')).toBeDisabled();
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(screen.getByLabelText('Prepared by')).toHaveValue('Test User');
-      fireEvent.click(screen.getByRole('button', { name: 'Save materials' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Save materials' }));
       await screen.findByText('Save failed');
       expect(screen.getByRole('button', { name: 'Edit item 1' })).toBeEnabled();
       expect(screen.getByLabelText('Revision')).toHaveValue('01');
@@ -1055,7 +1069,7 @@ describe('ChangeOrdersTab', () => {
     expect(screen.getByLabelText('Description (EN)')).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel editing' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel editing' }));
     const exportButton = screen.getByRole('button', { name: /export excel/i });
     expect(exportButton).toBeEnabled();
 
@@ -1138,20 +1152,6 @@ describe('ChangeOrdersTab', () => {
     'copies an inherited material as an editable main row in %s',
     async (collection, documentName) => {
       const api = await import('@/api/client');
-      // Tabster treats jsdom's zero-sized body as a hidden iframe and cannot
-      // activate the editor's modal focus scope without a visible viewport.
-      const viewport = vi
-        .spyOn(document.body, 'getBoundingClientRect')
-        .mockReturnValue(new DOMRect(0, 0, 1024, 768));
-      const offsetParent = vi
-        .spyOn(HTMLElement.prototype, 'offsetParent', 'get')
-        .mockImplementation(function (this: HTMLElement) {
-          return this.parentElement;
-        });
-      onTestFinished(() => {
-        viewport.mockRestore();
-        offsetParent.mockRestore();
-      });
       const child = {
         ...details.items[0],
         id: '66666666-6666-4666-8666-666666666666',
@@ -1369,6 +1369,8 @@ describe('ChangeOrdersTab', () => {
     const catalogRow = (await screen.findByText('New cable type')).closest('tr');
     expect(catalogRow).not.toBeNull();
     fireEvent.click(within(catalogRow!).getByText('Add'));
+    const editor = await screen.findByRole('dialog', { name: 'Edit Change Order item' });
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
 
     const expandButton = await screen.findByRole('button', {
       name: 'Expand inherited standard materials for item 2',

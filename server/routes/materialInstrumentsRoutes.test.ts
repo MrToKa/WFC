@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const database = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('../db.js', () => ({ pool: database }));
+vi.mock('../config.js', () => ({ config: { jwtSecret: 'isolated-unit-test-key', bcryptRounds: 4 } }));
 
 import { authenticate, requireAdmin } from '../middleware.js';
 import {
@@ -71,6 +72,7 @@ const catalogs = [
     router: materialInstrumentsRouter,
     table: 'material_instruments',
     assignmentTable: 'material_instrument_standard_materials',
+    assignmentOwnerColumn: 'instrument_id',
     itemKey: 'instrument',
     collectionKey: 'instruments',
     idParam: 'instrumentId',
@@ -81,6 +83,7 @@ const catalogs = [
     router: materialInstrumentInstallationMaterialsRouter,
     table: 'material_instrument_installation_materials',
     assignmentTable: 'material_instrument_installation_standard_materials',
+    assignmentOwnerColumn: 'instrument_installation_material_id',
     itemKey: 'instrumentInstallationMaterial',
     collectionKey: 'instrumentInstallationMaterials',
     idParam: 'instrumentInstallationMaterialId',
@@ -146,7 +149,7 @@ describe.each(catalogs)('$category catalog', (catalog) => {
     expect(duplicate.status).toHaveBeenCalledWith(409);
   });
 
-  it('loads details and standard assignments from the Instrument installation catalog', async () => {
+  it('loads details with category-qualified standard assignments from the shared catalog', async () => {
     database.query.mockResolvedValueOnce({ rows: [row] }).mockResolvedValueOnce({ rows: [] });
     const response = await invoke(catalog.router, 'get', `/:${catalog.idParam}`, {
       params: { [catalog.idParam]: id },
@@ -155,9 +158,12 @@ describe.each(catalogs)('$category catalog', (catalog) => {
       expect.stringContaining(`FROM ${catalog.assignmentTable} a`),
       [id],
     );
-    expect(database.query.mock.calls[1][0]).toContain(
-      'JOIN material_instrument_installation_materials child',
+    const assignmentQuery = database.query.mock.calls[1][0] as string;
+    expect(assignmentQuery).toContain('JOIN standard_material_catalog child');
+    expect(assignmentQuery).toContain(
+      'ON child.id = a.referenced_material_id AND child.category = a.referenced_material_category',
     );
+    expect(assignmentQuery).toContain(`WHERE a.${catalog.assignmentOwnerColumn} = $1`);
     expect(response.json).toHaveBeenCalledWith({
       category: expect.objectContaining({ key: catalog.category, supportsStandardMaterials: true }),
       material: expect.objectContaining({ id }),

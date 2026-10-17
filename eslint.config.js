@@ -30,7 +30,9 @@ const typedLanguageOptions = (project) => ({
 
 export default [
   {
-    ignores: ['**/node_modules/**', 'dist/**', 'coverage/**', '.data/**'],
+    ignores: ['**/node_modules/**', 'dist/**', 'server/dist/**', 'coverage/**', '.data/**', 'viewer-runtime/sdk/**', 'public/viewer-runtime/**'],
+  },
+  {
     linterOptions: {
       reportUnusedDisableDirectives: 'off',
     },
@@ -90,6 +92,16 @@ export default [
     plugins: {
       '@typescript-eslint': typescriptEslint,
     },
+    rules: typedRules,
+  },
+  {
+    files: ['scripts/**/*.ts'],
+    languageOptions: {
+      parser: typescriptParser,
+      parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+      globals: { ...globals.node, ...globals.es2022 },
+    },
+    plugins: { '@typescript-eslint': typescriptEslint },
     rules: typedRules,
   },
   {

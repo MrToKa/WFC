@@ -35,11 +35,7 @@ const resolveDefaultApiBaseUrl = (): string => {
   }
 
   if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    const hostname = window.location.hostname;
-    const apiPort = import.meta.env.VITE_API_PORT ?? '4000';
-    const portSegment = apiPort ? `:${apiPort}` : '';
-    return `${protocol}//${hostname}${portSegment}`;
+    return window.location.origin;
   }
 
   return 'http://localhost:4000';

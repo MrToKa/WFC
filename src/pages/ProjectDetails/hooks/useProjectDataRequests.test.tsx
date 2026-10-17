@@ -90,6 +90,37 @@ beforeEach(() => {
 });
 
 describe('project data loading', () => {
+  it('hides the old login grant until the same project is loaded for the new token', async () => {
+    const pending = deferred<{ project: Project }>();
+    mocks.project.mockResolvedValueOnce({ project: { ...project('same'), canEdit: true } });
+    mocks.project.mockReturnValueOnce(pending.promise);
+    const { result, rerender } = renderHook(({ token }) => useProjectDetailsData({ projectId: 'same', token }), {
+      initialProps: { token: 'first-login' },
+    });
+    await waitFor(() => expect(result.current.project?.canEdit).toBe(true));
+    rerender({ token: 'second-login' });
+    expect(result.current.project).toBeNull();
+    expect(result.current.formattedDates).toBeNull();
+    expect(result.current.projectLoading).toBe(true);
+    await act(async () => pending.resolve({ project: { ...project('same'), canEdit: false } }));
+    expect(result.current.project?.canEdit).toBe(false);
+    expect(result.current.projectLoading).toBe(false);
+    expect(mocks.project).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores an old login response after a new-token project request finishes', async () => {
+    const pending = deferred<{ project: Project }>();
+    mocks.project.mockReturnValueOnce(pending.promise);
+    mocks.project.mockResolvedValueOnce({ project: { ...project('same'), canEdit: false } });
+    const { result, rerender } = renderHook(({ token }) => useProjectDetailsData({ projectId: 'same', token }), {
+      initialProps: { token: 'first-login' },
+    });
+    rerender({ token: 'second-login' });
+    await waitFor(() => expect(result.current.project?.canEdit).toBe(false));
+    await act(async () => pending.resolve({ project: { ...project('same'), canEdit: true } }));
+    expect(result.current.project?.canEdit).toBe(false);
+  });
+
   it('keeps the current project when an older route request completes later', async () => {
     const pending = deferred<{ project: Project }>();
     mocks.project.mockReturnValueOnce(pending.promise);

@@ -1,6 +1,8 @@
 import { initializeStandardMaterialCategories } from './services/standardMaterialCategorySchema.js';
 import { initializeMaterialIdentity } from './services/materialIdentitySchema.js';
 import { initializeMaterialChangeLog } from './services/materialChangeLogSchema.js';
+import { initializeModelRegistry } from './modelRegistry/schema.js';
+import { initializeViewerSessions } from './viewerSessions/schema.js';
 import { Pool } from 'pg';
 import { config } from './config.js';
 import { CABLE_MTO_VALUES } from './models/cable.js';
@@ -2307,6 +2309,8 @@ export async function initializeDatabase(): Promise<void> {
   await initializeMaterialIdentity(pool);
   await initializeStandardMaterialCategories(pool);
   await initializeMaterialChangeLog(pool);
+  await initializeModelRegistry(pool);
+  await initializeViewerSessions(pool);
 }
 
 export async function shutdownDatabase(): Promise<void> {

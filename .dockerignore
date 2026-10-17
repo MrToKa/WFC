@@ -6,7 +6,14 @@ backups
 node_modules
 dist
 .env
+.env.*
+**/.env
+**/.env.*
+.npmrc
+**/.npmrc
 server/.env
+server/dist
 *.log
 coverage
+public/viewer-runtime
 
