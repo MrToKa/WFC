@@ -13,82 +13,81 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Active revision — Routes + Path, user18October2026
+## Active revision — Routes + Path, 18 October 2026
 
-User explicitly chose two inner tabs **Routes + Path** after the source review
-showed the canonical addon actually constructs three. Outer visible name is
-**Path Finder**. New isolated branch pf-two-tabs-local-20261018 inherits
-fcd8f1dc39569c430125b897c95756fac9c28a89. Original resources remain reference-only.
+State: scoped local delivery IMPLEMENTED/VERIFIED; source/API/browser/combined
+backup/restore/session/64-cable recovery/cleanup PASS. Extended preview exact-job
+crash recovery NOT_RUN (PARTIAL extension). Human route/length acceptance PENDING.
 
-Root owns API/hook/outer label/Details branding/docs+latercomputer-use. Frontend
-owner edits PathFinder*.tsx/tests; backend owner server/pathfinder +route; Viewer
-owner protected protocol/Controller/capture and small Model DTO/reader/cache
-boundary extension. Core11 files remain pinned. Initial source was frozen for
-46152f9; browser-driven follow-up writers are listed below. Runtime operations
-follow explicit sequential releases.
+- Worktree: C:/Users/todor.chankov/source/WFC-pathfinder-local, branch
+  pf-two-tabs-local-20261018, inheriting fcd8f1dc39569c430125b897c95756fac9c28a89.
+- Source: feature46152f9; appearance/caption542e101; final immutable-metadata fix
+  cb02f43000a51b4f511346d2aa666d09929570e0. Source writers frozen.
+- Live own5190: API7d216f20 / web36d9e4d6; exact binding in
+  runtime/two-tabs-final-candidate-health-1792312921278.json. Source manifest817,
+  SHA330b195d97b089e2c2cd063af96155dd513166a9711392a25dfa753df3777275,
+  evidence/pf7/sources-1792312859326.json.
+- User explicitly chose Routes + Path; outer label Path Finder. Routes supports
+  newest category rules, explicit exclusion, deepest descendants and native
+  bounded names. Path supports named/point/selection standalone preview/reverse,
+  trigger/vertical preferences, shared locations, existing cable calculations and
+  explicit Review/Apply; ordered lookup remains advanced. Previews create no fake
+  cables or Apply. Details owns gap1m and all three design allowances. Core11 pinned.
+- Changed modules: PathFinder*.tsx/tests, API/hook/outer tab/Details labels,
+  server/pathfinder and router, protected Viewer protocol/Controller/capture/path,
+  small Model DTO/reader/cache boundary, runtime recovery helper and docs/evidence.
+- Actual source checks: backend69/69 after metadata fix; frontend36/36 full run
+  plus focused callback/caption checks; root24 initial and18 final API/hook;
+  Viewer60 final correction + original capture19/Controller19/legacy guards;
+  Model94 and runner zero warnings/errors. Types/lint PASS at recorded scopes.
+- First actual candidate29/29 PASS. Appearance75/0 and stale save caption failed
+  in its browser run, then were corrected. Corrected542 backend27/29 exposed
+  optional metadata loss during design reuse plus an over-specific concurrent
+  gap assertion. Failed receipts remain intact. Final cb02 actual29/29 PASS;
+  strengthened gap proof records fresh full-calculation contributor. Cleanup PASS.
+- Actual computer-use: two tabs/keyboard/one Viewer/retained drafts; ten-root
+  capture52objects/26segments; category edits/dirty/discard; exact selectedpoint;
+  stale binding refusal/reconfirmation; standalone forward/reverse35.30345579516123m,
+  design45m; Review enables Apply and tab change resets it. No real Apply.
+  Corrected original-material75/0/100, defaultfilledGhost/yellowline/Clear PASS.
+  New path resets defaultGhost. Saved caption confirmed. Finalcb02 fresh reload
+  and protected path/Zoom PASS. See evidence/routes-path/computer-use-*.json.
+- Real demo cable revision0, routing/design/install null, Apply0. Current artifact
+  proposals retain Control/26segment diagnostics. Historical stale-artifact optional
+  metadata is not backfilled; required frozen provenance remains available.
+- Final operational receipts: runtime/final-drill-1792313480874.json,
+  cleanup-1792313736971.json, two-tabs-final-health-1792313808306.json. Verified
+  archive d7d63dce-4549-4e78-9bc5-7ff6a9eddc7b at
+  pathfinder-engine/.scratch/pf-two-tabs-backup-20261018-0847 retains
+  1,348,954,278payloadbytes/private companion. Restore/session/actual64cableworker
+  recovery PASS; preview queuedcancel/no-workflowwrites PASS, same-job recovery
+  NOT_RUN because observed job advanced before KILL. Extra target0resources.
+  Removed8old2ae payloads1,346,348,226bytes and6unusedownimages; small oldprivate
+  companion/compact provenance retained. Denied3 children untouched.
+- Postrestart browser safely failed closed during coldstop; Refresh Path Finder
+  restored ready model. One new standalone Control path35.30345579516123m/design45
+  is displayed. Finalread-only audit post-operations-read-only-audit-20261018T085957Z.json
+  confirms realcable revision0/routing-design-install null/Apply0 and preview
+  noitems/proposals/reviews/Apply. Final5group preservation PASS in
+  evidence/pf8/isolation-1792313848085.json. Current production bytes unchanged.
+- SDK explicit transparency disables consolidation until Reload model; Clear
+  restores appearance. No wholeplant throughput guarantee. Reusable graph and
+  complete plant capture/capacity remain NOT_IMPLEMENTED/NOT_RUN. Native comparison
+  NOT_PERFORMED/NOT_REQUIRED_BY_USER. Human manual engineering acceptance PENDING.
+- Three denied cleanup children retained without retry/bypass: .pf0-work/core-1f723e37-
+  f152-4a60-9b1e-46adc6c3179c, .pf2-work/model-tests-2733f823d57d477ba5e338a7d9a08cc9,
+  pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581. Automatic
+  approval review said blocked by policy. Initial SDK certificate setup observation
+  remains in report22; no certificate deletion attempted.
+- Next: actual human route/length review via handoffs/PF-user-manual-review.md;
+  react to concrete feedback with a new inherited local branch. Final report22,
+  matrix and evidence are committed locally in the delivery commit containing
+  this update (inspect live HEAD). Heartbeat updated through application tool to
+  PAUSED; evidence/routes-path/automation-paused.json. No unchanged review loop.
 
-Implemented source in progress: Routes selection/category rules with latest
-overlap precedence, deepest geometry descendants and native bounded C# name
-resolution; Path standalone From/To preview/category/SECONDARYtrigger/vertical,
-show/reverse/cancel, approved transparency bridge; existing cable registry,
-automatic jobs/ReviewApply retained, orderedlookup inside Path advanced section.
-Gap and3allowances remain Details-owned. Previews create no fake cables/Apply.
-All shared Viewer tools need ownership generations to fence late responses and
-invalidate old Review/Apply when displayed route/mode/preferences change.
-
-Actual scoped checks so far: backend60/60 +tsc/lintPASS; RootAPI/hook/Details24/24
-PASS; Viewer47protocol/pathfinder/bridge +19capture(actualC#) +19Controller
-+27adapter/legacyGhost PASS; Model94/94 and ModelRunnerbuild0warnings/errors.
-Frontend full36/36 PASS (471.33s,30s case timeout), final callback follow-ups
-1historical+2new cases PASS; combinedfrontend/servertypes and6filelint PASS
-before a test-timeout-only metadata edit, whose final recheck is pending.
-Accepted-artifact-after-cancel race was corrected, covered and independently
-re-reviewed as resolved. Production source writers are frozen. Live29NOT_RUN,
-newUI/backupNOT_RUN until root checkpoint/build release.
-Do not promote those source checks to runtime/human/native acceptance.
-
-New automatic cleanup denial: owned scratch
-pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581 was rejected
-with blocked by policy. Do not retry/bypass/deleteparent. Two previous denied
-children remain unchanged. SDKfirstlaunch reported devcertificateinstallation
-before isolated environment was configured; no certificate removal attempted.
-Production checkpoint46152f9873764ec22537029d98bbfcc453052768 is committed locally.
-Owned5190 rebuild/start PASS: API905dcb21, web09dcf672; exact binding in
-runtime/two-tabs-candidate-health-1792310191915.json. Backend29 now has the
-exclusive synthetic test window; root browser and all maintenance are held.
-Final frontend/server types and targeted lint also PASS after metadata edit;
-evidence/routes-path/frontend-source-20261018T075446Z.json distinguishes full36
-and final3 affected checks. Source manifest816files SHA2c25192e is recorded in
-evidence/pf7/sources-1792310155683.json. Backup2ae6f51b remains intact.
-Actual backend29/29 and fixture cleanup PASS, exact compiled driver/image bound
-in evidence/routes-path/live29*-20261018T075720Z.json. Actual Cua passed two tabs,
-keyboard, retained drafts/one Viewer, rule edits/dirty/prepare/discard, ten-root
-capture52objects, stale QA binding refusal/reconfirmation, selectedobjectXYZ,
-standalone forward/reverse35.30345579516123m/design45, and Review/tab reset. No
-real Apply. See computer-use-before-appearance-fix.json; two defects are FAIL:
-explicit75/0blackGhostoverdraw; savedlocationeditoroldstalehintaftergoodSave.
-Caption+lateUIfence fix is frozen and focused1/1/types/lint PASS. Viewer owner
-is correcting explicitpercent via bounded original materials in pathfinder.mjs
-and its tests; default.025Ghost unchanged. Root owns async bridge+tests;29Node
-bridge checks PASS including post-preflight ACL/clear/cancel/replacement/dispose.
-No build of partialfollowup. Runtime905d/09dc remains healthy and maintenance
-held; backup2ae intact. Backend owner has read-only post-Cua data audit only.
-Corrective source is frozen and committed in542e101fd7d9a0cf53a70db7d898902e5437500c.
-Final correction checks:60/60 Node (21SDK+30bridge+9adapter),18/18API/hook,
-caption1/1, frontendtypes/lint PASS. Independent review findings on partial
-appearance restoration and overlapping preflight recovery are resolved. Explicit
-transparency now preserves original materials; defaultfilledGhost remains. SDK
-unconsolidation persists until Reload model after Clear; actual response awaits
-the new browser run. Runtime owner is building/starting ONLY own5190 from542e101;
-Correctedcandidatehealth PASS: API fcd7b866/web9cd76986, source542e101,
-runtime/two-tabs-corrected-candidate-health-1792312346296.json. Manifest816files
-SHA3cbf30f0879b2338fe88b8fb30b1994bdfa6e20c6851c5f6b33fd7342625e6ec is
-evidence/pf7/sources-1792312287692.json. Finalbackend29 has its exclusive window;
-newAPI/browser/replacementbackup remain NOT_RUN. Old backup2ae retained.
-Next: correctedcandidatehealth, final29API, real75/0/100/Clear+caption browser
-recheck, then replacementbackup/restore/recovery/cleanup/preservation audit.
-Heartbeat remains PAUSED from previous manual-review delivery; direct new user
-work is ongoing, not a new licence attempt or merge authorization.
+Original checkouts/dirty files, synced sources/, original13containers and working
+data remain untouched. No push, PR, merge, deployment or original update. Full
+history, source receipts and honest failures: 22-routes-path-tabs.md.
 
 ## Previous delivery — project gap and manual real-result review
 

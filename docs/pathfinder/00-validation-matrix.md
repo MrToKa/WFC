@@ -191,3 +191,25 @@ counts and receipts. Historical rows above retain their original scope/status.
 | PF8-USER-01 |Human reviews new generated route/length and decides whether to accept | PENDING_USER_REVIEW |
 | PF7-PARITY-01 |Native comparison declined as mandatory acceptance by user | NOT_PERFORMED / NOT_REQUIRED_BY_USER |
 | PF2-GRAPH-01/fullplant |Reusable graph, wholeplant capture/category completeness/capacity; crosscomputer restore/host networkdisconnect | NOT_IMPLEMENTED / NOT_RUN as scoped in report |
+
+## Routes + Path revision — 18 October 2026
+
+Source checkpoints46152f9 (feature),542e101 (browser appearance/caption fixes),
+cb02f43 (immutable metadata during design reuse). Full scope and dated receipts:
+[Routes + Path report](22-routes-path-tabs.md). Historical failures remain recorded.
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF4-TABS-01 |Outer Path Finder; Routes + Path, keyboard switching, one protected Viewer and retained drafts; actual ten-root rule capture52objects | PASS at source/first browser scope |
+| PF2-RULES-01 |Newest category rule precedence, explicit exclusion, deepest geometry, bounded native route names; legacy capture retained | PASS: source94Model/19capture and actual selected-network capture; wholeplant NOT_RUN |
+| PF5-PREVIEW-01 |Standalone named/point/reverse previews, category/trigger/vertical preferences, immutable dependency/job separation, no fake cables/Apply | PASS: finalcb02 actual29/29 and actual35.30345579516123m/design45 forward/reverse |
+| PF4-APPEARANCE-01 |DefaultfilledGhost, original-material75/0/100, protected original route colors/yellow, Clearrestore, nextpathdefaultGhostreset | PASS: actual542 browser and60Node correction checks; unconsolidation persists until Reload model |
+| PF3-CAPTION-01 |Shared-save confirmation replaces stale hint and retains exact existing QA point | PASS: affected sourcecase and actual542browser |
+| PF5-REUSE-METADATA-01 |Canonical category and prepared diagnostics survive design-only geometry reuse from immutable input | Earlier27/29 FAIL preserved; bounded69/69 sourcefix and finalcb02 actual29/29 PASS; stale historical optional diagnostics not backfilled |
+| PF5-GAP-CONCURRENT-01 |Changedgap geometry hash plus actual fresh successful full calculation; later design reuse permitted | Earlier explicit-request-mode assertion FAIL preserved; stronger finalcb02 actual proof PASS with contributor IDs |
+| PF8-TABS-OPS |Verified combined replacementbackup, restore/session/64cable recovery/cleanup for finalcandidate | PASS: newd7d63dce archive, source cookie200/copied410/sourcebearer401/newcookie200; actual64/64 recovery; extra0resources; eightoldpayloads/sixownimages retired |
+| PF8-PREVIEW-RECOVERY |Actual same-preview job crash/natural lease recovery plus no-workflow-write cancellation | PARTIAL: queued cancellation/no-workflow-write PASS; exact-job recovery NOT_RUN because observed preview advanced before KILL; no fake numeric-recovery PASS |
+| PF8-POST-RESTART |Protected browser after coldstop; safe Refresh and recomputed defaultGhost route | PASS: accessended fails closed; Refresh modelready and35.30345579516123m/design45; no realApply |
+| PF8-PRESERVE-TABS |Original checkouts/dirtyfiles,13containers,Core/PF0/native source pins | PASS: final5group isolation-1792313848085.json |
+| PF8-USER-01 |Human route/length review | PENDING_USER_REVIEW |
+| PF7-PARITY-01 |Native comparison | NOT_PERFORMED / NOT_REQUIRED_BY_USER |

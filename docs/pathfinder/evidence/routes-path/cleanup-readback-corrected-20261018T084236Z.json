@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "pathfinder.routes-path.corrected-cleanup-readback.v1",
+  "observedAtUtc": "2026-10-18T08:44:37.6658744Z",
+  "sourceCommit": "cb02f43000a51b4f511346d2aa666d09929570e0",
+  "apiImage": "sha256:7d216f20dfe2ec7b46f7ed9b357ea1a9171be73127d6422b673031b9971fb111",
+  "webImage": "sha256:36d9e4d6c7f8d826ded465dc4c7bf45fd61e62212e868d7e5f8430896a35307f",
+  "scope": "Read-only repeatable-read PostgreSQL audit after corrected 29/29 run. Historical immutable proposal metadata is observed without backfilling.",
+  "integrationReceipt": "live29-corrected-20261018T084236Z.json",
+  "cleanupStatus": "PASS",
+  "readback": {
+    "database": "wfc_pathfinder_local",
+    "temporaryFixtureCounts": {
+      "users": 0,
+      "projects": 0,
+      "locations": 0,
+      "cables": 0,
+      "triggers": 0
+    },
+    "synthetic": {
+      "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+      "connectionGap": "1",
+      "secondaryTrayLength": "5",
+      "endConnectionLength": "6",
+      "additionalBendingPercent": "10",
+      "activeModelVersionId": "a856352c-b3dd-4143-a723-1f4e7d3f2cb2"
+    },
+    "realDemo": {
+      "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+      "settings": {
+        "revision": "2",
+        "connectionGap": "1",
+        "secondaryTrayLength": "3",
+        "endConnectionLength": "5",
+        "additionalBendingPercent": "10"
+      },
+      "artifact": {
+        "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+        "objectCount": 52,
+        "routingLeafCount": 26
+      },
+      "bindings": [
+        {
+          "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+          "name": "=PF-DEMO-NETWORK-END",
+          "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+          "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+          "revision": "2",
+          "point": [
+            57.840041442197844,
+            -6.751280339942497,
+            8.211000437980317
+          ],
+          "source": "manual",
+          "derivation": "manual-world-point",
+          "current": true
+        },
+        {
+          "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+          "name": "=PF-DEMO-NETWORK-START",
+          "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+          "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+          "revision": "3",
+          "point": [
+            45.16500215081601,
+            -11.73700013993792,
+            1.5296001389080516
+          ],
+          "source": "manual",
+          "derivation": "manual-world-point",
+          "current": true
+        }
+      ],
+      "proposalMetadata": [
+        {
+          "id": "b0f4977a-caf7-4a35-9fb2-3d15e0aa3278",
+          "createdAt": "2026-10-18T11:36:20.877544+03:00",
+          "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+          "geometryHash": "568a96b5d992edd09d86d2bd17be37f985e703ef9010e3ad2b3a26dd670890d1",
+          "calculationMode": "calculate",
+          "effectiveCategory": "Control",
+          "preparedPresent": true,
+          "preparedSegmentCount": 26,
+          "preparedCounts": {
+            "fallbackBends": 2,
+            "validatedBends": 5,
+            "fallbackStraights": 2,
+            "fallbackClearances": 0,
+            "validatedStraights": 17
+          },
+          "sameGeometryDiagnosticsSource": {
+            "proposalId": "b0f4977a-caf7-4a35-9fb2-3d15e0aa3278",
+            "calculationMode": "calculate",
+            "preparedSegmentCount": 26,
+            "preparedCounts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            }
+          }
+        },
+        {
+          "id": "4aa44682-26f0-41c4-878c-be8ca0c68953",
+          "createdAt": "2026-10-18T11:12:19.530951+03:00",
+          "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+          "geometryHash": "ede9f4b700da5126e9554c2cde05f1279d87c5e4622187326ec11b1e6bf3a159",
+          "calculationMode": "calculate",
+          "effectiveCategory": "Control",
+          "preparedPresent": true,
+          "preparedSegmentCount": 26,
+          "preparedCounts": {
+            "fallbackBends": 2,
+            "validatedBends": 5,
+            "fallbackStraights": 2,
+            "fallbackClearances": 0,
+            "validatedStraights": 17
+          },
+          "sameGeometryDiagnosticsSource": {
+            "proposalId": "4aa44682-26f0-41c4-878c-be8ca0c68953",
+            "calculationMode": "calculate",
+            "preparedSegmentCount": 26,
+            "preparedCounts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            }
+          }
+        },
+        {
+          "id": "f8899236-3942-4208-8fe2-be2136607f17",
+          "createdAt": "2026-10-18T11:05:40.247261+03:00",
+          "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+          "geometryHash": "81754e745c71e401d94311edc36fee664685a9e025fd033884af0e5f698ebc24",
+          "calculationMode": "calculate",
+          "effectiveCategory": "Control",
+          "preparedPresent": true,
+          "preparedSegmentCount": 26,
+          "preparedCounts": {
+            "fallbackBends": 2,
+            "validatedBends": 5,
+            "fallbackStraights": 2,
+            "fallbackClearances": 0,
+            "validatedStraights": 17
+          },
+          "sameGeometryDiagnosticsSource": {
+            "proposalId": "f8899236-3942-4208-8fe2-be2136607f17",
+            "calculationMode": "calculate",
+            "preparedSegmentCount": 26,
+            "preparedCounts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            }
+          }
+        },
+        {
+          "id": "5fcfea03-6258-417c-8fc2-31ebbc695de3",
+          "createdAt": "2026-10-18T09:42:02.499792+03:00",
+          "artifactId": "6a04c032-707f-490c-9cc6-325a04a63250",
+          "geometryHash": "076becae2df162ff438b9db6a418f5620eef1d02d624468147b75a9a9c55676b",
+          "calculationMode": "design",
+          "effectiveCategory": null,
+          "preparedPresent": false,
+          "preparedSegmentCount": null,
+          "preparedCounts": null,
+          "sameGeometryDiagnosticsSource": {
+            "proposalId": "74739a68-99e3-402e-afc4-663e81020c63",
+            "calculationMode": "calculate",
+            "preparedSegmentCount": 26,
+            "preparedCounts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            }
+          }
+        },
+        {
+          "id": "74739a68-99e3-402e-afc4-663e81020c63",
+          "createdAt": "2026-10-18T09:40:36.945817+03:00",
+          "artifactId": "6a04c032-707f-490c-9cc6-325a04a63250",
+          "geometryHash": "076becae2df162ff438b9db6a418f5620eef1d02d624468147b75a9a9c55676b",
+          "calculationMode": "calculate",
+          "effectiveCategory": "Control",
+          "preparedPresent": true,
+          "preparedSegmentCount": 26,
+          "preparedCounts": {
+            "fallbackBends": 2,
+            "validatedBends": 5,
+            "fallbackStraights": 2,
+            "fallbackClearances": 0,
+            "validatedStraights": 17
+          },
+          "sameGeometryDiagnosticsSource": {
+            "proposalId": "74739a68-99e3-402e-afc4-663e81020c63",
+            "calculationMode": "calculate",
+            "preparedSegmentCount": 26,
+            "preparedCounts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            }
+          }
+        }
+      ],
+      "locationAuditCount": 9,
+      "reviewCount": 3,
+      "applyReceiptCount": 0,
+      "cable": {
+        "id": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "routing": null,
+        "designLength": null,
+        "installLength": null,
+        "cableWriteRevision": "0"
+      }
+    }
+  }
+}
