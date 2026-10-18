@@ -105,3 +105,32 @@ new PF-2 isolation receipt; the unchanged Core was not refactored.
 See [PF-2 report](02-stage-report.md), [computational boundary](02-model-geometry.md)
 and linked compact evidence. Automatic continuation was paused at the concrete
 external licence blocker; no successful-stage or user-acceptance claim follows.
+
+## PF-3–PF-7 independent execution — 18 October 2026
+
+The user's later resumption in `18-execution-resume.md` supersedes the earlier
+routine stop. Frozen/historical observations above remain unchanged.
+Implementation checkpoint `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a` contains the
+integrated local workflow; final images and test scopes are in
+[PF-7 report](07-stage-report.md). These rows do not accept native engineering
+equivalence or authorize original-installation updates.
+
+| ID | Actual scope / evidence | Result |
+|---|---|---|
+| PF3-LOC-01 | One manual identity resolves SYNTHETIC-1 From and SYNTHETIC-2 To; both auto-recalculate; registry/save/pick/reload/actual restore evidence linked in reports | PASS at local fixture/shared registry scope; final restore separately PF-8 |
+| PF3-LOC-02 | Pure20 +actual SQL10 +HTTP13; ambiguity/missing/stale and project/model fences, aliases and ABA revision behavior | PASS at recorded fixture scope |
+| PF4-AUTH-01 | Actual engineer deep-link fallback; current-admin/revocation/late-expiry/cross-project API and Apply controls in20 live checks | PASS at tested roles/actions |
+| PF4-VIEW-01 | Final computer-use real selected-network exact lookup/Reverse35.30345579516123m, original colors, filled Ghost, yellow mesh; zero-ID paths/one-point marker; Clear restores visibility/colors | PASS at captured diagnostic/synthetic scope; no camera restore claim |
+| PF5-JOB-01 | Actual durable2/2, cancellation held terminal, explicit retry, lease owner fencing; backend20 live; actual child crash recovery reported separately PF-8 | PASS at checked scope; fullplant throughput NOT_RUN |
+| PF5-SET-01 | UI reserve6→7→6; retained10m geometry, design18→19→18, applied18 unchanged; server design-mode receipts | PASS |
+| PF5-STALE-01 | Model selection/settings/manual edits ABA, location edits, health/auth late fences; stale review/Apply refused | PASS at fixtures and actual UI actions |
+| PF6-APPLY-01 |20 live checks: atomic route/design/history/receipt, rollback on failure, immutable review/idempotency; current auth/dependencies through commit | PASS for exact trusted local synthetic fixture |
+| PF6-APPLY-02 | installLength99 retained, server write revision increments for each distinct Apply, idempotent replay no extra increment; manual/import change staleness | PASS at actual own SQL/HTTP fixture |
+| PF7-REG-01 | Frontend71, protected runtime104, backend34, legacy40, refreshed registry13, Core105/215, ModelRunner38; compile/lint at recorded source | PASS at stated regression scope |
+| PF7-PARITY-01 | Full web pipeline synthetic10m/18m and captured diagnostics checked; representative same-source native paired geometry/path/design oracle missing | BLOCKED for real engineering acceptance |
+| PF2-GRAPH-01 | Fitted geometry disk cache present; unchanged endpoint-dependent graph constructed per query; see19-graph-preparation-review | NOT_IMPLEMENTED for reusable graph; capacity NOT_RUN |
+| PF8-LOCAL-01 | Local Viewer/assets/CSP, analytics disabled, internal Docker API network; no runtime native/cloud dependency in exercised paths | PASS at inspected/observed scope; computer network disconnect NOT_RUN |
+| PF8-USER-01 | Local demonstration and instructions prepared; user has not yet accepted this new feature or approved integration | NOT_RUN |
+
+Final operational audit/cleanup outcomes append below after their actual checks.
+

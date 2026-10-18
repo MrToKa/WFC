@@ -1,5 +1,26 @@
 # PF-8 — Isolated local demonstration and operational delivery
 
+## Refreshed execution baseline — 18 October 2026, 02:38 UTC
+
+The integrated local source is now committed at
+`51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; active branch is
+`pf-7-integration-local-20261018`, inheriting the PF-4 workflow branch.
+Final API562e8073 / web81bb13b4 has actual backend20/20 and final browser
+yellow/Ghost/Review/one-point/Clear verification. See `07-stage-report.md`,
+the final computer-use receipt and `automation-progress.md` rather than
+repeating earlier source work. The native/full-plant/graph gates remain open.
+Remote read-only observations at02:29:57UTC are in
+`evidence/pf7/remote-observations-20261018T022957Z.json`: originalWFCmain
+e1ef2020 and canonicalPFmaster45c24bf5; local feature branch absent remotely.
+PR/review/CI state has not been refreshed or claimed successful.
+
+PF-8 is already executing under standing user authorization: the runtime
+owner is completing the actual final combined cold backup/restore/crash drill.
+Do not launch a second simultaneous drill. Continue its recorded operation,
+then complete the report/audit/cleanup and next unmet-gate handoff below.
+
+## Task
+
 This is the next independent operations prompt, not a claim that PF-7 native
 parity or user acceptance passed. Refresh live branch, HEAD, uncommitted source,
 PF-7 receipts and `automation-progress.md` before execution. Work only in
