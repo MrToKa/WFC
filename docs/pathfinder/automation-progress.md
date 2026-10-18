@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-plan-purpose-revisions-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r0-purpose-contracts-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -13,7 +13,34 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current continuation — purpose/revision plan and older-model preparation
+## Current execution — PF-R0 and sequential PF-R delivery
+
+Explicit user authorization on 19 October 2026: implement plan32, create a detailed
+self-contained next prompt after EACH technically completed stage, account for
+earlier deliveries and execute that prompt immediately. Routine questions use the
+recommended engineering choice and are recorded; no routine stage pause.
+
+- Starting revision: `916256f0da14b8f21ca039b34bfae2de33b2bb0d`.
+- Current stage: PF-R0 contracts/examples/validation/capacity technically COMPLETE;
+  final local commit and PF-R1 handoff/branch transition in progress.
+- Active app heartbeat: `path-finder-purpose-rules-and-model-revisions`, ACTIVE,
+  every ten minutes, created through the app tool; the old `pathfinder` remains deleted.
+- Root owns overview/catalog examples, baseline/frozen hashes, validation matrix,
+  report/progress/handoffs and ALL actual runtime/SQL/HTTP operations.
+- Agent `revision_geometry_ingestion_plan` owns only `r0/geometry-revision-contracts.md`
+  and `r0/geometry-revision-examples.json`.
+- Agent `purpose_revision_plan_review` owns only `r0/policy-drawing-contracts.md`
+  and `r0/policy-drawing-examples.json`.
+- Agent `old_model_conversion_map` performs read-only catalog/source/capacity audit.
+- No active download, package, build, test or runtime mutation. No PF-R acceptance
+  is yet claimed. Original checkout/container/database restrictions still apply.
+- Evidence: 35-r0-stage-report.md; 12/12 documentation checks PASS, 24 locked
+  references/11 Core, 29 unique synthetic policy cases, 54 links/0 missing,
+  zero known credential matches; independent review findings closed.
+- Next: local R0 commit, prepare detailed PF-R1, new inheriting branch, immediately
+  execute exact catalog/dependency copy. No completed future-stage claim.
+
+## Previous continuation — purpose/revision plan and older-model preparation
 
 The new request is a detailed implementation plan, plus explicitly authorized
 Autodesk conversion of the older NWD for later revision comparison. The new

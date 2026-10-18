@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "wfc.pfr0.reference-lock.v1",
+  "recordedAt": "2026-10-18T21:24:24.819Z",
+  "baselineCommit": "916256f0da14b8f21ca039b34bfae2de33b2bb0d",
+  "sourceCoreCommit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+  "scope": "content integrity only; historical105regression/43golden counts are not new execution results",
+  "status": "PASS",
+  "pureCoreFiles": 11,
+  "historicalFrozenCases": 43,
+  "regeneratedExpected": false,
+  "files": [
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.inputs.json",
+      "bytes": 223109,
+      "sha256": "1fd49428742284e30071a0b293cca0a8f5eff8b47a2aaab10f1184cf73cd7e78",
+      "kind": "frozen-pf0-artifact"
+    },
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.expected.json",
+      "bytes": 49832,
+      "sha256": "43ea08d2e7e5ff4e56d1fe5c4435bada300a215b0da3164f5179d27ca4b23a5a",
+      "kind": "frozen-pf0-artifact"
+    },
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.schema.json",
+      "bytes": 25431,
+      "sha256": "b65addd83e0e3b400246e28da6b9a0dedfcb6517008b643a0203694f2f36f759",
+      "kind": "frozen-pf0-artifact"
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/Program.cs",
+      "bytes": 10553,
+      "sha256": "127e1d0fe89dd5bd41cd396bd5200837a7fb008c776b9326bb1634a9235ea5d0",
+      "kind": "frozen-pf0-artifact"
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/GoldenExtractor.csproj",
+      "bytes": 456,
+      "sha256": "957561bc4bdb7873d96216c972a2cb0fe12c980048bad462edc96d66450967ae",
+      "kind": "frozen-pf0-artifact"
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/CaptureGeometry.cs",
+      "bytes": 3337,
+      "sha256": "3b4ac928911a8c21feb8ed5810c84a7d6cfc7fe5f4d4191d51fd8a3a9d08320d",
+      "kind": "frozen-pf0-artifact"
+    },
+    {
+      "path": "docs/pathfinder/fixtures/generator/CaptureGeometry.csproj",
+      "bytes": 539,
+      "sha256": "cbef8afc87576bc54755e66be25bc85cd4b7de535a48f91179087396f1702c89",
+      "kind": "frozen-pf0-artifact"
+    },
+    {
+      "path": "docs/pathfinder/fixtures/pf-core-v1.manifest.json",
+      "bytes": 13592,
+      "sha256": "0c3aac68b43f5e19201037716c13e3a0b8b6cd6074ea015eaf23de8c93b26392",
+      "kind": "frozen-pf0-manifest"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/CableDesignLength.cs",
+      "bytes": 2220,
+      "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteCalculator.cs",
+      "bytes": 51930,
+      "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteCodeParser.cs",
+      "bytes": 3247,
+      "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteLookupCalculator.cs",
+      "bytes": 25795,
+      "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/RouteNameResolver.cs",
+      "bytes": 2272,
+      "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/RoutingModels.cs",
+      "bytes": 11386,
+      "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayBendMeshGeometry.cs",
+      "bytes": 32190,
+      "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayGeometryBuilder.cs",
+      "bytes": 23403,
+      "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshClearance.cs",
+      "bytes": 43315,
+      "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshData.cs",
+      "bytes": 2817,
+      "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshGeometry.cs",
+      "bytes": 23892,
+      "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba",
+      "kind": "unchanged-pure-core"
+    },
+    {
+      "path": "src/pages/TrayDetails/trayDrawingService.ts",
+      "bytes": 99219,
+      "sha256": "6ec59229008eac99cb60b56f26cfae125e1e88255edb2d69da615b2140bfd0ea",
+      "kind": "pre-r2a-source-assertion-baseline-not-pixel-golden"
+    },
+    {
+      "path": "src/pages/TrayDetails/trayDrawingService.test.ts",
+      "bytes": 19550,
+      "sha256": "b326fa0f0abc2bd4fa0fd1862a2d569d731c928f30f5c9fc9732af192a780ffa",
+      "kind": "pre-r2a-source-assertion-baseline-not-pixel-golden"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/cableLayoutDefaults.ts",
+      "bytes": 1982,
+      "sha256": "9d358cb84fa0f5675b6ef6f910d64bbc528d98bf2468a4236b696f9e594dc9bc",
+      "kind": "pre-r2a-source-assertion-baseline-not-pixel-golden"
+    },
+    {
+      "path": "src/pages/TrayDetails/TrayDetails.utils.ts",
+      "bytes": 11151,
+      "sha256": "b8ff57b6a926d47327bb5b7dcb38c412d829ebf7e66333fc23d37395694a27de",
+      "kind": "pre-r2a-source-assertion-baseline-not-pixel-golden"
+    },
+    {
+      "path": "viewer-runtime/test/fixtures/route-c-regression.json",
+      "bytes": 18882,
+      "sha256": "8368d5a9602d45205aead5fdabd2ff9b4d3d41ad5f8f370a7506c7bb6c4cc67d",
+      "kind": "pre-r2a-source-assertion-baseline-not-pixel-golden"
+    }
+  ]
+}
