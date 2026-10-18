@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-2-capacity-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-2-worker-reuse-local-20261018` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -13,9 +13,30 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
+## Current continuation — PF-2 private worker reuse, 18 October 2026
+
+IN_PROGRESS, branch `pf-2-worker-reuse-local-20261018`, inheriting completed
+capacity commit `adcb55da93564571deb0a5bc11ef9921c54c0a53`. The next self-contained
+assignment is [PF-2 worker reuse](handoffs/PF-2-worker-reuse.md), prepared through
+prepare-stage-handoff under the user's automatic continuation instruction.
+Feasibility review is read-only so far; implementation/runtime parity tests are
+NOT_RUN. Current5190/original resources remain unchanged.
+
+- C# owner: ModelRunner/session +runner tests only; server owner: private session/
+  worker injection/tests; runtime owner: separate session test/orchestration and
+  coordinated isolated mode profile; parent docs/evidence/integration.
+- One lane, unchanged pinned Core/Model and per-query graph, exact private framed
+  request/response/handshake, one prepared identity, hard supervisor/Node deadlines,
+  bounded count/age/idle/RSS and no hidden queue/replay. One-shot stays default
+  pending varied-query/parity/security/lifecycle gates. Current caps are not raised.
+- Next: acknowledge shared private protocol, implement isolated modules, validate
+  fresh-vs-reused mixed queries and actual process/job lifecycle, then measure the
+  actual persistent path. No real review/Apply or whole-plant claim.
+
 ## Latest delivery — PF-2 capacity baseline, 18 October 2026
 
-SCOPED_TECHNICAL_PASS on `pf-2-capacity-local-20261018`, inheriting
+SCOPED_TECHNICAL_PASS, committed `adcb55da93564571deb0a5bc11ef9921c54c0a53` on
+`pf-2-capacity-local-20261018`, inheriting
 `8a726f72ab94da22681320f28ccebe1224cf8eb3`. Current user requested the next
 remaining stage. The original PF-2 item5 still requires capacity measurement;
 previous manual-review handoffs do not waive that technical remainder. This is
