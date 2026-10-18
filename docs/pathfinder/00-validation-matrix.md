@@ -213,3 +213,21 @@ cb02f43 (immutable metadata during design reuse). Full scope and dated receipts:
 | PF8-PRESERVE-TABS |Original checkouts/dirtyfiles,13containers,Core/PF0/native source pins | PASS: final5group isolation-1792313848085.json |
 | PF8-USER-01 |Human route/length review | PENDING_USER_REVIEW |
 | PF7-PARITY-01 |Native comparison | NOT_PERFORMED / NOT_REQUIRED_BY_USER |
+
+## Independent Path lookup revision — 18 October 2026
+
+Feature60e9ce6, browser-driven caption correction73c13aa. Exact receipts and
+remaining scopes are in [report23](23-independent-path-lookup.md).
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF4-LOOKUP-TAB |Three persistent tools/one protected Viewer; retained input; independent dirty-Routes lookup; Path draft fences; Restore and actual Cancel | PASS at source44baseline+9affected and actual first-candidate browser scope |
+| PF2-LOOKUP-OWNERS |Pinned C# parser/owner hierarchy/wrapper collapse/ambiguity/qualified names; exact leaves; dedicated capture cannot become planning | PASS:37scope,94legacyModel,75protectedNode,42runner,106backend/5realprivateprocess checks |
+| PF5-LOOKUP-API |No planning query required; purpose/SHA reuse/file checks; current model/selection/admin/login/Detailsgap fences; large pre-body transport | PASS source and actual10/10API,13,201,771-byte nginx upload; live no-planning-history case NOT_RUN |
+| PF5-LOOKUP-REAL |Actual forward/reverse/dirty lookup35.30345579516123m,4gaps/.9840583861033791m,25usedleaves; exact90point reversal; raw55/27 resolves52/26 | PASS converted-model execution; human engineering acceptance PENDING |
+| PF4-LOOKUP-CAPTION |Used leaves caption distinct from prepared-network fallback counts | First browser caption FAIL; text-only73c13aa +affected1case/types/lint PASS; final browser separately recorded in report23 |
+| PF6-LOOKUP-NO-WRITES |All12 settings/selection/registry/planning/location/binding/object/cable/proposal/review/Apply hashes unchanged; registry11,104objects,5proposals,3reviews,0Apply | PASS real after-UI read-only audit |
+| PF8-LOOKUP-ARCHIVE |Corrected source images/schema/newlookup archived and restored on separate5191; resource/session/JWT fences | PASS final-drill-1792317333519.json;27artifactfiles/7,678,830bytes; lookup-specific readback/retirement/cleanup separately in report23 |
+| PF8-LOOKUP-CRASH |New actual worker/preview crash recovery | NOT_RUN by explicit scoped operator skip; previous accepted64cable and PARTIALpreview scopes remain historical |
+| PF8-LOOKUP-FINAL |Corrected browser/result25usedleaves; final12workflow hashes/cable revision0/null/Apply0; actual restored lookup purpose/SHA; targetzero;8oldpayloads1,348,954,278bytes/4unusedimages retired; original5groups preserved | PASS: final browser/audit/combineddrill/cleanup/isolation receipts in report23 |
+| PF8-USER-01 |Human route/length acceptance and separate main integration decision | PENDING_USER_REVIEW; no real Apply or main publication |

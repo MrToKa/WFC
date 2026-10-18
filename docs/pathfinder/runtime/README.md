@@ -5,12 +5,25 @@ project, images, networks, PostgreSQL database, MinIO storage, staging and
 PathFinder artifact volumes. The original WFC application and its thirteen
 containers are outside this lifecycle. There is no push, merge or deployment.
 
-For the latest Routes + Path candidate, use
-[the current delivery report](../22-routes-path-tabs.md) for exact
+For the latest Routes + Path + Path lookup candidate, use
+[the current delivery report](../23-independent-path-lookup.md) for exact
 images, retained backup and verification. The older operational receipts near
 the end of this page retain their historical scope. Native comparison is no
 longer a prerequisite for the user-selected manual per-proposal Review+Apply;
 it has not been performed or reported as PASS.
+
+The current three-tab archive is `3db9fa33-c10e-4646-82bc-fe99f3d8af35` at
+`pathfinder-engine/.scratch/path-lookup-archive-462d5a9465e8`, with a separate
+ignored private companion. Corrected APIee402f8d/web1895a3fa, same-host restore,
+retained lookup readback and retirement are bound in
+[combined-lookup-drill-1792317499732.json](combined-lookup-drill-1792317499732.json).
+The restored lookup is complete/nonstale with35.30345579516123m/90points and
+lookup-purpose/SHA preserved. This drill explicitly skipped both crash tests;
+earlier results retain their historical scopes. Superseded d7payloads were
+retired only after this verified replacement; their old directory is no longer
+a restorable archive set. The own5190 demonstration remains running and the
+additional5191 target has zero resources. See report23 for final browser,
+cleanup, rejected supplemental commands and four preserved denied scratch paths.
 
 The default address is **http://127.0.0.1:5190**. Only the web service publishes a
 port, bound to IPv4 loopback. API, database, object storage and calculation inputs

@@ -1,0 +1,833 @@
+{
+  "schemaVersion": "pathfinder.lookup.real-ui-audit.v1",
+  "recordedAtUtc": "2026-10-18T09:50:18.137Z",
+  "status": "PASS",
+  "sourceScope": "60e9ce66680d2e86b17be5c9a73d1247d20d9fc0; actual API1630510e/webf4b5a13 UI window. Later frontend label-only candidate has not been started by this agent.",
+  "containers": [
+    {
+      "name": "/wfc-pathfinder-local-api-1",
+      "id": "ad429b5aae2296380cbc259ca4b9a74e0fd975de353eac383fb3167dd24e1e9e",
+      "image": "sha256:1630510e3240a8ede43d9cc9b77297bedb150cc25ad9480e9425f31797177bc3",
+      "startedAt": "2026-10-18T09:38:27.560354659Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    },
+    {
+      "name": "/wfc-pathfinder-local-web-1",
+      "id": "f7b4d610a90be3ed0a06d2eb68655cdd60f919ea7bb9ae0fa56338006b17f274",
+      "image": "sha256:f4b5a13c603d091e1473983aed9d20e26daabf04e4603819883c28e860fb6617",
+      "startedAt": "2026-10-18T09:38:33.34515307Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    },
+    {
+      "name": "/wfc-pathfinder-local-postgres-1",
+      "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+      "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+      "startedAt": "2026-10-18T02:03:12.60010978Z",
+      "owner": "7c713695-a3c9-40b6-852e-5ceb51642d65",
+      "project": "wfc-pathfinder-local"
+    }
+  ],
+  "baseline": "real-ui-baseline-60e9ce6-20261018T094118Z.json",
+  "before": {
+    "schemaVersion": "pathfinder.lookup.audit.v1",
+    "recordedAtUtc": "2026-10-18T09:41:18.339Z",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "scope": "isolated database; repeatable read-only snapshot",
+    "database": {
+      "database": "wfc_pathfinder_local",
+      "address": "172.28.0.3/32",
+      "port": 5432
+    },
+    "registryRevision": "11",
+    "latestPlanningArtifact": {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52
+    },
+    "planningArtifactList": [
+      {
+        "id": "6a04c032-707f-490c-9cc6-325a04a63250",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "df1b67a0c832e9eed426d4f00741373616b4738f0520b65eb3ff3898c9fd2640",
+        "objectCount": 52
+      },
+      {
+        "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+        "objectCount": 52
+      }
+    ],
+    "planningArtifactsAndWorkflow": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "nativeParity": "NOT_PERFORMED; no Apply or engineering acceptance asserted"
+  },
+  "after": {
+    "schemaVersion": "pathfinder.lookup.audit.v1",
+    "recordedAtUtc": "2026-10-18T09:49:29.605Z",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "scope": "isolated database; repeatable read-only snapshot",
+    "database": {
+      "database": "wfc_pathfinder_local",
+      "address": "172.28.0.3/32",
+      "port": 5432
+    },
+    "registryRevision": "11",
+    "latestPlanningArtifact": {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52
+    },
+    "planningArtifactList": [
+      {
+        "id": "6a04c032-707f-490c-9cc6-325a04a63250",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "df1b67a0c832e9eed426d4f00741373616b4738f0520b65eb3ff3898c9fd2640",
+        "objectCount": 52
+      },
+      {
+        "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+        "objectCount": 52
+      }
+    ],
+    "planningArtifactsAndWorkflow": {
+      "settings": {
+        "count": 1,
+        "sha256": "fd028bfed36351138279cea05254d6eb0bb712f9ca8fb7501643ebbb0760ae2d"
+      },
+      "selection": {
+        "count": 1,
+        "sha256": "53c9e37c1ada39e3fadd5ba7b00f508198e6c2fc12c189c8789380d61f5e80e9"
+      },
+      "registry": {
+        "count": 1,
+        "sha256": "ad9d92d44bd97652b37a8e97a0892eebc5f9314372504b35ab950492014d0984"
+      },
+      "planningArtifacts": {
+        "count": 2,
+        "sha256": "02a92c6d9d81be7cfc775920ba1577183e0d517def13532f325f616dae720ddd"
+      },
+      "locations": {
+        "count": 3,
+        "sha256": "14b33f54e2b6ad71318f8d586280a44771456dad365cdd0fc42e2a5f0657a8e7"
+      },
+      "aliases": {
+        "count": 4,
+        "sha256": "30a41e0035f5737aa29ae112d5873efee8c6df6345dc43a19f777d5b62aacf4b"
+      },
+      "bindings": {
+        "count": 3,
+        "sha256": "2a0d7dc92b71813355eee3946ac83cca0564bd7429e6f9ebc33ed56e1c47d434"
+      },
+      "modelObjects": {
+        "count": 104,
+        "sha256": "14b7cd1d1aa7ddf23c21895279e9c83c07f9fa21935f424213369f4ab270cd56"
+      },
+      "cables": {
+        "count": 1,
+        "sha256": "7d1bf598adb6ca623113993592717b0de159747e2280f7286bbb2a8f035dde1b"
+      },
+      "proposals": {
+        "count": 5,
+        "sha256": "5a5a10d25a41e24f1f02ee473062888f6d47f55c11b791f300ff198127031e18"
+      },
+      "reviews": {
+        "count": 3,
+        "sha256": "a1121bb28f1c633a229efd78b135200368154959caa4773fa640a8157a24f909"
+      },
+      "applies": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "nativeParity": "NOT_PERFORMED; no Apply or engineering acceptance asserted"
+  },
+  "unchangedCategories": [
+    "settings",
+    "selection",
+    "registry",
+    "planningArtifacts",
+    "locations",
+    "aliases",
+    "bindings",
+    "modelObjects",
+    "cables",
+    "proposals",
+    "reviews",
+    "applies"
+  ],
+  "changedCategories": [],
+  "lookupProvenance": {
+    "schemaVersion": "pathfinder.lookup.real-ui-provenance.v1",
+    "recordedAtUtc": "2026-10-18T09:50:18.137Z",
+    "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+    "jobs": [
+      {
+        "id": "d522c782-4b4c-49f1-b797-3718b3fcf316",
+        "state": "complete",
+        "cancelRequested": false,
+        "createdAt": "2026-10-18T09:43:12.445Z",
+        "reverse": false,
+        "inputRouteText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2/SECONDARY",
+        "dependencies": {
+          "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+          "selectionRevision": "1",
+          "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+          "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+          "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+          "connectionGap": "1",
+          "options": {
+            "maxGraphNodes": 200000,
+            "maxGraphConnections": 1000000,
+            "sampleSpacingMeters": 0.125,
+            "preferVerticalApproach": true,
+            "secondaryDistanceMeters": 2,
+            "connectionToleranceMeters": 1
+          }
+        },
+        "result": {
+          "status": "calculated",
+          "engineeringAccepted": false,
+          "effectiveCategory": null,
+          "design": null,
+          "usedConnectionGapMeters": 1,
+          "lookupScope": {
+            "warnings": [
+              "Scope uses current SDK display visibility; native visibility, native-converted parity and engineering acceptance remain unverified.",
+              "1 broad name-discovery leaves were excluded by canonical logical-owner resolution."
+            ],
+            "uniqueCodeCount": 10,
+            "resolvedLeafCount": 26,
+            "requestedCodeCount": 10,
+            "resolvedOwnerCount": 10,
+            "discoveredObjectCount": 55
+          },
+          "prepared": {
+            "key": "71540578da0f49932ebaa50ca37d48072a3ea11df324616d797beb6bce5ef382",
+            "counts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            },
+            "readiness": "needs_review",
+            "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+            "diagnostics": [
+              "Inventory is explicitly partial.",
+              "Geometry capture is explicitly partial.",
+              "Source unit conversion is unverified.",
+              "Source/root/display transforms are unverified.",
+              "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+              "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+              "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+              "dbid:427079: straight axis needs unique neighboring port evidence",
+              "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+              "dbid:427083: straight axis needs unique neighboring port evidence"
+            ],
+            "objectCount": 52,
+            "segmentCount": 26,
+            "loadedFromDisk": false,
+            "diagnosticCount": 36,
+            "engineeringAccepted": false,
+            "diagnosticsTruncated": false
+          },
+          "route": {
+            "success": true,
+            "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+            "routeCodes": [
+              "/DFB018-1",
+              "/DFB011",
+              "/DFB012",
+              "/DFB013",
+              "/B002",
+              "/B107-1",
+              "/B107-2",
+              "/B107-3",
+              "/BC025",
+              "/BC022-2"
+            ],
+            "lengthMeters": 35.30345579516123,
+            "fromDistanceMeters": 0,
+            "toDistanceMeters": 0,
+            "fromRequiresSecondary": false,
+            "toRequiresSecondary": false,
+            "connectionGapCount": 4,
+            "connectionGapLengthMeters": 0.9840583861033791,
+            "segmentIds": [
+              "dbid:427100",
+              "dbid:427079",
+              "dbid:427083",
+              "dbid:427082",
+              "dbid:427086",
+              "dbid:426728",
+              "dbid:426727",
+              "dbid:426789",
+              "dbid:426801",
+              "dbid:426800",
+              "dbid:426799",
+              "dbid:426798",
+              "dbid:426797",
+              "dbid:426796",
+              "dbid:426795",
+              "dbid:426794",
+              "dbid:426793",
+              "dbid:426804",
+              "dbid:425836",
+              "dbid:425799",
+              "dbid:425800",
+              "dbid:425801",
+              "dbid:425802",
+              "dbid:425803",
+              "dbid:425804"
+            ],
+            "distinctGeometryLeaves": 25,
+            "pointCount": 90,
+            "pointsSha256": "98599df6c0955c0d285e4e2864bf3bad6f50dd850f8175be1a3eab77ab79c231",
+            "firstPoint": {
+              "x": 45.16500215081601,
+              "y": -11.73700013993792,
+              "z": 1.5296001389080516
+            },
+            "lastPoint": {
+              "x": 57.840041442197844,
+              "y": -6.751280339942497,
+              "z": 8.211000437980317
+            }
+          }
+        },
+        "rawSnapshot": {
+          "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+          "purpose": "lookup",
+          "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+          "bytes": 2571046,
+          "objectCount": 55,
+          "routingLeafCount": 27,
+          "capture": {
+            "adapterVersion": "wfc.protected-lookup-capture.v1",
+            "sourceKind": "converted",
+            "inventoryComplete": false,
+            "geometryComplete": false,
+            "unitsVerified": false,
+            "transformsVerified": false,
+            "planningVisibilityKnown": false,
+            "sourceLinkVerified": false,
+            "evidenceSha256": [
+              "4f06368b009609ae0c70c33932772d587c891b802d82af1daee0156d7582c9df"
+            ],
+            "lookupRouteCodes": [
+              "/DFB018-1",
+              "/DFB011",
+              "/DFB012",
+              "/DFB013",
+              "/B002",
+              "/B107-1",
+              "/B107-2",
+              "/B107-3",
+              "/BC025",
+              "/BC022-2"
+            ]
+          }
+        },
+        "staleAtCompletion": false
+      },
+      {
+        "id": "b7049ed3-d218-4b4d-87da-972b10cc1d26",
+        "state": "complete",
+        "cancelRequested": false,
+        "createdAt": "2026-10-18T09:44:23.237Z",
+        "reverse": true,
+        "inputRouteText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2/SECONDARY",
+        "dependencies": {
+          "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+          "selectionRevision": "1",
+          "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+          "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+          "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+          "connectionGap": "1",
+          "options": {
+            "maxGraphNodes": 200000,
+            "maxGraphConnections": 1000000,
+            "sampleSpacingMeters": 0.125,
+            "preferVerticalApproach": true,
+            "secondaryDistanceMeters": 2,
+            "connectionToleranceMeters": 1
+          }
+        },
+        "result": {
+          "status": "calculated",
+          "engineeringAccepted": false,
+          "effectiveCategory": null,
+          "design": null,
+          "usedConnectionGapMeters": 1,
+          "lookupScope": {
+            "warnings": [
+              "Scope uses current SDK display visibility; native visibility, native-converted parity and engineering acceptance remain unverified.",
+              "1 broad name-discovery leaves were excluded by canonical logical-owner resolution."
+            ],
+            "uniqueCodeCount": 10,
+            "resolvedLeafCount": 26,
+            "requestedCodeCount": 10,
+            "resolvedOwnerCount": 10,
+            "discoveredObjectCount": 55
+          },
+          "prepared": {
+            "key": "71540578da0f49932ebaa50ca37d48072a3ea11df324616d797beb6bce5ef382",
+            "counts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            },
+            "readiness": "needs_review",
+            "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+            "diagnostics": [
+              "Inventory is explicitly partial.",
+              "Geometry capture is explicitly partial.",
+              "Source unit conversion is unverified.",
+              "Source/root/display transforms are unverified.",
+              "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+              "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+              "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+              "dbid:427079: straight axis needs unique neighboring port evidence",
+              "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+              "dbid:427083: straight axis needs unique neighboring port evidence"
+            ],
+            "objectCount": 52,
+            "segmentCount": 26,
+            "loadedFromDisk": true,
+            "diagnosticCount": 36,
+            "engineeringAccepted": false,
+            "diagnosticsTruncated": false
+          },
+          "route": {
+            "success": true,
+            "routeText": "/BC022-2/BC025/B107-3/B107-2/B107-1/B002/DFB013/DFB012/DFB011/DFB018-1",
+            "routeCodes": [
+              "/BC022-2",
+              "/BC025",
+              "/B107-3",
+              "/B107-2",
+              "/B107-1",
+              "/B002",
+              "/DFB013",
+              "/DFB012",
+              "/DFB011",
+              "/DFB018-1"
+            ],
+            "lengthMeters": 35.30345579516123,
+            "fromDistanceMeters": 0,
+            "toDistanceMeters": 0,
+            "fromRequiresSecondary": false,
+            "toRequiresSecondary": false,
+            "connectionGapCount": 4,
+            "connectionGapLengthMeters": 0.9840583861033791,
+            "segmentIds": [
+              "dbid:425804",
+              "dbid:425803",
+              "dbid:425802",
+              "dbid:425801",
+              "dbid:425800",
+              "dbid:425799",
+              "dbid:425836",
+              "dbid:426804",
+              "dbid:426793",
+              "dbid:426794",
+              "dbid:426795",
+              "dbid:426796",
+              "dbid:426797",
+              "dbid:426798",
+              "dbid:426799",
+              "dbid:426800",
+              "dbid:426801",
+              "dbid:426789",
+              "dbid:426727",
+              "dbid:426728",
+              "dbid:427086",
+              "dbid:427082",
+              "dbid:427083",
+              "dbid:427079",
+              "dbid:427100"
+            ],
+            "distinctGeometryLeaves": 25,
+            "pointCount": 90,
+            "pointsSha256": "0cd46fff727c7947f7cb4cf6f4b9e276ba075bdd66a76393c7c6eae7116adcb9",
+            "firstPoint": {
+              "x": 57.840041442197844,
+              "y": -6.751280339942497,
+              "z": 8.211000437980317
+            },
+            "lastPoint": {
+              "x": 45.16500215081601,
+              "y": -11.73700013993792,
+              "z": 1.5296001389080516
+            }
+          }
+        },
+        "rawSnapshot": {
+          "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+          "purpose": "lookup",
+          "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+          "bytes": 2571046,
+          "objectCount": 55,
+          "routingLeafCount": 27,
+          "capture": {
+            "adapterVersion": "wfc.protected-lookup-capture.v1",
+            "sourceKind": "converted",
+            "inventoryComplete": false,
+            "geometryComplete": false,
+            "unitsVerified": false,
+            "transformsVerified": false,
+            "planningVisibilityKnown": false,
+            "sourceLinkVerified": false,
+            "evidenceSha256": [
+              "4f06368b009609ae0c70c33932772d587c891b802d82af1daee0156d7582c9df"
+            ],
+            "lookupRouteCodes": [
+              "/DFB018-1",
+              "/DFB011",
+              "/DFB012",
+              "/DFB013",
+              "/B002",
+              "/B107-1",
+              "/B107-2",
+              "/B107-3",
+              "/BC025",
+              "/BC022-2"
+            ]
+          }
+        },
+        "staleAtCompletion": false
+      },
+      {
+        "id": "1e488836-275a-4b2a-9706-67d2e0078198",
+        "state": "complete",
+        "cancelRequested": false,
+        "createdAt": "2026-10-18T09:47:20.594Z",
+        "reverse": true,
+        "inputRouteText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2/SECONDARY",
+        "dependencies": {
+          "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+          "selectionRevision": "1",
+          "contentFingerprint": "b5bb4fbe666b440c73bb1ffd2ee0db01be66146f8002e4a9df8dce8521db1d34",
+          "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+          "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+          "connectionGap": "1",
+          "options": {
+            "maxGraphNodes": 200000,
+            "maxGraphConnections": 1000000,
+            "sampleSpacingMeters": 0.125,
+            "preferVerticalApproach": true,
+            "secondaryDistanceMeters": 2,
+            "connectionToleranceMeters": 1
+          }
+        },
+        "result": {
+          "status": "calculated",
+          "engineeringAccepted": false,
+          "effectiveCategory": null,
+          "design": null,
+          "usedConnectionGapMeters": 1,
+          "lookupScope": {
+            "warnings": [
+              "Scope uses current SDK display visibility; native visibility, native-converted parity and engineering acceptance remain unverified.",
+              "1 broad name-discovery leaves were excluded by canonical logical-owner resolution."
+            ],
+            "uniqueCodeCount": 10,
+            "resolvedLeafCount": 26,
+            "requestedCodeCount": 10,
+            "resolvedOwnerCount": 10,
+            "discoveredObjectCount": 55
+          },
+          "prepared": {
+            "key": "71540578da0f49932ebaa50ca37d48072a3ea11df324616d797beb6bce5ef382",
+            "counts": {
+              "fallbackBends": 2,
+              "validatedBends": 5,
+              "fallbackStraights": 2,
+              "fallbackClearances": 0,
+              "validatedStraights": 17
+            },
+            "readiness": "needs_review",
+            "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+            "diagnostics": [
+              "Inventory is explicitly partial.",
+              "Geometry capture is explicitly partial.",
+              "Source unit conversion is unverified.",
+              "Source/root/display transforms are unverified.",
+              "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+              "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+              "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+              "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+              "dbid:427079: straight axis needs unique neighboring port evidence",
+              "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+              "dbid:427083: straight axis needs unique neighboring port evidence"
+            ],
+            "objectCount": 52,
+            "segmentCount": 26,
+            "loadedFromDisk": true,
+            "diagnosticCount": 36,
+            "engineeringAccepted": false,
+            "diagnosticsTruncated": false
+          },
+          "route": {
+            "success": true,
+            "routeText": "/BC022-2/BC025/B107-3/B107-2/B107-1/B002/DFB013/DFB012/DFB011/DFB018-1",
+            "routeCodes": [
+              "/BC022-2",
+              "/BC025",
+              "/B107-3",
+              "/B107-2",
+              "/B107-1",
+              "/B002",
+              "/DFB013",
+              "/DFB012",
+              "/DFB011",
+              "/DFB018-1"
+            ],
+            "lengthMeters": 35.30345579516123,
+            "fromDistanceMeters": 0,
+            "toDistanceMeters": 0,
+            "fromRequiresSecondary": false,
+            "toRequiresSecondary": false,
+            "connectionGapCount": 4,
+            "connectionGapLengthMeters": 0.9840583861033791,
+            "segmentIds": [
+              "dbid:425804",
+              "dbid:425803",
+              "dbid:425802",
+              "dbid:425801",
+              "dbid:425800",
+              "dbid:425799",
+              "dbid:425836",
+              "dbid:426804",
+              "dbid:426793",
+              "dbid:426794",
+              "dbid:426795",
+              "dbid:426796",
+              "dbid:426797",
+              "dbid:426798",
+              "dbid:426799",
+              "dbid:426800",
+              "dbid:426801",
+              "dbid:426789",
+              "dbid:426727",
+              "dbid:426728",
+              "dbid:427086",
+              "dbid:427082",
+              "dbid:427083",
+              "dbid:427079",
+              "dbid:427100"
+            ],
+            "distinctGeometryLeaves": 25,
+            "pointCount": 90,
+            "pointsSha256": "0cd46fff727c7947f7cb4cf6f4b9e276ba075bdd66a76393c7c6eae7116adcb9",
+            "firstPoint": {
+              "x": 57.840041442197844,
+              "y": -6.751280339942497,
+              "z": 8.211000437980317
+            },
+            "lastPoint": {
+              "x": 45.16500215081601,
+              "y": -11.73700013993792,
+              "z": 1.5296001389080516
+            }
+          }
+        },
+        "rawSnapshot": {
+          "artifactId": "b06ab4c4-60e2-4b87-8010-61e1b547f795",
+          "purpose": "lookup",
+          "snapshotSha256": "1aa3036066f74aa7dfe0dfb9d702f8107bdb5836a2f563be8cb6432e113f8b6b",
+          "bytes": 2571046,
+          "objectCount": 55,
+          "routingLeafCount": 27,
+          "capture": {
+            "adapterVersion": "wfc.protected-lookup-capture.v1",
+            "sourceKind": "converted",
+            "inventoryComplete": false,
+            "geometryComplete": false,
+            "unitsVerified": false,
+            "transformsVerified": false,
+            "planningVisibilityKnown": false,
+            "sourceLinkVerified": false,
+            "evidenceSha256": [
+              "4f06368b009609ae0c70c33932772d587c891b802d82af1daee0156d7582c9df"
+            ],
+            "lookupRouteCodes": [
+              "/DFB018-1",
+              "/DFB011",
+              "/DFB012",
+              "/DFB013",
+              "/B002",
+              "/B107-1",
+              "/B107-2",
+              "/B107-3",
+              "/BC025",
+              "/BC022-2"
+            ]
+          }
+        },
+        "staleAtCompletion": false
+      }
+    ],
+    "comparisons": [
+      {
+        "forwardJobId": "d522c782-4b4c-49f1-b797-3718b3fcf316",
+        "reverseJobId": "b7049ed3-d218-4b4d-87da-972b10cc1d26",
+        "sameSnapshot": true,
+        "exactReversedPoints": true,
+        "sameLength": true,
+        "sameGapCount": true,
+        "sameGapLength": true
+      },
+      {
+        "forwardJobId": "d522c782-4b4c-49f1-b797-3718b3fcf316",
+        "reverseJobId": "1e488836-275a-4b2a-9706-67d2e0078198",
+        "sameSnapshot": true,
+        "exactReversedPoints": true,
+        "sameLength": true,
+        "sameGapCount": true,
+        "sameGapLength": true
+      }
+    ],
+    "counts": {
+      "lookup_items": 0,
+      "applies": 0
+    },
+    "retainedCompletedLookupId": "d522c782-4b4c-49f1-b797-3718b3fcf316"
+  },
+  "acceptance": "Technical independent lookup and unchanged workflow only. Native parity and user engineering acceptance not asserted.",
+  "sideEffects": "Read-only database transactions and exact snapshot-file integrity reads; no DB mutations, runtime actions, source edits, /health probes or integration reruns."
+}

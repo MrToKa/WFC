@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "project": "wfc-pathfinder-local-50fae7c4061f",
+  "removedVerifiedRestoreFixtureOnly": true,
+  "resources": {
+    "containers": [],
+    "volumes": [],
+    "networks": []
+  }
+}

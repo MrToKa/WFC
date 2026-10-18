@@ -15,7 +15,7 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Active revision — independent Path lookup, 18 October 2026
 
-IN_PROGRESS on new branch pf-path-lookup-local-20261018 inheriting
+IMPLEMENTED/VERIFIED in the scoped local delivery on branch pf-path-lookup-local-20261018 inheriting
 9e6561e33ccf9ab535fb2184c858ecd20240071d. User requested the third addon tab
 and its functionality. Canonical source shows that this lookup independently
 discovers requested visible logical routes, rather than using Routes assignments.
@@ -31,28 +31,57 @@ discovers requested visible logical routes, rather than using Routes assignments
   cable proposal/Apply writes. Project Details owns gap. No design allowances.
 - UI has Routes/Path/Path lookup with one protected Viewer, independent dirty-rule
   lookup, shared transparency, exact points, Reverse extension, Restore/Cancel,
-  retained drafts and stale-response/review fences. Actual UI verification pending.
+  retained drafts and stale-response/review fences. Actual UI verification PASS.
 - Current frozen source checks: root API/hook23/23 PASS (initial22/23 cancellation-message
   failure corrected with explicit AbortError); Model lookup37/37 plus legacy94/94,
   protected Node75/75, Controller20/20, Runner42/42 PASS. Initial Node interop used a historical DLL;
   fresh isolated DLL rebuilt and full affected suite passed, no source fix inferred.
   Backend106/106 focused controls PASS including actual Express transport and
   five fresh private C# worker calls. Types and scoped lint PASS. Frontend44-case
-  baseline regression and targeted post-freeze cancellation/copy cases are still
-  running; runtime start waits for their result. These are source scopes, not
-  new runtime/native/human acceptance.
-- New image/build/browser/SQL acceptance NOT_RUN. Existing own5190 API7d216f20 /
-  web36d9e4d6 and verified backupd7d63dce remain untouched during source work.
-- Next: coordinated source freeze/review/types and local checkpoint; own runtime
-  build/start; actual no-planning/independent-scope/auth/gap/transport controls and
-  computer-use; verified backup/own cleanup as justified by changed schema; final
-  preservation/report/handoff/local commit. No original update/publication.
+  baseline regression plus9final affected and1caption case PASS at their exact
+  recorded scopes; this is not one full47run. Human acceptance remains PENDING.
+- Source60e9ce6 built/started own5190 API1630510e/webf4b5a13. Actual scoped10/10
+  API integration PASS, including13,201,771-byte nginx upload, purpose/auth/gap
+  fences and cleanup. Real-project workflow baseline unchanged (registry11,
+ 104modelobjects,5proposals,3reviews,0Apply). Browser first forward/reverse lookup
+  produced35.30345579516123m,4gaps/.9840583861033791m,25usedleaves with Ghost and
+  protectedyellowline. Actual dirty-rule independence/Pathfences/Restore/Cancel
+  PASS. Both reverse90point arrays exactly reverse forward. All12 workflow hashes
+  unchanged; latest final job06c0b624-2d84-432e-9f1d-1c6f23cc4f6c, cable revision0,
+  routing/design/installnull and0Apply. Final read-only audit is dated10:03UTC.
+- Browser found one inaccurate caption: used leaves were labeled as all prepared
+  geometry. Text-only correction73c13aa58519f26cbb96d93bbbb70bcdd5bb2cdd passes
+  affected1test/types/lint; source828 manifest SHAc3a58fd623df881da39fa8f043a6260eb93ca3f989d938089a15015de958f2d7.
+  Built/started APIee402f8d/web1895a3fa and final corrected browser PASS. API16
+  filesystemlayers/fullConfig match actual-tested1630510e exactly. New verified
+  backup3db9fa33-c10e-4646-82bc-fe99f3d8af35 is at
+  pathfinder-engine/.scratch/path-lookup-archive-462d5a9465e8 with separate private
+  companion. Archive/restore/session/newlookupreadback/targetretirement PASS;
+  oldd7payloads1,348,954,278bytes and4unusedownimages retired. Extra target zero
+  containers/volumes/networks. Both new crash tests deliberately NOT_RUN.
+- Supplemental combined health/startup-receipt command was rejected by automatic
+  approval review `blocked by policy`; it is not retried/bypassed. No startup JSON
+  was produced. Actual successful runtime CLI start, build binding and separate
+  10/10 API integration are the stated evidence.
+- Final five-group preservation audit PASS: evidence/pf8/isolation-1792317744025.json.
+  Report23 links all scopes, actual images and exact changed paths (59checkpoint
+  files,45code/test/config paths; later docs/evidence only). No original update,
+  publication, real Apply or user engineering acceptance performed.
+- Next: actual human review in handoffs/PF-path-lookup-manual-review.md, prepared
+  via prepare-stage-handoff. Existing heartbeat updated through app tool and
+  remains PAUSED with schedule/target preserved. No routine unchanged reruns or
+  invented stage. User feedback/main integration are separate decisions.
 - Three prior denied cleanup children and parents remain untouched. A fourth,
   newly owned compatibility scratch removal was rejected by automatic approval
   review with `blocked by policy` on18October2026: `pathfinder-engine/.scratch/lookup-model-compat-459be54639f5400ebe91f856c64d7f5a`.
   It is retained; do not retry, delete its parent or bypass the rejection.
-  No identical
-  preview crash retry, native licence attempt or frozen PF0 generator rerun.
+  The shell overwrite of the old handoff was also rejected; it was preserved and
+  a new additive handoff was created with the file-editing tool. No rejected
+  command retry, preview crash retry, native licence attempt or frozen PF0
+  generator rerun occurred. Broad discovery4096objects/64MiB and other bounded
+  limits remain; live no-planning-history case NOT_RUN, native comparison
+  NOT_PERFORMED/NOT_REQUIRED_BY_USER, wholeplant/reusablegraph/crosscomputer and
+  offline-disconnect limitations unchanged. Human engineering review PENDING.
 
 ## Previous delivery — Routes + Path, 18 October 2026
 

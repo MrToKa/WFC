@@ -1,0 +1,15 @@
+{
+  "scope": "Final read-only existence check; no deletion or rejected-action retry",
+  "retained": [
+    { "path": ".pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c", "exists": true },
+    { "path": ".pf2-work/model-tests-2733f823d57d477ba5e338a7d9a08cc9", "exists": true },
+    { "path": "pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581", "exists": true },
+    { "path": "pathfinder-engine/.scratch/lookup-model-compat-459be54639f5400ebe91f856c64d7f5a", "exists": true }
+  ],
+  "reason": "Automatic approval review rejected the removals with blocked by policy; all four children and their parents are preserved.",
+  "auditLimit": "The unchanged generic isolation audit enumerates only the first two inherited denials. This supplemental read-only check covers all four.",
+  "otherRejectedCommands": [
+    { "action": "supplemental combined health/startup-receipt command", "result": "blocked by policy", "retried": false, "startupJsonProduced": false },
+    { "action": "shell overwrite of old manual-review handoff", "result": "blocked by policy", "retried": false, "oldHandoffUnchanged": true, "saferAdditiveDelivery": "docs/pathfinder/handoffs/PF-path-lookup-manual-review.md" }
+  ]
+}
