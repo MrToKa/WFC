@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-8-ui-preservation-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-3-input-coverage-local-20261018` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -13,7 +13,23 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current continuation — fresh UI data-preservation investigation
+## Current continuation — actual business input and full-model candidate coverage
+
+Newinheritingbranchpf-3-input-coverage-local-20261018 at technicaldelivery
+de093daf26531cfbedf3d12a3a52f5d8a3f136a1. Self-containedassignment
+[PF-3 current inputs](handoffs/PF-3-current-input-coverage.md) prepared with
+prepare-stage-handoff; userstandingauthority executesit immediately.
+CurrentoriginalDBendpoint/project/businesscounts/MTO/model-link UNKNOWN;
+guardedminimal readonlycopy/toolcontrols/fullmodelcandidateaudit NOT_RUN.
+Thisstagepermits narroworiginalreadonlySQL after verified backend/PGidentity/
+connectionendpoint/read-onlytxn guards; never app/config/dbbootstrap,original
+writes/import/Review/Apply. Privateengineeringrows ignored, compacthashes/counts
+onlyinGit. Originalconnectiondefaults are not observations. All7deniedchildren
+andparentsremainuntouched; no newcontainersneeded. Parentdocs/coordination,
+separate source-copy/alias-auditwriters and readonlyreview. Nextfirsttoolcontrols,
+independent sourceguardreview, then boundedactualreadcopyifprerequisitespass.
+
+## Latest delivery — fresh UI data-preservation investigation
 
 Technically complete on `pf-8-ui-preservation-local-20261018`, inheriting coverage delivery
 `7aedfe0b0b14b38ba58bc20ef40599403d4114c6`. New self-contained assignment
