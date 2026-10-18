@@ -15,6 +15,10 @@ not declare human acceptance or authorize main integration.
   `cfdcd3f5974636737ff34acec0fc3de391d35ab1` follows it; its failed and corrected
   live results are distinguished in the report. Later documentation/evidence commits may follow; inspect live branch/HEAD,
   status and agents before further work. Preserve concurrent/uncommitted work.
+  Scoped technical delivery/evidence is committed in
+  `961d24ff0f8e6cbbe9a77807d631aa0b3d7f00ef`; the heartbeat is PAUSED while the
+  actual human review is pending. Its tool/readback receipt is
+  [automation-paused.json](../evidence/manual-settings/automation-paused.json).
 - Original WFC main and observed live GitHub main are
   `e1ef20202598bb4d3d78e4772cbbb9747ec23a00`; canonical PathFinder local/live
   master is `45c24bf5f433f13e102600b36f20327c77961d0a`. Observations are dated

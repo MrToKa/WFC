@@ -56,9 +56,11 @@ source filename is confirmed by the user. Human acceptance remains PENDING.
   be impersonated by another technical run. Whole-plant capacity/category
   completeness and reusable graph remain explicitly unperformed/unimplemented.
 
-Technical delivery is ready for the user's manual review. The heartbeat is
-being paused through the app after the local report/evidence commit; its exact
-stored result will be recorded separately. Do not repeat the old licence refusal
+Technical delivery is ready for the user's manual review. Delivery/evidence
+commit961d24ff0f8e6cbbe9a77807d631aa0b3d7f00ef follows the candidate checkpoint.
+The heartbeat was setPAUSED through the app; stored status/name/schedule/target
+were read back. See evidence/manual-settings/automation-paused.json. The full
+saved configuration was resubmitted, changing only status. Do not repeat the old licence refusal
 or unchanged completed tests. Resume from concrete feedback/remaining measured
 scope while preserving the original installation and accepted algorithm.
 

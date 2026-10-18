@@ -215,3 +215,12 @@ original container IDs/images/starttimes match the baseline. Only the isolated
 application/resources were rebuilt/restarted; there was no push, PR, merge,
 deployment or original working-data write. The user can review the local result
 before making a separate integration decision.
+
+Local technical delivery/evidence commit:
+961d24ff0f8e6cbbe9a77807d631aa0b3d7f00ef. A following metadata-only commit
+records the actual heartbeat PAUSED result and this reference. The app tool
+confirmed PAUSED and stored status/name/schedule/target were read back;
+[receipt](evidence/manual-settings/automation-paused.json). This avoids repeated
+unchanged checks while the next required action is the user's manual review.
+It is not a declaration that the remaining whole-plant/graph work or human
+acceptance is complete. The next handoff preserves those limitations.
