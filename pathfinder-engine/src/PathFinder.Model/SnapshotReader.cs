@@ -53,6 +53,26 @@ public static class SnapshotReader
         if (capture.SourceKind is not ("converted" or "native" or "synthetic")) throw new ArgumentException("Unknown sourceKind.");
         if (capture.EvidenceSha256 is null || capture.EvidenceSha256.Length > 256) throw new ArgumentException("Evidence hashes outside budget.");
         foreach (var value in capture.EvidenceSha256) Hash(value);
+        if (capture.InputScope is { } input)
+        {
+            if (capture.SourceKind != "converted" || capture.AdapterVersion != "wfc.protected-selected-capture.v1" || lookup
+                || capture.InventoryComplete || capture.GeometryComplete || capture.UnitsVerified || capture.TransformsVerified
+                || capture.PlanningVisibilityKnown || capture.SourceLinkVerified)
+                throw new ArgumentException("Recorded selected input scope cannot claim native or engineering proofs.");
+            if (input.SchemaVersion != "wfc.capture.input.v1" || input.EquipmentNameCount is < 0 or > 4096
+                || input.ChunkCount is < 0 or > 16 || input.InputUtf8Bytes is < 1 or > 1048576
+                || (input.EquipmentNameCount == 0) != (input.ChunkCount == 0)
+                || input.EquipmentNameCount > input.ChunkCount * 256 || input.ChunkCount > input.EquipmentNameCount)
+                throw new ArgumentException("Capture input scope is outside its bounded session contract.");
+            Hash(input.ScopeSha256); Hash(input.EquipmentNamesSha256);
+            var scan = input.PropertyScan ?? throw new ArgumentException("Completed capture needs SDK row coverage.");
+            if (scan.IndexedObjectCount is < 1 or > 1000000 || scan.AttemptedObjectCount < 0
+                || scan.AttemptedObjectCount > scan.IndexedObjectCount || scan.ReturnedObjectCount < 0
+                || scan.ReturnedObjectCount > scan.AttemptedObjectCount
+                || scan.OmittedObjectCount != scan.AttemptedObjectCount - scan.ReturnedObjectCount
+                || scan.Complete != (input.EquipmentNameCount > 0 && scan.AttemptedObjectCount == scan.IndexedObjectCount && scan.OmittedObjectCount == 0))
+                throw new ArgumentException("Capture property row coverage is inconsistent.");
+        }
         if (capture.SourceLinkVerified && model.SourceContentSha256 is null) throw new ArgumentException("A verified source link needs its source content SHA256.");
         if (coordinates.VertexFrame != "canonical-world-metres") throw new ArgumentException("Only already canonical world-metre vertices are admitted; adapters must transform exactly once before the boundary.");
         Text(coordinates.SourceUnits, "sourceUnits", 64);

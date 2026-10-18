@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-3-input-coverage-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-3-batched-capture-local-20261018` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -14,6 +14,59 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
 ## Current continuation — actual business input and full-model candidate coverage
+
+LATEST16:45UTC: bounded capture/eligibility delivery TECHNICALLY COMPLETE on
+pf-3-batched-capture-local-20261018; [report29](29-batched-capture.md). Final101
+runtime+10syntax;53frontend/servercontracts+7affectedTab;28rootAPI/hook;25C#;
+12candidateunit+1transportdelta; actualSQL12TEMP/ROLLBACK PASS. Bothasyncowner/
+wholeSTART-to-final-auth deadline defects have actual0/2prefixedFAILrepros and
+independent source closure. Latercardmarkup2checks/lint. Exactlatestserved7PASS
+1792341465579 at ownAPIdce12a1f/web561d51c3, Linuxrunnerfe25497e modeoneshot.
+OrdinaryCUA captures13objects/2QAnames,438155of438155SDKrecords/0omitted; reload
+cardcounts persist; rawrulesnotrecovered. Firstv1businessbaselineprecisionlimited
+nevercomparedasexact. FixedlosslessSQLJSONBtextV2before1792341157585/after
+1792341771559 proves2projects/2types/3cables/2selections exactlyunchanged/0added
+throughlatestmarkupbuild/start,reload,SECONDcapture. InitialcaptureNOTretroproved.
+Wider12PASS1792341663456/4e0de64c preserves18baselineoriginal/5190resources+hashes.
+6exactownunusedimagesremoved(logical719154364B,physicalNOT_MEASURED),3ownbadframing
+screensremoved. Needednew5191/owner8fffd6b8 project0cba87606e9b retained. CUAown
+tab3 remains useful for nextstage; current finalimage prepared-input-scope-final.png.
+All7deniedchildren/parentsuntouched; originalDBqueries/writes/restarts0 inthisstage.
+Next LOCALCOMMIT→prepare-stage-handoff→newinheritingbranch forcopied2140cable
+project with ownnormalmodelimport/storage; explicitactualDetailsS/E/P+gap1.
+No originalreread/native/APSrequest needed. No borrowedQAmodel/syntheticflag/guessed
+aliases/coordinates/engineeringApply. Actual1527missingkeys still humanmappinggap.
+Continue useful independent seed/browsercoverage, no routine pause or publication.
+
+Chronological entries below retain earlier IN_PROGRESS states, superseded above.
+
+NEXT IMPLEMENTATION ACTIVE: branchpf-3-batched-capture-local-20261018 inherits
+actual-input deliveryd2c2d0178fb2b58617bfd4ea4039c38b9d00fa69, handoff
+6761cb76df79392befba6ace1c4d8c685b36cfdd at [bounded capture assignment](handoffs/PF-3-batched-capture.md).
+Runtime/protocol shared interface is being agreed before overlapping edits;
+known-hidden SQL region/test owner released. No new runtime/DB action yet.
+Original/source/private input preservation constraints persist. Next source/UI
+batching and durable honest provenance, then isolated focused/runtime checks.
+
+Live16:10UTC update supersedes prior preparation wording: three writers active
+runtime/protocol and frontend/capture provenance, candidate SQL nowfrozen with
+12unitPASS +1newtransportcontrol/type/lint. RootC#strictoptionalinputscope25PASS
+at csharp-input-1792339199298; API/hook28PASS actual new final28testJSON retained
+privately, compactreceipt pending. Beforeupload cancellation/localguard/fresh
+server model/registry/cable-endpoint dependency guards added; acceptedinflightPOST
+retains authoritative saved identity and previousscope/dirty notice as before.
+One NEW owned5191restore is running: projectwfc-pathfinder-local-0cba87606e9b,
+owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46, runtime
+pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600. Old archiveAPI/
+webimages only; newsource NOTBUILT/NOTACTIVATED yet. Restorerotation/fencing/
+inventoriesPASS in runtime-baseline1792339580221. No original/5190 lifecycle.
+Fresh local C#runner for runtimeinterop: capture-runner-3e6108f3-8bbd-497c-b2fe-
+3e3c1017c02d/runner/PathFinder.ModelRunner.dll SHA5d84d7799eb95d441b427568d67f2af82a61bdc09b5420432ead7915ebb5fe97.
+Candidate actualSQLdriver NOTRUN until ownsourcebuild/rootrelease; integration.mjs
+wrapper is source-reviewed with strict ownership/compiledhash/SQLidentity guards
+and raw-before-assert deadline capture. Next runtime/frontend focusedtests/source
+freeze, finaltypes/lint/ownbuild/start then actualSQL and computer-use. Keepactive
+agents' edits; do not duplicate capture or restore. All7deniedchildren untouched.
 
 Technical delivery COMPLETE at scoped evidence: [report28](28-current-input-coverage.md).
 Final guarded read-only copy PASS:2140actual cables, exact same project UUID with

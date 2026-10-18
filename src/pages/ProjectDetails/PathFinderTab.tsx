@@ -3,6 +3,7 @@ import { Body1, Button, Caption1, Field, Input, Spinner, Tab, TabList, Textarea,
 import type { PathFinderCable, PathFinderLocation, PathFinderPreferences } from '@/api/pathfinder';
 import type { CanonicalPoint, ViewerModelObject, ViewerModelObjectsPage } from '../../../viewer-runtime/protocol.mjs';
 import { isCanonicalPoint } from '../../../viewer-runtime/protocol.mjs';
+import { CAPTURE_INPUT_LIMITS } from '../../../viewer-runtime/capture-input.mjs';
 import { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerHeight } from './hooks/useRoutingsViewerHeight';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
@@ -130,7 +131,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
     const cables = selected ? [selected] : data?.cables ?? [];
     const equipmentNames = [...new Set([...standaloneNames, ...cables.flatMap(cable => [cable.fromLocation, cable.toLocation]).filter((value): value is string => Boolean(value?.trim())).map(value => value.trim())])];
     if (!routeCodes.length || routeCodes.length > 100 || routeCodes.some(value => value.length > 256) || !captureCategories.length) { setLocalError('Choose 1–100 exact network codes and explicitly select their allowed cable categories.'); return; }
-    if (equipmentNames.length > 256 || equipmentNames.some(value => value.length > 256)) { setLocalError('The equipment scope exceeds 256 names. Select one cable to prepare its endpoint candidates.'); return; }
+    if (equipmentNames.length > CAPTURE_INPUT_LIMITS.names || equipmentNames.some(value => value.length > 256)) { setLocalError('Use at most 4,096 equipment names, each up to 256 characters. Reduce the selected endpoint scope.'); return; }
     setPreparing(true);
     try {
       const result = await pf.prepareModel({ routeCodes, equipmentNames, allowedCategories: captureCategories });
@@ -175,7 +176,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
           <Field label="Routing network codes" hint="Exact model identifiers separated by /, spaces or commas. SECONDARY is an allowance."><Textarea aria-label="Routing network codes" maxLength={8000} rows={3} value={captureRoutes} onChange={(_, value) => setCaptureRoutes(value.value)} /></Field>
           <Button disabled={!selected?.routing || preparing} onClick={() => setCaptureRoutes(selected?.routing ?? '')}>Use selected cable routing</Button>
           <fieldset disabled={pf.busy}><legend>Allowed cable categories for this network</legend>{(['MV', 'LV', 'Control'] as const).map(category => <label key={category} style={{ display: 'block' }}><input type="checkbox" checked={captureCategories.includes(category)} onChange={event => setCaptureCategories(previous => event.target.checked ? [...previous, category] : previous.filter(value => value !== category))} /> {category}{category === 'Control' ? ' (including Instrumentation)' : ''}</label>)}</fieldset>
-          <Caption1>{selected ? 'The selected cable’s From/To names are included as equipment candidates.' : 'Project From/To names are included as equipment candidates, up to 256 unique names.'} This prepares only the selected network. Review its category assignments and locations.</Caption1>
+           <Caption1>{selected ? 'The selected cable’s From/To names are included as equipment candidates.' : 'Project From/To names are collected in bounded chunks, up to 4,096 requested names.'} This prepares only the selected network. Review its category assignments and locations.</Caption1>
           <Button appearance="primary" disabled={routeRulesDirty || pf.viewerPhase !== 'ready' || pf.busy || !captureRoutes.trim() || !captureCategories.length} onClick={() => void prepareModel()}>Prepare selected model network</Button>
           {preparing ? <Button onClick={restoreView}>Cancel model preparation</Button> : null}
           <details><summary>Import an existing canonical snapshot</summary>

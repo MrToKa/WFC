@@ -1,0 +1,616 @@
+TAP version 13
+# Subtest: SDK initialization uses pinned local assets, explicit local worker root and cookie credentials only
+ok 1 - SDK initialization uses pinned local assets, explicit local worker root and cookie credentials only
+  ---
+  duration_ms: 2.4797
+  type: 'test'
+  ...
+# Subtest: capture adapter preserves only the typed empty lookup scope error and keeps unexpected SDK errors generic
+ok 2 - capture adapter preserves only the typed empty lookup scope error and keeps unexpected SDK errors generic
+  ---
+  duration_ms: 30.8196
+  type: 'test'
+  ...
+# Subtest: staged adapter acknowledges all input before one SDK read, admits committed index0 and clears private input
+ok 3 - staged adapter acknowledges all input before one SDK read, admits committed index0 and clears private input
+  ---
+  duration_ms: 4.659
+  type: 'test'
+  ...
+# Subtest: a late cancelled sdk operation cannot clear its replacement capture
+ok 4 - a late cancelled sdk operation cannot clear its replacement capture
+  ---
+  duration_ms: 2.8761
+  type: 'test'
+  ...
+# Subtest: a late cancelled digest operation cannot clear its replacement capture
+ok 5 - a late cancelled digest operation cannot clear its replacement capture
+  ---
+  duration_ms: 2.6477
+  type: 'test'
+  ...
+# Subtest: missing renderer feature flag API fails before SDK initialization instead of allowing edges-only Ghost
+ok 6 - missing renderer feature flag API fails before SDK initialization instead of allowing edges-only Ghost
+  ---
+  duration_ms: 0.3537
+  type: 'test'
+  ...
+# Subtest: wrong SDK version and asset failure remain controlled, no SDK model is started
+ok 7 - wrong SDK version and asset failure remain controlled, no SDK model is started
+  ---
+  duration_ms: 0.2833
+  type: 'test'
+  ...
+# Subtest: aborted SDK assets detach listeners and pending initialization cannot start a viewer
+ok 8 - aborted SDK assets detach listeners and pending initialization cannot start a viewer
+  ---
+  duration_ms: 0.2604
+  type: 'test'
+  ...
+# Subtest: geometry/index/property worker callbacks gate evidence, original lighting is preserved and dispose releases all state
+ok 9 - geometry/index/property worker callbacks gate evidence, original lighting is preserved and dispose releases all state
+  ---
+  duration_ms: 3.5588
+  type: 'test'
+  ...
+# Subtest: property read error prevents ready evidence and caller abort releases a stalled property callback
+ok 10 - property read error prevents ready evidence and caller abort releases a stalled property callback
+  ---
+  duration_ms: 30.3187
+  type: 'test'
+  ...
+# Subtest: aborting a geometry load or rejecting an external URL cannot retain an active viewer
+ok 11 - aborting a geometry load or rejecting an external URL cannot retain an active viewer
+  ---
+  duration_ms: 0.9364
+  type: 'test'
+  ...
+# Subtest: prepared name index normalizes collisions and a unique name without fragments stays non-drawable
+ok 12 - prepared name index normalizes collisions and a unique name without fragments stays non-drawable
+  ---
+  duration_ms: 60.7925
+  type: 'test'
+  ...
+# Subtest: pending object-tree index is cancellable and ignores late SDK callback
+ok 13 - pending object-tree index is cancellable and ignores late SDK callback
+  ---
+  duration_ms: 15.4526
+  type: 'test'
+  ...
+# Subtest: independent lookup empty-visible scope sends only an allowlisted actionable message
+ok 14 - independent lookup empty-visible scope sends only an allowlisted actionable message
+  ---
+  duration_ms: 24.1352
+  type: 'test'
+  ...
+# Subtest: HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects
+ok 15 - HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects
+  ---
+  duration_ms: 0.6559
+  type: 'test'
+  ...
+# Subtest: computed path requires ordered complete bounded chunks and current cookie-bound admin permission
+ok 16 - computed path requires ordered complete bounded chunks and current cookie-bound admin permission
+  ---
+  duration_ms: 2.1688
+  type: 'test'
+  ...
+# Subtest: a successful zero-length engine result transports its one exact point without adding a second
+ok 17 - a successful zero-length engine result transports its one exact point without adding a second
+  ---
+  duration_ms: 1.7963
+  type: 'test'
+  ...
+# Subtest: out-of-order/incomplete computed paths fail closed; Clear cancels a pending authorization
+ok 18 - out-of-order/incomplete computed paths fail closed; Clear cancels a pending authorization
+  ---
+  duration_ms: 1.4546
+  type: 'test'
+  ...
+# Subtest: picking and metadata reauthorize after SDK work; cancellation and revoked admin suppress results
+ok 19 - picking and metadata reauthorize after SDK work; cancellation and revoked admin suppress results
+  ---
+  duration_ms: 1.2981
+  type: 'test'
+  ...
+# Subtest: selection is cookie-bound admin authorized before and after SDK work, and Clear suppresses late selection
+ok 20 - selection is cookie-bound admin authorized before and after SDK work, and Clear suppresses late selection
+  ---
+  duration_ms: 1.3663
+  type: 'test'
+  ...
+# Subtest: transparency is bounded to the current committed path and delayed authorization cannot change a replacement
+ok 21 - transparency is bounded to the current committed path and delayed authorization cannot change a replacement
+  ---
+  duration_ms: 2.0771
+  type: 'test'
+  ...
+# Subtest: transparency reauthorizes after material preflight and makes no change after role revocation
+ok 22 - transparency reauthorizes after material preflight and makes no change after role revocation
+  ---
+  duration_ms: 0.976
+  type: 'test'
+  ...
+# Subtest: Clear, cancellation, replacement and disposal cannot publish late preflighted transparency
+ok 23 - Clear, cancellation, replacement and disposal cannot publish late preflighted transparency
+  ---
+  duration_ms: 2.5124
+  type: 'test'
+  ...
+# Subtest: late final transparency authorization cannot mutate a cleared path
+ok 24 - late final transparency authorization cannot mutate a cleared path
+  ---
+  duration_ms: 0.9538
+  type: 'test'
+  ...
+# Subtest: partial appearance restoration errors are sanitized and leave Clear available for retry
+ok 25 - partial appearance restoration errors are sanitized and leave Clear available for retry
+  ---
+  duration_ms: 2.7046
+  type: 'test'
+  ...
+# Subtest: model capture transport is request-bound, reauthorizes each part and reserves the replay budget
+ok 26 - model capture transport is request-bound, reauthorizes each part and reserves the replay budget
+  ---
+  duration_ms: 13.5816
+  type: 'test'
+  ...
+# Subtest: the overall capture deadline starts before initial authorization and refuses a delayed start
+ok 27 - the overall capture deadline starts before initial authorization and refuses a delayed start
+  ---
+  duration_ms: 1.4471
+  type: 'test'
+  ...
+# Subtest: a final capture response cannot publish after delayed postauthorization exceeds the shared deadline
+ok 28 - a final capture response cannot publish after delayed postauthorization exceeds the shared deadline
+  ---
+  duration_ms: 1.0396
+  type: 'test'
+  ...
+# Subtest: staged input ACKs and first output stay separately typed and reauthorize every round
+ok 29 - staged input ACKs and first output stay separately typed and reauthorize every round
+  ---
+  duration_ms: 3.0082
+  type: 'test'
+  ...
+# Subtest: Clear or revoked authority after a staged append cannot publish a late input ACK
+ok 30 - Clear or revoked authority after a staged append cannot publish a late input ACK
+  ---
+  duration_ms: 2.0246
+  type: 'test'
+  ...
+# Subtest: actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths
+ok 31 - actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths
+  ---
+  duration_ms: 0.5032
+  type: 'test'
+  ...
+# Subtest: cancelling INIT suppresses late readiness and permits a fresh controlled initialization
+ok 32 - cancelling INIT suppresses late readiness and permits a fresh controlled initialization
+  ---
+  duration_ms: 0.3639
+  type: 'test'
+  ...
+# Subtest: new load aborts old load, rejects late progress/completion and cannot reuse old loadId
+ok 33 - new load aborts old load, rejects late progress/completion and cannot reuse old loadId
+  ---
+  duration_ms: 0.6245
+  type: 'test'
+  ...
+# Subtest: cancel pending load aborts transport and suppresses late model/index callbacks
+ok 34 - cancel pending load aborts transport and suppresses late model/index callbacks
+  ---
+  duration_ms: 0.4521
+  type: 'test'
+  ...
+# Subtest: empty/marker-only/invalid routing clears previous overlays without invoking geometry
+ok 35 - empty/marker-only/invalid routing clears previous overlays without invoking geometry
+  ---
+  duration_ms: 1.009
+  type: 'test'
+  ...
+# Subtest: partial/missing/ambiguous/non-drawable matches remain occurrence-preserving model-only results
+ok 36 - partial/missing/ambiguous/non-drawable matches remain occurrence-preserving model-only results
+  ---
+  duration_ms: 0.5706
+  type: 'test'
+  ...
+# Subtest: clear and cancel invalidate pending route results, stale identity and unknown target cannot change active view
+ok 37 - clear and cancel invalidate pending route results, stale identity and unknown target cannot change active view
+  ---
+  duration_ms: 0.4805
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 401 yields sanitized SESSION_EXPIRED and no SDK model load
+ok 38 - protected descriptor HTTP 401 yields sanitized SESSION_EXPIRED and no SDK model load
+  ---
+  duration_ms: 0.4027
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 403 yields sanitized ACCESS_REVOKED and no SDK model load
+ok 39 - protected descriptor HTTP 403 yields sanitized ACCESS_REVOKED and no SDK model load
+  ---
+  duration_ms: 0.3706
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 409 yields sanitized MODEL_SELECTION_CHANGED and no SDK model load
+ok 40 - protected descriptor HTTP 409 yields sanitized MODEL_SELECTION_CHANGED and no SDK model load
+  ---
+  duration_ms: 0.3885
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 410 yields sanitized SESSION_EXPIRED and no SDK model load
+ok 41 - protected descriptor HTTP 410 yields sanitized SESSION_EXPIRED and no SDK model load
+  ---
+  duration_ms: 0.3855
+  type: 'test'
+  ...
+# Subtest: protected descriptor HTTP 503 yields sanitized MODEL_UNAVAILABLE and no SDK model load
+ok 42 - protected descriptor HTTP 503 yields sanitized MODEL_UNAVAILABLE and no SDK model load
+  ---
+  duration_ms: 0.3901
+  type: 'test'
+  ...
+# Subtest: descriptor oversized/wrong identity/external entrypoint never reaches SDK
+ok 43 - descriptor oversized/wrong identity/external entrypoint never reaches SDK
+  ---
+  duration_ms: 1.6021
+  type: 'test'
+  ...
+# Subtest: 409 MODEL_UNAVAILABLE safe code is preserved without disclosing backend text
+ok 44 - 409 MODEL_UNAVAILABLE safe code is preserved without disclosing backend text
+  ---
+  duration_ms: 0.4597
+  type: 'test'
+  ...
+# Subtest: worker failure rechecks protected descriptor to identify revoked session without renewal
+ok 45 - worker failure rechecks protected descriptor to identify revoked session without renewal
+  ---
+  duration_ms: 0.4715
+  type: 'test'
+  ...
+# Subtest: runtime error during indexing prevents late readiness and releases the failed model
+ok 46 - runtime error during indexing prevents late readiness and releases the failed model
+  ---
+  duration_ms: 0.3842
+  type: 'test'
+  ...
+# Subtest: DISPOSE aborts resources, removes listeners, acknowledges exactly once and ignores all late work
+ok 47 - DISPOSE aborts resources, removes listeners, acknowledges exactly once and ignores all late work
+  ---
+  duration_ms: 0.3868
+  type: 'test'
+  ...
+# Subtest: a saturated command registry still admits replay-safe CANCEL and terminal DISPOSE without growing it
+ok 48 - a saturated command registry still admits replay-safe CANCEL and terminal DISPOSE without growing it
+  ---
+  duration_ms: 69.4536
+  type: 'test'
+  ...
+# Subtest: 1527 names use bounded sequential input chunks and one immutable exact request
+ok 49 - 1527 names use bounded sequential input chunks and one immutable exact request
+  ---
+  duration_ms: 11.1522
+  type: 'test'
+  ...
+# Subtest: UTF8-aware chunks fit the entire unchanged64KiB envelope
+ok 50 - UTF8-aware chunks fit the entire unchanged64KiB envelope
+  ---
+  duration_ms: 6.3829
+  type: 'test'
+  ...
+# Subtest: 4096 short names use at most16 chunks;4097 fails without truncation
+ok 51 - 4096 short names use at most16 chunks;4097 fails without truncation
+  ---
+  duration_ms: 3.4501
+  type: 'test'
+  ...
+# Subtest: oneMiB entire canonical scope is enforced independently of count limit
+ok 52 - oneMiB entire canonical scope is enforced independently of count limit
+  ---
+  duration_ms: 8.3687
+  type: 'test'
+  ...
+# Subtest: NFC trim/first dedup preserves case variants and ordered overlap rules
+ok 53 - NFC trim/first dedup preserves case variants and ordered overlap rules
+  ---
+  duration_ms: 1.2082
+  type: 'test'
+  ...
+# Subtest: empty equipment scope hashes and acknowledges before output index0 is admitted
+ok 54 - empty equipment scope hashes and acknowledges before output index0 is admitted
+  ---
+  duration_ms: 0.4792
+  type: 'test'
+  ...
+# Subtest: input ACK hashes are null until final count and digest verification
+ok 55 - input ACK hashes are null until final count and digest verification
+  ---
+  duration_ms: 1.067
+  type: 'test'
+  ...
+# Subtest: missing, reordered, repeated, wrong capture and mixed append payloads fail closed
+ok 56 - missing, reordered, repeated, wrong capture and mixed append payloads fail closed
+  ---
+  duration_ms: 0.9837
+  type: 'test'
+  ...
+# Subtest: final count cannot accept omitted names, changed values or a false declared digest
+ok 57 - final count cannot accept omitted names, changed values or a false declared digest
+  ---
+  duration_ms: 1.1221
+  type: 'test'
+  ...
+# Subtest: staging retains the original300s deadline instead of resetting after each chunk
+ok 58 - staging retains the original300s deadline instead of resetting after each chunk
+  ---
+  duration_ms: 0.616
+  type: 'test'
+  ...
+# Subtest: current-stage and caller cancellation fences suppress a late SHA result
+ok 59 - current-stage and caller cancellation fences suppress a late SHA result
+  ---
+  duration_ms: 1.0057
+  type: 'test'
+  ...
+# Subtest: planner detaches mutable caller arrays before its asynchronous digest
+ok 60 - planner detaches mutable caller arrays before its asynchronous digest
+  ---
+  duration_ms: 0.691
+  type: 'test'
+  ...
+# Subtest: one schema validates compact descriptor, pending metadata scope and finalized omitted-row closure
+ok 61 - one schema validates compact descriptor, pending metadata scope and finalized omitted-row closure
+  ---
+  duration_ms: 0.5257
+  type: 'test'
+  ...
+# Subtest: protocol staged variants are exact, directional and bound to a loaded model
+ok 62 - protocol staged variants are exact, directional and bound to a loaded model
+  ---
+  duration_ms: 1.2873
+  type: 'test'
+  ...
+# Subtest: staged1527 names produce one bounded computational snapshot with durable scope and actual scan closure
+ok 63 - staged1527 names produce one bounded computational snapshot with durable scope and actual scan closure
+  ---
+  duration_ms: 101.5264
+  type: 'test'
+  ...
+# Subtest: irrelevant omitted SDK rows retain geometry but make absence and unique-candidate status unknown
+ok 64 - irrelevant omitted SDK rows retain geometry but make absence and unique-candidate status unknown
+  ---
+  duration_ms: 85.9165
+  type: 'test'
+  ...
+# Subtest: staged request hash and inherited deadline are checked before any SDK read
+ok 65 - staged request hash and inherited deadline are checked before any SDK read
+  ---
+  duration_ms: 1.305
+  type: 'test'
+  ...
+# Subtest: generator and assembler honor the reduced shared response budget without truncation
+ok 66 - generator and assembler honor the reduced shared response budget without truncation
+  ---
+  duration_ms: 30.0734
+  type: 'test'
+  ...
+# Subtest: assembler rejects forged finalized scope scan counts and descriptor hashes
+ok 67 - assembler rejects forged finalized scope scan counts and descriptor hashes
+  ---
+  duration_ms: 111.4742
+  type: 'test'
+  ...
+# Subtest: independent lookup broadly discovers qualified names without JS owner parsing or planning assignments
+ok 68 - independent lookup broadly discovers qualified names without JS owner parsing or planning assignments
+  ---
+  duration_ms: 75.0005
+  type: 'test'
+  ...
+# Subtest: independent lookup excludes hidden ancestors, off nodes and invisible fragment geometry without fabricating native proof
+ok 69 - independent lookup excludes hidden ancestors, off nodes and invisible fragment geometry without fabricating native proof
+  ---
+  duration_ms: 155.1521
+  type: 'test'
+  ...
+# Subtest: independent lookup requires visibility support and exclusive canonical C\# planned scope
+ok 70 - independent lookup requires visibility support and exclusive canonical C\# planned scope
+  ---
+  duration_ms: 15.6996
+  type: 'test'
+  ...
+# Subtest: lookup capture retains cancellation and model identity fences
+ok 71 - lookup capture retains cancellation and model identity fences
+  ---
+  duration_ms: 1.155
+  type: 'test'
+  ...
+# Subtest: lookup refuses partially visible physical meshes rather than changing the fitting geometry
+ok 72 - lookup refuses partially visible physical meshes rather than changing the fitting geometry
+  ---
+  duration_ms: 13.3249
+  type: 'test'
+  ...
+# Subtest: ordered route selections recursively capture deepest geometry with the latest overlapping categories and exact selected root boundary
+ok 73 - ordered route selections recursively capture deepest geometry with the latest overlapping categories and exact selected root boundary
+  ---
+  duration_ms: 77.8092
+  type: 'test'
+  ...
+# Subtest: empty category overlap explicitly excludes a leaf and never falls back to another category or model
+ok 74 - empty category overlap explicitly excludes a leaf and never falls back to another category or model
+  ---
+  duration_ms: 94.0551
+  type: 'test'
+  ...
+# Subtest: rule selection refuses absent roots, mixed contracts, invalid categories and duplicate rule identities
+ok 75 - rule selection refuses absent roots, mixed contracts, invalid categories and duplicate rule identities
+  ---
+  duration_ms: 15.35
+  type: 'test'
+  ...
+# Subtest: assembler refuses forged nonancestor selected root boundaries
+ok 76 - assembler refuses forged nonancestor selected root boundaries
+  ---
+  duration_ms: 78.8603
+  type: 'test'
+  ...
+# Subtest: selected actual-shaped SDK capture retains binary64 transforms and physical leaves only
+ok 77 - selected actual-shaped SDK capture retains binary64 transforms and physical leaves only
+  ---
+  duration_ms: 125.2428
+  type: 'test'
+  ...
+# Subtest: equipment property matching is exact NFC/trim/case and retains ambiguous and missing candidates
+ok 78 - equipment property matching is exact NFC/trim/case and retains ambiguous and missing candidates
+  ---
+  duration_ms: 123.7285
+  type: 'test'
+  ...
+# Subtest: geometry-free equipment keeps an actual SDK bound and never becomes a routing tray
+ok 79 - geometry-free equipment keeps an actual SDK bound and never becomes a routing tray
+  ---
+  duration_ms: 123.8946
+  type: 'test'
+  ...
+# Subtest: categories require explicit planning selection and unknown categories fail
+ok 80 - categories require explicit planning selection and unknown categories fail
+  ---
+  duration_ms: 0.3548
+  type: 'test'
+  ...
+# Subtest: NaN mesh coordinates and invalid triangle indices are refused without an incomplete snapshot
+ok 81 - NaN mesh coordinates and invalid triangle indices are refused without an incomplete snapshot
+  ---
+  duration_ms: 47.6567
+  type: 'test'
+  ...
+# Subtest: canonical geometry beyond the engine and picking1e9 bound is explicitly refused
+ok 82 - canonical geometry beyond the engine and picking1e9 bound is explicitly refused
+  ---
+  duration_ms: 30.2125
+  type: 'test'
+  ...
+# Subtest: raw millimetre offsets beyond1e9 remain valid when canonical metres fit the engine bound
+ok 83 - raw millimetre offsets beyond1e9 remain valid when canonical metres fit the engine bound
+  ---
+  duration_ms: 122.3092
+  type: 'test'
+  ...
+# Subtest: cyclic hierarchy is refused
+ok 84 - cyclic hierarchy is refused
+  ---
+  duration_ms: 31.9559
+  type: 'test'
+  ...
+# Subtest: cancellation after metadata aborts traversal and model replacement invalidates capture
+ok 85 - cancellation after metadata aborts traversal and model replacement invalidates capture
+  ---
+  duration_ms: 0.9938
+  type: 'test'
+  ...
+# Subtest: capture does not touch visibility, colors, selection, navigation or Ghost
+ok 86 - capture does not touch visibility, colors, selection, navigation or Ghost
+  ---
+  duration_ms: 122.1841
+  type: 'test'
+  ...
+# Subtest: assembler rejects stale, duplicate, out-of-order and premature complete events
+ok 87 - assembler rejects stale, duplicate, out-of-order and premature complete events
+  ---
+  duration_ms: 124.5278
+  type: 'test'
+  ...
+# Subtest: assembler refuses unsupported proof flags, oversized chunks and count tampering
+ok 88 - assembler refuses unsupported proof flags, oversized chunks and count tampering
+  ---
+  duration_ms: 110.1835
+  type: 'test'
+  ...
+# Subtest: large escaped Unicode property payloads paginate and reassemble exactly under24KiB
+ok 89 - large escaped Unicode property payloads paginate and reassemble exactly under24KiB
+  ---
+  duration_ms: 110.5225
+  type: 'test'
+  ...
+# Subtest: canonical capture JSON rejects duplicate object members and unexpected object keys
+ok 90 - canonical capture JSON rejects duplicate object members and unexpected object keys
+  ---
+  duration_ms: 121.8045
+  type: 'test'
+  ...
+# Subtest: legacy, selected-boundary and independent lookup SDK captures cross the strict C\# model-worker boundary
+ok 91 - legacy, selected-boundary and independent lookup SDK captures cross the strict C\# model-worker boundary
+  ---
+  duration_ms: 1598.2315
+  type: 'test'
+  ...
+# Subtest: independent lookup capture is a closed bounded third union without planning rules or equipment
+ok 92 - independent lookup capture is a closed bounded third union without planning rules or equipment
+  ---
+  duration_ms: 1.9725
+  type: 'test'
+  ...
+# Subtest: shared project/model normalization is the exact strict parser key operation
+ok 93 - shared project/model normalization is the exact strict parser key operation
+  ---
+  duration_ms: 0.6942
+  type: 'test'
+  ...
+# Subtest: bootstrap accepts only two unique UUID fields and rejects credentials, URLs and unknown query keys
+ok 94 - bootstrap accepts only two unique UUID fields and rejects credentials, URLs and unknown query keys
+  ---
+  duration_ms: 0.5735
+  type: 'test'
+  ...
+# Subtest: parent and frame schemas enforce direction, exact keys and handshake null identities
+ok 95 - parent and frame schemas enforce direction, exact keys and handshake null identities
+  ---
+  duration_ms: 0.1793
+  type: 'test'
+  ...
+# Subtest: commands have closed payloads and fixed runtime version, no model URLs or auth header input
+ok 96 - commands have closed payloads and fixed runtime version, no model URLs or auth header input
+  ---
+  duration_ms: 0.1817
+  type: 'test'
+  ...
+# Subtest: only plain detached records are accepted and accessor/prototype/cyclic inputs are rejected
+ok 97 - only plain detached records are accepted and accessor/prototype/cyclic inputs are rejected
+  ---
+  duration_ms: 0.1484
+  type: 'test'
+  ...
+# Subtest: routing splits ASCII slash first, normalizes NFKC/case and preserves repeated occurrence indices
+ok 98 - routing splits ASCII slash first, normalizes NFKC/case and preserves repeated occurrence indices
+  ---
+  duration_ms: 0.3438
+  type: 'test'
+  ...
+# Subtest: route result describes only model occurrences and rejects DB fields and false readiness/counts
+ok 99 - route result describes only model occurrences and rejects DB fields and false readiness/counts
+  ---
+  duration_ms: 0.4926
+  type: 'test'
+  ...
+# Subtest: 64 KiB boundary counts UTF-8 bytes and applies to complete serialized envelope
+ok 100 - 64 KiB boundary counts UTF-8 bytes and applies to complete serialized envelope
+  ---
+  duration_ms: 1.643
+  type: 'test'
+  ...
+# Subtest: progress rejects fabricated invalid totals and descriptor pins the complete identity/profile/path
+ok 101 - progress rejects fabricated invalid totals and descriptor pins the complete identity/profile/path
+  ---
+  duration_ms: 0.3999
+  type: 'test'
+  ...
+1..101
+# tests 101
+# suites 0
+# pass 101
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3761.1895

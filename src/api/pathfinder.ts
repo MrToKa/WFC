@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import type { CanonicalPoint } from '../../viewer-runtime/protocol.mjs';
+import { validateModelCaptureInputScope, type ModelCaptureInputScope } from '../../viewer-runtime/capture-input.mjs';
 
 const uuid = z.string().uuid(), revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/);
 const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+const captureProvenance = z.object({ inputScope: z.custom<ModelCaptureInputScope>(value => validateModelCaptureInputScope(value)).optional() }).passthrough();
 const match = z.object({ status: z.enum(['matched', 'missing', 'ambiguous', 'stale']), locationId: uuid.nullable(), candidates: z.array(z.string().max(2048)) });
 const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.string()), revision,
   matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
@@ -40,7 +42,7 @@ const stateSchema = z.object({ schemaVersion: z.literal(1), projectId: uuid, reg
   activeModel: z.object({ modelVersionId: uuid.nullable(), selectionRevision: revision, contentFingerprint: z.string().nullable() }),
   settings: projectSettingsSchema,
   cables: z.array(cable).max(100000), locations: z.array(location),
-  artifacts: z.array(z.object({ id: uuid, modelVersionId: uuid, snapshotSha256: z.string(), objectCount: z.number().int(), engineeringAccepted: z.boolean(), readiness: z.string(), capture: z.record(z.unknown()), coordinates: z.record(z.unknown()), createdAt: z.string() })),
+  artifacts: z.array(z.object({ id: uuid, modelVersionId: uuid, snapshotSha256: z.string(), objectCount: z.number().int(), engineeringAccepted: z.boolean(), readiness: z.string(), capture: captureProvenance, coordinates: z.record(z.unknown()), createdAt: z.string() })),
   jobs: z.array(jobSchema), proposals: z.array(proposalSummarySchema) });
 export type PathFinderState = z.infer<typeof stateSchema>;
 export type PathFinderLocation = z.infer<typeof location>;

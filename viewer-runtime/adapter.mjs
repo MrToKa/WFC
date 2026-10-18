@@ -1,6 +1,7 @@
 import { createRouteController } from './routes.mjs';
 import { createPathFinderController } from './pathfinder.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
+import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { SDK_VERSION } from './protocol.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
@@ -117,7 +118,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
     const viewing = window.Autodesk.Viewing, viewer = new viewing.GuiViewer3D(container);
     let finished = false, routes, pathfinder, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
     let capture;
-    const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; old.controller.abort(); void old.iterator.return().catch(() => {}); };
+    const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; clearTimeout(old.deadline); old.controller.abort(); if (old.iterator) void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
     const finish = () => {
       if (finished) return;
@@ -178,14 +179,35 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         const abort = () => currentCapture.controller.abort();
         operationSignal?.addEventListener('abort', abort, { once: true });
         try {
+          active(operationSignal); active(currentCapture.controller.signal);
+          if (Date.now() - currentCapture.startedAt > CAPTURE_INPUT_LIMITS.milliseconds || currentCapture.responses >= CAPTURE_INPUT_LIMITS.responses) throw safeError('EXTRACTION_FAILED');
+          if (!currentCapture.iterator) {
+            if (!currentCapture.stage?.ready || index !== 0) throw safeError('EXTRACTION_FAILED');
+            currentCapture.iterator = captureIterator(currentCapture, currentCapture.stage.request(), currentCapture.stage.remainingResponses);
+          }
           const next = await currentCapture.iterator.next(); active(operationSignal);
           if (capture !== currentCapture || next.done || !next.value || next.value.captureId !== captureId) throw safeError('EXTRACTION_FAILED');
           const eventJson = JSON.stringify(next.value, (_key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw safeError('EXTRACTION_FAILED'); return value; });
-          const done = next.value.type === 'complete'; currentCapture.index++;
+          const done = next.value.type === 'complete'; currentCapture.index++; currentCapture.responses++;
           if (done) cancelCapture();
           return { captureId, index, done, eventJson };
-        } catch (error) { cancelCapture(); throw error?.name === 'AbortError' ? error : safeError(error?.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'LOOKUP_GEOMETRY_NOT_FOUND' : 'EXTRACTION_FAILED'); }
+        } catch (error) { if (capture === currentCapture) cancelCapture(); throw error?.name === 'AbortError' ? error : safeError(error?.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'LOOKUP_GEOMETRY_NOT_FOUND' : 'EXTRACTION_FAILED'); }
         finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
+      }
+      function captureIterator(state, request, eventLimit = CAPTURE_INPUT_LIMITS.responses) {
+        return captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint }, { signal: AbortSignal.any([signal, state.controller.signal].filter(Boolean)), startedAt: state.startedAt, eventLimit, onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
+      }
+      async function inputAck(state, request, operationSignal) {
+        if (capture !== state || state.reading || state.iterator) throw safeError('EXTRACTION_FAILED');
+        state.reading = true; const abort = () => state.controller.abort(); operationSignal?.addEventListener('abort', abort, { once: true });
+        try {
+          active(operationSignal); active(state.controller.signal);
+          const result = request ? await state.stage.append(request) : await state.stage.initialAck();
+          active(operationSignal); active(state.controller.signal);
+          if (capture !== state || ++state.responses > CAPTURE_INPUT_LIMITS.responses) throw safeError('EXTRACTION_FAILED');
+          return result;
+        } catch (error) { if (capture === state) cancelCapture(); throw error?.name === 'AbortError' ? error : safeError('EXTRACTION_FAILED'); }
+        finally { state.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
       const handle = {
         finish,
@@ -211,16 +233,28 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         readSelection: pathfinder.readSelection,
         setPathTransparency: pathfinder.setTransparency,
         pickPoint: pathfinder.pickPoint,
-        async startModelCapture(request, operationSignal, onProgress) {
+        async startModelCapture(request, operationSignal, onProgress, { startedAt = Date.now() } = {}) {
           cancelCapture();
           if (!descriptor) throw safeError('EXTRACTION_FAILED');
+          if (!Number.isFinite(startedAt) || startedAt > Date.now() || Date.now() - startedAt > CAPTURE_INPUT_LIMITS.milliseconds) throw safeError('EXTRACTION_FAILED');
           const controller = new AbortController();
-          const state = { id: request.captureId, index: 0, reading: false, controller, onProgress, iterator: null };
-          state.iterator = captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint }, { signal: AbortSignal.any([signal, controller.signal].filter(Boolean)), onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
+          const state = { id: request.captureId, index: 0, reading: false, controller, onProgress, iterator: null, stage: null, startedAt, responses: 0, deadline: null };
           capture = state;
+          state.deadline = setTimeout(() => { if (capture === state) cancelCapture(); }, Math.max(1, CAPTURE_INPUT_LIMITS.milliseconds - (Date.now() - startedAt)));
+          if (isStagedModelCaptureStart(request)) {
+            state.stage = createModelCaptureInputStage(request, { signal: AbortSignal.any([signal, controller.signal].filter(Boolean)), startedAt: state.startedAt, isCurrent: () => capture === state && !finished });
+            return inputAck(state, null, operationSignal);
+          }
+          state.iterator = captureIterator(state, request);
           return captureEvent(request.captureId, 0, operationSignal, onProgress);
         },
-        readModelCapture(request, operationSignal, onProgress) { return captureEvent(request.captureId, request.index, operationSignal, onProgress); },
+        readModelCapture(request, operationSignal, onProgress) {
+          if (isModelCaptureInputAppend(request)) {
+            if (!capture || capture.id !== request.captureId || !capture.stage) throw safeError('EXTRACTION_FAILED');
+            return inputAck(capture, request, operationSignal);
+          }
+          return captureEvent(request.captureId, request.index, operationSignal, onProgress);
+        },
       };
       current = handle;
       return handle;

@@ -30,6 +30,27 @@ public sealed record CaptureEvidence
     public required string[] EvidenceSha256 { get; init; }
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string[]? LookupRouteCodes { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public CaptureInputScope? InputScope { get; init; }
+}
+// Recorded request/SDK-row coverage is provenance, not native or engineering proof.
+public sealed record CaptureInputScope
+{
+    public required string SchemaVersion { get; init; }
+    public required int EquipmentNameCount { get; init; }
+    public required int ChunkCount { get; init; }
+    public required int InputUtf8Bytes { get; init; }
+    public required string ScopeSha256 { get; init; }
+    public required string EquipmentNamesSha256 { get; init; }
+    public required CapturePropertyScan PropertyScan { get; init; }
+}
+public sealed record CapturePropertyScan
+{
+    public required int IndexedObjectCount { get; init; }
+    public required int AttemptedObjectCount { get; init; }
+    public required int ReturnedObjectCount { get; init; }
+    public required int OmittedObjectCount { get; init; }
+    public required bool Complete { get; init; }
 }
 public sealed record CoordinateEvidence
 {

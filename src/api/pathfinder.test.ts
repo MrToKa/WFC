@@ -8,6 +8,17 @@ function state() { return { schemaVersion: 1, projectId, registryRevision: '3', 
   cables: [{ id: cableId, cableId: 17, tag: '=CABLE-17', fromLocation: 'EQ-001', toLocation: 'EQ-002', mto: 'Instrumentation', routing: null, designLength: '42', installLength: '37', cableWriteRevision: '9007199254740993', fromMatch: { status: 'missing', locationId: null, candidates: [] }, toMatch: { status: 'missing', locationId: null, candidates: [] } }],
   locations: [], artifacts: [], jobs: [], proposals: [] }; }
 describe('PathFinder API contract', () => {
+  it('retains validated recorded input provenance after reload without granting completeness', async () => {
+    const inputScope = { schemaVersion: 'wfc.capture.input.v1', equipmentNameCount: 1527, chunkCount: 6, inputUtf8Bytes: 70438,
+      scopeSha256: 'a'.repeat(64), equipmentNamesSha256: 'b'.repeat(64),
+      propertyScan: { indexedObjectCount: 100, attemptedObjectCount: 100, returnedObjectCount: 90, omittedObjectCount: 10, complete: false } };
+    const artifact = { id: cableId, modelVersionId: modelId, snapshotSha256: 'c'.repeat(64), objectCount: 26, engineeringAccepted: false, readiness: 'needs_review', capture: { inputScope }, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), artifacts: [artifact] }));
+    const result = await fetchPathFinderState(projectId, 'token');
+    expect(result.artifacts[0].capture.inputScope).toEqual(inputScope); expect(result.artifacts[0].engineeringAccepted).toBe(false);
+    fetch.mockResolvedValueOnce(Response.json({ ...state(), artifacts: [{ ...artifact, capture: { inputScope: { ...inputScope, propertyScan: { ...inputScope.propertyScan, complete: true } } } }] }));
+    await expect(fetchPathFinderState(projectId, 'token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
   it('accepts a nonempty actual-shaped state with integer cable_id and exact BIGINT revision strings', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json(state()));
     const result = await fetchPathFinderState(projectId, 'test-token');

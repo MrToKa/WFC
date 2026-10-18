@@ -17,6 +17,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   const renderedScope = useRef(scope);
   const runRef = useRef<Run | null>(null), dataRef = useRef<PathFinderState | null>(null);
   const lookupCapture = useRef<AbortController | null>(null);
+  const planningCapture = useRef<AbortController | null>(null);
   const [revision, setRevision] = useState(0), [view, setView] = useState<View>(initial);
   const live = useCallback((run: Run) => !run.closed && runRef.current === run && latest.current === scope, [scope]);
   const update = useCallback((run: Run, patch: Partial<View>) => { if (live(run)) setView(previous => ({ ...previous, ...patch })); }, [live]);
@@ -117,14 +118,27 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     if (reviewed.id !== proposal.id || reviewed.projectId !== projectId || reviewed.proposalHash !== proposal.proposalHash) throw new Error('Review identity mismatch');
     return { reviewId: result.reviewId, proposal: reviewed };
   }), [perform, projectId, token]);
-  const prepareModel = useCallback((request: ModelCaptureRequest) => perform(async (data, run) => {
+  const prepareModel = useCallback((request: ModelCaptureRequest, isCurrent: () => boolean = () => true) => perform(async (data, run) => {
     if (!run.viewer || !run.viewer.getLoadSnapshot()?.ready) throw new Error('The protected model is not ready');
+    planningCapture.current?.abort();
+    const operation = new AbortController(); planningCapture.current = operation;
+    const current = () => { if (operation.signal.aborted || !live(run) || planningCapture.current !== operation || !isCurrent()) throw new DOMException('Model capture cancelled.', 'AbortError'); };
+    // Cable spelling and ownership are captured inputs; late state changes require
+    // a new preparation, even when the model selection itself did not change.
+    const dependencies = (value: PathFinderState) => JSON.stringify({ projectId: value.projectId, activeModel: value.activeModel, registryRevision: value.registryRevision,
+      cables: value.cables.map(cable => [cable.id, cable.fromLocation, cable.toLocation]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))) });
+    const frozenDependencies = dependencies(data);
     try {
+      current();
       const captured = await run.viewer.captureModel(request, progress => update(run, { viewerMessage: `Preparing the selected model: ${progress.index + 1} data batches…` }));
-      if (!live(run)) return null;
+      current();
+      const latestData = await fetchPathFinderState(projectId!, token!, AbortSignal.any([run.abort.signal, operation.signal]));
+      current();
+      if (dependencies(latestData) !== frozenDependencies || dataRef.current && dependencies(dataRef.current) !== frozenDependencies)
+        throw new PathFinderApiError('CAPTURE_INPUT_CHANGED', 409);
       const result = await pathFinderRequest(projectId!, token!, '/artifacts', 'POST', { modelVersionId: data.activeModel.modelVersionId, expectedSelectionRevision: data.activeModel.selectionRevision, expectedRegistryRevision: data.registryRevision, snapshot: captured.snapshot }, run.abort.signal);
       return { ...result, captureSummary: captured.summary };
-    } finally { if (run.viewer.getLoadSnapshot()?.ready) update(run, { viewerMessage: 'The active model is ready.' }); }
+    } finally { if (planningCapture.current === operation) planningCapture.current = null; if (run.viewer.getLoadSnapshot()?.ready) update(run, { viewerMessage: 'The active model is ready.' }); }
   }), [live, perform, projectId, token, update]);
   const startLookup = useCallback((routeText: string, reverse: boolean) => perform(async (data, run) => {
     if (!run.viewer?.getLoadSnapshot()?.ready || !routeText.trim() || routeText.length > 8000) throw new Error('Load the active model and enter a bounded route');
@@ -180,6 +194,6 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()),
     setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),
-    cancelOperation: () => { lookupCapture.current?.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
+    cancelOperation: () => { planningCapture.current?.abort(); lookupCapture.current?.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
     showPath: (path: ComputedPath) => viewerAction(viewer => viewer.showComputedPath(path)), clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };
 }

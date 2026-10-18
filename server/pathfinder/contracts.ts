@@ -16,6 +16,30 @@ const fragment = z.object({
   if (value.triangleIndices.length % 3 !== 0 || value.triangleIndices.some(index => index >= value.vertices.length))
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Triangle indices are invalid.' });
 });
+/** Reported input/SDK row coverage; this never grants native or engineering proof. */
+export const captureInputScopeSchema = z.object({
+  schemaVersion: z.literal('wfc.capture.input.v1'),
+  equipmentNameCount: z.number().int().nonnegative().max(4096),
+  chunkCount: z.number().int().nonnegative().max(16),
+  inputUtf8Bytes: z.number().int().positive().max(1024 * 1024),
+  scopeSha256: hash,
+  equipmentNamesSha256: hash,
+  propertyScan: z.object({
+    indexedObjectCount: z.number().int().positive().max(1_000_000),
+    attemptedObjectCount: z.number().int().nonnegative().max(1_000_000),
+    returnedObjectCount: z.number().int().nonnegative().max(1_000_000),
+    omittedObjectCount: z.number().int().nonnegative().max(1_000_000),
+    complete: z.boolean(),
+  }).strict(),
+}).strict().superRefine((value, ctx) => {
+  const scan = value.propertyScan;
+  if ((value.equipmentNameCount === 0) !== (value.chunkCount === 0) || value.chunkCount > value.equipmentNameCount || value.equipmentNameCount > value.chunkCount * 256)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Input chunk counts disagree with the requested equipment scope.' });
+  if (scan.returnedObjectCount > scan.attemptedObjectCount || scan.attemptedObjectCount > scan.indexedObjectCount || scan.omittedObjectCount !== scan.attemptedObjectCount - scan.returnedObjectCount)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Reported SDK row coverage counts disagree.' });
+  if (scan.complete !== (value.equipmentNameCount > 0 && scan.attemptedObjectCount === scan.indexedObjectCount && scan.omittedObjectCount === 0))
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Reported SDK row coverage completion disagrees with its counts.' });
+});
 export const snapshotObject = z.object({
   id: identity, parentId: identity.nullable().optional(), externalId: z.string().min(1).max(1024).nullable().optional(),
   dbId: z.number().int().nonnegative().max(2_147_483_647).nullable().optional(), name: text,
@@ -38,7 +62,11 @@ export const snapshotSchema = z.object({
   capture: z.object({ adapterVersion: z.string().min(1).max(256), sourceKind: z.enum(['converted', 'native', 'synthetic']),
     inventoryComplete: z.boolean(), geometryComplete: z.boolean(), unitsVerified: z.boolean(), transformsVerified: z.boolean(),
     planningVisibilityKnown: z.boolean(), sourceLinkVerified: z.boolean(), evidenceSha256: z.array(hash).max(256),
-    lookupRouteCodes:z.array(z.string().max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/)).min(1).max(100).optional() }).strict(),
+    lookupRouteCodes:z.array(z.string().max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/)).min(1).max(100).optional(),
+    inputScope: captureInputScopeSchema.optional() }).strict().superRefine((value, ctx) => {
+      if (value.inputScope && (value.lookupRouteCodes !== undefined || value.sourceKind !== 'converted' || value.adapterVersion !== 'wfc.protected-selected-capture.v1' || value.inventoryComplete || value.geometryComplete || value.unitsVerified || value.transformsVerified || value.planningVisibilityKnown || value.sourceLinkVerified))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Input coverage metadata cannot grant completeness or native proofs.' });
+    }),
   coordinates: z.object({ vertexFrame: z.literal('canonical-world-metres'), sourceUnits: z.string().min(1).max(64),
     metresPerSourceUnit: z.number().finite().positive().max(1e9).nullable(), sourceToWorldMetres: matrix.nullable(),
     globalOffsetMetres: point, displayToWorldMetres: matrix }).strict(),

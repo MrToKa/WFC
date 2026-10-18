@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { captureSelectedModel, createModelCaptureAssembler, MODEL_CAPTURE_LIMITS } from '../model-capture.mjs';
+import { planModelCaptureInput } from '../capture-input.mjs';
 
 class Matrix {
   constructor(double = false) { this.elements = double ? new Float64Array(16) : new Float32Array(16); this.makeScale(1, 1, 1); }
@@ -43,6 +44,37 @@ async function collect(options = {}, input = request) { const value = fixture(op
 const ruleRequest = rules => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], routeRules: rules }; };
 const rule = (objectIds, allowedCategories, id = '44444444-4444-4444-8444-444444444444') => ({ id, objectIds, allowedCategories });
 const lookupRequest = (lookupRouteCodes = ['/BC001']) => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], lookupRouteCodes }; };
+async function stagedRequest(equipmentNames) {
+  const source = { routeRules: [rule([2], ['LV'])], equipmentNames };
+  const p = await planModelCaptureInput(source, { captureId: request.captureId, envelopeIdentity: { instanceId: '99999999-9999-4999-8999-999999999999', projectId: request.projectId, modelVersionId: request.modelVersionId, loadId: '88888888-8888-4888-8888-888888888888' } });
+  return { p, input: { ...request, routeCodes: undefined, allowedCategories: undefined, ...p.request, inputScope: p.descriptor } };
+}
+test('staged1527 names produce one bounded computational snapshot with durable scope and actual scan closure', async () => {
+  const { input, p } = await stagedRequest(['P-001', ...Array.from({ length: 1526 }, (_, i) => 'UNMATCHED-' + i)]), f = fixture(), events = [], assembler = createModelCaptureAssembler({ eventLimit: 3000 - 1 - p.chunks.length }), requestedBatches = [];
+  const original = f.model.getBulkProperties; f.model.getBulkProperties = (...args) => { requestedBatches.push([...args[0]]); return original(...args); };
+  for await (const e of captureSelectedModel({ model: f.model }, input, { eventLimit: 3000 - 1 - p.chunks.length })) { events.push(e); assembler.accept(e); }
+  const snapshot = assembler.finish(), summary = assembler.summary(); assert.equal(snapshot.capture.inputScope.equipmentNameCount, 1527); assert.deepEqual(snapshot.capture.inputScope.propertyScan, { indexedObjectCount: 6, attemptedObjectCount: 6, returnedObjectCount: 6, omittedObjectCount: 0, complete: true }); assert.deepEqual(summary.scope.equipmentNames, p.request.equipmentNames); assert.deepEqual(summary.scope.inputScope, snapshot.capture.inputScope); assert.equal(requestedBatches.filter(batch => batch.length === 6).length, 1); assert.ok(requestedBatches.slice(1).every(batch => batch.every(id => id === 1 || id === 2))); assert.ok(events.length + 1 + p.chunks.length <= 3000); assert.equal(snapshot.capture.geometryComplete, false);
+});
+test('irrelevant omitted SDK rows retain geometry but make absence and unique-candidate status unknown', async () => {
+  const { input } = await stagedRequest(['P-001', 'NOT-FOUND']), f = fixture(), original = f.model.getBulkProperties, assembler = createModelCaptureAssembler();
+  f.model.getBulkProperties = (ids, options, success) => original(ids, options, rows => success(rows.filter(row => row.dbId !== 5)));
+  for await (const e of captureSelectedModel({ model: f.model }, input)) assembler.accept(e);
+  const snapshot = assembler.finish(), summary = assembler.summary(); assert.equal(snapshot.capture.inputScope.propertyScan.omittedObjectCount, 1); assert.equal(snapshot.capture.inputScope.propertyScan.complete, false); assert.equal(summary.scope.fullPropertyScan, false); assert.equal(summary.equipmentMatches.find(x => x.name === 'P-001').status, 'unknown'); assert.equal(summary.equipmentMatches.find(x => x.name === 'NOT-FOUND').status, 'unknown'); assert.ok(summary.diagnostics.some(x => x.code === 'incomplete_sdk_property_scan')); assert.ok(snapshot.objects.some(o => o.geometryRole === 'routing-leaf'));
+});
+test('staged request hash and inherited deadline are checked before any SDK read', async () => {
+  const { input } = await stagedRequest(['P-001']), f = fixture(); let reads = 0; f.model.getObjectTree = () => { reads++; };
+  for (const [bad, options] of [[{ ...input, inputScope: { ...input.inputScope, scopeSha256: 'a'.repeat(64) } }, {}], [input, { startedAt: Date.now() - 300001 }]]) await assert.rejects(async () => { for await (const _e of captureSelectedModel({ model: f.model }, bad, options)) { /* no partial metadata */ } }, /digest mismatch|deadline/);
+  assert.equal(reads, 0);
+});
+test('generator and assembler honor the reduced shared response budget without truncation', async () => {
+  const { input } = await stagedRequest(['P-001']), f = fixture(), assembler = createModelCaptureAssembler({ eventLimit: 1 }), generator = captureSelectedModel({ model: f.model }, input, { eventLimit: 1 }); const first = await generator.next(); assembler.accept(first.value); await assert.rejects(() => generator.next(), /bounded bridge budget/); assert.throws(() => assembler.finish(), /not complete/); assert.throws(() => assembler.accept(first.value), /over-budget/); assert.throws(() => createModelCaptureAssembler({ eventLimit: 3001 }), /budget/);
+});
+test('assembler rejects forged finalized scope scan counts and descriptor hashes', async () => {
+  const { input } = await stagedRequest(['P-001']), f = fixture(), events = []; for await (const e of captureSelectedModel({ model: f.model }, input)) events.push(e);
+  for (const change of [s => { s.scope.inputScope.propertyScan.complete = false; }, s => { s.scope.inputScope.equipmentNamesSha256 = 'f'.repeat(64); }, s => { s.scope.equipmentNames = []; }]) {
+    const assembler = createModelCaptureAssembler(), changed = structuredClone(events), parts = changed.filter(e => e.type === 'summary-part'); assert.equal(parts.length, 1); const summary = JSON.parse(parts[0].text); change(summary); parts[0].text = JSON.stringify(summary); assert.throws(() => changed.forEach(e => assembler.accept(e)), /scope closure/);
+  }
+});
 
 test('independent lookup broadly discovers qualified names without JS owner parsing or planning assignments', async () => {
   const { snapshot, summary } = await collect({ lookupNames: true }, lookupRequest());
@@ -183,7 +215,8 @@ test('canonical capture JSON rejects duplicate object members and unexpected obj
   assert.throws(() => extra.accept({ ...firstObject, text: JSON.stringify(object) }), /captured object/);
 });
 test('legacy, selected-boundary and independent lookup SDK captures cross the strict C# model-worker boundary', async () => {
-  for (const captureRequest of [request, ruleRequest([rule([2], ['LV'])]), lookupRequest()]) {
+  const staged = await stagedRequest(['P-001']);
+  for (const captureRequest of [request, ruleRequest([rule([2], ['LV'])]), lookupRequest(), staged.input]) {
     const lookup = Boolean(captureRequest.lookupRouteCodes);
     const { snapshot } = await collect({ lookupNames: lookup }, captureRequest), root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), scratch = path.join(root, 'pathfinder-engine/.scratch/protected-capture-interop-' + randomUUID()), snapshotId = randomUUID();
     await fs.mkdir(path.join(scratch, 'snapshots'), { recursive: true });

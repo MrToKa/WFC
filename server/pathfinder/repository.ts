@@ -185,7 +185,7 @@ export function createPathFinderRepository(pool: Pool) {
             if (location.binding && (location.binding.modelVersionId === model.active_model_version_id && location.binding.source === 'manual' || location.binding.status === 'confirmed')) continue;
             const names = [...new Set([location.name,...location.aliases].map(normalizeLocation))];
             const candidates = await client.query<Row>(`SELECT * FROM pf_model_objects WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object'
-              AND match_names ?| $3::text[] ORDER BY object_id LIMIT 3`,[projectId,artifact.id,names]);
+              AND visibility<>'hidden' AND match_names ?| $3::text[] ORDER BY object_id LIMIT 3`,[projectId,artifact.id,names]);
             if (candidates.rows.length !== 1 || candidates.rows[0].visibility !== 'visible') {
               await client.query(`INSERT INTO pf_location_matches(project_id,location_id,model_version_id,status,candidate_object_ids) VALUES($1,$2,$3,$4,$5)
                 ON CONFLICT(project_id,location_id,model_version_id) DO UPDATE SET status=EXCLUDED.status,candidate_object_ids=EXCLUDED.candidate_object_ids`,

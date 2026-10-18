@@ -30,6 +30,45 @@ beforeEach(() => {
 });
 afterEach(() => { document.body.replaceChildren(); });
 describe('PathFinder scope and shared-location orchestration', () => {
+  it('cancels a late planning capture before it can upload', async () => {
+    let finish!: (value: { snapshot: unknown; summary: Record<string, unknown> }) => void;
+    facts.capture.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    let pending!: Promise<unknown>; act(() => { pending = result.current.prepareModel({ routeCodes: ['BC1'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] }); });
+    await waitFor(() => expect(facts.capture).toHaveBeenCalledOnce());
+    act(() => result.current.cancelOperation());
+    await act(async () => { finish({ snapshot: {}, summary: {} }); await pending; });
+    expect(pathFinderRequest).not.toHaveBeenCalled();
+  });
+  it('refuses changed registry inputs and revoked access before planning artifact upload', async () => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    vi.mocked(fetchPathFinderState).mockResolvedValueOnce({ ...state(), registryRevision: '4' });
+    await act(() => result.current.prepareModel({ routeCodes: ['BC1'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] }));
+    expect(pathFinderRequest).not.toHaveBeenCalled();
+    vi.mocked(fetchPathFinderState).mockRejectedValueOnce(new PathFinderApiError('ADMIN_REQUIRED', 403));
+    await act(() => result.current.prepareModel({ routeCodes: ['BC1'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] }));
+    expect(pathFinderRequest).not.toHaveBeenCalled(); expect(facts.disposed).toHaveBeenCalledWith('reload');
+  });
+  it('rejects a changed cable endpoint even when the selection and registry revisions stay equal', async () => {
+    const baseline = state(); baseline.cables = [{ id: locationId, cableId: 1, tag: '=QA', fromLocation: 'FROM', toLocation: 'TO', mto: 'Control', routing: null, designLength: null, installLength: null, cableWriteRevision: '1',
+      fromMatch: { status: 'missing', locationId: null, candidates: [] }, toMatch: { status: 'missing', locationId: null, candidates: [] } }];
+    vi.mocked(fetchPathFinderState).mockResolvedValue(baseline);
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data?.cables).toHaveLength(1));
+    vi.mocked(fetchPathFinderState).mockResolvedValueOnce({ ...baseline, cables: [{ ...baseline.cables[0], toLocation: 'CHANGED' }] });
+    await act(() => result.current.prepareModel({ routeCodes: ['BC1'], allowedCategories: ['Control'], equipmentNames: ['FROM', 'TO'] }));
+    expect(pathFinderRequest).not.toHaveBeenCalled(); expect(result.current.error).toMatch(/project changed/i);
+  });
+  it('checks the frozen local endpoint/rule scope after the final server read and before upload', async () => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    let valid = true;
+    vi.mocked(fetchPathFinderState).mockImplementationOnce(async () => { valid = false; return state(); });
+    await act(() => result.current.prepareModel({ routeCodes: ['BC1'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] }, () => valid));
+    expect(pathFinderRequest).not.toHaveBeenCalled();
+  });
   it('does not request admin data or create a frame for a non-admin or mismatched project', async () => {
     const { result, rerender } = renderHook(({ isAdmin, loadedProjectId }) => usePathFinder({ projectId, loadedProjectId, token: 'token', isAdmin, container }), { initialProps: { isAdmin: false, loadedProjectId: projectId } });
     expect(result.current.data).toBeNull(); expect(fetchPathFinderState).not.toHaveBeenCalled(); expect(facts.instances).toBe(0);

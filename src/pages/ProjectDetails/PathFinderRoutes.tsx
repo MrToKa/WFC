@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
 import type { PathFinderCable } from '@/api/pathfinder';
 import type { ViewerModelObject, ViewerModelObjectsPage } from '../../../viewer-runtime/protocol.mjs';
+import { CAPTURE_INPUT_LIMITS, modelCaptureScopeBytes } from '../../../viewer-runtime/capture-input.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 
@@ -18,10 +19,22 @@ export function PathFinderRoutes({ pf, active, selectedCable, standaloneNames, o
   const [preparedRules, setPreparedRules] = useState<Rule[]>([]), [dirty, setDirty] = useState(false), dirtyCallback = useRef(onRulesDirtyChange); dirtyCallback.current = onRulesDirtyChange;
   const [newCategories, setNewCategories] = useState<Category[]>(['LV', 'Control']), [working, setWorking] = useState(false), [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState(''), [candidates, setCandidates] = useState<ViewerModelObjectsPage | null>(null), [checkedObjects, setCheckedObjects] = useState<ViewerModelObject[]>([]);
+  const capturePending = useRef(false), cancelOperation = useRef(pf.cancelOperation); cancelOperation.current = pf.cancelOperation;
+  const scopeCables = selectedCable ? [selectedCable] : pf.data?.cables ?? [];
+  const endpointScope = JSON.stringify([modelScope, selectedCable?.id ?? null, standaloneNames, scopeCables.map(cable => [cable.id, cable.fromLocation, cable.toLocation])]);
+  const currentEndpointScope = useRef(endpointScope); currentEndpointScope.current = endpointScope;
+  const recordedInput = pf.data?.artifacts[0]?.capture.inputScope;
   const modelId = pf.data?.activeModel.modelVersionId, selectionRevision = pf.data?.activeModel.selectionRevision;
   useEffect(() => { generation.current++; setRules([]); setPreparedRules([]); setDirty(false); dirtyCallback.current(false); setSelectedRuleId(null); setWorking(false); setNotice(null); setCandidates(null); setCheckedObjects([]); }, [modelId, selectionRevision]);
   useEffect(() => { generation.current++; setWorking(false); setNotice(null); return () => { generation.current++; }; }, [active]);
-  const markDirty = () => { ruleRevision.current++; setDirty(true); onRulesDirtyChange(true); };
+  useEffect(() => {
+    if (capturePending.current) { capturePending.current = false; generation.current++; cancelOperation.current(); setWorking(false); setNotice('The endpoint scope changed. Route preparation was cancelled.'); }
+  }, [endpointScope]);
+  useEffect(() => {
+    if (!active && capturePending.current) { capturePending.current = false; cancelOperation.current(); }
+    return () => { if (capturePending.current) { capturePending.current = false; cancelOperation.current(); } };
+  }, [active]);
+  const markDirty = () => { if (capturePending.current) { capturePending.current = false; generation.current++; pf.cancelOperation(); setWorking(false); } ruleRevision.current++; setDirty(true); onRulesDirtyChange(true); };
   const saveObjects = (objects: ViewerModelObject[], replace: boolean) => {
     const objectIds = [...new Set(objects.map(object => object.objectId))];
     const existing = replace ? rules.find(rule => rule.id === selectedRuleId) : rules.find(rule => rule.objectIds.length === objectIds.length && rule.objectIds.every(id => objectIds.includes(id)));
@@ -58,26 +71,34 @@ export function PathFinderRoutes({ pf, active, selectedCable, standaloneNames, o
   };
   const prepare = async () => {
     if (!active || !rules.length || pf.busy || working) return;
-    const cables = selectedCable ? [selectedCable] : pf.data?.cables ?? [];
-    const equipmentNames = [...new Set([...standaloneNames, ...cables.flatMap(cable => [cable.fromLocation, cable.toLocation]).filter((value): value is string => Boolean(value?.trim())).map(value => value.trim())])];
-    if (equipmentNames.length > 256 || equipmentNames.some(name => name.length > 256)) { setNotice('The equipment scope exceeds 256 names. Select one cable in Path to prepare its endpoint candidates.'); return; }
-    const current = ++generation.current, capturedScope = currentModelScope.current, capturedRevision = ruleRevision.current;
+    const equipmentNames = [...new Set([...standaloneNames, ...scopeCables.flatMap(cable => [cable.fromLocation, cable.toLocation]).filter((value): value is string => Boolean(value?.trim())).map(value => value.trim())])];
+    if (equipmentNames.length > CAPTURE_INPUT_LIMITS.names || equipmentNames.some(name => name.length > 256)) { setNotice('Use at most 4,096 equipment names, each up to 256 characters. Reduce the selected endpoint scope.'); return; }
+    const current = ++generation.current, capturedScope = currentModelScope.current, capturedEndpoints = currentEndpointScope.current, capturedRevision = ruleRevision.current;
     const capturedRules = rules.map(rule => ({ ...rule, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories], names: [...rule.names] }));
+    const request = { routeRules: capturedRules.map(({ id, objectIds, allowedCategories }) => ({ id, objectIds, allowedCategories })), equipmentNames };
+    try { if (modelCaptureScopeBytes(request).length > CAPTURE_INPUT_LIMITS.bytes) throw new Error(); }
+    catch { setNotice('The capture input exceeds its bounded size or contains an invalid rule or equipment name. Reduce the scope.'); return; }
+    capturePending.current = true;
     setWorking(true); setNotice(null);
     try {
-      const result = await pf.prepareModel({ routeRules: capturedRules.map(({ id, objectIds, allowedCategories }) => ({ id, objectIds, allowedCategories })), equipmentNames });
+      const result = await pf.prepareModel(request, () => generation.current === current && currentModelScope.current === capturedScope && currentEndpointScope.current === capturedEndpoints && ruleRevision.current === capturedRevision);
       if (result && currentModelScope.current === capturedScope) {
         // A persisted snapshot remains authoritative even if its viewer work was cancelled meanwhile.
         setPreparedRules(capturedRules);
-        if (ruleRevision.current === capturedRevision) { setRules(capturedRules); setDirty(false); onRulesDirtyChange(false); }
+        if (ruleRevision.current === capturedRevision && currentEndpointScope.current === capturedEndpoints) { setRules(capturedRules); setDirty(false); onRulesDirtyChange(false); }
         else { setDirty(true); onRulesDirtyChange(true); }
-        setNotice(generation.current === current ? 'All route rules were prepared. Review category assignments and locations before using calculated results.' : 'The snapshot was saved before cancellation completed. Its prepared rules were retained.');
+        setNotice(currentEndpointScope.current !== capturedEndpoints ? 'The saved snapshot records a previous endpoint scope. Prepare again for the current endpoints.' : generation.current === current ? 'All route rules were prepared. Review category assignments and locations before using calculated results.' : 'The snapshot was saved before cancellation completed. Its prepared rules were retained.');
       }
-    } finally { if (generation.current === current) setWorking(false); }
+    } finally { if (generation.current === current) { capturePending.current = false; setWorking(false); } }
   };
   return <section className={styles.result} aria-label="Route category rules">
     <h3>Route categories</h3>
     <Body1>Select model objects or groups, then assign the cable categories allowed on their routes.</Body1>
+    {recordedInput ? <div aria-label="Recorded preparation input scope">
+      <Body1 style={{ display: 'block' }}>Last prepared locations: {recordedInput.equipmentNameCount.toLocaleString()} {recordedInput.equipmentNameCount === 1 ? 'name' : 'names'}.</Body1>
+      {recordedInput.propertyScan ? <Caption1 style={{ display: 'block', marginTop: 4 }}>Model records returned: {recordedInput.propertyScan.returnedObjectCount.toLocaleString()} of {recordedInput.propertyScan.attemptedObjectCount.toLocaleString()} checked; {recordedInput.propertyScan.omittedObjectCount.toLocaleString()} unavailable. {recordedInput.propertyScan.complete ? 'Review shared locations before using calculated routes.' : 'Location matching may be incomplete. Review missing locations before using calculated routes.'}</Caption1> : null}
+      <Caption1 style={{ display: 'block', marginTop: 4 }}>These counts describe the last preparation. Prepare again after changing project inputs.</Caption1>
+    </div> : pf.data?.artifacts.length ? <Caption1>Recorded input scope is unavailable for this historical snapshot.</Caption1> : null}
     <fieldset disabled={!active || pf.busy || working}><legend>Categories for a new selection</legend>
       {categories.map(category => <label key={category} style={{ display: 'block' }}><input type="checkbox" checked={newCategories.includes(category)} onChange={event => setNewCategories(previous => event.target.checked ? [...previous, category] : previous.filter(value => value !== category))} />{category}{category === 'Control' ? ' (including Instrumentation)' : ''}</label>)}
     </fieldset>
@@ -110,7 +131,7 @@ export function PathFinderRoutes({ pf, active, selectedCable, standaloneNames, o
     {!rules.length ? <Caption1>No route category rules yet.</Caption1> : null}
     {dirty ? <Body1 role="status">Route rules have unapplied changes. Prepare all rules or discard the draft before calculating or reviewing paths.</Body1> : null}
     <Button appearance="primary" disabled={!active || pf.viewerPhase !== 'ready' || !rules.length || pf.busy || working} onClick={() => void prepare()}>Prepare routes from all rules</Button>
-    {working ? <Button onClick={() => { generation.current++; pf.cancelOperation(); setWorking(false); setNotice('Viewer preparation cancelled. A snapshot already being saved will be retained when its save finishes.'); }}>Cancel route preparation</Button> : null}
+    {working ? <Button onClick={() => { capturePending.current = false; generation.current++; pf.cancelOperation(); setWorking(false); setNotice('Viewer preparation cancelled. A snapshot already being saved will be retained when its save finishes.'); }}>Cancel route preparation</Button> : null}
     <Caption1>Preparation includes the named From/To endpoints entered in Path and the project cable endpoint names. Selection rules reset when the active model version or its selection revision changes. Only the explicitly selected route network is prepared.</Caption1>
   </section>;
 }

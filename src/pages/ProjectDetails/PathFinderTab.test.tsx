@@ -223,7 +223,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     expect(screen.getByRole('checkbox', { name: 'MV for rule 1' })).not.toBeChecked(); expect(screen.getByRole('checkbox', { name: 'LV for rule 1' })).toBeChecked(); expect(screen.getByRole('checkbox', { name: 'Control for rule 1' })).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 2' });
     await user.click(screen.getByRole('checkbox', { name: 'MV for rule 1' })); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
-    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [45], allowedCategories: ['LV', 'Control'] }, { id: expect.any(String), objectIds: [44], allowedCategories: ['MV', 'LV', 'Control'] }], equipmentNames: ['EQ-001', 'EQ-002'] });
+    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [45], allowedCategories: ['LV', 'Control'] }, { id: expect.any(String), objectIds: [44], allowedCategories: ['MV', 'LV', 'Control'] }], equipmentNames: ['EQ-001', 'EQ-002'] }, expect.any(Function));
     await user.click(screen.getByRole('button', { name: 'Remove rule 1' })); expect(screen.queryByRole('button', { name: /Group B/ })).toBeNull();
   });
   it('updates a selected root group and supports explicit category exclusion', async () => {
@@ -232,7 +232,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('button', { name: /Group A/ });
     await user.click(screen.getByRole('button', { name: 'Update selected group' })); await screen.findByRole('button', { name: /Group C/ });
     await user.click(screen.getByRole('checkbox', { name: 'LV for rule 1' })); await user.click(screen.getByRole('checkbox', { name: 'Control for rule 1' })); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
-    expect(pf.prepareModel).toHaveBeenLastCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [46], allowedCategories: [] }], equipmentNames: ['EQ-001', 'EQ-002'] });
+    expect(pf.prepareModel).toHaveBeenLastCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [46], allowedCategories: [] }], equipmentNames: ['EQ-001', 'EQ-002'] }, expect.any(Function));
   });
   it('clears route rules on a model selection revision change and ignores a late selection from the hidden tab', async () => {
     const user = userEvent.setup(); let finish!: (value: { objects: ViewerModelObject[] }) => void;
@@ -248,7 +248,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, readObjects: vi.fn(async () => ({ cursor: 0, nextCursor: null, complete: true, query: 'BC001', coordinateFrame: 'world-metres-z-up' as const, metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0] as [number, number, number], objects: [object] })) });
     mount(); await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByText('Find route objects by name')); await user.type(screen.getByRole('textbox', { name: 'Route object query' }), 'BC001'); await user.click(screen.getByRole('button', { name: 'Find route objects' }));
     await user.click(await screen.findByRole('checkbox', { name: 'Select BC001 (44)' })); await user.click(screen.getByRole('button', { name: 'Add checked objects as a rule' })); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
-    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [44], allowedCategories: ['LV', 'Control'] }], equipmentNames: ['EQ-001', 'EQ-002'] });
+    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [44], allowedCategories: ['LV', 'Control'] }], equipmentNames: ['EQ-001', 'EQ-002'] }, expect.any(Function));
   });
   it('calculates and reverses a standalone path using original endpoint names and current Path preferences', async () => {
     const user = userEvent.setup(), forwardId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', reverseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -351,7 +351,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   it('includes arbitrary standalone endpoint names when preparing selected route rules', async () => {
     const user = userEvent.setup(); mount(); await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'Standalone source'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'Standalone destination');
     await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 1' }); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
-    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [44], allowedCategories: ['LV', 'Control'] }], equipmentNames: ['Standalone source', 'Standalone destination', 'EQ-001', 'EQ-002'] });
+    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [44], allowedCategories: ['LV', 'Control'] }], equipmentNames: ['Standalone source', 'Standalone destination', 'EQ-001', 'EQ-002'] }, expect.any(Function));
   });
   it('blocks calculations and review for dirty category rules, keeps the block on failed preparation, and permits explicit discard', async () => {
     const user = userEvent.setup(), detail = proposal(true); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed'), reviewProposal: vi.fn(async () => ({ reviewId: '88888888-8888-4888-8888-888888888888', proposal: detail })) }); mount();

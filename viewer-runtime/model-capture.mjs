@@ -1,5 +1,6 @@
 // Protected-runtime capture only. Importing this module does not read SDK globals.
 // The parent application uses only the pure assembler and the bounded bridge.
+import { validateModelCaptureInputDescriptor, validateModelCaptureInputScope, modelCaptureScopeBytes, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 export const MODEL_CAPTURE_LIMITS = Object.freeze({ eventBytes: 24 * 1024, totalBytes: 64 * 1024 ** 2, events: 3000, indexedObjects: 1000000, objects: 4096, fragments: 100000, vertices: 5000000, triangles: 5000000, depth: 512, properties: 1024, milliseconds: 300000 });
 const encoder = new TextEncoder();
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -28,7 +29,8 @@ function validateHeader(header) {
   if (!keys(header, ['schemaVersion', 'model', 'capture', 'coordinates']) || header.schemaVersion !== 'pathfinder.model.snapshot.v1' || !keys(header.model, ['projectId', 'modelVersionId', 'contentSha256']) || !UUID.test(header.model.projectId ?? '') || !UUID.test(header.model.modelVersionId ?? '') || !HASH.test(header.model.contentSha256 ?? '')) refuse('Invalid snapshot header.');
   const captureKeys = ['adapterVersion', 'sourceKind', 'inventoryComplete', 'geometryComplete', 'unitsVerified', 'transformsVerified', 'planningVisibilityKnown', 'sourceLinkVerified', 'evidenceSha256'];
   const lookup = header.capture.lookupRouteCodes !== undefined;
-  if (!keys(header.capture, lookup ? [...captureKeys, 'lookupRouteCodes'] : captureKeys) || lookup && !lookupCodes(header.capture.lookupRouteCodes) || header.capture.sourceKind !== 'converted' || header.capture.adapterVersion !== (lookup ? 'wfc.protected-lookup-capture.v1' : 'wfc.protected-selected-capture.v1') || ['inventoryComplete', 'geometryComplete', 'unitsVerified', 'transformsVerified', 'planningVisibilityKnown', 'sourceLinkVerified'].some(key => header.capture[key] !== false) || !Array.isArray(header.capture.evidenceSha256) || !header.capture.evidenceSha256.length || header.capture.evidenceSha256.length > 256 || header.capture.evidenceSha256.some(value => !HASH.test(value))) refuse('Snapshot metadata claims unsupported proof.');
+  const staged = header.capture.inputScope !== undefined;
+  if (!keys(header.capture, [...captureKeys, ...(lookup ? ['lookupRouteCodes'] : []), ...(staged ? ['inputScope'] : [])]) || staged && (lookup || !validateModelCaptureInputScope(header.capture.inputScope, { allowPending: true })) || lookup && !lookupCodes(header.capture.lookupRouteCodes) || header.capture.sourceKind !== 'converted' || header.capture.adapterVersion !== (lookup ? 'wfc.protected-lookup-capture.v1' : 'wfc.protected-selected-capture.v1') || ['inventoryComplete', 'geometryComplete', 'unitsVerified', 'transformsVerified', 'planningVisibilityKnown', 'sourceLinkVerified'].some(key => header.capture[key] !== false) || !Array.isArray(header.capture.evidenceSha256) || !header.capture.evidenceSha256.length || header.capture.evidenceSha256.length > 256 || header.capture.evidenceSha256.some(value => !HASH.test(value))) refuse('Snapshot metadata claims unsupported proof.');
   const coordinates = header.coordinates;
   if (!keys(coordinates, ['vertexFrame', 'sourceUnits', 'metresPerSourceUnit', 'sourceToWorldMetres', 'globalOffsetMetres', 'displayToWorldMetres']) || coordinates.vertexFrame !== 'canonical-world-metres' || typeof coordinates.sourceUnits !== 'string' || !coordinates.sourceUnits.length || coordinates.sourceUnits.length > 64 || !(coordinates.metresPerSourceUnit > 0) || coordinates.metresPerSourceUnit > 1e9 || !Number.isFinite(coordinates.metresPerSourceUnit)) refuse('Invalid capture coordinates.');
   text(coordinates.sourceUnits, 64); canonicalPoint(coordinates.globalOffsetMetres); affine(coordinates.sourceToWorldMetres); affine(coordinates.displayToWorldMetres);
@@ -66,8 +68,9 @@ function requestContract(request) {
     if (!Array.isArray(request.routeCodes) || request.routeCodes.length < 1 || request.routeCodes.length > 100 || request.routeCodes.some(value => typeof value !== 'string' || value.length > 256 || !/^[A-Z0-9][A-Z0-9_.-]*$/i.test(value.replace(/^\/+|\/+$/g, '').trim()) || routeKey(value) === 'SECONDARY')) refuse('Choose 1–100 exact routing network codes; SECONDARY is an allowance.');
     if (!Array.isArray(request.allowedCategories) || !request.allowedCategories.length || request.allowedCategories.length > 3 || request.allowedCategories.some(value => !['MV', 'LV', 'Control'].includes(value)) || unique(request.allowedCategories).length !== request.allowedCategories.length) refuse('Explicit allowed routing categories are required.');
   }
-  if (!Array.isArray(request.equipmentNames) || request.equipmentNames.length > 256 || request.equipmentNames.some(value => typeof value !== 'string' || !value.trim() || value.length > 256 || /[\u0000-\u001f\u007f-\u009f]/u.test(value))) refuse('Equipment names exceed the explicit capture budget.');
-  return { ...request, ...(request.lookupRouteCodes ? { lookupRouteCodes: [...request.lookupRouteCodes] } : request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })) } : { routeCodes: unique(request.routeCodes.map(routeKey)) }), equipmentNames: unique(request.equipmentNames.map(value => value.normalize('NFC').trim())) };
+  if (request.inputScope !== undefined && (!validateModelCaptureInputDescriptor(request.inputScope) || request.lookupRouteCodes !== undefined)) refuse('Invalid staged capture scope.');
+  if (!Array.isArray(request.equipmentNames) || request.equipmentNames.length > (request.inputScope ? CAPTURE_INPUT_LIMITS.names : 256) || request.equipmentNames.some(value => typeof value !== 'string' || !value.trim() || value.length > 256 || /[\u0000-\u001f\u007f-\u009f]/u.test(value))) refuse('Equipment names exceed the explicit capture budget.');
+  return { ...request, ...(request.inputScope ? { inputScope: { ...request.inputScope } } : {}), ...(request.lookupRouteCodes ? { lookupRouteCodes: [...request.lookupRouteCodes] } : request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })) } : { routeCodes: unique(request.routeCodes.map(routeKey)) }), equipmentNames: unique(request.equipmentNames.map(value => value.normalize('NFC').trim())) };
 }
 
 function* textParts(type, captureId, id, body) {
@@ -85,10 +88,17 @@ function* textParts(type, captureId, id, body) {
   } while (cursor < body.length);
 }
 
-export async function* captureSelectedModel(viewer, input, { signal, onProgress } = {}) {
-  const request = requestContract(input), started = Date.now(), model = viewer?.model;
+export async function* captureSelectedModel(viewer, input, { signal, onProgress, startedAt = Date.now(), eventLimit = MODEL_CAPTURE_LIMITS.events } = {}) {
+  const request = requestContract(input), started = startedAt, model = viewer?.model;
+  if (!Number.isFinite(started) || started > Date.now() || !Number.isSafeInteger(eventLimit) || eventLimit < 1 || eventLimit > MODEL_CAPTURE_LIMITS.events) refuse('Invalid capture deadline or shared response budget.');
   if (!model) refuse('The selected model is not loaded.');
   const active = () => { if (signal?.aborted) throw new DOMException('Model capture cancelled.', 'AbortError'); if (Date.now() - started > MODEL_CAPTURE_LIMITS.milliseconds) refuse('Selected model capture deadline exceeded. Reduce the scope.'); if (viewer.model !== model) refuse('The model changed during capture.'); };
+  active();
+  if (request.inputScope) {
+    const inputBytes = modelCaptureScopeBytes(request), namesBytes = encoder.encode(serialize(request.equipmentNames));
+    const hash = async data => { active(); const value = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', data))).map(v => v.toString(16).padStart(2, '0')).join(''); active(); return value; };
+    if (request.equipmentNames.length !== request.inputScope.equipmentNameCount || inputBytes.length !== request.inputScope.inputUtf8Bytes || inputBytes.length > CAPTURE_INPUT_LIMITS.bytes || await hash(inputBytes) !== request.inputScope.scopeSha256 || await hash(namesBytes) !== request.inputScope.equipmentNamesSha256) refuse('Staged capture scope digest mismatch.');
+  }
   const sdk = globalThis.Autodesk?.Viewing?.Private, THREE = globalThis.THREE;
   if (!sdk || typeof sdk.enumMeshVertices !== 'function' || typeof sdk.enumMeshTriangles !== 'function' || !THREE || typeof sdk.LmvMatrix4 !== 'function') refuse('Pinned SDK computational capture APIs are unavailable.');
   if (String(globalThis.LMV_VIEWER_VERSION ?? '') !== '7.130.0') refuse('This computational capture adapter requires pinned SDK7.130.0.');
@@ -115,10 +125,10 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress 
   const lookup = request.lookupRouteCodes !== undefined;
   const captureScope = { ...(lookup ? { lookupRouteCodes: request.lookupRouteCodes, visibility: 'current-sdk-display-only-native-unknown' } : request.routeRules ? { routeRules: request.routeRules } : { routeCodes: request.routeCodes, allowedCategories: request.allowedCategories }), equipmentNames: request.equipmentNames };
   const metadataHash = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(serialize({ ...evidence, scope: captureScope }))))).map(value => value.toString(16).padStart(2, '0')).join('');
-  const header = { schemaVersion: 'pathfinder.model.snapshot.v1', model: { projectId: request.projectId, modelVersionId: request.modelVersionId, contentSha256: request.contentFingerprint }, capture: { adapterVersion: lookup ? 'wfc.protected-lookup-capture.v1' : 'wfc.protected-selected-capture.v1', ...(lookup ? { lookupRouteCodes: request.lookupRouteCodes } : {}), sourceKind: 'converted', inventoryComplete: false, geometryComplete: false, unitsVerified: false, transformsVerified: false, planningVisibilityKnown: false, sourceLinkVerified: false, evidenceSha256: [metadataHash] }, coordinates: { vertexFrame: 'canonical-world-metres', sourceUnits, metresPerSourceUnit: scale, sourceToWorldMetres: Array.from(sourceToWorld.elements), globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements) } };
+  const header = { schemaVersion: 'pathfinder.model.snapshot.v1', model: { projectId: request.projectId, modelVersionId: request.modelVersionId, contentSha256: request.contentFingerprint }, capture: { adapterVersion: lookup ? 'wfc.protected-lookup-capture.v1' : 'wfc.protected-selected-capture.v1', ...(lookup ? { lookupRouteCodes: request.lookupRouteCodes } : {}), ...(request.inputScope ? { inputScope: { ...request.inputScope, propertyScan: null } } : {}), sourceKind: 'converted', inventoryComplete: false, geometryComplete: false, unitsVerified: false, transformsVerified: false, planningVisibilityKnown: false, sourceLinkVerified: false, evidenceSha256: [metadataHash] }, coordinates: { vertexFrame: 'canonical-world-metres', sourceUnits, metresPerSourceUnit: scale, sourceToWorldMetres: Array.from(sourceToWorld.elements), globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements) } };
   validateHeader(header);
   let eventCount = 0, transportBytes = 0, snapshotBytes = size(header);
-  function emit(event) { active(); const bytes = size(event); if (bytes > MODEL_CAPTURE_LIMITS.eventBytes || ++eventCount > MODEL_CAPTURE_LIMITS.events || (transportBytes += bytes) > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Selected capture exceeds the bounded bridge budget. Reduce network/equipment scope.'); return event; }
+  function emit(event) { active(); const bytes = size(event); if (bytes > MODEL_CAPTURE_LIMITS.eventBytes || ++eventCount > eventLimit || (transportBytes += bytes) > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Selected capture exceeds the bounded bridge budget. Reduce network/equipment scope.'); return event; }
   yield emit({ type: 'metadata', captureId: request.captureId, schemaVersion: 'pathfinder.model.capture.events.v1', snapshotHeader: header, scope: lookup ? 'independent-lookup-network' : 'explicit-selected-network', inventoryComplete: false, geometryComplete: false });
   const ids = [tree.getRootId()], seen = new Set(ids), routes = new Map((request.routeCodes ?? []).map(code => [code, []])), equipment = new Map(request.equipmentNames.map(name => [normal(name), { name, ids: new Set() }]));
   tree.enumNodeChildren(tree.getRootId(), id => { active(); if (!Number.isSafeInteger(id) || id < 0) refuse('Invalid SDK object identity.'); if (!seen.has(id)) { seen.add(id); ids.push(id); } if (ids.length > MODEL_CAPTURE_LIMITS.indexedObjects) refuse('Model inventory exceeds the capture indexing budget.'); return false; }, true);
@@ -187,16 +197,18 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress 
     collect(rootId); tree.enumNodeChildren(rootId, id => { collect(id); return false; }, true);
     if (!deepestMeshes) refuse('A selected route root has no deepest physical geometry descendants.');
   }
+  const attemptedPropertyIds = new Set(), returnedPropertyIds = new Set();
   // A bounded full property scan is required for exact NFC property matching.
   // SDK fuzzy/substring search cannot establish absence or ambiguity reliably.
   for (let index = 0; index < ids.length; index += 512) {
     active(); const batchIds = ids.slice(index, index + 512);
     if (equipment.size || batchIds.some(id => selected.has(id))) {
+      batchIds.forEach(id => attemptedPropertyIds.add(id));
       const rows = await sdkCall((success, failure) => model.getBulkProperties(batchIds, { ignoreHidden: false, needsExternalId: true }, success, failure));
       if (!Array.isArray(rows) || rows.length > batchIds.length) refuse('Invalid SDK property batch.');
       const returned = new Set();
       for (const row of rows) {
-        if (!batchIds.includes(row.dbId) || returned.has(row.dbId)) refuse('SDK property batch identity mismatch.'); returned.add(row.dbId);
+        if (!batchIds.includes(row.dbId) || returned.has(row.dbId)) refuse('SDK property batch identity mismatch.'); returned.add(row.dbId); returnedPropertyIds.add(row.dbId);
         const names = [tree.getNodeName(row.dbId) ?? '', ...(row.properties ?? []).filter(value => PROPERTY_NAME.test(value.displayName ?? value.attributeName ?? '')).map(value => String(value.displayValue ?? ''))];
         const matches = names.map(normal).filter(name => equipment.has(name));
         if (matches.length) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
@@ -222,9 +234,10 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress 
   }
   const missingProperties = [...selected.keys()].filter(id => !propertyMap.has(id));
   for (let start = 0; start < missingProperties.length; start += 128) {
-    const batch = missingProperties.slice(start, start + 128), rows = await sdkCall((success, failure) => model.getBulkProperties(batch, { ignoreHidden: false, needsExternalId: true }, success, failure));
+    const batch = missingProperties.slice(start, start + 128); batch.forEach(id => attemptedPropertyIds.add(id));
+    const rows = await sdkCall((success, failure) => model.getBulkProperties(batch, { ignoreHidden: false, needsExternalId: true }, success, failure));
     if (!Array.isArray(rows) || rows.length !== batch.length) refuse('Selected hierarchy/object properties are incomplete.');
-    for (const row of rows) { if (!batch.includes(row.dbId) || propertyMap.has(row.dbId)) refuse('Selected property identity differs.'); propertyMap.set(row.dbId, row); }
+    for (const row of rows) { if (!batch.includes(row.dbId) || propertyMap.has(row.dbId)) refuse('Selected property identity differs.'); propertyMap.set(row.dbId, row); returnedPropertyIds.add(row.dbId); }
   }
   const externalMap = await sdkCall((success, failure) => model.getExternalIdMapping(success, failure)), externalIds = new Map(); let externalCount = 0;
   for (const [externalId, dbId] of Object.entries(externalMap ?? {})) { active(); if (++externalCount > MODEL_CAPTURE_LIMITS.indexedObjects) refuse('External identity map exceeds its budget.'); if (selected.has(dbId)) { if (!externalIds.has(dbId)) externalIds.set(dbId, []); externalIds.get(dbId).push(text(externalId, 1024)); } }
@@ -280,18 +293,21 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress 
     for (const event of textParts('object-part', request.captureId, object.id, body)) yield emit(event);
     objectCount++; onProgress?.({ phase: 'geometry', loaded: objectCount, total: selected.size }); await pause();
   }
-  const equipmentMatches = [...equipment.values()].map(value => ({ name: value.name, status: value.ids.size === 0 ? 'missing' : value.ids.size > 1 ? 'ambiguous' : 'candidate', candidateObjectIds: [...value.ids].sort((a, b) => a - b).map(id => 'dbid:' + id) }));
-  const summary = { scope: { kind: lookup ? 'independent-lookup-network' : 'explicit-selected-network', ...captureScope, ...(request.routeRules || lookup ? {} : { routeCodes: request.routeCodes.map(code => '/' + code) }), fullHierarchyIndexed: true, indexedObjectCount: ids.length, selectedObjectsOnly: true, fullGeometryCaptured: false, fullPropertyScan: equipment.size > 0 }, evidence, equipmentMatches, diagnostics, counts: { objectCount, fragmentCount, vertexCount, triangleCount }, engineeringAccepted: false, limitations: ['Selected network geometry only; full plant capture/capacity is not established.', ...(lookup ? ['Lookup scope uses current SDK display visibility; native visibility and logical ownership are not established by capture. C# resolves requested owners before fitting.'] : []), 'Exact endpoint candidates retain ambiguity and unknown native visibility; automatic engineering acceptance is not granted.', 'SDK unit/transform measurements do not establish native-converted parity or source-link proof.'] };
+  const propertyScan = { indexedObjectCount: ids.length, attemptedObjectCount: attemptedPropertyIds.size, returnedObjectCount: returnedPropertyIds.size, omittedObjectCount: attemptedPropertyIds.size - returnedPropertyIds.size, complete: equipment.size > 0 && attemptedPropertyIds.size === ids.length && returnedPropertyIds.size === ids.length };
+  const equipmentMatches = [...equipment.values()].map(value => ({ name: value.name, status: value.ids.size > 1 ? 'ambiguous' : !propertyScan.complete ? 'unknown' : value.ids.size === 0 ? 'missing' : 'candidate', candidateObjectIds: [...value.ids].sort((a, b) => a - b).map(id => 'dbid:' + id) }));
+  if (equipment.size && !propertyScan.complete) diagnostics.push({ code: 'incomplete_sdk_property_scan', omittedObjectCount: propertyScan.omittedObjectCount, message: 'The SDK omitted requested property rows; absence or uniqueness of endpoint candidates is not established.' });
+  const summary = { scope: { kind: lookup ? 'independent-lookup-network' : 'explicit-selected-network', ...captureScope, ...(request.inputScope ? { inputScope: { ...request.inputScope, propertyScan } } : {}), ...(request.routeRules || lookup ? {} : { routeCodes: request.routeCodes.map(code => '/' + code) }), fullHierarchyIndexed: true, indexedObjectCount: ids.length, selectedObjectsOnly: true, fullGeometryCaptured: false, fullPropertyScan: propertyScan.complete }, evidence, equipmentMatches, diagnostics, counts: { objectCount, fragmentCount, vertexCount, triangleCount }, engineeringAccepted: false, limitations: ['Selected network geometry only; full plant capture/capacity is not established.', ...(lookup ? ['Lookup scope uses current SDK display visibility; native visibility and logical ownership are not established by capture. C# resolves requested owners before fitting.'] : []), 'Exact endpoint candidates retain ambiguity and unknown native visibility; automatic engineering acceptance is not granted.', 'SDK unit/transform measurements do not establish native-converted parity or source-link proof.'] };
   for (const event of textParts('summary-part', request.captureId, null, serialize(summary))) yield emit(event);
   yield emit({ type: 'complete', captureId: request.captureId, objectCount, fragmentCount, vertexCount, triangleCount, engineeringAccepted: false });
 }
 
-export function createModelCaptureAssembler() {
+export function createModelCaptureAssembler({ eventLimit = MODEL_CAPTURE_LIMITS.events } = {}) {
+  if (!Number.isSafeInteger(eventLimit) || eventLimit < 1 || eventLimit > MODEL_CAPTURE_LIMITS.events) refuse('Invalid shared capture response budget.');
   let captureId, header, totalBytes = 0, eventCount = 0, current, summaryText = '', summaryPart = 0, summaryDone = false, completed = false, summary;
   const objects = [], seenObjects = new Set();
   return {
     accept(event) {
-      if (!event || typeof event !== 'object' || Array.isArray(event) || completed || !UUID.test(event.captureId ?? '') || size(event) > MODEL_CAPTURE_LIMITS.eventBytes || ++eventCount > MODEL_CAPTURE_LIMITS.events || (totalBytes += size(event)) > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Invalid, stale or over-budget capture event.');
+      if (!event || typeof event !== 'object' || Array.isArray(event) || completed || !UUID.test(event.captureId ?? '') || size(event) > MODEL_CAPTURE_LIMITS.eventBytes || ++eventCount > eventLimit || (totalBytes += size(event)) > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Invalid, stale or over-budget capture event.');
       if (!captureId) { if (event.type !== 'metadata') refuse('Capture metadata must be first.'); captureId = event.captureId; }
       if (event.captureId !== captureId) refuse('Capture identity changed.');
       if (event.type === 'metadata') {
@@ -325,6 +341,11 @@ export function createModelCaptureAssembler() {
         }
         if (counts.fragmentCount > MODEL_CAPTURE_LIMITS.fragments || counts.vertexCount > MODEL_CAPTURE_LIMITS.vertices || counts.triangleCount > MODEL_CAPTURE_LIMITS.triangles) refuse('Captured geometry total budget exceeded.');
         for (const key of Object.keys(counts)) if (counts[key] !== event[key] || counts[key] !== summary.counts[key]) refuse('Capture count closure differs.');
+        if (header.capture.inputScope) {
+          const scope = summary?.scope?.inputScope, { propertyScan: _pending, ...expected } = header.capture.inputScope;
+          if (!validateModelCaptureInputScope(scope) || serialize({ ...scope, propertyScan: null }) !== serialize({ ...expected, propertyScan: null }) || !Array.isArray(summary.scope.equipmentNames) || summary.scope.equipmentNames.length !== expected.equipmentNameCount || summary.scope.indexedObjectCount !== scope.propertyScan.indexedObjectCount || summary.scope.fullPropertyScan !== scope.propertyScan.complete) refuse('Capture input or property scan scope closure differs.');
+          header.capture.inputScope = JSON.parse(serialize(scope));
+        } else if (summary?.scope?.inputScope !== undefined) refuse('Unrequested capture input scope.');
         completed = true; return;
       }
       refuse('Unknown capture event.');

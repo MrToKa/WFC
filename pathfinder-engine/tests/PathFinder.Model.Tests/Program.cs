@@ -17,6 +17,12 @@ internal static class Program
             var scratch = Path.Combine(root, "pathfinder-engine/.scratch/model-tests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(scratch);
             var watch = Stopwatch.StartNew();
+            if (args.Contains("--input-scope", StringComparer.Ordinal))
+            {
+                InputScopeTests.Run(Fixture(), Check, (name, action) => Reject(name, action));
+                Console.WriteLine(JsonSerializer.Serialize(new { scope = "capture-input-provenance", status = Failures.Count == 0 ? "PASS" : "FAIL", checks = Checks, failures = Failures }));
+                return Failures.Count == 0 ? 0 : 1;
+            }
             Transforms();
             var fixture = Fixture();
             var bytes = Bytes(fixture);

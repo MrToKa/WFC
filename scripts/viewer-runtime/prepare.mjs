@@ -9,7 +9,7 @@ const SDK = path.join(SOURCE, 'sdk', '7.130.0');
 const DESTINATION = path.join(ROOT, 'public', 'viewer-runtime', '7.130.0');
 const MANIFEST_SHA = '747540a153fb18809c428d8ed177aa8a296cff1b5175ab85445e0a2ebdb36d75';
 const GEOMETRY_SHA = '4d10d66dca31f10b82926693a0e7438e68f448047f3f991baabb82f6ed2573fa';
-const RUNTIME_FILES = ['index.html', 'runtime.css', 'runtime.mjs', 'adapter.mjs', 'bridge.mjs', 'protocol.mjs', 'routes.mjs', 'route-geometry.mjs', 'pathfinder.mjs', 'model-capture.mjs'];
+const RUNTIME_FILES = ['index.html', 'runtime.css', 'runtime.mjs', 'adapter.mjs', 'bridge.mjs', 'protocol.mjs', 'routes.mjs', 'route-geometry.mjs', 'pathfinder.mjs', 'model-capture.mjs', 'capture-input.mjs'];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const refuse = code => { throw new Error(code); };
 const samePath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;

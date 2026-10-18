@@ -1,5 +1,6 @@
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
+import { planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
@@ -39,6 +40,7 @@ export class ViewerController {
   private handshakeTimer: number;
   private unwatch: () => void;
   private queuedLoad: { modelVersionId: string; finish: () => void } | null = null;
+  private captureInputAbort: AbortController | null = null;
 
   constructor(private readonly options: ViewerOptions) {
     if (!UUID.test(options.projectId)) throw new Error('Invalid project ID');
@@ -200,6 +202,7 @@ export class ViewerController {
   async load(modelVersionId: string): Promise<void> {
     if (this.disposed || !this.ready && !this.queuedLoad) throw new Error('Viewer runtime is not ready');
     if (!UUID.test(modelVersionId)) throw new Error('Invalid model version ID');
+    this.captureInputAbort?.abort(); this.captureInputAbort = null;
     if (this.modelVersionId || this.queuedLoad) {
       const old = this.queuedLoad;
       this.queuedLoad = null;
@@ -379,28 +382,71 @@ export class ViewerController {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
     const input = request.lookupRouteCodes ? { lookupRouteCodes: [...request.lookupRouteCodes], equipmentNames: [...request.equipmentNames] } : request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })), equipmentNames: [...request.equipmentNames] } : { routeCodes: [...request.routeCodes], allowedCategories: [...request.allowedCategories], equipmentNames: [...request.equipmentNames] };
     this.clear('selection'); const generation = this.routeGeneration;
-    if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) throw new DOMException('Model capture cancelled.', 'AbortError');
-    const captureId = uuid(), assembler = createModelCaptureAssembler();
+    const operation = new AbortController(); this.captureInputAbort = operation;
+    const { instanceId, modelVersionId, loadId } = this;
+    const current = () => {
+      if (this.disposed || operation.signal.aborted || generation !== this.routeGeneration || instanceId !== this.instanceId || modelVersionId !== this.modelVersionId || loadId !== this.loadId)
+        throw new DOMException('Model capture cancelled.', 'AbortError');
+    };
     try {
-      let reply = await this.sendAsync('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
+      if (!await this.checkSelection()) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
+      if (!modelVersionId || !loadId) throw new Error('Model capture identity is unavailable');
+      const captureId = uuid(); let responses = 0, descriptor: ModelCaptureInputDescriptor | undefined, frozenRequest: ModelCaptureRequest | undefined;
+      const round = async (type: string, payload: Record<string, unknown>, terminal: string) => {
+        current(); if (++responses > 3000) throw new Error('Model capture exceeded its bounded response budget');
+        const value = await this.sendAsync(type, payload, terminal); current(); return value;
+      };
+      let reply: ViewerEvent;
+      if (input.lookupRouteCodes) reply = await round('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
+      else {
+        const plan = await planModelCaptureInput(input, { captureId, envelopeIdentity: { instanceId, projectId: this.options.projectId, modelVersionId, loadId }, signal: operation.signal }); current();
+        descriptor = plan.descriptor; frozenRequest = plan.request;
+        const acknowledged = (event: ViewerEvent, received: number) => {
+          const ack = event.payload, ready = received === plan.descriptor.equipmentNameCount;
+          if (!validateModelCaptureInputAck(ack) || ack.captureId !== captureId || ack.receivedNameCount !== received || ack.phase !== (ready ? 'ready' : 'receiving') ||
+              ack.scopeSha256 !== (ready ? plan.descriptor.scopeSha256 : null) || ack.equipmentNamesSha256 !== (ready ? plan.descriptor.equipmentNamesSha256 : null))
+            throw new Error('Model capture input acknowledgement mismatch');
+        };
+        acknowledged(await round('START_MODEL_CAPTURE', plan.startPayload, 'MODEL_CAPTURE_INPUT_ACK'), 0);
+        for (const chunk of plan.chunks) {
+          acknowledged(await round('READ_MODEL_CAPTURE', { ...chunk }, 'MODEL_CAPTURE_INPUT_ACK'), chunk.equipmentOffset + chunk.equipmentNames.length);
+          onProgress({ index: responses - 1, type: 'input' });
+        }
+        reply = await round('READ_MODEL_CAPTURE', { captureId, index: 0 }, 'MODEL_CAPTURE_EVENT');
+      }
+      const assembler = createModelCaptureAssembler({ eventLimit: 3000 - (descriptor ? 1 + descriptor.chunkCount : 0) });
       for (let index = 0; index < 3000; index++) {
-        if (this.disposed || generation !== this.routeGeneration) throw new DOMException('Model capture cancelled.', 'AbortError');
+        current();
         const event: unknown = JSON.parse(String(reply.payload.eventJson));
         assembler.accept(event);
         const eventRecord = event as Record<string, unknown>;
         onProgress({ index, type: String(eventRecord.type), ...(typeof eventRecord.objectCount === 'number' ? { objectCount: eventRecord.objectCount } : {}) });
         if (reply.payload.done === true) {
           if (eventRecord.type !== 'complete') throw new Error('Model capture ended without a complete receipt');
-          return { snapshot: assembler.finish(), summary: assembler.summary() };
+          const snapshot = assembler.finish(), summary = assembler.summary();
+          if (descriptor) {
+            const inputScope = (snapshot as { capture?: { inputScope?: unknown } }).capture?.inputScope;
+            if (!validateModelCaptureInputScope(inputScope) || Object.entries(descriptor).some(([key, value]) => inputScope[key as keyof typeof inputScope] !== value))
+              throw new Error('Completed model capture input scope mismatch');
+            const scope = summary.scope as Record<string, unknown> | undefined;
+            const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+            if (!scope || !frozenRequest || !equal(scope.equipmentNames, frozenRequest.equipmentNames) || !equal(scope.inputScope, inputScope) ||
+                (frozenRequest.routeRules ? !equal(scope.routeRules, frozenRequest.routeRules) : !equal(scope.routeCodes, frozenRequest.routeCodes?.map(code => '/' + code)) || !equal(scope.allowedCategories, frozenRequest.allowedCategories)))
+              throw new Error('Completed model capture request summary mismatch');
+          }
+          if (!await this.checkSelection()) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
+          return { snapshot, summary };
         }
         if (eventRecord.type === 'complete') throw new Error('Model capture completion mismatch');
-        reply = await this.sendAsync('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
+        reply = await round('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
       }
       throw new Error('Model capture exceeded its bounded event budget');
     } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw error; }
+    finally { if (this.captureInputAbort === operation) this.captureInputAbort = null; }
   }
 
   clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {
+    this.captureInputAbort?.abort(); this.captureInputAbort = null;
     ++this.routeGeneration;
     this.routeRequestId = null;
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
@@ -425,6 +471,7 @@ export class ViewerController {
     this.dispose('reload');
   }
   dispose(reason: 'unmount' | 'project-change' | 'logout' | 'reload' = 'unmount'): void {
+    this.captureInputAbort?.abort(); this.captureInputAbort = null;
     if (this.disposed) return;
     this.disposed = true;
     ++this.generation;

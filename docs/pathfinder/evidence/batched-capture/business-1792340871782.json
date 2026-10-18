@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.protected-business.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T16:27:45.755Z",
+  "raw": {
+    "path": "pathfinder-engine/.scratch/capture-business-7e992398-61f7-4c8e-87d1-18bef4c3376a/business.private.json",
+    "bytes": 16403,
+    "sha256": "8c78a6cd32ce60866f64a11b7fb43aa14ef2923dd5df2a23cdd682f4ae7d710c",
+    "exitCode": 0
+  },
+  "target": {
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "apiId": "c84871e5b2b447d438e3b15f12ac3e7dbe7146637113bee3f7598198867b6c3d",
+    "apiImage": "sha256:08d842043cecd526668bd7ec192ef424508ed5f47a7029a10139c0381ee6724a",
+    "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785"
+  },
+  "groups": {
+    "projects": {
+      "count": 2,
+      "sha256": "52baf4ecf865ab147b20197abaeb603edbf3455259251ba943dc97da2103e446"
+    },
+    "types": {
+      "count": 2,
+      "sha256": "d8d189fff545f5afe299bc260f3ddfdf727accc42a850566b28ca13350366722"
+    },
+    "cables": {
+      "count": 3,
+      "sha256": "3b75cedda9fa7d1695df8be270e2117a8b4f58c27ae2d14790994bdb7b8e60a3"
+    },
+    "selections": {
+      "count": 2,
+      "sha256": "2af735d63ecb728c38422062abc5e043dd2ffc5c53a9fe76166761f97956ed9f"
+    }
+  },
+  "finishedAt": "2026-10-18T16:27:51.782Z"
+}

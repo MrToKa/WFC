@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.retained-package-observation.v1",
+  "recordedAt": "2026-10-18T16:18:16.652Z",
+  "status": "PASS",
+  "scope": "Read-only integrity observation of retained local ZIP for next copied-project stage; no model import, writes or native parity.",
+  "file": "pathfinder-engine/.scratch/pathfinder-local/aalborg-portable.zip",
+  "bytes": 439112840,
+  "sha256": "e3056f28efaa57eef65f81dbdfe41396d9e010bdc975738d1259c58af6c3a922",
+  "unchangedDuringRead": true
+}

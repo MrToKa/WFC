@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ViewerController, type ViewerEvent } from './ViewerController';
 import { invalidateViewerLogin } from './loginLifecycle';
+import { webcrypto } from 'node:crypto';
+import * as captureRuntime from '../../viewer-runtime/model-capture.mjs';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
 let controllers: ViewerController[];
-beforeEach(() => { controllers = []; vi.useFakeTimers(); });
-afterEach(() => { controllers.forEach(c => c.dispose()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); document.body.replaceChildren(); });
+beforeEach(() => { controllers = []; vi.stubGlobal('crypto', webcrypto); vi.useFakeTimers(); });
+afterEach(() => { controllers.forEach(c => c.dispose()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); document.body.replaceChildren(); });
 function setup(token = 'login-a') {
   const container = document.createElement('div'); document.body.append(container);
   const events: ViewerEvent[] = [];
@@ -126,6 +128,80 @@ describe('PathFinder protected Viewer capabilities', () => {
     const capturing = s.c.captureModel({ routeRules: rules, equipmentNames: [] }); rules[0].objectIds[0] = 99;
     await expect(capturing).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
     expect(s.send.mock.calls.find(call => call[0].type === 'START_MODEL_CAPTURE')![0].payload.routeRules[0].objectIds).toEqual([23]);
+  });
+  it('collects 1,527 frozen equipment names in six bounded rounds before requesting one output stream', async () => {
+    const s = await loaded(), names = Array.from({ length: 1527 }, (_, index) => `=REAL-FORMAT-${String(index).padStart(4, '0')}`);
+    let descriptor: Record<string, unknown>, received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'START_MODEL_CAPTURE') { descriptor = value.payload.input; s.message('MODEL_CAPTURE_INPUT_ACK', { captureId: value.payload.captureId, phase: 'receiving', receivedNameCount: 0, scopeSha256: null, equipmentNamesSha256: null }, value.requestId, s.identity); }
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.equipmentNames) {
+        received += value.payload.equipmentNames.length; const ready = received === 1527;
+        s.message('MODEL_CAPTURE_INPUT_ACK', { captureId: value.payload.captureId, phase: ready ? 'ready' : 'receiving', receivedNameCount: received, scopeSha256: ready ? descriptor.scopeSha256 : null, equipmentNamesSha256: ready ? descriptor.equipmentNamesSha256 : null }, value.requestId, s.identity);
+      }
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.index === 0) s.message('ERROR', { code: 'EXTRACTION_FAILED', message: 'Output boundary reached by this input-only control.', retryable: false, operation: 'READ_MODEL_CAPTURE' }, value.requestId, s.identity);
+    });
+    const capture = s.c.captureModel({ routeCodes: ['BC001'], allowedCategories: ['Control'], equipmentNames: names }); names[0] = 'MUTATED';
+    await expect(capture).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
+    const chunks = s.send.mock.calls.map(call => call[0]).filter(value => value.type === 'READ_MODEL_CAPTURE' && value.payload.equipmentNames);
+    expect(chunks.map(value => value.payload.equipmentNames.length)).toEqual([256, 256, 256, 256, 256, 247]);
+    expect(chunks.flatMap(value => value.payload.equipmentNames)[0]).toBe('=REAL-FORMAT-0000');
+    expect(chunks.every(value => new TextEncoder().encode(JSON.stringify(value)).byteLength <= 65536)).toBe(true);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'START_MODEL_CAPTURE')).toHaveLength(1);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'READ_MODEL_CAPTURE' && call[0].payload.index === 0)).toHaveLength(1);
+  });
+  it('cancels between acknowledged input chunks and never starts extraction after Clear', async () => {
+    const s = await loaded(); let appended = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'START_MODEL_CAPTURE') s.message('MODEL_CAPTURE_INPUT_ACK', { captureId: value.payload.captureId, phase: 'receiving', receivedNameCount: 0, scopeSha256: null, equipmentNamesSha256: null }, value.requestId, s.identity);
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.equipmentNames) { appended++; s.c.clear(); }
+    });
+    await expect(s.c.captureModel({ routeCodes: ['BC001'], allowedCategories: ['Control'], equipmentNames: Array.from({ length: 600 }, (_, i) => `EQ-${i}`) })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(appended).toBe(1); expect(s.send.mock.calls.some(call => call[0].type === 'READ_MODEL_CAPTURE' && call[0].payload.index !== undefined)).toBe(false);
+  });
+  it('refuses a ready acknowledgement with different hashes before starting extraction', async () => {
+    const s = await loaded();
+    s.send.mockImplementation(value => {
+      if (value.type === 'START_MODEL_CAPTURE') s.message('MODEL_CAPTURE_INPUT_ACK', { captureId: value.payload.captureId, phase: 'receiving', receivedNameCount: 0, scopeSha256: null, equipmentNamesSha256: null }, value.requestId, s.identity);
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.equipmentNames) s.message('MODEL_CAPTURE_INPUT_ACK', { captureId: value.payload.captureId, phase: 'ready', receivedNameCount: 1, scopeSha256: 'f'.repeat(64), equipmentNamesSha256: 'e'.repeat(64) }, value.requestId, s.identity);
+    });
+    await expect(s.c.captureModel({ routeCodes: ['BC001'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] })).rejects.toThrow('acknowledgement mismatch');
+    expect(s.send.mock.calls.some(call => call[0].payload.index === 0)).toBe(false);
+  });
+  it('refuses a complete result whose recorded summary drops requested names despite matching descriptor hashes', async () => {
+    const s = await loaded(); let scope: Record<string, unknown>;
+    vi.spyOn(captureRuntime, 'createModelCaptureAssembler').mockImplementation(() => ({ accept: vi.fn(), finish: () => ({ capture: { inputScope: scope } }), summary: () => ({ scope: { inputScope: scope, equipmentNames: [], routeCodes: ['/BC001'], allowedCategories: ['Control'] } }) }));
+    s.send.mockImplementation(value => {
+      if (value.type === 'START_MODEL_CAPTURE') {
+        scope = { ...value.payload.input, propertyScan: { indexedObjectCount: 1, attemptedObjectCount: 1, returnedObjectCount: 1, omittedObjectCount: 0, complete: true } };
+        s.message('MODEL_CAPTURE_INPUT_ACK', { captureId: value.payload.captureId, phase: 'receiving', receivedNameCount: 0, scopeSha256: null, equipmentNamesSha256: null }, value.requestId, s.identity);
+      }
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.equipmentNames) s.message('MODEL_CAPTURE_INPUT_ACK', { captureId: value.payload.captureId, phase: 'ready', receivedNameCount: 1, scopeSha256: scope.scopeSha256, equipmentNamesSha256: scope.equipmentNamesSha256 }, value.requestId, s.identity);
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.index === 0) s.message('MODEL_CAPTURE_EVENT', { captureId: value.payload.captureId, index: 0, done: true, eventJson: JSON.stringify({ type: 'complete', captureId: value.payload.captureId }) }, value.requestId, s.identity);
+    });
+    await expect(s.c.captureModel({ routeCodes: ['BC001'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] })).rejects.toThrow('request summary mismatch');
+  });
+  it('assembles one completed staged snapshot with durable input scope and exact final request closure', async () => {
+    const s = await loaded(), matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    let descriptor: Record<string, unknown>, captureId = '', events: Record<string, unknown>[] = [];
+    s.send.mockImplementation(value => {
+      if (value.type === 'START_MODEL_CAPTURE') {
+        descriptor = value.payload.input; captureId = value.payload.captureId;
+        s.message('MODEL_CAPTURE_INPUT_ACK', { captureId, phase: 'receiving', receivedNameCount: 0, scopeSha256: null, equipmentNamesSha256: null }, value.requestId, s.identity);
+      }
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.equipmentNames) {
+        const inputScope = { ...descriptor, propertyScan: { indexedObjectCount: 1, attemptedObjectCount: 1, returnedObjectCount: 1, omittedObjectCount: 0, complete: true } };
+        const counts = { objectCount: 1, fragmentCount: 1, vertexCount: 3, triangleCount: 1 };
+        const object = { id: 'dbid:1', parentId: null, dbId: 1, name: 'Straight', geometryRole: 'routing-leaf', leafToRootNames: ['Straight'], properties: [], nativeHidden: null, planningExcluded: false, routeName: '/BC001', shapeName: 'Straight', categoryAssignmentSource: 'explicit-planning', allowedCategories: ['Control'], bounds: { minimum: [0, 0, 0], maximum: [1, 1, 0] }, fragments: [{ id: 'fragment:0', vertices: [[0, 0, 0], [1, 0, 0], [0, 1, 0]], triangleIndices: [0, 1, 2], fragmentToWorldMetres: matrix, transformAlreadyApplied: true }] };
+        const header = { schemaVersion: 'pathfinder.model.snapshot.v1', model: { projectId, modelVersionId: versionId, contentSha256: 'a'.repeat(64) }, capture: { adapterVersion: 'wfc.protected-selected-capture.v1', sourceKind: 'converted', inventoryComplete: false, geometryComplete: false, unitsVerified: false, transformsVerified: false, planningVisibilityKnown: false, sourceLinkVerified: false, evidenceSha256: ['b'.repeat(64)], inputScope: { ...descriptor, propertyScan: null } }, coordinates: { vertexFrame: 'canonical-world-metres', sourceUnits: 'metres', metresPerSourceUnit: 1, sourceToWorldMetres: matrix, globalOffsetMetres: [0, 0, 0], displayToWorldMetres: matrix } };
+        events = [{ type: 'metadata', captureId, schemaVersion: 'pathfinder.model.capture.events.v1', snapshotHeader: header, scope: 'explicit-selected-network', inventoryComplete: false, geometryComplete: false }, { type: 'object-part', captureId, objectId: object.id, partIndex: 0, final: true, text: JSON.stringify(object) }, { type: 'summary-part', captureId, partIndex: 0, final: true, text: JSON.stringify({ engineeringAccepted: false, counts, scope: { kind: 'explicit-selected-network', routeCodes: ['/BC001'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'], inputScope, indexedObjectCount: 1, fullPropertyScan: true } }) }, { type: 'complete', captureId, ...counts, engineeringAccepted: false }];
+        s.message('MODEL_CAPTURE_INPUT_ACK', { captureId, phase: 'ready', receivedNameCount: 1, scopeSha256: descriptor.scopeSha256, equipmentNamesSha256: descriptor.equipmentNamesSha256 }, value.requestId, s.identity);
+      }
+      if (value.type === 'READ_MODEL_CAPTURE' && value.payload.index !== undefined) s.message('MODEL_CAPTURE_EVENT', { captureId, index: value.payload.index, done: value.payload.index === events.length - 1, eventJson: JSON.stringify(events[value.payload.index]) }, value.requestId, s.identity);
+    });
+    const result = await s.c.captureModel({ routeCodes: ['BC001'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] });
+    expect((result.snapshot as { objects: unknown[] }).objects).toHaveLength(1);
+    expect((result.snapshot as { capture: { inputScope: { equipmentNameCount: number; propertyScan: { complete: boolean } } } }).capture.inputScope).toMatchObject({ equipmentNameCount: 1, chunkCount: 1, propertyScan: { complete: true } });
+    expect(s.send.mock.calls.filter(call => call[0].type === 'START_MODEL_CAPTURE')).toHaveLength(1);
   });
 });
 

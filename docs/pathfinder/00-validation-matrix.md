@@ -316,3 +316,20 @@ Branchpf-3-input-coverage-local-20261018, handoff4ade614f, [report28](28-current
 | PF3-CANDIDATE-CONTROLS |Source-backed alias decoding and later metadata/count/projectpair deltas | PASS historical48fullcontrols +separate1/5/7affected checks; no invented finalfullsuite count |
 | PF3-INPUT-PRESERVE |All18baseline containers, originals/source/5190 hashes after actual copy | PASS12checks1792337673384/300f2f34, separately original4projection consistency |
 | PF3-CAPTURE-NEXT |1527raw names exceed existing256 preparation cap; knownhidden rows counted beforeLIMIT | NOT_IMPLEMENTED inthisdelivery; source-grounded next batching/eligibility stage, not engineering readiness |
+
+## PF-3 bounded project capture and eligibility — 18 October 2026
+
+Branchpf-3-batched-capture-local-20261018, handoff6761cb76, [report29](29-batched-capture.md).
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF3-CAPTURE-INPUT |One collecting ID, bounded input/count/order/hash/UTF8/session lifetime; shared3000ACK/output budget | PASS101finalruntime+syntax10; two actual stale-owner/deadline0/2reproductions corrected/source-reviewed |
+| PF3-CAPTURE-1527 |Actual retained business names through planner/collector | PASS1527names/6chunks/7ACK/2993remainingresponses/max5567B; NOTactualbusinessSDK/geometry/matching proof |
+| PF3-CAPTURE-FRONTEND |Controller/Routes/localguard and serverinputscope contracts | PASS53focused +7affectedTab +28rootAPI/hook; later2copy/layout checks separate; types/lintPASS |
+| PF3-CAPTURE-CSHARP |Optional strict scope/scan metadata with legacy JSON and no proof promotion | PASS25focused reader controls on own artifacts; purecoremath unchanged |
+| PF3-MATCH-HIDDEN |Eligibility beforeORDER/LIMIT; unknown/manual/project/model/currentauth | PASS12unit+1transportdelta; actualPostgreSQL12TEMP/ROLLBACK controls at pinned compiledmodules, no public businesswrites |
+| PF3-CAPTURE-SERVED |Final ownAPIdce12a1f/web561d51c3, five served runtime hashes/two compiledmodules/health | PASS7; Linuxrunnerfe25497e modeoneshot, separate hostinterop5d84d779, no sessionactivation claim |
+| PF3-CAPTURE-UI |Actual selected real group capture/reload/repeat in ownQAproject | PASS13objects/2QA names,438155of438155SDKrows/0omitted; saved card persists; no rawrule recovery/fullplant/real2140coverage/Ghost-or-route claim |
+| PF3-CAPTURE-PRESERVE |Exact PostgreSQL JSONB text core rows through latestbuild/reload/secondcapture | PASS2projects/2types/3cables/2selections unchanged/0added; firstv1baseline precision limitation retained, not retroproof |
+| PF3-CAPTURE-CLEAN |Unused exact own resources and wider original5190 preservation | PASS6ownunusedimages/3framingfiles deleted; physicalreclaimNOT_MEASURED; wider12PASS/all18baseline unchanged;7deniedchildren untouched |
+| PF3-CAPTURE-NEXT |Separatecopied2140businessproject/modelstorage +actual1527SDKcapture | NOT_RUN; nextinheritinghandoff, no nativeoracle or inventedmapping/Apply |

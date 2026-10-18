@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createViewerAdapter } from '../adapter.mjs';
 import { createRouteController } from '../routes.mjs';
+import { planModelCaptureInput } from '../capture-input.mjs';
 
 const turn = () => new Promise(resolve => setImmediate(resolve));
 
@@ -88,6 +89,54 @@ test('capture adapter preserves only the typed empty lookup scope error and keep
     await assert.rejects(handle.readModelCapture({ captureId, index: 1 }), { code: fail ? 'EXTRACTION_FAILED' : 'LOOKUP_GEOMETRY_NOT_FOUND', message: 'The local model or one of its resources could not be read.' });
     f.adapter.dispose();
   }
+});
+test('staged adapter acknowledges all input before one SDK read, admits committed index0 and clears private input', async t => {
+  const previous = { window: globalThis.window, Autodesk: globalThis.Autodesk, THREE: globalThis.THREE, LMV_VIEWER_VERSION: globalThis.LMV_VIEWER_VERSION }; t.after(() => Object.assign(globalThis, previous));
+  const f = sdkFixture(); globalThis.window = f.window;
+  class Matrix { constructor() { this.elements = new Float64Array(16); } makeScale(x, y, z) { this.elements.fill(0); this.elements[0] = x; this.elements[5] = y; this.elements[10] = z; this.elements[15] = 1; return this; } }
+  f.window.Autodesk.Viewing.Private = { LmvMatrix4: Matrix, enumMeshVertices() {}, enumMeshTriangles() {} }; Object.assign(globalThis, { Autodesk: f.window.Autodesk, THREE: {}, LMV_VIEWER_VERSION: '7.130.0' }); let sdkReads = 0;
+  Object.assign(f.model, { getObjectTree: success => { sdkReads++; success(f.tree); }, getUnitScale: () => 1, getUnitString: () => 'metres', getUpVector: () => [0, 0, 1], getGlobalOffset: () => [0, 0, 0] });
+  await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: { projectId: '11111111-1111-4111-8111-111111111111', modelVersionId: '22222222-2222-4222-8222-222222222222', contentFingerprint: 'a'.repeat(64) } });
+  const captureId = '33333333-3333-4333-8333-333333333333', p = await planModelCaptureInput({ routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: Array.from({ length: 257 }, (_, i) => 'EQ-' + i) }, { captureId, envelopeIdentity: { instanceId: '44444444-4444-4444-8444-444444444444', projectId: '11111111-1111-4111-8111-111111111111', modelVersionId: '22222222-2222-4222-8222-222222222222', loadId: '55555555-5555-4555-8555-555555555555' } });
+  assert.equal((await handle.startModelCapture(p.startPayload)).phase, 'receiving'); assert.equal(sdkReads, 0);
+  for (const c of p.chunks) await handle.readModelCapture(c); assert.equal(sdkReads, 0);
+  const first = await handle.readModelCapture({ captureId, index: 0 }); assert.equal(first.index, 0); assert.equal(JSON.parse(first.eventJson).type, 'metadata'); assert.equal(sdkReads, 1);
+  handle.clearRoute(); await assert.rejects(handle.readModelCapture({ captureId, index: 1 }), { code: 'EXTRACTION_FAILED' });
+  const again = await handle.startModelCapture(p.startPayload); assert.equal(again.receivedNameCount, 0); await assert.rejects(handle.readModelCapture({ captureId, index: 0 }), { code: 'EXTRACTION_FAILED' }); assert.equal(sdkReads, 1); f.adapter.dispose();
+});
+
+for (const phase of ['sdk', 'digest']) test(`a late cancelled ${phase} operation cannot clear its replacement capture`, async t => {
+  const previous = { window: globalThis.window, Autodesk: globalThis.Autodesk, THREE: globalThis.THREE, LMV_VIEWER_VERSION: globalThis.LMV_VIEWER_VERSION }, originalCrypto = globalThis.crypto;
+  t.after(() => { Object.assign(globalThis, previous); Object.defineProperty(globalThis, 'crypto', { configurable: true, value: originalCrypto }); });
+  const f = sdkFixture(); globalThis.window = f.window; t.after(() => f.adapter.dispose());
+  class Matrix { constructor() { this.elements = new Float64Array(16); } makeScale(x, y, z) { this.elements.fill(0); this.elements[0] = x; this.elements[5] = y; this.elements[10] = z; this.elements[15] = 1; return this; } }
+  f.window.Autodesk.Viewing.Private = { LmvMatrix4: Matrix, enumMeshVertices() {}, enumMeshTriangles() {} };
+  Object.assign(globalThis, { Autodesk: f.window.Autodesk, THREE: {}, LMV_VIEWER_VERSION: '7.130.0' });
+  Object.assign(f.model, { getUnitScale: () => 1, getUnitString: () => 'metres', getUpVector: () => [0, 0, 1], getGlobalOffset: () => [0, 0, 0] });
+  await f.adapter.initialize();
+  const identity = { instanceId: '44444444-4444-4444-8444-444444444444', projectId: '11111111-1111-4111-8111-111111111111', modelVersionId: '22222222-2222-4222-8222-222222222222', loadId: '55555555-5555-4555-8555-555555555555' };
+  const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: { projectId: identity.projectId, modelVersionId: identity.modelVersionId, contentFingerprint: 'a'.repeat(64) } });
+  const request = count => ({ routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: Array.from({ length: count }, (_, i) => 'EQ-' + i) });
+  const oldPlan = await planModelCaptureInput(request(1), { captureId: '33333333-3333-4333-8333-333333333333', envelopeIdentity: identity });
+  const replacement = await planModelCaptureInput(request(257), { captureId: '66666666-6666-4666-8666-666666666666', envelopeIdentity: identity });
+  let resume, observed; const waiting = new Promise(resolve => { observed = resolve; }); let pending;
+  if (phase === 'sdk') {
+    f.model.getObjectTree = success => { resume = () => success(f.tree); observed(); };
+    pending = handle.startModelCapture({ captureId: oldPlan.startPayload.captureId, lookupRouteCodes: ['/BC1'], equipmentNames: [] });
+  } else {
+    await handle.startModelCapture(oldPlan.startPayload);
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { subtle: { digest(...args) { observed(); return new Promise(resolve => { resume = async () => resolve(await originalCrypto.subtle.digest(...args)); }); } } } });
+    pending = handle.readModelCapture(oldPlan.chunks[0]);
+  }
+  const oldRejected = assert.rejects(pending, { name: 'AbortError' }); await waiting;
+  const ack = await handle.startModelCapture(replacement.startPayload); assert.equal(ack.receivedNameCount, 0);
+  Object.defineProperty(globalThis, 'crypto', { configurable: true, value: originalCrypto });
+  await resume(); await oldRejected; await turn();
+  f.model.getObjectTree = success => success(f.tree);
+  assert.equal((await handle.readModelCapture(replacement.chunks[0])).receivedNameCount, 256);
+  assert.equal((await handle.readModelCapture(replacement.chunks[1])).phase, 'ready');
+  const metadata = await handle.readModelCapture({ captureId: replacement.startPayload.captureId, index: 0 });
+  assert.equal(JSON.parse(metadata.eventJson).type, 'metadata'); assert.equal(metadata.captureId, replacement.startPayload.captureId);
 });
 
 test('missing renderer feature flag API fails before SDK initialization instead of allowing edges-only Ghost', async () => {

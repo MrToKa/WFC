@@ -1,4 +1,5 @@
 import { CHANNEL, PROTOCOL_VERSION, SDK_VERSION, validateEnvelope, validateDescriptor, parseRouting } from './protocol.mjs';
+import { isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 
 const messages = {
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
@@ -20,7 +21,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   const origin = window.location.origin;
   const requests = new Map(), usedLoads = new Set(), cleanupRequests = new Set();
   let disposed = false, phase = 'hello', current = null, handle, loadController, initController, initCommand, routeRequest, routeHasLine = false;
-  let computed;
+  let computed, captureScope;
   const capabilities = new Map();
   const lifetime = new AbortController();
   const identityMatches = command => command.modelVersionId === (current?.modelVersionId ?? null) && command.loadId === (current?.loadId ?? null);
@@ -38,6 +39,25 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     emit(command, 'ERROR', { code, message: messages[code], retryable: ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
     finish(command);
     onState({ phase: 'error', code });
+  }
+  function releaseCapture(scope, abort = false) {
+    if (!scope) return;
+    clearTimeout(scope.timer); scope.closed = true;
+    if (captureScope === scope) captureScope = undefined;
+    if (abort) scope.controller.abort();
+  }
+  function beginCapture(command) {
+    const scope = { captureId: command.payload.captureId, startedAt: Date.now(), controller: new AbortController(), installed: false, closed: false, timer: null };
+    scope.timer = setTimeout(() => {
+      const owned = captureScope === scope;
+      for (const entry of requests.values()) if (entry.captureScope === scope && entry.status === 'pending') error(entry.command, failure('EXTRACTION_FAILED'));
+      releaseCapture(scope, true);
+      if (owned) { try { handle?.clearRoute(); } catch { /* Deadline remains terminal; cleanup details are not transported. */ } }
+    }, CAPTURE_INPUT_LIMITS.milliseconds);
+    return scope;
+  }
+  function checkCapture(scope) {
+    if (!scope || scope.closed || Date.now() - scope.startedAt > CAPTURE_INPUT_LIMITS.milliseconds || scope.installed && captureScope !== scope) throw failure('EXTRACTION_FAILED');
   }
   const liveLoad = command => !disposed && current === command && !loadController?.signal.aborted;
   async function responseJson(response) {
@@ -66,6 +86,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     return { descriptor: parsed, modelUrl: new URL(parsed.entrypoint, base).href };
   }
   function stopRoute(exceptRequestId) {
+    releaseCapture(captureScope, true);
     if (routeRequest) { const entry = requests.get(routeRequest.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
     routeRequest = undefined;
     routeHasLine = false;
@@ -74,12 +95,14 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       const entry = requests.get(id);
       if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY'].includes(entry?.command.type))) {
         if (entry?.status === 'pending') entry.status = 'cancelled';
+        if (entry?.command.type === 'START_MODEL_CAPTURE') releaseCapture(entry.captureScope, true);
         controller.abort();
       }
     }
     handle?.clearRoute();
   }
   function stopLoad() {
+    releaseCapture(captureScope, true);
     if (current) { const entry = requests.get(current.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
     loadController?.abort();
     handle?.finish();
@@ -87,7 +110,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     routeRequest = undefined;
     routeHasLine = false;
     computed = undefined;
-    for (const controller of capabilities.values()) controller.abort();
+    for (const [id, controller] of capabilities) { releaseCapture(requests.get(id)?.captureScope, true); controller.abort(); }
     capabilities.clear();
   }
   async function requirePathFinder(command, signal) {
@@ -102,21 +125,30 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   async function pathFinder(command) {
     if (capabilities.size >= 2) { error(command, failure('INVALID_STATE')); return; }
     const controller = new AbortController(); capabilities.set(command.requestId, controller);
-    const signal = AbortSignal.any([lifetime.signal, loadController.signal, controller.signal]);
+    const capturing = command.type === 'START_MODEL_CAPTURE' || command.type === 'READ_MODEL_CAPTURE';
+    const ownedCapture = command.type === 'START_MODEL_CAPTURE' ? beginCapture(command) : capturing ? captureScope : undefined;
+    if (capturing) requests.get(command.requestId).captureScope = ownedCapture;
+    const signal = AbortSignal.any([lifetime.signal, loadController.signal, controller.signal, ...(ownedCapture ? [ownedCapture.controller.signal] : [])]);
     const live = () => !disposed && !signal.aborted && identityMatches(command) && requests.get(command.requestId)?.status === 'pending';
     try {
+      if (capturing) { checkCapture(ownedCapture); if (ownedCapture.captureId !== command.payload.captureId) throw failure('EXTRACTION_FAILED'); }
       await requirePathFinder(command, signal);
+      if (capturing) checkCapture(ownedCapture);
       if (!live()) return;
       if (command.type === 'START_MODEL_CAPTURE' || command.type === 'READ_MODEL_CAPTURE') {
-        // Reserve the generator's complete 3,000-event worst case inside the
+        // Reserve the complete 3,000 ACK+output response budget inside the
         // unchanged 4,096-command replay budget, leaving room for cleanup.
         if (command.type === 'START_MODEL_CAPTURE' && requests.size > 1091) throw failure('CAPTURE_RELOAD_REQUIRED');
-        if (command.type === 'START_MODEL_CAPTURE') stopRoute(command.requestId);
+        if (command.type === 'START_MODEL_CAPTURE') { stopRoute(command.requestId); captureScope = ownedCapture; ownedCapture.installed = true; }
         const progress = value => { if (live()) emit(command, 'MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, ...value }); };
-        const result = command.type === 'START_MODEL_CAPTURE' ? await handle.startModelCapture(command.payload, signal, progress) : await handle.readModelCapture(command.payload, signal, progress);
+        const result = command.type === 'START_MODEL_CAPTURE' ? await handle.startModelCapture(command.payload, signal, progress, { startedAt: ownedCapture.startedAt }) : await handle.readModelCapture(command.payload, signal, progress);
+        checkCapture(ownedCapture);
         await requirePathFinder(command, signal);
+        checkCapture(ownedCapture);
         if (!live()) return;
-        if (!emit(command, 'MODEL_CAPTURE_EVENT', result)) throw failure('EXTRACTION_FAILED');
+        const terminal = isStagedModelCaptureStart(command.payload) || command.type === 'READ_MODEL_CAPTURE' && isModelCaptureInputAppend(command.payload) ? 'MODEL_CAPTURE_INPUT_ACK' : 'MODEL_CAPTURE_EVENT';
+        if (!emit(command, terminal, result)) throw failure('EXTRACTION_FAILED');
+        if (terminal === 'MODEL_CAPTURE_EVENT' && result.done) releaseCapture(ownedCapture);
       } else if (command.type === 'BEGIN_COMPUTED_PATH') {
         stopRoute(command.requestId); computed = { pathId: command.payload.pathId, pointCount: command.payload.pointCount, objectIds: command.payload.objectIds, points: [] };
         emit(command, 'COMPUTED_PATH_UPDATED', { pathId: computed.pathId, phase: 'begun', received: 0 });
@@ -155,12 +187,16 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       finish(command);
     } catch (cause) {
       if (!live()) return;
-      if (['BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type)) {
+      if (capturing) {
+        const owned = captureScope === ownedCapture;
+        releaseCapture(ownedCapture, true);
+        if (owned) { try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; } }
+      } else if (['BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH'].includes(command.type)) {
         computed = undefined; routeHasLine = false;
         try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; }
       }
       error(command, cause);
-    } finally { capabilities.delete(command.requestId); }
+    } finally { capabilities.delete(command.requestId); if (command.type === 'START_MODEL_CAPTURE' && captureScope !== ownedCapture) releaseCapture(ownedCapture, true); }
   }
   async function load(command) {
     stopLoad();

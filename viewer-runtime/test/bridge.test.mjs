@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRuntimeBridge } from '../bridge.mjs';
 import { CHANNEL, parseRouting } from '../protocol.mjs';
+import { planModelCaptureInput } from '../capture-input.mjs';
 
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 const turn = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
@@ -211,6 +212,39 @@ test('model capture transport is request-bound, reauthorizes each part and reser
   for (let i = 0; i < 1090; i++) g.send('CANCEL_REQUEST', { targetRequestId: uuid(8000 + i) });
   g.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
   assert.equal(g.messages('MODEL_CAPTURE_EVENT').length, 0); assert.equal(g.messages('ERROR').at(-1).payload.code, 'CAPTURE_RELOAD_REQUIRED'); g.bridge.dispose();
+});
+test('the overall capture deadline starts before initial authorization and refuses a delayed start', async t => {
+  let now = 1000000, started = 0; t.mock.method(Date, 'now', () => now); const permission = deferred();
+  const f = fixture({ startModelCapture: async ({ captureId }) => { started++; return { captureId, index: 0, done: false, eventJson: '{}' }; }, fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? permission.promise : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }) });
+  t.after(() => f.bridge.dispose()); await f.loaded(); f.send('START_MODEL_CAPTURE', { captureId: uuid(119), routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+  now += 300001; permission.resolve(Response.json({ authorized: true, loadId: uuid(4) })); await turn();
+  assert.equal(started, 0); assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'EXTRACTION_FAILED');
+});
+test('a final capture response cannot publish after delayed postauthorization exceeds the shared deadline', async t => {
+  let now = 2000000, authorizations = 0; t.mock.method(Date, 'now', () => now); const permission = deferred();
+  const f = fixture({ fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? ++authorizations === 4 ? permission.promise : Response.json({ authorized: true, loadId: uuid(4) }) : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }) });
+  t.after(() => f.bridge.dispose()); await f.loaded(); const captureId = uuid(120);
+  f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+  f.send('READ_MODEL_CAPTURE', { captureId, index: 1 }); await turn(); assert.equal(authorizations, 4);
+  now += 300001; permission.resolve(Response.json({ authorized: true, loadId: uuid(4) })); await turn();
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1); assert.equal(f.messages('ERROR').at(-1).payload.code, 'EXTRACTION_FAILED');
+});
+test('staged input ACKs and first output stay separately typed and reauthorize every round', async () => {
+  let p;
+  const f = fixture({ startModelCapture: async ({ captureId }) => ({ captureId, phase: 'receiving', receivedNameCount: 0, scopeSha256: null, equipmentNamesSha256: null }), readModelCapture: async value => Object.hasOwn(value, 'equipmentOffset') ? ({ captureId: value.captureId, phase: 'ready', receivedNameCount: 1, scopeSha256: p.descriptor.scopeSha256, equipmentNamesSha256: p.descriptor.equipmentNamesSha256 }) : ({ captureId: value.captureId, index: 0, done: false, eventJson: '{}' }) });
+  await f.loaded();
+  p = await planModelCaptureInput({ routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: ['EQ-1'] }, { captureId: uuid(117), envelopeIdentity: { instanceId: uuid(1), projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4) } });
+  f.send('START_MODEL_CAPTURE', p.startPayload); await turn(); f.send('READ_MODEL_CAPTURE', p.chunks[0]); await turn(); f.send('READ_MODEL_CAPTURE', { captureId: uuid(117), index: 0 }); await turn();
+  assert.equal(f.messages('MODEL_CAPTURE_INPUT_ACK').length, 2); assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 1); assert.equal(f.fetches.filter(r => r.url.endsWith('/pathfinder-authorization')).length, 6); f.bridge.dispose();
+});
+test('Clear or revoked authority after a staged append cannot publish a late input ACK', async () => {
+  for (const revoke of [false, true]) {
+    const gate = deferred(); let blocked = false;
+    const p = await planModelCaptureInput({ routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: ['EQ-1'] }, { captureId: uuid(118), envelopeIdentity: { instanceId: uuid(1), projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4) } });
+    const f = fixture({ startModelCapture: async ({ captureId }) => ({ captureId, phase: 'receiving', receivedNameCount: 0, scopeSha256: null, equipmentNamesSha256: null }), readModelCapture: async ({ captureId }) => { await gate.promise; return { captureId, phase: 'ready', receivedNameCount: 1, scopeSha256: p.descriptor.scopeSha256, equipmentNamesSha256: p.descriptor.equipmentNamesSha256 }; }, fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? blocked ? new Response('', { status: 403 }) : Response.json({ authorized: true, loadId: uuid(4) }) : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 342, totalBytes: 439007803 }) });
+    await f.loaded(); f.send('START_MODEL_CAPTURE', p.startPayload); await turn(); assert.equal(f.messages('MODEL_CAPTURE_INPUT_ACK').length, 1);
+    f.send('READ_MODEL_CAPTURE', p.chunks[0]); await turn(); if (revoke) blocked = true; else f.send('CLEAR_ROUTE', { reason: 'user' }); gate.resolve(); await turn(); assert.equal(f.messages('MODEL_CAPTURE_INPUT_ACK').length, 1); if (revoke) assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+  }
 });
 
 test('actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths', async () => {

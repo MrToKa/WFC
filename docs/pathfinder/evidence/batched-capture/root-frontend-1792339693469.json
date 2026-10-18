@@ -1,0 +1,170 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.root-frontend-check.v1",
+  "recordedAt": "2026-10-18T16:08:13.468Z",
+  "status": "PASS",
+  "baseCommit": "6761cb76df79392befba6ace1c4d8c685b36cfdd",
+  "scope": "API recorded provenance roundtrip and hook late-cancellation/current role/registry/model/cable/local-scope guards. Includes current unaffected cases in these two suites.",
+  "sources": [
+    {
+      "file": "src/api/pathfinder.ts",
+      "sha256": "8e9270ad276d7d466ca21f56dbd233f49c76b12eab1847214f2cdd98e946e171"
+    },
+    {
+      "file": "src/api/pathfinder.test.ts",
+      "sha256": "0199204dde332f9ebb6283d155521b36b753512ee8961db6c5032ac2bf3d8057"
+    },
+    {
+      "file": "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "sha256": "ab4cb8ff2bd60158b53b993403888661039d3ceb47d3a0632b45638539a464cd"
+    },
+    {
+      "file": "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx",
+      "sha256": "57dad2c5ee11a8a88c94e025c715fe88ed226bd688df61ad9621e2d77a7621e1"
+    }
+  ],
+  "tests": {
+    "passed": 28,
+    "failed": 0,
+    "total": 28,
+    "suites": [
+      {
+        "file": "src/api/pathfinder.test.ts",
+        "status": "passed",
+        "cases": [
+          {
+            "name": "PathFinder API contract retains validated recorded input provenance after reload without granting completeness",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract accepts a nonempty actual-shaped state with integer cable_id and exact BIGINT revision strings",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract rejects changed project identity, malformed numeric IDs and arbitrary endpoint URLs",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract preserves the exact decimal project gap and rejects missing, nonpositive or oversized values",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract detail readers require exact proposal/project identity and never promote an unaccepted model",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract reads raw diagnostic lookup results with exact points and rejects wrong identity or promoted acceptance",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract uses the server canonical lookup plan and rejects stale selections or malformed capture queries",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract requires an exact settings revision for standalone preview dependency fencing",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder API contract reads a standalone path without cable Apply capability and rejects identity or capability promotion",
+            "status": "passed"
+          }
+        ]
+      },
+      {
+        "file": "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx",
+        "status": "passed",
+        "cases": [
+          {
+            "name": "PathFinder scope and shared-location orchestration cancels a late planning capture before it can upload",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration refuses changed registry inputs and revoked access before planning artifact upload",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration rejects a changed cable endpoint even when the selection and registry revisions stay equal",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration checks the frozen local endpoint/rule scope after the final server read and before upload",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration does not request admin data or create a frame for a non-admin or mismatched project",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration updates aliases then binds once using the fresh registry revision and active model selection",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration a current-role refusal clears all cached PF data and disposes the protected viewer",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration scope changes synchronously hide the old data and ignore a late previous-login response",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration a bounded extraction failure leaves the live model ready so the admin can reduce scope and retry",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration retains the model after a partial appearance restore, offers Clear retry and clears the error after acknowledgement",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration only explicitly requested retries force a new calculation job",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration captures an independent lookup without a planning artifact and keeps gap resolution in Project Details",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration does not capture or enqueue after a cancelled lookup plan resolves late",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration does not enqueue a late protected capture after Cancel",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration durably cancels an accepted lookup job when Cancel races its creation response",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration keeps lookup discovery refusals safe and distinguishes missing visible geometry from quota errors",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration binds a standalone path to current project inputs even when a caller supplies stale managed fields",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration keeps bounded native routing preferences while reading the current Details gap for cable jobs",
+            "status": "passed"
+          },
+          {
+            "name": "PathFinder scope and shared-location orchestration uses the protected controller for selection/transparency and cancels pending viewer work",
+            "status": "passed"
+          }
+        ]
+      }
+    ]
+  },
+  "privateRaw": {
+    "file": "pathfinder-engine/.scratch/batched-root-tests-final-20261018.json",
+    "bytes": 11652,
+    "sha256": "0f5570c37cfd00bbf2fe50b90e24a90154617b8d91f3f89a7a391d19eb295aa3"
+  },
+  "lint": {
+    "status": "PASS",
+    "scope": [
+      "src/api/pathfinder.ts",
+      "src/api/pathfinder.test.ts",
+      "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx"
+    ]
+  }
+}
