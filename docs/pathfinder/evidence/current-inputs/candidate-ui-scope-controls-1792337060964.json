@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.candidate-ui-scope-controls.v1",
+  "status": "PASS_AT_FOCUSED_METADATA_SCOPE",
+  "recordedAt": "2026-10-18T15:24:20.964Z",
+  "executedBy": "viewer_tab_capabilities",
+  "previousEvidence": "docs/pathfinder/evidence/current-inputs/candidate-source-controls-1792336100796.json",
+  "delta": "Added raw trimmed case-sensitive endpoint Set count, trimmed/raw maximum name lengths and exact current Routes256-name/character comparison. Normalized matching keys and decoder behavior are unchanged.",
+  "source": [
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-audit.mjs",
+      "sha256": "4b1dff94b037bb75adde819b89c1b4442cf0e2a322cb1fdc77b385b5e7c98022"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-lib.mjs",
+      "sha256": "834d39f60d250c689b885722fa24efa9af008d5825b7fef98b3466ad8294d2dc"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-lib.test.mjs",
+      "sha256": "ade0c43ebff75d47e2da00673d41865df94fb7313003c6ec7f06750a70e8bc56"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/README-candidates.md",
+      "sha256": "e85b27928b17e1fb8c3447b07c1cfb2d8bb7904570eed2c3e6e72295e8e5b777"
+    }
+  ],
+  "checks": [
+    {
+      "command": "node --test --test-reporter=tap --test-name-pattern='capture comparison|raw trimmed|trimmed length|public summary|missing unique ambiguous' scripts/pathfinder-current-inputs/candidate-lib.test.mjs",
+      "exitCode": 0,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "rawTap": {
+        "path": "docs/pathfinder/evidence/current-inputs/candidate-ui-scope-delta-1792337060964.tap",
+        "sha256": "326eff9e755b286be4c0190d17224e0eaa2a0aabb695599d3c9ceb9719da9ad5"
+      }
+    },
+    {
+      "command": "node --check scripts/pathfinder-current-inputs/candidate-audit.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node --check scripts/pathfinder-current-inputs/candidate-lib.mjs",
+      "exitCode": 0
+    }
+  ],
+  "newControls": [
+    "257 raw trimmed case variants collapse to one normalized key yet exceed the UI256-name limit.",
+    "Outer whitespace makes raw length401 while trimmed name length1 fits the UI length gate."
+  ],
+  "scopeLimits": [
+    "All copied cable endpoints only; standalone drafts and selected-cable scope are not included.",
+    "Numeric UI name/length comparison does not establish root-rule, geometry, native visibility, confirmed binding or engineering acceptance.",
+    "Prior48/48 controls remain historical evidence; this delta ran only5 affected controls, not a new full-suite result."
+  ],
+  "actualBusinessAudit": "NOT_RUN_AWAITING_ROOT_RELEASE",
+  "actions": {
+    "databaseQueries": 0,
+    "databaseWrites": 0,
+    "containerActions": 0
+  }
+}

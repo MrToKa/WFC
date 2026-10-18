@@ -15,12 +15,55 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current continuation — actual business input and full-model candidate coverage
 
+Technical delivery COMPLETE at scoped evidence: [report28](28-current-input-coverage.md).
+Final guarded read-only copy PASS:2140actual cables, exact same project UUID with
+observed name HPU Aalborg2023/number P230039 / H.7500062; active fingerprint b5bb4fbe
+and five resource pins agree. Before/copy/after four projection hashes unchanged.
+Source final45controls+3syntax PASS; first endpoint-formatter FAIL and abbreviated
+project-name FAIL remain historical, followed only by separately reviewed diagnostics.
+Actual full214part/PDB audit PASS_WITH_GAPS:1527normalized AND raw-trimmed distinct
+keys, all1527missing/0unique/0ambiguous, three empty uses. Actual category mapping
+332MV/257LV/1551effectiveControl; no unknown. PDB diagnosis115actual objects and
+52retained SDK property arrays agree with pinned SDK; no decoder mismatch observed.
+Business labels/full rows remain private ignored scratch. Wider final preservation
+12PASS1792337673384/300f2f34 plus narrow original fourgroup proof; no original writes,
+new containers, import, jobs or Apply. Seven denied children/parents untouched.
+Next useful independent implementation: bounded name-chunk collection in ONE capture
+and ONE scan/snapshot/upload, durable input-scope provenance, unchanged security/
+geometry/time/message limits, and known-hidden SQL exclusion BEFORE LIMIT/ambiguity.
+Manual mapping/engineering review remains required; zero names matched is not solved
+by changing punctuation/fuzzy matching. Preparing next inherited local handoff now.
+
+The following entries retain the chronological investigation, superseded by the
+actual final scoped outcome above:
+
 Newinheritingbranchpf-3-input-coverage-local-20261018 at technicaldelivery
 de093daf26531cfbedf3d12a3a52f5d8a3f136a1. Self-containedassignment
 [PF-3 current inputs](handoffs/PF-3-current-input-coverage.md) prepared with
 prepare-stage-handoff; userstandingauthority executesit immediately.
-CurrentoriginalDBendpoint/project/businesscounts/MTO/model-link UNKNOWN;
-guardedminimal readonlycopy/toolcontrols/fullmodelcandidateaudit NOT_RUN.
+Actualmetadataendpointbound(host.docker.internal5434→PG172.17.0.2:5432,wfc_app),
+sourcecontrols33/syntax3/source-onlyreviewPASS at0fa4a1source. Candidate48controls
++1metadata-deltacontrol/source-reviewPASS. Originalproject/businesscounts/MTO/
+model-link UNKNOWN. ParentreleasedoneROOTcopy: actualsource-copy1515Z FAIL
+SOURCE_SQL_SERVER_IDENTITY beforeanybusinessreads, raw146B/failuremetadata565B
+durable; exactmismatchingpredicateNOTPROVED. PreserveFAIL/nounchangedretry.
+Writerpreparingoneidentity-onlydiagnostic(no project/model/cablequeries) with
+sameRO/endpoint/watchdog; rootsoleexecutorafternewreview/controlfreeze.
+No guardrelaxationuntilactualfacts; candidateactualauditstillNOT_RUN.
+DiagnosticnowOBSERVED source-identity1521Z/ce997e9c: raw172.17.0.2/32,
+host172.17.0.2,expecteddbwfc_app/port5432/ROanddefaultROon/repeatable-read/
+transportfalse; no businessqueries. AuthorizeminimalSQLhost(inet_server_addr())
+comparisonformatterfixwithoutchangingexpectedidentity/ROguards. Sourcewriter
+newcontrols/reviewerexactdelta, thenROOTsolecorrectedcopyfreshwork. Neverretry
+firstfailedccf beforefile oroverwritehistoricalreceipts. Stillnocablesnapshot.
+Correctedformattercopy1524Z passesSQLendpointthenFAILSOURCE_PROJECT_IDENTITY.
+Boundedproject-onlydiag1529Z proves SAMEpinnedUUID0c... storednameHPUAalborg2023,
+numberP230039/H.7500062; soleHPUAalborgprefixof3discoveryrows. Rootresolution
+project-identity-resolution1530Z retains SAMEscreenshotUUID, exactobservedfull
+name+number(no originalrename/switch). Source+candidatewritersupdateonlyexpected
+pins/tests; source-onlyreviewthenROOTsolefreshcopy. Modelb5fingerprint+5resource
+guardmuststillpassBEFOREcables. BothactualFAILsremain. BusinesscopystillNOTRUN
+successfully, actualcandidateauditpending. Otherdiscoveredprojectlabelsprivate.
 Thisstagepermits narroworiginalreadonlySQL after verified backend/PGidentity/
 connectionendpoint/read-onlytxn guards; never app/config/dbbootstrap,original
 writes/import/Review/Apply. Privateengineeringrows ignored, compacthashes/counts

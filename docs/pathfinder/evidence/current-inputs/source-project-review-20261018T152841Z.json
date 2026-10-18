@@ -1,0 +1,29 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.project-review.v1",
+  "recordedAt":"2026-10-18T15:28:41Z",
+  "status":"NO_REMAINING_MATERIAL_FINDINGS",
+  "reviewer":"/root/pf_runtime_map",
+  "scope":"Static delta review of the bounded project-identity diagnostic and private facts in existing guard-error envelopes; no live query, inferred project choice or guard relaxation by reviewer.",
+  "source":[
+    {"path":"scripts/pathfinder-current-inputs/source-copy.mjs","sha256":"beae476a6259c964aadd3f73795b74b33095ced3992dca4b6c2faba640cd2fc3"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.mjs","sha256":"defe0f36d1e0c7265067104fabadbb4b2ed50dc797b9bac0f98ecade5c7cd158"},
+    {"path":"scripts/pathfinder-current-inputs/source-lib.test.mjs","sha256":"6635ff8a8385c558d2036d7f85e06da2c07b31a4513f59d849341d533158193a"},
+    {"path":"scripts/pathfinder-current-inputs/README-source.md","sha256":"31fc47acba71663bb3b716b4fd7c8d7a9e0c5c1d5d27a625a6b531721ff58e86"}
+  ],
+  "reviewedDelta":[
+    "The projectIdentityOnly branch follows the unchanged exact canonical SQL host/port/database/effective and default read-only/repeatable-read/transport guard.",
+    "It reads only id/project_number/name for the fixed target UUID with LIMIT2, followed by a fixed parameterized Aalborg/HPU name-or-number discovery query ordered by project_number,id with LIMIT11.",
+    "It returns before allowance, selection/model, cable or customer reads. There is no automatic project selection, name rewrite, fallback, or copy-guard relaxation.",
+    "Project labels and full observations remain in exclusive private raw output. Public receipts retain raw path/hash, bounded counts and safe guard descriptions only. Raw is durable before host validation; eleven discovery rows produce a retained overflow failure.",
+    "Existing normal-copy guard failures may retain only already-selected minimal project identity or model identity/resource-reference facts privately, without extra queries. Public failure metadata remains code-only.",
+    "The existing parsed-config/NODE_OPTIONS/no-bootstrap/read-only/startup deadline/output and owner-path safeguards remain applicable."
+  ],
+  "ownerExecutedChecks":{"receipt":"docs/pathfinder/evidence/current-inputs/source-project-controls-1792337296830.json","receiptSha256":"2535a5d4cae9724b1607a5fc25957438ea4257233cca4140dca55808efc432ed","nodeTestPass":41,"nodeTestFail":0,"nodeSyntaxPass":3,"rawTestSha256":"2196cd818aa6b8a6949ef1295548ae9f9bf61b3a835ba5b7d6752c050f1647d0","attribution":"Source-owner execution; reviewer verified frozen file, receipt and retained output hashes and read the focused tests without rerunning them."},
+  "preservedFailures":["docs/pathfinder/evidence/current-inputs/source-copy-20261018T1515Z.json","docs/pathfinder/evidence/current-inputs/source-copy-corrected-20261018T1524Z.json"],
+  "reviewerActions":{"testsExecuted":0,"databaseQueries":0,"containerOperations":0,"applicationEdits":0,"localReviewReceiptWrites":1},
+  "limitations":[
+    "The cause of SOURCE_PROJECT_IDENTITY is not established by this source review. Original project labels/discovery and model/cable content remain unobserved in the reviewed failed copy.",
+    "Actual diagnostic execution remains the parent's sole operation. Any ambiguous/different project observation requires explicit bounded disposition rather than silently changing the source target.",
+    "Historical failed copy receipts remain FAIL; a later observation or corrected run cannot relabel them."
+  ]
+}

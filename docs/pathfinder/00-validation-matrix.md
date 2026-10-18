@@ -301,3 +301,18 @@ Branchpf-8-ui-preservation-local-20261018, base7aedfe0/handoff e275dd5.
 | PF8-UI-HISTORY |Priorstage25 lost mismatch detail | FAIL_NOT_RETAINED unchanged; new valid addition shape does not conclusively diagnose old mismatch |
 | PF3-INPUT-NEXT |Current HPU business From/To/MTO and fullmodel name/property candidatecoverage | NOT_RUN; separate narrow readonly handoff required. Template2027rows does not prove currentHPUprovenance |
 | PF8-USER-01 |Engineering acceptance/fullplant/literalgraphreuse/mainintegration | PENDING_USER_REVIEW / NOT_PROVED / NOT_IMPLEMENTED / NOT_AUTHORIZED as scoped |
+
+## PF-3 actual current inputs and full-model name coverage — 18 October 2026
+
+Branchpf-3-input-coverage-local-20261018, handoff4ade614f, [report28](28-current-input-coverage.md).
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF3-INPUT-REAL |Guarded original read-only before/copy/after; exact pinned project, active fingerprint/five resource pins | PASS2140cables; fourprojection hashes/container metadata unchanged; private rows excluded fromGit |
+| PF3-INPUT-HISTORY |First SQL rawaddress formatter and subsequent short project-name assertions | FAIL retained; separate diagnostics proved /32 formatting and sameUUID observed fullidentity; final guarded copy PASS |
+| PF3-INPUT-CONTROLS |Source copy fixedparameterized RO SQL/endpoints/bounds/failure preservation | PASS final45controls+3syntax and independent closing source review |
+| PF3-CANDIDATE-REAL |Production exact normalization/matching over all214parts/fivePDB resources, actual input | PASS_WITH_GAPS1527keys allmissing/0unique/0ambiguous;4280uses/3empty; no binding/geometry inference |
+| PF3-CANDIDATE-SEMANTICS |Actual PDB decoder versus pinned SDK methods and retained SDK arrays | PASS115actual objects/0diff and52/52fullarrays; all438156PDBrecords scanned;0eligible exactmatches; no nativeequivalence claim |
+| PF3-CANDIDATE-CONTROLS |Source-backed alias decoding and later metadata/count/projectpair deltas | PASS historical48fullcontrols +separate1/5/7affected checks; no invented finalfullsuite count |
+| PF3-INPUT-PRESERVE |All18baseline containers, originals/source/5190 hashes after actual copy | PASS12checks1792337673384/300f2f34, separately original4projection consistency |
+| PF3-CAPTURE-NEXT |1527raw names exceed existing256 preparation cap; knownhidden rows counted beforeLIMIT | NOT_IMPLEMENTED inthisdelivery; source-grounded next batching/eligibility stage, not engineering readiness |

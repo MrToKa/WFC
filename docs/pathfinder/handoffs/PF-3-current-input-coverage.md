@@ -1,5 +1,13 @@
 # PF-3 continuation — current cable inputs and full-model candidate coverage
 
+Execution note18October2026: technical scope completed in [report28](../28-current-input-coverage.md).
+The screenshot's SAME project UUID stores name `HPU Aalborg 2023` and number
+`P230039 / H.7500062`; the abbreviated human name was not an exact DB label.
+Two actual failed gates and separately reviewed diagnostics remain recorded.
+Final consistent read-only source copy2140cables PASS; actual full candidate audit
+1527keys allmissing PASS_WITH_GAPS. No original write or unverified binding/Apply.
+This note records resolved facts without rewriting the original preparation state.
+
 Execute this stage under the user's standing automatic continuation authority.
 Prepared with `prepare-stage-handoff` after the scoped PF-8 delivery; no new
 stage number or remote integration is implied. Work only in

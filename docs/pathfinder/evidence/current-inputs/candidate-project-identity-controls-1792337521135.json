@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "pathfinder.current-inputs.candidate-project-identity-controls.v1",
+  "status": "PASS_AT_FOCUSED_IDENTITY_SCOPE",
+  "recordedAt": "2026-10-18T15:32:01.135Z",
+  "executedBy": "viewer_tab_capabilities",
+  "expectedProject": {
+    "id": "0c0007c9-d73f-4d13-bc87-601c544727b7",
+    "name": "HPU Aalborg 2023",
+    "projectNumber": "P230039 / H.7500062"
+  },
+  "identityBasis": "Parent-authorized exact name/number guard from its bounded read-only diagnostic; this agent performed no source database query.",
+  "delta": "Candidate CLI pins the same UUID plus exact full raw project name and exact project number. Added optional expected projectNumber validator guard; endpoint normalization and model/resource/schema semantics remain unchanged.",
+  "source": [
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-audit.mjs",
+      "sha256": "a138b43767398fe558ed7bc96b34560239a3fedeccc0c75aea3ecd2ed6c84b7d"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-lib.mjs",
+      "sha256": "35dee09670a8ad10df5d764ab63b4b883f9c3f5fa62201d6502134510a64755b"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/candidate-lib.test.mjs",
+      "sha256": "ef2391bb44784accdab900e62c24e147291ea33b342cc0fae0774b9a0c7eacca"
+    },
+    {
+      "path": "scripts/pathfinder-current-inputs/README-candidates.md",
+      "sha256": "e85b27928b17e1fb8c3447b07c1cfb2d8bb7904570eed2c3e6e72295e8e5b777"
+    }
+  ],
+  "checks": [
+    {
+      "command": "node --test --test-reporter=tap --test-name-pattern='project name|exact current project identity|valid input preserves|input refuses foreign model project|input refuses foreign cable project|source receipt requires|durably retains a sanitized failure' scripts/pathfinder-current-inputs/candidate-lib.test.mjs",
+      "exitCode": 0,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "rawTap": {
+        "path": "docs/pathfinder/evidence/current-inputs/candidate-project-identity-final-1792337521135.tap",
+        "sha256": "51e809da98a92cc21a0d6353949b04b9f72d355b7005fe22a1b346022163afb0"
+      }
+    },
+    {
+      "command": "node --check scripts/pathfinder-current-inputs/candidate-audit.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node --check scripts/pathfinder-current-inputs/candidate-lib.mjs",
+      "exitCode": 0
+    }
+  ],
+  "history": {
+    "initialRun": {
+      "status": "FAIL",
+      "passed": 6,
+      "failed": 1,
+      "rawTap": {
+        "path": "docs/pathfinder/evidence/current-inputs/candidate-project-identity-delta-1792337489339.tap",
+        "sha256": "462bf53f85e524dbed3de5b8c75ae9398a9adf0159237f919d23b8015d969e7a"
+      },
+      "cause": "Existing synthetic durable-failure fixture still used abbreviated HPU Aalborg name, so the new correct project-identity guard ran before its intended wrong-content guard.",
+      "correction": "Updated only that synthetic fixture identity. No real input, product data, frozen PF0/engine fixtures or expected numerical results changed."
+    },
+    "earlierFullSuite": "48/48 historical at its recorded source revision; this identity delta ran only7 affected controls."
+  },
+  "actualBusinessAudit": "NOT_RUN_AWAITING_SOURCE_COPY_AND_ROOT_RELEASE",
+  "actions": {
+    "databaseQueries": 0,
+    "databaseWrites": 0,
+    "applicationOrContainerActions": 0
+  }
+}

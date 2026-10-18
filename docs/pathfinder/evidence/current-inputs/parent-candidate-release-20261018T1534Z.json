@@ -1,0 +1,12 @@
+{
+  "schemaVersion":"pathfinder.current-inputs.parent-release.v1",
+  "recordedAtUtc":"2026-10-18T15:33:32Z",
+  "decision":"execute-one-offline-full-model-current-candidate-audit",
+  "executor":"/root only",
+  "sourceCopy":{"file":"docs/pathfinder/evidence/current-inputs/source-copy-fullname-20261018T1533Z.json","sha256":"a1c9e90a2c48e9da4d619cc3a4d5a90c1a9c2ae2c4b91fc99c9d396f5aba2c02","status":"PASS","cables":2140,"beforeCopyAfterFourProjectionGroups":"UNCHANGED","originalBackendPgMetadata":"UNCHANGED"},
+  "privateSnapshot":{"path":"pathfinder-engine/.scratch/current-inputs-2b20a8ae-a435-4d4d-aec4-005bb021a715/current-inputs.private.json","bytes":922311,"sha256":"0a84d1327950d4bd1d8420661f526cf1c97fdec5dbaaca71c429bf3e0c3bd897"},
+  "candidateSource":{"candidate-audit.mjs":"a138b43767398fe558ed7bc96b34560239a3fedeccc0c75aea3ecd2ed6c84b7d","candidate-lib.mjs":"35dee09670a8ad10df5d764ab63b4b883f9c3f5fa62201d6502134510a64755b","candidate-lib.test.mjs":"ef2391bb44784accdab900e62c24e147291ea33b342cc0fae0774b9a0c7eacca","README-candidates.md":"e85b27928b17e1fb8c3447b07c1cfb2d8bb7904570eed2c3e6e72295e8e5b777"},
+  "parentSourceReview":"No remaining material finding after original review and narrow metadata/exact observed project-pair updates. Raw trimmed case-sensitive Routes request count stays distinct from normalized matching keys; original matcher/property decoder semantics unchanged.",
+  "ownerControls":{"historicalFull":"48/48 including18synthetic SDK object comparisons","metadataOnlyDelta":"syntax +1targeted PASS","rawUiCountDelta":"5/5affected+syntax2 PASS","exactProjectPairDelta":"7/7affected+syntax2 PASS; prior6/7fixture-identity failure retained separately","fullFinalSuiteRerun":"NOT_RUN; unaffected semantic decoder and normalization were not rewritten"},
+  "scope":"Host-file-only analysis of guarded private2140cable snapshot and exact pinned retained214part inventory/five property files. Full candidate keys/values remain private; public counts/hashes/provenance. No DB connection/write, new capture, confirmed binding, job, Review/Apply or runtime mutation. Metadata matches do not establish geometry/visibility/engineering readiness."
+}
