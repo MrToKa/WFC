@@ -18,6 +18,9 @@ The user explicitly authorized automatic implementation of the remaining stages 
 The new request is a detailed implementation plan, plus explicitly authorized
 Autodesk conversion of the older NWD for later revision comparison. The new
 local planning branch inherits `c81328e0c6127d6633d15be51126128e2f8036bd`.
+The reviewed plan/prepared handoff and operational checkpoint are committed
+locally at `dfd04fd` (no publication). Staged documentation scope7/no raw credential
+values/link check3documents9local targets/diff whitespace check PASS.
 See [plan32](32-purpose-and-revision-plan.md) and the prepared, NOT_EXECUTED
 [PF-R0 assignment](handoffs/PF-R0-purpose-revisions.md). PF-R0–PF-R10, including
 R2a, remain PLANNED; no WFC feature code/runtime/database changes are made here.
@@ -37,16 +40,31 @@ private account captures and credentials stay outside Git. Conversion outcome
 and exact verification scope are recorded in the
 [older-model report](33-older-model-preparation.md) and its evidence.
 The current model is not replaced or imported by this preparation.
-Actual derivative conversion PASS with exactly one submit. First download stopped
-on COST_EXPIRED; a genuinely refreshed proof has zero mutation authority.
-Read-only download is active from20:16:12UTC, invocation
-`ad20ba27-4831-49f8-bb4a-7c0fd9c75080` / exec session98950. Shared own runner.lock
-prevents duplicate execution. Read the report/journals before any continuation.
+Older-model preparation is technically COMPLETE/PASS at 21:09:01.699 UTC on
+18 October (00:09 on 19 October locally). Exactly one upload/submission;
+173 verified resources / 174,769,843 raw bytes; independently verified ZIP
+174,823,508 bytes, SHA256
+`a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183`.
+Earlier COST_EXPIRED receipts are retained. Final read-only invocation
+`a7b0c3f6-4574-4adb-9098-134eb141fd04` PASS, 280 reservations / two genuinely
+reviewed zero-mutation proofs; old 70 checkpoints reused, no repeated conversion.
+Credential-free package session 53578 PASS, zero APS requests. No active download
+or packager remains. Public [summary receipt](evidence/purpose-revision-plan/older-model-actual.json)
+was generated after reviewed source hashes were rechecked. Keep the package,
+source snapshot and private evidence for the upcoming comparison; do not repeat
+the upload/submit or import/select the older model as part of planning.
 
 Independent source review of the plan/handoff PASS. New implementation checks,
 actual cross-revision geometry comparison and engineering acceptance NOT_RUN.
+The older package has not been imported or rendered in WFC. No app feature code
+or runtime changes; no new containers; own temporary account tabs closed.
 The automatic task remains deleted; the planning request does not restart it.
 Next implementation step is PF-R0 contracts, then the actual tray catalog in R1.
+Final public documentation review PASS; eight delivered docs/evidence files,
+zero raw credential matches, 11 checked local links / zero missing targets;
+package receipt/size/counters and Git whitespace checks PASS. No app feature
+tests were run for this planning-only scope. Exact final commit is available
+from live Git history; the plan checkpoint remains `dfd04fd`.
 The old human-only handoff below is historical and does not cover this new scope.
 
 ## Previous operational delivery — actual business input and full-model candidate coverage

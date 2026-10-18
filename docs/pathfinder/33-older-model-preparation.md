@@ -59,11 +59,53 @@
    е валиден 20:06:14.072–20:36:14.072 UTC, с **нула** разрешения за
    storage/upload/submit и до 2000 четения. Старият proof/ledger се запазват.
 
-## Текущ checkpoint
+10. Второто сваляне е прекратено коректно с **COST_EXPIRED** в края на валидния
+    срок. Запазени са **70** завършени файлови checkpoints; invocation
+    `ad20ba27-4831-49f8-bb4a-7c0fd9c75080` има 246 успешни reservations,
+    173 signed-resource и 70 raw-resource заявки, **нула** cloud mutations.
+11. Трети действителен преглед на Free/team/hub/application — **PASS**. Новият
+    read-only proof `47341ef5e94e31fc846cee6a0b2d61d57ec463bf48d1fac66440e2de447876c7`
+    е валиден 20:32:18.048–21:02:18.048 UTC. Наблюдавани са 1926 basic calls;
+    complex chart показва 3, breakdown — 6, наличният баланс е 9/10 units.
+    Разминаването и stale hub редът са записани; няма разрешение за нов submit.
+    Първият опит за този proof е отказан при проверка за промяна на source файла.
+    Независимото повторно прочитане доказва същия SHA256, размер и стабилни
+    метаданни; следващият непроменен recorder преминава. Gate не е отслабен.
+    Pointer е сменен атомарно и отново прочетен като валиден JSON.
+12. По време на възобновеното сваляне е извършен следващ свеж преглед, без да
+    изтича активният proof. Новият read-only proof
+    `b018a362c81f2f58b83e5b8bff22dd7192d4c252bce56a31e40a248d652a023f`
+    е валиден 20:50:30.900–21:20:30.900 UTC: basic 2101; complex chart и
+    breakdown 3; баланс 9/10 units. Няма mutation grants. Същият процес приема
+    новия proof в 20:53:49.923 UTC преди reservation 176, след независимо
+    artifact/source/account валидиране. Старите proofs се запазват непроменени.
 
-Състояние: **IN_PROGRESS**. Реалната конверсия е завършена; следват довършване
-на свалянето, пакетиране и независима проверка на офлайн пакета. Подготвен е
-read-only runner с проверявана ротация към изрично прегледани, свежи, същия
+## Завършен резултат
+
+Състояние: **PASS** за източник → качване → SVF 3D → сваляне → офлайн пакет.
+Финалното пакетиране и независима проверка завършват в 21:09:01.699 UTC на
+18 октомври / 00:09:01.699 местно време на 19 октомври 2026 г.
+
+| Проверка | Действителен резултат |
+| --- | --- |
+| Support profile | `svf-local-7.130.0-v1` — PASS |
+| Ресурси | 173; 174 769 843 raw bytes |
+| ZIP | 174 823 508 bytes |
+| ZIP SHA256 | `a4538444641bfc96ce8915a0ef24c1adfebb50a72c1575a23cc475d9bd781183` |
+| Content fingerprint | `6f6fdfd86ef0a9061b74062675a3c72c971cfa1c43539e4adf42b9122c75d639` |
+| Package ID | `f1074064-2cb8-4d6e-8412-e025343c6e27` |
+| Качване / submit | 1 initiate, 5 части, 1 complete; точно 1 submit |
+| Последно read-only сваляне | PASS; 280 reservations, 2 свежи proofs, 0 cloud mutations |
+| Локално пакетиране / независима проверка | PASS; 0 APS requests, 0 cloud mutations |
+
+Готовият [SVF пакет](../../pathfinder-engine/.scratch/older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d/runner-state/output/aalborg-older-svf.zip)
+остава в собственото локално работно място. Големият пакет и частните доказателства
+не се добавят в Git. [Публичният технически receipt](evidence/purpose-revision-plan/older-model-actual.json)
+съдържа точните осем изпълнения, hashes, counters и отделните резултати; предишните
+неуспешни опити не са заличени. Provider totals се отнасят само за тези runner
+receipts, не са общ отчет за целия Autodesk акаунт.
+
+Използван е read-only runner с проверявана ротация към изрично прегледани, свежи, същия
 source/account и zero-mutation proofs. Проверява всяко четене чрез непроменения
 cost provider; не удължава стар proof. Запазва една provider инстанция и плана
 в паметта, а не повтаря конверсията. Невалиден/изтекъл нов pointer отказва без
@@ -72,16 +114,41 @@ fallback. Ограниченията са 1000 reservations/45 минути за
 
 Независим source review и синтактична проверка на helper SHA256
 `ce6a0f33a9408d2b7a1aa2b649e24090fa3c265de8090fad6dcd9b027d605d63` — **PASS**.
-Root го стартира реално в 20:16:12 UTC, invocation
-`ad20ba27-4831-49f8-bb4a-7c0fd9c75080`, session 98950. Не започвай второ активно
-изпълнение. Общият runner.lock се пази; proof activation/read-progress journals
-са под `runner-state/read-download-ad20ba27-4831-49f8-bb4a-7c0fd9c75080`.
-След освобождаване на lock старият runner може да изпълни credential-free
-`package`. Първият download процес вече е приключил с COST_EXPIRED.
+Root възобнови същия read-only helper в 20:39 UTC, exec session 69296, след
+приключването на session 98950. Изпълнението завърши PASS с 173 checkpoints;
+proof activation/read-progress journals са запазени под
+`runner-state/read-download-a7b0c3f6-4574-4adb-9098-134eb141fd04`.
+След освобождаване на lock root изпълни credential-free `package`, session
+53578, също завършила PASS. Няма активен download/packager. Независимият преглед
+на публичния summarizer е PASS след премахване на произволно частно поле и
+добавяне на проверка на двата действителни source hashes срещу review pins.
+Синтактичните проверки и реалното създаване на публичния receipt са PASS.
 
 Реалното сравнение на геометрия/purposes/преместени локации е **NOT_RUN**.
 Инженерното приемане и native parity не са доказани. Не е извършен импорт във
-WFC или смяна на активния модел. Не са създадени контейнери, не са променяни
+WFC, 3D browser проверка на стария пакет или смяна на активния модел.
+Не са създадени контейнери, не са променяни
 оригиналните checkout-и/контейнери/данни, 5190 или 5191. Няма push/PR/merge.
 Нужните доказателства и сравнителният модел се пазят; отказаните за почистване
 директории не са докосвани.
+Временните две Autodesk browser страници са затворени; съществуващата 5191
+демонстрация е оставена отворена. Оригиналното WFC и каноничният PathFinder
+са clean при финалната проверка; старият PathFinder запазва същите два
+променени source файла и `.vscode/`.
+
+## Финални проверки на документацията
+
+- Независим source и публичен документален review — **PASS**; runtime/package
+  резултатът е отделното действително изпълнение на root, не твърдение на reviewer-а.
+- Осемте доставки под `docs/pathfinder/`: JSON parse и проверка срещу действителните
+  три credential стойности — **PASS**, нула съвпадения/нула разкрити стойности.
+- Трите основни документа: **11** локални линка, **0** липсващи цели — **PASS**.
+- Публичният package receipt, точният ZIP размер и броячите за един submit — **PASS**.
+- Git whitespace проверка — **PASS**. Предупреждението за нормализация LF/CRLF
+  не е грешка. Проверен обхват: `dfd04fd` плюс финалните документални промени
+  преди локалния commit; няма приложен source код.
+
+Променените/нови доставки са план 32, този отчет 33, `automation-progress.md`,
+`handoffs/PF-R0-purpose-revisions.md` и четири JSON файла в
+`evidence/purpose-revision-plan/`: active marker, source evidence, discovery evidence
+и final actual summary. PF-R0 остава подготвен, **NOT_EXECUTED**.
