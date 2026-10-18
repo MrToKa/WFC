@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-2-coverage-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-8-ui-preservation-local-20261018` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -13,7 +13,19 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current continuation — retained coverage audit
+## Current continuation — fresh UI data-preservation investigation
+
+IN_PROGRESS on `pf-8-ui-preservation-local-20261018`, inheriting coverage delivery
+`7aedfe0b0b14b38ba58bc20ef40599403d4114c6`. New self-contained assignment
+[PF-8 UI preservation](handoffs/PF-8-ui-preservation.md) prepared through
+prepare-stage-handoff. Existing5190/source resources unchanged. Runtime writer
+owns new audit/tools/evidence and fresh5191 lifecycle; parent docs/CUA. All fresh
+runtime/UI gates NOT_RUN. A0beforemount/A1afterautomaticwork/A2preview/A3Clear
+must be saved beforeassertion/retirement. Automatic proposal additions are
+permitted only with exact current-job provenance, never mistaken for Apply.
+Do not rewrite stage25's historical FAIL_NOT_RETAINED as a new PASS.
+
+## Latest delivery — retained coverage audit
 
 SCOPED_TECHNICAL_PASS on `pf-2-coverage-local-20261018`, inheriting local worker delivery
 `25e49401a7eca4117bbb261208be00bc92a7b36a`. New assignment
