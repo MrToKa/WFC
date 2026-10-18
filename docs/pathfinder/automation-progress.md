@@ -15,15 +15,42 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current continuation — fresh UI data-preservation investigation
 
-IN_PROGRESS on `pf-8-ui-preservation-local-20261018`, inheriting coverage delivery
+Technically complete on `pf-8-ui-preservation-local-20261018`, inheriting coverage delivery
 `7aedfe0b0b14b38ba58bc20ef40599403d4114c6`. New self-contained assignment
 [PF-8 UI preservation](handoffs/PF-8-ui-preservation.md) prepared through
 prepare-stage-handoff. Existing5190/source resources unchanged. Runtime writer
-owns new audit/tools/evidence and fresh5191 lifecycle; parent docs/CUA. All fresh
-runtime/UI gates NOT_RUN. A0beforemount/A1afterautomaticwork/A2preview/A3Clear
-must be saved beforeassertion/retirement. Automatic proposal additions are
+owns new audit/tools/evidence and fresh5191 lifecycle; parent docs/CUA. Actual
+A0beforemount/A1afterautomaticwork/A2preview/A3Clear were saved before
+assertion/retirement. Automatic proposal additions are
 permitted only with exact current-job provenance, never mistaken for Apply.
+Source review tightens contract: all existingproposalrows immutable; stale/canApply
+DTOonly. RealQA manualaliases/bindings alreadyexist so registry staysunchanged.
+Preview persists pf_jobs(kindpreview)+pf_lookup_results, no pf_previews table;
+Clearlocalonly/nocancellation. Alljob/item quiescence spans>15s auto scan.
 Do not rewrite stage25's historical FAIL_NOT_RETAINED as a new PASS.
+
+Actual four-phase qualification nowPASS at APIe0a6d742/web5abc6002:
+34controls/source-reviewedhelpers, A0rawsavedbeforelogin; A1adds1currentauthorized
+calculatejob/item/proposal(designreuse) only; A2adds1previewjob+lookupresult only;
+A3zeroall12workflow+6auxdeltas. Stablewindows span>15s;24aggregateraw/diff/artifact
+checksPASS, exactqualifiedLinuxrunner4b940d5c/worker1c53eae0/session5d0dfe63 reused.
+Allreceipts under evidence/ui-preservation; see report27. Currenttarget
+wfc-pathfinder-local-f673a0facba3/owner7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74
+was retired only after complete evidence and parentdisposition1447Z; ownCUAtab
+closed. ActualstaleClearcaption corrected by exactly3frontendowner-loss
+setNotice(null) calls;5selectedUITests/types/lint/source-reviewPASS. WEB-ONLY
+build577e/APIunchanged; C0zerochanges/C1onepreviewpaironlyPASS,5bindingcontrols.
+NewbrowserClearcaption/draftsPASS. CalculateoccurredwhileViewerloading so
+new577eGhostrenderNOTASSERTED; prior5abcGhostproofretainsitsownscope.
+Gatedcleanup5containers/4volumes/2networks/3unusedimages(logical294832567B,
+physicalNOT_MEASURED). Finalprimaryaudit12PASS1792335003878dfe1b66c;
+all18baselineidentities/5190workflow/sourceinputsunchanged. Sevenpreviously
+deniedscratchchildren+parentsuntouched/no retry. No originalDBqueries inthisstage.
+Next: localdeliverycommit, prepare-stage-handoff for PF-3actualbusinessinput/
+fullmodelnamecoverage on newinheritingbranch, then execute. Currentbusiness
+project/count/MTO/model-link UNKNOWN until narrowlyverified originalreadonly
+snapshot; templaterows2027areonlycandidate/noHPUprovenance. No Review/Apply,
+originalwrites, publication or deployment. Humanengineeringacceptancepending.
 
 ## Latest delivery — retained coverage audit
 

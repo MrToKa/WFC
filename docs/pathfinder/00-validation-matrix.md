@@ -284,3 +284,20 @@ Branchpf-2-coverage-local-20261018, base25e49401/handoff f2f5e6ab.
 | PF3-COVER-QA |All3retained QA cables/aliases/bindings with projectfences and unknownlivegates | PASS at retainedscope;2realmanual endpoints, thirdrealbindingstale;2synthetic cables not crossmatched; no businesscoverage claim |
 | PF2-COVER-CONTROLS |Failure receipts/hash/path/offset/hierarchy/category/bounds/fragments/registry/workbounds | PASS43/43/TAP; source-only review closed; earlier fixturemkdirfailure preserved |
 | PF2-COVER-PLANT/GRAPH |Full computational plant/equipment/category coverage, literal graphreuse and engineering acceptance | BLOCKED_INPUT/NOT_IMPLEMENTED/PENDING_USER_REVIEW as scoped; metadata audit and cooperative9.167s/604778496Bpeak are not routingcapacity |
+
+## PF-8 fresh UI preservation and Clear caption — 18 October 2026
+
+Branchpf-8-ui-preservation-local-20261018, base7aedfe0/handoff e275dd5.
+[Report27](27-ui-data-preservation.md) keeps the older FAIL_NOT_RETAINED separate.
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF8-UI-AUDIT |Durable raw/diff-before-assert, exact image/module/phase chain, provenance and quiescence contracts | PASS34focusedcontrols; independent source review |
+| PF8-UI-PHASES |Fresh A0/A1/A2/A3: automatic1job/item/proposal; standalone1preview/result; Clearzeroall18groups | PASS actual saved phases and24aggregatechecks at APIe0a6/web5abc; protected business/Review/Apply/existingrows unchanged |
+| PF4-UI-CLEAR |Three owner-loss notice setters preserve drafts and late-result fences | PASS5selectedUITests/types/scopedlint/source-review; three pre-fixcaptionFAIL and separate test-accessorFAIL retained |
+| PF8-UI-CAPTION |Web-only577e replacement; C0nochanges/C1onepreviewpair; same login/fixed API/modules | PASS5bindingcontrols and actualC0/C1; ordinarybrowser Clear notice/drafts PASS. NewroutecalculatedwhileViewerloading: retained-resultnotice, no new577eGhostdisplayclaim |
+| PF8-UI-CLEAN |Full evidence/disposition before gated targetretirement; exact unreferenced ownedimages | PASS5containers/4volumes/2networks/3images; logical294832567B, physicalreclaimedNOT_MEASURED; all7deniedchildren untouched |
+| PF8-UI-PRESERVE |Final5190/source/all18baseline audit aftercleanup | PASS12checks preservation1792335003878dfe1b66c; originalDBqueries NOT_RUN inthisstage |
+| PF8-UI-HISTORY |Priorstage25 lost mismatch detail | FAIL_NOT_RETAINED unchanged; new valid addition shape does not conclusively diagnose old mismatch |
+| PF3-INPUT-NEXT |Current HPU business From/To/MTO and fullmodel name/property candidatecoverage | NOT_RUN; separate narrow readonly handoff required. Template2027rows does not prove currentHPUprovenance |
+| PF8-USER-01 |Engineering acceptance/fullplant/literalgraphreuse/mainintegration | PENDING_USER_REVIEW / NOT_PROVED / NOT_IMPLEMENTED / NOT_AUTHORIZED as scoped |

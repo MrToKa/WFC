@@ -262,6 +262,51 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await waitFor(() => expect(showPath).toHaveBeenLastCalledWith({ pathId: reverseId, points: [[4, 5, 6], [1, 2, 3]], objectIds: [23] })); expect(pf.action).not.toHaveBeenCalled();
     expect(within(screen.getByRole('region', { name: 'Standalone path result' })).queryByRole('button', { name: /Apply/ })).toBeNull();
   });
+  it('shared Clear removes the displayed standalone notice and result while preserving drafts and preferences without requests', async () => {
+    const user = userEvent.setup(), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const startPreview = vi.fn(async () => id), readPreview = vi.fn(async () => preview(id)), showPath = vi.fn(async () => 'displayed');
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount();
+    await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Path cable type' }), 'Control');
+    const trigger = screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' }); await user.clear(trigger); await user.type(trigger, '3');
+    await user.click(screen.getByRole('checkbox', { name: 'Prefer vertical approach' })); await user.click(screen.getByRole('button', { name: 'Calculate path' }));
+    expect(await screen.findByText('The exact standalone path is displayed. Review its route and length.')).toBeVisible();
+    const beforeClear = { start: startPreview.mock.calls.length, read: readPreview.mock.calls.length, calculate: pf.calculate.mock.calls.length, clear: pf.clear.mock.calls.length };
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByText('The exact standalone path is displayed. Review its route and length.')).toBeNull(); expect(screen.queryByRole('region', { name: 'Standalone path result' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Path From location' })).toHaveValue('EQ-001'); expect(screen.getByRole('textbox', { name: 'Path To location' })).toHaveValue('EQ-002');
+    expect(screen.getByRole('combobox', { name: 'Path cable type' })).toHaveValue('Control'); expect(trigger).toHaveValue('3'); expect(screen.getByRole('checkbox', { name: 'Prefer vertical approach' })).not.toBeChecked();
+    for (const name of ['Routes', 'Path', 'Path lookup']) expect(screen.getByRole('tab', { name })).toBeVisible(); expect(screen.getByRole('button', { name: 'Calculate path' })).toBeEnabled();
+    expect(pf.clear.mock.calls.length).toBeGreaterThan(beforeClear.clear); expect(startPreview).toHaveBeenCalledTimes(beforeClear.start); expect(readPreview).toHaveBeenCalledTimes(beforeClear.read); expect(pf.calculate).toHaveBeenCalledTimes(beforeClear.calculate);
+    expect(pf.action).not.toHaveBeenCalled(); expect(pf.reviewProposal).not.toHaveBeenCalled(); expect(pf.saveLocation).not.toHaveBeenCalled(); expect(pf.matchAll).not.toHaveBeenCalled();
+  });
+  it('shared Clear prevents a late standalone display acknowledgement from restoring its notice or result', async () => {
+    const user = userEvent.setup(), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let finish!: (value: string) => void;
+    const showPath = vi.fn(() => new Promise<string>(resolve => { finish = resolve; })), startPreview = vi.fn(async () => id), readPreview = vi.fn(async () => preview(id));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount();
+    await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002'); await user.click(screen.getByRole('button', { name: 'Calculate path' }));
+    await waitFor(() => expect(showPath).toHaveBeenCalledOnce()); await user.click(screen.getByRole('button', { name: 'Clear' })); await act(async () => finish('displayed'));
+    expect(screen.queryByText('The exact standalone path is displayed. Review its route and length.')).toBeNull(); expect(screen.queryByRole('region', { name: 'Standalone path result' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Path From location' })).toHaveValue('EQ-001'); expect(screen.getByRole('textbox', { name: 'Path To location' })).toHaveValue('EQ-002');
+    expect(startPreview).toHaveBeenCalledOnce(); expect(readPreview).toHaveBeenCalledOnce(); expect(pf.action).not.toHaveBeenCalled(); expect(pf.reviewProposal).not.toHaveBeenCalled();
+  });
+  it('shared Clear removes a completed lookup notice while preserving its route draft without cancellation requests', async () => {
+    const user = userEvent.setup(), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const startLookup = vi.fn(async () => id), readLookup = vi.fn(async () => lookup(id));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, startLookup, readLookup, showPath: vi.fn(async () => 'displayed') }); mount();
+    await user.click(screen.getByRole('tab', { name: 'Path lookup' })); await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/BC1/BC2'); await user.click(screen.getByRole('button', { name: 'Show route' }));
+    expect(await screen.findByText('The exact ordered lookup is displayed.')).toBeVisible(); await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByText('The exact ordered lookup is displayed.')).toBeNull(); expect(screen.queryByRole('region', { name: 'Ordered lookup result' })).toBeNull(); expect(screen.getByRole('textbox', { name: 'Path Finder ordered route' })).toHaveValue('/BC1/BC2');
+    expect(startLookup).toHaveBeenCalledOnce(); expect(readLookup).toHaveBeenCalledOnce(); expect(pf.action).not.toHaveBeenCalled();
+  });
+  it('shared Clear removes the proposal review notice and eligibility without another review or Apply', async () => {
+    const user = userEvent.setup(), detail = proposal(true), reviewProposal = vi.fn(async () => ({ reviewId: '88888888-8888-4888-8888-888888888888', proposal: detail }));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed'), reviewProposal }); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ })); await screen.findByText('Design length: 21 m'); await user.click(screen.getByRole('button', { name: 'Confirm proposal review' }));
+    expect(await screen.findByText('Review confirmed for this immutable proposal.')).toBeVisible(); await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByText('Review confirmed for this immutable proposal.')).toBeNull(); expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+    expect(reviewProposal).toHaveBeenCalledOnce(); expect(pf.action).not.toHaveBeenCalled();
+  });
   it('uses one selected equipment object as an endpoint and rejects partial or non-finite manual coordinates', async () => {
     const user = userEvent.setup(); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] } }); mount();
     await user.click(screen.getByRole('button', { name: 'Use selection as From' })); expect(await screen.findByRole('textbox', { name: 'Path From location' })).toHaveValue('Tray group A');

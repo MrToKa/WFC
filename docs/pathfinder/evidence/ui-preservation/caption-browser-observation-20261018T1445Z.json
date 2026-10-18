@@ -1,0 +1,17 @@
+{
+  "schemaVersion":"pathfinder.ui-preservation.caption-browser.v1",
+  "status":"PASS_CLEAR_NOTICE_AND_DRAFTS",
+  "recordedAtUtc":"2026-10-18T14:45:48Z",
+  "method":"Ordinary protected UI through computer-use; same owned IAB tab and login, one reload after web-only replacement, exactly one Calculate path and one Clear. No evaluation/NOP_VIEWER/API injection.",
+  "target":{"project":"wfc-pathfinder-local-f673a0facba3","owner":"7fa65ffa-ef34-46a7-b4c1-55cd19f8fa74","port":5191,"webImage":"sha256:577e040fa919c6c556e69bd34f3697d49d14d2b6b00d10c600ce1beb26803014","apiImage":"sha256:e0a6d7425b5280e429c3f25fa0d94922553ae08005f3773676f0cc5291f2904e"},
+  "input":{"from":"=PF-DEMO-NETWORK-START","to":"=PF-DEMO-NETWORK-END","category":"Control","secondaryDistanceMetres":2,"preferVerticalApproach":true},
+  "actualBeforeClear":{"geometricMetres":35.30345579516123,"designMetres":45,"connectionGaps":4,"gapLengthMetres":0.9840583861033791,"notice":"The result is retained. Reload the model and calculate again to display it.","displayScope":"Calculate was clicked while Viewer was loading. Calculation completed; protective retained-result notice was observed. This attempt is NOT a new-web route/Ghost display PASS; prior A2 visual proof remains separately scoped to earlier web5abc."},
+  "actualAfterClear":{"resultRemoved":true,"reverseButtonRemoved":true,"localNoticeRemoved":true,"fromToPreserved":true,"categoryPreserved":true,"secondaryDistanceAndVerticalPreferencePreserved":true,"threeToolTabsPreserved":true,"wholeModelOpaque":true,"reviewOrApply":false,"extraCalculateRetry":false},
+  "screenshots":[
+    {"file":"docs/pathfinder/evidence/ui-preservation/clear-caption-fixed-20261018.jpg","bytes":78407,"sha256":"e42a0adf470c4459c14d2b2d4a12fbeed26bd2789f33a5d4d8c7ed15f6e15139","scope":"Whole model restored; three tool tabs and Clear context."},
+    {"file":"docs/pathfinder/evidence/ui-preservation/clear-drafts-fixed-20261018.jpg","bytes":84502,"sha256":"317905d58c79066392e62a93451428613870f9bd9b21968fa7facc866579d093","scope":"From/To drafts and vertical preference retained after Clear; complete AX observation additionally verifies Control/notice/result removal."}
+  ],
+  "dataPreservation":"PENDING_SEPARATE_C1",
+  "engineeringAcceptance":"NOT_PERFORMED",
+  "ownTab":"OPEN_PENDING_C1_AND_DISPOSITION"
+}

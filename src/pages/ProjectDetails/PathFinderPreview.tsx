@@ -24,7 +24,7 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
   const dependencyKey = JSON.stringify([pf.data?.activeModel, pf.data?.registryRevision, pf.data?.settings, pf.data?.artifacts.map(artifact => artifact.id), options]);
   useEffect(() => { onEndpointNamesChange([...new Set([from.name.trim(), to.name.trim()].filter(Boolean))]); }, [from.name, to.name, onEndpointNamesChange]);
   useEffect(() => { generation.current++; setJobId(null); setPreview(null); setWorking(false); setCancelRequested(false); setNotice(null); return () => { generation.current++; }; }, [active, dependencyKey]);
-  useEffect(() => { if (!displayOwned) { generation.current++; setJobId(null); setPreview(null); setWorking(false); } }, [displayOwned]);
+  useEffect(() => { if (!displayOwned) { generation.current++; setJobId(null); setPreview(null); setWorking(false); setNotice(null); } }, [displayOwned]);
   const invalidate = () => { generation.current++; setJobId(null); setPreview(null); setWorking(false); setCancelRequested(false); setNotice(null); };
   const setEndpoint = (side: 'from' | 'to', value: Endpoint) => { onInputChange(); invalidate(); (side === 'from' ? setFrom : setTo)(value); };
   const assignSelection = async (side: 'from' | 'to') => {

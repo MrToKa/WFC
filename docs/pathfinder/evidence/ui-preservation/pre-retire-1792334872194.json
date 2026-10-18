@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "pathfinder.ui-preservation.pre-retire.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T14:47:52.194Z",
+  "captionReceiptSha256": "6fb0523f3b0a103c4909d6eeacd4c00205c2c6735c9c0954e2b43c8acc63a923",
+  "checks": [
+    {
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\C1-1792334796719-96a78df3.private.json",
+      "status": "PASS",
+      "sha256": "c917b68fb9cbe8fc5bcdfd3b62134db9a41b2171c1b51cdc1b1e8abc53af6dfc"
+    },
+    {
+      "file": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\C1-1792334796719-96a78df3.diff.private.json",
+      "status": "PASS",
+      "sha256": "e10adc9267628a49d197de2942a933234264616ada35aa10dab374fd020d9644"
+    },
+    {
+      "file": "pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\qualified-caption-index.html",
+      "status": "PASS",
+      "sha256": "621c442ed49eb82d472aad4f219e9ffdaf3e238da97bbb69791aa0d0d95124a6"
+    },
+    {
+      "file": "pathfinder-engine\\.scratch\\ui-preservation-c43b7c81-a9cc-4eca-a349-ef06a6c9f338\\qualified-caption-index-B9FuVVuE.js",
+      "status": "PASS",
+      "sha256": "ed7c956435d6c87d31cd29ad108e3af869c0568ba373e985902b79af2fd0e4f6"
+    }
+  ]
+}

@@ -16,7 +16,7 @@ export function PathFinderResults({ pf, selectedCableId, active = true, displayO
   const operation = useRef(0), reviewContext = useRef('');
   useEffect(() => { operation.current++; setProposal(null); setReviewId(null); setApplyKey(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { operation.current++; }; }, [selectedCableId, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
   useEffect(() => { operation.current++; setReviewId(null); setApplyKey(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { operation.current++; }; }, [active]);
-  useEffect(() => { if (!displayOwned) { operation.current++; setReviewId(null); setApplyKey(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); } }, [displayOwned]);
+  useEffect(() => { if (!displayOwned) { operation.current++; setReviewId(null); setApplyKey(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); } }, [displayOwned]);
   const optionsKey = JSON.stringify(options);
   useEffect(() => { operation.current++; setReviewId(null); setApplyKey(null); setPathDisplayed(false); setApplied(false); setNotice(null); }, [optionsKey]);
   const selectedRevision = data?.cables.find(cable => cable.id === proposal?.cableId)?.cableWriteRevision;

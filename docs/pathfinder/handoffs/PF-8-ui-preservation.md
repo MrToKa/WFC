@@ -45,8 +45,10 @@ an authorized automatic-calculation UI visit. Every change still needs exact
 observed provenance, current authority/dependencies and documented semantics.
 Cable routing/design/install/write revisions, settings, active selection,
 registry/locations/bindings/model data and Review/Apply must not change from
-these browser actions. Existing proposal immutable inputs/results stay intact;
-any supported state transition needs its exact causal trace. Unexplained changes
+these browser actions. Source review at e275dd5 confirms existing proposal rows
+are entirely immutable (database trigger rejects every UPDATE); stale/canApply
+are DTO-derived, not stored state transitions. No existing proposal change is
+allowed. Unexplained changes
 fail the gate and require investigation while the target still exists.
 
 ## Ownership and execution
@@ -87,8 +89,13 @@ already suffice; do not widen or alter them merely for this stage.
 5. Save full before/after and structured row/column differences BEFORE any
    assertion. Attribute additions to exact current automatic calculate or preview
    jobs, observed actor/login identity fingerprint (never token), engine/model/
-   Details snapshots and requested cable IDs. Existing proposal result/dependency
-   content cannot change silently. Separate expected automatic proposal additions
+   Details snapshots and requested cable IDs. Existing proposal rows cannot change.
+   Actual preview output is pf_jobs(kind='preview') plus pf_lookup_results, not a
+   pf_previews table. Clear changes local/Viewer state; it does not SQL-cancel.
+   Exact QA manual bindings/aliases already exist, so registry.match must leave
+   registry/locations/aliases/bindings/events unchanged. Observe all project jobs/
+   items and stable snapshots spanning over15seconds for quiescence with automatic
+   features enabled. Separate expected automatic proposal additions
    from preview-only records and forbidden review/apply/business edits.
 6. On mismatch, keep owned target available for bounded read-only diagnosis;
    do not unconditionally retire from finally. Retirement is allowed only after

@@ -34,7 +34,7 @@ export function PathFinderLookup({ pf, selectedCable, active = true, displayOwne
       if (capturing.current) { latest.current.cancelOperation(); capturing.current = false; }
     };
   }, [active, activeModel, selectionRevision, connectionGap, settingsRevision]);
-  useEffect(() => { if (!displayOwned) { generation.current++; cancelRetainedJob(); setJobId(null); setLookup(null); setWorking(false); } }, [displayOwned]);
+  useEffect(() => { if (!displayOwned) { generation.current++; cancelRetainedJob(); setJobId(null); setLookup(null); setWorking(false); setNotice(null); } }, [displayOwned]);
   const edit = () => {
     generation.current++; cancelRetainedJob(); setJobId(null); setLookup(null); setNotice(null); setCancelRequested(false); cancelled.current = false;
     onInputChange?.(); latest.current.clear();
