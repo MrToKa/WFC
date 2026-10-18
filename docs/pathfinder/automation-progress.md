@@ -73,8 +73,20 @@ and its tests; default.025Ghost unchanged. Root owns async bridge+tests;29Node
 bridge checks PASS including post-preflight ACL/clear/cancel/replacement/dispose.
 No build of partialfollowup. Runtime905d/09dc remains healthy and maintenance
 held; backup2ae intact. Backend owner has read-only post-Cua data audit only.
-Next: finishappearance/sourcechecks/freeze, localcheckpoint/newcandidatebuild,
-finalAPI+browserrecheck, then replacementbackup/restore/recovery/cleanup/audit.
+Corrective source is frozen and committed in542e101fd7d9a0cf53a70db7d898902e5437500c.
+Final correction checks:60/60 Node (21SDK+30bridge+9adapter),18/18API/hook,
+caption1/1, frontendtypes/lint PASS. Independent review findings on partial
+appearance restoration and overlapping preflight recovery are resolved. Explicit
+transparency now preserves original materials; defaultfilledGhost remains. SDK
+unconsolidation persists until Reload model after Clear; actual response awaits
+the new browser run. Runtime owner is building/starting ONLY own5190 from542e101;
+Correctedcandidatehealth PASS: API fcd7b866/web9cd76986, source542e101,
+runtime/two-tabs-corrected-candidate-health-1792312346296.json. Manifest816files
+SHA3cbf30f0879b2338fe88b8fb30b1994bdfa6e20c6851c5f6b33fd7342625e6ec is
+evidence/pf7/sources-1792312287692.json. Finalbackend29 has its exclusive window;
+newAPI/browser/replacementbackup remain NOT_RUN. Old backup2ae retained.
+Next: correctedcandidatehealth, final29API, real75/0/100/Clear+caption browser
+recheck, then replacementbackup/restore/recovery/cleanup/preservation audit.
 Heartbeat remains PAUSED from previous manual-review delivery; direct new user
 work is ongoing, not a new licence attempt or merge authorization.
 

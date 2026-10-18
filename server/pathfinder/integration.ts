@@ -32,6 +32,7 @@ export async function runPathFinderIntegration(projectId:string) {
   await pool.query('INSERT INTO users(id,email,password_hash,is_admin,role) VALUES($1,$2,$3,true,$4)',[actorId,`${actorId}@pf-integration.invalid`,'Isolated direct-service fixture; no login password.','admin']);
   const email = `${actorId}@pf-integration.invalid`,token = signAccessToken(actorId,email,true).token;
   const base = `/api/projects/${projectId}/pathfinder`;
+  let capturedCalculation:Json|null=null;
   async function request(method:string,url:string,body?:unknown,bearer=token) {
     const response = await fetch(origin+url,{method,headers:{Authorization:`Bearer ${bearer}`,...(body === undefined ? {} : {'Content-Type':'application/json'})},body:body === undefined ? undefined : JSON.stringify(body)});
     const value = response.status===204 ? {} : await response.json() as Json; return {status:response.status,value};
@@ -61,6 +62,7 @@ export async function runPathFinderIntegration(projectId:string) {
     const row = (await pool.query('SELECT id FROM pf_proposals WHERE project_id=$1 AND job_id=$2 AND cable_id=$3',[projectId,accepted.jobId,cableIds[0]])).rows[0];
     assert.ok(row?.id,'Expected a proposal, rather than a fabricated blocked result.');
     const proposal=await api('GET',base+'/proposals/'+row.id),preferences=options ?? defaultOptions;
+    capturedCalculation=proposal;
     assert.deepEqual(proposal.routingPreferences,{secondaryDistanceMeters:preferences.secondaryDistanceMeters,preferVerticalApproach:preferences.preferVerticalApproach});
     return proposal;
   }
@@ -72,9 +74,9 @@ export async function runPathFinderIntegration(projectId:string) {
   }
   async function cable() {return (await pool.query('SELECT routing,design_length,install_length,cable_write_revision::text FROM cables WHERE id=$1',[cableIds[0]])).rows[0];}
   async function test(name:string,run:()=>Promise<unknown>) {
-    const started=Date.now();
+    const started=Date.now();capturedCalculation=null;
     try {const details=await run(); checks.push({name,status:'PASS',milliseconds:Date.now()-started,...(details === undefined ? {} : {details})});}
-    catch(error) {checks.push({name,status:'FAIL',milliseconds:Date.now()-started,message:error instanceof Error ? error.message : 'Unknown test failure'});}
+    catch(error) {checks.push({name,status:'FAIL',milliseconds:Date.now()-started,message:error instanceof Error ? error.message : 'Unknown test failure',...(capturedCalculation ? {capturedCalculation} : {})});}
   }
   async function installPause() {
     await pool.query(`CREATE FUNCTION ${prefix}_pause() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
@@ -219,11 +221,25 @@ export async function runPathFinderIntegration(projectId:string) {
       const current=await state(),lookup=await api('POST',base+'/lookups',{routeText:'/BC001',reverse:false,expectedSelectionRevision:current.activeModel.selectionRevision,artifactId:current.artifacts[0].id,options:{...defaultOptions,connectionToleranceMeters:99}});
       await waitFor(async()=>{const value=await api('GET',base+'/lookups/'+lookup.jobId);return value.status==='complete'?value:undefined;},45000);
       assert.equal((await pool.query('SELECT diagnostic_input FROM pf_jobs WHERE id=$1',[lookup.jobId])).rows[0].diagnostic_input.options.connectionToleranceMeters,1);
+      const beforeGapPatch=(await pool.query('SELECT clock_timestamp() AS observed')).rows[0].observed;
       await api('PATCH','/api/projects/'+projectId,{connectionGap:.5});
       assert.equal((await api('GET',base+'/proposals/'+proposal.id)).stale,true);assert.equal((await apply(proposal,review.reviewId)).value.code,'PROPOSAL_STALE');
       assert.equal((await api('GET',base+'/lookups/'+lookup.jobId)).result.stale,true);
-      const changed=await calculate();assert.equal(changed.calculationMode,'calculate');assert.equal(changed.dependencies.options.connectionToleranceMeters,.5);
+      const changed=await calculate();assert.equal(changed.dependencies.options.connectionToleranceMeters,.5);
+      const originalHash=(await pool.query('SELECT geometry_hash FROM pf_proposals WHERE project_id=$1 AND id=$2',[projectId,proposal.id])).rows[0].geometry_hash;
+      const changedHash=(await pool.query('SELECT geometry_hash FROM pf_proposals WHERE project_id=$1 AND id=$2',[projectId,changed.id])).rows[0].geometry_hash;
+      assert.notEqual(changedHash,originalHash,'A changed gap must have different geometry dependencies.');
+      // Automatic work may calculate this exact new graph before the explicit request reaches it.
+      // Prove the fresh full calculation, rather than requiring one particular requester to own it.
+      const fullCalculation=(await pool.query(`SELECT id,job_id,created_at,dependencies FROM pf_proposals WHERE project_id=$1 AND cable_id=$2 AND geometry_hash=$3
+        AND created_at>=$4 AND result->>'calculationMode'='calculate' AND result->'route'->>'success'='true' ORDER BY created_at,id LIMIT 1`,
+      [projectId,cableIds[0],changedHash,beforeGapPatch])).rows[0];
+      assert.ok(fullCalculation,'The changed-gap geometry requires an actual fresh successful core calculation.');
+      assert.equal(fullCalculation.dependencies.options.connectionToleranceMeters,.5);assert.equal(fullCalculation.dependencies.settings.connectionGap,'0.5');
       await api('PATCH','/api/projects/'+projectId,{connectionGap:1});assert.equal((await api('GET',base+'/proposals/'+proposal.id)).stale,true);
+      return {oldProposalId:proposal.id,requestedProposalId:changed.id,requestedJobId:changed.jobId,requestedCalculationMode:changed.calculationMode,
+        oldGeometryHash:originalHash,changedGeometryHash:changedHash,freshFullCalculationProposalId:fullCalculation.id,freshFullCalculationJobId:fullCalculation.job_id,
+        freshFullCalculationCreatedAt:fullCalculation.created_at,gapChangedAfter:beforeGapPatch};
     });
     await test('explicit forced retry replaces a seeded transient failure while automatic requests deduplicate',async () => {
       const proposal=await calculate(),oldJobId=proposal.jobId;

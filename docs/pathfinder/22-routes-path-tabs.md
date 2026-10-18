@@ -186,3 +186,33 @@ Explicit material edits require SDK unconsolidation. Clear restores appearance
 and visibility, while that rendering optimization remains disabled until model
 reload. This is an operational limitation, not an assertion of whole-plant
 performance. Final real 75/0/100/Clear and new-image verification still follow.
+
+## Corrected appearance candidate and backend follow-up
+
+Checkpoint542e101 runs on API fcd7b866 and web9cd76986, bound by
+[corrected startup health](runtime/two-tabs-corrected-candidate-health-1792312346296.json).
+The new source manifest has816files and SHA256
+3cbf30f0879b2338fe88b8fb30b1994bdfa6e20c6851c5f6b33fd7342625e6ec.
+[Actual corrected computer-use](evidence/routes-path/computer-use-corrected-appearance.json)
+passes default filledGhost, explicit75/0/100 using original materials, protected
+route colors/yellow line, Clear restoration, shared-save caption, both tabs with
+one Viewer, and new forward/reverse35.30345579516123m/design45m. A new calculation
+returns to default Ghost even if the transparency input still reads100. These
+are actual selected-network observations, not whole-plant performance proof.
+
+The corrected candidate's final backend attempt passed27/29 with cleanup PASS.
+One assertion exposed lost effectiveCategory/prepared metadata when a valid
+existing route was reused for design-only calculation. Geometry10m and design18m
+were already correct; the category display returnednull. The worker correction
+retains original geometry diagnostics and derives the canonical category from
+the immutable accepted cable inputs, rejecting contradictory metadata. Fresh
+69/69 unit checks (9new+60existing), server TypeScript and ESLint pass.
+
+The other failed assertion assumed that a particular explicit request must own
+the fresh calculation after a gap edit. Concurrent automatic work can validly
+compute the same new geometry first. The strengthened driver now requires
+different old/new geometry hashes plus an actual fresh successful full
+calculation for the exact new hash/settings after the PATCH, and records its
+job/proposal IDs. The failed receipt remains preserved; unavailable full response
+IDs from that earlier attempt are not invented. A fresh candidate/live rerun is
+required before promoting this backend correction.

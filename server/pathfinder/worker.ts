@@ -15,6 +15,14 @@ import { collectPreviewDependencies, previewEngineRequest, type PreviewDependenc
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
+/** Reused geometry keeps its original diagnostics; category comes from the immutable calculation inputs. */
+export function mergeRetainedGeometryResponse(response:EngineResponse,retained:EngineResponse,frozenCategory:string|null):EngineResponse {
+  const effectiveCategory=frozenCategory==='Instrumentation' ? 'Control' : frozenCategory;
+  if (!effectiveCategory || !['MV','LV','Control'].includes(effectiveCategory) || !retained.route?.success
+    || retained.effectiveCategory!=null && retained.effectiveCategory!==effectiveCategory)
+    throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'The retained geometry metadata does not match the original calculation inputs.');
+  return {...response,route:retained.route,effectiveCategory,prepared:retained.prepared ?? response.prepared};
+}
 function principal(job:Row):JobPrincipal {return {userId:job.requested_by,loginId:job.login_id,loginExpiresAt:new Date(job.login_expires_at).getTime()};}
 async function claim(pool:Pool):Promise<Row|null> {
   return transaction(pool,async client => {
@@ -92,13 +100,14 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
       });
       if (!item) break;
       const dependencies = item.dependencies as DependencySnapshot;
-      let response:EngineResponse,calculationMode = 'calculate',retained:Row|undefined;
+      let response:EngineResponse,calculationMode = 'calculate',retained:Row|undefined,retainedResult:EngineResponse|undefined;
       const requestId = randomUUID();
       try {
         await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
         const previous = await pool.query<Row>(`SELECT result FROM pf_proposals WHERE project_id=$1 AND cable_id=$2 AND geometry_hash=$3
           AND result->'route'->>'success'='true' ORDER BY created_at DESC,id DESC LIMIT 1`,[job.project_id,item.cable_id,geometryHash(dependencies)]);
-        retained = previous.rows[0]?.result.route;
+        retainedResult = previous.rows[0]?.result as EngineResponse|undefined;
+        retained = retainedResult?.route;
         calculationMode = retained ? 'design' : 'calculate';
         response = await runEngine({schemaVersion:'pathfinder.model.runner.v1',requestId,operation:calculationMode,projectId:job.project_id,
           modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds:job.timeout_ms,
@@ -106,7 +115,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
             fromRequiresSecondary:retained.fromRequiresSecondary,toRequiresSecondary:retained.toRequiresSecondary}} : {
             category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
             to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),projectSettings:engineProjectSettings(dependencies.settings)},signal);
-        if (retained) response = {...response,route:retained as EngineResponse['route']};
+        if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,dependencies.cableInputs.mto);
       } catch(error) {
         signal.throwIfAborted();
         const safe = error instanceof PathFinderError ? error.message : 'The private calculation engine failed.';
