@@ -23,8 +23,9 @@ recommended engineering choice and are recorded; no routine stage pause.
 - Starting revision: `916256f0da14b8f21ca039b34bfae2de33b2bb0d`.
 - Completed R0 commit: `09f0e1dbdded9abca35b493db6eda7e9df9b94e4`.
 - Detailed R1 handoff: `handoffs/PF-R1-project-tray-catalog.md`, committed at
-  `9c5fa34` after prepare-stage-handoff. Current stage PF-R1 technically COMPLETE
-  on its inherited branch; final local commit and R2 handoff are being recorded.
+  `9c5fa34` after prepare-stage-handoff. PF-R1 technical commit is d997dca1e7673061bd04e64bad61b6563749e1b7.
+  Detailed R2 handoff: handoffs/PF-R2-purpose-policy.md; execute immediately on
+  inherited pf-r2-purpose-policy-local-20261019 after this metadata commit.
   Do not repeat R0, source seed/catalog copy or model conversion/import.
 - Active app heartbeat: `path-finder-purpose-rules-and-model-revisions`, ACTIVE,
   every ten minutes, created through the app tool; the old `pathfinder` remains deleted.
@@ -95,9 +96,10 @@ recommended engineering choice and are recorded; no routine stage pause.
 - Evidence: 35-r0-stage-report.md; 12/12 documentation checks PASS, 24 locked
   references/11 Core, 29 unique synthetic policy cases, 54 links/0 missing,
   zero known credential matches; independent review findings closed.
-- Next: scoped final checks/localR1commit; prepare detailed PF-R2 purpose policy
-  handoff with actual revisions/evidence, create inherited R2branch and execute
-  immediately. R2 entrypoint read-only map is assigned to purpose_revision_plan_review.
+- Next: PF-R2 persistent routing-purpose settings. A owns new shared/catalog/schema,
+  B new policy repository/router/parser, C API/hook/card and Details integration.
+  Root owns existing server schema/app/router/dependencies and actual runtime checks.
+  No R2 runtime changes or real policy choices yet.
 
 ## Previous continuation — purpose/revision plan and older-model preparation
 
