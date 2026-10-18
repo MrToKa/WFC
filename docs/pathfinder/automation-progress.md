@@ -5,15 +5,63 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-path-lookup-local-20261018` (inspect live branch/HEAD before each continuation).
-- Integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. The local commit containing this final progress/report records the remaining PF-8 evidence. Read live HEAD rather than inferring a self-referential hash from this file. No implementation changes are left outside these deliveries.
+- Current branch: `pf-2-capacity-local-20261018` (inspect live branch/HEAD before each continuation).
+- Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
 - Canonical reference: PathFinder `45c24bf5f433f13e102600b36f20327c77961d0a`.
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Active revision — independent Path lookup, 18 October 2026
+## Latest delivery — PF-2 capacity baseline, 18 October 2026
+
+SCOPED_TECHNICAL_PASS on `pf-2-capacity-local-20261018`, inheriting
+`8a726f72ab94da22681320f28ccebe1224cf8eb3`. Current user requested the next
+remaining stage. The original PF-2 item5 still requires capacity measurement;
+previous manual-review handoffs do not waive that technical remainder. This is
+an additive bounded benchmark, not a speculative stage or engineering acceptance.
+
+- New assignment: [PF-2 capacity baseline](handoffs/PF-2-capacity-baseline.md),
+  prepared with prepare-stage-handoff and separately authorized for execution.
+- Ownership: C# agent only new CapacityBench tool; orchestrator agent only new
+  scripts/pathfinder-capacity/; read-only input owner fresh scratch/provenance;
+  parent docs/report/integration. Preserve shared changes.
+- Verified additive build0warnings/errors and self-test3synthetic datasets/
+  21phases PASS at final DLL90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a.
+  Root17/17 malformed/hash/identity/purpose/limit/path controls PASS against
+  those exact bytes; all preflight refusals preserve absent/existing workroots.
+  Read-only copied-input provenance PASS with source SHA b4736540... and all
+  12workflowhashes/18containeridentities unchanged at extraction scope.
+- Actual five datasets/65direct phases/50direct queries/15one-shot queries and
+  four process controls PASS. Full unrounded route/design/category match, including
+  saved real preview35.30345579516123m/design45m. Node28guards/syntax PASS.
+  Source API imageee402 unchanged; own networkless temporary containers retired.
+  Initial omitted-false guard refusal and outer mount-order falseFAIL retained;
+  new metadata-only normalized preservation amendment PASS, no math rerun.
+  Real one-shot disk-warm mean1.200s(2) vs identical-query same-model median
+  0.749ms(8) have different cost scopes; no deployed speedup is claimed.
+- Final preservation PASS:12workflow hashes,18container identities, source/copy/
+  manifest/reference bytes, all original checkouts/dirtyfiles/Core/PF0/native pins.
+  See [report24](24-capacity-baseline.md) and its linked exact receipts.
+- Work uses copies of own5190 selected real planning network and explicit new
+  synthetic inputs. No live settings/jobs/Apply, no API restart/code change,
+  no Core/limit changes. Whole-plant completeness/capacity remains NOT_RUN and
+  reusable graph NOT_IMPLEMENTED. Native comparison remains not required by
+  user; engineering manual acceptance PENDING. Heartbeat remains PAUSED while
+  this direct authorized continuation is active.
+- Cleanup:10,010,214bytes redundant own control copies removed. Removal of two
+  superseded own scratch directories was rejected by automatic approval review
+  `blocked by policy`;2,502,799bytes remain,0deleted. Never retry/bypass/remove
+  parents of capacity-bench-build-6134b7566e7a43c9a3bd05843a30018f or
+  capacity-bench-selftest-0e06d25a9f8c459594fe6a376c0660ee under engine/.scratch.
+  These join the four previously denied children; all six are retained.
+- Next: local commit of completed additive delivery, then prepare/execute a bounded
+  private-worker reuse handoff if read-only feasibility preserves all current
+  per-request/cancellation/cache/resource/auth guarantees. Measurement supports
+  investigating repeated process/JIT/cache-restore overhead, not a Core fork or
+  an assumption of mixed-query equivalence. User's routine continuation is authorized.
+
+## Previous delivery — independent Path lookup, 18 October 2026
 
 IMPLEMENTED/VERIFIED in the scoped local delivery on branch pf-path-lookup-local-20261018 inheriting
 9e6561e33ccf9ab535fb2184c858ecd20240071d. User requested the third addon tab

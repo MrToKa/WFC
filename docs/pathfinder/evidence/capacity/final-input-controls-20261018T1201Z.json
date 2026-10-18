@@ -1,0 +1,334 @@
+{
+  "schemaVersion": "pathfinder.capacity.input-controls.v1",
+  "observedAtUtc": "2026-10-18T12:00:42.957Z",
+  "status": "PASS",
+  "sourceManifestSha256": "f90e21941578e62d8f5d7426c2f78d039bfa0825e9ebd78cb78ee48d24be8e9a",
+  "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+  "executableSha256": "90c939476155552bf3be27bbee29e09e220e159c16996fa30dcde4f997691b2a",
+  "checks": [
+    {
+      "name": "duplicate-member",
+      "status": "PASS",
+      "inputSha256": "55c70634f019da62c08455c5b981c397ea93e77370338ad847f1be68b266e540",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 241,
+        "stderrBytes": 0,
+        "outputSha256": "84c0eae687be21a447ae25389e1bdb368c2bbfd0896c8a4f7276f79be3b4fde3",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Duplicate JSON member.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "unknown-nested-member",
+      "status": "PASS",
+      "inputSha256": "d973b5445d2d17b4f9d26ab98dac9ee44ef3addb1366d26829ccd6cb9f3bf4f0",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 372,
+        "stderrBytes": 0,
+        "outputSha256": "6857c6643daa7cae7be7e0111ab23b3f50adf026625d5d6a4ad78419610ba970",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "The JSON property 'unexpected' could not be mapped to any .NET member contained in type 'PathFinder.Adapter.ProjectSettingsSnapshot'.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "nonfinite-overflow-coordinate",
+      "status": "PASS",
+      "inputSha256": "d7d3e3d0f8b5299130050d9e924c4125dae07e6e2a96518d9a041001e47e55f3",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 257,
+        "stderrBytes": 0,
+        "outputSha256": "ab262ef22ba9a816a459dc6b28f4fd96e3902e5892da6c29b9371efc42cf4404",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Finite bounded endpoints are required.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "wrong-point-arity",
+      "status": "PASS",
+      "inputSha256": "da26b2d1338b8e68f4e716c9440108a44eb4a6232e1266d4f0b1fb1f2cfe1269",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 256,
+        "stderrBytes": 0,
+        "outputSha256": "a56b35090fa1f1046639873f035db19b5ffda7a3c29e25be7916b1fde3b498ed",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Finite bounded endpoints are required.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "snapshot-hash-mismatch",
+      "status": "PASS",
+      "inputSha256": "b34d2023a01b916bef6fa65c7c759f7da8d4af38bcc971f5229f9d9c10d2aac7",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 266,
+        "stderrBytes": 0,
+        "outputSha256": "1bdfe9639ad3218a8e8c7365f705f97f6853107f1854cfe9c8211c9fa1fdf077",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Copied snapshot SHA256 mismatch before parsing.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "snapshot-project-mismatch",
+      "status": "PASS",
+      "inputSha256": "0e360d89cf9ca57809b9848833e8242557a8294d9bec8f8d784548a8d13962b7",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 275,
+        "stderrBytes": 0,
+        "outputSha256": "71690c7458f3fb4d1cb0f88b82f8a63237acda6961c940edb2127ed5a43696bd",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Copied snapshot project/model/content identity mismatch.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "snapshot-content-mismatch",
+      "status": "PASS",
+      "inputSha256": "2f8425f121046081b97ad951f5feff44bed8ff3adfa98978deff0f3f4597f4e4",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 275,
+        "stderrBytes": 0,
+        "outputSha256": "e13ac7ab807344c0d324472a7886b01c1e1fc5af09a95ba0f50997950ba62414",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Copied snapshot project/model/content identity mismatch.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "snapshot-outside-input-root",
+      "status": "PASS",
+      "inputSha256": "f90e21941578e62d8f5d7426c2f78d039bfa0825e9ebd78cb78ee48d24be8e9a",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 293,
+        "stderrBytes": 0,
+        "outputSha256": "0fcb80cb5232cfa0dbcba166b3ce630b1c70723c9dc37b7a697d8d2660630531",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Copied snapshot must be below the manifest's mounted input directory.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "conflicting-project-gap",
+      "status": "PASS",
+      "inputSha256": "4756d332bd0b2b84900d900627187c79a3adae3a5e1b3619b8bcfcf68832ca15",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 282,
+        "stderrBytes": 0,
+        "outputSha256": "5d35b2354ed7da71000ca8b6c406bbc7188e425579b1caa78fb26aedfa2d2721",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Frozen Project Details gap must match explicit routing options.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "numeric-project-decimal",
+      "status": "PASS",
+      "inputSha256": "dc378da8a274af9075d4c62756a37fe6f86b9df7cb8564d993571c7e435e6f9f",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 302,
+        "stderrBytes": 0,
+        "outputSha256": "8cd7f2387431c0bf71e3f7532c965dde7b8b6d0b5171604a58ec7f23c141e126",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Project Details decimal values must be explicit decimal strings, or null SECONDARY.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "negative-project-allowance",
+      "status": "PASS",
+      "inputSha256": "d989bf7c987dd063cb7e5be5e7e54210495c5815d9e4d213d48c7c1c7dd86f59",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 270,
+        "stderrBytes": 0,
+        "outputSha256": "1eb281b28903ff564dc76c251e69f32dcb637221f05e4d57ffeb1e3de9a81176",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Project Details revision or allowances are invalid.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "unknown-category",
+      "status": "PASS",
+      "inputSha256": "85aab35b3d902d75d94f503bd48bbce68c10dcab37ce6376b8fc81088439835e",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 236,
+        "stderrBytes": 0,
+        "outputSha256": "a0505ecfc4069479560fd53e6848124fa3bf190acbaa2186fb68dda9d45395fd",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Unknown category.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "graph-node-budget",
+      "status": "PASS",
+      "inputSha256": "0138ca9f78cad06c7172c9ffe167ce869f8ee61b7a169405372735a543cd5971",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 270,
+        "stderrBytes": 0,
+        "outputSha256": "515bae3d4684ca0cebb6d78a1952626d9d3dfb0ce9b9bb247a3bbe81796f61b9",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Routing options are outside existing server guards.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "repeat-budget",
+      "status": "PASS",
+      "inputSha256": "162150a4f86574769c34f147bb764579ed3c3ad872ce4a64021004f290fc07c0",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 262,
+        "stderrBytes": 0,
+        "outputSha256": "5d72bd42d6097ed97a067d556f6d5d4b1d8f871c6757328f0aa24e7a88db674b",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Benchmark work/time/size budget is invalid.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "oversized-manifest",
+      "status": "PASS",
+      "inputSha256": "76c002eec0c9da854ca2ee5dae9fb0069a622274b6638ab712fcb70384304899",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 268,
+        "stderrBytes": 0,
+        "outputSha256": "ebc4ca1425dbb387a90c0a2de021e90d0b50fc7b4afa0b2ba0b40c14acd1aeea",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Input file is missing or outside its byte budget.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "preexisting-work-root",
+      "status": "PASS",
+      "inputSha256": "982e4af147b0d3cde730661729646544bc28adf641fc49d575b1cfc9a9106df2",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 266,
+        "stderrBytes": 0,
+        "outputSha256": "1520e93f009c9eb4456cef05bc40369e05a7c064402db068b8804fd39054e2eb",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Work root must be a new absent child directory.",
+        "rejected": true
+      }
+    },
+    {
+      "name": "independent-lookup-purpose",
+      "status": "PASS",
+      "inputSha256": "d741f24fb5b31c5ff44a11450fda8a9f7d561643794c69685ed1a6070abecd7a",
+      "preflightWorkRootPreserved": true,
+      "result": {
+        "code": 2,
+        "signal": null,
+        "reason": null,
+        "stdoutBytes": 305,
+        "stderrBytes": 0,
+        "outputSha256": "0942a1624728dc0b7b60f5849a4cf56f041efaa4284336f2afcec8aba757b1b0",
+        "responseSchemaVersion": "pathfinder.capacity.result.v1",
+        "responseStatus": "FAIL",
+        "responseErrorCode": "INVALID_INPUT",
+        "responseMessage": "Capacity calculation requires a planning snapshot, not an independent lookup artifact.",
+        "rejected": true
+      }
+    }
+  ],
+  "scope": "New benchmark CLI rejection controls; not model engineering or application acceptance. Files remain below fresh owned scratch; no live runtime access."
+}

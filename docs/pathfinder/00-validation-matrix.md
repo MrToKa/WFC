@@ -231,3 +231,21 @@ remaining scopes are in [report23](23-independent-path-lookup.md).
 | PF8-LOOKUP-CRASH |New actual worker/preview crash recovery | NOT_RUN by explicit scoped operator skip; previous accepted64cable and PARTIALpreview scopes remain historical |
 | PF8-LOOKUP-FINAL |Corrected browser/result25usedleaves; final12workflow hashes/cable revision0/null/Apply0; actual restored lookup purpose/SHA; targetzero;8oldpayloads1,348,954,278bytes/4unusedimages retired; original5groups preserved | PASS: final browser/audit/combineddrill/cleanup/isolation receipts in report23 |
 | PF8-USER-01 |Human route/length acceptance and separate main integration decision | PENDING_USER_REVIEW; no real Apply or main publication |
+
+## PF-2 bounded capacity continuation — 18 October 2026
+
+Additive source on `pf-2-capacity-local-20261018`, inheriting8a726f72; exact source,
+assembly, input and actual executed-tool hashes are in [report24](24-capacity-baseline.md).
+This does not reclassify native comparison or whole-plant acceptance.
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF2-CAP-INPUT |Exact current copied52object/26segment planning snapshot, real Details/options/endpoints, separately saved current reference; no jobs | PASS input-provenance1792324304556 and full semantic digestaa699a15... |
+| PF2-CAP-CLI |New tool/single Core ProjectReference; fresh build/selftest21phases and17targeted invalid/hash/identity/purpose/limits/path refusals | PASS exact finalDLL90c93947...; not a new105/215regression execution |
+| PF2-CAP-RESULT |Five datasets/65phases/50direct queries/15actual one-shot queries; full routes/design/category equal; independent synthetic16/128/512/2048m and24/147/569/2259m | PASS summary1792325273563; scope selected real +mathematical8/64/256/1024 only |
+| PF2-CAP-BOUNDS |Node28guards, finite/full output, four actual process cancellation/deadline/output/cleanup controls; unchangedlimits | PASS; sampledRSS estimate, cgrouppeak unavailable; no exact peak/plant claim |
+| PF2-CAP-PRESERVE |All12workflow hashes,18container identities, source/copiedbytes/Details/selection and original sourcepins unchanged | PASS final-preservation1792325162813 +isolation1792325122300; mount-order falseFAIL separately retained/amended |
+| PF2-CAP-CLEAN |Own temporary containers gone; four redundant files10,010,214bytes removed; finaldemo/evidence retained | PASS for performed cleanup; two oldbuild/testdir removals BLOCKED by automatic approval review,2,502,799bytes retained/no retry; six total denied children untouched |
+| PF2-GRAPH-01 |Reusable graph prepared once per appropriate revision | NOT_IMPLEMENTED; unchanged Core graph still per query |
+| PF2-CAP-PLANT |Representative complete real-plant geometry/category/capacity | NOT_RUN; selected26segments and sparse syntheticchains are insufficient |
+| PF8-USER-01 |Human engineering route/length acceptance and main integration | PENDING_USER_REVIEW; no real Apply/push/PR/merge/deployment |
