@@ -23,8 +23,9 @@ fcd8f1dc39569c430125b897c95756fac9c28a89. Original resources remain reference-on
 Root owns API/hook/outer label/Details branding/docs+latercomputer-use. Frontend
 owner edits PathFinder*.tsx/tests; backend owner server/pathfinder +route; Viewer
 owner protected protocol/Controller/capture and small Model DTO/reader/cache
-boundary extension. Core11 files remain pinned. Runtime owner is read-only until
-all source freezes; no rebuild/restart yet. Preserve concurrent changes.
+boundary extension. Core11 files remain pinned. Initial source was frozen for
+46152f9; browser-driven follow-up writers are listed below. Runtime operations
+follow explicit sequential releases.
 
 Implemented source in progress: Routes selection/category rules with latest
 overlap precedence, deepest geometry descendants and native bounded C# name
@@ -51,9 +52,29 @@ pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581 was reje
 with blocked by policy. Do not retry/bypass/deleteparent. Two previous denied
 children remain unchanged. SDKfirstlaunch reported devcertificateinstallation
 before isolated environment was configured; no certificate removal attempted.
-Next: finishfrontend+integration/typechecks, freeze/commit, owncandidatebuild,
-backend29, actualUIboth tabs/rules/preview/Reviewfences, replacementbackup/restore/
-recovery/cleanupandpreservation. Current healthy5190/backup2ae6f51b retained.
+Production checkpoint46152f9873764ec22537029d98bbfcc453052768 is committed locally.
+Owned5190 rebuild/start PASS: API905dcb21, web09dcf672; exact binding in
+runtime/two-tabs-candidate-health-1792310191915.json. Backend29 now has the
+exclusive synthetic test window; root browser and all maintenance are held.
+Final frontend/server types and targeted lint also PASS after metadata edit;
+evidence/routes-path/frontend-source-20261018T075446Z.json distinguishes full36
+and final3 affected checks. Source manifest816files SHA2c25192e is recorded in
+evidence/pf7/sources-1792310155683.json. Backup2ae6f51b remains intact.
+Actual backend29/29 and fixture cleanup PASS, exact compiled driver/image bound
+in evidence/routes-path/live29*-20261018T075720Z.json. Actual Cua passed two tabs,
+keyboard, retained drafts/one Viewer, rule edits/dirty/prepare/discard, ten-root
+capture52objects, stale QA binding refusal/reconfirmation, selectedobjectXYZ,
+standalone forward/reverse35.30345579516123m/design45, and Review/tab reset. No
+real Apply. See computer-use-before-appearance-fix.json; two defects are FAIL:
+explicit75/0blackGhostoverdraw; savedlocationeditoroldstalehintaftergoodSave.
+Caption+lateUIfence fix is frozen and focused1/1/types/lint PASS. Viewer owner
+is correcting explicitpercent via bounded original materials in pathfinder.mjs
+and its tests; default.025Ghost unchanged. Root owns async bridge+tests;29Node
+bridge checks PASS including post-preflight ACL/clear/cancel/replacement/dispose.
+No build of partialfollowup. Runtime905d/09dc remains healthy and maintenance
+held; backup2ae intact. Backend owner has read-only post-Cua data audit only.
+Next: finishappearance/sourcechecks/freeze, localcheckpoint/newcandidatebuild,
+finalAPI+browserrecheck, then replacementbackup/restore/recovery/cleanup/audit.
 Heartbeat remains PAUSED from previous manual-review delivery; direct new user
 work is ongoing, not a new licence attempt or merge authorization.
 

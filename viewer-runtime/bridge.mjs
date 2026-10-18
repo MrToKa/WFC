@@ -10,6 +10,7 @@ const messages = {
   EXTRACTION_FAILED: 'The requested model metadata could not be read completely.', PICK_UNAVAILABLE: 'Point picking is unavailable for this model.', PICK_TIMEOUT: 'Point picking timed out. Start picking again.',
   CAPTURE_RELOAD_REQUIRED: 'Reload the model before preparing another snapshot; this viewer has reached its bounded command budget.',
   SELECTION_TOO_LARGE: 'Select at most 16 model objects at a time, then add another route rule.',
+  APPEARANCE_RESTORE_FAILED: 'Some viewer appearance could not be restored. Press Clear again, or reload the model.',
 };
 const failure = code => Object.assign(new Error(messages[code] ?? messages.RESOURCE_FAILED), { code });
 const httpCode = status => status === 401 || status === 410 ? 'SESSION_EXPIRED' : status === 403 ? 'ACCESS_REVOKED' : status === 409 ? 'MODEL_SELECTION_CHANGED' : status === 503 ? 'MODEL_UNAVAILABLE' : 'RESOURCE_FAILED';
@@ -33,7 +34,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   function finish(command) { const entry = requests.get(command.requestId); if (entry?.status === 'pending') entry.status = 'finished'; }
   function error(command, cause) {
     const code = Object.hasOwn(messages, cause?.code) ? cause.code : 'RESOURCE_FAILED';
-    emit(command, 'ERROR', { code, message: messages[code], retryable: ['RESOURCE_FAILED', 'SESSION_EXPIRED'].includes(code), operation: command.type });
+    emit(command, 'ERROR', { code, message: messages[code], retryable: ['RESOURCE_FAILED', 'SESSION_EXPIRED', 'APPEARANCE_RESTORE_FAILED'].includes(code), operation: command.type });
     finish(command);
     onState({ phase: 'error', code });
   }
@@ -130,7 +131,13 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         emit(command, 'COMPUTED_PATH_UPDATED', { pathId: path.pathId, phase: 'displayed', received: path.points.length });
       } else if (command.type === 'SET_PATH_TRANSPARENCY') {
         if (!routeHasLine || routeRequest?.type !== 'COMMIT_COMPUTED_PATH' || routeRequest.requestId !== command.payload.routeRequestId) throw failure('NO_DRAWABLE_ROUTE');
-        handle.setPathTransparency(command.payload.percent);
+        await handle.setPathTransparency(command.payload.percent, signal, async () => {
+          // Material preparation can yield; recheck authority and route ownership
+          // immediately before the SDK makes its synchronous appearance change.
+          await requirePathFinder(command, signal);
+          if (!live() || !routeHasLine || routeRequest?.type !== 'COMMIT_COMPUTED_PATH' || routeRequest.requestId !== command.payload.routeRequestId) throw failure('NO_DRAWABLE_ROUTE');
+        });
+        if (!live()) return;
         emit(command, 'PATH_TRANSPARENCY_UPDATED', command.payload);
       } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_SELECTION') {
         const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : await handle.readModelObjects(command.payload, signal);
@@ -147,7 +154,10 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       finish(command);
     } catch (cause) {
       if (!live()) return;
-      if (['BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type)) { computed = undefined; handle?.clearRoute(); routeHasLine = false; }
+      if (['BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type)) {
+        computed = undefined; routeHasLine = false;
+        try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; }
+      }
       error(command, cause);
     } finally { capabilities.delete(command.requestId); }
   }
@@ -183,7 +193,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     }
   }
   async function show(command) {
-    stopRoute();
+    try { stopRoute(); } catch (cause) { error(command, cause); return; }
     routeRequest = command;
     const ticket = command;
     try {
@@ -209,7 +219,8 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       onState({ phase: 'route', drawableCount, lineCount: result.lineCount });
     } catch (cause) {
       if (disposed || routeRequest !== ticket || !identityMatches(command)) return;
-      handle?.clearRoute(); routeHasLine = false;
+      routeHasLine = false;
+      try { handle?.clearRoute(); } catch (cleanup) { cause = cleanup; }
       error(command, cause);
     }
   }
@@ -225,7 +236,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       if (command.type === 'CANCEL_REQUEST' && cleanupRequests.size < 4096) cleanupRequests.add(command.requestId);
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
-    switch (command.type) {
+    try { switch (command.type) {
       case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
@@ -266,7 +277,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         lifetime.abort(); stopLoad(); adapter.dispose(); finish(command);
         disposed = true; phase = 'disposed'; window.removeEventListener('message', receive);
         emit(command, 'DISPOSED', {}); onState({ phase }); break;
-    }
+    } } catch (cause) { error(command, cause); }
   }
   window.addEventListener('message', receive);
   emit(null, 'HELLO', { supportedProtocolVersions: [1], sdkVersion: SDK_VERSION });

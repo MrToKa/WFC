@@ -1,0 +1,552 @@
+{
+  "schemaVersion": "pathfinder.routes-path.post-browser-readback.v1",
+  "observedAtUtc": "2026-10-18T08:16:14.2789256Z",
+  "scope": "Read-only PostgreSQL repeatable-read snapshot after first candidate browser tests; before pending Viewer appearance fix. Technical Review does not mean user engineering acceptance.",
+  "calculationSourceCommit": "46152f9873764ec22537029d98bbfcc453052768",
+  "apiContainer": "3d68ca29bfa715f668c22fbc75da4898572cf2e80ad341f2979d6cb58ab5f147",
+  "apiImage": "sha256:905dcb21138065e4b8cd028a6747fd613d080f6bb562d7901c034eb9c7ae4bce",
+  "webContainer": "64153d63c111e32c581721467e4811a58b8dc850020d645de97409b0c86d865b",
+  "webImage": "sha256:09dcf672529ea4e119e8655411cdc9288851aeaa5e059d12c4b4415f4e6baa85",
+  "readback": {
+    "database": "wfc_pathfinder_local",
+    "project": {
+      "id": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+      "connectionGap": "1",
+      "secondaryTrayLength": "3",
+      "endConnectionLength": "5",
+      "additionalBendingPercent": "10",
+      "settingsRevision": "2"
+    },
+    "selection": {
+      "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+      "selectionRevision": "1"
+    },
+    "latestArtifact": {
+      "id": "75c61dc7-d456-45b0-9052-2a0822240350",
+      "snapshotSha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "objectCount": 52,
+      "routingLeafCount": 26,
+      "objectRoleCount": 0,
+      "hierarchyCount": 26,
+      "capture": {
+        "sourceKind": "converted",
+        "unitsVerified": false,
+        "adapterVersion": "wfc.protected-selected-capture.v1",
+        "evidenceSha256": [
+          "2e3022a65df9623758504e28b046a49420e3edabd73b5079848cb5efac94119a"
+        ],
+        "geometryComplete": false,
+        "inventoryComplete": false,
+        "sourceLinkVerified": false,
+        "transformsVerified": false,
+        "planningVisibilityKnown": false
+      },
+      "createdAtUtc": "2026-10-18T11:04:27.504971+03:00"
+    },
+    "bindings": [
+      {
+        "locationId": "3b9f01b2-5260-4efa-8914-5b4d54dc36ae",
+        "name": "=PF-DEMO-NETWORK-START",
+        "locationRevision": "3",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "bindingRevision": "2",
+        "point": [
+          45.16500215081601,
+          -11.73700013993792,
+          1.5296001389080516
+        ],
+        "source": "manual",
+        "derivation": "manual-world-point",
+        "coordinateFrame": "canonical-world-metres",
+        "status": "confirmed"
+      },
+      {
+        "locationId": "2d92f671-338b-49bc-be80-f356ca2332e8",
+        "name": "=PF-DEMO-NETWORK-END",
+        "locationRevision": "3",
+        "modelVersionId": "925c0fc0-6e36-4d47-b1ce-38b0beff5953",
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "bindingRevision": "2",
+        "point": [
+          57.840041442197844,
+          -6.751280339942497,
+          8.211000437980317
+        ],
+        "source": "manual",
+        "derivation": "manual-world-point",
+        "coordinateFrame": "canonical-world-metres",
+        "status": "confirmed"
+      }
+    ],
+    "proposals": [
+      {
+        "id": "f8899236-3942-4208-8fe2-be2136607f17",
+        "jobId": "6ae118cb-b60f-474c-8b03-be33d992cfc7",
+        "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "status": "calculated",
+        "createdAtUtc": "2026-10-18T11:05:40.247261+03:00",
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "registryRevision": "10",
+        "settings": {
+          "revision": "2",
+          "connectionGap": "1",
+          "endConnectionLength": "5",
+          "secondaryTrayLength": "3",
+          "additionalBendingPercent": "10"
+        },
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "prepared": {
+          "key": "0021390ef09b898d2810e70f93c8c4ab90ddb04e2fc5dd38ec34264365bd214d",
+          "counts": {
+            "fallbackBends": 2,
+            "validatedBends": 5,
+            "fallbackStraights": 2,
+            "fallbackClearances": 0,
+            "validatedStraights": 17
+          },
+          "readiness": "needs_review",
+          "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+          "diagnostics": [
+            "Inventory is explicitly partial.",
+            "Geometry capture is explicitly partial.",
+            "Source unit conversion is unverified.",
+            "Source/root/display transforms are unverified.",
+            "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+            "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+            "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+            "dbid:427079: straight axis needs unique neighboring port evidence",
+            "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+            "dbid:427083: straight axis needs unique neighboring port evidence"
+          ],
+          "objectCount": 52,
+          "segmentCount": 26,
+          "loadedFromDisk": false,
+          "diagnosticCount": 36,
+          "engineeringAccepted": false,
+          "diagnosticsTruncated": false
+        },
+        "route": {
+          "lengthMeters": 35.30345579516123,
+          "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+          "pointCount": 90,
+          "firstPoint": {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          },
+          "lastPoint": {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          },
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false
+        },
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        },
+        "reviewCount": 1,
+        "jobState": "complete",
+        "cancelRequested": false
+      },
+      {
+        "id": "74739a68-99e3-402e-afc4-663e81020c63",
+        "jobId": "22e04714-26cc-42cb-9fb7-14f8a0290c96",
+        "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "status": "calculated",
+        "createdAtUtc": "2026-10-18T09:40:36.945817+03:00",
+        "artifactId": "6a04c032-707f-490c-9cc6-325a04a63250",
+        "registryRevision": "7",
+        "settings": {
+          "revision": "0",
+          "connectionGap": "1",
+          "endConnectionLength": "5",
+          "secondaryTrayLength": "3",
+          "additionalBendingPercent": "10"
+        },
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "prepared": {
+          "key": "eff179d09fbd5953b94b26ef8cdb5ac141d9694bccd6d3b52ee68f3fdb8574eb",
+          "counts": {
+            "fallbackBends": 2,
+            "validatedBends": 5,
+            "fallbackStraights": 2,
+            "fallbackClearances": 0,
+            "validatedStraights": 17
+          },
+          "readiness": "needs_review",
+          "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+          "diagnostics": [
+            "Inventory is explicitly partial.",
+            "Geometry capture is explicitly partial.",
+            "Source unit conversion is unverified.",
+            "Source/root/display transforms are unverified.",
+            "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+            "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+            "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+            "dbid:427079: straight axis needs unique neighboring port evidence",
+            "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+            "dbid:427083: straight axis needs unique neighboring port evidence"
+          ],
+          "objectCount": 52,
+          "segmentCount": 26,
+          "loadedFromDisk": true,
+          "diagnosticCount": 36,
+          "engineeringAccepted": false,
+          "diagnosticsTruncated": false
+        },
+        "route": {
+          "lengthMeters": 35.30345579516123,
+          "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+          "pointCount": 90,
+          "firstPoint": {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          },
+          "lastPoint": {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          },
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false
+        },
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        },
+        "reviewCount": 0,
+        "jobState": "complete",
+        "cancelRequested": false
+      },
+      {
+        "id": "5fcfea03-6258-417c-8fc2-31ebbc695de3",
+        "jobId": "6bb023a9-2807-4243-9e22-ee13dcc8fb2c",
+        "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "status": "calculated",
+        "createdAtUtc": "2026-10-18T09:42:02.499792+03:00",
+        "artifactId": "6a04c032-707f-490c-9cc6-325a04a63250",
+        "registryRevision": "7",
+        "settings": {
+          "revision": "2",
+          "connectionGap": "1",
+          "endConnectionLength": "5",
+          "secondaryTrayLength": "3",
+          "additionalBendingPercent": "10"
+        },
+        "routingPreferences": {
+          "secondaryDistanceMeters": 2,
+          "preferVerticalApproach": true
+        },
+        "prepared": null,
+        "route": {
+          "lengthMeters": 35.30345579516123,
+          "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+          "pointCount": 90,
+          "firstPoint": {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          },
+          "lastPoint": {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          },
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false
+        },
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        },
+        "reviewCount": 2,
+        "jobState": "complete",
+        "cancelRequested": false
+      },
+      {
+        "id": "4aa44682-26f0-41c4-878c-be8ca0c68953",
+        "jobId": "d791c4e9-5784-47e6-bd26-e31b26cd8bac",
+        "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+        "status": "calculated",
+        "createdAtUtc": "2026-10-18T11:12:19.530951+03:00",
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "registryRevision": "10",
+        "settings": {
+          "revision": "2",
+          "connectionGap": "1",
+          "endConnectionLength": "5",
+          "secondaryTrayLength": "3",
+          "additionalBendingPercent": "10"
+        },
+        "routingPreferences": {
+          "secondaryDistanceMeters": 3,
+          "preferVerticalApproach": true
+        },
+        "prepared": {
+          "key": "0021390ef09b898d2810e70f93c8c4ab90ddb04e2fc5dd38ec34264365bd214d",
+          "counts": {
+            "fallbackBends": 2,
+            "validatedBends": 5,
+            "fallbackStraights": 2,
+            "fallbackClearances": 0,
+            "validatedStraights": 17
+          },
+          "readiness": "needs_review",
+          "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+          "diagnostics": [
+            "Inventory is explicitly partial.",
+            "Geometry capture is explicitly partial.",
+            "Source unit conversion is unverified.",
+            "Source/root/display transforms are unverified.",
+            "Native planning visibility is not established; display Ghost/isolation is never used as exclusion.",
+            "Cryptographic/evidenced source-to-conversion correspondence is not established.",
+            "dbid:425799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425802: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425803: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425836: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426727: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426728: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426789: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426790: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426793: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426794: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426795: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426796: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426797: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426798: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426799: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426800: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426801: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:426804: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427079: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427082: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427083: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427086: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:427100: native ancestor visibility unknown; fitted provisionally, not engineering-ready.",
+            "dbid:425799: two measured cap sections with compatible neighbouring ports are required",
+            "dbid:427079: straight axis needs unique neighboring port evidence",
+            "dbid:427082: radial mesh surfaces do not prove a stable circular bend",
+            "dbid:427083: straight axis needs unique neighboring port evidence"
+          ],
+          "objectCount": 52,
+          "segmentCount": 26,
+          "loadedFromDisk": true,
+          "diagnosticCount": 36,
+          "engineeringAccepted": false,
+          "diagnosticsTruncated": false
+        },
+        "route": {
+          "lengthMeters": 35.30345579516123,
+          "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+          "pointCount": 90,
+          "firstPoint": {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          },
+          "lastPoint": {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          },
+          "fromRequiresSecondary": false,
+          "toRequiresSecondary": false
+        },
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        },
+        "reviewCount": 0,
+        "jobState": "complete",
+        "cancelRequested": false
+      }
+    ],
+    "standalonePreviews": [
+      {
+        "jobId": "03aff1a0-d5e7-43c6-8267-6318d12a3fa8",
+        "createdAtUtc": "2026-10-18T11:05:39.36226+03:00",
+        "state": "complete",
+        "reverse": false,
+        "inputFrom": {
+          "name": "=PF-DEMO-NETWORK-START"
+        },
+        "inputTo": {
+          "name": "=PF-DEMO-NETWORK-END"
+        },
+        "category": "Control",
+        "options": {
+          "maxGraphNodes": 200000,
+          "maxGraphConnections": 1000000,
+          "sampleSpacingMeters": 0.125,
+          "preferVerticalApproach": true,
+          "secondaryDistanceMeters": 2,
+          "connectionToleranceMeters": 1
+        },
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "settings": {
+          "revision": "2",
+          "connectionGap": "1",
+          "endConnectionLength": "5",
+          "secondaryTrayLength": "3",
+          "additionalBendingPercent": "10"
+        },
+        "staleAtCompletion": false,
+        "resultStatus": "calculated",
+        "effectiveCategory": "Control",
+        "route": {
+          "lengthMeters": 35.30345579516123,
+          "routeText": "/DFB018-1/DFB011/DFB012/DFB013/B002/B107-1/B107-2/B107-3/BC025/BC022-2",
+          "pointCount": 90,
+          "firstPoint": {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          },
+          "lastPoint": {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          }
+        },
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        }
+      },
+      {
+        "jobId": "80c78b92-2fc1-47a5-b1f1-00f99209462c",
+        "createdAtUtc": "2026-10-18T11:06:30.564095+03:00",
+        "state": "complete",
+        "reverse": true,
+        "inputFrom": {
+          "name": "=PF-DEMO-NETWORK-START"
+        },
+        "inputTo": {
+          "name": "=PF-DEMO-NETWORK-END"
+        },
+        "category": "Control",
+        "options": {
+          "maxGraphNodes": 200000,
+          "maxGraphConnections": 1000000,
+          "sampleSpacingMeters": 0.125,
+          "preferVerticalApproach": true,
+          "secondaryDistanceMeters": 2,
+          "connectionToleranceMeters": 1
+        },
+        "artifactId": "75c61dc7-d456-45b0-9052-2a0822240350",
+        "settings": {
+          "revision": "2",
+          "connectionGap": "1",
+          "endConnectionLength": "5",
+          "secondaryTrayLength": "3",
+          "additionalBendingPercent": "10"
+        },
+        "staleAtCompletion": false,
+        "resultStatus": "calculated",
+        "effectiveCategory": "Control",
+        "route": {
+          "lengthMeters": 35.30345579516123,
+          "routeText": "/BC022-2/BC025/B107-3/B107-2/B107-1/B002/DFB013/DFB012/DFB011/DFB018-1",
+          "pointCount": 90,
+          "firstPoint": {
+            "x": 57.840041442197844,
+            "y": -6.751280339942497,
+            "z": 8.211000437980317
+          },
+          "lastPoint": {
+            "x": 45.16500215081601,
+            "y": -11.73700013993792,
+            "z": 1.5296001389080516
+          }
+        },
+        "design": {
+          "designLengthMeters": "45",
+          "unroundedLengthMeters": "44.33380137467732",
+          "lengthBeforePercentageMeters": "40.3034557951612"
+        }
+      }
+    ],
+    "reviewCount": 3,
+    "applyReceiptCount": 0,
+    "cable": {
+      "id": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+      "tag": "PF-MANUAL-DEMO",
+      "routing": null,
+      "designLength": null,
+      "installLength": null,
+      "cableWriteRevision": "0",
+      "fromLocation": "=PF-DEMO-NETWORK-START",
+      "toLocation": "=PF-DEMO-NETWORK-END"
+    }
+  }
+}

@@ -61,6 +61,15 @@ describe('PathFinder scope and shared-location orchestration', () => {
     act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'EXTRACTION_FAILED', operation: 'READ_MODEL_CAPTURE' } }));
     expect(result.current.viewerPhase).toBe('ready'); expect(result.current.error).toContain('Reduce the network or equipment scope'); expect(facts.disposed).not.toHaveBeenCalled();
   });
+  it('retains the model after a partial appearance restore, offers Clear retry and clears the error after acknowledgement', async () => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(facts.events.length).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'APPEARANCE_RESTORE_FAILED', operation: 'CLEAR_ROUTE' } }));
+    expect(result.current.viewerPhase).toBe('ready'); expect(result.current.error).toContain('Press Clear again'); expect(facts.disposed).not.toHaveBeenCalled();
+    act(() => result.current.clear()); expect(facts.clear).toHaveBeenCalledOnce();
+    act(() => facts.events[0]({ type: 'ROUTE_CLEARED', payload: {} })); expect(result.current.error).toBeNull(); expect(facts.instances).toBe(1);
+  });
   it('only explicitly requested retries force a new calculation job', async () => {
     const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
     await waitFor(() => expect(result.current.data).not.toBeNull());

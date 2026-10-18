@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "pathfinder.routes-path.followup-source.v1",
+  "recordedAtUtc": "2026-10-18T08:27:51.738Z",
+  "parentCheckpoint": "46152f9873764ec22537029d98bbfcc453052768",
+  "branch": "pf-two-tabs-local-20261018",
+  "scope": "Browser-observed material transparency/caption corrections and restoration recovery guards; source checks only, new candidate browser verification still pending.",
+  "checks": [
+    {
+      "scope": "Final PathFinder SDK module, bridge and adapter",
+      "status": "PASS",
+      "passed": 60,
+      "breakdown": {
+        "pathfinder": 21,
+        "bridge": 30,
+        "adapter": 9
+      },
+      "reportedBy": "designated Viewer source owner, after closing independent review"
+    },
+    {
+      "scope": "Final root API and hook",
+      "command": "npx vitest run src/api/pathfinder.test.ts src/pages/ProjectDetails/hooks/usePathFinder.test.tsx --maxWorkers=1",
+      "status": "PASS",
+      "passed": 18,
+      "breakdown": {
+        "api": 7,
+        "hook": 11
+      },
+      "exitCode": 0
+    },
+    {
+      "scope": "Root frontend types and 3-file ESLint",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "scope": "Saved shared location caption and late draft/model UI fence",
+      "command": "npx vitest run src/pages/ProjectDetails/PathFinderTab.test.tsx -t 'resolves either cable endpoint' --maxWorkers=1 --cache=false",
+      "status": "PASS",
+      "passed": 1,
+      "skipped": 35,
+      "durationSeconds": 15.98
+    },
+    {
+      "scope": "Caption frontend types and 2-file ESLint",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "scope": "Source syntax and whitespace",
+      "status": "PASS"
+    }
+  ],
+  "review": {
+    "acceptedArtifactAfterCancel": "RESOLVED and regression verified",
+    "appearanceRecoveryStateLoss": "RESOLVED; retained per-entry state, independent cleanup, bound clone safety and teardown preserved",
+    "overlappingPreflightRecoveryBarrier": "RESOLVED; rechecked after yields and before commit, fault regression passes",
+    "otherActionableFindings": 0
+  },
+  "appearance": {
+    "defaultGhostOpacity": 0.025,
+    "explicitMode": "original background materials; protected opaque original-colour route materials; unchanged yellow exact path",
+    "maximumFragmentsScanned": 1000000,
+    "maximumMaterialStates": 4096,
+    "maximumProtectedFragmentReferences": 8192,
+    "fullGeometryOrFragmentCopy": false,
+    "reauthorizeImmediatelyBeforeCommit": true,
+    "clearRestoresAppearance": true,
+    "unconsolidationPersistsUntilReload": true
+  },
+  "errorHandling": {
+    "code": "APPEARANCE_RESTORE_FAILED",
+    "terminal": false,
+    "clearRetryAndModelReloadAvailable": true,
+    "partialClearNeverAcknowledgedAsComplete": true,
+    "rawSdkErrorsExposed": false
+  },
+  "finalPathfinderSourceSha256": "d3cbee6038f995e03ac4049500f701eee35fa293f0ec646a76e8aeae907ab2d5",
+  "finalPathfinderTestsSha256": "ec4e83d3ebcbf6d74d0159888a768721587a073748ecbb19d93d1ad013282792",
+  "nativeComparison": "NOT_PERFORMED / NOT_REQUIRED_BY_USER",
+  "humanAcceptance": "PENDING",
+  "newRuntimeVerification": "NOT_RUN at this source observation",
+  "credentialsRecorded": false
+}

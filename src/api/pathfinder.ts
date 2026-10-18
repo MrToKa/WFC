@@ -52,6 +52,7 @@ export class PathFinderApiError extends Error {
     super(code === 'PREVIEW_LOCATION_MISSING' ? 'A From/To name was not found. Choose a point or save a shared location, then calculate again.'
       : code === 'PREVIEW_LOCATION_AMBIGUOUS' ? 'A From/To name matches more than one object. Choose the intended point or save a shared location.'
       : code === 'PREVIEW_LOCATION_STALE' ? 'A shared From/To location needs confirmation against the active model.'
+      : code === 'APPEARANCE_RESTORE_FAILED' ? 'Some viewer appearance could not be restored. Press Clear again, or reload the model.'
       : status === 401 ? 'Sign in again to use Path Finder.' : status === 403 ? 'Path Finder requires current administrator access.'
       : status === 409 ? 'The project changed. Refresh Path Finder and review the latest values before trying again.'
         : status === 413 ? 'This file or project exceeds the supported size. Use a bounded canonical snapshot.'

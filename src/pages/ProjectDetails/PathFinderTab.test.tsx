@@ -46,12 +46,16 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     expect(usePathFinder).not.toHaveBeenCalled(); expect(screen.queryByTestId('pathfinder-model-host')).toBeNull();
   });
   it('resolves either cable endpoint using the same saved project location and preserves install length', async () => {
-    const user = userEvent.setup(); mount();
+    const user = userEvent.setup();
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, locations: pf.data.locations.map(location => ({ ...location, binding: { ...location.binding, status: 'stale' as const, derivation: 'equipment-bottom-aabb' as const } })) } }); mount();
     await user.click(screen.getByRole('button', { name: /=CABLE-2/ })); await user.click(screen.getByRole('button', { name: 'Resolve To' }));
     expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('EQ-001'); expect(screen.getByRole('textbox', { name: 'Location X in metres' })).toHaveValue('1');
+    expect(screen.getByText('Stale binding: confirm against the active model')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Save shared location' }));
-    expect(pf.saveLocation).toHaveBeenCalledWith({ locationId, name: 'EQ-001', aliases: ['Equipment A'], point: [1, 2, 3], objectId: 'dbid:23', externalId: 'ext-23', derivation: 'manual-world-point' });
+    expect(pf.saveLocation).toHaveBeenCalledWith({ locationId, name: 'EQ-001', aliases: ['Equipment A'], point: [1, 2, 3], objectId: 'dbid:23', externalId: 'ext-23', derivation: 'equipment-bottom-aabb' });
     expect(await screen.findByText('Shared location saved. 2 cables can reuse this location at either endpoint.')).toBeVisible();
+    expect(screen.getByText('Binding confirmed against the active model.')).toBeVisible(); expect(screen.queryByText('Stale binding: confirm against the active model')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Location X in metres' })).toHaveValue('1'); expect(screen.getByRole('combobox', { name: 'Saved location' })).toHaveValue(locationId);
     expect(pf.data.cables[0].installLength).toBe(123);
   });
   it('requires explicit finite coordinates for a missing endpoint and keeps a pick uncommitted until Save', async () => {

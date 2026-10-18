@@ -56,6 +56,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
   const [picking, setPicking] = useState(false), [query, setQuery] = useState(''), [candidates, setCandidates] = useState<ViewerModelObjectsPage | null>(null), [searching, setSearching] = useState(false);
   const [captureRoutes, setCaptureRoutes] = useState(''), [captureCategories, setCaptureCategories] = useState<('MV' | 'LV' | 'Control')[]>([]), [preparing, setPreparing] = useState(false);
   const data = pf.data, active = Boolean(data?.activeModel.modelVersionId), selected = data?.cables.find(cable => cable.id === selectedCableId);
+  const latestLocationDraft = useRef({ draft, modelVersionId: data?.activeModel.modelVersionId, selectionRevision: data?.activeModel.selectionRevision });
+  latestLocationDraft.current = { draft, modelVersionId: data?.activeModel.modelVersionId, selectionRevision: data?.activeModel.selectionRevision };
   useEffect(() => { interaction.current++; setDraft(emptyDraft()); setCandidates(null); setPicking(false); setNotice(null); }, [data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
   const changeMode = (next: 'routes' | 'path') => {
     if (next === mode) return;
@@ -98,11 +100,16 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
   };
   const save = async () => {
     if (!canSave) return;
+    const savedContext = latestLocationDraft.current;
     const name = draft.name.trim();
     const affected = (data?.cables ?? []).filter(cable => [cable.fromLocation, cable.toLocation].some(value => value && [name, ...draft.aliases.split(/\r?\n|;/).map(alias => alias.trim()).filter(Boolean)].some(alias => normalized(alias) === normalized(value)))).length;
     const result = await pf.saveLocation({ name, aliases: [...new Set(draft.aliases.split(/\r?\n|;/).map(alias => alias.trim()).filter(Boolean))], locationId: draft.locationId,
       point: formPoint as CanonicalPoint, objectId: draft.objectId, externalId: draft.externalId, derivation: draft.bindingDerivation });
-    if (result) { if (typeof result.locationId === 'string') setDraft(previous => ({ ...previous, locationId: result.locationId as string })); setNotice(`Shared location saved. ${affected} ${affected === 1 ? 'cable can' : 'cables can'} reuse this location at either endpoint.`); }
+    const current = latestLocationDraft.current;
+    if (result && current.draft === savedContext.draft && current.modelVersionId === savedContext.modelVersionId && current.selectionRevision === savedContext.selectionRevision) {
+      setDraft(previous => previous === savedContext.draft ? { ...previous, locationId: typeof result.locationId === 'string' ? result.locationId : previous.locationId, derivation: 'Binding confirmed against the active model.' } : previous);
+      setNotice(`Shared location saved. ${affected} ${affected === 1 ? 'cable can' : 'cables can'} reuse this location at either endpoint.`);
+    }
   };
   const importSnapshot = async (file: File | undefined) => {
     if (!file) return;

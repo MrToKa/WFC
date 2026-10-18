@@ -6,6 +6,7 @@ const positiveId = value => Number.isSafeInteger(value) && value > 0 && value <=
 const pause = () => new Promise(resolve => setTimeout(resolve, 0));
 const displayPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => Number.isFinite(item) && Math.abs(item) <= 1e12);
 const TUBE_SIDES = 8, SEGMENTS_PER_MESH = 2000, TUBE_VERTICES = TUBE_SIDES * 2 + 2;
+const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 8192 });
 
 /** Visual thickness only: each cylinder axis is exactly one supplied segment. */
 export function createExactPathBatches(points, radius) {
@@ -74,7 +75,9 @@ export function modelCoordinates(model) {
 
 export function createPathFinderController(viewer, { window, signal } = {}) {
   const model = viewer.model, THREE = window.THREE, sceneName = 'wfc-computed-path';
-  let disposed = false, overlays = [], geometries = [], material, ghost, bounds, pick, inventoryPromise, externalPromise, fadeOpacity = 0.025;
+  let disposed = false, overlays = [], geometries = [], material, ghost, bounds, pick, inventoryPromise, externalPromise;
+  let appearance, pathObjectIds = [], viewGeneration = 0, transparencyOperation = 0, materialSerial = 0, sceneActive = false, recoveryRequired = false;
+  const pendingCloneCleanup = new Set();
   const active = operationSignal => { if (disposed || signal?.aborted || operationSignal?.aborted) throw abortError(); };
   function callback(work, operationSignal, timeout = 15000) {
     active(operationSignal);
@@ -101,23 +104,65 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     }
     for (const item of [viewer.impl.fadeMaterial, ...(viewer.impl.fadeMaterial?.variants ?? [])].filter(Boolean)) {
       if (!ghost.materials.has(item)) ghost.materials.set(item, item.opacity);
-      item.opacity = fadeOpacity;
+      item.opacity = 0.025;
     }
   }
-  function clear() {
-    for (const overlay of overlays) viewer.overlays.removeMesh(overlay, sceneName);
-    for (const geometry of geometries) geometry.dispose(); if (material) material.dispose();
-    if (overlays.length) viewer.overlays.removeScene(sceneName);
-    overlays = []; geometries = []; material = bounds = undefined;
-    if (ghost) {
-      const prior = ghost; ghost = undefined;
-      if (prior.visibility) model.visibilityManager.setVisibility(prior.visibility.defaultVisible, prior.visibility.states);
-      else viewer.isolate([], model);
-      for (const [item, opacity] of prior.materials) item.opacity = opacity;
-      if (typeof prior.preference === 'boolean') viewer.setGhosting(prior.preference);
-      if (typeof prior.pass === 'boolean') viewer.impl.toggleGhosting(prior.pass);
-      viewer.clearSelection(); viewer.impl.invalidate(true, true, true);
+  const materialState = item => ({ opacity: item.opacity, transparent: item.transparent, depthWrite: item.depthWrite });
+  const applyMaterialState = (item, state) => { Object.assign(item, state); item.needsUpdate = true; };
+  const restoreFailure = cause => Object.assign(fail('APPEARANCE_RESTORE_FAILED'), cause === undefined ? {} : { cause });
+  const terminalOrAbort = error => error?.name === 'AbortError' || ['ACCESS_REVOKED', 'SESSION_EXPIRED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(error?.code);
+  function restoreState(state) {
+    let failed = false; state.restoring = true;
+    const rememberFailure = error => { failed = true; state.lastRestoreError ??= error; };
+    // Delete a saved entry only after its SDK operation succeeds, so Clear can retry failures.
+    for (const [id, original] of state.foreground) {
+      try { state.fragments.setMaterial(id, original); state.foreground.delete(id); } catch (error) { rememberFailure(error); }
     }
+    for (const [item, saved] of state.materials) {
+      try { applyMaterialState(item, saved); state.materials.delete(item); } catch (error) { rememberFailure(error); }
+    }
+    const stillBound = new Set(state.foreground.values());
+    for (const [original, entry] of state.clones) {
+      if (stillBound.has(original)) continue; // Never dispose a material still used by an unrestored fragment.
+      if (entry.registered) {
+        try { state.manager.removeMaterial(entry.name); entry.registered = false; } catch (error) { rememberFailure(error); continue; }
+      }
+      try { entry.clone.dispose(); state.clones.delete(original); } catch (error) { rememberFailure(error); }
+    }
+    return !failed && !state.foreground.size && !state.materials.size && !state.clones.size;
+  }
+  function releaseDetachedClones(state) {
+    // Preflight has not touched these original materials/fragments; another command may now own them.
+    state.foreground.clear(); state.materials.clear();
+    if (!restoreState(state)) { pendingCloneCleanup.add(state); recoveryRequired = true; return false; }
+    return true;
+  }
+  function restoreAppearance() {
+    let failed = false;
+    if (appearance) { if (restoreState(appearance)) appearance = undefined; else failed = true; }
+    for (const state of pendingCloneCleanup) { if (restoreState(state)) pendingCloneCleanup.delete(state); else failed = true; }
+    if (failed) { recoveryRequired = true; throw restoreFailure(appearance?.lastRestoreError ?? [...pendingCloneCleanup][0]?.lastRestoreError); }
+  }
+  function clear() {
+    viewGeneration++; transparencyOperation++;
+    let failed = false, firstError;
+    const attempt = work => { try { work(); return true; } catch (error) { failed = true; firstError ??= error; return false; } };
+    attempt(restoreAppearance); pathObjectIds = []; bounds = undefined;
+    overlays = overlays.filter(overlay => !attempt(() => viewer.overlays.removeMesh(overlay, sceneName)));
+    geometries = geometries.filter(geometry => overlays.some(overlay => overlay.geometry === geometry) || !attempt(() => geometry.dispose()));
+    if (!overlays.length && material && attempt(() => material.dispose())) material = undefined;
+    if (!overlays.length && sceneActive && attempt(() => viewer.overlays.removeScene(sceneName))) sceneActive = false;
+    if (ghost) {
+      const prior = ghost;
+      if (!prior.visibilityRestored && attempt(() => prior.visibility ? model.visibilityManager.setVisibility(prior.visibility.defaultVisible, prior.visibility.states) : viewer.isolate([], model))) prior.visibilityRestored = true;
+      for (const [item, opacity] of prior.materials) if (attempt(() => { item.opacity = opacity; })) prior.materials.delete(item);
+      if (!prior.preferenceRestored && attempt(() => { if (typeof prior.preference === 'boolean') viewer.setGhosting(prior.preference); })) prior.preferenceRestored = true;
+      if (!prior.passRestored && attempt(() => { if (typeof prior.pass === 'boolean') viewer.impl.toggleGhosting(prior.pass); })) prior.passRestored = true;
+      if (prior.visibilityRestored && !prior.materials.size && prior.preferenceRestored && prior.passRestored) ghost = undefined;
+    }
+    attempt(() => viewer.clearSelection()); attempt(() => viewer.impl.invalidate(true, true, true));
+    recoveryRequired = failed;
+    if (failed) throw restoreFailure(firstError);
   }
   function showPath({ points, objectIds }) {
     active();
@@ -127,10 +172,12 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     if (!objectIds.length && (typeof model.visibilityManager?.setAllVisibility !== 'function' || typeof model.visibilityManager?.getVisibility !== 'function' || typeof model.visibilityManager?.getDefaultVisibility !== 'function' || typeof model.visibilityManager?.setVisibility !== 'function')) throw fail('SDK_UNSUPPORTED');
     const tubes = createExactPathBatches(local, 0.02 / coordinates.scale);
     clear();
+    pathObjectIds = [...objectIds];
     bounds = new THREE.Box3();
     for (const point of local) bounds.expandByPoint(new THREE.Vector3(...point));
     material = new THREE.MeshBasicMaterial({ color: 0xffe600, depthTest: false, depthWrite: false, side: THREE.DoubleSide });
     viewer.overlays.addScene(sceneName);
+    sceneActive = true;
     for (const batch of tubes.batches) {
       const geometry = new THREE.BufferGeometry(); geometries.push(geometry);
       const positions = new THREE.BufferAttribute(batch.positions, 3), indices = new THREE.BufferAttribute(batch.indices, 1);
@@ -152,10 +199,83 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     return { pointCount: points.length };
   }
   function fit() { if (bounds) viewer.navigation.fitBounds(false, bounds); }
-  function setTransparency(percent) {
-    active();
+  async function setTransparency(percent, operationSignal, beforeCommit = async () => {}) {
+    active(operationSignal);
+    if (recoveryRequired || appearance?.restoring || pendingCloneCleanup.size) throw restoreFailure();
     if (!ghost || !bounds || !Number.isSafeInteger(percent) || percent < 0 || percent > 100) throw fail('PATH_INVALID');
-    fadeOpacity = (100 - percent) / 100; captureGhost(); viewer.impl.invalidate(true, true, true);
+    const generation = viewGeneration, operation = ++transparencyOperation, previous = appearance;
+    const current = () => {
+      active(operationSignal);
+      if (viewer.model !== model || generation !== viewGeneration || operation !== transparencyOperation) throw abortError();
+      if (recoveryRequired || appearance?.restoring || pendingCloneCleanup.size) throw restoreFailure();
+    };
+    let prepared = previous;
+    try {
+      if (!prepared) {
+        const fragments = model.getFragmentList(), manager = viewer.impl.matman?.(), count = fragments?.getCount?.(), tree = await callback((yes, no) => model.getObjectTree(yes, no), operationSignal, 45000);
+        if (!Number.isSafeInteger(count) || count < 0 || count > APPEARANCE_LIMITS.fragments || !tree || !ghost.visibility || typeof fragments.getMaterial !== 'function' || typeof fragments.setMaterial !== 'function' || typeof manager?.cloneMaterial !== 'function' || typeof manager.addMaterial !== 'function' || typeof manager.removeMaterial !== 'function' || typeof model.unconsolidate !== 'function' || pathObjectIds.length && typeof viewer.show !== 'function') throw fail('SDK_UNSUPPORTED');
+        prepared = { fragments, manager, materials: new Map(), foreground: new Map(), clones: new Map() };
+        const remember = item => {
+          if (!item || prepared.materials.has(item)) return;
+          if (!Number.isFinite(item.opacity) || item.opacity < 0 || item.opacity > 1 || typeof item.transparent !== 'boolean' || typeof item.depthWrite !== 'boolean' || item.originModelId !== undefined && item.originModelId !== model.id || item._sharedBy?.some(id => id !== model.id)) throw fail('SDK_UNSUPPORTED');
+          prepared.materials.set(item, materialState(item));
+          if (prepared.materials.size > APPEARANCE_LIMITS.materials) throw fail('SDK_UNSUPPORTED');
+          for (const variant of item.variants ?? []) remember(variant);
+        };
+        // Read only current-model fragment materials. No geometry or full fragment copy is retained.
+        for (let id = 0; id < count; id++) {
+          current(); remember(fragments.getMaterial(id));
+          if (id % 8192 === 0) await pause();
+        }
+        for (const objectId of pathObjectIds) tree.enumNodeFragments(objectId, id => {
+          current();
+          if (!Number.isSafeInteger(id) || id < 0 || id >= count) throw fail('SDK_UNSUPPORTED');
+          const original = fragments.getMaterial(id); if (!original) throw fail('SDK_UNSUPPORTED');
+          prepared.foreground.set(id, original);
+          if (prepared.foreground.size > APPEARANCE_LIMITS.foregroundFragments) throw fail('SDK_UNSUPPORTED');
+        }, true);
+        for (const original of new Set(prepared.foreground.values())) {
+          current(); const clone = manager.cloneMaterial(original, model);
+          if (!clone || clone === original || typeof clone.dispose !== 'function') throw fail('SDK_UNSUPPORTED');
+          prepared.clones.set(original, { clone, name: `${sceneName}-material-${++materialSerial}`, registered: false });
+          applyMaterialState(clone, { opacity: 1, transparent: false, depthWrite: true });
+        }
+      }
+      current(); await beforeCommit(); current();
+      const rollback = new Map([...prepared.materials.keys()].map(item => [item, materialState(item)]));
+      const rollbackView = { defaultVisible: model.visibilityManager.getDefaultVisibility(), states: model.visibilityManager.getVisibility().map(entry => [...entry]), preference: viewer.prefs?.get('ghosting'), pass: viewer.impl.showGhosting };
+      try {
+        if (!previous) {
+          // Pinned SDK material changes require unconsolidation; Clear restores appearance, not this optimization.
+          model.unconsolidate(); appearance = prepared;
+          for (const entry of prepared.clones.values()) { entry.registered = true; managerAdd(prepared.manager, entry); }
+          for (const [id, original] of prepared.foreground) prepared.fragments.setMaterial(id, prepared.clones.get(original).clone);
+        }
+        for (const item of prepared.materials.keys()) applyMaterialState(item, { opacity: (100 - percent) / 100, transparent: percent > 0, depthWrite: percent === 0 });
+        // Explicit percentages use original coloured materials, never the black Ghost override shader.
+        model.visibilityManager.setVisibility(ghost.visibility.defaultVisible, ghost.visibility.states);
+        if (pathObjectIds.length) viewer.show(pathObjectIds, model);
+        viewer.setGhosting(false); viewer.impl.toggleGhosting(false); viewer.impl.invalidate(true, true, true);
+      } catch (error) {
+        let restoreFailed = false;
+        const attempt = work => { try { work(); } catch { restoreFailed = true; } };
+        if (previous) for (const [item, state] of rollback) attempt(() => applyMaterialState(item, state));
+        else attempt(restoreAppearance);
+        attempt(() => model.visibilityManager.setVisibility(rollbackView.defaultVisible, rollbackView.states));
+        if (typeof rollbackView.preference === 'boolean') attempt(() => viewer.setGhosting(rollbackView.preference));
+        if (typeof rollbackView.pass === 'boolean') attempt(() => viewer.impl.toggleGhosting(rollbackView.pass));
+        attempt(() => viewer.impl.invalidate(true, true, true));
+        if (restoreFailed) { recoveryRequired = true; throw terminalOrAbort(error) ? error : restoreFailure(error); }
+        throw error;
+      }
+    } catch (error) {
+      if (prepared && prepared !== previous && prepared !== appearance && !releaseDetachedClones(prepared) && !terminalOrAbort(error)) throw restoreFailure(error);
+      throw error;
+    }
+  }
+  function managerAdd(manager, entry) {
+    manager.addMaterial(entry.name, entry.clone, true);
+    applyMaterialState(entry.clone, { opacity: 1, transparent: false, depthWrite: true });
   }
   async function inventory(operationSignal) {
     if (!inventoryPromise) inventoryPromise = (async () => {
@@ -272,5 +392,5 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, fit, clear, readObjects, readSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); clear(); disposed = true; inventoryPromise = externalPromise = undefined; } };
+  return { showPath, fit, clear, readObjects, readSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = undefined; } } };
 }

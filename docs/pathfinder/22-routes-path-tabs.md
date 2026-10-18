@@ -130,3 +130,59 @@ retry/bypass, alongside the two earlier denied children. One initial SDK launch
 reported development-certificate installation before its environment was fully
 isolated; later runs disable first-launch certificate setup. No original checkout
 or application was built/changed and no certificate deletion is attempted.
+
+## First candidate and browser findings
+
+Source checkpoint `46152f9873764ec22537029d98bbfcc453052768` built and started
+only the owned 5190 installation. API image `905dcb21` and web `09dcf672` are
+bound in [the startup receipt](runtime/two-tabs-candidate-health-1792310191915.json).
+The actual synthetic driver passed
+[29/29 controls](evidence/routes-path/live29-20261018T075720Z.json), with
+[exact driver/image binding](evidence/routes-path/live29-binding-20261018T075720Z.json)
+and [zero temporary fixture residue](evidence/routes-path/cleanup-readback-20261018T075720Z.json).
+The older host compiled driver was not executed; the exact new container driver
+hash is recorded. These results do not establish later image verification.
+
+[Actual browser checks](evidence/routes-path/computer-use-before-appearance-fix.json)
+passed keyboard switching, retained drafts and one Viewer, category editing,
+dirty preparation/discard, capture of ten actual route roots in two rules,
+stale-binding refusal and reconfirmation, selection-derived coordinates, and
+standalone forward/reverse length. The new rule capture still produces 52 objects
+and the same 35.30345579516123m geometry / 45m design result. Native comparison
+was not performed. A technical QA Review enabled Apply; switching tabs removed
+eligibility. No Apply was performed on the real demonstration.
+
+Two observed defects are preserved as failures in that earlier receipt:
+
+- Explicit 75% and 0% transparency used the black Ghost shader and obscured
+  original route colors in the dense plant. The default filled Ghost passed.
+  Corrective work uses original-material transparency, matching the addon,
+  with bounded preparation, protected foreground colors and complete restoration.
+  [Autodesk's material example](https://aps.autodesk.com/blog/material-swatches-forge-viewer)
+  documents fragment material assignment and unconsolidation; the pinned local
+  SDK is also inspected for the actual APIs used. Runtime recheck is pending.
+- After reconfirming a stale shared location, the editor retained its old stale
+  hint. The narrow caption correction preserves the point, identity and
+  derivation, fences later draft/model changes, and passes the affected save
+  test (1/1), frontend types and two-file ESLint. Runtime recheck is pending.
+
+Root bridge follow-up passes 29 Node tests, including three new cases for ACL
+revocation after material preparation, cancellation/clear/replacement/disposal,
+and a late final authorization. The SDK callback reauthorizes immediately before
+the synchronous material commit. No source/image promotion, replacement archive
+or cleanup is inferred while the appearance correction remains in progress.
+
+The final corrective source is now frozen: 60 relevant Node tests pass (21
+PathFinder SDK, 30 bridge, 9 adapter), and 18 current API/hook tests pass (7+11).
+The saved-location caption correction passes its affected test, types and lint.
+[Source evidence](evidence/routes-path/appearance-followup-source.json) records
+the actual separate runs. Independent review found and closed recovery-state
+loss during SDK cleanup and an overlapping preflight/recovery race. Pending
+restoration is retained, independent cleanup proceeds, still-bound clones are
+not disposed, and Clear remains retryable through a sanitized nonterminal error.
+New operations recheck pending recovery after yields and before commit.
+
+Explicit material edits require SDK unconsolidation. Clear restores appearance
+and visibility, while that rendering optimization remains disabled until model
+reload. This is an operational limitation, not an assertion of whole-plant
+performance. Final real 75/0/100/Clear and new-image verification still follow.

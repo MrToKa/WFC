@@ -16,12 +16,12 @@ function fixture(options = {}) {
     addEventListener(type, fn) { if (type === 'message') listeners.add(fn); }, removeEventListener(type, fn) { if (type === 'message') listeners.delete(fn); } };
   const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [] };
   const handle = { finish() { facts.finishes++; }, prepareIndex: options.prepareIndex ?? (async () => {}),
-    clearRoute() { facts.clears++; }, fitRoute() { facts.fits++; },
+    clearRoute() { facts.clears++; return options.clearRoute?.(); }, fitRoute() { facts.fits++; },
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
     readSelection: options.readSelection ?? (async () => ({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
-    setPathTransparency: options.setPathTransparency ?? (percent => { facts.transparency = percent; }),
+    setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
     readModelCapture: options.readModelCapture ?? (async ({ captureId, index }) => ({ captureId, index, done: true, eventJson: JSON.stringify({ type: 'complete', captureId }) })),
     showRoute: options.showRoute ?? (async raw => { facts.shows.push(raw); return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1, diagnostics: {} }; }) };
@@ -125,6 +125,70 @@ test('transparency is bounded to the current committed path and delayed authoriz
   const first = await display(uuid(90)); f.send('SET_PATH_TRANSPARENCY', { routeRequestId: first.requestId, percent: 40 }); await turn(); assert.equal(f.facts.transparency, 40);
   const second = await display(uuid(91)); f.send('SET_PATH_TRANSPARENCY', { routeRequestId: first.requestId, percent: 90 }); await turn(); assert.equal(f.facts.transparency, 40); assert.equal(f.messages('ERROR').at(-1).payload.code, 'NO_DRAWABLE_ROUTE');
   f.send('SET_PATH_TRANSPARENCY', { routeRequestId: second.requestId, percent: 100 }); f.send('CLEAR_ROUTE', { reason: 'user' }); await turn(); assert.equal(f.facts.transparency, 40); assert.equal(f.messages('PATH_TRANSPARENCY_UPDATED').length, 1); f.bridge.dispose();
+});
+
+async function displayComputedForTransparency(f, pathId) {
+  f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [] }); await turn();
+  f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points: [[1, 2, 3]] }); await turn();
+  const committed = f.send('COMMIT_COMPUTED_PATH', { pathId }); await turn(); return committed;
+}
+
+test('transparency reauthorizes after material preflight and makes no change after role revocation', async () => {
+  const prepared = deferred(); let authorized = true;
+  const f = fixture({
+    setPathTransparency: async (percent, _signal, beforeCommit) => { await prepared.promise; await beforeCommit(); f.facts.transparency = percent; },
+    fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+      ? authorized ? Response.json({ authorized: true, loadId: uuid(4) }) : new Response(null, { status: 403 })
+      : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }),
+  });
+  await f.loaded(); const shown = await displayComputedForTransparency(f, uuid(110));
+  f.send('SET_PATH_TRANSPARENCY', { routeRequestId: shown.requestId, percent: 75 }); await turn();
+  authorized = false; prepared.resolve(); await turn();
+  assert.equal(f.facts.transparency, undefined); assert.equal(f.messages('PATH_TRANSPARENCY_UPDATED').length, 0);
+  assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+});
+
+test('Clear, cancellation, replacement and disposal cannot publish late preflighted transparency', async () => {
+  for (const action of ['clear', 'cancel', 'replace', 'dispose']) {
+    const prepared = deferred();
+    const f = fixture({ setPathTransparency: async (percent, _signal, beforeCommit) => { await prepared.promise; await beforeCommit(); f.facts.transparency = percent; } });
+    await f.loaded(); const shown = await displayComputedForTransparency(f, uuid(111));
+    const pending = f.send('SET_PATH_TRANSPARENCY', { routeRequestId: shown.requestId, percent: 75 }); await turn();
+    if (action === 'clear') f.send('CLEAR_ROUTE', { reason: 'user' });
+    if (action === 'cancel') f.send('CANCEL_REQUEST', { targetRequestId: pending.requestId });
+    if (action === 'replace') await displayComputedForTransparency(f, uuid(112));
+    if (action === 'dispose') f.send('DISPOSE', { reason: 'unmount' });
+    prepared.resolve(); await turn();
+    assert.equal(f.facts.transparency, undefined, action); assert.equal(f.messages('PATH_TRANSPARENCY_UPDATED').length, 0, action); f.bridge.dispose();
+  }
+});
+
+test('late final transparency authorization cannot mutate a cleared path', async () => {
+  const permission = deferred(); let reads = 0;
+  const f = fixture({ fetchImpl: async url => url.endsWith('/pathfinder-authorization')
+    ? ++reads === 5 ? permission.promise : Response.json({ authorized: true, loadId: uuid(4) })
+    : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }) });
+  await f.loaded(); const shown = await displayComputedForTransparency(f, uuid(113));
+  f.send('SET_PATH_TRANSPARENCY', { routeRequestId: shown.requestId, percent: 75 }); await turn(); assert.equal(reads, 5);
+  f.send('CLEAR_ROUTE', { reason: 'user' }); permission.resolve(Response.json({ authorized: true, loadId: uuid(4) })); await turn();
+  assert.equal(f.facts.transparency, undefined); assert.equal(f.messages('PATH_TRANSPARENCY_UPDATED').length, 0); f.bridge.dispose();
+});
+
+test('partial appearance restoration errors are sanitized and leave Clear available for retry', async () => {
+  for (const type of ['CLEAR_ROUTE', 'SHOW_ROUTE', 'START_MODEL_CAPTURE', 'BEGIN_COMPUTED_PATH']) {
+    let broken = false;
+    const f = fixture({ clearRoute: () => { if (broken) throw Object.assign(new Error('private://material-token'), { code: 'APPEARANCE_RESTORE_FAILED' }); } });
+    await f.loaded(); await displayComputedForTransparency(f, uuid(114)); broken = true;
+    const payload = type === 'CLEAR_ROUTE' ? { reason: 'user' } : type === 'SHOW_ROUTE' ? { rawRouting: 'BC1', source: 'manual', cableId: null }
+      : type === 'BEGIN_COMPUTED_PATH' ? { pathId: uuid(115), pointCount: 1, objectIds: [] }
+        : { captureId: uuid(116), routeCodes: ['BC1'], allowedCategories: ['Control'], equipmentNames: [] };
+    f.send(type, payload); await turn();
+    const result = f.messages('ERROR').at(-1); assert.equal(result.payload.code, 'APPEARANCE_RESTORE_FAILED', type);
+    assert.equal(result.payload.retryable, true); assert.match(result.payload.message, /Press Clear again/);
+    assert.equal(JSON.stringify(f.sent).includes('material-token'), false); assert.equal(f.messages('ROUTE_CLEARED').length, 0);
+    broken = false; f.send('CLEAR_ROUTE', { reason: 'user' }); await turn();
+    assert.equal(f.messages('ROUTE_CLEARED').length, 1, type); f.bridge.dispose();
+  }
 });
 
 test('model capture transport is request-bound, reauthorizes each part and reserves the replay budget', async () => {
