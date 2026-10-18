@@ -15,13 +15,31 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current continuation — retained coverage audit
 
-IN_PROGRESS on `pf-2-coverage-local-20261018`, inheriting local worker delivery
+SCOPED_TECHNICAL_PASS on `pf-2-coverage-local-20261018`, inheriting local worker delivery
 `25e49401a7eca4117bbb261208be00bc92a7b36a`. New assignment
 [PF-2 retained coverage](handoffs/PF-2-coverage-audit.md) prepared through
 prepare-stage-handoff and executed under standing authorization. No activation
-of session mode on5190 or new runtime is included. All checks start NOT_RUN;
-receipt declarations/preparation are not audit results. Parent owns docs/evidence,
-one writer owns scripts/pathfinder-coverage, independent review is read-only.
+of session mode on5190 or new runtime is included. Actual audit
+`evidence/coverage/audit-1792332295000.json` passes6scopedgates:214parts/
+152879123bytes/438155objects/664556uniqueassociations,1root/depth14,
+selected52objects/26LV+Controlleaves/all99fragments/10completechosenroots.
+Actual43controlsPASS with TAP; independent source review closed at7afc8b8f.
+All52selectednativevisibilitystates unknown; equipment-rolecount0. RealQAFrom/To
+rawnamesmissing but2manualbindingscurrentagainstretainedartifact; thirdbinding
+stale. Synthetic2cablesprojectfenced/currentartifactunknown, repeatedaliasesreuse
+sameprojectlocations. No businesscoverage/fullplantgeometry/capacity PASS.
+Independent exactPDBobservation identifiesmapped-only388764; rootpresent,
+all438155retainedexternalIDsmatch; runtimeomissioncauseunproved.
+Report26 records exactscopes/9.167s/604778496Bpeak/cooperativeguards and historical
+fixturemkdirfailure. No app/Core/Model/DB/runtime/input mutation.
+New seventh denied child: pathfinder-engine/.scratch/coverage-controls-14b7cdcb-10cb-4ad5-a8d4-a1962a8f0ea7
+(406-byte failedsetupmarker), one removal rejected blocked by policy beforeprocess.
+Do not retry/bypass/deleteparent; receipt cleanup-refusal-1792332352021.json.
+The proposed cleanup-result file does not exist. Finalcontrolfixtures retained
+as needed evidence; no Dockerresourcescreated for this stage.
+Next independent proof gap: investigate stage25 post-UI unexpected comparison on
+a fresh own restoredtarget as NEW evidence (never recovery of lostobservation),
+save before/after/diffs before assert/cleanup. Root prepares next handoff/branch.
 
 ## Latest checkpoint — private worker reuse delivery, 18 October 2026
 

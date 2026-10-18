@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "pathfinder.coverage.cleanup-refusal.v1",
+  "recordedAt": "2026-10-18T14:05:52.020Z",
+  "status": "BLOCKED_BY_POLICY",
+  "action": "Remove the single verified own failed-setup marker and its exact directory",
+  "reason": "Automatic approval review rejected exec_command before process creation: blocked by policy.",
+  "target": "pathfinder-engine/.scratch/coverage-controls-14b7cdcb-10cb-4ad5-a8d4-a1962a8f0ea7",
+  "existsAfterRefusal": true,
+  "markerExists": true,
+  "markerBytes": 406,
+  "markerSha256": "6e44afcd49c3c3591e69a6169f6c8519cd17e634fbe8ca8e23d77b8d2ed04fb6",
+  "preflight": {
+    "path": "docs/pathfinder/evidence/coverage/cleanup-preflight-1792332439000.json",
+    "sha256": "9df0ab0548507a881b3f553aa3f951b07eb54e9562d1146cdbeb65dadb302bbe"
+  },
+  "nonexistentProposedResultReceipt": "docs/pathfinder/evidence/coverage/cleanup-result-1792332459000.json",
+  "proposedResultReceiptExists": false,
+  "retryOrBypass": false,
+  "priorDeniedPathsUntouched": true
+}

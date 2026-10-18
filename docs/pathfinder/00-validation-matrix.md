@@ -270,3 +270,17 @@ FAIL_NOT_RETAINED after a cleanup sequencing error. No activation is inferred.
 | PF8-SESSION-PRESERVE |Original sources/data/5190 unchanged; target/test cleanup and final preservation | Primary5190/all18baseline12auditchecks PASS; fresh5-group isolation PASS; own5191 retired. Final target post-UI workflow comparison FAIL_NOT_RETAINED after audit/retirement sequencing error, not repaired by primary audit |
 | PF2-GRAPH-01/PF2-CAP-PLANT |Once-prepared graph and representative wholeplant scope | NOT_IMPLEMENTED / NOT_RUN; fitted geometry/session reuse does not close these requirements |
 | PF8-USER-01 |Human engineering acceptance and main integration | PENDING_USER_REVIEW; no real Apply or publication |
+
+## PF-2 retained whole-inventory coverage audit — 18 October 2026
+
+Branchpf-2-coverage-local-20261018, base25e49401/handoff f2f5e6ab.
+[Report26](26-retained-model-coverage.md) and its receipts preserve exact scope.
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF2-COVER-INTEGRITY |Actual214parts/152879123bytes,438155uniqueobjects/664556uniqueassociations,complete parents/childcounts/one root/depth14 | PASS6scoped gates in audit1792332295000; no fullmesh/engineering claim |
+| PF2-COVER-SELECTED |All52selectedobjects/26LV+Controlleaves/99fragments join,10chosen root subtrees complete | PASS; other438103objects are unclassified modelscope, not automatically missing trays;0equipment/all nativevisibilityunknown |
+| PF2-COVER-IDENTITY |PDB438156vsreachable438155 exact sets/external IDs | Set difference reconciled: mapping-only388764; allretained IDsagree/rootpresent. Runtime omission cause UNPROVED; CLI-alone narrowerflag retained |
+| PF3-COVER-QA |All3retained QA cables/aliases/bindings with projectfences and unknownlivegates | PASS at retainedscope;2realmanual endpoints, thirdrealbindingstale;2synthetic cables not crossmatched; no businesscoverage claim |
+| PF2-COVER-CONTROLS |Failure receipts/hash/path/offset/hierarchy/category/bounds/fragments/registry/workbounds | PASS43/43/TAP; source-only review closed; earlier fixturemkdirfailure preserved |
+| PF2-COVER-PLANT/GRAPH |Full computational plant/equipment/category coverage, literal graphreuse and engineering acceptance | BLOCKED_INPUT/NOT_IMPLEMENTED/PENDING_USER_REVIEW as scoped; metadata audit and cooperative9.167s/604778496Bpeak are not routingcapacity |
