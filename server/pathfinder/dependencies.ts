@@ -5,6 +5,7 @@ import { normalizeLocation } from './matching.js';
 import { activeModel, latestArtifact } from './repository.js';
 import type { DependencySnapshot, EngineOptions } from './jobContracts.js';
 import { projectRoutingSettings } from './settings.js';
+import { requirePreparedRoutingScope } from './routingScope.js';
 export {requireCurrentLogin} from './auth.js';
 
 export function canonicalJson(value: unknown): string {
@@ -15,8 +16,12 @@ export function canonicalJson(value: unknown): string {
 }
 export const hash = (value:unknown):string => createHash('sha256').update(canonicalJson(value)).digest('hex');
 export function geometryHash(dependencies: DependencySnapshot): string {
-  const {settings:_settings,cableWriteRevision:_write,registryRevision:_registry,...geometry} = dependencies;
-  return hash(geometry);
+  // Explicitly select engineering inputs. Full catalog snapshots, private copy
+  // evidence and drawing revisions must never become transitive PF dependencies.
+  const {schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,routing} = dependencies;
+  return hash({schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,
+    routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
+      routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
 }
 type Row = Record<string,any>;
 export type CollectedDependencies = {dependencies:DependencySnapshot|null;status:string;message:string;cable:Row};
@@ -37,6 +42,13 @@ export async function collectDependencies(client: PoolClient, projectId: string,
   const artifact = await latestArtifact(client,projectId,model.active_model_version_id);
   if (!artifact || artifact.content_fingerprint !== model.content_fingerprint) return blocked('model_index_required','Prepare a computational snapshot for the active model.');
   if (lockCable) await client.query('SELECT id FROM pf_artifacts WHERE project_id=$1 AND id=$2 FOR SHARE',[projectId,artifact.id]);
+  let routing;
+  try { routing = await requirePreparedRoutingScope(client,projectId,artifact.id); }
+  catch (error) {
+    if (error instanceof PathFinderError && error.code === 'ROUTING_PREPARATION_REQUIRED')
+      return blocked('routing_preparation_required',error.message);
+    throw error;
+  }
   if (!['MV','LV','Control','Instrumentation'].includes(cable.mto)) return blocked('category_required','Resolve the cable category before calculation.');
   const currentSettings=await projectRoutingSettings(client,projectId,options);
   if (!currentSettings.settings.endConnectionLength || !currentSettings.settings.additionalBendingPercent) return blocked('settings_required','Set the project allowances in Project Details.');
@@ -52,7 +64,7 @@ export async function collectDependencies(client: PoolClient, projectId: string,
   };
   const from = await endpoint(cable.from_location),to = await endpoint(cable.to_location);
   if (!from || !to) return blocked('locations_required',`Resolve ${!from && !to ? 'From and To' : !from ? 'From' : 'To'} locations. Missing, ambiguous or stale locations cannot be calculated.`);
-  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{schemaVersion:'pathfinder.dependencies.v1',projectId,cableId,cableWriteRevision:cable.cable_write_revision,
+  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{schemaVersion:'pathfinder.dependencies.v2',routing,projectId,cableId,cableWriteRevision:cable.cable_write_revision,
     cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id},registryRevision:registry.registry_revision,
     model:{id:model.active_model_version_id,selectionRevision:model.selection_revision,contentFingerprint:model.content_fingerprint},artifact:{id:artifact.id,sha256:artifact.snapshot_sha256},
     settings:currentSettings.settings,

@@ -86,7 +86,7 @@ describe('proposal compatibility and stable dependency hashing',() => {
   });
   it('is independent of JSONB object property order',() => expect(hash({b:2,a:{d:4,c:3}})).toBe(hash({a:{c:3,d:4},b:2})));
   it('reuses geometry across settings/write revisions while binding new provenance',() => {
-    const value = {schemaVersion:'pathfinder.dependencies.v1',projectId,cableId:randomUUID(),cableWriteRevision:'1',registryRevision:'1',
+    const value = {schemaVersion:'pathfinder.dependencies.v2',routing:{catalogRevision:'1',routingContentSha256:'c'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'d'.repeat(64)},projectId,cableId:randomUUID(),cableWriteRevision:'1',registryRevision:'1',
       settings:{revision:'1',connectionGap:'.25',secondaryTrayLength:'5',endConnectionLength:'6',additionalBendingPercent:'10'},model:{id:modelVersionId,selectionRevision:'1',contentFingerprint:'a'.repeat(64)},
       artifact:{id:snapshotId,sha256:'a'.repeat(64)},options:defaultOptions,cableInputs:{fromLocation:'A',toLocation:'B',mto:'Control',cableTypeId:randomUUID()},
       from:{locationId:randomUUID(),bindingRevision:'1',point:[0,0,.5]},to:{locationId:randomUUID(),bindingRevision:'1',point:[10,0,.5]},engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'} as DependencySnapshot;

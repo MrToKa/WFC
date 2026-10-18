@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { revision, uuid, snapshotSchema } from './contracts.js';
+import type { RoutingScope } from './routingScope.js';
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -19,7 +20,8 @@ export const createJobSchema = z.object({cableIds:z.array(uuid).min(1).max(10_00
 export type EngineOptions = z.infer<typeof optionsSchema>;
 export type ProjectSettings = {revision:string;connectionGap:string;secondaryTrayLength:string|null;endConnectionLength:string;additionalBendingPercent:string};
 export type DependencySnapshot = {
-  schemaVersion:'pathfinder.dependencies.v1';projectId:string;cableId:string;cableWriteRevision:string;
+  schemaVersion:'pathfinder.dependencies.v2';projectId:string;cableId:string;cableWriteRevision:string;
+  routing:RoutingScope;
   cableInputs:{fromLocation:string|null;toLocation:string|null;mto:string|null;cableTypeId:string};
   registryRevision:string;model:{id:string;selectionRevision:string;contentFingerprint:string};
   artifact:{id:string;sha256:string};settings:ProjectSettings;options:EngineOptions;

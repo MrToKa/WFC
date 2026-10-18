@@ -1,5 +1,8 @@
 import type { Pool } from 'pg';
 import { initializePathFinderJobs } from './jobsSchema.js';
+import { initializePurposePolicySchema } from './policySchema.js';
+import { initializeArtifactRoutingScope } from './routingScope.js';
+import { initializeRoutingPolicySchema } from './purposePolicy.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -100,8 +103,11 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
       CREATE TRIGGER pf_location_event_append_only BEFORE UPDATE OR DELETE ON pf_location_events FOR EACH ROW EXECUTE FUNCTION protect_pf_location_event();
       CREATE INDEX IF NOT EXISTS pf_artifacts_model ON pf_artifacts(project_id,model_version_id,created_at DESC,id);
     `);
+    await initializeArtifactRoutingScope(client);
     await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
   finally { client.release(); }
   await initializePathFinderJobs(pool);
+  await initializePurposePolicySchema(pool);
+  await initializeRoutingPolicySchema(pool);
 }

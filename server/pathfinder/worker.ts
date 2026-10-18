@@ -12,6 +12,8 @@ import { principalTransaction } from './auth.js';
 import { collectLookupDependencies, type LookupDependencies } from './lookups.js';
 import { engineProjectSettings } from './settings.js';
 import { collectPreviewDependencies, previewEngineRequest, type PreviewDependencies } from './previews.js';
+import { requirePreparedRoutingScope, requireVersionedCalculationScope } from './routingScope.js';
+import { activeModel, latestArtifact } from './repository.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -104,6 +106,13 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       let response:EngineResponse,calculationMode = 'calculate',retained:Row|undefined,retainedResult:EngineResponse|undefined;
       const requestId = randomUUID();
       try {
+        requireVersionedCalculationScope(dependencies);
+        await principalTransaction(pool,job.project_id,principal(job),async client => {
+          await fencedJob(client,job);
+          const current=await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true);
+          if (!current.dependencies || hash(current.dependencies)!==hash(dependencies))
+            throw new PathFinderError('PROPOSAL_STALE',409,'The tray catalog, routing permissions or another calculation input changed. Calculate a fresh proposal.');
+        });
         await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
         const previous = await pool.query<Row>(`SELECT result FROM pf_proposals WHERE project_id=$1 AND cable_id=$2 AND geometry_hash=$3
           AND result->'route'->>'success'='true' ORDER BY created_at DESC,id DESC LIMIT 1`,[job.project_id,item.cable_id,geometryHash(dependencies)]);
@@ -162,6 +171,17 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFacto
     for (const previous of projects.rows) {
       if (controller.signal.aborted) return;
       try {
+        // Historical complete jobs must not seed repeated blocked replacements
+        // or rematch a registry before a catalog-scoped producer exists.
+        await principalTransaction(pool,previous.project_id,principal(previous),async client => {
+          const model=await activeModel(client,previous.project_id);
+          if (!model.active_model_version_id || model.state!=='ready' || model.health!=='healthy')
+            throw new PathFinderError('ROUTING_PREPARATION_REQUIRED',409);
+          const artifact=await latestArtifact(client,previous.project_id,model.active_model_version_id);
+          if (!artifact || artifact.content_fingerprint!==model.content_fingerprint)
+            throw new PathFinderError('ROUTING_PREPARATION_REQUIRED',409);
+          await requirePreparedRoutingScope(client,previous.project_id,artifact.id);
+        });
         const registry = (await pool.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1',[previous.project_id])).rows[0];
         if (registry) await jobs.create(previous.project_id,principal(previous),{expectedRegistryRevision:registry.registry_revision,options:previous.options,timeoutMilliseconds:previous.timeout_ms});
       } catch {/* Missing/revoked/stale dependencies remain visible; retries are bounded by this cadence. */}

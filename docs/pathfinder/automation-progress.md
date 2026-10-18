@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r1-tray-catalog-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r2-purpose-policy-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -99,7 +99,49 @@ recommended engineering choice and are recorded; no routine stage pause.
 - Next: PF-R2 persistent routing-purpose settings. A owns new shared/catalog/schema,
   B new policy repository/router/parser, C API/hook/card and Details integration.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
-  No R2 runtime changes or real policy choices yet.
+  R1 historical note; see live R2 checkpoint below for current runtime changes.
+
+## Live PF-R2 checkpoint — technically complete
+
+- Current branch pf-r2-purpose-policy-local-20261019, inherited HEAD8f08885;
+  technical commit follows report37. R1d997dca/R009f0e1d retained.
+- All scoped writers finished and froze sources. Independent read-only final
+  source/evidence reviews found no material blocker; stale checkpoint replaced.
+- Frontend/server typecheck, targeted lint and **164/164 tests in10files PASS**.
+  Actual rollback SQL/refusal PASS; actual SQL/HTTP **21/21 PASS**, cleanup PASS.
+  Actual computer-use **13/13 PASS**; real330/6/0, spacing variants disambiguated,
+  synthetic save/reload/reset/exclude/conflict/discard/history and engineer rights.
+- Current owned5191 API image2097b386515435d50aa1e095e4c12e340b2d2bab71c44707fc85bc89340ad476,
+  ID2d24fef0506ad34629dac1da02a97b5834619893eb28714089bcd2499d359f41;
+  web image77611de13845a691984a784b4e4d5a7642412ea656b33bb97f4218b9a9cae845,
+  IDdcfc3490af572cc23bdd6efc8e0412a18255fee6d2a3a6722f1642bd3595d7f1.
+  PostgreSQL/MinIO/storage-ready and networks/volumes retained. All18protected
+  container identities/images/starttimes/state unchanged.
+- Runtime owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46, project
+  wfc-pathfinder-local-0cba87606e9b, loopback5191, directory
+  .scratch/batched-capture-runtime-20261018-1600. Keep demo/normal admin login.
+- Verified pre-migration backup89f25359-4b21-4c8b-b88c-9268a9806522 retained.
+  Private work .scratch/tray-catalog-f135b9e0-02e8-40e2-9ae6-5c98b67c1a8a,
+  current image binding r2-approved-runtime2.private.json. Old R1 image guards
+  intentionally refuse new API/web; never weaken them or generic-retire5191.
+- Final whole45-table/business and3-bucket inventory preservation PASS:
+  evidence/purpose-policy/final-preservation-1792364617873.json. Real330trays,
+  2140selected cables/51types,0rules/0bindings/0scopes/44historicaljobs unchanged;
+  all2143existing cables unchanged. No real engineering Apply/native parity.
+- All own SQL/HTTP/browser fixtures/accounts/logins cleaned. Three newly owned
+  unused images and dead fixture credential removed; current images/archives/
+  private proofs/screenshots retained. Historical denied paths untouched.
+- Historical FAILs retained: unordered network-array audit, header-only test
+  client ECONNRESET and tag-vs-ID image inspection. Each has explicit corrected
+  reconciliation/control; no blind lifecycle/build retry.
+- Report37 and evidence/purpose-policy contain exact sources/images/results.
+  No active root subprocess. Original/5190 checkouts/containers/data unchanged;
+  no push/PR/merge/deployment. Automation remains ACTIVE.
+- Next immediately: prepare-stage-handoff → detailed R2a prompt/localcommit →
+  inherited pf-r2a-drawing-positioning-local-20261019. Implement separate admin
+  Left/Right rules, consistent read-only drawing snapshots for existing viewers,
+  joint compatible side bundles/divider/metrics/exports. Resolve local overrides,
+  export self-invalidation and mixed reads. No R2a edits yet.
 
 ## Previous continuation — purpose/revision plan and older-model preparation
 

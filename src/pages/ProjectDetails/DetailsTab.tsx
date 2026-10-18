@@ -27,6 +27,7 @@ import type {
 import type { CustomBundleRangesController } from './hooks/useCustomBundleRanges';
 import { CABLE_CATEGORY_CONFIG, CABLE_CATEGORY_ORDER } from './hooks/cableLayoutDefaults';
 import { ProjectModelSection } from './ProjectModelSection';
+import { RoutingPurposePolicyCard } from '@/components/RoutingPurposePolicyCard';
 
 type NumericFieldName =
   | 'connectionGap'
@@ -81,6 +82,7 @@ type DetailsTabProps = {
   project: Project;
   formattedDates: FormattedDates;
   isAdmin: boolean;
+  routingPolicyAdmin?: boolean;
   modelProjectId?: string | null;
   modelToken?: string | null;
   cableSpacingField: CableSpacingController;
@@ -108,6 +110,7 @@ export const DetailsTab = ({
   project,
   formattedDates,
   isAdmin,
+  routingPolicyAdmin = false,
   modelProjectId = null,
   modelToken = null,
   cableSpacingField,
@@ -154,6 +157,13 @@ export const DetailsTab = ({
         projectId={modelProjectId}
         token={modelToken}
         canEdit={Boolean(isAdmin && modelToken && project.id === modelProjectId)}
+      />
+      <RoutingPurposePolicyCard
+        className={styles.panel}
+        projectId={modelProjectId}
+        loadedProjectId={project.id}
+        token={modelToken}
+        isAdmin={routingPolicyAdmin}
       />
       <div className={styles.numericFieldsRow}>
         {numericFields.map((field) => {

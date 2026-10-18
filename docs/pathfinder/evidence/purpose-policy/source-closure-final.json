@@ -1,0 +1,261 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.source-closure.v1",
+  "status": "PASS",
+  "observedAt": "2026-10-18T23:09:12.342Z",
+  "branch": "pf-r2-purpose-policy-local-20261019",
+  "head": "8f0888527ca31fdf864912d1d2ad1514033a28f0",
+  "cachedOriginRelation": "0\t46",
+  "upstream": "NONE",
+  "frozenReferences": 24,
+  "imageAndLaterReceiptHashes": 33,
+  "stagedFiles": [
+    {
+      "path": "docker/pathfinder.nginx.conf",
+      "sha256": "f0f6dab83892fc8757f22dbaa632ca5a12e9b57738e86926b7644a10052cf32e"
+    },
+    {
+      "path": "docs/pathfinder/37-r2-stage-report.md",
+      "sha256": "61375d80a847e1e416c7c8ce8dda04551faa12f22036e2d0d5c44dfa0b5071f4"
+    },
+    {
+      "path": "docs/pathfinder/automation-progress.md",
+      "sha256": "e9e6c5dda0adf9426421fd9ff50059ec0cb68f1edc7d3ac4f1e19afdbe500696"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/actual-controls-1792363750637.json",
+      "sha256": "d2d2d78ebb565723fb05949069244f89b528ff9428a572d4b641e7ec74078396"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/actual-controls-1792363829250.json",
+      "sha256": "29aa186ce2d2035977329069b43434f76baf85639c7ccac6277b610312e53f12"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/actual-preflight-1792363729167.json",
+      "sha256": "fb176d46037db2768318baf08682be04741794877f24aac81fe3cb0d41beb312"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/browser-fixture-cleanup-1792364442072.json",
+      "sha256": "1c466483ab8cf93cb319dd854eb6ce85ffd8bb1690a285b20ddb4f7422125f56"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/candidate-build-1792363079883.json",
+      "sha256": "c73b9960955daf265f8dd932e32f63c5d75665ff05c26c4b531a5dcdb178b6cb"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/candidate-build-1792363588403.json",
+      "sha256": "aa28e7fea207346a7648cedfa21c13a932363317566c664c35e3aee9628c4d80"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/cleanup-1792364510042.json",
+      "sha256": "e465551d59db5ca821652cf92478f2ec70de95b5ff266f2a4b05350ada846f5b"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/computer-use-final.json",
+      "sha256": "8fe802ea397b386f0a172176d4e6f3980c20cf392c18a4dd6ff41cf7c3096dc4"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/eof-normalization.json",
+      "sha256": "94813a3e165228801f9115b718a9bd2161405709e91463c75a380c9dc58cc997"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/final-preservation-1792364617873.json",
+      "sha256": "3d1567b077c3ca2132f2b3a26544f60c6b9bb17e85201dc212641ff6c0861056"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/pre-migration-backup-1792362626867.json",
+      "sha256": "37538f0f1998dbe964ac6af2587510034660b5d940d31f486049f0951dfb3f82"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/remote-observations.json",
+      "sha256": "dacb118854d818e68c8e987269cc858c83b5a4ae14bcdc5ed2f6a524b52f0b89"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/runtime-upgrade-1792363695614.json",
+      "sha256": "9e3e35165b20858a71b73edbee17f997bd6bd586448ee72454b08d5a9e2f2980"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/runtime-upgrade-initial-audit-failure.json",
+      "sha256": "f3e45a6b687bdd82da230cde7b4ad0def03a43009ca78c71636b19142dd028e7"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/web-spacing-initial-inspection-failure.json",
+      "sha256": "d9f8299d91ef23a973694d0ff154d544a105675a823b8d25b6e999a4c9f4508e"
+    },
+    {
+      "path": "docs/pathfinder/evidence/purpose-policy/web-spacing-patch-1792364180288.json",
+      "sha256": "2a88b232098747529a9553f14434f24cb27a31e962cdb17e7c52bc71a3c7a609"
+    },
+    {
+      "path": "scripts/pathfinder-purpose-policy/README.md",
+      "sha256": "ba8c24a84c7b6775f6813139be926ecfffe6d4b767b13eb16d32319ad61b6350"
+    },
+    {
+      "path": "scripts/pathfinder-purpose-policy/actual-controls.mjs",
+      "sha256": "b767f0483656ba769ba3e0eae0a75a7248ecd1d3cb6f59aa5c199840a8e7980d"
+    },
+    {
+      "path": "server/app.ts",
+      "sha256": "0f8192cfbf11a9ea2a053d3e04738261849ece3883fbe857fc04f74a64362b22"
+    },
+    {
+      "path": "server/pathfinder/catalog.test.ts",
+      "sha256": "baa7839a01969ed13f69b5245b97435a514a5fdba1dc47e1e197e247a21c77df"
+    },
+    {
+      "path": "server/pathfinder/catalog.ts",
+      "sha256": "a05ba11b04355adb13ecd116d99d7ace9c41fd0c6c01cefd27f868cad9b4b3a2"
+    },
+    {
+      "path": "server/pathfinder/dependencies.ts",
+      "sha256": "7890855e009551ed638ec537f512fe62a23ba55322114b7cd41281003850a80f"
+    },
+    {
+      "path": "server/pathfinder/engine.test.ts",
+      "sha256": "80e0e39d5a717fdd873cb325fe91d8aaecb60e1ae25c0cc0bd60aeb14937c57b"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "sha256": "72683f8b1734428b1677eb837f8e159eaa953a85856c661a87f26dc2fb380cfb"
+    },
+    {
+      "path": "server/pathfinder/policyJson.ts",
+      "sha256": "9dfd43269f651d6868bda8e2e389f19f0c786dce0dc78f630dc11a342ae9905f"
+    },
+    {
+      "path": "server/pathfinder/policySchema.integration.sql",
+      "sha256": "a8b0d0719ed1b2a5eac69b95e1225255aef5e9815b253cf1be252ec69b4afbc3"
+    },
+    {
+      "path": "server/pathfinder/policySchema.test.ts",
+      "sha256": "d0252d2b9ed03208f9b3907d4f27686ac4cc5b3e8c199bab070e262afa7a0b96"
+    },
+    {
+      "path": "server/pathfinder/policySchema.ts",
+      "sha256": "ea2e5c755c91e688575c3692d924950a960ecee072585963493abb278257334c"
+    },
+    {
+      "path": "server/pathfinder/previews.test.ts",
+      "sha256": "ad62ccffa2c989eb73d9782d715b1cb075ab2fe7e33012cfd5bb847223dbed21"
+    },
+    {
+      "path": "server/pathfinder/previews.ts",
+      "sha256": "3df26fa419a2a3b07473b301eb51111dca83610b3591aa73db2689f291054cbb"
+    },
+    {
+      "path": "server/pathfinder/purposePolicy.test.ts",
+      "sha256": "c1344ef590347c7f5953d1f05885154352b408ab90858222124b6f08e9fe1de5"
+    },
+    {
+      "path": "server/pathfinder/purposePolicy.ts",
+      "sha256": "16f3d9c8073567a10ed5e4dfe8cd64698dc2c5b2aa77ba5e048c9fb372fd2ac6"
+    },
+    {
+      "path": "server/pathfinder/purposePolicyRoutes.test.ts",
+      "sha256": "2d233a4c21c748f85b435b8d0f63ff547fba16a86e489aa38c967c5546b69612"
+    },
+    {
+      "path": "server/pathfinder/purposePolicyRoutes.ts",
+      "sha256": "80dd1842aada698e5403ed495262d86e8010ca48f49b59757fc2fd32bc87af03"
+    },
+    {
+      "path": "server/pathfinder/routingScope.test.ts",
+      "sha256": "9f96402395459a7899cabba668d43177c206f466764bd469f2ff07d95fb77136"
+    },
+    {
+      "path": "server/pathfinder/routingScope.ts",
+      "sha256": "28ce4ad3c5fe69d1838ddcb084371c92bc2c65cf0a3c5a8693516eb3c4781846"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "sha256": "3b8fab7583a7aab6409e2b2d3ef67853d6926b152942d2d08b034c34643677b9"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "sha256": "7f2868873da414562c583bd5f2a31e524e972ed12db909adf4ca51685e92026e"
+    },
+    {
+      "path": "shared/pathfinderPurposePolicy.test.ts",
+      "sha256": "beb77e1cb330651859f9d2eb8de98af2e6f53984013b6490565595e221983a99"
+    },
+    {
+      "path": "shared/pathfinderPurposePolicy.ts",
+      "sha256": "257a1c8fc603b9bf357e53dc8aaf5ba20bc7cfb30736b60c1ba5febcc8c1b10b"
+    },
+    {
+      "path": "src/api/pathfinderPolicies.test.ts",
+      "sha256": "e340019060fda2c6ca8cb4c4de4e92c2d23a7bf9c661e79fbe70c3be1bdf3490"
+    },
+    {
+      "path": "src/api/pathfinderPolicies.ts",
+      "sha256": "06ced272e601598f9e7e2e9145e5318433aca3a41eba0d76450a2d8871e07253"
+    },
+    {
+      "path": "src/components/RoutingPurposePolicyCard.test.tsx",
+      "sha256": "58a2f404d1014feb894e297eef8ff194fcf0c7575b57ae229aa17b6fec25f11b"
+    },
+    {
+      "path": "src/components/RoutingPurposePolicyCard.tsx",
+      "sha256": "7d8e80cbb2470f1c5a9d199eb1ed1320580abd10150dd2846e3387657895b6cf"
+    },
+    {
+      "path": "src/pages/ProjectDetails.tsx",
+      "sha256": "1289f5a5b83d64934d8503b8c1637179e96925c21f21f1d52bedde0ef83b77c4"
+    },
+    {
+      "path": "src/pages/ProjectDetails/DetailsTab.tsx",
+      "sha256": "f2c30412ab55a864cd9ee495aad09684f59f4bc38be926b535fe3505e828385e"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useRoutingPurposePolicy.test.ts",
+      "sha256": "e3fda133b9da8b1a550951354c4549d49f67694aef98c6e7a4e7461d84c76809"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/useRoutingPurposePolicy.ts",
+      "sha256": "dfec7ba8fd29c9f70201a6b4ffd3794964637cc45b510343b7ab1c6204ddd2e3"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "4129afb050e04f33dcb78ad3fabf28873e1f91fc99da74e942f190a7a6d3af9a"
+    }
+  ],
+  "localLinks": 28,
+  "knownCredentialMatches": 0,
+  "jsonAndWhitespace": "PASS",
+  "originals": [
+    {
+      "name": "originalWfc",
+      "branch": "main",
+      "commit": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+      "status": [],
+      "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "canonicalPathFinder",
+      "branch": "master",
+      "commit": "45c24bf5f433f13e102600b36f20327c77961d0a",
+      "status": [],
+      "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "legacyPathFinder",
+      "branch": "master",
+      "commit": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+      "status": [
+        "M AddinRibbon/AddinRibbon.csproj",
+        " M AddinRibbon/ClAddin.cs",
+        "?? .vscode/"
+      ],
+      "diffSha256": "ded5c28f7e8e762f19e339272df4175f73d77cb16d8e24ea5aa97a548448c671"
+    }
+  ],
+  "independentReview": "Two read-only agents; no material blocker after progress/error-code wording correction",
+  "tests": {
+    "vitestFiles": 10,
+    "vitestChecks": 164,
+    "typecheck": "PASS",
+    "targetedLint": "PASS",
+    "actualControls": 21,
+    "browserChecks": 13
+  },
+  "scope": "Reconciles recorded checks and current sources; no test/runtime rerun, no original writes"
+}

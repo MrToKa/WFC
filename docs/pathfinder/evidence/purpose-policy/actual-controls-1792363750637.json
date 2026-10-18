@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "pathfinder.purpose-policy.actual-controls.v1",
+  "status": "FAIL",
+  "startedAt": "2026-10-18T22:49:10.167Z",
+  "checks": [
+    {
+      "name": "actual catalog decimal null and zero; retained immutable pages",
+      "status": "PASS"
+    },
+    {
+      "name": "timestamp and changelog edits do not advance catalog or drawing domain",
+      "status": "PASS"
+    },
+    {
+      "name": "rollback reverses tray routing epochs",
+      "status": "PASS"
+    },
+    {
+      "name": "paginated 1001 row immutable manifest has no truncation",
+      "status": "PASS"
+    },
+    {
+      "name": "SQL Unicode normalization matches actual ECMAScript NFC trim",
+      "status": "PASS"
+    },
+    {
+      "name": "strict current admin; signed engineer role cannot read catalog policy or history",
+      "status": "PASS"
+    },
+    {
+      "name": "authorized missing project 404; unauthorized project identity remains private",
+      "status": "PASS"
+    }
+  ],
+  "cleanup": "PASS",
+  "error": "ECONNRESET",
+  "finishedAt": "2026-10-18T22:49:10.509Z",
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "port": 5191,
+  "apiId": "2d24fef0506ad34629dac1da02a97b5834619893eb28714089bcd2499d359f41",
+  "apiImage": "sha256:2097b386515435d50aa1e095e4c12e340b2d2bab71c44707fc85bc89340ad476",
+  "sourceSha256": "210ba5204400a2f27b4f43edbb3db748b03d1b5032fc014e7f300ecf3509c298",
+  "transport": {
+    "exitCode": 1,
+    "error": null,
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

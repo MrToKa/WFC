@@ -1636,6 +1636,7 @@ export const ProjectDetails = () => {
           formattedDates={formattedDates}
           isAdmin={canEdit}
           modelProjectId={projectId ?? null}
+          routingPolicyAdmin={Boolean(user?.isAdmin)}
           modelToken={token}
           cableSpacingField={cableSpacingField}
           cableCategoryCards={cableCategoryCards}

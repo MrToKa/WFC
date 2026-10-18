@@ -7,6 +7,10 @@ import { snapshotObject } from './contracts.js';
 import { proposalRoutingPreferences } from './jobContracts.js';
 import { createPathFinderApply } from './apply.js';
 
+// Preview's former behaviour is retained only behind an explicitly scoped
+// producer. Actual missing/mismatched producer controls live in routingScope.test.
+vi.mock('./routingScope.js',()=>({requirePreparedRoutingScope:vi.fn(async()=>({catalogRevision:'1',routingContentSha256:'c'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'d'.repeat(64)}))}));
+
 const projectId='11111111-1111-4111-8111-111111111111',modelId='22222222-2222-4222-8222-222222222222',artifactId='33333333-3333-4333-8333-333333333333';
 const who:JobPrincipal={userId:'44444444-4444-4444-8444-444444444444',loginId:'55555555-5555-4555-8555-555555555555',loginExpiresAt:Date.now()+3_600_000};
 const settings={connection_gap:'1',secondary_tray_length:'5',end_connection_length:'6',additional_bending_percent:'10',pf_settings_revision:'7'};

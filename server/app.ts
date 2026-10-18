@@ -22,6 +22,7 @@ import { pool } from './db.js';
 import { principalTransaction, requestPrincipal } from './pathfinder/auth.js';
 import { PathFinderError } from './pathfinder/errors.js';
 import { uuid } from './pathfinder/contracts.js';
+import { createPurposePolicyRouter } from './pathfinder/purposePolicyRoutes.js';
 
 // Large PF payloads require the current project/admin/login before parsing;
 // the write transaction repeats authorization after the upload completes.
@@ -55,6 +56,9 @@ export const createApp = (): Express => {
       exposedHeaders: ['Content-Disposition'],
     }),
   );
+  // Policy endpoints own bounded duplicate-safe parsing and exact authorization
+  // errors. Mount before generic JSON and project middleware consumes the body.
+  app.use('/api/projects/:projectId/pathfinder', createPurposePolicyRouter(pool));
   // Filtered exports send IDs for every matching page, which can exceed the default 100 KB.
   app.use(/^\/api\/materials\/[^/]+\/export$/, express.json({ limit: '10mb' }));
   app.use(

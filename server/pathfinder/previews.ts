@@ -10,6 +10,7 @@ import { defaultOptions, type EngineOptions, type EngineResponse, type JobPrinci
 import { engineProjectSettings, projectRoutingSettings } from './settings.js';
 import { hash } from './dependencies.js';
 import { jobDto } from './jobs.js';
+import { requirePreparedRoutingScope, type RoutingScope } from './routingScope.js';
 
 const name = z.string().trim().max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
 export const previewEndpointSchema = z.object({ name, point: point.optional() }).strict().refine(value=>Boolean(value.name || value.point),'Enter an endpoint name or choose an explicit point.');
@@ -21,7 +22,7 @@ export const previewSchema = z.object({
 export type PreviewInput = z.infer<typeof previewSchema>;
 type Endpoint = {name:string;point:[number,number,number];source:'manual-world-point'|'shared-location'|'equipment-bottom-aabb';objectId:string|null;locationId:string|null;bindingRevision:string|null};
 export type PreviewDependencies = {
-  schemaVersion:'pathfinder.preview.dependencies.v1';projectId:string;modelVersionId:string;selectionRevision:string;contentFingerprint:string;
+  schemaVersion:'pathfinder.preview.dependencies.v2';routing:RoutingScope;projectId:string;modelVersionId:string;selectionRevision:string;contentFingerprint:string;
   artifactId:string;snapshotSha256:string;registryRevision:string;settings:ProjectSettings;options:EngineOptions;
   input:PreviewInput;from:Endpoint;to:Endpoint;engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1';
 };
@@ -52,13 +53,14 @@ export async function collectPreviewDependencies(client:PoolClient,projectId:str
   const requested={...defaultOptions,secondaryDistanceMeters:input.secondaryDistanceMeters ?? defaultOptions.secondaryDistanceMeters,
     preferVerticalApproach:input.preferVerticalApproach ?? defaultOptions.preferVerticalApproach};
   const model=await collectLookupDependencies(client,projectId,{routeText:'',reverse:input.reverse,options:requested,artifactId:input.artifactId,expectedSelectionRevision:input.expectedSelectionRevision,planningOnly:true});
+  const routing=await requirePreparedRoutingScope(client,projectId,model.artifactId);
   const registry=(await client.query<{registry_revision:string}>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0];
   if (!registry || registry.registry_revision!==input.expectedRegistryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409,'The shared location registry changed. Refresh before calculating.');
   const current=await projectRoutingSettings(client,projectId,requested);
   if (current.settings.revision!==input.expectedSettingsRevision) throw new PathFinderError('PROJECT_SETTINGS_CONFLICT',409,'Project Details changed. Refresh before calculating.');
   const from=await resolveEndpoint(client,projectId,model.modelVersionId,model.artifactId,input.from);
   const to=await resolveEndpoint(client,projectId,model.modelVersionId,model.artifactId,input.to);
-  return {schemaVersion:'pathfinder.preview.dependencies.v1',projectId,modelVersionId:model.modelVersionId,selectionRevision:model.selectionRevision,
+  return {schemaVersion:'pathfinder.preview.dependencies.v2',routing,projectId,modelVersionId:model.modelVersionId,selectionRevision:model.selectionRevision,
     contentFingerprint:model.contentFingerprint,artifactId:model.artifactId,snapshotSha256:model.snapshotSha256,registryRevision:registry.registry_revision,
     settings:current.settings,options:current.options,input,from,to,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'};
 }
