@@ -399,7 +399,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     detail.result!.diagnostics = { geometryLeavesUsed: 12, fallbackBends: 2, fallbackStraights: null, fallbackClearances: 3 };
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, startLookup: vi.fn(async () => id), readLookup: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed') }); mount();
     await user.click(screen.getByRole('tab', { name: 'Path lookup' })); await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/BC1'); await user.click(screen.getByRole('button', { name: 'Show route' }));
-    expect(await screen.findByText('Prepared lookup geometry — leaf count: 12')).toBeVisible(); expect(screen.getByText('Prepared geometry fallbacks — bends: 2; straights: Unavailable; clearances: 3')).toBeVisible(); expect(screen.getByText('Connection gap used: 1 m')).toBeVisible();
+    expect(await screen.findByText('Geometry leaves used: 12')).toBeVisible(); expect(screen.getByText('Prepared geometry fallbacks — bends: 2; straights: Unavailable; clearances: 3')).toBeVisible(); expect(screen.getByText('Connection gap used: 1 m')).toBeVisible();
     expect(screen.getByText('Some prepared geometry diagnostics are unavailable. Missing counts are not assumed to be zero.')).toBeVisible(); expect(screen.getByText('Fallback geometry exists in the prepared lookup network and may be outside the returned route. Review the relevant geometry against the model.')).toBeVisible();
   });
   it('fences a late model capture on a tab switch without losing the ordered-route draft', async () => {

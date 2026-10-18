@@ -1,0 +1,16 @@
+{
+  "scope": "Browser-discovered diagnostic-label correction after source60e9ce6",
+  "observedAtUtc": "2026-10-18T09:45:50Z",
+  "reason": "geometryLeavesUsed counts only returned distinct leaves; the prepared-network scope applies to fallback counts. The original caption mislabeled the first number as all prepared leaves.",
+  "changes": ["PathFinderLookup.tsx: Geometry leaves used caption and Lookup geometry diagnostics section name", "PathFinderTab.test.tsx: one matching diagnostic assertion"],
+  "checks": [
+    { "name": "Affected diagnostic case", "status": "PASS", "passed": 1, "skipped": 46, "loaded": 47, "durationSeconds": 14.95 },
+    { "name": "Frontend TypeScript", "status": "PASS", "exitCode": 0 },
+    { "name": "Two-file ESLint and diff check", "status": "PASS", "exitCode": 0 }
+  ],
+  "sha256": {
+    "src/pages/ProjectDetails/PathFinderLookup.tsx": "7f0188af6a09d274dd020b4564e60b22d30e9dbb34fc9f8ae4a3813c7312ab7e",
+    "src/pages/ProjectDetails/PathFinderTab.test.tsx": "a2793585556fef40080c0627626634a43333023f94b26dbeca1daa1dc250a62c"
+  },
+  "limits": ["Text and one test assertion only; no numerical/backend/Viewer algorithm change.", "New image binding and final browser confirmation are recorded separately."]
+}
