@@ -212,7 +212,7 @@ export async function runPathFinderIntegration(projectId:string) {
       try {
         const original=await calculate();assert.equal(original.route.fromRequiresSecondary,true);assert.equal(original.design.designLengthMeters,'24');
         await api('PATCH','/api/projects/'+projectId,{secondaryTrayLength:7});const changed=await calculate();assert.equal(changed.calculationMode,'design');assert.equal(changed.design.designLengthMeters,'26');
-        const before=await cable();await api('PATCH','/api/projects/'+projectId,{secondaryTrayLength:1_000_000});const oversized=await calculate();
+        await api('PATCH','/api/projects/'+projectId,{secondaryTrayLength:1_000_000});const oversized=await calculate(),before=await cable();
         assert.ok(BigInt(oversized.design.designLengthMeters)>1_000_000n);assert.equal(oversized.canApply,false);assert.match(oversized.compatibilityIssue,/1,000,000/);
         const denied=await request('POST',base+'/proposals/'+oversized.id+'/review',{expectedProposalHash:oversized.proposalHash});assert.equal(denied.status,409);assert.equal(denied.value.code,'PROPOSAL_NOT_APPLICABLE');assert.deepEqual(await cable(),before);
       } finally {await api('PATCH','/api/projects/'+projectId,{secondaryTrayLength:5});current=await state();await api('PUT',base+'/locations/'+locationIds[0]+'/binding',{modelVersionId:initialModel,expectedSelectionRevision:current.activeModel.selectionRevision,expectedRegistryRevision:current.registryRevision,point:[0,0,.5],objectId:null,externalId:null});}
