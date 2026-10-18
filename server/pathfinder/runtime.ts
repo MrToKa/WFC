@@ -5,11 +5,12 @@ import { createPathFinderApply } from './apply.js';
 import { createPathFinderWorker } from './worker.js';
 import { pathFinderRoot } from './storage.js';
 import { createPathFinderLookups } from './lookups.js';
+import { createPathFinderPreviews } from './previews.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
   const registry = createPathFinderRepository(pool),jobs = createPathFinderJobs(pool,registry),apply = createPathFinderApply(pool),worker = createPathFinderWorker(pool,jobs);
-  return {registry,jobs,apply,worker,lookups:createPathFinderLookups(pool)};
+  return {registry,jobs,apply,worker,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool)};
 }
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
 export async function initializePathFinderRuntime():Promise<void> {

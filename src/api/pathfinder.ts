@@ -9,21 +9,32 @@ const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.strin
   matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
   binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
 const numeric = z.union([z.string(), z.number().finite()]).nullable();
-const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
+const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
+const projectSettingsSchema = z.object({ revision, connectionGap: z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100), secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() });
 const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
+const routingPreferencesSchema = z.object({ secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000), preferVerticalApproach: z.boolean() });
 const proposalSummarySchema = z.object({ id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
   stale: z.boolean(), synthetic: z.boolean(), engineeringAccepted: z.boolean(), acceptanceScope: z.string(), canApply: z.boolean(), compatibilityIssue: z.string().nullable(), message: z.string(), engineeringMessage: z.string(),
-  design: designSchema.nullable(), route: z.unknown().nullable(), createdAt: z.string(), calculationMode: z.string().optional() });
+  design: designSchema.nullable(), route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.string().optional() });
 const computedRouteSchema = z.object({ success: z.boolean(), message: z.string(), routeText: z.string(), routeCodes: z.array(z.string()), segmentIds: z.array(z.string()),
   points: z.array(point).max(200000), objectIds: z.array(z.string()).max(200000), lengthMeters: z.number().finite(), fromDistanceMeters: z.number().finite(), toDistanceMeters: z.number().finite(), fromRequiresSecondary: z.boolean(), toRequiresSecondary: z.boolean(), connectionGapCount: z.number().int().nonnegative(), connectionGapLengthMeters: z.number().finite() });
 const proposalSchema = proposalSummarySchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional() });
 const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('lookup'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
   input: z.object({ routeText: z.string(), reverse: z.boolean() }), result: z.object({ status: z.string(), message: z.string(), route: computedRouteSchema.nullable(), design: z.null(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('diagnostic-lookup'), stale: z.boolean(), prepared: z.unknown() }).nullable() });
+const endpointSchema = z.object({ name: z.string().max(500), point: point.optional() });
+const categorySchema = z.enum(['MV', 'LV', 'Control', 'Instrumentation']);
+const preferences = { secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).optional(), preferVerticalApproach: z.boolean().optional() };
+const previewInputSchema = z.object({ from: endpointSchema, to: endpointSchema, category: categorySchema, reverse: z.boolean(), ...preferences,
+  artifactId: uuid, expectedSelectionRevision: revision, expectedSettingsRevision: revision, expectedRegistryRevision: revision });
+const resolvedEndpointSchema = z.object({ name: z.string(), point, source: z.enum(['manual-world-point', 'shared-location', 'equipment-bottom-aabb']), objectId: z.string().nullable(), locationId: uuid.nullable(), bindingRevision: revision.nullable() });
+const previewSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('preview'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), cancelRequested: z.boolean(), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
+  input: previewInputSchema, result: z.object({ status: z.string(), message: z.string(), route: computedRouteSchema.nullable(), design: designSchema.nullable(), prepared: z.unknown(), effectiveCategory: z.string().nullable(), settings: projectSettingsSchema,
+    from: resolvedEndpointSchema, to: resolvedEndpointSchema, stale: z.boolean(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('standalone-preview'), canApply: z.literal(false) }).nullable() });
 const cable = z.object({ id: uuid, cableId: z.number().int(), tag: z.string().nullable(), fromLocation: z.string().nullable(), toLocation: z.string().nullable(), mto: z.string().nullable(),
   routing: z.string().nullable(), designLength: numeric, installLength: numeric, cableWriteRevision: revision, fromMatch: match, toMatch: match });
 const stateSchema = z.object({ schemaVersion: z.literal(1), projectId: uuid, registryRevision: revision,
   activeModel: z.object({ modelVersionId: uuid.nullable(), selectionRevision: revision, contentFingerprint: z.string().nullable() }),
-  settings: z.object({ connectionGap: z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100), secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() }),
+  settings: projectSettingsSchema,
   cables: z.array(cable).max(100000), locations: z.array(location),
   artifacts: z.array(z.object({ id: uuid, modelVersionId: uuid, snapshotSha256: z.string(), objectCount: z.number().int(), engineeringAccepted: z.boolean(), readiness: z.string(), capture: z.record(z.unknown()), coordinates: z.record(z.unknown()), createdAt: z.string() })),
   jobs: z.array(jobSchema), proposals: z.array(proposalSummarySchema) });
@@ -33,12 +44,18 @@ export type PathFinderCable = z.infer<typeof cable>;
 export type PathFinderProposal = z.infer<typeof proposalSchema>;
 export type PathFinderJob = z.infer<typeof jobSchema> & { items?: { cableId: string; status: string; state: string; message: string | null }[] };
 export type PathFinderLookup = z.infer<typeof lookupSchema>;
+export type PathFinderPreview = z.infer<typeof previewSchema>;
+export type PathFinderPreferences = { secondaryDistanceMeters: number; preferVerticalApproach: boolean };
+export type PathFinderPreviewInput = Omit<z.infer<typeof previewInputSchema>, 'artifactId' | 'expectedSelectionRevision' | 'expectedSettingsRevision' | 'expectedRegistryRevision'>;
 export class PathFinderApiError extends Error {
   constructor(public readonly code: string, public readonly status: number) {
-    super(status === 401 ? 'Sign in again to use PathFinder.' : status === 403 ? 'PathFinder requires current administrator access.'
-      : status === 409 ? 'The project changed. Refresh PathFinder and review the latest values before trying again.'
+    super(code === 'PREVIEW_LOCATION_MISSING' ? 'A From/To name was not found. Choose a point or save a shared location, then calculate again.'
+      : code === 'PREVIEW_LOCATION_AMBIGUOUS' ? 'A From/To name matches more than one object. Choose the intended point or save a shared location.'
+      : code === 'PREVIEW_LOCATION_STALE' ? 'A shared From/To location needs confirmation against the active model.'
+      : status === 401 ? 'Sign in again to use Path Finder.' : status === 403 ? 'Path Finder requires current administrator access.'
+      : status === 409 ? 'The project changed. Refresh Path Finder and review the latest values before trying again.'
         : status === 413 ? 'This file or project exceeds the supported size. Use a bounded canonical snapshot.'
-          : 'PathFinder could not complete the operation. Review the input and try again.');
+          : 'Path Finder could not complete the operation. Review the input and try again.');
   }
 }
 async function read(response: Response): Promise<unknown> {
@@ -50,7 +67,7 @@ async function read(response: Response): Promise<unknown> {
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new PathFinderApiError('INVALID_RESPONSE', 502); }
 }
 export async function pathFinderRequest(projectId: string, token: string, path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
-  if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/[0-9a-f-]{36})?|lookups(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
+  if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/[0-9a-f-]{36})?|lookups(?:\/[0-9a-f-]{36})?|previews(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
   const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder${path}`, { method, signal, cache: 'no-store', credentials: 'same-origin', redirect: 'error',
     headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const value = await read(response);
@@ -76,6 +93,10 @@ export async function fetchPathFinderJob(projectId: string, token: string, jobId
 }
 export async function fetchPathFinderLookup(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderLookup> {
   const parsed = lookupSchema.safeParse(await pathFinderRequest(projectId, token, `/lookups/${jobId}`, 'GET', undefined, signal));
+  if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
+}
+export async function fetchPathFinderPreview(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderPreview> {
+  const parsed = previewSchema.safeParse(await pathFinderRequest(projectId, token, `/previews/${jobId}`, 'GET', undefined, signal));
   if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
 }
 export type PathFinderBindingInput = { modelVersionId: string; expectedSelectionRevision: string; expectedRegistryRevision: string; point: CanonicalPoint; objectId: string | null; externalId: string | null };

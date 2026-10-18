@@ -3,8 +3,8 @@ export const PROTOCOL_VERSION = 1;
 export const SDK_VERSION = '7.130.0';
 export const MAX_MESSAGE_BYTES = 65536;
 export const FRAME_PATH = '/viewer-runtime/7.130.0/index.html';
-export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
-export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS']);
+export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'MODEL_SELECTION', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS']);
 export const MAX_PATH_POINTS = 20000;
 export const MAX_PATH_CHUNK_POINTS = 128;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -21,6 +21,13 @@ const record = value => value !== null && typeof value === 'object' && !Array.is
 const exact = (value, keys) => record(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key) && Object.getOwnPropertyDescriptor(value, key)?.get === undefined);
 const oneOf = (value, values) => values.includes(value);
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const categories = (value, allowEmpty = false) => Array.isArray(value) && (allowEmpty || value.length > 0) && value.length <= 3 && value.every(item => oneOf(item, ['MV', 'LV', 'Control'])) && new Set(value).size === value.length;
+const equipmentNames = value => Array.isArray(value) && value.length <= 256 && value.every(item => text(item, 256) && item.trim().length > 0);
+function captureRequest(value) {
+  if (!isUuid(value?.captureId) || !equipmentNames(value?.equipmentNames)) return false;
+  if (exact(value, ['captureId', 'routeCodes', 'allowedCategories', 'equipmentNames'])) return Array.isArray(value.routeCodes) && value.routeCodes.length > 0 && value.routeCodes.length <= 100 && value.routeCodes.every(item => text(item, 256) && item.trim().length > 0) && categories(value.allowedCategories);
+  return exact(value, ['captureId', 'routeRules', 'equipmentNames']) && Array.isArray(value.routeRules) && value.routeRules.length > 0 && value.routeRules.length <= 100 && value.routeRules.every(rule => exact(rule, ['id', 'objectIds', 'allowedCategories']) && isUuid(rule.id) && boundedIds(rule.objectIds) && rule.objectIds.length > 0 && categories(rule.allowedCategories, true)) && new Set(value.routeRules.map(rule => rule.id)).size === value.routeRules.length && value.routeRules.reduce((count, rule) => count + rule.objectIds.length, 0) <= 512;
+}
 
 const invalidRouting = () => { const error = new Error('The route contains invalid identifiers or exceeds the allowed size.'); error.code = 'ROUTE_INVALID'; throw error; };
 export function normalizeRoutingKey(token) {
@@ -89,7 +96,10 @@ function routeResult(value) {
 
 function payload(type, value) {
   switch (type) {
-    case 'START_MODEL_CAPTURE': return exact(value, ['captureId', 'routeCodes', 'allowedCategories', 'equipmentNames']) && isUuid(value.captureId) && Array.isArray(value.routeCodes) && value.routeCodes.length > 0 && value.routeCodes.length <= 100 && value.routeCodes.every(item => text(item, 256) && item.trim().length > 0) && Array.isArray(value.allowedCategories) && value.allowedCategories.length > 0 && value.allowedCategories.length <= 3 && value.allowedCategories.every(item => oneOf(item, ['MV', 'LV', 'Control'])) && new Set(value.allowedCategories).size === value.allowedCategories.length && Array.isArray(value.equipmentNames) && value.equipmentNames.length <= 256 && value.equipmentNames.every(item => text(item, 256) && item.trim().length > 0);
+    case 'START_MODEL_CAPTURE': return captureRequest(value);
+    case 'READ_SELECTION': return exact(value, []);
+    case 'MODEL_SELECTION': return exact(value, ['coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && payload('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: '', ...value }) && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
+    case 'SET_PATH_TRANSPARENCY': case 'PATH_TRANSPARENCY_UPDATED': return exact(value, ['routeRequestId', 'percent']) && isUuid(value.routeRequestId) && integer(value.percent) && value.percent <= 100;
     case 'READ_MODEL_CAPTURE': return exact(value, ['captureId', 'index']) && isUuid(value.captureId) && integer(value.index) && value.index > 0 && value.index < 3000;
     case 'MODEL_CAPTURE_EVENT': return exact(value, ['captureId', 'index', 'done', 'eventJson']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000 && typeof value.done === 'boolean' && text(value.eventJson, 49152) && new TextEncoder().encode(value.eventJson).byteLength <= 24576;
     case 'MODEL_CAPTURE_PROGRESS': return exact(value, ['captureId', 'phase', 'loaded', 'total']) && isUuid(value.captureId) && oneOf(value.phase, ['index', 'properties', 'geometry']) && integer(value.loaded) && integer(value.total) && value.loaded <= value.total && value.total <= 1000000;
@@ -130,7 +140,7 @@ export function validateEnvelope(value, direction) {
     const allowed = direction === 'parent-to-frame' ? PARENT_TYPES : direction === 'frame-to-parent' ? FRAME_TYPES : [...PARENT_TYPES, ...FRAME_TYPES];
     if (!allowed.includes(value.type) || !payload(value.type, value.payload)) return null;
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
-    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS'].includes(value.type) && value.modelVersionId === null) return null;
+    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_SELECTION', 'MODEL_SELECTION', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
     if (new TextEncoder().encode(serialized).byteLength > MAX_MESSAGE_BYTES) return null;
     return JSON.parse(serialized);

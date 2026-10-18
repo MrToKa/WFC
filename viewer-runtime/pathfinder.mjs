@@ -74,7 +74,7 @@ export function modelCoordinates(model) {
 
 export function createPathFinderController(viewer, { window, signal } = {}) {
   const model = viewer.model, THREE = window.THREE, sceneName = 'wfc-computed-path';
-  let disposed = false, overlays = [], geometries = [], material, ghost, bounds, pick, inventoryPromise, externalPromise;
+  let disposed = false, overlays = [], geometries = [], material, ghost, bounds, pick, inventoryPromise, externalPromise, fadeOpacity = 0.025;
   const active = operationSignal => { if (disposed || signal?.aborted || operationSignal?.aborted) throw abortError(); };
   function callback(work, operationSignal, timeout = 15000) {
     active(operationSignal);
@@ -101,7 +101,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     }
     for (const item of [viewer.impl.fadeMaterial, ...(viewer.impl.fadeMaterial?.variants ?? [])].filter(Boolean)) {
       if (!ghost.materials.has(item)) ghost.materials.set(item, item.opacity);
-      item.opacity = 0.025;
+      item.opacity = fadeOpacity;
     }
   }
   function clear() {
@@ -152,6 +152,11 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     return { pointCount: points.length };
   }
   function fit() { if (bounds) viewer.navigation.fitBounds(false, bounds); }
+  function setTransparency(percent) {
+    active();
+    if (!ghost || !bounds || !Number.isSafeInteger(percent) || percent < 0 || percent > 100) throw fail('PATH_INVALID');
+    fadeOpacity = (100 - percent) / 100; captureGhost(); viewer.impl.invalidate(true, true, true);
+  }
   async function inventory(operationSignal) {
     if (!inventoryPromise) inventoryPromise = (async () => {
       const tree = await callback((yes, no) => model.getObjectTree(yes, no), operationSignal, 45000);
@@ -182,9 +187,9 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     }).catch(error => { externalPromise = undefined; throw error; });
     return externalPromise;
   }
-  async function readObjects({ cursor, limit, query }, operationSignal) {
+  async function readObjects({ cursor, limit, query }, operationSignal, selectedIds) {
     active(operationSignal);
-    const coordinates = modelCoordinates(model), { tree, ids, names } = await inventory(operationSignal), external = await externalIds(operationSignal);
+    const coordinates = modelCoordinates(model), indexed = await inventory(operationSignal), tree = indexed.tree, ids = selectedIds ?? indexed.ids, names = selectedIds ? selectedIds.map(id => tree.getNodeName(id) ?? '') : indexed.names, external = await externalIds(operationSignal);
     if (cursor > ids.length) throw fail('EXTRACTION_FAILED');
     const objects = [], search = query.normalize('NFC').trim().toUpperCase();
     let index = cursor;
@@ -218,6 +223,23 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
     active(operationSignal);
     return { cursor, nextCursor: index >= ids.length ? null : index, complete: index >= ids.length, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: coordinates.scale, globalOffsetMetres: coordinates.globalOffsetMetres, objects };
   }
+  function selectionIds() {
+    active();
+    const aggregate = viewer.getAggregateSelection?.();
+    if (aggregate && (!Array.isArray(aggregate) || aggregate.some(entry => entry.model !== model && entry.selection?.length))) throw fail('EXTRACTION_FAILED');
+    const ids = aggregate ? aggregate.flatMap(entry => entry.model === model ? entry.selection : []) : viewer.getSelection?.();
+    if (!Array.isArray(ids) || !ids.every(positiveId) || new Set(ids).size !== ids.length) throw fail('EXTRACTION_FAILED');
+    if (ids.length > 16) throw fail('SELECTION_TOO_LARGE');
+    return [...ids];
+  }
+  async function readSelection(operationSignal) {
+    const ids = selectionIds(), indexed = await inventory(operationSignal);
+    if (ids.some(id => !indexed.ids.includes(id))) throw fail('EXTRACTION_FAILED');
+    const page = await readObjects({ cursor: 0, limit: 16, query: '' }, operationSignal, ids);
+    active(operationSignal);
+    if (!page.complete || JSON.stringify(selectionIds()) !== JSON.stringify(ids)) throw fail('EXTRACTION_FAILED');
+    return { coordinateFrame: page.coordinateFrame, metresPerDisplayUnit: page.metresPerDisplayUnit, globalOffsetMetres: page.globalOffsetMetres, objects: page.objects };
+  }
   function pickPoint(operationSignal) {
     active(operationSignal); pick?.cancel();
     const coordinates = modelCoordinates(model), canvas = viewer.canvas;
@@ -250,5 +272,5 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, fit, clear, readObjects, pickPoint, dispose() { if (disposed) return; pick?.cancel(); clear(); disposed = true; inventoryPromise = externalPromise = undefined; } };
+  return { showPath, fit, clear, readObjects, readSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); clear(); disposed = true; inventoryPromise = externalPromise = undefined; } };
 }

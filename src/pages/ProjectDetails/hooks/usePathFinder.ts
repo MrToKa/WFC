@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, parsePathFinderProposal, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal } from '@/api/pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
@@ -9,7 +9,7 @@ type Options = { projectId: string | null; loadedProjectId: string | null; token
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
 type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; modelVersionId: string | null; selectionRevision: string | null };
 const initial: View = { data: null, loading: true, busy: false, error: null, viewerPhase: 'loading', viewerMessage: 'Checking the active model…' };
-const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh PathFinder and try again.';
+const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh Path Finder and try again.';
 
 export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, container }: Options) {
   const scope = useMemo(() => ({ projectId, loadedProjectId, token, isAdmin }), [projectId, loadedProjectId, token, isAdmin]);
@@ -38,7 +38,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     const run: Run = { closed: false, abort: new AbortController(), viewer: null, modelVersionId: null, selectionRevision: null };
     runRef.current = run; dataRef.current = null; renderedScope.current = scope; setView(initial);
     if (!projectId || !token || !isAdmin || projectId !== loadedProjectId || !container.current) {
-      update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'Current administrator project access is required.', error: 'PathFinder is available only to administrators.' });
+      update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'Current administrator project access is required.', error: 'Path Finder is available only to administrators.' });
       return () => { run.closed = true; run.abort.abort(); };
     }
     void (async () => {
@@ -58,7 +58,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
           if (event.type === 'MODEL_CAPTURE_PROGRESS') update(run, { viewerMessage: `Preparing ${event.payload.phase === 'properties' ? 'equipment candidates' : event.payload.phase === 'geometry' ? 'routing geometry' : 'model identifiers'}: ${Number(event.payload.loaded).toLocaleString()} / ${Number(event.payload.total).toLocaleString()}…` });
           if (event.type === 'ERROR') {
             const code = String(event.payload.code), terminal = event.payload.operation === 'viewer' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(code);
-            update(run, terminal ? { viewerPhase: 'error', viewerMessage: 'Model access ended or the model changed. Refresh PathFinder to reload.', error: 'The protected viewer operation could not be completed.' }
+            update(run, terminal ? { viewerPhase: 'error', viewerMessage: 'Model access ended or the model changed. Refresh Path Finder to reload.', error: 'The protected viewer operation could not be completed.' }
               : { viewerMessage: 'The active model is ready.', error: message(new ViewerAccessError(code, 0)) });
           }
         };
@@ -102,7 +102,10 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       expectedSelectionRevision: current.activeModel.selectionRevision, expectedRegistryRevision: current.registryRevision, point: input.point, objectId: input.objectId, externalId: input.externalId, derivation: input.derivation ?? 'manual-world-point' }, run.abort.signal);
   }), [perform, projectId, token]);
   const uploadSnapshot = useCallback((snapshot: unknown) => perform((data, run) => pathFinderRequest(projectId!, token!, '/artifacts', 'POST', { modelVersionId: data.activeModel.modelVersionId, expectedSelectionRevision: data.activeModel.selectionRevision, expectedRegistryRevision: data.registryRevision, snapshot }, run.abort.signal)), [perform, projectId, token]);
-  const calculate = useCallback((cableIds?: string[], force = false) => perform((data, run) => pathFinderRequest(projectId!, token!, '/jobs', 'POST', { ...(cableIds ? { cableIds } : {}), expectedRegistryRevision: data.registryRevision, force }, run.abort.signal)), [perform, projectId, token]);
+  const calculate = useCallback((cableIds?: string[], force = false, preferences?: PathFinderPreferences) => perform((data, run) => pathFinderRequest(projectId!, token!, '/jobs', 'POST', {
+    ...(cableIds ? { cableIds } : {}), expectedRegistryRevision: data.registryRevision, force,
+    ...(preferences ? { options: { connectionToleranceMeters: Number(data.settings.connectionGap), sampleSpacingMeters: 0.125, maxGraphNodes: 200_000, maxGraphConnections: 1_000_000, ...preferences } } : {}),
+  }, run.abort.signal)), [perform, projectId, token]);
   const readProposal = useCallback((proposalId: string) => perform((_data, run) => fetchPathFinderProposal(projectId!, token!, proposalId, run.abort.signal)), [perform, projectId, token]);
   const readJob = useCallback((jobId: string) => perform((_data, run) => fetchPathFinderJob(projectId!, token!, jobId, run.abort.signal)), [perform, projectId, token]);
   const reviewProposal = useCallback((proposal: PathFinderProposal) => perform(async (_data, run) => {
@@ -132,6 +135,18 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     try { const value = await fetchPathFinderLookup(projectId, token, jobId, run.abort.signal); return live(run) ? value : null; }
     catch (error) { if (live(run)) { accessFailure(run, error); update(run, { error: message(error) }); } return null; }
   }, [accessFailure, live, projectId, token, update]);
+  const startPreview = useCallback((input: PathFinderPreviewInput) => perform(async (data, run) => {
+    const artifactId = data.artifacts[0]?.id;
+    if (!artifactId) throw new Error('Prepare the selected model network before calculating a path');
+    const result = await pathFinderRequest(projectId!, token!, '/previews', 'POST', { ...input, artifactId,
+      expectedSelectionRevision: data.activeModel.selectionRevision, expectedSettingsRevision: data.settings.revision, expectedRegistryRevision: data.registryRevision }, run.abort.signal);
+    if (typeof result.jobId !== 'string') throw new Error('Invalid path preview response'); return result.jobId;
+  }), [perform, projectId, token]);
+  const readPreview = useCallback(async (jobId: string) => {
+    const run = runRef.current; if (!run || !live(run) || !projectId || !token || !dataRef.current) return null;
+    try { const value = await fetchPathFinderPreview(projectId, token, jobId, run.abort.signal); return live(run) ? value : null; }
+    catch (error) { if (live(run)) { accessFailure(run, error); update(run, { error: message(error) }); } return null; }
+  }, [accessFailure, live, projectId, token, update]);
   const running = view.data?.jobs.some(job => ['queued', 'running'].includes(job.status)) ?? false;
   useEffect(() => { if (!running) return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [refresh, running]);
   const viewerAction = useCallback(async <T,>(operation: (viewer: ViewerController) => Promise<T>): Promise<T | null> => {
@@ -140,8 +155,11 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   }, [live, update]);
   const visible = renderedScope.current === scope ? view : initial;
   const clear = useCallback(() => { try { runRef.current?.viewer?.clear(); } catch { /* A terminal viewer is already closed. */ } }, []);
-  return { ...visible, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(); }, reloadViewer: () => setRevision(value => value + 1), action, matchAll, saveLocation, uploadSnapshot, calculate, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup,
+  return { ...visible, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(); }, reloadViewer: () => setRevision(value => value + 1), action, matchAll, saveLocation, uploadSnapshot, calculate, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
+    readSelection: () => viewerAction(viewer => viewer.readSelection()),
+    setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),
+    cancelOperation: () => { runRef.current?.viewer?.cancelPicking(); clear(); },
     showPath: (path: ComputedPath) => viewerAction(viewer => viewer.showComputedPath(path)), clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };
 }

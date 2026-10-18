@@ -66,14 +66,14 @@ export function createPathFinderRepository(pool: Pool) {
       return registryTransaction(pool,projectId,who,async client => {
         const model = await activeModel(client,projectId), artifact = await latestArtifact(client,projectId,model.active_model_version_id);
         const registry = await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1',[projectId]);
-        const setting = (await client.query<Row>('SELECT connection_gap::text,secondary_tray_length::text,end_connection_length::text,additional_bending_percent::text FROM projects WHERE id=$1',[projectId])).rows[0];
+        const setting = (await client.query<Row>('SELECT pf_settings_revision::text,connection_gap::text,secondary_tray_length::text,end_connection_length::text,additional_bending_percent::text FROM projects WHERE id=$1',[projectId])).rows[0];
         const list = await locations(client,projectId,model.active_model_version_id,artifact?.id ?? null);
         const cables = await client.query<Row>(`SELECT id,cable_id,tag,from_location,to_location,mto,routing,design_length,install_length,cable_write_revision::text
           FROM cables WHERE project_id=$1 ORDER BY cable_id,id LIMIT 100001`,[projectId]);
         if (cables.rows.length > 100000) throw new PathFinderError('PROJECT_CABLE_BUDGET',413);
         return {schemaVersion:1,projectId,registryRevision:registry.rows[0].registry_revision,
           activeModel:{modelVersionId:model.active_model_version_id,selectionRevision:model.selection_revision,contentFingerprint:model.content_fingerprint ?? null},
-          settings:{connectionGap:setting.connection_gap,secondaryTrayLength:setting.secondary_tray_length,endConnectionLength:setting.end_connection_length,additionalBendingPercent:setting.additional_bending_percent},
+          settings:{revision:setting.pf_settings_revision,connectionGap:setting.connection_gap,secondaryTrayLength:setting.secondary_tray_length,endConnectionLength:setting.end_connection_length,additionalBendingPercent:setting.additional_bending_percent},
           cables:cables.rows.map(cable => ({id:cable.id,cableId:cable.cable_id,tag:cable.tag,fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,
             routing:cable.routing,designLength:cable.design_length,installLength:cable.install_length,cableWriteRevision:cable.cable_write_revision,
             fromMatch:matchLocation(cable.from_location,list,Boolean(model.active_model_version_id)),toMatch:matchLocation(cable.to_location,list,Boolean(model.active_model_version_id))})),

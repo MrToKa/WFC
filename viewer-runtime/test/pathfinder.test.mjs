@@ -108,6 +108,42 @@ test('bounded metadata deduplicates SDK root, retains names/identities and marks
   assert.equal(second.objects[0].objectId, 3); assert.equal(second.complete, true); f.controller.dispose();
 });
 
+test('current model selection returns exact canonical bottom centres without changing the SDK selection', async () => {
+  const f = fixture(); f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [2, 3] }];
+  const selected = await f.controller.readSelection();
+  assert.deepEqual(selected.objects.map(object => object.objectId), [2, 3]);
+  assert.deepEqual(selected.objects[0].bottomCentre, modelCoordinates(f.model).toCanonical([2.5, 3, 3]));
+  assert.ok(validateEnvelope(envelope('MODEL_SELECTION', selected), 'frame-to-parent'));
+  f.viewer.getAggregateSelection = () => [{ model: {}, selection: [2] }];
+  await assert.rejects(() => f.controller.readSelection(), { code: 'EXTRACTION_FAILED' });
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: Array.from({ length: 17 }, (_, index) => index + 1) }];
+  await assert.rejects(() => f.controller.readSelection(), { code: 'SELECTION_TOO_LARGE' });
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [99] }];
+  await assert.rejects(() => f.controller.readSelection(), { code: 'EXTRACTION_FAILED' }); f.controller.dispose();
+});
+
+test('path background transparency changes filled Ghost only and Clear restores each original fade', () => {
+  const f = fixture(); assert.throws(() => f.controller.setTransparency(50), { code: 'PATH_INVALID' });
+  f.controller.showPath({ points: [[0, 0, 0], [1, 0, 0]], objectIds: [2] });
+  for (const percent of [0, 40, 100]) {
+    f.controller.setTransparency(percent); assert.equal(f.viewer.impl.fadeMaterial.opacity, (100 - percent) / 100);
+    assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, (100 - percent) / 100);
+    assert.equal(f.meshes[0].material.color, 0xffe600); assert.deepEqual(f.viewer.isolated, [2]);
+  }
+  for (const percent of [-1, 101, 1.5, NaN, '40']) assert.throws(() => f.controller.setTransparency(percent), { code: 'PATH_INVALID' });
+  f.controller.clear(); assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.15); assert.equal(f.viewer.impl.fadeMaterial.variants[0].opacity, 0.3); f.controller.dispose();
+});
+
+test('selection and route-rule protocol payloads are closed, bounded and retain explicit all-category exclusion', () => {
+  const rule = { id: uuid(6), objectIds: [2], allowedCategories: [] }, payload = { captureId: uuid(7), routeRules: [rule], equipmentNames: [] };
+  assert.ok(validateEnvelope(envelope('READ_SELECTION', {}))); assert.ok(validateEnvelope(envelope('START_MODEL_CAPTURE', payload)));
+  for (const changes of [{ routeCodes: ['BC1'] }, { routeRules: [{ ...rule, objectIds: [2, 2] }] }, { routeRules: [{ ...rule, allowedCategories: ['Instrumentation'] }] }, { routeRules: [rule, rule] }, { routeRules: [{ ...rule, objectIds: [0] }] }]) assert.equal(validateEnvelope(envelope('START_MODEL_CAPTURE', { ...payload, ...changes })), null);
+  assert.equal(validateEnvelope(envelope('START_MODEL_CAPTURE', { ...payload, routeRules: [{ ...rule, objectIds: Array.from({ length: 512 }, (_, index) => index + 1) }, { ...rule, id: uuid(8) }] })), null);
+  assert.ok(validateEnvelope(envelope('SET_PATH_TRANSPARENCY', { routeRequestId: uuid(6), percent: 0 })));
+  assert.equal(validateEnvelope(envelope('SET_PATH_TRANSPARENCY', { routeRequestId: uuid(6), percent: 100.1 })), null);
+  assert.equal(validateEnvelope({ ...envelope('READ_SELECTION', {}), loadId: null, modelVersionId: null }), null);
+});
+
 test('one-shot picking converts only the owned model surface hit and cancellation removes listeners', async () => {
   const f = fixture(), abort = new AbortController();
   const pending = f.controller.pickPoint(abort.signal); abort.abort(); await assert.rejects(pending, { name: 'AbortError' });

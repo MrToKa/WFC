@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, pathFinderRequest } from './pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderPreview, pathFinderRequest } from './pathfinder';
 
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', cableId = '33333333-3333-4333-8333-333333333333';
 afterEach(() => vi.restoreAllMocks());
 function state() { return { schemaVersion: 1, projectId, registryRevision: '3', activeModel: { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
-  settings: { connectionGap: '1', secondaryTrayLength: null, endConnectionLength: '2', additionalBendingPercent: '5' },
+  settings: { revision: '1', connectionGap: '1', secondaryTrayLength: null, endConnectionLength: '2', additionalBendingPercent: '5' },
   cables: [{ id: cableId, cableId: 17, tag: '=CABLE-17', fromLocation: 'EQ-001', toLocation: 'EQ-002', mto: 'Instrumentation', routing: null, designLength: '42', installLength: '37', cableWriteRevision: '9007199254740993', fromMatch: { status: 'missing', locationId: null, candidates: [] }, toMatch: { status: 'missing', locationId: null, candidates: [] } }],
   locations: [], artifacts: [], jobs: [], proposals: [] }; }
 describe('PathFinder API contract', () => {
@@ -27,7 +27,7 @@ describe('PathFinder API contract', () => {
   });
   it('detail readers require exact proposal/project identity and never promote an unaccepted model', async () => {
     const proposalId = '44444444-4444-4444-8444-444444444444';
-    const detail = { id: proposalId, projectId, jobId: modelId, cableId, status: 'model_needs_review', proposalHash: 'f'.repeat(64), cableWriteRevision: '2', stale: false, synthetic: false, engineeringAccepted: false, acceptanceScope: 'unaccepted-model', canApply: false, compatibilityIssue: null, message: 'Review required', engineeringMessage: 'Native parity is pending', route: null, design: null, createdAt: '2026-10-18T00:00:00Z' };
+    const detail = { id: proposalId, projectId, jobId: modelId, cableId, status: 'model_needs_review', proposalHash: 'f'.repeat(64), cableWriteRevision: '2', stale: false, synthetic: false, engineeringAccepted: false, acceptanceScope: 'unaccepted-model', canApply: false, compatibilityIssue: null, message: 'Review required', engineeringMessage: 'Native parity is pending', route: null, design: null, routingPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, createdAt: '2026-10-18T00:00:00Z' };
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json(detail)).mockResolvedValueOnce(Response.json({ ...detail, id: modelId }));
     expect((await fetchPathFinderProposal(projectId, 'test-token', proposalId)).canApply).toBe(false);
     await expect(fetchPathFinderProposal(projectId, 'test-token', proposalId)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
@@ -41,5 +41,25 @@ describe('PathFinder API contract', () => {
     const value = await fetchPathFinderLookup(projectId, 'test-token', id); expect(value.result?.route?.points).toEqual([[1.25, -2, 3], [4, 5, 6]]); expect(value.result?.design).toBeNull();
     await expect(fetchPathFinderLookup(projectId, 'test-token', id)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
     await expect(fetchPathFinderLookup(projectId, 'test-token', id)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+  it('requires an exact settings revision for standalone preview dependency fencing', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), settings: { ...state().settings, revision: '9007199254740993' } }));
+    expect((await fetchPathFinderState(projectId, 'test-token')).settings.revision).toBe('9007199254740993');
+    fetch.mockResolvedValueOnce(Response.json({ ...state(), settings: { ...state().settings, revision: undefined } }));
+    await expect(fetchPathFinderState(projectId, 'test-token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+  it('reads a standalone path without cable Apply capability and rejects identity or capability promotion', async () => {
+    const id = '44444444-4444-4444-8444-444444444444';
+    const endpoint = { name: 'EQ-001', point: [1, 2, 3], source: 'manual-world-point', objectId: null, locationId: null, bindingRevision: null };
+    const detail = { id, projectId, kind: 'preview', status: 'complete', total: 1, completed: 1, cancelRequested: false, createdAt: '2026-10-18T00:00:00Z', updatedAt: '2026-10-18T00:00:01Z', failure: null,
+      input: { from: { name: 'EQ-001', point: [1, 2, 3] }, to: { name: 'EQ-002', point: [11, 2, 3] }, category: 'Control', reverse: false, artifactId: modelId, expectedSelectionRevision: '2', expectedRegistryRevision: '3', expectedSettingsRevision: '1' },
+      result: { status: 'calculated', message: 'Path calculated.', prepared: {}, effectiveCategory: 'Control', engineeringAccepted: false, acceptanceScope: 'standalone-preview', canApply: false, stale: false, settings: state().settings, from: endpoint, to: { ...endpoint, name: 'EQ-002', point: [11, 2, 3] },
+        design: { lengthBeforePercentageMeters: '12', unroundedLengthMeters: '12.6', designLengthMeters: '13' }, route: { success: true, message: 'Found.', routeText: '/BC1', routeCodes: ['BC1'], segmentIds: ['dbid:23'], objectIds: ['dbid:23'], points: [[1, 2, 3], [11, 2, 3]], lengthMeters: 10, fromDistanceMeters: 0, toDistanceMeters: 0, fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 } } };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json(detail));
+    const value = await fetchPathFinderPreview(projectId, 'test-token', id);
+    expect(value.result?.route?.lengthMeters).toBe(10); expect(value.result?.design?.designLengthMeters).toBe('13'); expect(value.result?.canApply).toBe(false);
+    for (const invalid of [{ ...detail, projectId: modelId }, { ...detail, id: modelId }, { ...detail, result: { ...detail.result, canApply: true } }, { ...detail, result: { ...detail.result, engineeringAccepted: true } }]) {
+      fetch.mockResolvedValueOnce(Response.json(invalid)); await expect(fetchPathFinderPreview(projectId, 'test-token', id)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
   });
 });

@@ -65,6 +65,12 @@ public static class SnapshotReader
             Text(item.Name, "object.name", 2048, true);
             if (item.GeometryRole is not ("hierarchy" or "object" or "routing-leaf")) throw new ArgumentException("Unknown object geometry role.");
             if (item.RouteName is not null) Text(item.RouteName, "routeName", 2048, true);
+            if (item.RouteBoundaryId is not null)
+            {
+                Text(item.RouteBoundaryId, "routeBoundaryId", 256);
+                if (item.GeometryRole != "routing-leaf" || item.RouteName is not null || item.ShapeName is not null)
+                    throw new ArgumentException("A selected route boundary belongs only to a routing-leaf without competing route/shape labels.");
+            }
             if (item.ShapeName is not null) Text(item.ShapeName, "shapeName", 2048, true);
             if (item.LeafToRootNames is null || item.LeafToRootNames.Length == 0 || item.LeafToRootNames.Length > limits.MaximumDepth) throw new ArgumentException("Hierarchy evidence outside budget.");
             foreach (var name in item.LeafToRootNames) Text(name, "hierarchyName", 2048, true);
@@ -114,6 +120,21 @@ public static class SnapshotReader
         if (snapshot.Objects.Any(item => item.GeometryRole == "routing-leaf" && parentIdentities.Contains(item.Id)))
             throw new ArgumentException("A routing-leaf cannot be the parent of another inventory object.");
         _ = Visibility(snapshot, limits, cancellation); // Validates parents/cycles before any fitting or cache write.
+        var byId = snapshot.Objects.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        foreach (var item in snapshot.Objects.Where(item => item.RouteBoundaryId is not null))
+        {
+            var chainNames = new List<string>(); var current = item; bool found = false;
+            while (true)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                chainNames.Add(current.Name);
+                if (current.Id == item.RouteBoundaryId) found = true;
+                if (current.ParentId is null) break;
+                if (!byId.TryGetValue(current.ParentId, out current!)) throw new ArgumentException("Selected route boundary hierarchy is incomplete.");
+            }
+            if (!found) throw new ArgumentException("Selected route boundary is not an ancestor of its physical leaf.");
+            if (!chainNames.SequenceEqual(item.LeafToRootNames, StringComparer.Ordinal)) throw new ArgumentException("Selected route boundary hierarchy names disagree with parents.");
+        }
     }
 
     internal static Dictionary<string, string> Visibility(ModelSnapshot snapshot, ModelLimits limits, CancellationToken cancellation)

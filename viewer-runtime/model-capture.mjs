@@ -31,14 +31,15 @@ function validateHeader(header) {
 }
 function validateObject(object) {
   const required = ['id', 'parentId', 'dbId', 'name', 'geometryRole', 'leafToRootNames', 'properties', 'nativeHidden', 'planningExcluded', 'categoryAssignmentSource', 'allowedCategories', 'bounds', 'fragments'];
-  const allowed = new Set([...required, 'externalId', 'routeName', 'shapeName']);
+  const allowed = new Set([...required, 'externalId', 'routeName', 'shapeName', 'routeBoundaryId']);
   if (!object || typeof object !== 'object' || Array.isArray(object) || required.some(key => !Object.hasOwn(object, key)) || Object.keys(object).some(key => !allowed.has(key)) || !Number.isSafeInteger(object.dbId) || object.dbId < 0 || object.dbId > 2147483647 || object.id !== 'dbid:' + object.dbId || object.parentId !== null && !/^dbid:[0-9]+$/.test(object.parentId ?? '') || !['hierarchy', 'object', 'routing-leaf'].includes(object.geometryRole) || object.nativeHidden !== null || object.planningExcluded !== false) refuse('Invalid physical/hierarchy captured object.');
   text(object.name); if (object.externalId !== undefined && (!text(object.externalId, 1024).length)) refuse('Invalid external identity.');
   if (!Array.isArray(object.leafToRootNames) || !object.leafToRootNames.length || object.leafToRootNames.length > MODEL_CAPTURE_LIMITS.depth || object.leafToRootNames[0] !== object.name) refuse('Invalid leaf-to-root capture names.'); object.leafToRootNames.forEach(value => text(value));
   if (!Array.isArray(object.properties) || object.properties.length > MODEL_CAPTURE_LIMITS.properties) refuse('Invalid selected property count.');
   for (const property of object.properties) { if (!keys(property, ['category', 'name', 'value'])) refuse('Invalid captured property.'); text(property.category, 512); text(property.name, 512); text(property.value); }
   if (!Array.isArray(object.allowedCategories) || object.allowedCategories.length > 3 || unique(object.allowedCategories).length !== object.allowedCategories.length || object.allowedCategories.some(value => !['MV', 'LV', 'Control'].includes(value))) refuse('Invalid explicit category assignment.');
-  if (object.geometryRole === 'routing-leaf' ? object.categoryAssignmentSource !== 'explicit-planning' || !object.allowedCategories.length || typeof object.routeName !== 'string' || !object.routeName.startsWith('/') || typeof object.shapeName !== 'string' : object.categoryAssignmentSource !== 'unassigned' || object.allowedCategories.length || object.routeName !== undefined || object.shapeName !== undefined) refuse('Unsupported captured category/role assignment.');
+  const boundedRoute = /^dbid:[1-9][0-9]*$/.test(object.routeBoundaryId ?? '') && object.routeName === undefined && object.shapeName === undefined;
+  if (object.geometryRole === 'routing-leaf' ? object.categoryAssignmentSource !== 'explicit-planning' || !object.allowedCategories.length || !(boundedRoute || object.routeBoundaryId === undefined && typeof object.routeName === 'string' && object.routeName.startsWith('/') && typeof object.shapeName === 'string') : object.categoryAssignmentSource !== 'unassigned' || object.allowedCategories.length || object.routeName !== undefined || object.shapeName !== undefined || object.routeBoundaryId !== undefined) refuse('Unsupported captured category/role assignment.');
   if (object.routeName !== undefined) text(object.routeName); if (object.shapeName !== undefined) text(object.shapeName);
   exactBounds(object.bounds);
   if (!Array.isArray(object.fragments) || object.fragments.length > MODEL_CAPTURE_LIMITS.fragments || object.geometryRole !== 'routing-leaf' && object.fragments.length || object.geometryRole === 'routing-leaf' && !object.fragments.length) refuse('Invalid physical geometry role.');
@@ -52,10 +53,14 @@ function validateObject(object) {
 
 function requestContract(request) {
   if (!UUID.test(request?.captureId ?? '') || !UUID.test(request.projectId ?? '') || !UUID.test(request.modelVersionId ?? '') || !HASH.test(request.contentFingerprint ?? '')) refuse('Trusted capture/model identity is required.');
-  if (!Array.isArray(request.routeCodes) || request.routeCodes.length < 1 || request.routeCodes.length > 100 || request.routeCodes.some(value => typeof value !== 'string' || value.length > 256 || !/^[A-Z0-9][A-Z0-9_.-]*$/i.test(value.replace(/^\/+|\/+$/g, '').trim()) || routeKey(value) === 'SECONDARY')) refuse('Choose 1–100 exact routing network codes; SECONDARY is an allowance.');
-  if (!Array.isArray(request.allowedCategories) || !request.allowedCategories.length || request.allowedCategories.length > 3 || request.allowedCategories.some(value => !['MV', 'LV', 'Control'].includes(value)) || unique(request.allowedCategories).length !== request.allowedCategories.length) refuse('Explicit allowed routing categories are required.');
+  if (request.routeRules !== undefined) {
+    if (request.routeCodes !== undefined || request.allowedCategories !== undefined || !Array.isArray(request.routeRules) || !request.routeRules.length || request.routeRules.length > 100 || unique(request.routeRules.map(rule => rule?.id)).length !== request.routeRules.length || request.routeRules.some(rule => !keys(rule, ['id', 'objectIds', 'allowedCategories']) || !UUID.test(rule.id ?? '') || !Array.isArray(rule.objectIds) || !rule.objectIds.length || rule.objectIds.some(id => !Number.isSafeInteger(id) || id <= 0 || id > 2147483647) || unique(rule.objectIds).length !== rule.objectIds.length || !Array.isArray(rule.allowedCategories) || rule.allowedCategories.length > 3 || unique(rule.allowedCategories).length !== rule.allowedCategories.length || rule.allowedCategories.some(value => !['MV', 'LV', 'Control'].includes(value))) || request.routeRules.reduce((count, rule) => count + rule.objectIds.length, 0) > 512) refuse('Choose 1–100 valid ordered route rules within the selected root budget.');
+  } else {
+    if (!Array.isArray(request.routeCodes) || request.routeCodes.length < 1 || request.routeCodes.length > 100 || request.routeCodes.some(value => typeof value !== 'string' || value.length > 256 || !/^[A-Z0-9][A-Z0-9_.-]*$/i.test(value.replace(/^\/+|\/+$/g, '').trim()) || routeKey(value) === 'SECONDARY')) refuse('Choose 1–100 exact routing network codes; SECONDARY is an allowance.');
+    if (!Array.isArray(request.allowedCategories) || !request.allowedCategories.length || request.allowedCategories.length > 3 || request.allowedCategories.some(value => !['MV', 'LV', 'Control'].includes(value)) || unique(request.allowedCategories).length !== request.allowedCategories.length) refuse('Explicit allowed routing categories are required.');
+  }
   if (!Array.isArray(request.equipmentNames) || request.equipmentNames.length > 256 || request.equipmentNames.some(value => typeof value !== 'string' || !value.trim() || value.length > 256 || /[\u0000-\u001f\u007f-\u009f]/u.test(value))) refuse('Equipment names exceed the explicit capture budget.');
-  return { ...request, routeCodes: unique(request.routeCodes.map(routeKey)), equipmentNames: unique(request.equipmentNames.map(value => value.normalize('NFC').trim())) };
+  return { ...request, ...(request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })) } : { routeCodes: unique(request.routeCodes.map(routeKey)) }), equipmentNames: unique(request.equipmentNames.map(value => value.normalize('NFC').trim())) };
 }
 
 function* textParts(type, captureId, id, body) {
@@ -100,13 +105,14 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress 
   for (let axis = 0; axis < 3; axis++) displayToWorld.elements[12 + axis] = offset[axis] * scale;
   const sourceToWorld = matrix().makeScale(scale, scale, scale), sourceUnits = text(model.getUnitString(), 64); if (!sourceUnits.length) refuse('SDK source unit label is missing.');
   const evidence = { sdkVersion: String(globalThis.LMV_VIEWER_VERSION ?? 'unknown'), matrixPrecision: 'binary64', upVector: up, metresPerDisplayUnit: scale, globalOffsetDisplayUnits: offset, globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements), modelTransform: model.getModelTransform?.() ? Array.from(model.getModelTransform().elements) : null, placementTransform: model.getPlacementTransform?.() ? Array.from(model.getPlacementTransform().elements) : null, composition: 'canonicalVertex = displayToWorldMetres * sdkFragmentWorldMatrix * decodedLocalVertex; placement/root transform is not applied twice.', sourceLinkVerified: false, nativeVisibilityKnown: false, fragments: [] };
-  const metadataHash = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(serialize({ ...evidence, scope: { routeCodes: request.routeCodes, allowedCategories: request.allowedCategories, equipmentNames: request.equipmentNames } }))))).map(value => value.toString(16).padStart(2, '0')).join('');
+  const captureScope = { ...(request.routeRules ? { routeRules: request.routeRules } : { routeCodes: request.routeCodes, allowedCategories: request.allowedCategories }), equipmentNames: request.equipmentNames };
+  const metadataHash = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(serialize({ ...evidence, scope: captureScope }))))).map(value => value.toString(16).padStart(2, '0')).join('');
   const header = { schemaVersion: 'pathfinder.model.snapshot.v1', model: { projectId: request.projectId, modelVersionId: request.modelVersionId, contentSha256: request.contentFingerprint }, capture: { adapterVersion: 'wfc.protected-selected-capture.v1', sourceKind: 'converted', inventoryComplete: false, geometryComplete: false, unitsVerified: false, transformsVerified: false, planningVisibilityKnown: false, sourceLinkVerified: false, evidenceSha256: [metadataHash] }, coordinates: { vertexFrame: 'canonical-world-metres', sourceUnits, metresPerSourceUnit: scale, sourceToWorldMetres: Array.from(sourceToWorld.elements), globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements) } };
   validateHeader(header);
   let eventCount = 0, transportBytes = 0, snapshotBytes = size(header);
   function emit(event) { active(); const bytes = size(event); if (bytes > MODEL_CAPTURE_LIMITS.eventBytes || ++eventCount > MODEL_CAPTURE_LIMITS.events || (transportBytes += bytes) > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Selected capture exceeds the bounded bridge budget. Reduce network/equipment scope.'); return event; }
   yield emit({ type: 'metadata', captureId: request.captureId, schemaVersion: 'pathfinder.model.capture.events.v1', snapshotHeader: header, scope: 'explicit-selected-network', inventoryComplete: false, geometryComplete: false });
-  const ids = [tree.getRootId()], seen = new Set(ids), routes = new Map(request.routeCodes.map(code => [code, []])), equipment = new Map(request.equipmentNames.map(name => [normal(name), { name, ids: new Set() }]));
+  const ids = [tree.getRootId()], seen = new Set(ids), routes = new Map((request.routeCodes ?? []).map(code => [code, []])), equipment = new Map(request.equipmentNames.map(name => [normal(name), { name, ids: new Set() }]));
   tree.enumNodeChildren(tree.getRootId(), id => { active(); if (!Number.isSafeInteger(id) || id < 0) refuse('Invalid SDK object identity.'); if (!seen.has(id)) { seen.add(id); ids.push(id); } if (ids.length > MODEL_CAPTURE_LIMITS.indexedObjects) refuse('Model inventory exceeds the capture indexing budget.'); return false; }, true);
   for (let index = 0; index < ids.length; index++) {
     active(); const id = ids[index], name = tree.getNodeName(id) ?? '', key = routeKey(name);
@@ -133,6 +139,21 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress 
       };
       collect(owner); tree.enumNodeChildren(owner, id => { collect(id); return false; }, true);
     }
+  }
+  if (request.routeRules) for (const rule of request.routeRules) for (const rootId of rule.objectIds) {
+    if (!seen.has(rootId)) refuse('A selected route root is not in the current model inventory.');
+    let deepestMeshes = 0;
+    const collect = id => {
+      active();
+      if (tree.getChildCount(id) !== 0) return;
+      if (!ownFragments(id).length) return;
+      deepestMeshes++;
+      if (!rule.allowedCategories.length) { selected.delete(id); diagnostics.push({ code: 'route_rule_excluded', ruleId: rule.id, objectId: 'dbid:' + id }); return; }
+      const record = select(id, 'routing-leaf');
+      record.routeBoundaryId = rootId; record.allowedCategories = [...rule.allowedCategories]; record.ruleId = rule.id;
+    };
+    collect(rootId); tree.enumNodeChildren(rootId, id => { collect(id); return false; }, true);
+    if (!deepestMeshes) refuse('A selected route root has no deepest physical geometry descendants.');
   }
   // A bounded full property scan is required for exact NFC property matching.
   // SDK fuzzy/substring search cannot establish absence or ambiguity reliably.
@@ -219,13 +240,13 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress 
     const actualBounds = validBounds(objectBounds) ? objectBounds : record.role === 'hierarchy' ? selectedAncestorBounds.get(record.id) : sdkBounds(record.id);
     if (!validBounds(actualBounds)) refuse('Captured hierarchy has no selected descendant bounds.');
     for (const parent of chain.slice(1)) { if (!selectedAncestorBounds.has(parent)) selectedAncestorBounds.set(parent, bounds()); expand(selectedAncestorBounds.get(parent), actualBounds.minimum); expand(selectedAncestorBounds.get(parent), actualBounds.maximum); }
-    const object = { id: 'dbid:' + record.id, parentId: chain[1] !== undefined ? 'dbid:' + chain[1] : null, ...(external.length === 1 ? { externalId: external[0] } : {}), dbId: record.id, name: text(tree.getNodeName(record.id) ?? ''), geometryRole: record.role, leafToRootNames: chain.map(id => text(tree.getNodeName(id) ?? '')), properties, nativeHidden: null, planningExcluded: false, ...(record.role === 'routing-leaf' ? { routeName: [...record.routeNames][0], shapeName: text(tree.getNodeName(record.id) ?? '') } : {}), categoryAssignmentSource: record.role === 'routing-leaf' ? 'explicit-planning' : 'unassigned', allowedCategories: record.role === 'routing-leaf' ? [...request.allowedCategories] : [], bounds: actualBounds, fragments };
+    const object = { id: 'dbid:' + record.id, parentId: chain[1] !== undefined ? 'dbid:' + chain[1] : null, ...(external.length === 1 ? { externalId: external[0] } : {}), dbId: record.id, name: text(tree.getNodeName(record.id) ?? ''), geometryRole: record.role, leafToRootNames: chain.map(id => text(tree.getNodeName(id) ?? '')), properties, nativeHidden: null, planningExcluded: false, ...(record.role === 'routing-leaf' ? record.routeBoundaryId !== undefined ? { routeBoundaryId: 'dbid:' + record.routeBoundaryId } : { routeName: [...record.routeNames][0], shapeName: text(tree.getNodeName(record.id) ?? '') } : {}), categoryAssignmentSource: record.role === 'routing-leaf' ? 'explicit-planning' : 'unassigned', allowedCategories: record.role === 'routing-leaf' ? [...(record.allowedCategories ?? request.allowedCategories)] : [], bounds: actualBounds, fragments };
     const body = serialize(object); snapshotBytes += encoder.encode(body).length; if (snapshotBytes > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Selected computational snapshot exceeds64MiB. Reduce scope.');
     for (const event of textParts('object-part', request.captureId, object.id, body)) yield emit(event);
     objectCount++; onProgress?.({ phase: 'geometry', loaded: objectCount, total: selected.size }); await pause();
   }
   const equipmentMatches = [...equipment.values()].map(value => ({ name: value.name, status: value.ids.size === 0 ? 'missing' : value.ids.size > 1 ? 'ambiguous' : 'candidate', candidateObjectIds: [...value.ids].sort((a, b) => a - b).map(id => 'dbid:' + id) }));
-  const summary = { scope: { kind: 'explicit-selected-network', routeCodes: request.routeCodes.map(code => '/' + code), allowedCategories: request.allowedCategories, equipmentNames: request.equipmentNames, fullHierarchyIndexed: true, indexedObjectCount: ids.length, selectedObjectsOnly: true, fullGeometryCaptured: false, fullPropertyScan: equipment.size > 0 }, evidence, equipmentMatches, diagnostics, counts: { objectCount, fragmentCount, vertexCount, triangleCount }, engineeringAccepted: false, limitations: ['Selected network geometry only; full plant capture/capacity is not established.', 'Exact endpoint candidates retain ambiguity and unknown native visibility; automatic engineering acceptance is not granted.', 'SDK unit/transform measurements do not establish native-converted parity or source-link proof.'] };
+  const summary = { scope: { kind: 'explicit-selected-network', ...captureScope, ...(request.routeRules ? {} : { routeCodes: request.routeCodes.map(code => '/' + code) }), fullHierarchyIndexed: true, indexedObjectCount: ids.length, selectedObjectsOnly: true, fullGeometryCaptured: false, fullPropertyScan: equipment.size > 0 }, evidence, equipmentMatches, diagnostics, counts: { objectCount, fragmentCount, vertexCount, triangleCount }, engineeringAccepted: false, limitations: ['Selected network geometry only; full plant capture/capacity is not established.', 'Exact endpoint candidates retain ambiguity and unknown native visibility; automatic engineering acceptance is not granted.', 'SDK unit/transform measurements do not establish native-converted parity or source-link proof.'] };
   for (const event of textParts('summary-part', request.captureId, null, serialize(summary))) yield emit(event);
   yield emit({ type: 'complete', captureId: request.captureId, objectCount, fragmentCount, vertexCount, triangleCount, engineeringAccepted: false });
 }
@@ -264,6 +285,7 @@ export function createModelCaptureAssembler() {
           const chain = [], visited = new Set(); let node = object;
           while (node) { if (visited.has(node.id) || chain.length >= MODEL_CAPTURE_LIMITS.depth) refuse('Cyclic or over-depth captured hierarchy.'); visited.add(node.id); chain.push(node.name); if (node.parentId !== null && (!byId.has(node.parentId) || byId.get(node.parentId).geometryRole === 'routing-leaf')) refuse('Missing or physical-leaf captured parent.'); node = node.parentId === null ? null : byId.get(node.parentId); }
           if (serialize(chain) !== serialize(object.leafToRootNames)) refuse('Captured hierarchy names disagree with parents.');
+          if (object.routeBoundaryId !== undefined && !visited.has(object.routeBoundaryId)) refuse('Selected route boundary is not an ancestor of its physical leaf.');
           for (const fragment of object.fragments) { if (fragmentIds.has(fragment.id)) refuse('Duplicate captured physical fragment.'); fragmentIds.add(fragment.id); counts.fragmentCount++; counts.vertexCount += fragment.vertices.length; counts.triangleCount += fragment.triangleIndices.length / 3; }
         }
         if (counts.fragmentCount > MODEL_CAPTURE_LIMITS.fragments || counts.vertexCount > MODEL_CAPTURE_LIMITS.vertices || counts.triangleCount > MODEL_CAPTURE_LIMITS.triangles) refuse('Captured geometry total budget exceeded.');

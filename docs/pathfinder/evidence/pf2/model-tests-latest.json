@@ -2,12 +2,12 @@
   "stage": "PF-2",
   "scope": "synthetic-model-contract-transform-fitted-cache",
   "status": "PASS",
-  "observedAtUtc": "2026-10-17T20:58:40.6644054+00:00",
-  "passedChecks": 82,
+  "observedAtUtc": "2026-10-18T07:27:25.399092+00:00",
+  "passedChecks": 94,
   "failedChecks": 0,
-  "elapsedMilliseconds": 447,
-  "peakWorkingSetBytes": 51429376,
-  "scratchDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine/.scratch/model-tests-85a11ecad9c74a5185395aeaeff5322b",
+  "elapsedMilliseconds": 451,
+  "peakWorkingSetBytes": 51245056,
+  "scratchDirectory": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581",
   "sourceSnapshotSha256": "003c075d7f7808837caba3497f54c369428fabb41e5d243a171453a8f57504e2",
   "realNativeConvertedParity": "NOT_ESTABLISHED_BY_SYNTHETIC_TESTS",
   "reusableRoutingGraph": false,
@@ -366,6 +366,66 @@
       "name": "hierarchy-exact-depth-deep-first",
       "status": "PASS",
       "detail": "Actual linked depth limit is independent of inventory ordering and short name evidence."
+    },
+    {
+      "name": "selected-boundary-canonical-route-resolver",
+      "status": "PASS",
+      "detail": "Canonical resolver is bounded to the selected ancestor; an outside logical route cannot win."
+    },
+    {
+      "name": "selected-boundary-native-shape-search",
+      "status": "PASS",
+      "detail": "Pinned native FindShapeName chooses the nearest shape inside the same selected boundary."
+    },
+    {
+      "name": "selected-boundary-self-stops-ancestor-search",
+      "status": "PASS",
+      "detail": "Direct leaf selection preserves canonical fallback without taking its ancestor\u0027s name."
+    },
+    {
+      "name": "selected-boundary-invalidates-fitted-cache",
+      "status": "PASS",
+      "detail": "The selected root participates in the snapshot content hash."
+    },
+    {
+      "name": "selected-boundary-disk-restores-identical-labels",
+      "status": "PASS",
+      "detail": "Cold and restored model metadata agree."
+    },
+    {
+      "name": "selected-boundary-rejects-missing",
+      "status": "PASS",
+      "detail": "ArgumentException: Selected route boundary is not an ancestor of its physical leaf."
+    },
+    {
+      "name": "selected-boundary-rejects-nonancestor",
+      "status": "PASS",
+      "detail": "ArgumentException: Selected route boundary is not an ancestor of its physical leaf."
+    },
+    {
+      "name": "selected-boundary-rejects-competing-route",
+      "status": "PASS",
+      "detail": "ArgumentException: A selected route boundary belongs only to a routing-leaf without competing route/shape labels."
+    },
+    {
+      "name": "selected-boundary-rejects-competing-shape",
+      "status": "PASS",
+      "detail": "ArgumentException: A selected route boundary belongs only to a routing-leaf without competing route/shape labels."
+    },
+    {
+      "name": "selected-boundary-rejects-hierarchy-role",
+      "status": "PASS",
+      "detail": "ArgumentException: A selected route boundary belongs only to a routing-leaf without competing route/shape labels."
+    },
+    {
+      "name": "selected-boundary-rejects-forged-chain-name",
+      "status": "PASS",
+      "detail": "ArgumentException: Selected route boundary hierarchy names disagree with parents."
+    },
+    {
+      "name": "selected-boundary-legacy-serialization-omits-new-field",
+      "status": "PASS",
+      "detail": "The optional field never adds null members to legacy snapshots."
     },
     {
       "name": "cancel-while-waiting-for-other-model-fit",

@@ -9,6 +9,7 @@ const messages = {
   PATH_INVALID: 'The computed path is incomplete or invalid.', COORDINATES_UNSUPPORTED: 'The model coordinate convention is not supported for PathFinder.',
   EXTRACTION_FAILED: 'The requested model metadata could not be read completely.', PICK_UNAVAILABLE: 'Point picking is unavailable for this model.', PICK_TIMEOUT: 'Point picking timed out. Start picking again.',
   CAPTURE_RELOAD_REQUIRED: 'Reload the model before preparing another snapshot; this viewer has reached its bounded command budget.',
+  SELECTION_TOO_LARGE: 'Select at most 16 model objects at a time, then add another route rule.',
 };
 const failure = code => Object.assign(new Error(messages[code] ?? messages.RESOURCE_FAILED), { code });
 const httpCode = status => status === 401 || status === 410 ? 'SESSION_EXPIRED' : status === 403 ? 'ACCESS_REVOKED' : status === 409 ? 'MODEL_SELECTION_CHANGED' : status === 503 ? 'MODEL_UNAVAILABLE' : 'RESOURCE_FAILED';
@@ -69,7 +70,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     computed = undefined;
     for (const [id, controller] of capabilities) {
       const entry = requests.get(id);
-      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type === 'PICK_POINT')) {
+      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || ['PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY'].includes(entry?.command.type))) {
         if (entry?.status === 'pending') entry.status = 'cancelled';
         controller.abort();
       }
@@ -127,12 +128,16 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         handle.showComputedPath({ points: path.points, objectIds: path.objectIds });
         computed = undefined; routeRequest = command; routeHasLine = true;
         emit(command, 'COMPUTED_PATH_UPDATED', { pathId: path.pathId, phase: 'displayed', received: path.points.length });
-      } else if (command.type === 'READ_MODEL_OBJECTS') {
-        const result = await handle.readModelObjects(command.payload, signal);
+      } else if (command.type === 'SET_PATH_TRANSPARENCY') {
+        if (!routeHasLine || routeRequest?.type !== 'COMMIT_COMPUTED_PATH' || routeRequest.requestId !== command.payload.routeRequestId) throw failure('NO_DRAWABLE_ROUTE');
+        handle.setPathTransparency(command.payload.percent);
+        emit(command, 'PATH_TRANSPARENCY_UPDATED', command.payload);
+      } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_SELECTION') {
+        const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : await handle.readModelObjects(command.payload, signal);
         // Metadata and picks may outlive an ACL change while the SDK worker runs.
         await requirePathFinder(command, signal);
         if (!live()) return;
-        if (!emit(command, 'MODEL_OBJECTS', result)) throw failure('EXTRACTION_FAILED');
+        if (!emit(command, command.type === 'READ_SELECTION' ? 'MODEL_SELECTION' : 'MODEL_OBJECTS', result)) throw failure('EXTRACTION_FAILED');
       } else {
         const result = await handle.pickPoint(signal);
         await requirePathFinder(command, signal);
@@ -221,7 +226,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
       case 'INIT':

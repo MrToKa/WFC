@@ -228,14 +228,14 @@ export const DetailsTab = ({
           to the next whole metre. No length is
           calculated if the route is empty or a required segment length is missing or invalid.
         </Caption1>
-        <Body1><strong>PathFinder design length</strong></Body1>
+          <Body1><strong>Path Finder design length</strong></Body1>
         <Body1>
           ceil((max(0, Geometric length − flagged From/To approach lengths) + Secondary tray
           length × number of flagged approaches + For end connection) × (1 + Additional % for
           bending / 100))
         </Body1>
         <Body1>
-          Current PathFinder values: SECONDARY {project.secondaryTrayLength === null ? 'Not specified' : `${formatNumeric(project.secondaryTrayLength)} m`};
+            Current Path Finder values: SECONDARY {project.secondaryTrayLength === null ? 'Not specified' : `${formatNumeric(project.secondaryTrayLength)} m`};
           {' '}end connection reserve {formatNumeric(project.endConnectionLength)} m;
           {' '}bending allowance {formatNumeric(project.additionalBendingPercent)}%.
         </Body1>

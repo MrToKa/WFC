@@ -8,6 +8,7 @@ import { createPathFinderRepository } from '../pathfinder/repository.js';
 import { getPathFinderRuntime } from '../pathfinder/runtime.js';
 import { applySchema, createJobSchema, lookupSchema, reviewSchema } from '../pathfinder/jobContracts.js';
 import { principalTransaction, requestPrincipal as principal } from '../pathfinder/auth.js';
+import { previewSchema } from '../pathfinder/previews.js';
 
 export const pathfinderRouter = Router({mergeParams:true});
 pathfinderRouter.use(requireAdmin,(_req,res,next) => {res.setHeader('Cache-Control','private, no-store'); next();});
@@ -67,4 +68,10 @@ pathfinderRouter.post('/lookups',async (req,res) => {
 });
 pathfinderRouter.get('/lookups/:jobId',async (req,res) => {
   try {const {projectId}=identity(req);res.json(await getPathFinderRuntime().lookups.get(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.post('/previews',async (req,res) => {
+  try {const {projectId}=identity(req);res.status(202).json(await getPathFinderRuntime().previews.create(projectId,principal(req),previewSchema.parse(req.body)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.get('/previews/:jobId',async (req,res) => {
+  try {const {projectId}=identity(req);res.json(await getPathFinderRuntime().previews.get(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
 });

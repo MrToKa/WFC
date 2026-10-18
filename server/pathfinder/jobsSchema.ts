@@ -38,6 +38,8 @@ export async function initializePathFinderJobs(pool: Pool): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS pf_jobs_claim ON pf_jobs(state,lease_until,created_at);
       ALTER TABLE pf_jobs ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'calculate' CHECK(kind IN ('calculate','lookup'));
+      ALTER TABLE pf_jobs DROP CONSTRAINT IF EXISTS pf_jobs_kind_check;
+      ALTER TABLE pf_jobs ADD CONSTRAINT pf_jobs_kind_check CHECK(kind IN ('calculate','lookup','preview'));
       ALTER TABLE pf_jobs ADD COLUMN IF NOT EXISTS diagnostic_input JSONB;
       CREATE TABLE IF NOT EXISTS pf_lookup_results (
         project_id UUID NOT NULL,job_id UUID NOT NULL,dependencies JSONB NOT NULL,result JSONB NOT NULL,stale_at_completion BOOLEAN NOT NULL,

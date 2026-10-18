@@ -1,0 +1,132 @@
+# Path Finder — Routes and Path revision
+
+User decision18October2026: use two inner tabs **Routes + Path**, and rename the
+outer project tab to **Path Finder**. The canonical addon at45c24bf5 actually
+constructs Routes, Path and Path lookup; the user explicitly selected the first
+two after clarification. Ordered lookup remains inside Path as an advanced
+section, rather than becoming a third tab.
+
+Status: implementation/testing in progress. This document records the accepted
+direction; final runtime results will be appended only after actual checks.
+
+## Source verification before the runtime checkpoint
+
+| Scope | Actual result |
+| --- | --- |
+| Backend preview/preferences/boundary, matching and settings | PASS: 25 + 20 + 15 tests; server TypeScript and targeted ESLint pass |
+| Root API, hook and Details formula labels | PASS: 7 + 10 + 7 tests; targeted ESLint passes |
+| Protected bridge, path and protocol | PASS: 47 Node tests |
+| Rule/legacy capture | PASS: 19 Node tests, including two actual C# process cases |
+| Adapter and legacy Ghost restoration | PASS: 27 Node tests |
+| Viewer controller | PASS: 19 tests and targeted ESLint |
+| Model boundary, transforms and fitted cache | PASS: [94 model checks](evidence/pf2/model-tests-20261018T072725411Z.json); ModelRunner build has zero warnings/errors |
+| Runtime ownership and preview recovery safety boundaries | PASS: 19 tests; syntax check passes |
+| Frontend interactions | PASS: full 36-case run (471.33s, explicit 30s case budget); after the stable endpoint-name callback follow-up, one historical endpoint-save case and two name-capture/cancel-baseline cases pass on final production bytes |
+| Combined frontend/server types and UI lint | PASS; final test-metadata frontend type/lint recheck also passes; [exact UI source receipt](evidence/routes-path/frontend-source-20261018T075446Z.json) |
+| New runtime/API/browser/drill | Pending; do not infer a pass from the source checks above |
+
+The earlier 31-case frontend run passed 30 cases; its keyboard case needed an
+activation action and then passed separately. An expanded 35-case run exceeded
+the default per-case timeout in expensive jsdom/Fluent queries and was stopped.
+Bounded instrumentation did not establish a production render loop and was
+removed. A final run uses an explicit 30-second case timeout and will be recorded
+separately. Real-browser keyboard/response checks are still required.
+
+Independent read-only review identified an accepted-artifact-after-cancel race
+in route preparation. The correction reconciles an accepted same-model save
+into the prepared baseline even after cancellation or a tab change; newer
+draft edits remain dirty. A deferred-result regression covers it. The reviewer
+subsequently inspected the closing diff and marked the finding resolved.
+The final full suite and focused follow-ups pass. No additional actionable finding was
+reported in preview authorization, dependency checks, worker recovery or API
+boundaries.
+
+## Baseline and ownership
+
+Isolated worktree C:/Users/todor.chankov/source/WFC-pathfinder-local, new branch
+pf-two-tabs-local-20261018 inheritingfcd8f1dc39569c430125b897c95756fac9c28a89.
+Original WFC and PathFinder checkouts, synced sources/, original13containers,
+databases/storage/volumes remain unchanged. No push, PR, merge or deployment.
+The owned5190 installation and backup2ae6f51b remain until a new candidate passes.
+
+Writers own separate paths: frontend PathFinder*.tsx; backend server/pathfinder
+and its router; Viewer protocol/Controller/capture plus Model snapshot boundary;
+root API/hook/outer tab/Details label/docs/evidence. No duplicate implementation
+or partial-source image build. Existing review, job and protected Viewer guards
+must be preserved while the common Viewer remains mounted across both tabs.
+
+## Functional mapping
+
+Routes selects model objects/groups and assigns MV/LV/Control per rule. Captures
+include deepest geometry descendants. Editing or re-adding a rule makes it the
+newest; the newest overlapping rule controls the leaf. An empty category rule
+excludes that selected region. Model/selection revision changes clear drafts.
+Prepared snapshots retain per-leaf categories. Rule drafts are session state,
+as in the native addon; saving a snapshot is separate from editing a rule.
+
+Native route-name resolution stops at the selected root. New snapshots carry an
+optional routeBoundaryId, validated against actual ancestor identities; the
+existing C# RouteNameResolver receives the bounded names. This avoids a second
+JavaScript route-name parser. Eleven extracted pure Core files stay unchanged.
+Legacy exact-code captures and snapshots remain compatible.
+
+Path retains shared locations and cable calculations/ReviewApply. Standalone
+From/To accepts explicit points or confirmed aliases/unique prepared names,
+category, SECONDARY trigger and vertical preference. It uses the original C#
+calculation/design formula. Missing/ambiguous/stale names require resolution.
+Standalone results never create cables, proposals, reviews or Apply receipts.
+Reverse uses the original RouteResult.Reverse after calculation, preserving
+tie behavior. From/To source labels remain traceable.
+
+Connection gap and the three design allowances remain authoritative in Project
+Details. Existing default1m gap and mathematical order do not change. The default
+SECONDARY trigger remains2m; vertical preference true. Background transparency
+is an explicit0–100% command for the currently displayed computed path; the
+accepted default filledGhost remains until the user applies a transparency
+value. Clear/restore returns the saved rendering state.
+
+## Contracts and guards
+
+The project URL key/API/schema/code identifiers remain pathfinder. Only visible
+branding changes to Path Finder. Strict current administrator access applies to
+the tab, deep links and all operations.
+
+Approved bridge additions: READ_SELECTION/MODEL_SELECTION, routeRules capture
+union (1–100rules,<=512selectedroots, selection read<=16objects with explicit
+over-limit failure), and SET_PATH_TRANSPARENCY/PATH_TRANSPARENCY_UPDATED. Commands
+retain project/model/load/session authorization, byte/event quotas, finite
+coordinates and current-route ownership fences. No direct NOP_VIEWER interface.
+
+Standalone POST/GET /previews uses existing durable worker/lease/cancellation
+infrastructure, kind preview and no cable job items. Current selection/artifact/
+registry/settings revision fences apply before, after and on result reads.
+settings.revision is exposed as an exact string. Client values cannot override
+Details gap/allowances. Existing DELETE/jobs cancels the operation.
+
+Switching tabs or tools clears the common overlay, cancels picking and fences
+late display/Review responses. A proposal must match the currently selected
+SECONDARY/vertical preferences before review. Server proposal metadata comes
+from immutable original options; missing original options fail closed.
+
+## Required verification and limitations
+
+Check rule overlap/category edit/remove/model invalidation and deepest geometry;
+legacy capture output compatibility and strict boundary input rejection;
+selection/transparency stale-command guards and Clear restoration. Check actual
+standalone name/point/reverse/design/cancel/staleness/admin/kind separation and
+no cable writes, plus existing atomic ReviewApply controls. Check both tabs,
+keyboard selection, one mounted Viewer, retained drafts and late response fences.
+
+Build/restart only the owned5190 installation after coordinated freeze. Verify
+with computer-use using copied/synthetic data, record exact source/images and
+screenshots, retain a verified replacement backup and clean only own obsolete
+resources. Native reference is NOT_PERFORMED / NOT_REQUIRED_BY_USER; human manual
+route/length acceptance remains pending. Whole-plant capacity and reusable graph
+are not established by this UI/functionality revision.
+
+Third cleanup denial: model-tests-c13957af670e4ee2869cf876aa60d581 under owned
+engine scratch was rejected with blocked by policy and is retained without
+retry/bypass, alongside the two earlier denied children. One initial SDK launch
+reported development-certificate installation before its environment was fully
+isolated; later runs disable first-launch certificate setup. No original checkout
+or application was built/changed and no certificate deletion is attempted.

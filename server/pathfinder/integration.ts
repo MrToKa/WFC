@@ -40,6 +40,15 @@ export async function runPathFinderIntegration(projectId:string) {
     const response = await request(method,url,body,bearer); assert.ok(response.status>=200 && response.status<300,`${method} ${url}: ${response.status} ${response.value.code ?? ''}`); return response.value;
   }
   async function state() {return api('GET',base+'/state');}
+  async function previewInput(patch:Json={}) {
+    const current=await state();return {from:{name:'Manual start',point:[0,0,.5]},to:{name:'Manual end',point:[10,0,.5]},category:'Instrumentation',reverse:false,
+      artifactId:current.artifacts[0].id,expectedSelectionRevision:current.activeModel.selectionRevision,expectedSettingsRevision:current.settings.revision,
+      expectedRegistryRevision:current.registryRevision,secondaryDistanceMeters:2,preferVerticalApproach:true,...patch};
+  }
+  async function preview(patch:Json={}) {
+    const accepted=await api('POST',base+'/previews',await previewInput(patch));
+    return waitFor(async()=>{const value=await api('GET',base+'/previews/'+accepted.jobId);if (value.status==='failed' || value.status==='cancelled') throw Error('Preview stopped: '+value.failure);return value.status==='complete' ? value : undefined;},45000);
+  }
   async function waitFor<T>(action:()=>Promise<T|undefined>,milliseconds=15000):Promise<T> {
     const end = Date.now()+milliseconds;
     while (Date.now()<end) {const value=await action(); if (value !== undefined) return value; await delay(50);}
@@ -51,7 +60,9 @@ export async function runPathFinderIntegration(projectId:string) {
     await waitFor(async () => {const job=await api('GET',base+'/jobs/'+accepted.jobId); if (job.status==='failed' || job.status==='cancelled') throw Error('Calculation stopped: '+job.failure); return job.status==='complete' ? job : undefined;},45000);
     const row = (await pool.query('SELECT id FROM pf_proposals WHERE project_id=$1 AND job_id=$2 AND cable_id=$3',[projectId,accepted.jobId,cableIds[0]])).rows[0];
     assert.ok(row?.id,'Expected a proposal, rather than a fabricated blocked result.');
-    return api('GET',base+'/proposals/'+row.id);
+    const proposal=await api('GET',base+'/proposals/'+row.id),preferences=options ?? defaultOptions;
+    assert.deepEqual(proposal.routingPreferences,{secondaryDistanceMeters:preferences.secondaryDistanceMeters,preferVerticalApproach:preferences.preferVerticalApproach});
+    return proposal;
   }
   async function reviewed(proposal:Json,bearer=token):Promise<Json> {
     return api('POST',base+'/proposals/'+proposal.id+'/review',{expectedProposalHash:proposal.proposalHash},bearer);
@@ -91,6 +102,49 @@ export async function runPathFinderIntegration(projectId:string) {
       assert.equal((await request('GET',base+'/authorization')).status,204);
       const current=await state(),first=current.cables.find((value:Json)=>value.id===cableIds[0]),second=current.cables.find((value:Json)=>value.id===cableIds[1]);
       assert.equal(first.fromMatch.status,'matched');assert.equal(first.toMatch.status,'matched');assert.equal(first.fromMatch.locationId,second.toMatch.locationId);assert.equal(first.toMatch.locationId,second.fromMatch.locationId);
+    });
+    await test('standalone preview computes exact C# geometry/design without creating cables, proposals, reviews or Apply writes',async()=>{
+      const before=await cable(),counts=(await pool.query(`SELECT (SELECT count(*) FROM cables WHERE project_id=$1)::text AS cables,
+        (SELECT count(*) FROM pf_proposals p JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id WHERE p.project_id=$1 AND j.requested_by=$2)::text AS proposals,
+        (SELECT count(*) FROM pf_reviews WHERE project_id=$1 AND actor_id=$2)::text AS reviews,
+        (SELECT count(*) FROM pf_apply_receipts WHERE project_id=$1 AND actor_id=$2)::text AS receipts`,[projectId,actorId])).rows[0];
+      const value=await preview();assert.equal(value.kind,'preview');assert.equal(value.result.status,'calculated');assert.equal(value.result.route.lengthMeters,10);
+      assert.equal(value.result.design.designLengthMeters,'18');assert.equal(value.result.effectiveCategory,'Control');assert.equal(value.result.canApply,false);assert.equal(value.result.acceptanceScope,'standalone-preview');assert.equal(value.result.engineeringAccepted,false);
+      assert.equal(value.result.settings.connectionGap,'1');assert.equal(value.result.settings.endConnectionLength,'6');assert.equal(value.result.settings.secondaryTrayLength,'5');assert.equal(value.result.settings.additionalBendingPercent,'10');
+      assert.deepEqual(await cable(),before);assert.equal((await pool.query('SELECT count(*)::int AS count FROM pf_job_items WHERE project_id=$1 AND job_id=$2',[projectId,value.id])).rows[0].count,0);
+      assert.equal((await request('GET',base+'/proposals/'+value.id)).status,404);assert.equal((await request('POST',base+'/proposals/'+value.id+'/review',{expectedProposalHash:'a'.repeat(64)})).status,404);
+      const after=(await pool.query(`SELECT (SELECT count(*) FROM cables WHERE project_id=$1)::text AS cables,
+        (SELECT count(*) FROM pf_proposals p JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id WHERE p.project_id=$1 AND j.requested_by=$2)::text AS proposals,
+        (SELECT count(*) FROM pf_reviews WHERE project_id=$1 AND actor_id=$2)::text AS reviews,
+        (SELECT count(*) FROM pf_apply_receipts WHERE project_id=$1 AND actor_id=$2)::text AS receipts`,[projectId,actorId])).rows[0];assert.deepEqual(after,counts);
+      return {previewJob:value.id,lengthMeters:value.result.route.lengthMeters,designLengthMeters:value.result.design.designLengthMeters};
+    });
+    await test('standalone preview named aliases resolve both endpoints without saving another location',async()=>{
+      const count=(await pool.query('SELECT count(*)::int AS count FROM pf_locations WHERE project_id=$1',[projectId])).rows[0].count;
+      const value=await preview({from:{name:from},to:{name:to}});assert.equal(value.result.route.lengthMeters,10);assert.equal(value.result.from.source,'shared-location');assert.equal(value.result.to.source,'shared-location');
+      assert.equal((await pool.query('SELECT count(*)::int AS count FROM pf_locations WHERE project_id=$1',[projectId])).rows[0].count,count);
+    });
+    await test('standalone Reverse uses exact C# reversal with unchanged design length and original labels',async()=>{
+      const forward=await preview(),reverse=await preview({reverse:true});assert.deepEqual(reverse.result.route.points,[...forward.result.route.points].reverse());
+      assert.equal(reverse.result.design.designLengthMeters,forward.result.design.designLengthMeters);assert.equal(reverse.input.from.name,'Manual start');assert.equal(reverse.result.from.name,'Manual end');assert.equal(reverse.result.to.name,'Manual start');
+    });
+    await test('standalone preview rejects invalid coordinates, unknown categories and client-owned gap/allowance overrides',async()=>{
+      for (const patch of [{from:{name:''}},{from:{name:'Invalid',point:[1e10,0,0]}},{category:'unknown'},{connectionGap:99},{projectSettings:{secondaryTrayLength:'999'}}])
+        assert.equal((await request('POST',base+'/previews',await previewInput(patch))).status,400);
+      const missing=await request('POST',base+'/previews',await previewInput({from:{name:'=PF-NOT-A-REAL-NAME-'+suffix}}));assert.equal(missing.status,409);assert.equal(missing.value.code,'PREVIEW_LOCATION_MISSING');
+    });
+    await test('standalone preview fences active artifact, selection, settings and location revisions',async()=>{
+      for (const patch of [{artifactId:randomUUID()},{expectedSelectionRevision:'9223372036854775807'},{expectedSettingsRevision:'9223372036854775807'},{expectedRegistryRevision:'9223372036854775807'}])
+        assert.equal((await request('POST',base+'/previews',await previewInput(patch))).status,409);
+      const value=await preview();await pool.query('UPDATE projects SET additional_bending_percent=11 WHERE id=$1',[projectId]);
+      const stale=await api('GET',base+'/previews/'+value.id);assert.equal(stale.result.stale,true);assert.equal(stale.result.canApply,false);
+      await pool.query('UPDATE projects SET additional_bending_percent=10 WHERE id=$1',[projectId]);
+    });
+    await test('standalone preview enforces current admin access and isolates ordinary job readers',async()=>{
+      const value=await preview(),input=await previewInput();await pool.query("UPDATE users SET is_admin=false,role='engineer' WHERE id=$1",[actorId]);
+      try {assert.equal((await request('POST',base+'/previews',input)).status,403);assert.equal((await request('GET',base+'/previews/'+value.id)).status,403);}
+      finally {await pool.query("UPDATE users SET is_admin=true,role='admin' WHERE id=$1",[actorId]);}
+      assert.equal((await request('GET',base+'/lookups/'+value.id)).status,404);assert.equal((await api('GET',base+'/jobs/'+value.id)).kind,'preview');
     });
     await test('Project Details gap defaults to one metre, persists and rejects invalid API/SQL values',async()=>{
       const column=(await pool.query("SELECT column_default,is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='projects' AND column_name='connection_gap'")).rows[0];

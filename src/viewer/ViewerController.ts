@@ -1,4 +1,4 @@
-import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
@@ -78,7 +78,7 @@ export class ViewerController {
       if (!this.pending.delete(pending.envelope.requestId)) return;
       pending.reject?.(new Error('Viewer request timed out'));
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
-    }, ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject'> = {}): string {
@@ -171,6 +171,9 @@ export class ViewerController {
     }
     if (message.type === 'MODEL_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_MODEL_CAPTURE' ? 0 : pending.envelope.payload.index))) {
       pending.reject?.(new Error('Model capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
+    }
+    if (message.type === 'PATH_TRANSPARENCY_UPDATED' && (message.payload.routeRequestId !== pending.envelope.payload.routeRequestId || message.payload.percent !== pending.envelope.payload.percent)) {
+      pending.reject?.(new Error('Path transparency acknowledgement mismatch')); return;
     }
     pending.resolve?.({ type: message.type, payload: message.payload, requestId: message.requestId, identity });
     this.emit(message.type, message.payload, message.requestId, identity);
@@ -307,7 +310,7 @@ export class ViewerController {
 
   async showRoute(rawRouting: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     // Clear immediately, even for malformed input or a superseded access check.
@@ -322,7 +325,7 @@ export class ViewerController {
     if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > 512 || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
     // Freeze caller-owned arrays before asynchronous selection and capability checks.
     const points = path.points.map(point => [...point]), objectIds = [...path.objectIds], pathId = path.pathId;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     this.send('CLEAR_ROUTE', { reason: 'selection' }, 'ROUTE_CLEARED');
@@ -354,13 +357,27 @@ export class ViewerController {
     return reply.payload as unknown as ViewerModelObjectsPage;
   }
 
+  async readSelection(): Promise<ViewerSelection> {
+    const generation = this.routeGeneration;
+    if (this.disposed || !this.loaded || !await this.checkSelection() || this.disposed || generation !== this.routeGeneration) throw new Error('Model is not ready');
+    const reply = await this.sendAsync('READ_SELECTION', {}, 'MODEL_SELECTION');
+    return reply.payload as unknown as ViewerSelection;
+  }
+
+  async setPathTransparency(percent: number): Promise<void> {
+    if (!Number.isSafeInteger(percent) || percent < 0 || percent > 100) throw new Error('Transparency must be an integer from 0 to 100');
+    const routeRequestId = this.routeRequestId, generation = this.routeGeneration;
+    if (!routeRequestId || this.disposed || !this.loaded || !await this.checkSelection() || this.disposed || generation !== this.routeGeneration || routeRequestId !== this.routeRequestId) throw new Error('No drawable route');
+    await this.sendAsync('SET_PATH_TRANSPARENCY', { routeRequestId, percent }, 'PATH_TRANSPARENCY_UPDATED');
+  }
+
   cancelPicking(): void {
     for (const pending of [...this.pending.values()]) if (pending.envelope.type === 'PICK_POINT') this.cancel(pending.envelope.requestId);
   }
 
   async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}): Promise<{ snapshot: unknown; summary: Record<string, unknown> }> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    const input = { routeCodes: [...request.routeCodes], allowedCategories: [...request.allowedCategories], equipmentNames: [...request.equipmentNames] };
+    const input = request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })), equipmentNames: [...request.equipmentNames] } : { routeCodes: [...request.routeCodes], allowedCategories: [...request.allowedCategories], equipmentNames: [...request.equipmentNames] };
     this.clear('selection'); const generation = this.routeGeneration;
     if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) throw new DOMException('Model capture cancelled.', 'AbortError');
     const captureId = uuid(), assembler = createModelCaptureAssembler();
@@ -386,7 +403,7 @@ export class ViewerController {
   clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {
     ++this.routeGeneration;
     this.routeRequestId = null;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
     return this.send('CLEAR_ROUTE', { reason }, 'ROUTE_CLEARED');
   }
   zoom(): string {

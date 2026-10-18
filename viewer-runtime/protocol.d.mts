@@ -32,7 +32,12 @@ export interface ViewerDescriptor {
 }
 export type CanonicalPoint = [number, number, number];
 export interface ComputedPath { pathId: string; points: CanonicalPoint[]; objectIds: number[] }
-export interface ModelCaptureRequest { routeCodes: string[]; allowedCategories: ('MV' | 'LV' | 'Control')[]; equipmentNames: string[] }
+export type RoutingCategory = 'MV' | 'LV' | 'Control';
+export interface ModelRouteRule { id: string; objectIds: number[]; allowedCategories: RoutingCategory[] }
+export type ModelCaptureRequest = { equipmentNames: string[] } & (
+  { routeCodes: string[]; allowedCategories: RoutingCategory[]; routeRules?: never } |
+  { routeRules: ModelRouteRule[]; routeCodes?: never; allowedCategories?: never }
+);
 export interface ModelCaptureProgress { index: number; type: string; objectCount?: number }
 export interface PickedPoint { objectId: number; point: CanonicalPoint; derivation: 'picked-surface-point' }
 export interface ViewerModelObject {
@@ -43,6 +48,10 @@ export interface ViewerModelObject {
 }
 export interface ViewerModelObjectsPage {
   cursor: number; nextCursor: number | null; complete: boolean; query: string;
+  coordinateFrame: 'world-metres-z-up'; metresPerDisplayUnit: number; globalOffsetMetres: CanonicalPoint;
+  objects: ViewerModelObject[];
+}
+export interface ViewerSelection {
   coordinateFrame: 'world-metres-z-up'; metresPerDisplayUnit: number; globalOffsetMetres: CanonicalPoint;
   objects: ViewerModelObject[];
 }

@@ -11,6 +11,7 @@ import { PathFinderError } from './errors.js';
 import { principalTransaction } from './auth.js';
 import { collectLookupDependencies, type LookupDependencies } from './lookups.js';
 import { engineProjectSettings } from './settings.js';
+import { collectPreviewDependencies, previewEngineRequest, type PreviewDependencies } from './previews.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -60,6 +61,23 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
       await principalTransaction(pool,job.project_id,principal(job),async client => {
         await fencedJob(client,job);let stale=false;
         try {stale=hash(await collectLookupDependencies(client,job.project_id,dependencies))!==hash(dependencies);} catch {stale=true;}
+        await client.query(`INSERT INTO pf_lookup_results(project_id,job_id,dependencies,result,stale_at_completion) VALUES($1,$2,$3,$4,$5)
+          ON CONFLICT(project_id,job_id) DO NOTHING`,[job.project_id,job.id,dependencies,response,stale]);
+        await client.query('UPDATE pf_jobs SET completed=1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
+      });
+    } else if (job.kind==='preview') {
+      const dependencies=job.diagnostic_input as PreviewDependencies;
+      await principalTransaction(pool,job.project_id,principal(job),async client=>{
+        await fencedJob(client,job);
+        if (hash(await collectPreviewDependencies(client,job.project_id,dependencies.input))!==hash(dependencies))
+          throw new PathFinderError('PREVIEW_STALE',409,'The model, locations or Project Details changed before this preview.');
+      });
+      await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
+      const response=await runEngine(previewEngineRequest(dependencies,randomUUID(),job.timeout_ms),signal);
+      signal.throwIfAborted();
+      await principalTransaction(pool,job.project_id,principal(job),async client=>{
+        await fencedJob(client,job);let stale=false;
+        try {stale=hash(await collectPreviewDependencies(client,job.project_id,dependencies.input))!==hash(dependencies);} catch {stale=true;}
         await client.query(`INSERT INTO pf_lookup_results(project_id,job_id,dependencies,result,stale_at_completion) VALUES($1,$2,$3,$4,$5)
           ON CONFLICT(project_id,job_id) DO NOTHING`,[job.project_id,job.id,dependencies,response,stale]);
         await client.query('UPDATE pf_jobs SET completed=1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);

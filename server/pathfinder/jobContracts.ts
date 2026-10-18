@@ -7,6 +7,13 @@ export const optionsSchema = z.object({
   maxGraphNodes:z.number().int().min(2).max(1_000_000),maxGraphConnections:z.number().int().min(1).max(4_000_000),
 }).strict();
 export const defaultOptions = Object.freeze({connectionToleranceMeters:0.25,sampleSpacingMeters:0.125,secondaryDistanceMeters:2,preferVerticalApproach:true,maxGraphNodes:200_000,maxGraphConnections:1_000_000});
+/** Metadata comes only from retained engine inputs; unknown historical values cannot authorize Apply. */
+export function proposalRoutingPreferences(options:unknown):{secondaryDistanceMeters:number;preferVerticalApproach:boolean}|null {
+  if (!options || typeof options!=='object') return null;
+  const {secondaryDistanceMeters,preferVerticalApproach}=options as Record<string,unknown>;
+  return typeof secondaryDistanceMeters==='number' && Number.isFinite(secondaryDistanceMeters) && secondaryDistanceMeters>=0 && secondaryDistanceMeters<=1_000_000 && typeof preferVerticalApproach==='boolean'
+    ? {secondaryDistanceMeters,preferVerticalApproach} : null;
+}
 export const createJobSchema = z.object({cableIds:z.array(uuid).min(1).max(10_000).optional(),expectedRegistryRevision:revision,
   options:optionsSchema.optional(),timeoutMilliseconds:z.number().int().min(100).max(120_000).optional(),force:z.boolean().optional()}).strict();
 export type EngineOptions = z.infer<typeof optionsSchema>;

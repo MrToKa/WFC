@@ -20,6 +20,8 @@ function fixture(options = {}) {
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
+    readSelection: options.readSelection ?? (async () => ({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
+    setPathTransparency: options.setPathTransparency ?? (percent => { facts.transparency = percent; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
     readModelCapture: options.readModelCapture ?? (async ({ captureId, index }) => ({ captureId, index, done: true, eventJson: JSON.stringify({ type: 'complete', captureId }) })),
     showRoute: options.showRoute ?? (async raw => { facts.shows.push(raw); return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1, diagnostics: {} }; }) };
@@ -106,6 +108,23 @@ test('picking and metadata reauthorize after SDK work; cancellation and revoked 
   g.send('CANCEL_REQUEST', { targetRequestId: request.requestId });
   metadata.resolve({ cursor: 0, nextCursor: null, complete: true, query: 'CAB', coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] }); await turn();
   assert.equal(g.messages('MODEL_OBJECTS').length, 0); g.bridge.dispose();
+});
+
+test('selection is cookie-bound admin authorized before and after SDK work, and Clear suppresses late selection', async () => {
+  const selected = deferred(); let checks = 0;
+  const f = fixture({ readSelection: () => selected.promise, fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? ++checks === 1 ? Response.json({ authorized: true, loadId: uuid(4) }) : new Response(null, { status: 403 }) : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }) });
+  await f.loaded(); f.send('READ_SELECTION', {}); await turn(); selected.resolve({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] }); await turn();
+  assert.equal(f.messages('MODEL_SELECTION').length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+  const late = deferred(), g = fixture({ readSelection: () => late.promise }); await g.loaded(); g.send('READ_SELECTION', {}); await turn(); g.send('CLEAR_ROUTE', { reason: 'user' });
+  late.resolve({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] }); await turn(); assert.equal(g.messages('MODEL_SELECTION').length, 0); g.bridge.dispose();
+});
+
+test('transparency is bounded to the current committed path and delayed authorization cannot change a replacement', async () => {
+  const f = fixture(); await f.loaded();
+  const display = async pathId => { f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [] }); await turn(); f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points: [[1, 2, 3]] }); await turn(); const committed = f.send('COMMIT_COMPUTED_PATH', { pathId }); await turn(); return committed; };
+  const first = await display(uuid(90)); f.send('SET_PATH_TRANSPARENCY', { routeRequestId: first.requestId, percent: 40 }); await turn(); assert.equal(f.facts.transparency, 40);
+  const second = await display(uuid(91)); f.send('SET_PATH_TRANSPARENCY', { routeRequestId: first.requestId, percent: 90 }); await turn(); assert.equal(f.facts.transparency, 40); assert.equal(f.messages('ERROR').at(-1).payload.code, 'NO_DRAWABLE_ROUTE');
+  f.send('SET_PATH_TRANSPARENCY', { routeRequestId: second.requestId, percent: 100 }); f.send('CLEAR_ROUTE', { reason: 'user' }); await turn(); assert.equal(f.facts.transparency, 40); assert.equal(f.messages('PATH_TRANSPARENCY_UPDATED').length, 1); f.bridge.dispose();
 });
 
 test('model capture transport is request-bound, reauthorizes each part and reserves the replay budget', async () => {

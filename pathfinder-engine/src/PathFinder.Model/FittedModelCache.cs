@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AddinRibbon.Routing;
 
 namespace PathFinder.Model;
@@ -8,6 +9,8 @@ namespace PathFinder.Model;
 /// <summary>Versioned fitted geometry cache. RouteCalculator still constructs its graph per call.</summary>
 public sealed class FittedModelCache
 {
+    // Pinned native RoutingSession.FindShapeName; the selected root bounds its search.
+    private static readonly Regex SelectedShapeName = new(@"(?<![A-Za-z0-9])(?:BEND|ELBOW|FTUBE|TUBE|STRAIGHT)(?![A-Za-z0-9])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     public const string EngineVersion = "45c24bf5f433f13e102600b36f20327c77961d0a";
     private readonly string root;
     private readonly ModelLimits limits;
@@ -104,13 +107,26 @@ public sealed class FittedModelCache
         }) if (!verified) diagnostics.Add(diagnostic);
         var excluded = rules.ExcludedObjectIds.ToHashSet(StringComparer.Ordinal);
         var visibility = SnapshotReader.Visibility(snapshot, limits, cancellation);
+        var byId = snapshot.Objects.ToDictionary(item => item.Id, StringComparer.Ordinal);
         foreach (var duplicate in snapshot.Objects.Where(x => x.ExternalId is not null).GroupBy(x => x.ExternalId, StringComparer.Ordinal).Where(group => group.Count() > 1))
         { review = true; diagnostics.Add("Ambiguous external identity: " + duplicate.Key + "; version-local IDs remain distinct."); }
         foreach (var item in snapshot.Objects)
         {
             cancellation.ThrowIfCancellationRequested();
-            var routeName = item.RouteName ?? RouteNameResolver.Resolve(item.LeafToRootNames);
-            var shapeName = item.ShapeName ?? item.Name;
+            var routeNames = item.LeafToRootNames;
+            if (item.RouteBoundaryId is not null)
+            {
+                var bounded = new List<string>(); var node = item;
+                while (true)
+                {
+                    bounded.Add(node.Name);
+                    if (node.Id == item.RouteBoundaryId) break;
+                    node = byId[node.ParentId!]; // SnapshotReader has validated this ancestor boundary.
+                }
+                routeNames = bounded.ToArray();
+            }
+            var routeName = item.RouteName ?? RouteNameResolver.Resolve(routeNames);
+            var shapeName = item.ShapeName ?? (item.RouteBoundaryId is null ? item.Name : routeNames.FirstOrDefault(name => SelectedShapeName.IsMatch(name)) ?? item.Name);
             var bottom = new RoutePoint((item.Bounds.Minimum[0] + item.Bounds.Maximum[0]) / 2,
                 (item.Bounds.Minimum[1] + item.Bounds.Maximum[1]) / 2, item.Bounds.Minimum[2]);
             var state = item.PlanningExcluded || excluded.Contains(item.Id) ? "excluded" : visibility[item.Id];

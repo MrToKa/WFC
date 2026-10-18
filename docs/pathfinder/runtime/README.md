@@ -5,8 +5,8 @@ project, images, networks, PostgreSQL database, MinIO storage, staging and
 PathFinder artifact volumes. The original WFC application and its thirteen
 containers are outside this lifecycle. There is no push, merge or deployment.
 
-For the latest18October project-gap/manual-review candidate, use
-[the current delivery report](../21-manual-review-settings-report.md) for exact
+For the latest Routes + Path candidate, use
+[the current delivery report](../22-routes-path-tabs.md) for exact
 images, retained backup and verification. The older operational receipts near
 the end of this page retain their historical scope. Native comparison is no
 longer a prerequisite for the user-selected manual per-proposal Review+Apply;
@@ -56,7 +56,7 @@ All required Autodesk Viewer SDK files are copied from the verified local SDK.
 There is no Autodesk account or cloud call in this runtime setup.
 
 The file-specific Docker ignore list excludes copied model inputs, all engine
-scratch, both policy-denied historical scratch directories, generated .NET
+scratch, the policy-denied historical scratch directories, generated .NET
 outputs, private configurations and environment files. The excluded historical
 directories themselves remain untouched and remain visible to Git.
 

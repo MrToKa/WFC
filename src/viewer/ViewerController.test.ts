@@ -93,6 +93,32 @@ describe('PathFinder protected Viewer capabilities', () => {
     await expect(s.c.readModelObjects(0, 'PANEL')).rejects.toThrow('acknowledgement mismatch');
     expect(s.events.find(event => event.type === 'POINT_PICKED')?.identity).toMatchObject(s.identity);
   });
+  it('reads only the protected current SDK selection and binds transparency acknowledgements to the displayed path', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+      if (value.type === 'READ_SELECTION') s.message('MODEL_SELECTION', { coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] }, value.requestId, s.identity);
+      if (value.type === 'SET_PATH_TRANSPARENCY') s.message('PATH_TRANSPARENCY_UPDATED', value.payload, value.requestId, s.identity);
+    });
+    expect((await s.c.readSelection()).objects).toEqual([]);
+    const routeRequestId = await s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [] });
+    await s.c.setPathTransparency(40);
+    expect(s.send.mock.calls.find(call => call[0].type === 'SET_PATH_TRANSPARENCY')![0].payload).toEqual({ routeRequestId, percent: 40 });
+    await expect(s.c.setPathTransparency(101)).rejects.toThrow('integer');
+    s.c.clear(); await expect(s.c.setPathTransparency(40)).rejects.toThrow('No drawable route');
+  });
+  it('Clear cancels a pending selection and freezes nested rule arrays before asynchronous model authorization', async () => {
+    const s = await loaded();
+    const selecting = s.c.readSelection(); await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'READ_SELECTION')).toBe(true));
+    s.c.clear(); await expect(selecting).rejects.toMatchObject({ name: 'AbortError' });
+    const rules = [{ id: crypto.randomUUID(), objectIds: [23], allowedCategories: ['Control' as const] }];
+    s.send.mockImplementation(value => { if (value.type === 'START_MODEL_CAPTURE') s.message('ERROR', { code: 'EXTRACTION_FAILED', message: 'Synthetic controlled extraction failure.', retryable: false, operation: 'START_MODEL_CAPTURE' }, value.requestId, s.identity); });
+    const capturing = s.c.captureModel({ routeRules: rules, equipmentNames: [] }); rules[0].objectIds[0] = 99;
+    await expect(capturing).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
+    expect(s.send.mock.calls.find(call => call[0].type === 'START_MODEL_CAPTURE')![0].payload.routeRules[0].objectIds).toEqual([23]);
+  });
 });
 
 describe('Viewer parent identity and lifecycle', () => {

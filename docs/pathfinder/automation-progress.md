@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-manual-validation-settings-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-two-tabs-local-20261018` (inspect live branch/HEAD before each continuation).
 - Integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. The local commit containing this final progress/report records the remaining PF-8 evidence. Read live HEAD rather than inferring a self-referential hash from this file. No implementation changes are left outside these deliveries.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -13,7 +13,51 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current delivery — project gap and manual real-result review
+## Active revision — Routes + Path, user18October2026
+
+User explicitly chose two inner tabs **Routes + Path** after the source review
+showed the canonical addon actually constructs three. Outer visible name is
+**Path Finder**. New isolated branch pf-two-tabs-local-20261018 inherits
+fcd8f1dc39569c430125b897c95756fac9c28a89. Original resources remain reference-only.
+
+Root owns API/hook/outer label/Details branding/docs+latercomputer-use. Frontend
+owner edits PathFinder*.tsx/tests; backend owner server/pathfinder +route; Viewer
+owner protected protocol/Controller/capture and small Model DTO/reader/cache
+boundary extension. Core11 files remain pinned. Runtime owner is read-only until
+all source freezes; no rebuild/restart yet. Preserve concurrent changes.
+
+Implemented source in progress: Routes selection/category rules with latest
+overlap precedence, deepest geometry descendants and native bounded C# name
+resolution; Path standalone From/To preview/category/SECONDARYtrigger/vertical,
+show/reverse/cancel, approved transparency bridge; existing cable registry,
+automatic jobs/ReviewApply retained, orderedlookup inside Path advanced section.
+Gap and3allowances remain Details-owned. Previews create no fake cables/Apply.
+All shared Viewer tools need ownership generations to fence late responses and
+invalidate old Review/Apply when displayed route/mode/preferences change.
+
+Actual scoped checks so far: backend60/60 +tsc/lintPASS; RootAPI/hook/Details24/24
+PASS; Viewer47protocol/pathfinder/bridge +19capture(actualC#) +19Controller
++27adapter/legacyGhost PASS; Model94/94 and ModelRunnerbuild0warnings/errors.
+Frontend full36/36 PASS (471.33s,30s case timeout), final callback follow-ups
+1historical+2new cases PASS; combinedfrontend/servertypes and6filelint PASS
+before a test-timeout-only metadata edit, whose final recheck is pending.
+Accepted-artifact-after-cancel race was corrected, covered and independently
+re-reviewed as resolved. Production source writers are frozen. Live29NOT_RUN,
+newUI/backupNOT_RUN until root checkpoint/build release.
+Do not promote those source checks to runtime/human/native acceptance.
+
+New automatic cleanup denial: owned scratch
+pathfinder-engine/.scratch/model-tests-c13957af670e4ee2869cf876aa60d581 was rejected
+with blocked by policy. Do not retry/bypass/deleteparent. Two previous denied
+children remain unchanged. SDKfirstlaunch reported devcertificateinstallation
+before isolated environment was configured; no certificate removal attempted.
+Next: finishfrontend+integration/typechecks, freeze/commit, owncandidatebuild,
+backend29, actualUIboth tabs/rules/preview/Reviewfences, replacementbackup/restore/
+recovery/cleanupandpreservation. Current healthy5190/backup2ae6f51b retained.
+Heartbeat remains PAUSED from previous manual-review delivery; direct new user
+work is ongoing, not a new licence attempt or merge authorization.
+
+## Previous delivery — project gap and manual real-result review
 
 The latest user decision supersedes the earlier native-oracle prerequisite:
 manual inspection of generated routes/lengths is the chosen acceptance path.

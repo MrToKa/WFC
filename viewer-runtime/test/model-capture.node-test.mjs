@@ -38,6 +38,33 @@ function fixture({ ambiguous = true, nonfinite = false, indices = [0, 1, 2], emp
   return { model, tree, properties };
 }
 async function collect(options = {}, input = request) { const value = fixture(options), events = [], assembler = createModelCaptureAssembler(); for await (const event of captureSelectedModel({ model: value.model }, input)) { events.push(event); assembler.accept(event); } return { snapshot: assembler.finish(), summary: assembler.summary(), events, ...value }; }
+const ruleRequest = rules => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], routeRules: rules }; };
+const rule = (objectIds, allowedCategories, id = '44444444-4444-4444-8444-444444444444') => ({ id, objectIds, allowedCategories });
+
+test('ordered route selections recursively capture deepest geometry with the latest overlapping categories and exact selected root boundary', async () => {
+  const { snapshot, summary } = await collect({}, ruleRequest([rule([2], ['MV']), rule([3], ['Control'], '55555555-5555-4555-8555-555555555555')]));
+  const leaf = snapshot.objects.find(object => object.dbId === 3);
+  assert.deepEqual(leaf.allowedCategories, ['Control']); assert.equal(leaf.routeBoundaryId, 'dbid:3'); assert.equal(leaf.routeName, undefined); assert.equal(leaf.shapeName, undefined);
+  assert.deepEqual(leaf.leafToRootNames, ['Straight tray', 'TRAY-01', 'Plant']); assert.equal(summary.scope.routeRules.length, 2);
+  assert.equal(snapshot.objects.find(object => object.dbId === 2).geometryRole, 'hierarchy');
+});
+test('empty category overlap explicitly excludes a leaf and never falls back to another category or model', async () => {
+  await assert.rejects(() => collect({}, ruleRequest([rule([2], ['LV']), rule([3], [], '55555555-5555-4555-8555-555555555555')])), /No physical routing leaves/);
+  const { snapshot, summary } = await collect({}, ruleRequest([rule([2, 4], ['MV']), rule([3], [], '55555555-5555-4555-8555-555555555555')]));
+  assert.equal(snapshot.objects.some(object => object.dbId === 3), false); assert.deepEqual(snapshot.objects.find(object => object.dbId === 4).allowedCategories, ['MV']);
+  assert.ok(summary.diagnostics.some(item => item.code === 'route_rule_excluded' && item.objectId === 'dbid:3'));
+});
+test('rule selection refuses absent roots, mixed contracts, invalid categories and duplicate rule identities', async () => {
+  await assert.rejects(() => collect({}, ruleRequest([rule([99], ['LV'])])), /current model inventory/);
+  await assert.rejects(() => collect({}, { ...request, routeRules: [rule([2], ['LV'])] }), /ordered route rules/);
+  await assert.rejects(() => collect({}, ruleRequest([rule([2], ['Instrumentation'])])), /ordered route rules/);
+  await assert.rejects(() => collect({}, ruleRequest([rule([2], ['MV']), rule([3], ['LV'])])), /ordered route rules/);
+});
+test('assembler refuses forged nonancestor selected root boundaries', async () => {
+  const { events } = await collect({}, ruleRequest([rule([2], ['LV'])])), bad = structuredClone(events), packet = bad.find(event => event.type === 'object-part' && event.objectId === 'dbid:3');
+  const object = JSON.parse(packet.text); object.routeBoundaryId = 'dbid:99'; packet.text = JSON.stringify(object);
+  const assembler = createModelCaptureAssembler(); assert.throws(() => bad.forEach(event => assembler.accept(event)), /not an ancestor/);
+});
 
 test('selected actual-shaped SDK capture retains binary64 transforms and physical leaves only', async () => {
   const { snapshot, summary, events } = await collect();
@@ -118,10 +145,18 @@ test('canonical capture JSON rejects duplicate object members and unexpected obj
   const extra = createModelCaptureAssembler(); before.forEach(event => extra.accept(event)); const object = JSON.parse(firstObject.text); object.unexpected = true;
   assert.throws(() => extra.accept({ ...firstObject, text: JSON.stringify(object) }), /captured object/);
 });
-test('synthetic SDK capture crosses strict C# SnapshotReader and model-worker boundary', async () => {
-  const { snapshot } = await collect(), root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), scratch = path.join(root, 'pathfinder-engine/.scratch/protected-capture-interop-' + randomUUID()), snapshotId = randomUUID();
-  await fs.mkdir(path.join(scratch, 'snapshots'), { recursive: true }); const bytes = Buffer.from(JSON.stringify(snapshot)); await fs.writeFile(path.join(scratch, 'snapshots', snapshotId + '.json'), bytes, { flag: 'wx' });
-  const input = { schemaVersion: 'pathfinder.model.runner.v1', requestId: randomUUID(), operation: 'prepare', projectId: snapshot.model.projectId, modelVersionId: snapshot.model.modelVersionId, snapshotId, snapshotSha256: createHash('sha256').update(bytes).digest('hex'), timeoutMilliseconds: 30000 };
-  const result = spawnSync('dotnet', [path.join(root, 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll')], { cwd: root, windowsHide: true, input: JSON.stringify(input), encoding: 'utf8', timeout: 40000, maxBuffer: 8 * 1024 ** 2, env: { ...process.env, PF_ROOT: scratch, DOTNET_CLI_HOME: path.join(root, 'pathfinder-engine/.dotnet-home'), DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false' } });
-  assert.equal(result.status, 0, result.stderr); const response = JSON.parse(result.stdout); assert.equal(response.status, 'prepared', result.stdout); assert.equal(response.engineeringAccepted, false); assert.equal(response.prepared.segmentCount, 1);
+test('legacy and selected-boundary SDK captures cross the strict C# SnapshotReader and model-worker boundary', async () => {
+  for (const captureRequest of [request, ruleRequest([rule([2], ['LV'])])]) {
+    const { snapshot } = await collect({}, captureRequest), root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), scratch = path.join(root, 'pathfinder-engine/.scratch/protected-capture-interop-' + randomUUID()), snapshotId = randomUUID();
+    await fs.mkdir(path.join(scratch, 'snapshots'), { recursive: true });
+    try {
+      const bytes = Buffer.from(JSON.stringify(snapshot)); await fs.writeFile(path.join(scratch, 'snapshots', snapshotId + '.json'), bytes, { flag: 'wx' });
+      const input = { schemaVersion: 'pathfinder.model.runner.v1', requestId: randomUUID(), operation: 'prepare', projectId: snapshot.model.projectId, modelVersionId: snapshot.model.modelVersionId, snapshotId, snapshotSha256: createHash('sha256').update(bytes).digest('hex'), timeoutMilliseconds: 30000 };
+      const result = spawnSync('dotnet', [path.join(root, 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll')], { cwd: root, windowsHide: true, input: JSON.stringify(input), encoding: 'utf8', timeout: 40000, maxBuffer: 8 * 1024 ** 2, env: { ...process.env, PF_ROOT: scratch, DOTNET_CLI_HOME: path.join(root, 'pathfinder-engine/.dotnet-home'), DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false' } });
+      assert.equal(result.status, 0, result.stderr); const response = JSON.parse(result.stdout); assert.equal(response.status, 'prepared', result.stdout); assert.equal(response.engineeringAccepted, false); assert.equal(response.prepared.segmentCount, 1);
+    } finally {
+      const owned = path.resolve(root, 'pathfinder-engine/.scratch'); if (path.dirname(scratch) !== owned || !path.basename(scratch).startsWith('protected-capture-interop-')) throw Error('Refusing unexpected test cleanup target.');
+      await fs.rm(scratch, { recursive: true, force: false });
+    }
+  }
 });

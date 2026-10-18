@@ -43,6 +43,7 @@ internal static class Program
             Visibility(fixture, scratch);
             InvalidInputs(fixture);
             HierarchyDepth(fixture);
+            RouteBoundaryTests.Run(fixture, scratch, Check, (name, action) => Reject(name, action));
             QueuedCancellation(fixture, scratch);
             CacheFailures(fixture, scratch);
             FrozenGeometry(root, scratch);

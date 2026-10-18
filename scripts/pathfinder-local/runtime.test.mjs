@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { ROOT, contained, validProject, validateState, load, configuration, claimsProject, start, retire } from './runtime-lib.mjs';
 import { artifactInventory } from './container-ops.mjs';
 import { assertBackupRetirementIdentity, planBackupPayloadRetirement } from './cleanup-obsolete.mjs';
+import { validatePreviewRecoveryTarget, assertPreviewNoWorkflowWrites } from './preview-recovery.mjs';
 
 const runtime = path.join(ROOT, 'pathfinder-engine/.scratch/pathfinder-local');
 const state = await load(runtime);
@@ -38,6 +39,26 @@ test('failed quarantine and retired targets cannot be exposed by start', async (
 });
 test('retirement refuses the primary demonstration before changing Docker state', async () => {
   await assert.rejects(() => retire(state), /PF_VERIFIED_RESTORE_FIXTURE_REQUIRED/);
+});
+
+test('preview process interruption refuses primary, unverified, invalid and source-origin targets before runtime access', () => {
+  const extra = { project: 'wfc-pathfinder-local-abcdef123456', port: 5191, restore: { inventoriesEqual: true }, status: 'running', syntheticDemo: { projectId: randomUUID(), actorId: randomUUID() } };
+  validatePreviewRecoveryTarget(extra, 'http://127.0.0.1:5190');
+  for (const patch of [{ project: 'wfc-pathfinder-local' }, { port: 5190 }, { project: 'wfc-app' }, { restore: {} }, { status: 'failed-quarantine' }, { syntheticDemo: { projectId: 'bad', actorId: randomUUID() } }])
+    assert.throws(() => validatePreviewRecoveryTarget({ ...extra, ...patch }, 'http://127.0.0.1:5190'), /PF_PREVIEW_CRASH_EXTRA_VERIFIED_TARGET_REQUIRED/);
+  for (const origin of ['http://127.0.0.1:5191', 'http://127.0.0.1:5180', 'https://example.invalid'])
+    assert.throws(() => validatePreviewRecoveryTarget(extra, origin), /PF_PREVIEW_CRASH_EXTRA_VERIFIED_TARGET_REQUIRED/);
+});
+
+test('preview closure refuses cable edits, new workflow/registry rows and malformed baselines', () => {
+  const baseline = { cables: 66, cableSha256: 'a'.repeat(64), proposals: 64, reviews: 2, applyReceipts: 0, jobItems: 64, locations: 2, bindings: 2, aliases: 2 };
+  assertPreviewNoWorkflowWrites(baseline, { ...baseline });
+  for (const key of Object.keys(baseline)) {
+    const changed = { ...baseline, [key]: key === 'cableSha256' ? 'b'.repeat(64) : baseline[key] + 1 };
+    assert.throws(() => assertPreviewNoWorkflowWrites(baseline, changed), /PF_PREVIEW_CRASH_WORKFLOW_CHANGED/);
+  }
+  assert.throws(() => assertPreviewNoWorkflowWrites({ ...baseline, cableSha256: 'invalid' }, baseline), /PF_PREVIEW_CRASH_BASELINE_INVALID/);
+  assert.throws(() => assertPreviewNoWorkflowWrites(baseline, { ...baseline, cables: -1 }), /PF_PREVIEW_CRASH_BASELINE_INVALID/);
 });
 test('PF artifact inventory hashes all exact bytes and observes changes', async () => {
   const directory = path.join(ROOT, 'pathfinder-engine/.scratch/runtime-test-' + randomUUID());

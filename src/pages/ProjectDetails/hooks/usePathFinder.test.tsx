@@ -4,7 +4,7 @@ import { usePathFinder } from './usePathFinder';
 import { fetchPathFinderState, pathFinderRequest, PathFinderApiError, type PathFinderState } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), pathFinderRequest: vi.fn() };
@@ -12,10 +12,11 @@ vi.mock('@/api/pathfinder', async importOriginal => {
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
+  readSelection = facts.readSelection; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', locationId = '33333333-3333-4333-8333-333333333333';
 function state(): PathFinderState { return { schemaVersion: 1, projectId, registryRevision: '3', activeModel: { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
-  settings: { connectionGap: '1', secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, cables: [], artifacts: [], jobs: [], proposals: [],
+  settings: { revision: '1', connectionGap: '1', secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, cables: [], artifacts: [], jobs: [], proposals: [],
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
 let container: { current: HTMLDivElement };
 beforeEach(() => {
@@ -73,5 +74,27 @@ describe('PathFinder scope and shared-location orchestration', () => {
     const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container })); await waitFor(() => expect(result.current.data).not.toBeNull());
     await act(() => result.current.startLookup('/BC1/BC2', false));
     expect(pathFinderRequest).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/lookups', 'POST', { routeText: '/BC1/BC2', reverse: false, expectedSelectionRevision: '2', artifactId: locationId }, expect.any(AbortSignal)); expect(result.current.data?.settings.connectionGap).toBe('0.250');
+  });
+  it('binds a standalone path to current project inputs even when a caller supplies stale managed fields', async () => {
+    const current: PathFinderState = { ...state(), settings: { ...state().settings, revision: '9007199254740993' }, artifacts: [{ id: locationId, modelVersionId: modelId, snapshotSha256: 'a'.repeat(64), objectCount: 2, engineeringAccepted: false, readiness: 'needs_review', capture: {}, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' }] };
+    vi.mocked(fetchPathFinderState).mockResolvedValue(current); vi.mocked(pathFinderRequest).mockResolvedValue({ jobId: locationId });
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container })); await waitFor(() => expect(result.current.data).not.toBeNull());
+    const input = { from: { name: 'Equipment A' }, to: { name: '', point: [10, 0, 0] as [number, number, number] }, category: 'Instrumentation' as const, reverse: true, secondaryDistanceMeters: 3, preferVerticalApproach: false,
+      artifactId: modelId, expectedSelectionRevision: '0', expectedSettingsRevision: '0', expectedRegistryRevision: '0' };
+    await act(() => result.current.startPreview(input));
+    expect(pathFinderRequest).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/previews', 'POST', { ...input, artifactId: locationId, expectedSelectionRevision: '2', expectedSettingsRevision: '9007199254740993', expectedRegistryRevision: '3' }, expect.any(AbortSignal));
+  });
+  it('keeps bounded native routing preferences while reading the current Details gap for cable jobs', async () => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container })); await waitFor(() => expect(result.current.data).not.toBeNull());
+    await act(() => result.current.calculate([locationId], true, { secondaryDistanceMeters: 0, preferVerticalApproach: false }));
+    expect(pathFinderRequest).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/jobs', 'POST', { cableIds: [locationId], expectedRegistryRevision: '3', force: true,
+      options: { connectionToleranceMeters: 1, sampleSpacingMeters: 0.125, maxGraphNodes: 200000, maxGraphConnections: 1000000, secondaryDistanceMeters: 0, preferVerticalApproach: false } }, expect.any(AbortSignal));
+  });
+  it('uses the protected controller for selection/transparency and cancels pending viewer work', async () => {
+    const selected = { coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] };
+    facts.readSelection.mockResolvedValue(selected); facts.transparency.mockResolvedValue(undefined);
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container })); await waitFor(() => expect(facts.instances).toBe(1));
+    await act(async () => { expect(await result.current.readSelection()).toEqual(selected); await result.current.setPathTransparency(75); result.current.cancelOperation(); });
+    expect(facts.readSelection).toHaveBeenCalledOnce(); expect(facts.transparency).toHaveBeenCalledWith(75); expect(facts.cancelPicking).toHaveBeenCalledOnce(); expect(facts.clear).toHaveBeenCalledOnce(); expect(facts.instances).toBe(1);
   });
 });

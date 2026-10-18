@@ -5,7 +5,7 @@ import { PathFinderError } from './errors.js';
 import { collectDependencies, hash, hasSyntheticProof } from './dependencies.js';
 import type { PathFinderRepository } from './repository.js';
 import { defaultOptions, type createJobSchema, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
-import { designLengthCompatibilityIssue,routeCompatibilityIssue } from './jobContracts.js';
+import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
 import { principalTransaction } from './auth.js';
 import { projectRoutingSettings } from './settings.js';
 
@@ -20,12 +20,14 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
   const stale = !current.dependencies || hash(current.dependencies) !== row.dependency_hash;
   const synthetic = await hasSyntheticProof(client,dependencies);
   const result = row.result, route = result.route;
+  const routingPreferences=proposalRoutingPreferences(dependencies.options);
   const compatibilityIssue = (route ? routeCompatibilityIssue(route.routeText) : null)
-    ?? (result.design != null ? designLengthCompatibilityIssue(result.design.designLengthMeters) : null);
+    ?? (result.design != null ? designLengthCompatibilityIssue(result.design.designLengthMeters) : null)
+    ?? (routingPreferences ? null : 'The original calculation preferences are unavailable. Calculate and review a fresh proposal.');
   return {id:row.id,projectId:row.project_id,jobId:row.job_id,cableId:row.cable_id,status:row.status,
     proposalHash:row.proposal_hash,cableWriteRevision:dependencies.cableWriteRevision,stale,synthetic,engineeringAccepted:synthetic,
     acceptanceScope:synthetic ? 'local-synthetic-fixture' : 'manual-review',canApply:!stale && !compatibilityIssue && !row.cancel_requested && row.status === 'calculated' && route?.success===true && result.design != null && row.job_state === 'complete',
-    compatibilityIssue,
+    compatibilityIssue,routingPreferences,
     message:stale ? 'Dependencies changed. Calculate a fresh proposal.' : result.message,
     engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : 'Manual review and explicit Apply are required for this exact proposal. Native engineering parity has not been performed.',
     design:result.design ?? null,route:route ? {...route,pathPoints:undefined,...(detail ? {points:route.pathPoints.map((point:Row) => [point.x,point.y,point.z]),objectIds:[...new Set(route.segmentIds as string[])]} : {})} : null,

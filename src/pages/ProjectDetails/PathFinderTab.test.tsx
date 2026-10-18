@@ -3,7 +3,8 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PathFinderTab } from './PathFinderTab';
 import { usePathFinder } from './hooks/usePathFinder';
-import type { PathFinderLookup, PathFinderProposal, PathFinderState } from '@/api/pathfinder';
+import type { PathFinderLookup, PathFinderProposal, PathFinderPreview, PathFinderState } from '@/api/pathfinder';
+import type { ViewerModelObject } from '../../../viewer-runtime/protocol.mjs';
 
 vi.mock('./hooks/usePathFinder', () => ({ usePathFinder: vi.fn() }));
 vi.mock('./hooks/useRoutingsViewerHeight', () => ({ useRoutingsViewerHeight: () => 720 }));
@@ -12,30 +13,36 @@ function model() {
   const matched = { status: 'matched' as const, locationId, candidates: [locationId] }, missing = { status: 'missing' as const, locationId: null, candidates: [] };
   return { loading: false, busy: false, error: null, viewerPhase: 'ready' as const, viewerMessage: 'The active model is ready.',
     data: { schemaVersion: 1 as const, projectId, registryRevision: '3', activeModel: { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
-      settings: { connectionGap: '1', secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, artifacts: [], jobs: [], proposals: [],
+      settings: { revision: '1', connectionGap: '1', secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, artifacts: [], jobs: [], proposals: [],
       cables: [{ id: '44444444-4444-4444-8444-444444444444', cableId: 1, tag: '=CABLE-1', fromLocation: 'EQ-001', toLocation: 'EQ-002', mto: 'Control', routing: null, designLength: null, installLength: 123, cableWriteRevision: '0', fromMatch: matched, toMatch: missing },
         { id: '55555555-5555-4555-8555-555555555555', cableId: 2, tag: '=CABLE-2', fromLocation: 'EQ-002', toLocation: 'EQ-001', mto: 'Instrumentation', routing: null, designLength: null, installLength: null, cableWriteRevision: '0', fromMatch: missing, toMatch: matched }],
       locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: { modelVersionId: modelId, revision: '1', point: [1, 2, 3] as [number, number, number], objectId: 'dbid:23', externalId: 'ext-23', source: 'manual' as const, status: 'confirmed' as const } }] },
-    refresh: vi.fn(), reloadViewer: vi.fn(), action: vi.fn(async () => null), matchAll: vi.fn(async () => null), calculate: vi.fn(async () => null), readProposal: vi.fn(async () => null), readJob: vi.fn(async () => null), reviewProposal: vi.fn(async () => null), prepareModel: vi.fn(async () => null), startLookup: vi.fn(async () => null), readLookup: vi.fn(async () => null), saveLocation: vi.fn(async () => ({ locationId, registryRevision: '4' })), uploadSnapshot: vi.fn(async () => null),
-    pickPoint: vi.fn(async () => ({ objectId: 44, point: [4.5, -6, 7] as [number, number, number], derivation: 'picked-surface-point' as const })), cancelPicking: vi.fn(), readObjects: vi.fn(async () => null), showPath: vi.fn(async () => null), clear: vi.fn(), zoom: vi.fn() };
+    refresh: vi.fn(), reloadViewer: vi.fn(), action: vi.fn(async () => null), matchAll: vi.fn(async () => null), calculate: vi.fn(async () => null), readProposal: vi.fn(async () => null), readJob: vi.fn(async () => null), reviewProposal: vi.fn(async () => null), prepareModel: vi.fn(async () => null), startLookup: vi.fn(async () => null), readLookup: vi.fn(async () => null), startPreview: vi.fn(async () => null), readPreview: vi.fn(async () => null), saveLocation: vi.fn(async () => ({ locationId, registryRevision: '4' })), uploadSnapshot: vi.fn(async () => null),
+    pickPoint: vi.fn(async () => ({ objectId: 44, point: [4.5, -6, 7] as [number, number, number], derivation: 'picked-surface-point' as const })), cancelPicking: vi.fn(), cancelOperation: vi.fn(), readObjects: vi.fn(async () => null), readSelection: vi.fn(async () => ({ coordinateFrame: 'world-metres-z-up' as const, metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0] as [number, number, number], objects: [viewerObject(44, 'Tray group A')] })), setPathTransparency: vi.fn(async () => undefined), showPath: vi.fn(async () => null), clear: vi.fn(), zoom: vi.fn() };
 }
+function viewerObject(objectId: number, name: string): ViewerModelObject { return { objectId, name, parentId: null, externalId: null, bounds: { minimum: [1, 2, 3], maximum: [3, 4, 5] }, bottomCentre: [2, 3, 3], derivation: 'display-aabb-bottom-centre', nativeVisibility: 'unknown', properties: [], propertiesTruncated: false }; }
 let pf: ReturnType<typeof model>;
 beforeEach(() => { vi.clearAllMocks(); pf = model(); vi.mocked(usePathFinder).mockReturnValue(pf); });
 const mount = (isAdmin = true) => render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" isAdmin={isAdmin} />);
 function proposal(synthetic: boolean): PathFinderProposal { return {
   id: '66666666-6666-4666-8666-666666666666', projectId, jobId: '77777777-7777-4777-8777-777777777777', cableId: pf.data.cables[0].id,
   status: 'calculated', proposalHash: 'f'.repeat(64), cableWriteRevision: '0', stale: false, synthetic, engineeringAccepted: synthetic, acceptanceScope: synthetic ? 'local-synthetic-fixture' : 'unaccepted-model', canApply: synthetic,
-  compatibilityIssue: null, message: 'Route calculated.', engineeringMessage: synthetic ? 'Synthetic local demonstration only.' : 'Native engineering verification is pending.', createdAt: '2026-10-18T00:00:00Z',
+  compatibilityIssue: null, routingPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, message: 'Route calculated.', engineeringMessage: synthetic ? 'Synthetic local demonstration only.' : 'Native engineering verification is pending.', createdAt: '2026-10-18T00:00:00Z',
   design: { lengthBeforePercentageMeters: '20', unroundedLengthMeters: '21', designLengthMeters: '21' },
   route: { success: true, message: 'Route found.', routeText: '/BC1', routeCodes: ['/BC1'], segmentIds: ['dbid:23'], objectIds: ['dbid:23'], points: [[1, 2, 3], [4, 5, 6]], lengthMeters: 18, fromDistanceMeters: 0, toDistanceMeters: 0, fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 },
 }; }
 const artifact = (): PathFinderState['artifacts'][number] => ({ id: '99999999-9999-4999-8999-999999999999', modelVersionId: modelId, snapshotSha256: 'a'.repeat(64), objectCount: 2, engineeringAccepted: false, readiness: 'unverified', capture: {}, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' });
 function lookup(id: string, reverse = false): PathFinderLookup { return { id, projectId, kind: 'lookup', status: 'complete', total: 1, completed: 1, createdAt: '2026-10-18T00:00:00Z', updatedAt: '2026-10-18T00:00:01Z', failure: null, input: { routeText: '/BC1/BC2', reverse },
   result: { status: 'calculated', message: 'Diagnostic lookup complete.', prepared: {}, engineeringAccepted: false, acceptanceScope: 'diagnostic-lookup', stale: false, design: null, route: { ...proposal(false).route!, routeText: reverse ? '/BC2/BC1' : '/BC1/BC2', points: reverse ? [[4, 5, 6], [1, 2, 3]] : [[1, 2, 3], [4, 5, 6]] } } }; }
+function preview(id: string, reverse = false): PathFinderPreview { return { id, projectId, kind: 'preview', status: 'complete', total: 1, completed: 1, cancelRequested: false, createdAt: '2026-10-18T00:00:00Z', updatedAt: '2026-10-18T00:00:01Z', failure: null,
+  input: { from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse, secondaryDistanceMeters: 2, preferVerticalApproach: true, artifactId: artifact().id, expectedSelectionRevision: '2', expectedSettingsRevision: '1', expectedRegistryRevision: '3' },
+  result: { status: 'calculated', message: 'Standalone route found.', prepared: {}, engineeringAccepted: false, acceptanceScope: 'standalone-preview', canApply: false, stale: false, design: proposal(false).design, settings: pf.data.settings, effectiveCategory: 'LV',
+    from: { name: reverse ? 'EQ-002' : 'EQ-001', point: [1, 2, 3], source: 'shared-location', objectId: null, locationId, bindingRevision: '1' }, to: { name: reverse ? 'EQ-001' : 'EQ-002', point: [4, 5, 6], source: 'shared-location', objectId: null, locationId, bindingRevision: '1' }, route: { ...proposal(false).route!, points: reverse ? [[4, 5, 6], [1, 2, 3]] : [[1, 2, 3], [4, 5, 6]] } } }; }
 
-describe('admin PathFinder interface', () => {
+// Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
+describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   it('does not mount any hook or protected frame when administrator access is absent', () => {
-    mount(false); expect(screen.getByText('PathFinder is available only to administrators.')).toBeVisible();
+    mount(false); expect(screen.getByText('Path Finder is available only to administrators.')).toBeVisible();
     expect(usePathFinder).not.toHaveBeenCalled(); expect(screen.queryByTestId('pathfinder-model-host')).toBeNull();
   });
   it('resolves either cable endpoint using the same saved project location and preserves install length', async () => {
@@ -73,9 +80,9 @@ describe('admin PathFinder interface', () => {
   });
   it('prepares selected protected geometry only after explicit category selection and retains endpoint names', async () => {
     const user = userEvent.setup(); mount();
-    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.type(screen.getByRole('textbox', { name: 'Routing network codes' }), '/BC1/SECONDARY/BC2');
+    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByText('Advanced model preparation and import')); await user.type(screen.getByRole('textbox', { name: 'Routing network codes' }), '/BC1/SECONDARY/BC2');
     expect(screen.getByRole('button', { name: 'Prepare selected model network' })).toBeDisabled();
-    await user.click(screen.getByRole('checkbox', { name: 'Control (including Instrumentation)' }));
+    await user.click(within(screen.getByRole('group', { name: 'Allowed cable categories for this network' })).getByRole('checkbox', { name: 'Control (including Instrumentation)' }));
     await user.click(screen.getByRole('button', { name: 'Prepare selected model network' }));
     expect(pf.prepareModel).toHaveBeenCalledWith({ routeCodes: ['BC1', 'BC2'], allowedCategories: ['Control'], equipmentNames: ['EQ-001', 'EQ-002'] });
   });
@@ -166,16 +173,16 @@ describe('admin PathFinder interface', () => {
   it('keeps automatic proposals enabled and forces only explicit calculation retries', async () => {
     const user = userEvent.setup(), matched = pf.data.cables[0].fromMatch;
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], cables: [{ ...pf.data.cables[0], toMatch: matched }] } }); mount();
-    await waitFor(() => expect(pf.calculate).toHaveBeenCalledWith()); expect(screen.queryByRole('checkbox', { name: 'Automatically calculate ready cables' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Calculate all cables' })); expect(pf.calculate).toHaveBeenLastCalledWith(undefined, true);
-    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Calculate selected cable' })); expect(pf.calculate).toHaveBeenLastCalledWith([pf.data.cables[0].id], true);
+    await waitFor(() => expect(pf.calculate).toHaveBeenCalledWith(undefined, false, { secondaryDistanceMeters: 2, preferVerticalApproach: true })); expect(screen.queryByRole('checkbox', { name: 'Automatically calculate ready cables' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Calculate all cables' })); expect(pf.calculate).toHaveBeenLastCalledWith(undefined, true, { secondaryDistanceMeters: 2, preferVerticalApproach: true });
+    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Calculate selected cable' })); expect(pf.calculate).toHaveBeenLastCalledWith([pf.data.cables[0].id], true, { secondaryDistanceMeters: 2, preferVerticalApproach: true });
   });
   it('previews exact ordered lookup and reverse with unchanged cable labels and the read-only project gap', async () => {
     const user = userEvent.setup(), forwardId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', reverseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     const startLookup = vi.fn().mockResolvedValueOnce(forwardId).mockResolvedValueOnce(reverseId), readLookup = vi.fn().mockImplementation(async (id: string) => lookup(id, id === reverseId)), showPath = vi.fn(async () => 'displayed');
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startLookup, readLookup, showPath }); mount();
     await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByText('Manual ordered lookup and reverse preview'));
-    await user.type(screen.getByRole('textbox', { name: 'PathFinder ordered route' }), '/BC1/BC2'); expect(screen.queryByRole('spinbutton', { name: 'Lookup connection tolerance in metres' })).toBeNull(); expect(screen.getByText('Connection gap: 1 m. Change this in Project Details. Larger values permit larger unmodelled gaps.')).toBeVisible();
+    await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/BC1/BC2'); expect(screen.queryByRole('spinbutton', { name: 'Lookup connection tolerance in metres' })).toBeNull(); expect(screen.getByText('Connection gap: 1 m. Change this in Project Details. Larger values permit larger unmodelled gaps.')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Run ordered lookup' })); await screen.findByText('Lookup complete — forward preview');
     expect(startLookup).toHaveBeenNthCalledWith(1, '/BC1/BC2', false); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23] }));
     await user.click(screen.getByRole('button', { name: 'Reverse preview' })); await screen.findByText('Lookup complete — reverse preview');
@@ -185,7 +192,139 @@ describe('admin PathFinder interface', () => {
   it('retains an outdated lookup without displaying its stale points', async () => {
     const user = userEvent.setup(), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', detail = lookup(id); detail.result!.stale = true;
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startLookup: vi.fn(async () => id), readLookup: vi.fn(async () => detail) }); mount();
-    await user.click(screen.getByText('Manual ordered lookup and reverse preview')); await user.type(screen.getByRole('textbox', { name: 'PathFinder ordered route' }), '/BC1/BC2'); await user.click(screen.getByRole('button', { name: 'Run ordered lookup' }));
+    await user.click(screen.getByText('Manual ordered lookup and reverse preview')); await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/BC1/BC2'); await user.click(screen.getByRole('button', { name: 'Run ordered lookup' }));
     expect(await screen.findByText('The active model or lookup dependencies changed. Run a fresh lookup before displaying it.')).toBeVisible(); expect(pf.showPath).not.toHaveBeenCalled();
+  });
+  it('offers Routes and Path with keyboard activation while retaining one protected model host and local drafts', async () => {
+    const user = userEvent.setup(); mount(); const host = screen.getByTestId('pathfinder-model-host');
+    expect(screen.getByRole('tab', { name: 'Path' })).toHaveAttribute('aria-selected', 'true');
+    await user.type(screen.getByRole('textbox', { name: 'Location name' }), 'Draft location');
+    await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'Equipment draft');
+    await user.click(screen.getByRole('tab', { name: 'Routes' }));
+    expect(screen.getByRole('tabpanel', { name: 'Routes' })).toBeVisible(); expect(screen.queryByRole('textbox', { name: 'Path From location' })).toBeNull();
+    screen.getByRole('tab', { name: 'Path' }).focus(); await user.keyboard('{Enter}'); expect(screen.getByRole('tab', { name: 'Path' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('Draft location'); expect(screen.getByRole('textbox', { name: 'Path From location' })).toHaveValue('Equipment draft');
+    expect(screen.getByTestId('pathfinder-model-host')).toBe(host); expect(pf.reloadViewer).not.toHaveBeenCalled(); expect(pf.cancelOperation).toHaveBeenCalled();
+  });
+  it('prepares every ordered selected-object rule and makes category edits the newest override', async () => {
+    const user = userEvent.setup(), readSelection = vi.fn().mockResolvedValueOnce({ objects: [viewerObject(44, 'Group A')] }).mockResolvedValueOnce({ objects: [viewerObject(45, 'Group B')] });
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, readSelection }); mount(); await user.click(screen.getByRole('tab', { name: 'Routes' }));
+    await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 1' });
+    expect(screen.getByRole('checkbox', { name: 'MV for rule 1' })).not.toBeChecked(); expect(screen.getByRole('checkbox', { name: 'LV for rule 1' })).toBeChecked(); expect(screen.getByRole('checkbox', { name: 'Control for rule 1' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 2' });
+    await user.click(screen.getByRole('checkbox', { name: 'MV for rule 1' })); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
+    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [45], allowedCategories: ['LV', 'Control'] }, { id: expect.any(String), objectIds: [44], allowedCategories: ['MV', 'LV', 'Control'] }], equipmentNames: ['EQ-001', 'EQ-002'] });
+    await user.click(screen.getByRole('button', { name: 'Remove rule 1' })); expect(screen.queryByRole('button', { name: /Group B/ })).toBeNull();
+  });
+  it('updates a selected root group and supports explicit category exclusion', async () => {
+    const user = userEvent.setup(), readSelection = vi.fn().mockResolvedValueOnce({ objects: [viewerObject(44, 'Group A')] }).mockResolvedValueOnce({ objects: [viewerObject(46, 'Group C')] });
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, readSelection }); mount(); await user.click(screen.getByRole('tab', { name: 'Routes' }));
+    await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('button', { name: /Group A/ });
+    await user.click(screen.getByRole('button', { name: 'Update selected group' })); await screen.findByRole('button', { name: /Group C/ });
+    await user.click(screen.getByRole('checkbox', { name: 'LV for rule 1' })); await user.click(screen.getByRole('checkbox', { name: 'Control for rule 1' })); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
+    expect(pf.prepareModel).toHaveBeenLastCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [46], allowedCategories: [] }], equipmentNames: ['EQ-001', 'EQ-002'] });
+  });
+  it('clears route rules on a model selection revision change and ignores a late selection from the hidden tab', async () => {
+    const user = userEvent.setup(); let finish!: (value: { objects: ViewerModelObject[] }) => void;
+    const readSelection = vi.fn().mockResolvedValueOnce({ objects: [viewerObject(44, 'Group A')] }).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const current = { ...pf, readSelection }; vi.mocked(usePathFinder).mockReturnValue(current); const view = mount(); await user.click(screen.getByRole('tab', { name: 'Routes' }));
+    await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('button', { name: /Group A/ });
+    vi.mocked(usePathFinder).mockReturnValue({ ...current, data: { ...current.data, activeModel: { ...current.data.activeModel, selectionRevision: '3' } } }); view.rerender(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" isAdmin />);
+    expect(screen.queryByRole('button', { name: /Group A/ })).toBeNull(); await user.click(screen.getByRole('button', { name: 'Add current selection' })); await user.click(screen.getByRole('tab', { name: 'Path' }));
+    await act(async () => finish({ objects: [viewerObject(45, 'Late group')] })); await user.click(screen.getByRole('tab', { name: 'Routes' })); expect(screen.queryByRole('button', { name: /Late group/ })).toBeNull();
+  });
+  it('searches protected model metadata and adds checked objects to a category rule', async () => {
+    const user = userEvent.setup(), object = viewerObject(44, 'BC001');
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, readObjects: vi.fn(async () => ({ cursor: 0, nextCursor: null, complete: true, query: 'BC001', coordinateFrame: 'world-metres-z-up' as const, metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0] as [number, number, number], objects: [object] })) });
+    mount(); await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByText('Find route objects by name')); await user.type(screen.getByRole('textbox', { name: 'Route object query' }), 'BC001'); await user.click(screen.getByRole('button', { name: 'Find route objects' }));
+    await user.click(await screen.findByRole('checkbox', { name: 'Select BC001 (44)' })); await user.click(screen.getByRole('button', { name: 'Add checked objects as a rule' })); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
+    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [44], allowedCategories: ['LV', 'Control'] }], equipmentNames: ['EQ-001', 'EQ-002'] });
+  });
+  it('calculates and reverses a standalone path using original endpoint names and current Path preferences', async () => {
+    const user = userEvent.setup(), forwardId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', reverseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const startPreview = vi.fn().mockResolvedValueOnce(forwardId).mockResolvedValueOnce(reverseId), readPreview = vi.fn(async (id: string) => preview(id, id === reverseId)), showPath = vi.fn(async () => 'displayed');
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount();
+    await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002'); await user.click(screen.getByRole('button', { name: 'Calculate path' }));
+    expect(startPreview).toHaveBeenNthCalledWith(1, { from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: false, secondaryDistanceMeters: 2, preferVerticalApproach: true });
+    await screen.findByText('Path calculation complete'); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23] }));
+    await user.click(screen.getByRole('button', { name: 'Reverse path' })); await screen.findByText(/Original endpoints: From EQ-001; To EQ-002. Reverse preview/);
+    expect(startPreview).toHaveBeenLastCalledWith(expect.objectContaining({ from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: true }));
+    await waitFor(() => expect(showPath).toHaveBeenLastCalledWith({ pathId: reverseId, points: [[4, 5, 6], [1, 2, 3]], objectIds: [23] })); expect(pf.action).not.toHaveBeenCalled();
+    expect(within(screen.getByRole('region', { name: 'Standalone path result' })).queryByRole('button', { name: /Apply/ })).toBeNull();
+  });
+  it('uses one selected equipment object as an endpoint and rejects partial or non-finite manual coordinates', async () => {
+    const user = userEvent.setup(); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] } }); mount();
+    await user.click(screen.getByRole('button', { name: 'Use selection as From' })); expect(await screen.findByRole('textbox', { name: 'Path From location' })).toHaveValue('Tray group A');
+    await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002'); await user.click(screen.getByText('To coordinates (metres)')); await user.type(screen.getByRole('textbox', { name: 'Path To X in metres' }), 'Infinity');
+    expect(screen.getByRole('button', { name: 'Calculate path' })).toBeDisabled(); await user.clear(screen.getByRole('textbox', { name: 'Path To X in metres' })); expect(screen.getByRole('button', { name: 'Calculate path' })).toBeEnabled();
+  });
+  it('discards a hidden standalone preview response and keeps its endpoint draft', async () => {
+    const user = userEvent.setup(), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let finish!: (value: PathFinderPreview) => void;
+    const readPreview = vi.fn(() => new Promise<PathFinderPreview>(resolve => { finish = resolve; }));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview: vi.fn(async () => id), readPreview }); mount();
+    await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002'); await user.click(screen.getByRole('button', { name: 'Calculate path' })); await waitFor(() => expect(readPreview).toHaveBeenCalled());
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await act(async () => finish(preview(id))); expect(pf.showPath).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('textbox', { name: 'Path From location' })).toHaveValue('EQ-001'); expect(screen.queryByRole('region', { name: 'Standalone path result' })).toBeNull();
+  });
+  it('invalidates proposal review when another Path tool claims the shared view', async () => {
+    const user = userEvent.setup(), detail = { ...proposal(false), acceptanceScope: 'manual-review', canApply: true }, id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed'), reviewProposal: vi.fn(async () => ({ reviewId: '88888888-8888-4888-8888-888888888888', proposal: detail })), startLookup: vi.fn(async () => id), readLookup: vi.fn(async () => lookup(id)) }); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ })); await screen.findByText('Design length: 21 m'); await user.click(screen.getByRole('button', { name: 'Confirm proposal review' })); await waitFor(() => expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeEnabled());
+    await user.click(screen.getByText('Manual ordered lookup and reverse preview')); await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/BC1/BC2'); await user.click(screen.getByRole('button', { name: 'Run ordered lookup' })); await screen.findByText('Lookup complete — forward preview');
+    expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+  });
+  it('does not display a late ordered lookup after a proposal takes ownership of the view', async () => {
+    const user = userEvent.setup(), detail = proposal(true), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'; let finish!: (value: PathFinderLookup) => void;
+    const readLookup = vi.fn(() => new Promise<PathFinderLookup>(resolve => { finish = resolve; })), showPath = vi.fn(async () => 'displayed');
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath, startLookup: vi.fn(async () => id), readLookup }); mount();
+    await user.click(screen.getByText('Manual ordered lookup and reverse preview')); await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/BC1/BC2'); await user.click(screen.getByRole('button', { name: 'Run ordered lookup' })); await waitFor(() => expect(readLookup).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ })); await screen.findByText('Design length: 21 m'); await act(async () => finish(lookup(id)));
+    expect(showPath).toHaveBeenCalledTimes(1); expect(showPath).toHaveBeenCalledWith(expect.objectContaining({ pathId: detail.id })); expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled();
+  });
+  it('requires matching immutable preferences when reopening an old proposal and rejects invalid trigger values', async () => {
+    const user = userEvent.setup(), detail = proposal(true); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed') }); mount();
+    const trigger = screen.getByRole('textbox', { name: 'SECONDARY trigger distance in metres' }); await user.clear(trigger); await user.type(trigger, '3'); await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ }));
+    expect(await screen.findByText('This proposal uses different routing preferences. Calculate a new proposal with the current Path values before reviewing or applying.')).toBeVisible(); expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    await user.clear(trigger); await user.type(trigger, '-1'); expect(screen.getByRole('button', { name: 'Calculate all cables' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Calculate path' })).toBeDisabled();
+  });
+  it('applies draft transparency explicitly and restores the shared view without changing native ghost defaults on load', async () => {
+    const user = userEvent.setup(), detail = proposal(true); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed') }); mount();
+    expect(screen.getByRole('textbox', { name: 'Background transparency to apply percent' })).toHaveValue('75'); expect(pf.setPathTransparency).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ })); await screen.findByText('Design length: 21 m'); await user.click(screen.getByRole('button', { name: 'Apply transparency' })); expect(pf.setPathTransparency).toHaveBeenCalledWith(75);
+    await user.click(screen.getByRole('button', { name: 'Opaque background' })); expect(pf.setPathTransparency).toHaveBeenLastCalledWith(0); await user.click(screen.getByRole('button', { name: 'Restore view' })); expect(pf.cancelOperation).toHaveBeenCalled(); expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+  });
+  it('includes arbitrary standalone endpoint names when preparing selected route rules', async () => {
+    const user = userEvent.setup(); mount(); await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'Standalone source'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'Standalone destination');
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 1' }); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
+    expect(pf.prepareModel).toHaveBeenCalledWith({ routeRules: [{ id: expect.any(String), objectIds: [44], allowedCategories: ['LV', 'Control'] }], equipmentNames: ['Standalone source', 'Standalone destination', 'EQ-001', 'EQ-002'] });
+  });
+  it('blocks calculations and review for dirty category rules, keeps the block on failed preparation, and permits explicit discard', async () => {
+    const user = userEvent.setup(), detail = proposal(true); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed'), reviewProposal: vi.fn(async () => ({ reviewId: '88888888-8888-4888-8888-888888888888', proposal: detail })) }); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ })); await screen.findByText('Design length: 21 m'); await user.click(screen.getByRole('button', { name: 'Confirm proposal review' })); await waitFor(() => expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeEnabled());
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 1' }); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' })); await user.click(screen.getByRole('tab', { name: 'Path' }));
+    expect(screen.getByText('Route rules have changed. Prepare all rules in Routes or discard the draft before calculating, reviewing or applying paths.')).toBeVisible(); expect(screen.getByRole('button', { name: 'Calculate all cables' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Calculate path' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('button', { name: 'Discard route rule changes' })); await user.click(screen.getByRole('tab', { name: 'Path' }));
+    expect(screen.getByRole('button', { name: 'Calculate all cables' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+  });
+  it('releases the dirty category rule gate only after successful preparation', async () => {
+    const user = userEvent.setup(), prepareModel = vi.fn(async () => ({ artifactId: artifact().id, captureSummary: {} })); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, prepareModel }); mount();
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 1' }); await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('button', { name: 'Calculate all cables' })).toBeDisabled();
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' })); await screen.findByText('All route rules were prepared. Review category assignments and locations before using calculated results.'); await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('button', { name: 'Calculate all cables' })).toBeEnabled();
+  });
+  it('cancels point picking and ignores a picked point delivered after switching tools', async () => {
+    const user = userEvent.setup(); let finish!: (point: { objectId: number; point: [number, number, number]; derivation: 'picked-surface-point' }) => void;
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, pickPoint: vi.fn(() => new Promise<{ objectId: number; point: [number, number, number]; derivation: 'picked-surface-point' }>(resolve => { finish = resolve; })) }); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve To' })); await user.click(screen.getByRole('button', { name: 'Pick point in model' })); await user.click(screen.getByRole('tab', { name: 'Routes' }));
+    await act(async () => finish({ objectId: 44, point: [9, 8, 7], derivation: 'picked-surface-point' })); await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('textbox', { name: 'Location X in metres' })).toHaveValue(''); expect(pf.cancelPicking).toHaveBeenCalled(); expect(pf.saveLocation).not.toHaveBeenCalled();
+  });
+  it('reconciles the prepared rule baseline when an artifact save succeeds after viewer cancellation', async () => {
+    const user = userEvent.setup(); let finish!: (value: { captureSummary: Record<string, unknown> }) => void;
+    const prepareModel = vi.fn(() => new Promise<{ captureSummary: Record<string, unknown> }>(resolve => { finish = resolve; }));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, prepareModel }); mount();
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('button', { name: 'Add current selection' })); await screen.findByRole('checkbox', { name: 'LV for rule 1' });
+    await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' })); await waitFor(() => expect(prepareModel).toHaveBeenCalled()); await user.click(screen.getByRole('button', { name: 'Cancel route preparation' }));
+    await act(async () => finish({ captureSummary: {} })); expect(screen.getByText('The snapshot was saved before cancellation completed. Its prepared rules were retained.')).toBeVisible(); expect(screen.getByRole('button', { name: 'Discard route rule changes' })).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: 'LV for rule 1' })); await user.click(screen.getByRole('button', { name: 'Discard route rule changes' })); expect(screen.getByRole('checkbox', { name: 'LV for rule 1' })).toBeChecked();
+    await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('button', { name: 'Calculate all cables' })).toBeEnabled();
   });
 });

@@ -76,6 +76,8 @@ public sealed record SnapshotObject
     public required bool? NativeHidden { get; init; }
     public required bool PlanningExcluded { get; init; }
     public string? RouteName { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? RouteBoundaryId { get; init; }
     public string? ShapeName { get; init; }
     public required string CategoryAssignmentSource { get; init; }
     public required string[] AllowedCategories { get; init; }

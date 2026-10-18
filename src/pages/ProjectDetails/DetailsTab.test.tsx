@@ -139,12 +139,12 @@ describe('DetailsTab tray report templates', () => {
     fireEvent.change(input, { target: { value: '0.25' } }); expect(change).toHaveBeenCalledWith('0.25'); fireEvent.click(within(card).getByRole('button', { name: 'Save' })); expect(save).toHaveBeenCalledOnce();
     rerender(<NumericDetails numericFields={numericFields} isAdmin={false} />); expect(screen.getByText('Connection gap')).toBeVisible(); expect(screen.queryByRole('spinbutton', { name: 'Update value [m]' })).toBeNull();
   });
-  it('keeps the tray estimate distinct from the PathFinder formula and shows current project allowances', () => {
+  it('keeps the tray estimate distinct from the Path Finder formula and shows current project allowances', () => {
     render(<NumericDetails project={{ ...fixture.project, connectionGap: 1, secondaryTrayLength: 4, endConnectionLength: 6, additionalBendingPercent: 10 }} />);
-    expect(screen.getByText('Tray-list estimate')).toBeVisible(); expect(screen.getByText('PathFinder design length')).toBeVisible();
+    expect(screen.getByText('Tray-list estimate')).toBeVisible(); expect(screen.getByText('Path Finder design length')).toBeVisible();
     expect(screen.getByText('Auto calculated length [m] = ceil(Total routing length [m] × (1 + Additional % for bending / 100) + For end connection [m])')).toBeVisible();
     expect(screen.getByText('ceil((max(0, Geometric length − flagged From/To approach lengths) + Secondary tray length × number of flagged approaches + For end connection) × (1 + Additional % for bending / 100))')).toBeVisible();
-    expect(screen.getByText('Current PathFinder values: SECONDARY 4 m; end connection reserve 6 m; bending allowance 10%.')).toBeVisible(); expect(screen.getByText(/Measured connection gaps are already included in geometric length and are not added again/)).toBeVisible();
+    expect(screen.getByText('Current Path Finder values: SECONDARY 4 m; end connection reserve 6 m; bending allowance 10%.')).toBeVisible(); expect(screen.getByText(/Measured connection gaps are already included in geometric length and are not added again/)).toBeVisible();
   });
   it('keeps the separate model section visible for read-only project access', () => {
     render(<StatefulDetails onSave={vi.fn(async () => {})} canEdit={false} />);

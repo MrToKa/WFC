@@ -21,12 +21,15 @@ export const snapshotObject = z.object({
   dbId: z.number().int().nonnegative().max(2_147_483_647).nullable().optional(), name: text,
   geometryRole: z.enum(['hierarchy', 'object', 'routing-leaf']), leafToRootNames: z.array(text).min(1).max(512),
   properties: z.array(z.object({ category: text, name: text, value: text }).strict()).max(1024),
-  nativeHidden: z.boolean().nullable(), planningExcluded: z.boolean(), routeName: text.nullable().optional(), shapeName: text.nullable().optional(),
+  nativeHidden: z.boolean().nullable(), planningExcluded: z.boolean(), routeName: text.nullable().optional(), shapeName: text.nullable().optional(), routeBoundaryId: identity.optional(),
   categoryAssignmentSource: z.enum(['unassigned', 'explicit-planning', 'native-reference-selection', 'synthetic']),
   allowedCategories: z.array(z.enum(['MV', 'LV', 'Control'])).max(3), bounds,
   fragments: z.array(fragment).max(100_000),
   faceExtents: z.array(z.object({ face: z.enum(['MinX', 'MaxX', 'MinY', 'MaxY', 'MinZ', 'MaxZ']), bounds, sampleCount: z.number().int().nonnegative() }).strict()).max(6).nullable().optional(),
-}).strict();
+}).strict().superRefine((value,ctx)=>{
+  if (value.routeBoundaryId!==undefined && (value.geometryRole!=='routing-leaf' || value.routeName!==undefined || value.shapeName!==undefined))
+    ctx.addIssue({code:z.ZodIssueCode.custom,message:'A route boundary belongs only to a routing leaf and cannot compete with explicit route or shape names.'});
+});
 export const snapshotSchema = z.object({
   schemaVersion: z.literal('pathfinder.model.snapshot.v1'),
   model: z.object({ projectId: identity, modelVersionId: identity, contentSha256: hash, sourceContentSha256: hash.nullable().optional() }).strict(),
