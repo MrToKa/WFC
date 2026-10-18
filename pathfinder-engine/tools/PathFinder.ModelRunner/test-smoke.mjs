@@ -17,7 +17,7 @@ snapshot.model.projectId = projectId; snapshot.model.modelVersionId = modelVersi
 const snapshotBytes = Buffer.from(JSON.stringify(snapshot));
 const snapshotPath = path.join(scratch, 'snapshots', snapshotId + '.json');
 fs.writeFileSync(snapshotPath, snapshotBytes);
-const dll = path.join(root, 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll');
+const dll = process.env.PF_MODEL_RUNNER_DLL ?? path.join(root, 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll');
 const env = { ...process.env, PF_ROOT: scratch, DOTNET_CLI_HOME: path.join(root, 'pathfinder-engine/.dotnet-home'),
   DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false' };
 const settings = { revision: 'synthetic-settings-1', secondaryTrayLength: '5', endConnectionLength: '6', additionalBendingPercent: '10' };
@@ -36,6 +36,34 @@ function test(name, action) {
   try { const details = action(); checks.push({ name, status: 'PASS', details }); }
   catch (error) { checks.push({ name, status: 'FAIL', message: error.message }); }
 }
+test('independent-lookup-plan-needs-no-snapshot-planning-artifact-or-private-root', () => {
+  const response = run({ schemaVersion: 'pathfinder.model.runner.v1', requestId: crypto.randomUUID(), operation: 'lookup-plan', projectId, modelVersionId, timeoutMilliseconds: 30000,
+    routeText: '/bc001/SECONDARY/BC001/BC002/BC001' }, { ...env, PF_ROOT: '' });
+  assert.equal(response.status, 'lookup_planned'); assert.deepEqual(response.routeCodes, ['/BC001', '/BC002']); assert.equal(response.design, undefined);
+});
+test('lookup-plan-rejects-invalid-syntax-and-inappropriate-snapshot-fields', () => {
+  const request = { schemaVersion: 'pathfinder.model.runner.v1', requestId: crypto.randomUUID(), operation: 'lookup-plan', projectId, modelVersionId, timeoutMilliseconds: 30000 };
+  for (const routeText of ['/SECONDARY', '/BAD CODE', '/' + 'A'.repeat(256), Array.from({ length: 101 }, (_, index) => '/A' + index).join('')]) assert.equal(run({ ...request, routeText }).status, 'invalid_request');
+  assert.equal(run({ ...request, routeText: '/BC001', snapshotId }).status, 'invalid_request');
+});
+test('dedicated-lookup-resolves-owner-scope-and-cannot-be-promoted-to-planning', () => {
+  const dedicated = structuredClone(snapshot), leaf = dedicated.objects[0];
+  dedicated.capture = { adapterVersion: 'wfc.protected-lookup-capture.v1', sourceKind: 'converted', inventoryComplete: false, geometryComplete: false,
+    unitsVerified: false, transformsVerified: false, planningVisibilityKnown: false, sourceLinkVerified: false, evidenceSha256: [], lookupRouteCodes: ['/BC001'] };
+  leaf.name = 'FTUBE /BC001/123'; leaf.leafToRootNames = [leaf.name, '/BC001']; leaf.parentId = 'owner'; leaf.nativeHidden = null;
+  leaf.categoryAssignmentSource = 'lookup-all-categories'; leaf.allowedCategories = ['MV', 'LV', 'Control']; delete leaf.routeName; delete leaf.shapeName;
+  const owner = { ...structuredClone(leaf), id: 'owner', dbId: 2, parentId: null, name: '/BC001', leafToRootNames: ['/BC001'], geometryRole: 'hierarchy', fragments: [], allowedCategories: [], categoryAssignmentSource: 'unassigned' };
+  dedicated.objects.push(owner); const bytes = Buffer.from(JSON.stringify(dedicated)); fs.writeFileSync(snapshotPath, bytes);
+  try {
+    const request = { ...base(), operation: 'lookup', snapshotSha256: hash(bytes), routeText: '/bc001/SECONDARY/BC001', projectSettings: null };
+    const response = run(request); assert.equal(response.status, 'calculated'); assert.equal(response.design, null); assert.equal(response.lookupScope.resolvedLeafCount, 1); assert.equal(response.lookupScope.resolvedOwnerCount, 1); assert.equal(response.usedConnectionGapMeters, .25);
+    assert.equal(run({ ...request, routeText: '/BC002' }).status, 'invalid_request');
+    assert.equal(run({ ...base(), snapshotSha256: hash(bytes) }).status, 'invalid_request');
+    assert.equal(run({ ...base(), operation: 'prepare', snapshotSha256: hash(bytes) }).status, 'invalid_request');
+    const reversed = run({ ...request, reverse: true }); assert.deepEqual(reversed.route.pathPoints, response.route.pathPoints.toReversed());
+    return { scope: response.lookupScope, usedConnectionGapMeters: response.usedConnectionGapMeters };
+  } finally { fs.writeFileSync(snapshotPath, snapshotBytes); }
+});
 test('strict-prepare-and-private-fit-cache', () => { const r = run({ ...base(), operation: 'prepare' }); assert.equal(r.status, 'prepared'); assert.equal(r.prepared.segmentCount, 1); return r.prepared; });
 test('real-core-calculation-instrumentation-maps-to-control', () => {
   const r = run(base()); assert.equal(r.status, 'calculated'); assert.equal(r.effectiveCategory, 'Control'); assert.equal(r.route.lengthMeters, 10);
@@ -73,6 +101,7 @@ test('reverse-calculation-swaps-approaches-and-keeps-original-formula', () => {
   assert.equal(reverse.route.fromRequiresSecondary, forward.route.toRequiresSecondary); assert.deepEqual(reverse.design, forward.design);
 });
 test('lookup-missing-code-is-no-path', () => assert.equal(run({ ...base(), operation: 'lookup', routeText: '/MISSING' }).status, 'no_path'));
+test('legacy-planning-lookup-retains-original-long-code-contract', () => assert.equal(run({ ...base(), operation: 'lookup', routeText: '/' + 'A'.repeat(300) }).status, 'no_path'));
 test('lookup-invalid-and-secondary-only-input-rejected', () => {
   for (const routeText of ['/SECONDARY', '/BAD CODE', Array.from({ length: 101 }, (_, i) => '/A' + i).join('')]) assert.equal(run({ ...base(), operation: 'lookup', routeText }).status, 'invalid_request');
 });

@@ -51,6 +51,12 @@ internal static class Program
     private static object Execute(Request request, CancellationToken token)
     {
         var settings = request.ProjectSettings;
+        if (request.Operation == "lookup-plan") return new
+        {
+            schemaVersion = "pathfinder.model.response.v1", request.RequestId, status = "lookup_planned",
+            message = "Ordered route parsed by the pinned Path Finder lookup parser.",
+            routeCodes = LookupScopeResolver.Plan(request.RouteText!, token).Distinct(StringComparer.Ordinal).ToArray(), engineeringAccepted = false
+        };
         if (request.Operation == "design")
         {
             var route = request.Route ?? throw new ArgumentException("Retained route metrics are required.");
@@ -75,6 +81,14 @@ internal static class Program
         var snapshot = SnapshotReader.Read(snapshotBytes, cancellation: token);
         if (snapshot.Model.ProjectId != request.ProjectId || snapshot.Model.ModelVersionId != request.ModelVersionId)
             throw new ArgumentException("Snapshot project/model identity mismatch.");
+        LookupScopeSummary? lookupScope = null;
+        if (snapshot.Capture.LookupRouteCodes is not null)
+        {
+            if (request.Operation != "lookup") throw new ArgumentException("Independent lookup geometry cannot be used for planning preparation or cable calculation.");
+            var resolved = LookupScopeResolver.Resolve(snapshot, LookupScopeResolver.Plan(request.RouteText!, token), cancellation: token);
+            snapshot = resolved.Snapshot; lookupScope = resolved.Scope;
+            snapshotBytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, SnapshotReader.JsonOptions);
+        }
         var prepared = new FittedModelCache(SafeChild(root, "cache", create: true)).GetOrBuild(snapshotBytes, request.Rules, token);
         var summary = new
         {
@@ -129,7 +143,8 @@ internal static class Program
                 : request.Operation == "lookup" && routeResult.Success ? "Ordered lookup calculated without equipment approaches or full cable design allowances." : routeResult.Message,
             snapshot.Model, prepared = summary, effectiveCategory = request.Operation == "lookup" ? null : category.ToString(),
             route = routeResult, design = resultDesign, projectSettings = settings,
-            engineeringAccepted = false
+            engineeringAccepted = false, lookupScope,
+            usedConnectionGapMeters = request.Operation == "lookup" ? options.ConnectionToleranceMeters : (double?)null
         };
     }
 
@@ -137,12 +152,23 @@ internal static class Program
     {
         if (r.SchemaVersion != "pathfinder.model.runner.v1" || !Guid.TryParseExact(r.RequestId, "D", out _) ||
             !Guid.TryParseExact(r.ProjectId, "D", out _) || !Guid.TryParseExact(r.ModelVersionId, "D", out _) ||
-            !Guid.TryParseExact(r.SnapshotId, "D", out _) || !Regex.IsMatch(r.SnapshotSha256, "^[a-f0-9]{64}$") ||
-            r.Operation is not ("prepare" or "calculate" or "design" or "lookup") || r.TimeoutMilliseconds is < 1 or > 120000)
+            r.Operation is not ("prepare" or "calculate" or "design" or "lookup" or "lookup-plan") || r.TimeoutMilliseconds is < 1 or > 120000)
             throw new ArgumentException("Unknown schema, operation, identity, hash or deadline.");
-        if (r.Reverse && r.Operation is not ("calculate" or "lookup")) throw new ArgumentException("Reverse applies only to calculated paths or ordered lookup.");
-        if (r.Operation == "lookup")
+        if (r.Operation == "lookup-plan")
         {
+            if (r.SnapshotId is not null || r.SnapshotSha256 is not null || r.Options is not null || r.ProjectSettings is not null
+                || r.Rules is not null || r.Category is not null || r.From is not null || r.To is not null || r.Route is not null || r.Reverse)
+                throw new ArgumentException("Lookup planning only accepts model identity, route text and its bounded deadline.");
+        }
+        else if (!Guid.TryParseExact(r.SnapshotId, "D", out _) || r.SnapshotSha256 is null || !Regex.IsMatch(r.SnapshotSha256, "^[a-f0-9]{64}$"))
+            throw new ArgumentException("Immutable snapshot identity and hash are required.");
+        if (r.Reverse && r.Operation is not ("calculate" or "lookup")) throw new ArgumentException("Reverse applies only to calculated paths or ordered lookup.");
+        if (r.Operation == "lookup-plan") _ = LookupScopeResolver.Plan(r.RouteText!);
+        else if (r.Operation == "lookup")
+        {
+            // Existing planning-artifact lookup keeps its original text contract.
+            // The stricter per-code capture ceiling is checked only by lookup-plan
+            // and the dedicated captured-scope resolver.
             if (string.IsNullOrWhiteSpace(r.RouteText) || r.RouteText.Length > 8000 || RouteLookupCalculator.Parse(r.RouteText).Count > 100)
                 throw new ArgumentException("Ordered lookup requires 1 to 100 route codes in at most 8000 characters.");
         }
@@ -245,8 +271,8 @@ internal sealed record Request
     public required string Operation { get; init; }
     public required string ProjectId { get; init; }
     public required string ModelVersionId { get; init; }
-    public required string SnapshotId { get; init; }
-    public required string SnapshotSha256 { get; init; }
+    public string? SnapshotId { get; init; }
+    public string? SnapshotSha256 { get; init; }
     public required int TimeoutMilliseconds { get; init; }
     public string? Category { get; init; }
     public PointInput? From { get; init; }

@@ -22,20 +22,23 @@ export const snapshotObject = z.object({
   geometryRole: z.enum(['hierarchy', 'object', 'routing-leaf']), leafToRootNames: z.array(text).min(1).max(512),
   properties: z.array(z.object({ category: text, name: text, value: text }).strict()).max(1024),
   nativeHidden: z.boolean().nullable(), planningExcluded: z.boolean(), routeName: text.nullable().optional(), shapeName: text.nullable().optional(), routeBoundaryId: identity.optional(),
-  categoryAssignmentSource: z.enum(['unassigned', 'explicit-planning', 'native-reference-selection', 'synthetic']),
+  categoryAssignmentSource: z.enum(['unassigned', 'explicit-planning', 'native-reference-selection', 'synthetic', 'lookup-all-categories']),
   allowedCategories: z.array(z.enum(['MV', 'LV', 'Control'])).max(3), bounds,
   fragments: z.array(fragment).max(100_000),
   faceExtents: z.array(z.object({ face: z.enum(['MinX', 'MaxX', 'MinY', 'MaxY', 'MinZ', 'MaxZ']), bounds, sampleCount: z.number().int().nonnegative() }).strict()).max(6).nullable().optional(),
 }).strict().superRefine((value,ctx)=>{
   if (value.routeBoundaryId!==undefined && (value.geometryRole!=='routing-leaf' || value.routeName!==undefined || value.shapeName!==undefined))
     ctx.addIssue({code:z.ZodIssueCode.custom,message:'A route boundary belongs only to a routing leaf and cannot compete with explicit route or shape names.'});
+  if (value.categoryAssignmentSource==='lookup-all-categories' && (value.geometryRole!=='routing-leaf' || value.allowedCategories.length!==3 || !['MV','LV','Control'].every(category=>value.allowedCategories.includes(category as 'MV'|'LV'|'Control'))))
+    ctx.addIssue({code:z.ZodIssueCode.custom,message:'Lookup geometry must carry all three categories independently of planning rules.'});
 });
 export const snapshotSchema = z.object({
   schemaVersion: z.literal('pathfinder.model.snapshot.v1'),
   model: z.object({ projectId: identity, modelVersionId: identity, contentSha256: hash, sourceContentSha256: hash.nullable().optional() }).strict(),
   capture: z.object({ adapterVersion: z.string().min(1).max(256), sourceKind: z.enum(['converted', 'native', 'synthetic']),
     inventoryComplete: z.boolean(), geometryComplete: z.boolean(), unitsVerified: z.boolean(), transformsVerified: z.boolean(),
-    planningVisibilityKnown: z.boolean(), sourceLinkVerified: z.boolean(), evidenceSha256: z.array(hash).max(256) }).strict(),
+    planningVisibilityKnown: z.boolean(), sourceLinkVerified: z.boolean(), evidenceSha256: z.array(hash).max(256),
+    lookupRouteCodes:z.array(z.string().max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/)).min(1).max(100).optional() }).strict(),
   coordinates: z.object({ vertexFrame: z.literal('canonical-world-metres'), sourceUnits: z.string().min(1).max(64),
     metresPerSourceUnit: z.number().finite().positive().max(1e9).nullable(), sourceToWorldMetres: matrix.nullable(),
     globalOffsetMetres: point, displayToWorldMetres: matrix }).strict(),
@@ -48,7 +51,8 @@ export const createLocationSchema = z.object({ name: locationName, aliases: z.ar
 export const bindLocationSchema = z.object({ modelVersionId: uuid, expectedSelectionRevision: revision, expectedRegistryRevision: revision,
   point, objectId: identity.nullable(), externalId: z.string().min(1).max(1024).nullable(),
   derivation:z.enum(['manual-world-point','picked-surface-point','equipment-bottom-aabb']).optional() }).strict();
-export const artifactSchema = z.object({ modelVersionId: uuid, expectedSelectionRevision: revision, expectedRegistryRevision: revision, snapshot: snapshotSchema }).strict();
+export const artifactSchema = z.object({ modelVersionId: uuid, expectedSelectionRevision: revision, expectedRegistryRevision: revision,
+  snapshot: snapshotSchema.refine(value=>value.capture.lookupRouteCodes===undefined && !value.objects.some(object=>object.categoryAssignmentSource==='lookup-all-categories'),'Lookup-only capture cannot become a planning artifact.') }).strict();
 
 export type LocationMatch = { status: 'matched' | 'missing' | 'ambiguous' | 'stale'; locationId: string | null; candidates: string[] };
 export type LocationDto = { id: string; name: string; aliases: string[]; revision: string; matching?: { status: 'missing' | 'ambiguous' | 'unverified'; candidateObjectIds: string[] }; binding: null | {

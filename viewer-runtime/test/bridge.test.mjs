@@ -45,6 +45,15 @@ function fixture(options = {}) {
   return { bridge, send, sent, messages, init, loaded, facts, fetches, loads, states, listeners, window, handle };
 }
 
+test('independent lookup empty-visible scope sends only an allowlisted actionable message', async () => {
+  const f = fixture({ startModelCapture: async () => { throw Object.assign(new Error('SDK private object details must never escape'), { code: 'LOOKUP_GEOMETRY_NOT_FOUND' }); } });
+  await f.loaded(); f.send('START_MODEL_CAPTURE', { captureId: uuid(17), lookupRouteCodes: ['/BC001'], equipmentNames: [] }); await turn();
+  const error = f.messages('ERROR').at(-1).payload;
+  assert.equal(error.code, 'LOOKUP_GEOMETRY_NOT_FOUND'); assert.equal(error.retryable, false);
+  assert.equal(error.message, 'No display-visible route geometry matches the lookup. Check the route names and model visibility.');
+  assert.equal(JSON.stringify(f.sent).includes('private object'), false); f.bridge.dispose();
+});
+
 test('HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects', async () => {
   const f = fixture();
   assert.equal(f.messages('HELLO').length, 1); assert.equal(f.sent[0].origin, f.window.location.origin);

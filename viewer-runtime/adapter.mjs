@@ -184,7 +184,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
           const done = next.value.type === 'complete'; currentCapture.index++;
           if (done) cancelCapture();
           return { captureId, index, done, eventJson };
-        } catch (error) { cancelCapture(); throw error?.name === 'AbortError' ? error : safeError('EXTRACTION_FAILED'); }
+        } catch (error) { cancelCapture(); throw error?.name === 'AbortError' ? error : safeError(error?.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'LOOKUP_GEOMETRY_NOT_FOUND' : 'EXTRACTION_FAILED'); }
         finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
       const handle = {

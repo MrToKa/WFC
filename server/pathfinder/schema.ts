@@ -56,6 +56,8 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
         UNIQUE(project_id,id), UNIQUE(project_id,model_version_id,id),
         FOREIGN KEY(project_id,model_version_id) REFERENCES model_versions(project_id,id) ON DELETE CASCADE
       );
+      ALTER TABLE pf_artifacts ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'planning' CHECK(purpose IN ('planning','lookup'));
+      CREATE INDEX IF NOT EXISTS pf_lookup_artifact_content ON pf_artifacts(project_id,model_version_id,content_fingerprint,snapshot_sha256) WHERE purpose='lookup';
       CREATE TABLE IF NOT EXISTS pf_model_objects (
         project_id UUID NOT NULL, artifact_id UUID NOT NULL, object_id TEXT NOT NULL, external_id TEXT, db_id INTEGER,
         name TEXT NOT NULL, geometry_role TEXT NOT NULL CHECK(geometry_role IN ('hierarchy','object','routing-leaf')),

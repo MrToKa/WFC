@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderPreview, pathFinderRequest } from './pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest } from './pathfinder';
 
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', cableId = '33333333-3333-4333-8333-333333333333';
 afterEach(() => vi.restoreAllMocks());
@@ -35,12 +35,24 @@ describe('PathFinder API contract', () => {
   it('reads raw diagnostic lookup results with exact points and rejects wrong identity or promoted acceptance', async () => {
     const id = '44444444-4444-4444-8444-444444444444';
     const detail = { id, projectId, kind: 'lookup', status: 'complete', total: 1, completed: 1, createdAt: '2026-10-18T00:00:00Z', updatedAt: '2026-10-18T00:00:01Z', failure: null,
-      input: { routeText: '/BC1/BC2', reverse: true }, result: { status: 'calculated', message: 'Diagnostic lookup complete.', prepared: {}, engineeringAccepted: false, acceptanceScope: 'diagnostic-lookup', stale: false, design: null,
+      input: { routeText: '/BC1/BC2', reverse: true }, result: { status: 'calculated', message: 'Diagnostic lookup complete.', prepared: {}, engineeringAccepted: false, acceptanceScope: 'diagnostic-lookup', stale: false, design: null, connectionGap: '0.250', diagnostics: { geometryLeavesUsed: 1, fallbackBends: 0, fallbackStraights: 1, fallbackClearances: null },
         route: { success: true, message: 'Found.', routeText: '/BC2/BC1', routeCodes: ['BC2', 'BC1'], segmentIds: ['dbid:23'], objectIds: ['dbid:23'], points: [[1.25, -2, 3], [4, 5, 6]], lengthMeters: 10, fromDistanceMeters: 0, toDistanceMeters: 0, fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 } } };
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json(detail)).mockResolvedValueOnce(Response.json({ ...detail, projectId: modelId })).mockResolvedValueOnce(Response.json({ ...detail, result: { ...detail.result, engineeringAccepted: true } }));
     const value = await fetchPathFinderLookup(projectId, 'test-token', id); expect(value.result?.route?.points).toEqual([[1.25, -2, 3], [4, 5, 6]]); expect(value.result?.design).toBeNull();
+    expect(value.result?.connectionGap).toBe('0.250'); expect(value.result?.diagnostics.fallbackClearances).toBeNull();
     await expect(fetchPathFinderLookup(projectId, 'test-token', id)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
     await expect(fetchPathFinderLookup(projectId, 'test-token', id)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+  it('uses the server canonical lookup plan and rejects stale selections or malformed capture queries', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ routeCodes: ['/BC1', '/BC2'], connectionGap: '0.250', selectionRevision: '9007199254740993' }));
+    const raw = '/BC1/SECONDARY/BC2/BC1';
+    expect(await fetchPathFinderLookupPlan(projectId, 'test-token', raw, '9007199254740993')).toEqual({ routeCodes: ['/BC1', '/BC2'], connectionGap: '0.250', selectionRevision: '9007199254740993' });
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/lookups/plan'), expect.objectContaining({ method: 'POST', body: JSON.stringify({ routeText: raw, expectedSelectionRevision: '9007199254740993' }) }));
+    for (const invalid of [{ routeCodes: [], connectionGap: '1', selectionRevision: '2' }, { routeCodes: ['/BC1', '/BC1'], connectionGap: '1', selectionRevision: '2' }, { routeCodes: ['BC1'], connectionGap: '1', selectionRevision: '2' }, { routeCodes: ['/BC1'], connectionGap: '0', selectionRevision: '2' }, { routeCodes: ['/BC1'], connectionGap: '1', selectionRevision: '3' }]) {
+      fetch.mockResolvedValueOnce(Response.json(invalid));
+      await expect(fetchPathFinderLookupPlan(projectId, 'test-token', raw, '2')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
+    await expect(pathFinderRequest(projectId, 'test-token', '/lookups/arbitrary', 'POST')).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
   });
   it('requires an exact settings revision for standalone preview dependency fencing', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), settings: { ...state().settings, revision: '9007199254740993' } }));

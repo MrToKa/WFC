@@ -43,6 +43,14 @@ describe('PathFinder protected Viewer capabilities', () => {
     s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
     return { ...s, identity };
   }
+  it('freezes independent lookup capture codes without importing planning categories or roots', async () => {
+    const s = await loaded(), codes = ['/BC001', '/BC002'];
+    s.send.mockImplementation(value => { if (value.type === 'START_MODEL_CAPTURE') s.message('ERROR', { code: 'LOOKUP_GEOMETRY_NOT_FOUND', message: 'No display-visible route geometry matches the lookup.', retryable: false, operation: 'START_MODEL_CAPTURE' }, value.requestId, s.identity); });
+    const capturing = s.c.captureModel({ lookupRouteCodes: codes, equipmentNames: [] }); codes[0] = '/CHANGED';
+    await expect(capturing).rejects.toMatchObject({ code: 'LOOKUP_GEOMETRY_NOT_FOUND' });
+    const payload = s.send.mock.calls.find(call => call[0].type === 'START_MODEL_CAPTURE')![0].payload;
+    expect(payload.lookupRouteCodes).toEqual(['/BC001', '/BC002']); expect(payload.routeCodes).toBeUndefined(); expect(payload.routeRules).toBeUndefined(); expect(payload.allowedCategories).toBeUndefined();
+  });
   it('freezes and transports engine points in acknowledged bounded chunks before an exact display commit', async () => {
     const s = await loaded();
     let received = 0;

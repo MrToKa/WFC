@@ -10,7 +10,8 @@ const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.strin
   binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
 const numeric = z.union([z.string(), z.number().finite()]).nullable();
 const jobSchema = z.object({ id: uuid, projectId: uuid, kind: z.enum(['calculate', 'lookup', 'preview']).optional(), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.number().int().nonnegative(), completed: z.number().int().nonnegative(), cancelRequested: z.boolean(), failure: z.string().nullable(), attempts: z.number().int().nonnegative(), createdAt: z.string(), updatedAt: z.string() });
-const projectSettingsSchema = z.object({ revision, connectionGap: z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100), secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() });
+const connectionGapSchema = z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100);
+const projectSettingsSchema = z.object({ revision, connectionGap: connectionGapSchema, secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() });
 const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
 const routingPreferencesSchema = z.object({ secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000), preferVerticalApproach: z.boolean() });
 const proposalSummarySchema = z.object({ id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
@@ -19,8 +20,11 @@ const proposalSummarySchema = z.object({ id: uuid, projectId: uuid, jobId: uuid,
 const computedRouteSchema = z.object({ success: z.boolean(), message: z.string(), routeText: z.string(), routeCodes: z.array(z.string()), segmentIds: z.array(z.string()),
   points: z.array(point).max(200000), objectIds: z.array(z.string()).max(200000), lengthMeters: z.number().finite(), fromDistanceMeters: z.number().finite(), toDistanceMeters: z.number().finite(), fromRequiresSecondary: z.boolean(), toRequiresSecondary: z.boolean(), connectionGapCount: z.number().int().nonnegative(), connectionGapLengthMeters: z.number().finite() });
 const proposalSchema = proposalSummarySchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional() });
+const diagnosticCount = z.number().int().nonnegative().max(1_000_000).nullable();
+const lookupPlanSchema = z.object({ routeCodes: z.array(z.string().min(2).max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).refine(value => value !== '/SECONDARY')).min(1).max(100), connectionGap: connectionGapSchema, selectionRevision: revision });
 const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('lookup'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
-  input: z.object({ routeText: z.string(), reverse: z.boolean() }), result: z.object({ status: z.string(), message: z.string(), route: computedRouteSchema.nullable(), design: z.null(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('diagnostic-lookup'), stale: z.boolean(), prepared: z.unknown() }).nullable() });
+  input: z.object({ routeText: z.string(), reverse: z.boolean() }), result: z.object({ status: z.string(), message: z.string(), route: computedRouteSchema.nullable(), design: z.null(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('diagnostic-lookup'), stale: z.boolean(), prepared: z.unknown(), connectionGap: connectionGapSchema,
+    diagnostics: z.object({ geometryLeavesUsed: diagnosticCount, fallbackBends: diagnosticCount, fallbackStraights: diagnosticCount, fallbackClearances: diagnosticCount }) }).nullable() });
 const endpointSchema = z.object({ name: z.string().max(500), point: point.optional() });
 const categorySchema = z.enum(['MV', 'LV', 'Control', 'Instrumentation']);
 const preferences = { secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).optional(), preferVerticalApproach: z.boolean().optional() };
@@ -44,6 +48,7 @@ export type PathFinderCable = z.infer<typeof cable>;
 export type PathFinderProposal = z.infer<typeof proposalSchema>;
 export type PathFinderJob = z.infer<typeof jobSchema> & { items?: { cableId: string; status: string; state: string; message: string | null }[] };
 export type PathFinderLookup = z.infer<typeof lookupSchema>;
+export type PathFinderLookupPlan = z.infer<typeof lookupPlanSchema>;
 export type PathFinderPreview = z.infer<typeof previewSchema>;
 export type PathFinderPreferences = { secondaryDistanceMeters: number; preferVerticalApproach: boolean };
 export type PathFinderPreviewInput = Omit<z.infer<typeof previewInputSchema>, 'artifactId' | 'expectedSelectionRevision' | 'expectedSettingsRevision' | 'expectedRegistryRevision'>;
@@ -68,7 +73,7 @@ async function read(response: Response): Promise<unknown> {
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw new PathFinderApiError('INVALID_RESPONSE', 502); }
 }
 export async function pathFinderRequest(projectId: string, token: string, path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', body?: unknown, signal?: AbortSignal): Promise<Record<string, unknown>> {
-  if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/[0-9a-f-]{36})?|lookups(?:\/[0-9a-f-]{36})?|previews(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
+  if (!uuid.safeParse(projectId).success || !token || !/^\/(?:state|locations(?:\/[0-9a-f-]{36}(?:\/binding)?)?|artifacts|match|jobs(?:\/[0-9a-f-]{36})?|lookups(?:\/(?:plan|[0-9a-f-]{36}))?|previews(?:\/[0-9a-f-]{36})?|proposals(?:\/[0-9a-f-]{36}(?:\/(?:apply|review|reverse))?)?)$/.test(path)) throw new PathFinderApiError('INVALID_REQUEST', 400);
   const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder${path}`, { method, signal, cache: 'no-store', credentials: 'same-origin', redirect: 'error',
     headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const value = await read(response);
@@ -95,6 +100,11 @@ export async function fetchPathFinderJob(projectId: string, token: string, jobId
 export async function fetchPathFinderLookup(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderLookup> {
   const parsed = lookupSchema.safeParse(await pathFinderRequest(projectId, token, `/lookups/${jobId}`, 'GET', undefined, signal));
   if (!parsed.success || parsed.data.projectId !== projectId || parsed.data.id !== jobId) throw new PathFinderApiError('INVALID_RESPONSE', 502); return parsed.data;
+}
+export async function fetchPathFinderLookupPlan(projectId: string, token: string, routeText: string, expectedSelectionRevision: string, signal?: AbortSignal): Promise<PathFinderLookupPlan> {
+  const parsed = lookupPlanSchema.safeParse(await pathFinderRequest(projectId, token, '/lookups/plan', 'POST', { routeText, expectedSelectionRevision }, signal));
+  if (!parsed.success || parsed.data.selectionRevision !== expectedSelectionRevision || new Set(parsed.data.routeCodes).size !== parsed.data.routeCodes.length) throw new PathFinderApiError('INVALID_RESPONSE', 502);
+  return parsed.data;
 }
 export async function fetchPathFinderPreview(projectId: string, token: string, jobId: string, signal?: AbortSignal): Promise<PathFinderPreview> {
   const parsed = previewSchema.safeParse(await pathFinderRequest(projectId, token, `/previews/${jobId}`, 'GET', undefined, signal));

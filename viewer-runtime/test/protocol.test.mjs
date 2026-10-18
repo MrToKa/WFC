@@ -9,6 +9,14 @@ const route = (rawRouting = '/BC1/SECONDARY/BC1') => ({ rawRouting, source: 'man
   segments: parseRouting(rawRouting).segments.map(entry => ({ ...entry, model: { state: 'found', matchCount: 1, drawable: true } })),
   ignored: parseRouting(rawRouting).ignored, drawableCount: parseRouting(rawRouting).segments.length, lineCount: 1, warnings: [] });
 
+test('independent lookup capture is a closed bounded third union without planning rules or equipment', () => {
+  const payload = { captureId: uuid(17), lookupRouteCodes: ['/BC001', '/BC002'], equipmentNames: [] };
+  assert.ok(validateEnvelope(envelope('START_MODEL_CAPTURE', payload)));
+  for (const bad of [{ ...payload, routeCodes: ['BC001'] }, { ...payload, routeRules: [] }, { ...payload, allowedCategories: ['MV'] }, { ...payload, equipmentNames: ['EQ1'] },
+    { ...payload, lookupRouteCodes: [] }, { ...payload, lookupRouteCodes: ['/SECONDARY'] }, { ...payload, lookupRouteCodes: ['bc001'] }, { ...payload, lookupRouteCodes: Array(101).fill('/BC001') }, { ...payload, lookupRouteCodes: ['/' + 'A'.repeat(256)] }])
+    assert.equal(validateEnvelope(envelope('START_MODEL_CAPTURE', bad)), null);
+});
+
 test('shared project/model normalization is the exact strict parser key operation', () => {
   for (const token of ['bc１', ' /BC1/ ', '／ＢＣ１／', 'BC001-2']) assert.equal(normalizeRoutingKey(token), parseRouting(token).segments[0].key);
   assert.equal(normalizeRoutingKey(' secondary '), 'SECONDARY');

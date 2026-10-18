@@ -1,18 +1,20 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePathFinder } from './usePathFinder';
-import { fetchPathFinderState, pathFinderRequest, PathFinderApiError, type PathFinderState } from '@/api/pathfinder';
+import { fetchPathFinderState, fetchPathFinderLookupPlan, pathFinderRequest, PathFinderApiError, type PathFinderState } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
+import { ViewerAccessError } from '@/viewer/sessionApi';
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
-  return { ...original, fetchPathFinderState: vi.fn(), pathFinderRequest: vi.fn() };
+  return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), pathFinderRequest: vi.fn() };
 });
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
   readSelection = facts.readSelection; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
+  captureModel = facts.capture; getLoadSnapshot = () => ({ ready: true });
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', locationId = '33333333-3333-4333-8333-333333333333';
 function state(): PathFinderState { return { schemaVersion: 1, projectId, registryRevision: '3', activeModel: { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
@@ -22,6 +24,8 @@ let container: { current: HTMLDivElement };
 beforeEach(() => {
   vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
+  vi.mocked(fetchPathFinderLookupPlan).mockReset().mockResolvedValue({ routeCodes: ['/BC1', '/BC2'], selectionRevision: '2', connectionGap: '0.250' });
+  facts.capture.mockReset().mockResolvedValue({ snapshot: { lookup: 'owned-protected-capture' }, summary: {} });
   vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { projectId, activeModelVersionId: modelId, selectionRevision: 2, updatedAt: '2026-10-18T00:00:00Z' }, versions: [{ id: modelId, projectId, label: 'Model', source: { name: 'test.nwd', bytes: 1, sha256: 'a'.repeat(64), identityBasis: 'observed-local-file' }, preparedAt: '2026-10-18T00:00:00Z', importedAt: null, state: 'ready', health: 'healthy' }] });
 });
 afterEach(() => { document.body.replaceChildren(); });
@@ -77,12 +81,56 @@ describe('PathFinder scope and shared-location orchestration', () => {
     expect(pathFinderRequest).toHaveBeenNthCalledWith(1, projectId, 'token', '/jobs', 'POST', { expectedRegistryRevision: '3', force: false }, expect.any(AbortSignal));
     expect(pathFinderRequest).toHaveBeenNthCalledWith(2, projectId, 'token', '/jobs', 'POST', { cableIds: [locationId], expectedRegistryRevision: '3', force: true }, expect.any(AbortSignal));
   });
-  it('leaves lookup gap resolution to authoritative Project Details without a competing client override', async () => {
-    const current: PathFinderState = { ...state(), settings: { ...state().settings, connectionGap: '0.250' }, artifacts: [{ id: locationId, modelVersionId: modelId, snapshotSha256: 'a'.repeat(64), objectCount: 2, engineeringAccepted: false, readiness: 'needs_review', capture: {}, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' }] };
+  it('captures an independent lookup without a planning artifact and keeps gap resolution in Project Details', async () => {
+    const current: PathFinderState = { ...state(), settings: { ...state().settings, connectionGap: '0.250' }, artifacts: [] };
     vi.mocked(fetchPathFinderState).mockResolvedValue(current); vi.mocked(pathFinderRequest).mockResolvedValue({ jobId: locationId });
     const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container })); await waitFor(() => expect(result.current.data).not.toBeNull());
     await act(() => result.current.startLookup('/BC1/BC2', false));
-    expect(pathFinderRequest).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/lookups', 'POST', { routeText: '/BC1/BC2', reverse: false, expectedSelectionRevision: '2', artifactId: locationId }, expect.any(AbortSignal)); expect(result.current.data?.settings.connectionGap).toBe('0.250');
+    expect(fetchPathFinderLookupPlan).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/BC1/BC2', '2', expect.any(AbortSignal));
+    expect(facts.capture).toHaveBeenCalledWith({ lookupRouteCodes: ['/BC1', '/BC2'], equipmentNames: [] }, expect.any(Function));
+    expect(pathFinderRequest).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/lookups', 'POST', { routeText: '/BC1/BC2', reverse: false, expectedSelectionRevision: '2', snapshot: { lookup: 'owned-protected-capture' } }, expect.any(AbortSignal));
+    expect(result.current.data?.settings.connectionGap).toBe('0.250'); expect(result.current.data?.registryRevision).toBe('3'); expect(result.current.data?.artifacts).toEqual([]);
+  });
+  it('does not capture or enqueue after a cancelled lookup plan resolves late', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof fetchPathFinderLookupPlan>>) => void;
+    vi.mocked(fetchPathFinderLookupPlan).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    let pending!: ReturnType<typeof result.current.startLookup>;
+    act(() => { pending = result.current.startLookup('/BC1/BC2', false); });
+    await waitFor(() => expect(fetchPathFinderLookupPlan).toHaveBeenCalledOnce());
+    act(() => result.current.cancelOperation());
+    await act(async () => { finish({ routeCodes: ['/BC1', '/BC2'], selectionRevision: '2', connectionGap: '1' }); expect(await pending).toBeNull(); });
+    expect(facts.capture).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled(); expect(result.current.busy).toBe(false); expect(facts.disposed).not.toHaveBeenCalled();
+  });
+  it('does not enqueue a late protected capture after Cancel', async () => {
+    let finish!: (value: unknown) => void; facts.capture.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    let pending!: ReturnType<typeof result.current.startLookup>; act(() => { pending = result.current.startLookup('/BC1', false); });
+    await waitFor(() => expect(facts.capture).toHaveBeenCalledOnce()); act(() => result.current.cancelOperation());
+    await act(async () => { finish({ snapshot: { late: true }, summary: {} }); expect(await pending).toBeNull(); });
+    expect(pathFinderRequest).not.toHaveBeenCalled(); expect(result.current.error).toBe('The operation was cancelled.'); expect(result.current.busy).toBe(false);
+  });
+  it('durably cancels an accepted lookup job when Cancel races its creation response', async () => {
+    let finish!: (value: Record<string, unknown>) => void;
+    vi.mocked(pathFinderRequest).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValueOnce({});
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    let pending!: ReturnType<typeof result.current.startLookup>; act(() => { pending = result.current.startLookup('/BC1', false); });
+    await waitFor(() => expect(pathFinderRequest).toHaveBeenCalledOnce()); act(() => result.current.cancelOperation());
+    await act(async () => { finish({ jobId: locationId }); expect(await pending).toBeNull(); });
+    expect(pathFinderRequest).toHaveBeenLastCalledWith(projectId, 'token', `/jobs/${locationId}`, 'DELETE', undefined, expect.any(AbortSignal)); expect(result.current.busy).toBe(false);
+  });
+  it('keeps lookup discovery refusals safe and distinguishes missing visible geometry from quota errors', async () => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    facts.capture.mockRejectedValueOnce(new ViewerAccessError('LOOKUP_GEOMETRY_NOT_FOUND', 0));
+    await act(() => result.current.startLookup('/BC999', false));
+    expect(result.current.error).toBe('No display-visible route geometry matches the lookup. Check the route names and model visibility.'); expect(facts.disposed).not.toHaveBeenCalled(); expect(pathFinderRequest).not.toHaveBeenCalled();
+    vi.mocked(fetchPathFinderLookupPlan).mockRejectedValueOnce(new PathFinderApiError('ADMIN_REQUIRED', 403));
+    await act(() => result.current.startLookup('/BC1', false));
+    expect(result.current.data).toBeNull(); expect(facts.disposed).toHaveBeenCalledWith('reload'); expect(pathFinderRequest).not.toHaveBeenCalled();
   });
   it('binds a standalone path to current project inputs even when a caller supplies stale managed fields', async () => {
     const current: PathFinderState = { ...state(), settings: { ...state().settings, revision: '9007199254740993' }, artifacts: [{ id: locationId, modelVersionId: modelId, snapshotSha256: 'a'.repeat(64), objectCount: 2, engineeringAccepted: false, readiness: 'needs_review', capture: {}, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' }] };

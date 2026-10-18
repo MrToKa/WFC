@@ -40,6 +40,16 @@ public static class SnapshotReader
         Text(model.ProjectId, "projectId", 256); Text(model.ModelVersionId, "modelVersionId", 256); Hash(model.ContentSha256);
         if (model.SourceContentSha256 is not null) Hash(model.SourceContentSha256);
         Text(capture.AdapterVersion, "adapterVersion", 256);
+        var lookup = capture.LookupRouteCodes is not null;
+        if (lookup)
+        {
+            LookupScopeResolver.ValidateCodes(capture.LookupRouteCodes!);
+            if (capture.AdapterVersion != "wfc.protected-lookup-capture.v1" || capture.SourceKind != "converted"
+                || capture.InventoryComplete || capture.GeometryComplete || capture.UnitsVerified || capture.TransformsVerified
+                || capture.PlanningVisibilityKnown || capture.SourceLinkVerified)
+                throw new ArgumentException("Independent converted lookup cannot claim native visibility, completeness or engineering proofs.");
+        }
+        else if (capture.AdapterVersion == "wfc.protected-lookup-capture.v1") throw new ArgumentException("Dedicated lookup capture requires its immutable requested code scope.");
         if (capture.SourceKind is not ("converted" or "native" or "synthetic")) throw new ArgumentException("Unknown sourceKind.");
         if (capture.EvidenceSha256 is null || capture.EvidenceSha256.Length > 256) throw new ArgumentException("Evidence hashes outside budget.");
         foreach (var value in capture.EvidenceSha256) Hash(value);
@@ -52,6 +62,7 @@ public static class SnapshotReader
         if (capture.TransformsVerified && coordinates.SourceToWorldMetres is null) throw new ArgumentException("Verified transforms require a source-to-world matrix.");
         _ = AffineTransform.Point(coordinates.GlobalOffsetMetres); AffineTransform.Validate(coordinates.DisplayToWorldMetres);
         if (snapshot.Objects.Length == 0 || snapshot.Objects.Length > limits.MaximumObjects) throw new ArgumentException("Object count outside snapshot budget.");
+        if (lookup && snapshot.Objects.Length > 4096) throw new ArgumentException("Independent lookup exceeds the protected capture object budget.");
         var ids = new HashSet<string>(StringComparer.Ordinal); var dbIds = new HashSet<int>(); var fragmentIds = new HashSet<string>(StringComparer.Ordinal);
         int fragments = 0, vertices = 0, triangles = 0;
         foreach (var item in snapshot.Objects)
@@ -80,9 +91,19 @@ public static class SnapshotReader
                 if (property is null) throw new ArgumentException("Property cannot be null.");
                 Text(property.Category, "property.category", 512, true); Text(property.Name, "property.name", 512, true); Text(property.Value, "property.value", 16384, true);
             }
-            if (item.CategoryAssignmentSource is not ("explicit-planning" or "native-reference-selection" or "synthetic" or "unassigned")) throw new ArgumentException("Unknown category assignment source.");
+            if (item.CategoryAssignmentSource is not ("explicit-planning" or "native-reference-selection" or "synthetic" or "unassigned" or "lookup-all-categories")) throw new ArgumentException("Unknown category assignment source.");
             if (item.AllowedCategories is null || item.AllowedCategories.Length > 3) throw new ArgumentException("Invalid category assignment.");
             _ = Categories(item.AllowedCategories);
+            if (lookup)
+            {
+                if (item.NativeHidden is not null || item.PlanningExcluded || item.RouteName is not null || item.ShapeName is not null
+                    || (item.GeometryRole == "routing-leaf" ? item.CategoryAssignmentSource != "lookup-all-categories"
+                        || !item.AllowedCategories.SequenceEqual(new[] { "MV", "LV", "Control" }, StringComparer.Ordinal)
+                        || item.Fragments is null || item.Fragments.Length == 0
+                        : item.CategoryAssignmentSource != "unassigned" || item.AllowedCategories.Length != 0))
+                    throw new ArgumentException("Independent lookup objects cannot carry planning assignments or fabricated native visibility.");
+            }
+            else if (item.CategoryAssignmentSource == "lookup-all-categories") throw new ArgumentException("Lookup-only geometry cannot enter an ordinary planning snapshot.");
             if (item.CategoryAssignmentSource == "unassigned" && item.AllowedCategories.Length != 0) throw new ArgumentException("Unassigned category cannot contain inferred planning assignments.");
             Bounds(item.Bounds);
             if (item.Fragments is null) throw new ArgumentException("Fragments cannot be null.");
@@ -121,7 +142,7 @@ public static class SnapshotReader
             throw new ArgumentException("A routing-leaf cannot be the parent of another inventory object.");
         _ = Visibility(snapshot, limits, cancellation); // Validates parents/cycles before any fitting or cache write.
         var byId = snapshot.Objects.ToDictionary(item => item.Id, StringComparer.Ordinal);
-        foreach (var item in snapshot.Objects.Where(item => item.RouteBoundaryId is not null))
+        foreach (var item in snapshot.Objects.Where(item => lookup || item.RouteBoundaryId is not null))
         {
             var chainNames = new List<string>(); var current = item; bool found = false;
             while (true)
@@ -132,7 +153,7 @@ public static class SnapshotReader
                 if (current.ParentId is null) break;
                 if (!byId.TryGetValue(current.ParentId, out current!)) throw new ArgumentException("Selected route boundary hierarchy is incomplete.");
             }
-            if (!found) throw new ArgumentException("Selected route boundary is not an ancestor of its physical leaf.");
+            if (item.RouteBoundaryId is not null && !found) throw new ArgumentException("Selected route boundary is not an ancestor of its physical leaf.");
             if (!chainNames.SequenceEqual(item.LeafToRootNames, StringComparer.Ordinal)) throw new ArgumentException("Selected route boundary hierarchy names disagree with parents.");
         }
     }

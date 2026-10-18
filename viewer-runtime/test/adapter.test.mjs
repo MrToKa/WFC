@@ -71,6 +71,25 @@ test('SDK initialization uses pinned local assets, explicit local worker root an
   assert.equal(f.facts.featureFlagWrites.length, 1);
 });
 
+test('capture adapter preserves only the typed empty lookup scope error and keeps unexpected SDK errors generic', async t => {
+  const previous = { window: globalThis.window, Autodesk: globalThis.Autodesk, THREE: globalThis.THREE, LMV_VIEWER_VERSION: globalThis.LMV_VIEWER_VERSION };
+  t.after(() => Object.assign(globalThis, previous));
+  for (const fail of [false, true]) {
+    const f = sdkFixture(); globalThis.window = f.window;
+    class Matrix { constructor() { this.elements = new Float64Array(16); } makeScale(x, y, z) { this.elements.fill(0); this.elements[0] = x; this.elements[5] = y; this.elements[10] = z; this.elements[15] = 1; return this; } }
+    f.window.Autodesk.Viewing.Private = { LmvMatrix4: Matrix, enumMeshVertices() {}, enumMeshTriangles() {} };
+    Object.assign(globalThis, { Autodesk: f.window.Autodesk, THREE: {}, LMV_VIEWER_VERSION: '7.130.0' });
+    Object.assign(f.tree, { getNodeParentId: id => id === 1 ? 0 : 1, isNodeHidden: () => false, isNodeOff: () => false });
+    Object.assign(f.model, { getUnitScale: () => 1, getUnitString: () => 'metres', getUpVector: () => [0, 0, 1], getGlobalOffset: () => [0, 0, 0], getFragmentList: () => ({ isFragVisible: () => true }) });
+    await f.adapter.initialize(); const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor: { projectId: '11111111-1111-4111-8111-111111111111', modelVersionId: '22222222-2222-4222-8222-222222222222', contentFingerprint: 'a'.repeat(64) } });
+    const captureId = '33333333-3333-4333-8333-333333333333';
+    await handle.startModelCapture({ captureId, lookupRouteCodes: ['/BC1'], equipmentNames: [] });
+    if (fail) f.tree.getNodeName = () => { throw new Error('private SDK field'); };
+    await assert.rejects(handle.readModelCapture({ captureId, index: 1 }), { code: fail ? 'EXTRACTION_FAILED' : 'LOOKUP_GEOMETRY_NOT_FOUND', message: 'The local model or one of its resources could not be read.' });
+    f.adapter.dispose();
+  }
+});
+
 test('missing renderer feature flag API fails before SDK initialization instead of allowing edges-only Ghost', async () => {
   for (const options of [{ missingFeatureFlags: true }, { missingWebGPUFlag: true }]) {
     const f = sdkFixture(options);

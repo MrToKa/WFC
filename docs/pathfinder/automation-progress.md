@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-two-tabs-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-path-lookup-local-20261018` (inspect live branch/HEAD before each continuation).
 - Integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. The local commit containing this final progress/report records the remaining PF-8 evidence. Read live HEAD rather than inferring a self-referential hash from this file. No implementation changes are left outside these deliveries.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -13,7 +13,48 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Active revision — Routes + Path, 18 October 2026
+## Active revision — independent Path lookup, 18 October 2026
+
+IN_PROGRESS on new branch pf-path-lookup-local-20261018 inheriting
+9e6561e33ccf9ab535fb2184c858ecd20240071d. User requested the third addon tab
+and its functionality. Canonical source shows that this lookup independently
+discovers requested visible logical routes, rather than using Routes assignments.
+
+- Root owns API/hook/tests/docs/computer-use. Backend owner server/** and scoped
+  nginx transport. Viewer owner Model/ModelRunner/capture/protocol/Controller and
+  related tests. Former runtime owner currently owns only the three frontend
+  tab/lookup/test files. Preserve concurrent edits; no partial-image builds.
+- Flow: POST /lookups/plan uses pinned C# parser; protected bounded lookup capture
+  discovers broad SDK name candidates; C# owner resolver filters exact logical
+  owners, nested wrappers and ambiguity; new lookup-purpose artifact/job remains
+  separate from planning. No registry bump, binding changes, planning promotion,
+  cable proposal/Apply writes. Project Details owns gap. No design allowances.
+- UI has Routes/Path/Path lookup with one protected Viewer, independent dirty-rule
+  lookup, shared transparency, exact points, Reverse extension, Restore/Cancel,
+  retained drafts and stale-response/review fences. Actual UI verification pending.
+- Current frozen source checks: root API/hook23/23 PASS (initial22/23 cancellation-message
+  failure corrected with explicit AbortError); Model lookup37/37 plus legacy94/94,
+  protected Node75/75, Controller20/20, Runner42/42 PASS. Initial Node interop used a historical DLL;
+  fresh isolated DLL rebuilt and full affected suite passed, no source fix inferred.
+  Backend106/106 focused controls PASS including actual Express transport and
+  five fresh private C# worker calls. Types and scoped lint PASS. Frontend44-case
+  baseline regression and targeted post-freeze cancellation/copy cases are still
+  running; runtime start waits for their result. These are source scopes, not
+  new runtime/native/human acceptance.
+- New image/build/browser/SQL acceptance NOT_RUN. Existing own5190 API7d216f20 /
+  web36d9e4d6 and verified backupd7d63dce remain untouched during source work.
+- Next: coordinated source freeze/review/types and local checkpoint; own runtime
+  build/start; actual no-planning/independent-scope/auth/gap/transport controls and
+  computer-use; verified backup/own cleanup as justified by changed schema; final
+  preservation/report/handoff/local commit. No original update/publication.
+- Three prior denied cleanup children and parents remain untouched. A fourth,
+  newly owned compatibility scratch removal was rejected by automatic approval
+  review with `blocked by policy` on18October2026: `pathfinder-engine/.scratch/lookup-model-compat-459be54639f5400ebe91f856c64d7f5a`.
+  It is retained; do not retry, delete its parent or bypass the rejection.
+  No identical
+  preview crash retry, native licence attempt or frozen PF0 generator rerun.
+
+## Previous delivery — Routes + Path, 18 October 2026
 
 State: scoped local delivery IMPLEMENTED/VERIFIED; source/API/browser/combined
 backup/restore/session/64-cable recovery/cleanup PASS. Extended preview exact-job

@@ -42,7 +42,7 @@ export async function activeModel(client: PoolClient, projectId: string, expecte
 }
 export async function latestArtifact(client: PoolClient, projectId: string, modelVersionId: string | null): Promise<Row | null> {
   if (!modelVersionId) return null;
-  return (await client.query<Row>('SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 ORDER BY created_at DESC,id DESC LIMIT 1',[projectId,modelVersionId])).rows[0] ?? null;
+  return (await client.query<Row>("SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 AND purpose='planning' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId,modelVersionId])).rows[0] ?? null;
 }
 async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null): Promise<LocationDto[]> {
   const rows = await client.query<Row>(`SELECT l.id,l.name,l.revision::text,
@@ -136,6 +136,8 @@ export function createPathFinderRepository(pool: Pool) {
       });
     },
     async ingestArtifact(projectId: string, who: JobPrincipal, input: z.infer<typeof artifactSchema>) {
+      if (input.snapshot.capture.lookupRouteCodes!==undefined || input.snapshot.objects.some(object=>object.categoryAssignmentSource==='lookup-all-categories'))
+        throw new PathFinderError('LOOKUP_SCOPE_REQUIRED',409,'Lookup capture cannot replace the project planning artifact.');
       const actorId = who.userId;
       const snapshot = {...input.snapshot,model:{...input.snapshot.model,projectId,modelVersionId:input.modelVersionId}};
       const visibility = validateSnapshotStructure(snapshot);

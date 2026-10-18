@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderJob, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, parsePathFinderProposal, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal, type PathFinderPreferences, type PathFinderPreviewInput } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
@@ -9,13 +9,14 @@ type Options = { projectId: string | null; loadedProjectId: string | null; token
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
 type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; modelVersionId: string | null; selectionRevision: string | null };
 const initial: View = { data: null, loading: true, busy: false, error: null, viewerPhase: 'loading', viewerMessage: 'Checking the active model…' };
-const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && error.code === 'APPEARANCE_RESTORE_FAILED' ? new PathFinderApiError(error.code, 0).message : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh Path Finder and try again.';
+const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && error.code === 'APPEARANCE_RESTORE_FAILED' ? new PathFinderApiError(error.code, 0).message : error instanceof ViewerAccessError && error.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'No display-visible route geometry matches the lookup. Check the route names and model visibility.' : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh Path Finder and try again.';
 
 export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, container }: Options) {
   const scope = useMemo(() => ({ projectId, loadedProjectId, token, isAdmin }), [projectId, loadedProjectId, token, isAdmin]);
   const latest = useRef(scope); latest.current = scope;
   const renderedScope = useRef(scope);
   const runRef = useRef<Run | null>(null), dataRef = useRef<PathFinderState | null>(null);
+  const lookupCapture = useRef<AbortController | null>(null);
   const [revision, setRevision] = useState(0), [view, setView] = useState<View>(initial);
   const live = useCallback((run: Run) => !run.closed && runRef.current === run && latest.current === scope, [scope]);
   const update = useCallback((run: Run, patch: Partial<View>) => { if (live(run)) setView(previous => ({ ...previous, ...patch })); }, [live]);
@@ -126,11 +127,29 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     } finally { if (run.viewer.getLoadSnapshot()?.ready) update(run, { viewerMessage: 'The active model is ready.' }); }
   }), [live, perform, projectId, token, update]);
   const startLookup = useCallback((routeText: string, reverse: boolean) => perform(async (data, run) => {
-    const artifactId = data.artifacts[0]?.id;
-    if (!artifactId || !routeText.trim() || routeText.length > 8000) throw new Error('Prepare the selected model and enter a bounded route');
-    const result = await pathFinderRequest(projectId!, token!, '/lookups', 'POST', { routeText, reverse, expectedSelectionRevision: data.activeModel.selectionRevision, artifactId }, run.abort.signal);
-    if (typeof result.jobId !== 'string') throw new Error('Invalid lookup response'); return result.jobId;
-  }), [perform, projectId, token]);
+    if (!run.viewer?.getLoadSnapshot()?.ready || !routeText.trim() || routeText.length > 8000) throw new Error('Load the active model and enter a bounded route');
+    lookupCapture.current?.abort();
+    const operation = new AbortController(); lookupCapture.current = operation;
+    const stop = () => operation.abort(); run.abort.signal.addEventListener('abort', stop, { once: true });
+    const current = () => { if (operation.signal.aborted || !live(run) || lookupCapture.current !== operation) throw new DOMException('Lookup capture cancelled.', 'AbortError'); };
+    try {
+      update(run, { viewerMessage: 'Finding the requested logical routes…' });
+      const plan = await fetchPathFinderLookupPlan(projectId!, token!, routeText, data.activeModel.selectionRevision, operation.signal);
+      current();
+      const captured = await run.viewer.captureModel({ lookupRouteCodes: plan.routeCodes, equipmentNames: [] }, progress => update(run, { viewerMessage: `Reading lookup geometry: ${progress.index + 1} data batches…` }));
+      current();
+      // Once upload begins, keep its scope signal so a deliberate cancellation can
+      // receive the accepted job identity and cancel that job, rather than lose it.
+      const result = await pathFinderRequest(projectId!, token!, '/lookups', 'POST', { routeText, reverse, expectedSelectionRevision: data.activeModel.selectionRevision, snapshot: captured.snapshot }, run.abort.signal);
+      if (typeof result.jobId !== 'string') throw new Error('Invalid lookup response');
+      if (operation.signal.aborted && live(run)) await pathFinderRequest(projectId!, token!, `/jobs/${result.jobId}`, 'DELETE', undefined, run.abort.signal);
+      current(); return result.jobId;
+    } finally {
+      run.abort.signal.removeEventListener('abort', stop);
+      if (lookupCapture.current === operation) lookupCapture.current = null;
+      if (run.viewer?.getLoadSnapshot()?.ready) update(run, { viewerMessage: 'The active model is ready.' });
+    }
+  }), [live, perform, projectId, token, update]);
   const readLookup = useCallback(async (jobId: string) => {
     const run = runRef.current; if (!run || !live(run) || !projectId || !token || !dataRef.current) return null;
     try { const value = await fetchPathFinderLookup(projectId, token, jobId, run.abort.signal); return live(run) ? value : null; }
@@ -161,6 +180,6 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()),
     setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),
-    cancelOperation: () => { runRef.current?.viewer?.cancelPicking(); clear(); },
+    cancelOperation: () => { lookupCapture.current?.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
     showPath: (path: ComputedPath) => viewerAction(viewer => viewer.showComputedPath(path)), clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };
 }

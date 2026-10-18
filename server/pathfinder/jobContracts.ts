@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { revision, uuid } from './contracts.js';
+import { revision, uuid, snapshotSchema } from './contracts.js';
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -36,9 +36,11 @@ export const routeSchema = z.object({success:z.boolean(),message:z.string().max(
 const decimal = z.string().regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).max(100);
 export const designSchema = z.object({lengthBeforePercentageMeters:decimal,unroundedLengthMeters:decimal,designLengthMeters:decimal}).strict();
 export const engineResponseSchema = z.object({schemaVersion:z.literal('pathfinder.model.response.v1'),requestId:uuid,
-  status:z.enum(['prepared','calculated','no_path','settings_required','category_required','model_needs_review','invalid_request','deadline_exceeded','resource_limit']),
+  status:z.enum(['prepared','calculated','lookup_planned','no_path','settings_required','category_required','model_needs_review','invalid_request','deadline_exceeded','resource_limit']),
   message:z.string().max(32768),engineeringAccepted:z.literal(false),model:z.unknown().optional(),prepared:z.unknown().optional(),
   effectiveCategory:z.string().nullable().optional(),route:routeSchema.optional(),design:designSchema.nullable().optional(),projectSettings:z.unknown().optional(),
+  routeCodes:z.array(z.string().max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/)).min(1).max(100).optional(),usedConnectionGapMeters:z.number().finite().positive().max(100).nullable().optional(),
+  lookupScope:z.object({requestedCodeCount:z.number().int().nonnegative(),uniqueCodeCount:z.number().int().nonnegative(),discoveredObjectCount:z.number().int().nonnegative(),resolvedOwnerCount:z.number().int().nonnegative(),resolvedLeafCount:z.number().int().nonnegative(),warnings:z.array(z.string().max(32768)).max(2048)}).strict().nullable().optional(),
 }).strict();
 export type EngineResponse = z.infer<typeof engineResponseSchema>;
 export type EngineRoute = z.infer<typeof routeSchema>;
@@ -46,8 +48,12 @@ export type EngineDesign = z.infer<typeof designSchema>;
 export type JobPrincipal = {userId:string;loginId:string;loginExpiresAt:number};
 export const reviewSchema = z.object({expectedProposalHash:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 export const applySchema = z.object({idempotencyKey:uuid,reviewId:uuid,expectedCableWriteRevision:revision}).strict();
-export const lookupSchema = z.object({routeText:z.string().min(1).max(8000).refine(value=>routeCompatibilityIssue(value)===null,'The route is outside existing Viewer identifier limits.'),
-  reverse:z.boolean(),expectedSelectionRevision:revision,artifactId:uuid,options:optionsSchema.optional()}).strict();
+const lookupText=z.string().min(1).max(8000).refine(value=>routeCompatibilityIssue(value)===null,'The route is outside existing Viewer identifier limits.');
+export const lookupPlanSchema=z.object({routeText:lookupText,expectedSelectionRevision:revision}).strict();
+export const lookupSchema=z.union([
+  z.object({routeText:lookupText,reverse:z.boolean(),expectedSelectionRevision:revision,artifactId:uuid,options:optionsSchema.optional()}).strict(),
+  z.object({routeText:lookupText,reverse:z.boolean(),expectedSelectionRevision:revision,snapshot:snapshotSchema}).strict(),
+]);
 /** Match the exact existing cable-write bound before inviting Review/Apply. */
 export function designLengthCompatibilityIssue(value:unknown):string|null {
   const message='The design length must be a canonical whole number from 0 to 1,000,000 metres for WFC Apply.';

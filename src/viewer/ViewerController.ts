@@ -377,7 +377,7 @@ export class ViewerController {
 
   async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}): Promise<{ snapshot: unknown; summary: Record<string, unknown> }> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    const input = request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })), equipmentNames: [...request.equipmentNames] } : { routeCodes: [...request.routeCodes], allowedCategories: [...request.allowedCategories], equipmentNames: [...request.equipmentNames] };
+    const input = request.lookupRouteCodes ? { lookupRouteCodes: [...request.lookupRouteCodes], equipmentNames: [...request.equipmentNames] } : request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })), equipmentNames: [...request.equipmentNames] } : { routeCodes: [...request.routeCodes], allowedCategories: [...request.allowedCategories], equipmentNames: [...request.equipmentNames] };
     this.clear('selection'); const generation = this.routeGeneration;
     if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) throw new DOMException('Model capture cancelled.', 'AbortError');
     const captureId = uuid(), assembler = createModelCaptureAssembler();

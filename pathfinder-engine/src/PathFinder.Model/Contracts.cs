@@ -28,6 +28,8 @@ public sealed record CaptureEvidence
     public required bool PlanningVisibilityKnown { get; init; }
     public required bool SourceLinkVerified { get; init; }
     public required string[] EvidenceSha256 { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? LookupRouteCodes { get; init; }
 }
 public sealed record CoordinateEvidence
 {

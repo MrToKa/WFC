@@ -37,7 +37,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
   const height = useRoutingsViewerHeight(anchor);
   const pf = usePathFinder({ projectId, loadedProjectId, token, isAdmin, container });
   const panelId = useId(), interaction = useRef(0);
-  const [mode, setMode] = useState<'routes' | 'path'>('path');
+  const [mode, setMode] = useState<'routes' | 'path' | 'lookup'>('path');
+  const [lookupBusy, setLookupBusy] = useState(false);
   const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone'>('none');
   const [secondaryDistance, setSecondaryDistance] = useState('2'), [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
   const [standaloneNames, setStandaloneNames] = useState<string[]>([]);
@@ -59,7 +60,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
   const latestLocationDraft = useRef({ draft, modelVersionId: data?.activeModel.modelVersionId, selectionRevision: data?.activeModel.selectionRevision });
   latestLocationDraft.current = { draft, modelVersionId: data?.activeModel.modelVersionId, selectionRevision: data?.activeModel.selectionRevision };
   useEffect(() => { interaction.current++; setDraft(emptyDraft()); setCandidates(null); setPicking(false); setNotice(null); }, [data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
-  const changeMode = (next: 'routes' | 'path') => {
+  const changeMode = (next: 'routes' | 'path' | 'lookup') => {
     if (next === mode) return;
     restoreView(); setSearching(false); setLocalError(null); setMode(next);
   };
@@ -143,24 +144,31 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
         <div role="status" aria-live="polite" data-testid="pathfinder-status" data-phase={pf.viewerPhase}>
           {pf.loading || pf.viewerPhase === 'loading' ? <Spinner size="tiny" label={pf.viewerMessage} /> : <Body1>{pf.viewerMessage}</Body1>}
         </div>
-        {routeRulesDirty ? <Body1 role="alert">Route rules have changed. Prepare all rules in Routes or discard the draft before calculating, reviewing or applying paths.</Body1> : null}
+        {routeRulesDirty ? <Body1 role="alert">Route rules have changed. Prepare all rules in Routes or discard the draft before calculating, reviewing or applying Path results. Path lookup uses the active model independently.</Body1> : null}
         <div className={styles.actions}><Button disabled={pf.busy} onClick={pf.refresh}>Refresh Path Finder</Button><Button disabled={pf.busy} onClick={pf.reloadViewer}>Reload model</Button></div>
         {pf.error || localError ? <Body1 role="alert" className={styles.error}>{localError ?? pf.error}</Body1> : null}
         {notice ? <Body1 role="status">{notice}</Body1> : null}
         <div className={extra.warning} data-testid="pathfinder-readiness">
-          <Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects. Review the route and length before applying.` : 'Prepare the selected model network or import a canonical snapshot for automatic routing.'}</Body1>
-          <Caption1>Calculations create proposals. Cable values change only after review and Apply.</Caption1>
+          {mode === 'lookup' ? <><Body1>Path lookup reads the ordered route geometry from the active model. Routes preparation and category drafts are independent.</Body1><Caption1>This tool does not change cable endpoints, routes or lengths.</Caption1></> : <><Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects. Review the route and length before applying.` : 'Prepare the selected model network or import a canonical snapshot for automatic routing.'}</Body1><Caption1>Calculations create proposals. Cable values change only after review and Apply.</Caption1></>}
         </div>
-        <Caption1>Connection gap: {data?.settings.connectionGap ?? 'Not set'} m; SECONDARY: {data?.settings.secondaryTrayLength ?? 'Not set'} m; connection reserve: {data?.settings.endConnectionLength ?? 'Not set'} m; increase: {data?.settings.additionalBendingPercent ?? 'Not set'}%. Change these in Project Details.</Caption1>
+        {mode !== 'lookup' ? <Caption1>Connection gap: {data?.settings.connectionGap ?? 'Not set'} m; SECONDARY: {data?.settings.secondaryTrayLength ?? 'Not set'} m; connection reserve: {data?.settings.endConnectionLength ?? 'Not set'} m; increase: {data?.settings.additionalBendingPercent ?? 'Not set'}%. Change these in Project Details.</Caption1> : null}
         <div className={styles.actions}>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Clear</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={pf.zoom}>Zoom to path</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
-        <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, value) => changeMode(value.value as 'routes' | 'path')}>
+        <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, value) => changeMode(value.value as 'routes' | 'path' | 'lookup')}>
           <Tab id={`${panelId}-routes-tab`} value="routes" aria-controls={`${panelId}-routes-panel`}>Routes</Tab>
           <Tab id={`${panelId}-path-tab`} value="path" aria-controls={`${panelId}-path-panel`}>Path</Tab>
+          <Tab id={`${panelId}-lookup-tab`} value="lookup" aria-controls={`${panelId}-lookup-panel`}>Path lookup</Tab>
         </TabList>
+        <div className={extra.panel} style={{ display: mode === 'routes' ? 'none' : 'flex' }}>
+          <Field label="Background transparency to apply (%)"><Input aria-label="Background transparency to apply percent" disabled={pf.busy || mode === 'lookup' && lookupBusy} value={transparency} onChange={(_, value) => setTransparency(value.value)} /></Field>
+          <div className={styles.actions}>
+            <Button disabled={pf.busy || mode === 'lookup' && lookupBusy || pf.viewerPhase !== 'ready' || displayOwner === 'none' || !Number.isInteger(transparencyValue) || transparencyValue < 0 || transparencyValue > 100} onClick={() => void pf.setPathTransparency(transparencyValue)}>Apply transparency</Button>
+            <Button disabled={pf.busy || mode === 'lookup' && lookupBusy || pf.viewerPhase !== 'ready' || displayOwner === 'none'} onClick={() => { setTransparency('0'); void pf.setPathTransparency(0); }}>Opaque background</Button>
+          </div>
+        </div>
         <div id={`${panelId}-routes-panel`} role="tabpanel" aria-labelledby={`${panelId}-routes-tab`} className={extra.panel} style={{ display: mode === 'routes' ? 'flex' : 'none' }}>
         <PathFinderRoutes key={externalSnapshotRevision} pf={pf} active={mode === 'routes'} selectedCable={selected} standaloneNames={standaloneNames} onRulesDirtyChange={dirty => { setRouteRulesDirty(dirty); if (dirty) restoreView(); }} />
         <details><summary>Advanced model preparation and import</summary>
@@ -179,11 +187,6 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
         <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { restoreView(); setSecondaryDistance(value.value); }} /></Field>
         {!preferences ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
-        <Field label="Background transparency to apply (%)"><Input aria-label="Background transparency to apply percent" value={transparency} onChange={(_, value) => setTransparency(value.value)} /></Field>
-        <div className={styles.actions}>
-          <Button disabled={pf.viewerPhase !== 'ready' || displayOwner === 'none' || !Number.isInteger(transparencyValue) || transparencyValue < 0 || transparencyValue > 100} onClick={() => void pf.setPathTransparency(transparencyValue)}>Apply transparency</Button>
-          <Button disabled={pf.viewerPhase !== 'ready' || displayOwner === 'none'} onClick={() => { setTransparency('0'); void pf.setPathTransparency(0); }}>Opaque background</Button>
-        </div>
         <PathFinderPreview pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={routeRulesDirty ? null : preferences} onInputChange={restoreView} onEndpointNamesChange={updateStandaloneNames} />
         <details open><summary>Project cables and shared locations</summary>
         <div className={styles.actions}>
@@ -233,7 +236,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
         </details>
         </details>
         <PathFinderResults pf={pf} selectedCableId={selectedCableId} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal')} options={routeRulesDirty ? null : preferences} />
-        <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} />
+        </div>
+        <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
+          <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={restoreView} onBusyChange={setLookupBusy} />
         </div>
       </div>
       <div className={styles.host} ref={container} data-testid="pathfinder-model-host" />

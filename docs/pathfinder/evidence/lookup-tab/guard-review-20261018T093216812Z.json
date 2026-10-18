@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "pathfinder.lookup.read-only-review.v1",
+  "observedAtUtc": "2026-10-18T09:32:16.8085716Z",
+  "mode": "read-only",
+  "backendAndHookFindings": [],
+  "adjacentUiFinding": {
+    "priority": 2,
+    "file": "src/pages/ProjectDetails/PathFinderLookup.tsx",
+    "issue": "After lookup create ACK, tab switch/common Clear drops queued job ID without durable cancellation",
+    "state": "PARENT_ACCEPTED_FIX_ASSIGNED",
+    "owner": "/root/web_tabs_map"
+  },
+  "sourceFiles": [
+    {
+      "path": "server/pathfinder/lookups.ts",
+      "bytes": 11862,
+      "sha256": "e458cb5388ea3f07f8011a14f6acf4d10ca7fc7410c68afae501d6c4ee4d70a8"
+    },
+    {
+      "path": "server/pathfinder/contracts.ts",
+      "bytes": 6015,
+      "sha256": "341794e09e1cc49465319a34f9955687ed2694a48f7dac2c9bde1f0564c442a2"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "bytes": 6921,
+      "sha256": "98d3b0f17a23d8c8a1659e725b9844d7440fd3c06db6dc3810e8a5a86f58f6cb"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "bytes": 21712,
+      "sha256": "8e0f022a1104ab5f61fea26a1f9bd788cb46cf52f60400af70277cb9806c4038"
+    },
+    {
+      "path": "server/pathfinder/schema.ts",
+      "bytes": 8470,
+      "sha256": "f986dbba12e8197232b2718906f7d1fc801f496f3cfc4f23283b1fb65d36b06b"
+    },
+    {
+      "path": "server/pathfinder/storage.ts",
+      "bytes": 3068,
+      "sha256": "1b80beea5c4ac3d12232b0f796973335e1299b6d4bc4dc810d314f779eb0ec46"
+    },
+    {
+      "path": "server/pathfinder/worker.ts",
+      "bytes": 15727,
+      "sha256": "6c5806b03b864645cf27709f81b5104937d80db946cc53e1f755a5415390c718"
+    },
+    {
+      "path": "server/pathfinder/auth.ts",
+      "bytes": 2496,
+      "sha256": "7c69e345036f627606617b3ba8ff1b0b6a0639e94f5bd885d3d55157895848ef"
+    },
+    {
+      "path": "server/routes/pathfinderRoutes.ts",
+      "bytes": 6772,
+      "sha256": "772accd194195882693bc2c2053dd1dccc7cb917be542aa5833ab533d2ec8095"
+    },
+    {
+      "path": "server/app.ts",
+      "bytes": 5182,
+      "sha256": "09bbfb341f495a4f8d1a5e398427db0f85d7b1198bfdfbc1028a2a25c3d4bf2e"
+    },
+    {
+      "path": "docker/pathfinder.nginx.conf",
+      "bytes": 6101,
+      "sha256": "59fda9eead80aaac29578acd54b0e1d6197d9711b3387787070a6b9ffba66111"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "bytes": 20180,
+      "sha256": "77bbed8b2d480b8fc13ee3a861b7d10b9aa33a021c167440cea4c318317da0ac"
+    }
+  ],
+  "cleanup": {
+    "target": "C:/Users/todor.chankov/source/WFC-pathfinder-local/pathfinder-engine/.scratch/lookup-model-compat-459be54639f5400ebe91f856c64d7f5a",
+    "status": "REJECTED_RETAINED",
+    "reason": "Automatic approval review: blocked by policy",
+    "retryOrBypass": false,
+    "runnerDllRetained": true
+  }
+}

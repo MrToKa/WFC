@@ -37,6 +37,13 @@ const authorizePathFinderBody: RequestHandler = async (req, res, next) => {
     res.status(safe.status).json({ code: safe.code, error: safe.message });
   }
 };
+// raw-body may drain an oversized declared stream before reporting its error.
+// Bound authenticated declared captures immediately, even when no body bytes arrive.
+const pathFinderBodyLimit = (bytes:number):RequestHandler => (req,res,next) => {
+  const declared=req.header('content-length');
+  if (declared!==undefined && Number(declared)>bytes) {res.status(413).json({code:'ARTIFACT_LIMIT',error:'The computational snapshot exceeds the upload limit.'});return;}
+  next();
+};
 
 export const createApp = (): Express => {
   const app = express();
@@ -54,13 +61,14 @@ export const createApp = (): Express => {
     /^\/api\/projects\/[^/]+\/(change-orders|internal-ncrs)\/[^/]+\/materials(\/preview)?$/,
     express.json({ limit: '5mb' }),
   );
-  // Reject unauthenticated/non-admin artifact uploads before buffering a large
+  // Reject unauthenticated/non-admin artifact and lookup captures before buffering a large
   // computational snapshot. The PF router rechecks project/model dependencies.
   app.use(
-    /^\/api\/projects\/[0-9a-f-]{36}\/pathfinder\/artifacts\/?$/i,
+    /^\/api\/projects\/[0-9a-f-]{36}\/pathfinder\/(artifacts|lookups)\/?$/i,
     authenticate,
     requireAdmin,
     authorizePathFinderBody,
+    pathFinderBodyLimit(256*1024*1024),
     express.json({ limit: '256mb' }),
   );
   app.use(

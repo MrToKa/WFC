@@ -20,18 +20,20 @@ class Vector {
 }
 class Box { constructor() { this.min = new Vector(Infinity, Infinity, Infinity); this.max = new Vector(-Infinity, -Infinity, -Infinity); } isEmpty() { return this.min.x > this.max.x; } }
 const request = { captureId: '11111111-1111-4111-8111-111111111111', projectId: '22222222-2222-4222-8222-222222222222', modelVersionId: '33333333-3333-4333-8333-333333333333', contentFingerprint: 'a'.repeat(64), routeCodes: ['/TRAY-01'], allowedCategories: ['LV', 'Control'], equipmentNames: [' P-001 ', 'MISSING', 'café'] };
-function fixture({ ambiguous = true, nonfinite = false, indices = [0, 1, 2], emptyEndpoint = false, malformedParent = false, worldOffset = 0.125, rawOffset = 100000000.123 } = {}) {
+function fixture({ ambiguous = true, nonfinite = false, indices = [0, 1, 2], emptyEndpoint = false, malformedParent = false, worldOffset = 0.125, rawOffset = 100000000.123, lookupNames = false, hiddenIds = [], offIds = [], hiddenFragments = [] } = {}) {
   const names = new Map([[1, 'Plant'], [2, 'TRAY-01'], [3, 'Straight tray'], [4, 'Pump object'], [5, 'Second pump'], [6, 'Unicode equipment']]);
+  if (lookupNames) { names.set(2, 'Imported /BC001'); names.set(3, 'FTUBE /BC001/123'); }
   const parents = new Map([[1, 0], [2, 1], [3, malformedParent ? 3 : 2], [4, 1], [5, 1], [6, 1]]);
   const children = new Map([[1, [2, 4, 5, 6]], [2, [3]], [3, []], [4, []], [5, []], [6, []]]);
   const properties = new Map([[4, [{ displayCategory: 'Equipment', displayName: 'Equipment Tag', displayValue: 'P-001' }]], [5, ambiguous ? [{ displayCategory: 'Equipment', displayName: 'Tag', displayValue: 'p-001' }] : []], [6, [{ displayCategory: 'Equipment', displayName: 'Location', displayValue: 'cafe\u0301' }]]]);
   const tree = { getRootId: () => 1, getNodeName: id => names.get(id), getNodeParentId: id => parents.get(id), getChildCount: id => children.get(id).length,
+    isNodeHidden: id => hiddenIds.includes(id), isNodeOff: id => offIds.includes(id),
     enumNodeChildren(id, visit, recursive) { if (recursive && id === 1) visit(1); for (const child of children.get(id)) { if (visit(child)) return; if (recursive) this.enumNodeChildren(child, visit, true); } },
     enumNodeFragments(id, visit) { if (id === 3) visit(0); if ([4, 5, 6].includes(id) && !(emptyEndpoint && id === 4)) visit(id); },
     getNodeBox(id, box) { if (id === 4 && emptyEndpoint) box.set([2000, 3000, 4000, 2100, 3100, 4100]); },
   };
   const geometry = { vertices: [[0, 0, 0], [1000, 0, 0], [0, 1000, nonfinite ? NaN : 0]], indices };
-  const fragments = { getGeometry: () => geometry, getWorldMatrix(_id, value) { value.makeScale(1, 1, 1); value.elements[12] = worldOffset; }, getOriginalWorldMatrix(_id, value) { value.makeScale(1, 1, 1); }, getWorldBounds(id, value) { value.min = new Vector(2000 + id, 3000, 4000); value.max = new Vector(2100 + id, 3100, 4100); } };
+  const fragments = { isFragVisible: id => !hiddenFragments.includes(id), getGeometry: () => geometry, getWorldMatrix(_id, value) { value.makeScale(1, 1, 1); value.elements[12] = worldOffset; }, getOriginalWorldMatrix(_id, value) { value.makeScale(1, 1, 1); }, getWorldBounds(id, value) { value.min = new Vector(2000 + id, 3000, 4000); value.max = new Vector(2100 + id, 3100, 4100); } };
   const model = { getObjectTree: success => success(tree), getFragmentList: () => fragments, getUnitScale: () => 0.001, getUnitString: () => 'mm', getUpVector: () => [0, 0, 1], getGlobalOffset: () => new Vector(rawOffset, 0, 0), getData: () => ({}), getBulkProperties: (ids, _options, success) => success(ids.map(dbId => ({ dbId, externalId: 'external-' + dbId, properties: properties.get(dbId) ?? [] }))), getExternalIdMapping: success => success(Object.fromEntries([...names.keys()].map(id => ['external-' + id, id]))) };
   globalThis.Autodesk = { Viewing: { Private: { LmvMatrix4: Matrix, enumMeshVertices: (geo, visit) => geo.vertices.forEach((value, index) => visit(new Vector(...value), null, null, index)), enumMeshTriangles: (geo, visit) => { for (let index = 0; index < geo.indices.length; index += 3) visit(null, null, null, ...geo.indices.slice(index, index + 3)); } } } };
   globalThis.THREE = { Vector3: Vector, Box3: Box }; globalThis.LMV_VIEWER_VERSION = '7.130.0';
@@ -40,6 +42,41 @@ function fixture({ ambiguous = true, nonfinite = false, indices = [0, 1, 2], emp
 async function collect(options = {}, input = request) { const value = fixture(options), events = [], assembler = createModelCaptureAssembler(); for await (const event of captureSelectedModel({ model: value.model }, input)) { events.push(event); assembler.accept(event); } return { snapshot: assembler.finish(), summary: assembler.summary(), events, ...value }; }
 const ruleRequest = rules => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], routeRules: rules }; };
 const rule = (objectIds, allowedCategories, id = '44444444-4444-4444-8444-444444444444') => ({ id, objectIds, allowedCategories });
+const lookupRequest = (lookupRouteCodes = ['/BC001']) => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], lookupRouteCodes }; };
+
+test('independent lookup broadly discovers qualified names without JS owner parsing or planning assignments', async () => {
+  const { snapshot, summary } = await collect({ lookupNames: true }, lookupRequest());
+  assert.equal(snapshot.capture.adapterVersion, 'wfc.protected-lookup-capture.v1'); assert.deepEqual(snapshot.capture.lookupRouteCodes, ['/BC001']);
+  const leaf = snapshot.objects.find(object => object.dbId === 3);
+  assert.equal(leaf.routeBoundaryId, undefined); assert.equal(leaf.routeName, undefined); assert.equal(leaf.shapeName, undefined);
+  assert.equal(leaf.categoryAssignmentSource, 'lookup-all-categories'); assert.deepEqual(leaf.allowedCategories, ['MV', 'LV', 'Control']);
+  assert.deepEqual(leaf.leafToRootNames, ['FTUBE /BC001/123', 'Imported /BC001', 'Plant']);
+  assert.equal(leaf.nativeHidden, null); assert.equal(snapshot.capture.planningVisibilityKnown, false);
+  assert.equal(summary.scope.kind, 'independent-lookup-network'); assert.match(summary.scope.visibility, /native-unknown/);
+});
+test('independent lookup excludes hidden ancestors, off nodes and invisible fragment geometry without fabricating native proof', async () => {
+  for (const options of [{ hiddenIds: [2] }, { hiddenIds: [3] }, { offIds: [1] }, { hiddenFragments: [0] }])
+    await assert.rejects(() => collect({ lookupNames: true, ...options }, lookupRequest()), { code: 'LOOKUP_GEOMETRY_NOT_FOUND' });
+  await assert.rejects(() => collect({ lookupNames: true }, lookupRequest(['/MISSING'])), { code: 'LOOKUP_GEOMETRY_NOT_FOUND' });
+});
+test('independent lookup requires visibility support and exclusive canonical C# planned scope', async () => {
+  const value = fixture({ lookupNames: true }); delete value.tree.isNodeHidden;
+  await assert.rejects(async () => { for await (const _event of captureSelectedModel({ model: value.model }, lookupRequest())) { /* no partial result */ } }, /visibility cannot be established/);
+  for (const bad of [{ ...lookupRequest(), routeCodes: ['BC001'] }, { ...lookupRequest(), routeRules: [rule([2], ['MV'])] }, { ...lookupRequest(), equipmentNames: ['P-001'] }, lookupRequest(['bc001']), lookupRequest(['/SECONDARY']), lookupRequest(Array(101).fill('/BC001'))])
+    await assert.rejects(() => collect({ lookupNames: true }, bad), /Independent lookup/);
+});
+test('lookup capture retains cancellation and model identity fences', async () => {
+  const value = fixture({ lookupNames: true }), controller = new AbortController(), viewer = { model: value.model };
+  const iterator = captureSelectedModel(viewer, lookupRequest(), { signal: controller.signal }); await iterator.next(); controller.abort();
+  await assert.rejects(() => iterator.next(), { name: 'AbortError' });
+  const other = captureSelectedModel(viewer, lookupRequest()); await other.next(); viewer.model = {};
+  await assert.rejects(() => other.next(), /model changed/);
+});
+test('lookup refuses partially visible physical meshes rather than changing the fitting geometry', async () => {
+  const value = fixture({ lookupNames: true, hiddenFragments: [1] }), original = value.tree.enumNodeFragments;
+  value.tree.enumNodeFragments = (id, visit) => { original.call(value.tree, id, visit); if (id === 3) visit(1); };
+  await assert.rejects(async () => { for await (const _event of captureSelectedModel({ model: value.model }, lookupRequest())) { /* no partial snapshot */ } }, /partially visible fragment geometry/);
+});
 
 test('ordered route selections recursively capture deepest geometry with the latest overlapping categories and exact selected root boundary', async () => {
   const { snapshot, summary } = await collect({}, ruleRequest([rule([2], ['MV']), rule([3], ['Control'], '55555555-5555-4555-8555-555555555555')]));
@@ -145,15 +182,18 @@ test('canonical capture JSON rejects duplicate object members and unexpected obj
   const extra = createModelCaptureAssembler(); before.forEach(event => extra.accept(event)); const object = JSON.parse(firstObject.text); object.unexpected = true;
   assert.throws(() => extra.accept({ ...firstObject, text: JSON.stringify(object) }), /captured object/);
 });
-test('legacy and selected-boundary SDK captures cross the strict C# SnapshotReader and model-worker boundary', async () => {
-  for (const captureRequest of [request, ruleRequest([rule([2], ['LV'])])]) {
-    const { snapshot } = await collect({}, captureRequest), root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), scratch = path.join(root, 'pathfinder-engine/.scratch/protected-capture-interop-' + randomUUID()), snapshotId = randomUUID();
+test('legacy, selected-boundary and independent lookup SDK captures cross the strict C# model-worker boundary', async () => {
+  for (const captureRequest of [request, ruleRequest([rule([2], ['LV'])]), lookupRequest()]) {
+    const lookup = Boolean(captureRequest.lookupRouteCodes);
+    const { snapshot } = await collect({ lookupNames: lookup }, captureRequest), root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), scratch = path.join(root, 'pathfinder-engine/.scratch/protected-capture-interop-' + randomUUID()), snapshotId = randomUUID();
     await fs.mkdir(path.join(scratch, 'snapshots'), { recursive: true });
     try {
       const bytes = Buffer.from(JSON.stringify(snapshot)); await fs.writeFile(path.join(scratch, 'snapshots', snapshotId + '.json'), bytes, { flag: 'wx' });
-      const input = { schemaVersion: 'pathfinder.model.runner.v1', requestId: randomUUID(), operation: 'prepare', projectId: snapshot.model.projectId, modelVersionId: snapshot.model.modelVersionId, snapshotId, snapshotSha256: createHash('sha256').update(bytes).digest('hex'), timeoutMilliseconds: 30000 };
-      const result = spawnSync('dotnet', [path.join(root, 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll')], { cwd: root, windowsHide: true, input: JSON.stringify(input), encoding: 'utf8', timeout: 40000, maxBuffer: 8 * 1024 ** 2, env: { ...process.env, PF_ROOT: scratch, DOTNET_CLI_HOME: path.join(root, 'pathfinder-engine/.dotnet-home'), DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false' } });
-      assert.equal(result.status, 0, result.stderr); const response = JSON.parse(result.stdout); assert.equal(response.status, 'prepared', result.stdout); assert.equal(response.engineeringAccepted, false); assert.equal(response.prepared.segmentCount, 1);
+      const input = { schemaVersion: 'pathfinder.model.runner.v1', requestId: randomUUID(), operation: lookup ? 'lookup' : 'prepare', projectId: snapshot.model.projectId, modelVersionId: snapshot.model.modelVersionId, snapshotId, snapshotSha256: createHash('sha256').update(bytes).digest('hex'), timeoutMilliseconds: 30000,
+        ...(lookup ? { routeText: '/bc001/SECONDARY/BC001', options: { connectionToleranceMeters: 1, sampleSpacingMeters: .25, secondaryDistanceMeters: 2, preferVerticalApproach: true, maxGraphNodes: 10000, maxGraphConnections: 30000 } } : {}) };
+      const result = spawnSync('dotnet', [process.env.PF_MODEL_RUNNER_DLL ?? path.join(root, 'pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll')], { cwd: root, windowsHide: true, input: JSON.stringify(input), encoding: 'utf8', timeout: 40000, maxBuffer: 8 * 1024 ** 2, env: { ...process.env, PF_ROOT: scratch, DOTNET_CLI_HOME: path.join(root, 'pathfinder-engine/.dotnet-home'), DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false' } });
+      assert.equal(result.status, 0, result.stderr); const response = JSON.parse(result.stdout); assert.equal(response.status, lookup ? 'calculated' : 'prepared', result.stdout); assert.equal(response.engineeringAccepted, false); assert.equal(response.prepared.segmentCount, 1);
+      if (lookup) { assert.equal(response.lookupScope.resolvedLeafCount, 1); assert.equal(response.usedConnectionGapMeters, 1); assert.equal(response.design, null); }
     } finally {
       const owned = path.resolve(root, 'pathfinder-engine/.scratch'); if (path.dirname(scratch) !== owned || !path.basename(scratch).startsWith('protected-capture-interop-')) throw Error('Refusing unexpected test cleanup target.');
       await fs.rm(scratch, { recursive: true, force: false });

@@ -51,7 +51,7 @@ async function resolveEndpoint(client:PoolClient,projectId:string,modelId:string
 export async function collectPreviewDependencies(client:PoolClient,projectId:string,input:PreviewInput):Promise<PreviewDependencies> {
   const requested={...defaultOptions,secondaryDistanceMeters:input.secondaryDistanceMeters ?? defaultOptions.secondaryDistanceMeters,
     preferVerticalApproach:input.preferVerticalApproach ?? defaultOptions.preferVerticalApproach};
-  const model=await collectLookupDependencies(client,projectId,{routeText:'',reverse:input.reverse,options:requested,artifactId:input.artifactId,expectedSelectionRevision:input.expectedSelectionRevision});
+  const model=await collectLookupDependencies(client,projectId,{routeText:'',reverse:input.reverse,options:requested,artifactId:input.artifactId,expectedSelectionRevision:input.expectedSelectionRevision,planningOnly:true});
   const registry=(await client.query<{registry_revision:string}>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0];
   if (!registry || registry.registry_revision!==input.expectedRegistryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409,'The shared location registry changed. Refresh before calculating.');
   const current=await projectRoutingSettings(client,projectId,requested);

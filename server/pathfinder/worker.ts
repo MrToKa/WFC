@@ -66,6 +66,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
         modelVersionId:dependencies.modelVersionId,snapshotId:dependencies.artifactId,snapshotSha256:dependencies.snapshotSha256,timeoutMilliseconds:job.timeout_ms,
         routeText:dependencies.routeText,reverse:dependencies.reverse,options:dependencies.options},signal);
       signal.throwIfAborted();
+      await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
       await principalTransaction(pool,job.project_id,principal(job),async client => {
         await fencedJob(client,job);let stale=false;
         try {stale=hash(await collectLookupDependencies(client,job.project_id,dependencies))!==hash(dependencies);} catch {stale=true;}

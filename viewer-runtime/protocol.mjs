@@ -25,6 +25,7 @@ const categories = (value, allowEmpty = false) => Array.isArray(value) && (allow
 const equipmentNames = value => Array.isArray(value) && value.length <= 256 && value.every(item => text(item, 256) && item.trim().length > 0);
 function captureRequest(value) {
   if (!isUuid(value?.captureId) || !equipmentNames(value?.equipmentNames)) return false;
+  if (exact(value, ['captureId', 'lookupRouteCodes', 'equipmentNames'])) return value.equipmentNames.length === 0 && Array.isArray(value.lookupRouteCodes) && value.lookupRouteCodes.length > 0 && value.lookupRouteCodes.length <= 100 && value.lookupRouteCodes.every(item => text(item, 256) && /^\/[A-Z0-9][A-Z0-9_.-]*$/.test(item) && item !== '/SECONDARY');
   if (exact(value, ['captureId', 'routeCodes', 'allowedCategories', 'equipmentNames'])) return Array.isArray(value.routeCodes) && value.routeCodes.length > 0 && value.routeCodes.length <= 100 && value.routeCodes.every(item => text(item, 256) && item.trim().length > 0) && categories(value.allowedCategories);
   return exact(value, ['captureId', 'routeRules', 'equipmentNames']) && Array.isArray(value.routeRules) && value.routeRules.length > 0 && value.routeRules.length <= 100 && value.routeRules.every(rule => exact(rule, ['id', 'objectIds', 'allowedCategories']) && isUuid(rule.id) && boundedIds(rule.objectIds) && rule.objectIds.length > 0 && categories(rule.allowedCategories, true)) && new Set(value.routeRules.map(rule => rule.id)).size === value.routeRules.length && value.routeRules.reduce((count, rule) => count + rule.objectIds.length, 0) <= 512;
 }

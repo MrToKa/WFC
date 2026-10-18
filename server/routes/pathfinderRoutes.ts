@@ -6,7 +6,7 @@ import { artifactSchema, bindLocationSchema, createLocationSchema, revision, uui
 import { PathFinderError } from '../pathfinder/errors.js';
 import { createPathFinderRepository } from '../pathfinder/repository.js';
 import { getPathFinderRuntime } from '../pathfinder/runtime.js';
-import { applySchema, createJobSchema, lookupSchema, reviewSchema } from '../pathfinder/jobContracts.js';
+import { applySchema, createJobSchema, lookupSchema, lookupPlanSchema, reviewSchema } from '../pathfinder/jobContracts.js';
 import { principalTransaction, requestPrincipal as principal } from '../pathfinder/auth.js';
 import { previewSchema } from '../pathfinder/previews.js';
 
@@ -62,6 +62,12 @@ pathfinderRouter.post('/proposals/:proposalId/review',async (req,res) => {
 });
 pathfinderRouter.post('/proposals/:proposalId/apply',async (req,res) => {
   try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().apply(projectId,principal(req),uuid.parse(req.params.proposalId),applySchema.parse(req.body)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.post('/lookups/plan',async(req,res)=>{
+  const controller=new AbortController(),abort=()=>controller.abort(),closed=()=>{if (!res.writableEnded) controller.abort();};
+  req.once('aborted',abort);res.once('close',closed);
+  try {const {projectId}=identity(req);res.json(await getPathFinderRuntime().lookups.plan(projectId,principal(req),lookupPlanSchema.parse(req.body),controller.signal));}catch(error){failure(res,error);}
+  finally {req.off('aborted',abort);res.off('close',closed);}
 });
 pathfinderRouter.post('/lookups',async (req,res) => {
   try {const {projectId}=identity(req);res.status(202).json(await getPathFinderRuntime().lookups.create(projectId,principal(req),lookupSchema.parse(req.body)));} catch(error){failure(res,error);}

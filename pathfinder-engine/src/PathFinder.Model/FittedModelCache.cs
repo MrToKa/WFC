@@ -46,6 +46,8 @@ public sealed class FittedModelCache
             cancellation.ThrowIfCancellationRequested();
             if (memory.TryGetValue(key, out var hit)) return hit;
             var snapshot = SnapshotReader.Read(snapshotJson, limits, cancellation);
+            if (snapshot.Capture.LookupRouteCodes is not null && snapshot.Objects.Any(item => item.GeometryRole == "routing-leaf" && item.RouteBoundaryId is null))
+                throw new ArgumentException("Independent lookup must resolve its bounded logical-owner scope before fitting geometry.");
             var objectIdentities = new HashSet<string>(StringComparer.Ordinal);
             foreach (var item in snapshot.Objects) { cancellation.ThrowIfCancellationRequested(); objectIdentities.Add(item.Id); }
             foreach (var excludedId in rules.ExcludedObjectIds)
