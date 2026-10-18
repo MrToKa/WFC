@@ -121,11 +121,10 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       return { ...result, captureSummary: captured.summary };
     } finally { if (run.viewer.getLoadSnapshot()?.ready) update(run, { viewerMessage: 'The active model is ready.' }); }
   }), [live, perform, projectId, token, update]);
-  const startLookup = useCallback((routeText: string, reverse: boolean, connectionToleranceMeters = 0.25) => perform(async (data, run) => {
+  const startLookup = useCallback((routeText: string, reverse: boolean) => perform(async (data, run) => {
     const artifactId = data.artifacts[0]?.id;
     if (!artifactId || !routeText.trim() || routeText.length > 8000) throw new Error('Prepare the selected model and enter a bounded route');
-    const result = await pathFinderRequest(projectId!, token!, '/lookups', 'POST', { routeText, reverse, expectedSelectionRevision: data.activeModel.selectionRevision, artifactId,
-      options: { connectionToleranceMeters, sampleSpacingMeters: 0.125, secondaryDistanceMeters: 2, preferVerticalApproach: true, maxGraphNodes: 200000, maxGraphConnections: 1000000 } }, run.abort.signal);
+    const result = await pathFinderRequest(projectId!, token!, '/lookups', 'POST', { routeText, reverse, expectedSelectionRevision: data.activeModel.selectionRevision, artifactId }, run.abort.signal);
     if (typeof result.jobId !== 'string') throw new Error('Invalid lookup response'); return result.jobId;
   }), [perform, projectId, token]);
   const readLookup = useCallback(async (jobId: string) => {

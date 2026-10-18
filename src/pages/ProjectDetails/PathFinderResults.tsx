@@ -39,7 +39,7 @@ export function PathFinderResults({ pf, selectedCableId }: Props) {
     } finally { if (operation.current === current) setPreviewLoading(false); }
   };
   const confirmReview = async () => {
-    if (!proposal || !pathDisplayed) return;
+    if (!proposal || !pathDisplayed || !effectiveCanApply || stale || pf.busy) return;
     const reviewed = await pf.reviewProposal(proposal); if (!reviewed) return;
     setProposal(reviewed.proposal); setReviewId(reviewed.reviewId); setApplyKey(crypto.randomUUID()); setNotice('Review confirmed for this immutable proposal.');
   };
@@ -54,7 +54,7 @@ export function PathFinderResults({ pf, selectedCableId }: Props) {
   return <section className={styles.result} aria-label="PathFinder calculations">
     <h3>Calculate and review</h3>
     <Body1>Ready cables are calculated automatically as proposals.</Body1>
-    <Caption1>Calculations use the active model, shared locations and all three values from Project Details. Instrumentation follows Control.</Caption1>
+    <Caption1>Calculations use the active model, shared locations, connection gap and allowances from Project Details. Instrumentation follows Control.</Caption1>
     <div className={styles.actions}>
       <Button disabled={!data?.artifacts.length || pf.busy || !data.cables.length || data.cables.length > 10000} onClick={() => void pf.calculate(undefined, true)}>Calculate all cables</Button>
       <Button disabled={!data?.artifacts.length || pf.busy || !selectedCableId} onClick={() => void pf.calculate([selectedCableId!], true)}>Calculate selected cable</Button>
@@ -80,7 +80,7 @@ export function PathFinderResults({ pf, selectedCableId }: Props) {
     {proposal ? <section className={styles.result} aria-label="Proposal review" data-testid="pathfinder-proposal" data-stale={String(stale)}>
       <h4>Proposal review</h4>
       <Body1>Cable: {data?.cables.find(cable => cable.id === proposal.cableId)?.tag ?? proposal.cableId}</Body1>
-      <Body1>{proposal.synthetic ? 'Local synthetic fixture. This verifies application behaviour; it does not establish real-model engineering acceptance.' : 'Real model. Engineering acceptance is required before Apply.'}</Body1>
+      <Body1>{proposal.synthetic ? 'Local synthetic fixture for demonstration.' : 'Review the route and length before applying.'}</Body1>
       {stale ? <Body1 role="alert">This result is outdated. Calculate a new proposal before reviewing or applying it.</Body1> : null}
       <Body1>{proposal.message}</Body1>
       {proposal.compatibilityIssue ? <Body1 role="alert">{proposal.compatibilityIssue}</Body1> : null}
@@ -88,8 +88,8 @@ export function PathFinderResults({ pf, selectedCableId }: Props) {
       {proposal.design ? <><Body1>Before percentage: {proposal.design.lengthBeforePercentageMeters} m</Body1><Caption1>Before rounding: {proposal.design.unroundedLengthMeters} m</Caption1><Body1>Design length: {proposal.design.designLengthMeters} m</Body1></> : null}
       <Caption1>Installed length is not changed by Apply.</Caption1>
       <div className={styles.actions}>
-        <Button disabled={pf.busy || stale || !pathDisplayed || Boolean(reviewId)} onClick={() => void confirmReview()}>Confirm proposal review</Button>
-        <Button appearance="primary" disabled={pf.busy || stale || !reviewId || !effectiveCanApply || !proposal.engineeringAccepted || applied} onClick={() => void apply()}>Apply reviewed result</Button>
+        <Button disabled={pf.busy || stale || !pathDisplayed || !effectiveCanApply || Boolean(reviewId)} onClick={() => void confirmReview()}>Confirm proposal review</Button>
+        <Button appearance="primary" disabled={pf.busy || stale || !reviewId || !effectiveCanApply || applied} onClick={() => void apply()}>Apply reviewed result</Button>
       </div>
       {!effectiveCanApply && !stale ? <Caption1>{proposal.engineeringMessage}</Caption1> : null}
     </section> : null}

@@ -15,6 +15,7 @@ export type Project = {
   customer: string;
   manager: string | null;
   description: string | null;
+  connectionGap: number;
   secondaryTrayLength: number | null;
   supportDistance: number | null;
   supportWeight: number | null;

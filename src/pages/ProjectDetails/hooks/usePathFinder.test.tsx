@@ -15,7 +15,7 @@ vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', locationId = '33333333-3333-4333-8333-333333333333';
 function state(): PathFinderState { return { schemaVersion: 1, projectId, registryRevision: '3', activeModel: { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
-  settings: { secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, cables: [], artifacts: [], jobs: [], proposals: [],
+  settings: { connectionGap: '1', secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, cables: [], artifacts: [], jobs: [], proposals: [],
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
 let container: { current: HTMLDivElement };
 beforeEach(() => {
@@ -66,5 +66,12 @@ describe('PathFinder scope and shared-location orchestration', () => {
     await act(() => result.current.calculate()); await act(() => result.current.calculate([locationId], true));
     expect(pathFinderRequest).toHaveBeenNthCalledWith(1, projectId, 'token', '/jobs', 'POST', { expectedRegistryRevision: '3', force: false }, expect.any(AbortSignal));
     expect(pathFinderRequest).toHaveBeenNthCalledWith(2, projectId, 'token', '/jobs', 'POST', { cableIds: [locationId], expectedRegistryRevision: '3', force: true }, expect.any(AbortSignal));
+  });
+  it('leaves lookup gap resolution to authoritative Project Details without a competing client override', async () => {
+    const current: PathFinderState = { ...state(), settings: { ...state().settings, connectionGap: '0.250' }, artifacts: [{ id: locationId, modelVersionId: modelId, snapshotSha256: 'a'.repeat(64), objectCount: 2, engineeringAccepted: false, readiness: 'needs_review', capture: {}, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' }] };
+    vi.mocked(fetchPathFinderState).mockResolvedValue(current); vi.mocked(pathFinderRequest).mockResolvedValue({ jobId: locationId });
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container })); await waitFor(() => expect(result.current.data).not.toBeNull());
+    await act(() => result.current.startLookup('/BC1/BC2', false));
+    expect(pathFinderRequest).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/lookups', 'POST', { routeText: '/BC1/BC2', reverse: false, expectedSelectionRevision: '2', artifactId: locationId }, expect.any(AbortSignal)); expect(result.current.data?.settings.connectionGap).toBe('0.250');
   });
 });

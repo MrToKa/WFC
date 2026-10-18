@@ -31,9 +31,21 @@ and all cables. Bindings are per model version; a historical binding remains
 visible as stale and is never silently transplanted to a new model.
 
 Artifact capture claims, a successful visual load or fitted geometry never grant
-engineering acceptance. Uploaded artifacts have `engineeringAccepted=false`,
-enforced in SQL. The unresolved native/converted reference gate is independent
-of the location registry and must not be bypassed with client data.
+native engineering acceptance. Uploaded artifacts keep `engineeringAccepted=false`,
+enforced in SQL. Under the user's manual-validation policy, a current administrator
+can explicitly confirm review of an exact, current calculated proposal and then
+Apply it locally. The review and atomic Apply record their actual actor/time/ID,
+`validationMethod=manual-review` and `nativeParity=not-performed`; this does not
+claim native parity or overall user acceptance. Historical unclassified reviews
+cannot silently grant the new manual acceptance. No model-wide accepted flag or
+capture-provided proof is used.
+
+Project Details owns the connection gap (metres), with an explicit default of
+1 for both existing and new projects. Every calculation, ordered lookup and
+current-dependency check resolves it from the project; request options cannot
+override it. The gap participates in geometry identity and requires routing
+recalculation. SECONDARY length, end connection reserve and bending percentage
+remain exact design settings and can reuse unchanged route geometry.
 
 `cable_write_revision` is owned by a database trigger, distinct from the user's
 engineering revision string. Relevant business mutations advance it even when

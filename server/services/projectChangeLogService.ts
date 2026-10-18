@@ -9,6 +9,7 @@ const labels: Record<string, string> = {
   manager: 'Project manager',
   description: 'Description',
   secondaryTrayLength: 'Secondary tray length',
+  connectionGap: 'Connection gap',
   supportDistance: 'Distance between supports',
   supportWeight: 'Support weight',
   additionalBendingPercent: 'Additional % for bending',

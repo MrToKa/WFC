@@ -7,10 +7,11 @@ import { PathFinderError } from './errors.js';
 import { defaultOptions, type EngineOptions, type JobPrincipal, type lookupSchema } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { jobDto } from './jobs.js';
+import { projectRoutingSettings } from './settings.js';
 
 type Row=Record<string,any>;
 export type LookupDependencies={schemaVersion:'pathfinder.lookup.dependencies.v1';projectId:string;modelVersionId:string;selectionRevision:string;contentFingerprint:string;
-  artifactId:string;snapshotSha256:string;routeText:string;reverse:boolean;options:EngineOptions;engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'};
+  artifactId:string;snapshotSha256:string;routeText:string;reverse:boolean;settingsRevision:string;connectionGap:string;options:EngineOptions;engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'};
 export async function collectLookupDependencies(client:PoolClient,projectId:string,input:{routeText:string;reverse:boolean;options:EngineOptions;artifactId?:string;expectedSelectionRevision?:string}):Promise<LookupDependencies> {
   const selected=await activeModel(client,projectId,undefined,input.expectedSelectionRevision);
   if (!selected.active_model_version_id) throw new PathFinderError('MODEL_REQUIRED',409);
@@ -20,8 +21,9 @@ export async function collectLookupDependencies(client:PoolClient,projectId:stri
   const artifact=await latestArtifact(client,projectId,model.id);
   if (!artifact || input.artifactId && input.artifactId!==artifact.id || artifact.content_fingerprint!==model.content_fingerprint) throw new PathFinderError('MODEL_INDEX_CONFLICT',409);
   await client.query('SELECT id FROM pf_artifacts WHERE project_id=$1 AND id=$2 FOR SHARE',[projectId,artifact.id]);
+  const current=await projectRoutingSettings(client,projectId,input.options);
   return {schemaVersion:'pathfinder.lookup.dependencies.v1',projectId,modelVersionId:model.id,selectionRevision:selection.selection_revision,contentFingerprint:model.content_fingerprint,
-    artifactId:artifact.id,snapshotSha256:artifact.snapshot_sha256,routeText:input.routeText,reverse:input.reverse,options:input.options,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'};
+    artifactId:artifact.id,snapshotSha256:artifact.snapshot_sha256,routeText:input.routeText,reverse:input.reverse,settingsRevision:current.settings.revision,connectionGap:current.settings.connectionGap,options:current.options,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'};
 }
 export function createPathFinderLookups(pool:Pool) {
   return {

@@ -8,8 +8,8 @@ export async function initializePathFinderJobs(pool: Pool): Promise<void> {
       ALTER TABLE projects ADD COLUMN IF NOT EXISTS pf_settings_revision BIGINT NOT NULL DEFAULT 0 CHECK(pf_settings_revision >= 0);
       CREATE OR REPLACE FUNCTION own_pf_settings_revision() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         NEW.pf_settings_revision := OLD.pf_settings_revision;
-        IF ROW(NEW.secondary_tray_length,NEW.end_connection_length,NEW.additional_bending_percent)
-          IS DISTINCT FROM ROW(OLD.secondary_tray_length,OLD.end_connection_length,OLD.additional_bending_percent)
+        IF ROW(NEW.connection_gap,NEW.secondary_tray_length,NEW.end_connection_length,NEW.additional_bending_percent)
+          IS DISTINCT FROM ROW(OLD.connection_gap,OLD.secondary_tray_length,OLD.end_connection_length,OLD.additional_bending_percent)
         THEN NEW.pf_settings_revision := OLD.pf_settings_revision + 1; END IF; RETURN NEW;
       END $$;
       DROP TRIGGER IF EXISTS pf_settings_revision_owned ON projects;
@@ -67,6 +67,8 @@ export async function initializePathFinderJobs(pool: Pool): Promise<void> {
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),UNIQUE(project_id,actor_id,idempotency_key),
         FOREIGN KEY(project_id,proposal_id) REFERENCES pf_proposals(project_id,id) ON DELETE CASCADE,FOREIGN KEY(project_id,cable_id) REFERENCES cables(project_id,id) ON DELETE CASCADE
       );
+      ALTER TABLE pf_reviews ADD COLUMN IF NOT EXISTS validation_method TEXT NOT NULL DEFAULT 'legacy-unclassified'
+        CHECK(validation_method IN ('legacy-unclassified','synthetic-fixture','manual-review'));
       CREATE OR REPLACE FUNCTION protect_pf_immutable_record() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         RAISE EXCEPTION 'PathFinder immutable record cannot be updated'; END $$;
       DROP TRIGGER IF EXISTS pf_artifact_immutable ON pf_artifacts;

@@ -29,7 +29,8 @@ export function createPathFinderApply(pool:Pool) {
     if (!review || review.actor_id !== who.userId || review.proposal_id !== proposalId || review.proposal_hash !== proposal.proposal_hash) throw new PathFinderError('REVIEW_REQUIRED',409,'Review this exact proposal before applying it.');
     const dependencies = proposal.dependencies as DependencySnapshot,result = proposal.result;
     if (proposal.status !== 'calculated' || !result.route?.success || !result.design || proposal.job_state !== 'complete' || proposal.cancel_requested) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409);
-    if (!await hasSyntheticProof(client,dependencies)) throw new PathFinderError('ENGINEERING_ACCEPTANCE_REQUIRED',409,'Real model Apply is blocked pending verified native/converted engineering acceptance.');
+    const synthetic=await hasSyntheticProof(client,dependencies);
+    if (!synthetic && review.validation_method!=='manual-review') throw new PathFinderError('MANUAL_REVIEW_REQUIRED',409,'Confirm manual review of this exact proposal before applying it. Historical reviews do not grant manual acceptance.');
     const current = await collectDependencies(client,projectId,proposal.cable_id,dependencies.options,true);
     if (!current.dependencies || hash(current.dependencies) !== proposal.dependency_hash || input.expectedCableWriteRevision !== current.cable.cable_write_revision) throw new PathFinderError('PROPOSAL_STALE',409,'The cable or a calculation dependency changed. Recalculate and review.');
     await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
@@ -46,8 +47,10 @@ export function createPathFinderApply(pool:Pool) {
       WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c) AS value`,[projectId,proposal.cable_id,route,Number(length),input.expectedCableWriteRevision])).rows[0]?.value;
     if (!after) throw new PathFinderError('CABLE_WRITE_CONFLICT',409);
     const provenance = {schemaVersion:'pathfinder.apply.v1',proposalId,proposalHash:proposal.proposal_hash,reviewId:input.reviewId,dependencies,
-      engineVersion:dependencies.engineVersion,calculationMode:result.calculationMode,synthetic:true,acceptanceScope:'local-synthetic-fixture',
-      engineeringAcceptanceMessage:'This is the explicitly seeded synthetic fixture; it is not acceptance of the real converted model.'};
+      engineVersion:dependencies.engineVersion,calculationMode:result.calculationMode,synthetic,acceptanceScope:synthetic?'local-synthetic-fixture':'manual-review',
+      validationMethod:synthetic?'synthetic-fixture':'manual-review',nativeParity:'not-performed',
+      review:{id:review.id,actorId:review.actor_id,reviewedAt:review.reviewed_at,validationMethod:review.validation_method},
+      engineeringAcceptanceMessage:synthetic?'This is the explicitly seeded synthetic fixture; it is not acceptance of the real converted model.':'An administrator confirmed manual review of this exact proposal. Native engineering parity has not been performed; broader user acceptance remains pending.'};
     await client.query(`INSERT INTO cable_versions(id,cable_id,version_number,change_type,change_source,cable_number,revision,mto,tag,cable_type_id,cable_type_name,
       from_location,to_location,routing,delivery,design_length,install_length,pull_date,connected_from,connected_to,tested,changed_by,changed_by_snapshot)
       SELECT $1,c.id,COALESCE((SELECT MAX(v.version_number) FROM cable_versions v WHERE v.cable_id=c.id),0)+1,'update','pathfinder',c.cable_id,c.revision,c.mto,c.tag,c.cable_type_id,ct.name,

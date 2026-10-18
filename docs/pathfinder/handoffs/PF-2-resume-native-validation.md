@@ -1,5 +1,12 @@
 # PF-2/PF-7 — Resume the first unmet real-model gate
 
+> Superseded as the required next task by the user's18October2026 decision.
+> The user declines Navisworks reference data and will manually validate real
+> results. Follow [project settings/manual review](PF-project-settings-manual-review.md)
+> and [the current decision](../20-manual-review-and-project-gap.md). Native
+> comparison remains an optional unperformed evidence path; this historical
+> handoff must not block the authorized manual-review implementation or Apply.
+
 This is the next unmet part of the accepted PF-0–PF-8 plan, not a newPF-9 or a
 success claim. The independent admin workflow and operations delivery are
 already implemented; do not duplicate them.

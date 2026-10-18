@@ -507,6 +507,14 @@ export const ProjectDetails = () => {
       });
   }, [effectiveTrayTemplates, project, trays, wordFileOptions]);
 
+  const connectionGapField = useProjectNumericField({
+    project,
+    field: 'connectionGap',
+    token,
+    isAdmin: canEdit,
+    showToast,
+    reloadProject,
+  });
   const secondaryTrayLengthField = useProjectNumericField({
     project,
     field: 'secondaryTrayLength',
@@ -560,6 +568,12 @@ export const ProjectDetails = () => {
   const numericFields = useMemo(
     () => [
       {
+        field: 'connectionGap' as const,
+        label: NUMERIC_FIELD_LABELS.connectionGap,
+        unit: 'm',
+        ...connectionGapField,
+      },
+      {
         field: 'secondaryTrayLength' as const,
         label: NUMERIC_FIELD_LABELS.secondaryTrayLength,
         unit: 'm',
@@ -597,6 +611,7 @@ export const ProjectDetails = () => {
       },
     ],
     [
+      connectionGapField,
       secondaryTrayLengthField,
       supportDistanceField,
       supportWeightField,
@@ -924,6 +939,11 @@ export const ProjectDetails = () => {
         id: 'details:updated-at',
         name: 'Last updated',
         value: formattedDates?.updated ?? '-',
+      },
+      {
+        id: 'details:connection-gap',
+        name: 'Connection gap',
+        value: formatNumberWithUnit(project.connectionGap, 'm'),
       },
       {
         id: 'details:secondary-tray-length',

@@ -23,7 +23,7 @@ const cable = z.object({ id: uuid, cableId: z.number().int(), tag: z.string().nu
   routing: z.string().nullable(), designLength: numeric, installLength: numeric, cableWriteRevision: revision, fromMatch: match, toMatch: match });
 const stateSchema = z.object({ schemaVersion: z.literal(1), projectId: uuid, registryRevision: revision,
   activeModel: z.object({ modelVersionId: uuid.nullable(), selectionRevision: revision, contentFingerprint: z.string().nullable() }),
-  settings: z.object({ secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() }),
+  settings: z.object({ connectionGap: z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).refine(value => Number.isFinite(Number(value)) && Number(value) > 0 && Number(value) <= 100), secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() }),
   cables: z.array(cable).max(100000), locations: z.array(location),
   artifacts: z.array(z.object({ id: uuid, modelVersionId: uuid, snapshotSha256: z.string(), objectCount: z.number().int(), engineeringAccepted: z.boolean(), readiness: z.string(), capture: z.record(z.unknown()), coordinates: z.record(z.unknown()), createdAt: z.string() })),
   jobs: z.array(jobSchema), proposals: z.array(proposalSummarySchema) });

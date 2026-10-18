@@ -499,6 +499,7 @@ projectsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
             p.manager,
             p.description,
             p.secondary_tray_length,
+            p.connection_gap,
             p.support_distance,
             p.support_weight,
             p.tray_load_safety_factor,
@@ -587,6 +588,7 @@ projectsRouter.post(
       description,
       manager,
       secondaryTrayLength,
+      connectionGap,
       supportDistance,
       supportWeight,
       trayLoadSafetyFactor,
@@ -613,6 +615,7 @@ projectsRouter.post(
             manager,
             description,
             secondary_tray_length,
+            connection_gap,
             support_distance,
             support_weight,
             tray_load_safety_factor,
@@ -620,7 +623,7 @@ projectsRouter.post(
             additional_bending_percent,
             end_connection_length
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
           RETURNING id;
         `,
           [
@@ -633,6 +636,7 @@ projectsRouter.post(
               ? null
               : normalizedDescription,
             secondaryTrayLength ?? null,
+            connectionGap ?? 1,
             supportDistance ?? null,
             supportWeight ?? null,
             trayLoadSafetyFactor ?? null,
@@ -754,6 +758,11 @@ projectsRouter.patch(
     if (parseResult.data.secondaryTrayLength !== undefined) {
       fields.push(`secondary_tray_length = $${index++}`);
       values.push(parseResult.data.secondaryTrayLength);
+    }
+
+    if (parseResult.data.connectionGap !== undefined) {
+      fields.push(`connection_gap = $${index++}`);
+      values.push(parseResult.data.connectionGap);
     }
 
     if (parseResult.data.supportDistance !== undefined) {

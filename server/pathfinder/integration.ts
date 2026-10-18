@@ -13,6 +13,7 @@ import { syntheticStraightSnapshot } from './syntheticFixture.js';
 import { pathFinderRoot, snapshotFilename } from './storage.js';
 import { principalTransaction } from './auth.js';
 import { lockProject } from './repository.js';
+import { defaultOptions,type EngineOptions } from './jobContracts.js';
 
 type Json = Record<string,any>;
 export async function runPathFinderIntegration(projectId:string) {
@@ -25,8 +26,8 @@ export async function runPathFinderIntegration(projectId:string) {
   const parsed = new URL(origin); assert.equal(parsed.protocol,'http:'); assert.ok(['127.0.0.1','localhost'].includes(parsed.hostname)); assert.equal(parsed.port,'4000'); assert.equal(parsed.pathname,'/');
   const actorId = randomUUID(),suffix = actorId.replaceAll('-','').slice(0,10),cableIds = [randomUUID(),randomUUID()];
   const prefix = `pf_test_${suffix}`,pauseKey = Math.floor(Math.random()*1_000_000_000)+1;
-  const locationIds:string[] = [],uploadedArtifacts:string[] = [],checks:Json[] = [],cleanup:Json[] = [];
-  const beforeSettings = (await pool.query('SELECT secondary_tray_length::text,end_connection_length::text,additional_bending_percent::text FROM projects WHERE id=$1',[projectId])).rows[0];
+  const locationIds:string[] = [],uploadedArtifacts:string[] = [],createdProjects:string[]=[],checks:Json[] = [],cleanup:Json[] = [];
+  const beforeSettings = (await pool.query('SELECT connection_gap::text,secondary_tray_length::text,end_connection_length::text,additional_bending_percent::text FROM projects WHERE id=$1',[projectId])).rows[0];
   const initialModel = (await pool.query('SELECT active_model_version_id FROM project_model_selections WHERE project_id=$1',[projectId])).rows[0].active_model_version_id;
   await pool.query('INSERT INTO users(id,email,password_hash,is_admin,role) VALUES($1,$2,$3,true,$4)',[actorId,`${actorId}@pf-integration.invalid`,'Isolated direct-service fixture; no login password.','admin']);
   const email = `${actorId}@pf-integration.invalid`,token = signAccessToken(actorId,email,true).token;
@@ -44,9 +45,9 @@ export async function runPathFinderIntegration(projectId:string) {
     while (Date.now()<end) {const value=await action(); if (value !== undefined) return value; await delay(50);}
     throw Error('Isolated integration condition did not settle within its deadline.');
   }
-  async function calculate():Promise<Json> {
+  async function calculate(options?:EngineOptions):Promise<Json> {
     await pool.query('UPDATE cables SET tag=$2 WHERE id=$1',[cableIds[0],'PF-INTEGRATION-'+randomUUID()]);
-    const current = await state(),accepted = await api('POST',base+'/jobs',{cableIds:[cableIds[0]],expectedRegistryRevision:current.registryRevision,force:true});
+    const current = await state(),accepted = await api('POST',base+'/jobs',{cableIds:[cableIds[0]],expectedRegistryRevision:current.registryRevision,force:true,...(options?{options}:{})});
     await waitFor(async () => {const job=await api('GET',base+'/jobs/'+accepted.jobId); if (job.status==='failed' || job.status==='cancelled') throw Error('Calculation stopped: '+job.failure); return job.status==='complete' ? job : undefined;},45000);
     const row = (await pool.query('SELECT id FROM pf_proposals WHERE project_id=$1 AND job_id=$2 AND cable_id=$3',[projectId,accepted.jobId,cableIds[0]])).rows[0];
     assert.ok(row?.id,'Expected a proposal, rather than a fabricated blocked result.');
@@ -76,6 +77,7 @@ export async function runPathFinderIntegration(projectId:string) {
       AND position('UPDATE cables c SET routing=' IN query)>0 LIMIT 1`)).rows.length ? true : undefined);
   }
   try {
+    await pool.query('UPDATE projects SET connection_gap=1,secondary_tray_length=5,end_connection_length=6,additional_bending_percent=10 WHERE id=$1',[projectId]);
     const typeId = (await pool.query('SELECT id FROM cable_types WHERE project_id=$1 ORDER BY created_at,id LIMIT 1',[projectId])).rows[0].id;
     const from=`=PF-TEST-FROM-${suffix}`,to=`=PF-TEST-TO-${suffix}`;
     for (let i=0;i<2;i++) await pool.query(`INSERT INTO cables(id,project_id,cable_id,cable_type_id,mto,tag,from_location,to_location,install_length)
@@ -89,6 +91,22 @@ export async function runPathFinderIntegration(projectId:string) {
       assert.equal((await request('GET',base+'/authorization')).status,204);
       const current=await state(),first=current.cables.find((value:Json)=>value.id===cableIds[0]),second=current.cables.find((value:Json)=>value.id===cableIds[1]);
       assert.equal(first.fromMatch.status,'matched');assert.equal(first.toMatch.status,'matched');assert.equal(first.fromMatch.locationId,second.toMatch.locationId);assert.equal(first.toMatch.locationId,second.fromMatch.locationId);
+    });
+    await test('Project Details gap defaults to one metre, persists and rejects invalid API/SQL values',async()=>{
+      const column=(await pool.query("SELECT column_default,is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='projects' AND column_name='connection_gap'")).rows[0];
+      assert.equal(column.column_default,'1');assert.equal(column.is_nullable,'NO');
+      const created=await api('POST','/api/projects',{projectNumber:'PF-GAP-TEST-'+suffix,name:'Connection gap fixture',customer:'Isolated synthetic fixture'});
+      const id=created.project.id;createdProjects.push(id);assert.equal(created.project.connectionGap,1);
+      assert.equal((await api('GET','/api/projects/'+id)).project.connectionGap,1);
+      assert.equal((await api('GET',`/api/projects/${id}/pathfinder/state`)).settings.connectionGap,'1');
+      assert.equal((await api('PATCH','/api/projects/'+id,{connectionGap:1.125})).project.connectionGap,1.125);
+      assert.equal((await api('GET',`/api/projects/${id}/pathfinder/state`)).settings.connectionGap,'1.125');
+      for (const value of [0,-1,101,null,'NaN']) assert.equal((await request('PATCH','/api/projects/'+id,{connectionGap:value})).status,400);
+      const malformed=await fetch(origin+'/api/projects/'+id,{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:'{"connectionGap":NaN}'});assert.equal(malformed.status,400);
+      const client=await pool.connect();
+      try {await client.query('BEGIN');for(const value of ['0','101','NaN','Infinity']) {await client.query('SAVEPOINT invalid_gap');await assert.rejects(client.query('UPDATE projects SET connection_gap=$2::numeric WHERE id=$1',[id,value]),{code:'23514'});await client.query('ROLLBACK TO SAVEPOINT invalid_gap');}}
+      finally {await client.query('ROLLBACK');client.release();}
+      assert.equal((await api('GET','/api/projects/'+id)).project.connectionGap,1.125);
     });
     await test('project mutex permits mixed-import and admin-assignment FK lock orders without a deadlock',async()=>{
       const importer=await pool.connect();let pf:Promise<unknown>|undefined;
@@ -140,6 +158,19 @@ export async function runPathFinderIntegration(projectId:string) {
       await pool.query('UPDATE project_model_selections SET active_model_version_id=$2,selection_revision=selection_revision+1 WHERE project_id=$1',[projectId,initialModel]);
       assert.equal((await api('GET',base+'/lookups/'+accepted.jobId)).result.stale,true);
     });
+    await test('server-owned project gap fences overrides, routes, lookup and A to B to A staleness',async()=>{
+      const proposal=await calculate({...defaultOptions,connectionToleranceMeters:99}),review=await reviewed(proposal);
+      assert.equal(proposal.dependencies.options.connectionToleranceMeters,1);assert.equal(proposal.dependencies.settings.connectionGap,'1');
+      assert.equal((await pool.query('SELECT options FROM pf_jobs WHERE id=$1',[proposal.jobId])).rows[0].options.connectionToleranceMeters,1);
+      const current=await state(),lookup=await api('POST',base+'/lookups',{routeText:'/BC001',reverse:false,expectedSelectionRevision:current.activeModel.selectionRevision,artifactId:current.artifacts[0].id,options:{...defaultOptions,connectionToleranceMeters:99}});
+      await waitFor(async()=>{const value=await api('GET',base+'/lookups/'+lookup.jobId);return value.status==='complete'?value:undefined;},45000);
+      assert.equal((await pool.query('SELECT diagnostic_input FROM pf_jobs WHERE id=$1',[lookup.jobId])).rows[0].diagnostic_input.options.connectionToleranceMeters,1);
+      await api('PATCH','/api/projects/'+projectId,{connectionGap:.5});
+      assert.equal((await api('GET',base+'/proposals/'+proposal.id)).stale,true);assert.equal((await apply(proposal,review.reviewId)).value.code,'PROPOSAL_STALE');
+      assert.equal((await api('GET',base+'/lookups/'+lookup.jobId)).result.stale,true);
+      const changed=await calculate();assert.equal(changed.calculationMode,'calculate');assert.equal(changed.dependencies.options.connectionToleranceMeters,.5);
+      await api('PATCH','/api/projects/'+projectId,{connectionGap:1});assert.equal((await api('GET',base+'/proposals/'+proposal.id)).stale,true);
+    });
     await test('explicit forced retry replaces a seeded transient failure while automatic requests deduplicate',async () => {
       const proposal=await calculate(),oldJobId=proposal.jobId;
       // Deliberately seed a failed item in this private fixture; do not invent a successful engine result.
@@ -172,6 +203,16 @@ export async function runPathFinderIntegration(projectId:string) {
       await calculate();await pool.query('UPDATE projects SET end_connection_length=8 WHERE id=$1',[projectId]);
       try {const proposal=await calculate();assert.equal(proposal.calculationMode,'design');assert.equal(proposal.route.lengthMeters,10);assert.equal(proposal.design.designLengthMeters,'20');}
       finally {await pool.query('UPDATE projects SET end_connection_length=6 WHERE id=$1',[projectId]);}
+    });
+    await test('bending percentage and SECONDARY Details values recalculate design without replacing unchanged geometry',async()=>{
+      await calculate();await api('PATCH','/api/projects/'+projectId,{additionalBendingPercent:20});
+      try {const percentage=await calculate();assert.equal(percentage.calculationMode,'design');assert.equal(percentage.design.designLengthMeters,'20');}
+      finally {await api('PATCH','/api/projects/'+projectId,{additionalBendingPercent:10});}
+      let current=await state();await api('PUT',base+'/locations/'+locationIds[0]+'/binding',{modelVersionId:initialModel,expectedSelectionRevision:current.activeModel.selectionRevision,expectedRegistryRevision:current.registryRevision,point:[0,4,.5],objectId:null,externalId:null});
+      try {
+        const original=await calculate();assert.equal(original.route.fromRequiresSecondary,true);assert.equal(original.design.designLengthMeters,'24');
+        await api('PATCH','/api/projects/'+projectId,{secondaryTrayLength:7});const changed=await calculate();assert.equal(changed.calculationMode,'design');assert.equal(changed.design.designLengthMeters,'26');
+      } finally {await api('PATCH','/api/projects/'+projectId,{secondaryTrayLength:5});current=await state();await api('PUT',base+'/locations/'+locationIds[0]+'/binding',{modelVersionId:initialModel,expectedSelectionRevision:current.activeModel.selectionRevision,expectedRegistryRevision:current.registryRevision,point:[0,0,.5],objectId:null,externalId:null});}
     });
     await test('allowance A to B to A revision invalidates reviewed result',async () => {
       const proposal=await calculate(),review=await reviewed(proposal);await pool.query('UPDATE projects SET end_connection_length=7 WHERE id=$1',[projectId]);await pool.query('UPDATE projects SET end_connection_length=6 WHERE id=$1',[projectId]);
@@ -242,17 +283,24 @@ export async function runPathFinderIntegration(projectId:string) {
       try {const applying=apply(proposal,review.reviewId,randomUUID(),short);await waitForPausedApply();await delay(Math.max(0,claims.exp!*1000-Date.now()+80));await holder.query('SELECT pg_advisory_unlock($1)',[pauseKey]);const result=await applying;assert.equal(result.status,401);assert.equal(result.value.code,'LOGIN_EXPIRED');assert.deepEqual(await cable(),before);}
       finally {await holder.query('SELECT pg_advisory_unlock($1)',[pauseKey]);holder.release();await dropPause();}
     });
-    await test('HTTP-uploaded geometry cannot acquire the seeded synthetic proof',async () => {
+    await test('untrusted upload remains non-native and requires a new explicit manual review before atomic real-scope Apply',async () => {
       let current=await state();const snapshot=syntheticStraightSnapshot(projectId,initialModel,current.activeModel.contentFingerprint);
       assert.equal((await request('POST',base+'/artifacts',{modelVersionId:initialModel,expectedSelectionRevision:current.activeModel.selectionRevision,expectedRegistryRevision:current.registryRevision,snapshot,engineeringAccepted:true})).status,400);
       const uploaded=await api('POST',base+'/artifacts',{modelVersionId:initialModel,expectedSelectionRevision:current.activeModel.selectionRevision,expectedRegistryRevision:current.registryRevision,snapshot});uploadedArtifacts.push(uploaded.artifactId);assert.equal(uploaded.engineeringAccepted,false);
       for (const [index,locationId] of locationIds.entries()) {current=await state();await api('PUT',base+'/locations/'+locationId+'/binding',{modelVersionId:initialModel,expectedSelectionRevision:current.activeModel.selectionRevision,expectedRegistryRevision:current.registryRevision,point:index?[10,0,.5]:[0,0,.5],objectId:null,externalId:null});}
-      const proposal=await calculate(),review=await reviewed(proposal);assert.equal(proposal.synthetic,false);assert.equal(proposal.canApply,false);const result=await apply(proposal,review.reviewId);assert.equal(result.status,409);assert.equal(result.value.code,'ENGINEERING_ACCEPTANCE_REQUIRED');
+      const proposal=await calculate(),before=await cable();assert.equal(proposal.synthetic,false);assert.equal(proposal.engineeringAccepted,false);assert.equal(proposal.acceptanceScope,'manual-review');assert.equal(proposal.canApply,true);
+      const missing=await apply(proposal,randomUUID());assert.equal(missing.status,409);assert.equal(missing.value.code,'REVIEW_REQUIRED');assert.deepEqual(await cable(),before);
+      const legacyId=randomUUID();await pool.query('INSERT INTO pf_reviews(id,project_id,proposal_id,actor_id,proposal_hash) VALUES($1,$2,$3,$4,$5)',[legacyId,projectId,proposal.id,actorId,proposal.proposalHash]);
+      const legacy=await apply(proposal,legacyId);assert.equal(legacy.status,409);assert.equal(legacy.value.code,'MANUAL_REVIEW_REQUIRED');assert.deepEqual(await cable(),before);
+      const review=await reviewed(proposal),key=randomUUID(),result=await apply(proposal,review.reviewId,key);assert.equal(result.status,200);
+      const provenance=result.value.receipt.provenance;assert.equal(provenance.synthetic,false);assert.equal(provenance.acceptanceScope,'manual-review');assert.equal(provenance.validationMethod,'manual-review');assert.equal(provenance.nativeParity,'not-performed');assert.equal(provenance.review.actorId,actorId);assert.equal(provenance.review.id,review.reviewId);assert.ok(provenance.review.reviewedAt);
+      assert.equal((await cable()).install_length,before.install_length);assert.equal((await api('GET',base+'/proposals/'+proposal.id)).engineeringAccepted,false);
+      const replay=await apply(proposal,review.reviewId,key);assert.equal(replay.status,200);assert.equal(replay.value.duplicate,true);assert.equal(replay.value.receipt.id,result.value.receipt.id);
     });
   } finally {
     await pool.query(`DROP TRIGGER IF EXISTS ${prefix}_pause ON cables;DROP FUNCTION IF EXISTS ${prefix}_pause();DROP TRIGGER IF EXISTS ${prefix}_fail ON pf_apply_receipts;DROP FUNCTION IF EXISTS ${prefix}_fail()`).catch(error=>cleanup.push({name:'temporary SQL triggers',status:'FAIL',message:error.message}));
     await pool.query("UPDATE users SET is_admin=true,role='admin' WHERE id=$1",[actorId]);
-    await pool.query('UPDATE projects SET secondary_tray_length=$2,end_connection_length=$3,additional_bending_percent=$4 WHERE id=$1',[projectId,beforeSettings.secondary_tray_length,beforeSettings.end_connection_length,beforeSettings.additional_bending_percent]);
+    await pool.query('UPDATE projects SET secondary_tray_length=$2,end_connection_length=$3,additional_bending_percent=$4,connection_gap=$5 WHERE id=$1',[projectId,beforeSettings.secondary_tray_length,beforeSettings.end_connection_length,beforeSettings.additional_bending_percent,beforeSettings.connection_gap]);
     await pool.query('UPDATE project_model_selections SET active_model_version_id=$2,selection_revision=selection_revision+CASE WHEN active_model_version_id IS DISTINCT FROM $2::uuid THEN 1 ELSE 0 END WHERE project_id=$1',[projectId,initialModel]);
     await pool.query("UPDATE model_versions SET health='healthy' WHERE project_id=$1 AND id=$2",[projectId,initialModel]);
     await pool.query("UPDATE pf_jobs SET cancel_requested=true WHERE requested_by=$1 AND state IN ('queued','running')",[actorId]);
@@ -265,11 +313,12 @@ export async function runPathFinderIntegration(projectId:string) {
     }
     // Reestablish automatic demonstration bindings after deleting only the test upload.
     const current=await state();await api('POST',base+'/match',{expectedRegistryRevision:current.registryRevision});
+    await pool.query('DELETE FROM projects WHERE id=ANY($1::uuid[])',[createdProjects]);
     await pool.query('DELETE FROM viewer_login_bindings WHERE user_id=$1',[actorId]);await pool.query('DELETE FROM users WHERE id=$1',[actorId]);
-    cleanup.push({name:'fixture admin/cables/locations/jobs/uploads removed; original synthetic allowances/model restored; immutable audit events retained',status:'PASS'});
+    cleanup.push({name:'fixture admin/projects/cables/locations/jobs/uploads removed; original synthetic gap/allowances/model restored; immutable audit events retained',status:'PASS'});
   }
   const result={schemaVersion:'pathfinder.integration.v1',recordedAtUtc:new Date().toISOString(),projectId,scope:'separate local synthetic fixture only',status:checks.every(value=>value.status==='PASS') && cleanup.every(value=>value.status==='PASS')?'PASS':'FAIL',
-    passed:checks.filter(value=>value.status==='PASS').length,total:checks.length,checks,cleanup,nativeParity:'BLOCKED; synthetic integration does not establish real model engineering acceptance.',
+    passed:checks.filter(value=>value.status==='PASS').length,total:checks.length,checks,cleanup,nativeParity:'NOT_PERFORMED; manual per-proposal review policy does not claim native engineering parity or broader user acceptance.',
     sourceSha256:createHash('sha256').update(await fs.readFile(new URL(import.meta.url))).digest('hex')};
   const root=await pathFinderRoot(),directory=path.join(root,'integration');await fs.mkdir(directory,{recursive:true});const filename=path.join(directory,'integration-'+randomUUID()+'.json');await fs.writeFile(filename,JSON.stringify(result,null,2),{flag:'wx'});
   console.log(JSON.stringify({...result,evidence:filename}));return result;

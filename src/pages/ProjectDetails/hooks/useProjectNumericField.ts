@@ -14,6 +14,7 @@ type ShowToast = (props: {
 }) => void;
 
 type UpdatableNumericProjectField =
+  | 'connectionGap'
   | 'secondaryTrayLength'
   | 'supportDistance'
   | 'supportWeight'
@@ -24,6 +25,7 @@ type UpdatableNumericProjectField =
 type NumericFieldLabelMap = Record<UpdatableNumericProjectField, string>;
 
 export const NUMERIC_FIELD_LABELS: NumericFieldLabelMap = {
+  connectionGap: 'Connection gap',
   secondaryTrayLength: 'Secondary tray length',
   supportDistance: 'Default distance between supports',
   supportWeight: 'Support weight',
@@ -33,6 +35,7 @@ export const NUMERIC_FIELD_LABELS: NumericFieldLabelMap = {
 };
 
 const FIELD_DECIMAL_PLACES: Record<UpdatableNumericProjectField, number> = {
+  connectionGap: 3,
   secondaryTrayLength: 1,
   supportDistance: 1,
   supportWeight: 1,
@@ -123,10 +126,10 @@ export const useProjectNumericField = ({
     }
 
     if (
-      (field === 'additionalBendingPercent' || field === 'endConnectionLength') &&
+      (field === 'connectionGap' || field === 'additionalBendingPercent' || field === 'endConnectionLength') &&
       parsed.numeric === null
     ) {
-      setError('Enter a value of 0 or greater.');
+      setError(field === 'connectionGap' ? 'Enter a connection gap greater than 0 and no more than 100 metres.' : 'Enter a value of 0 or greater.');
       return;
     }
 
@@ -134,6 +137,10 @@ export const useProjectNumericField = ({
       parsed.numeric !== null
         ? roundToDecimalPlaces(parsed.numeric, decimals)
         : null;
+    if (field === 'connectionGap' && (nextValue === null || nextValue <= 0 || nextValue > 100)) {
+      setError('Enter a connection gap greater than 0 and no more than 100 metres.');
+      return;
+    }
     const currentValue = project[field];
 
     if (currentValue === nextValue) {

@@ -140,6 +140,7 @@ const projectFieldSchema = {
   manager: z.string().trim().max(200).optional(),
   description: z.string().trim().max(2000).optional(),
   secondaryTrayLength: z.number().min(0).max(1_000_000).nullable().optional(),
+  connectionGap: z.number().finite().positive().max(100).optional(),
   supportDistance: z.number().min(0).max(1_000_000).nullable().optional(),
   supportWeight: z.number().min(0).max(1_000_000).nullable().optional(),
   additionalBendingPercent: z.number().finite().min(0).max(1_000_000).optional(),
@@ -164,6 +165,7 @@ export const updateProjectSchema = z
     manager: projectFieldSchema.manager,
     description: projectFieldSchema.description.optional(),
     secondaryTrayLength: projectFieldSchema.secondaryTrayLength,
+    connectionGap: projectFieldSchema.connectionGap,
     supportDistance: projectFieldSchema.supportDistance,
     supportWeight: projectFieldSchema.supportWeight,
     additionalBendingPercent: projectFieldSchema.additionalBendingPercent,
@@ -182,6 +184,7 @@ export const updateProjectSchema = z
       value.manager !== undefined ||
       value.description !== undefined ||
       value.secondaryTrayLength !== undefined ||
+      value.connectionGap !== undefined ||
       value.supportDistance !== undefined ||
       value.supportWeight !== undefined ||
       value.additionalBendingPercent !== undefined ||

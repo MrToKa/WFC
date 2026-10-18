@@ -5,13 +5,33 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-8-delivery-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-manual-validation-settings-20261018` (inspect live branch/HEAD before each continuation).
 - Integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. The local commit containing this final progress/report records the remaining PF-8 evidence. Read live HEAD rather than inferring a self-referential hash from this file. No implementation changes are left outside these deliveries.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
 - Canonical reference: PathFinder `45c24bf5f433f13e102600b36f20327c77961d0a`.
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
+
+## Active revision — user manual validation and project gap
+
+User18October2026confirmed exactNWD/no licence and chose manual result review
+instead of required Navisworks reference. This supersedes the native prerequisite
+in historical sections below. No native parity PASS/user acceptance is invented.
+Newbranch `pf-manual-validation-settings-20261018` inherits5485283. Threewriters
+own server/frontend/runtime separately; parentdocs/UI/coordination. Current
+task is explicit ProjectDetails connectionGap default1m, server-owned tolerance
+and hashes/fullroute recomputation, existing3allowances, formula-card explanation,
+and existing manual per-proposal Review+Apply for realresults with honest scope.
+See `20-manual-review-and-project-gap.md` and
+`handoffs/PF-project-settings-manual-review.md`. Sourcefrozen: backend51/51
+engine/settings/registry and191/191 project/access/cable regressions PASS,
+serverbuildPASS; frontend147/147 before finaleligibilityguard and finalaffected
+PFtab17/17/tsc/lintPASS; runtimeownership/path17/17PASS. Jointnewimage build,
+23-case liveSQL/HTTP, computer-use and replacementbackup remainIN_PROGRESS.
+Heartbeat updatedACTIVE throughapp with latesthuman
+decision appended, to avoid stopping on superseded native requirement.
+No original resources are changed; no push/PR/merge/deployment/native launch.
 
 ## Latest wakeup audit — 18 October 2026, 05:38 UTC
 
@@ -30,7 +50,7 @@ status and unchanged prompt/name/schedule/target were checked. New receipt:
 now includes this fresh baseline. Remain blocked on the same external reference;
 no engineering acceptance, merge or deployment is inferred from a heartbeat.
 
-## Current work — independent local delivery complete, real gate BLOCKED
+## Historical delivery — before the revised manual-review criterion
 
 The isolated5190 demonstration is healthy. Final combined cold backup/restore,
 cookie/JWT fencing, actual .NET-child death/natural recovery64/64/0duplicates,

@@ -40,6 +40,7 @@ const project = (id: string): Project => ({
   customer: 'Customer',
   manager: null,
   description: null,
+  connectionGap: 1,
   secondaryTrayLength: null,
   supportDistance: null,
   supportWeight: null,

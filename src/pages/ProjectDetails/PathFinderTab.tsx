@@ -88,7 +88,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
       const snapshot: unknown = JSON.parse(await file.text());
       if (!snapshot || typeof snapshot !== 'object' || !('schemaVersion' in snapshot) || snapshot.schemaVersion !== 'pathfinder.model.snapshot.v1') throw new Error('Select an exported canonical PathFinder snapshot JSON file.');
       const result = await pf.uploadSnapshot(snapshot);
-      if (result) setNotice('Model snapshot imported for calculation and review. Engineering acceptance remains a separate check.');
+      if (result) setNotice('Model snapshot imported. Review the route and length before applying results.');
     } catch (error) { setLocalError(error instanceof Error ? error.message : 'The snapshot could not be read.'); }
     finally { if (fileInput.current) fileInput.current.value = ''; }
   };
@@ -116,15 +116,15 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
         {pf.error || localError ? <Body1 role="alert" className={styles.error}>{localError ?? pf.error}</Body1> : null}
         {notice ? <Body1 role="status">{notice}</Body1> : null}
         <div className={extra.warning} data-testid="pathfinder-readiness">
-          <Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects. ${artifact.engineeringAccepted ? 'Engineering accepted.' : 'Engineering validation is required before applying real-model results.'}` : 'Import a canonical geometry snapshot to prepare automatic routing.'}</Body1>
+          <Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects. Review the route and length before applying.` : 'Prepare the selected model network or import a canonical snapshot for automatic routing.'}</Body1>
           <Caption1>Calculations create proposals. Cable values change only after review and Apply.</Caption1>
         </div>
         <details open={!artifact}><summary>Model preparation and project values</summary>
-          <Caption1>SECONDARY: {data?.settings.secondaryTrayLength ?? 'Not set'} m; connection reserve: {data?.settings.endConnectionLength ?? 'Not set'} m; increase: {data?.settings.additionalBendingPercent ?? 'Not set'}%. Change these in Project Details.</Caption1>
+          <Caption1>Connection gap: {data?.settings.connectionGap ?? 'Not set'} m; SECONDARY: {data?.settings.secondaryTrayLength ?? 'Not set'} m; connection reserve: {data?.settings.endConnectionLength ?? 'Not set'} m; increase: {data?.settings.additionalBendingPercent ?? 'Not set'}%. Change these in Project Details.</Caption1>
           <Field label="Routing network codes" hint="Exact model identifiers separated by /, spaces or commas. SECONDARY is an allowance."><Textarea aria-label="Routing network codes" maxLength={8000} rows={3} value={captureRoutes} onChange={(_, value) => setCaptureRoutes(value.value)} /></Field>
           <Button disabled={!selected?.routing || preparing} onClick={() => setCaptureRoutes(selected?.routing ?? '')}>Use selected cable routing</Button>
           <fieldset disabled={pf.busy}><legend>Allowed cable categories for this network</legend>{(['MV', 'LV', 'Control'] as const).map(category => <label key={category} style={{ display: 'block' }}><input type="checkbox" checked={captureCategories.includes(category)} onChange={event => setCaptureCategories(previous => event.target.checked ? [...previous, category] : previous.filter(value => value !== category))} /> {category}{category === 'Control' ? ' (including Instrumentation)' : ''}</label>)}</fieldset>
-          <Caption1>{selected ? 'The selected cable’s From/To names are included as equipment candidates.' : 'Project From/To names are included as equipment candidates, up to 256 unique names.'} This prepares the selected network, preserving unknown native visibility.</Caption1>
+          <Caption1>{selected ? 'The selected cable’s From/To names are included as equipment candidates.' : 'Project From/To names are included as equipment candidates, up to 256 unique names.'} This prepares only the selected network. Review its category assignments and locations.</Caption1>
           <Button appearance="primary" disabled={pf.viewerPhase !== 'ready' || pf.busy || !captureRoutes.trim() || !captureCategories.length} onClick={() => void prepareModel()}>Prepare selected model network</Button>
           {preparing ? <Button onClick={pf.clear}>Cancel model preparation</Button> : null}
           <details><summary>Import an existing canonical snapshot</summary>

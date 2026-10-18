@@ -10,7 +10,7 @@ export const defaultOptions = Object.freeze({connectionToleranceMeters:0.25,samp
 export const createJobSchema = z.object({cableIds:z.array(uuid).min(1).max(10_000).optional(),expectedRegistryRevision:revision,
   options:optionsSchema.optional(),timeoutMilliseconds:z.number().int().min(100).max(120_000).optional(),force:z.boolean().optional()}).strict();
 export type EngineOptions = z.infer<typeof optionsSchema>;
-export type ProjectSettings = {revision:string;secondaryTrayLength:string|null;endConnectionLength:string;additionalBendingPercent:string};
+export type ProjectSettings = {revision:string;connectionGap:string;secondaryTrayLength:string|null;endConnectionLength:string;additionalBendingPercent:string};
 export type DependencySnapshot = {
   schemaVersion:'pathfinder.dependencies.v1';projectId:string;cableId:string;cableWriteRevision:string;
   cableInputs:{fromLocation:string|null;toLocation:string|null;mto:string|null;cableTypeId:string};

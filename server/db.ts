@@ -92,6 +92,16 @@ export async function initializeDatabase(): Promise<void> {
     ADD COLUMN IF NOT EXISTS secondary_tray_length NUMERIC;
   `);
 
+  // Explicit project routing default, including projects created before this feature.
+  await pool.query(`
+    ALTER TABLE projects ADD COLUMN IF NOT EXISTS connection_gap NUMERIC NOT NULL DEFAULT 1;
+    ALTER TABLE projects ALTER COLUMN connection_gap SET DEFAULT 1;
+    UPDATE projects SET connection_gap=1 WHERE connection_gap IS NULL;
+    ALTER TABLE projects ALTER COLUMN connection_gap SET NOT NULL;
+    ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_connection_gap_check;
+    ALTER TABLE projects ADD CONSTRAINT projects_connection_gap_check CHECK(connection_gap > 0 AND connection_gap <= 100);
+  `);
+
   await pool.query(`
     ALTER TABLE projects
     ADD COLUMN IF NOT EXISTS support_distance NUMERIC;

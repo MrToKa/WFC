@@ -14,3 +14,16 @@ export function syntheticStraightSnapshot(projectId:string,modelVersionId:string
       geometryRole:'object' as const,leafToRootNames:[index ? '=PF-SYNTHETIC-TO' : '=PF-SYNTHETIC-FROM'],properties:[],nativeHidden:false,planningExcluded:false,
       categoryAssignmentSource:'synthetic' as const,allowedCategories:[],bounds:{minimum:[x,0,.5] as [number,number,number],maximum:[x,0,.5] as [number,number,number]},fragments:[]}))]};
 }
+
+/** Two explicitly synthetic 10m straight trays separated by a measured 0.5m gap. */
+export function syntheticGapSnapshot(projectId:string,modelVersionId:string,contentFingerprint:string):ComputationalSnapshot {
+  const snapshot=syntheticStraightSnapshot(projectId,modelVersionId,contentFingerprint);
+  const second=structuredClone(snapshot.objects[0]);
+  second.id='synthetic:tray-2';second.routeName='/BC002';second.leafToRootNames=['STRAIGHT','/BC002'];
+  second.bounds={minimum:[10.5,-.5,0],maximum:[20.5,.5,1]};
+  second.fragments[0].id='synthetic:fragment-2';
+  second.fragments[0].vertices=second.fragments[0].vertices.map(([x,y,z])=>[x+10.5,y,z]);
+  snapshot.objects.splice(1,0,second);
+  const endpoint=snapshot.objects.at(-1)!;endpoint.bounds={minimum:[20.5,0,.5],maximum:[20.5,0,.5]};
+  return snapshot;
+}

@@ -62,6 +62,20 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('project mutations', () => {
+  it('persists a fractional connection gap and returns the authoritative value',async()=>{
+    client.query.mockResolvedValue({rowCount:1,rows:[{...projectRow,connection_gap:'1.125'}]});
+    const response=responseStub();
+    await handlerFor('patch','/:projectId')({params:{projectId},body:{connectionGap:1.125}} as unknown as Request,response);
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('connection_gap = $1'),[1.125,projectId]);
+    expect(response.json).toHaveBeenCalledWith({project:expect.objectContaining({connectionGap:1.125})});
+  });
+  it('creates a project with the explicit one-metre connection gap when omitted',async()=>{
+    const response=responseStub();
+    await handlerFor('post','/')({body:{projectNumber:'PF-DEFAULT',name:'Default gap',customer:'Local fixture'}} as unknown as Request,response);
+    const insert=client.query.mock.calls.find(([sql])=>typeof sql==='string' && /INSERT INTO projects\s*\(/.test(sql));
+    expect(insert).toBeDefined();expect(insert![1][7]).toBe(1);
+    expect(response.json).toHaveBeenCalledWith({project:expect.objectContaining({connectionGap:1})});
+  });
   it('persists cable length allowances and returns them after saving', async () => {
     const saved = { ...projectRow, additional_bending_percent: '12.5', end_connection_length: '0' };
     client.query.mockResolvedValue({ rowCount: 1, rows: [saved] });

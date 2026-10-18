@@ -4,6 +4,7 @@ import { PathFinderError } from './errors.js';
 import { normalizeLocation } from './matching.js';
 import { activeModel, latestArtifact } from './repository.js';
 import type { DependencySnapshot, EngineOptions } from './jobContracts.js';
+import { projectRoutingSettings } from './settings.js';
 export {requireCurrentLogin} from './auth.js';
 
 export function canonicalJson(value: unknown): string {
@@ -37,8 +38,8 @@ export async function collectDependencies(client: PoolClient, projectId: string,
   if (!artifact || artifact.content_fingerprint !== model.content_fingerprint) return blocked('model_index_required','Prepare a computational snapshot for the active model.');
   if (lockCable) await client.query('SELECT id FROM pf_artifacts WHERE project_id=$1 AND id=$2 FOR SHARE',[projectId,artifact.id]);
   if (!['MV','LV','Control','Instrumentation'].includes(cable.mto)) return blocked('category_required','Resolve the cable category before calculation.');
-  const setting = (await client.query<Row>('SELECT secondary_tray_length::text,end_connection_length::text,additional_bending_percent::text,pf_settings_revision::text FROM projects WHERE id=$1',[projectId])).rows[0];
-  if (!setting?.end_connection_length || !setting.additional_bending_percent) return blocked('settings_required','Set the project allowances in Project Details.');
+  const currentSettings=await projectRoutingSettings(client,projectId,options);
+  if (!currentSettings.settings.endConnectionLength || !currentSettings.settings.additionalBendingPercent) return blocked('settings_required','Set the project allowances in Project Details.');
   const registry = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0];
   const endpoint = async (name:string|null):Promise<DependencySnapshot['from']|null> => {
     if (!name || !normalizeLocation(name)) return null;
@@ -54,8 +55,8 @@ export async function collectDependencies(client: PoolClient, projectId: string,
   return {status:'ready',message:'Ready for calculation.',cable,dependencies:{schemaVersion:'pathfinder.dependencies.v1',projectId,cableId,cableWriteRevision:cable.cable_write_revision,
     cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id},registryRevision:registry.registry_revision,
     model:{id:model.active_model_version_id,selectionRevision:model.selection_revision,contentFingerprint:model.content_fingerprint},artifact:{id:artifact.id,sha256:artifact.snapshot_sha256},
-    settings:{revision:setting.pf_settings_revision,secondaryTrayLength:setting.secondary_tray_length,endConnectionLength:setting.end_connection_length,additionalBendingPercent:setting.additional_bending_percent},
-    options,from,to,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'}};
+    settings:currentSettings.settings,
+    options:currentSettings.options,from,to,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'}};
 }
 export async function hasSyntheticProof(client: PoolClient, dependencies: DependencySnapshot): Promise<boolean> {
   if (process.env.PF_LOCAL_DEMO !== 'true') return false;

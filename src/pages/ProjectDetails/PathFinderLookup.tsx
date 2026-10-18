@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Body1, Button, Caption1, Field, Input, Spinner, Textarea } from '@fluentui/react-components';
+import { Body1, Button, Caption1, Field, Spinner, Textarea } from '@fluentui/react-components';
 import type { PathFinderCable, PathFinderLookup as Lookup } from '@/api/pathfinder';
 import { MAX_PATH_POINTS } from '../../../viewer-runtime/protocol.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
@@ -11,9 +11,8 @@ export function PathFinderLookup({ pf, selectedCable }: Props) {
   const [routeText, setRouteText] = useState(''), [reverse, setReverse] = useState(false), [jobId, setJobId] = useState<string | null>(null), [lookup, setLookup] = useState<Lookup | null>(null);
   const [notice, setNotice] = useState<string | null>(null), [originalEnds, setOriginalEnds] = useState<{ from: string | null; to: string | null } | null>(null), [cancelRequested, setCancelRequested] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [tolerance, setTolerance] = useState('0.25'), [submittedTolerance, setSubmittedTolerance] = useState(0.25);
-  const generation = useRef(0), activeModel = pf.data?.activeModel.modelVersionId, selectionRevision = pf.data?.activeModel.selectionRevision, hasData = Boolean(pf.data), hasArtifact = Boolean(pf.data?.artifacts.length);
-  useEffect(() => { generation.current++; setJobId(null); setLookup(null); setNotice(null); setCancelRequested(false); setPreviewLoading(false); }, [activeModel, selectionRevision]);
+  const generation = useRef(0), activeModel = pf.data?.activeModel.modelVersionId, selectionRevision = pf.data?.activeModel.selectionRevision, connectionGap = pf.data?.settings.connectionGap, hasData = Boolean(pf.data), hasArtifact = Boolean(pf.data?.artifacts.length);
+  useEffect(() => { generation.current++; setJobId(null); setLookup(null); setNotice(null); setCancelRequested(false); setPreviewLoading(false); latest.current.clear(); }, [activeModel, selectionRevision, connectionGap]);
   useEffect(() => {
     if (!jobId || !hasData) return;
     const current = generation.current; let closed = false, timer: ReturnType<typeof setTimeout>;
@@ -37,12 +36,10 @@ export function PathFinderLookup({ pf, selectedCable }: Props) {
     };
     void poll(); return () => { closed = true; clearTimeout(timer); };
   }, [jobId, hasData]);
-  const run = async (input = routeText, reversed = reverse, gap = Number(tolerance), preserveLabels = false) => {
-    if (!Number.isFinite(gap) || gap < 0 || gap > 100) { setNotice('Enter a finite connection tolerance from 0 to 100 metres.'); return; }
+  const run = async (input = routeText, reversed = reverse, preserveLabels = false) => {
     const current = ++generation.current; setNotice(null); setLookup(null); setJobId(null); setCancelRequested(false); setPreviewLoading(false); latest.current.clear();
     if (!preserveLabels) setOriginalEnds(selectedCable ? { from: selectedCable.fromLocation, to: selectedCable.toLocation } : null);
-    setSubmittedTolerance(gap);
-    const id = await latest.current.startLookup(input, reversed, gap);
+    const id = await latest.current.startLookup(input, reversed);
     if (generation.current === current && id) setJobId(id);
   };
   const pending = Boolean(jobId && (!lookup || lookup.status === 'queued' || lookup.status === 'running'));
@@ -52,10 +49,10 @@ export function PathFinderLookup({ pf, selectedCable }: Props) {
     <Field label="Ordered route" hint="Separate exact tray identifiers with /."><Textarea aria-label="PathFinder ordered route" rows={3} maxLength={8000} value={routeText} onChange={(_, value) => setRouteText(value.value)} /></Field>
     <Button disabled={!selectedCable?.routing || pending || previewLoading || pf.busy} onClick={() => setRouteText(selectedCable?.routing ?? '')}>Use cable routing for lookup</Button>
     <label><input type="checkbox" checked={reverse} onChange={event => setReverse(event.target.checked)} /> Reverse route order</label>
-    <Field label="Connection tolerance (m)" hint="Default 0.25 m. Larger values permit larger unmodelled gaps."><Input aria-label="Lookup connection tolerance in metres" type="number" min={0} max={100} step={0.05} value={tolerance} onChange={(_, value) => setTolerance(value.value)} /></Field>
+    <Caption1>Connection gap: {connectionGap ?? 'Not set'} m. Change this in Project Details. Larger values permit larger unmodelled gaps.</Caption1>
     <div className={styles.actions}>
-      <Button disabled={!hasArtifact || !routeText.trim() || !tolerance.trim() || pending || previewLoading || pf.busy} onClick={() => void run()}>Run ordered lookup</Button>
-      {lookup?.result?.route?.success ? <Button disabled={pending || previewLoading || pf.busy} onClick={() => void run(lookup.input.routeText, !lookup.input.reverse, submittedTolerance, true)}>Reverse preview</Button> : null}
+      <Button disabled={!hasArtifact || !routeText.trim() || !connectionGap || pending || previewLoading || pf.busy} onClick={() => void run()}>Run ordered lookup</Button>
+      {lookup?.result?.route?.success ? <Button disabled={pending || previewLoading || pf.busy} onClick={() => void run(lookup.input.routeText, !lookup.input.reverse, true)}>Reverse preview</Button> : null}
       {pending ? <Button disabled={cancelRequested || pf.busy} onClick={() => { setCancelRequested(true); void pf.action(`/jobs/${jobId}`, undefined, 'DELETE'); }}>Cancel lookup</Button> : null}
     </div>
     {pending ? <Spinner size="tiny" label={cancelRequested ? 'Waiting for the lookup to stop…' : 'Calculating the ordered lookup…'} /> : null}
@@ -67,7 +64,7 @@ export function PathFinderLookup({ pf, selectedCable }: Props) {
       {lookup.failure ? <Body1>{lookup.failure}</Body1> : null}
       {lookup.result ? <><Body1>{lookup.result.message}</Body1>{lookup.result.stale ? <Body1 role="alert">The active model or input dependencies changed. Run a fresh lookup.</Body1> : null}
         {lookup.result.route ? <><Body1>Ordered network length: {lookup.result.route.lengthMeters} m</Body1><Caption1>Connection gaps: {lookup.result.route.connectionGapCount}; total gap length: {lookup.result.route.connectionGapLengthMeters} m</Caption1><details><summary>Lookup route text</summary><p style={{ overflowWrap: 'anywhere' }}>{lookup.result.route.routeText}</p></details></> : null}
-        <Caption1>Diagnostic only. Native/converted engineering verification is not established. Apply is unavailable for ordered lookups.</Caption1></> : null}
+        <Caption1>Diagnostic only. This lookup does not assign cable endpoints or a design length. Apply is unavailable for ordered lookups.</Caption1></> : null}
     </section> : null}
   </details>;
 }

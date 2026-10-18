@@ -10,6 +10,7 @@ import type { PathFinderJobs } from './jobs.js';
 import { PathFinderError } from './errors.js';
 import { principalTransaction } from './auth.js';
 import { collectLookupDependencies, type LookupDependencies } from './lookups.js';
+import { engineProjectSettings } from './settings.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -86,7 +87,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
           ...(retained ? {route:{success:true,lengthMeters:retained.lengthMeters,fromDistanceMeters:retained.fromDistanceMeters,toDistanceMeters:retained.toDistanceMeters,
             fromRequiresSecondary:retained.fromRequiresSecondary,toRequiresSecondary:retained.toRequiresSecondary}} : {
             category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
-            to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),projectSettings:dependencies.settings},signal);
+            to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),projectSettings:engineProjectSettings(dependencies.settings)},signal);
         if (retained) response = {...response,route:retained as EngineResponse['route']};
       } catch(error) {
         signal.throwIfAborted();

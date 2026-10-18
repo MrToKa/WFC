@@ -7,6 +7,7 @@ import type { PathFinderRepository } from './repository.js';
 import { defaultOptions, type createJobSchema, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
 import { routeCompatibilityIssue } from './jobContracts.js';
 import { principalTransaction } from './auth.js';
+import { projectRoutingSettings } from './settings.js';
 
 type Row = Record<string,any>;
 export function jobDto(row:Row) {
@@ -22,10 +23,10 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
   const compatibilityIssue = route ? routeCompatibilityIssue(route.routeText) : null;
   return {id:row.id,projectId:row.project_id,jobId:row.job_id,cableId:row.cable_id,status:row.status,
     proposalHash:row.proposal_hash,cableWriteRevision:dependencies.cableWriteRevision,stale,synthetic,engineeringAccepted:synthetic,
-    acceptanceScope:synthetic ? 'local-synthetic-fixture' : 'unaccepted-model',canApply:synthetic && !stale && !compatibilityIssue && !row.cancel_requested && row.status === 'calculated' && result.design != null && row.job_state === 'complete',
+    acceptanceScope:synthetic ? 'local-synthetic-fixture' : 'manual-review',canApply:!stale && !compatibilityIssue && !row.cancel_requested && row.status === 'calculated' && route?.success===true && result.design != null && row.job_state === 'complete',
     compatibilityIssue,
     message:stale ? 'Dependencies changed. Calculate a fresh proposal.' : result.message,
-    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : 'Real model engineering acceptance is blocked pending native/converted verification.',
+    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : 'Manual review and explicit Apply are required for this exact proposal. Native engineering parity has not been performed.',
     design:result.design ?? null,route:route ? {...route,pathPoints:undefined,...(detail ? {points:route.pathPoints.map((point:Row) => [point.x,point.y,point.z]),objectIds:[...new Set(route.segmentIds as string[])]} : {})} : null,
     calculationMode:result.calculationMode,
     ...(detail ? {dependencies,prepared:result.prepared ?? null,effectiveCategory:result.effectiveCategory ?? null} : {}),createdAt:row.created_at};
@@ -41,7 +42,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         if (!cables.rows.length) throw new PathFinderError('NO_CABLES',409,'There are no selected cables to calculate.');
         if (cables.rows.length > 10000) throw new PathFinderError('JOB_CABLE_BUDGET',413);
         if (input.cableIds && new Set(input.cableIds).size !== cables.rows.length) throw new PathFinderError('CABLE_NOT_FOUND',404);
-        const options = input.options ?? {...defaultOptions},items = [];
+        const {options}=await projectRoutingSettings(client,projectId,input.options ?? {...defaultOptions}),items = [];
         for (const cable of cables.rows) items.push({id:cable.id,...await collectDependencies(client,projectId,cable.id,options,true)});
         const requestHash = hash({timeoutMilliseconds:input.timeoutMilliseconds ?? 60000,items:items.map(item => ({id:item.id,dependencies:item.dependencies,status:item.status,cableWriteRevision:item.cable.cable_write_revision}))});
         if (!input.force) {
@@ -99,7 +100,8 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         if (row.proposal_hash !== expectedProposalHash) throw new PathFinderError('PROPOSAL_HASH_CONFLICT',409);
         const proposal = await proposalDto(client,row,true);
         if (proposal.stale) throw new PathFinderError('PROPOSAL_STALE',409);
-        const reviewId = randomUUID(); await client.query('INSERT INTO pf_reviews(id,project_id,proposal_id,actor_id,proposal_hash) VALUES($1,$2,$3,$4,$5)',[reviewId,projectId,proposalId,who.userId,expectedProposalHash]);
+        if (!proposal.canApply) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409,'Only a complete applicable proposal can be confirmed for review.');
+        const reviewId = randomUUID(); await client.query('INSERT INTO pf_reviews(id,project_id,proposal_id,actor_id,proposal_hash,validation_method) VALUES($1,$2,$3,$4,$5,$6)',[reviewId,projectId,proposalId,who.userId,expectedProposalHash,proposal.synthetic?'synthetic-fixture':'manual-review']);
         return {reviewId,proposal};
       });
     },
