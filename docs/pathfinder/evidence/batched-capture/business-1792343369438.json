@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "pathfinder.batched-capture.protected-business.v2",
+  "projection": "lossless-postgresql-jsonb-text",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T17:09:23.125Z",
+  "raw": {
+    "path": "pathfinder-engine/.scratch/capture-business-182dd99f-a519-4e83-85a6-2e64d5814b2c/business.private.json",
+    "bytes": 1786970,
+    "sha256": "49a06f7ef573fb2777cadb64e9f223ba2310837ecf1a1477690d15a755ed8b79",
+    "exitCode": 0
+  },
+  "target": {
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "apiId": "97e0ad80387c1c1e5148922356088ccbc7f77e5def61073c657b10769db09adb",
+    "apiImage": "sha256:dce12a1f5ab6311bbaf04defb7277ff0d50fee36e29e49d47234e5bf4ea405fe",
+    "pgId": "6a39e7b2d794055dccef0919cf3a99ddf60e0f3c0b5daae062cec1eb6c9b3785"
+  },
+  "precisionControl": {
+    "numericDecodedEqual": true,
+    "numericTextDistinct": true,
+    "bigintDecodedEqual": true,
+    "bigintTextDistinct": true
+  },
+  "groups": {
+    "projects": {
+      "count": 3,
+      "sha256": "0508e3b94f15972181d3b9e3119323f3aeb20fe253baf0f52006bb3855e341de"
+    },
+    "types": {
+      "count": 52,
+      "sha256": "3175b5f2926c8bf21e54fc64b090ede7e42d713852214d537ab79ae862c04ea9"
+    },
+    "cables": {
+      "count": 2143,
+      "sha256": "9d6e41eb3c27f1ea082fa815b80102d17f899ac5e11bb34305361f4b0121503e"
+    },
+    "selections": {
+      "count": 3,
+      "sha256": "9c619bdc9d7774ddfe50b3983a153203eb9c61a58cce078142fa41056f29efda"
+    }
+  },
+  "protectedRows": {
+    "projects": {
+      "before": 2,
+      "unchanged": 2,
+      "added": 1
+    },
+    "types": {
+      "before": 2,
+      "unchanged": 2,
+      "added": 50
+    },
+    "cables": {
+      "before": 3,
+      "unchanged": 3,
+      "added": 2140
+    },
+    "selections": {
+      "before": 2,
+      "unchanged": 2,
+      "added": 1
+    }
+  },
+  "finishedAt": "2026-10-18T17:09:29.438Z"
+}

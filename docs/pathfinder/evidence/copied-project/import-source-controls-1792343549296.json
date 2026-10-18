@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "pathfinder.copied-project.import-source-controls.v1",
+  "status": "PASS",
+  "observedAt": "2026-10-18T17:12:29.251Z",
+  "revision": "272b3a025d0ac107c44b1ab6b9b8d3bf20c50965",
+  "branch": "pf-3-copied-project-local-20261018",
+  "files": [
+    {
+      "path": "scripts/pathfinder-copied-project/import.mjs",
+      "bytes": 26756,
+      "sha256": "9d1d2e4f740efe95aa30950a539b7d934658c4c76cc25df341eecdaf20aa7b1f"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/import-lib.mjs",
+      "bytes": 23039,
+      "sha256": "67506d5b2a2b59b196629be02fb221344e68370fb981dd8dc5e4b99b532e17b4"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/import-lib.test.mjs",
+      "bytes": 23644,
+      "sha256": "923697c860c0fd009411ae1b122ca4a949394e9b32d06c6d808febbb539b0bee"
+    },
+    {
+      "path": "scripts/pathfinder-copied-project/README-import.md",
+      "bytes": 7130,
+      "sha256": "d38fd838de8ccfa8eb44f91dc4db58db81f53e880c7d1cfd386d5325f2394ffa"
+    }
+  ],
+  "dependencies": [
+    {
+      "path": "scripts/pathfinder-copied-project/seed-lib.mjs",
+      "sha256": "fb57bac5c9e886ec5fc536965513ad9eda83597c67b2e3206ddf77eca1705c44"
+    },
+    {
+      "path": "scripts/pathfinder-local/runtime-lib.mjs",
+      "sha256": "4a27ed7c07ec6da9eb5c13e29a1e4271ca65978e4bb25df7b737b01b6d8d24ce"
+    },
+    {
+      "path": "server/vendor/routings-model-package/lib/verify.mjs",
+      "sha256": "8b3c3daae8b4594c3ade1ab34ca79b38de83eb9d52a7d7a072b96fa4907da7fb"
+    }
+  ],
+  "checks": {
+    "executedBy": "Import tool implementation owner",
+    "command": "node --test --test-reporter=tap scripts/pathfinder-copied-project/import-lib.test.mjs",
+    "tests": 50,
+    "pass": 50,
+    "fail": 0,
+    "skipped": 0,
+    "exitCode": 0,
+    "raw": {
+      "path": "docs/pathfinder/evidence/copied-project/import-controls-final-1792343400.tap",
+      "bytes": 10139,
+      "sha256": "36818836a489e9a3bd904815d88a0a7a27bb63a9ae34f524aa66dac1d1468964",
+      "createdAtUtc": "2026-10-18T17:10:28.151Z",
+      "completedAtUtc": "2026-10-18T17:10:28.434Z",
+      "tests": 50,
+      "pass": 50,
+      "fail": 0,
+      "skip": 0
+    },
+    "syntax": {
+      "command": "node --check <each owned .mjs>",
+      "pass": 3,
+      "results": [
+        {
+          "path": "scripts/pathfinder-copied-project/import.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "scripts/pathfinder-copied-project/import-lib.mjs",
+          "exitCode": 0
+        },
+        {
+          "path": "scripts/pathfinder-copied-project/import-lib.test.mjs",
+          "exitCode": 0
+        }
+      ]
+    }
+  },
+  "history": [
+    {
+      "toolChunk": "e2970d",
+      "tests": 42,
+      "pass": 41,
+      "fail": 1,
+      "cause": "Synthetic original-project rejection fixture left its unrelated seed-receipt project ID inconsistent, so earlier seed-plan linkage correctly refused it. The fixture now aligns that receipt field to exercise the intended original-project marker guard.",
+      "raw": "Actual tool history only; no durable initial full TAP file claimed."
+    },
+    {
+      "raw": {
+        "path": "docs/pathfinder/evidence/copied-project/import-controls-initial-1792343000.tap",
+        "bytes": 9447,
+        "sha256": "0ce769437360d83bcec7422f41ba97b30b8b34b1301eb10e56e79737409a38bb",
+        "createdAtUtc": "2026-10-18T17:07:06.520Z",
+        "completedAtUtc": "2026-10-18T17:07:06.788Z",
+        "tests": 47,
+        "pass": 47,
+        "fail": 0,
+        "skip": 0
+      },
+      "note": "47/47 actual controls after fixture alignment and initial stream/watchdog corrections; later guards extend to final50."
+    }
+  ],
+  "sourceReviewClosures": [
+    {
+      "finding": "Read-only helper watchdog was initially installed after stdin consumption.",
+      "resolution": "Fixed watchdog installed before stdin/read/import; actual bounded host child with stdin intentionally kept open exits2 under20ms test-only watchdog. This is a host process control, not a Docker/runtime/SQL test."
+    },
+    {
+      "finding": "Rejected fetch could bypass owned archive stream cleanup.",
+      "resolution": "Entire fetch/read/parse path is wrapped in finally; synthetic rejecting-fetch control verifies destruction."
+    },
+    {
+      "finding": "Self-review concurrent resume could read stale history before acquiring its run lock.",
+      "resolution": "Owned exclusive lock acquired before history scan. Actual tiny synthetic file control inserts the prior uncertain-upload event at that boundary and proves resume refuses a fresh upload."
+    },
+    {
+      "finding": "Ready verification needed complete report/resource joins.",
+      "resolution": "All six server verification checks, full manifest resource list, every verified resource SHA and normal storage-readback totals are compared before selection."
+    }
+  ],
+  "actualExecution": {
+    "hostSyntheticControls": "PASS",
+    "mockedHTTP": "PASS",
+    "actualTargetHTTP": "NOT_RUN_BY_OWNER",
+    "actualTargetSQL": "NOT_RUN_BY_OWNER",
+    "actualImport": "NOT_RUN_BY_OWNER",
+    "containerLifecycle": "NOT_RUN_BY_OWNER",
+    "originalResources": "NO_ACTION_BY_OWNER",
+    "engineeringAcceptance": "NOT_GRANTED"
+  },
+  "privacy": {
+    "businessRowsInGit": false,
+    "credentialsOrTokensInReceipts": false,
+    "syntheticJournalControl": "Fresh tiny ignored scratch files only; no recursive cleanup or denied-directory retry."
+  },
+  "limitations": [
+    "Parent is sole actual executor after independent source review.",
+    "Unit controls exercise the authority/workflow contracts, mock HTTP, an actual host watchdog and a tiny synthetic journal. They do not replace actual protected import, row/bucket preservation, UI or engineering acceptance checks.",
+    "Public filename numeric suffixes are labels; actual filesystem run timestamps are retained above.",
+    "A hard crash can leave an owned run lock; no automatic stale-lock bypass or replacement idempotency key is implemented.",
+    "Uncertain accepted operations are retained and require later same-directory reconciliation; no upload or PATCH auto-retry."
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "pathfinder.copied-project.business-verification.v1",
+  "status": "PASS",
+  "recordedAt": "2026-10-18T17:27:40.268Z",
+  "checks": [
+    {
+      "name": "preexisting-projects-exact",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-new-projects-identities",
+      "status": "PASS"
+    },
+    {
+      "name": "preexisting-types-exact",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-new-types-identities",
+      "status": "PASS"
+    },
+    {
+      "name": "preexisting-cables-exact",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-new-cables-identities",
+      "status": "PASS"
+    },
+    {
+      "name": "preexisting-selections-exact",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-new-selections-identities",
+      "status": "PASS"
+    },
+    {
+      "name": "all-seeded-projects-exact-through-import-and-ui",
+      "status": "PASS"
+    },
+    {
+      "name": "all-seeded-types-exact-through-import-and-ui",
+      "status": "PASS"
+    },
+    {
+      "name": "all-seeded-cables-exact-through-import-and-ui",
+      "status": "PASS"
+    },
+    {
+      "name": "old-model-selections-exact",
+      "status": "PASS"
+    },
+    {
+      "name": "only-expected-new-model-selected-once",
+      "status": "PASS"
+    }
+  ],
+  "plan": {
+    "path": "pathfinder-engine/.scratch/copied-project-seed-20261018-1710/plan.private.json",
+    "sha256": "3ac537e097ce4eec007bc2604c0c9338a9bfb0ecad81f3af70a71100b18d0b0d"
+  },
+  "projectId": "1af0f807-7653-40ea-8391-7eea6c54e7d4",
+  "seedCounts": {
+    "projects": 1,
+    "types": 50,
+    "cables": 2140,
+    "selections": 1
+  },
+  "after": {
+    "path": "docs/pathfinder/evidence/batched-capture/business-1792344448188.json",
+    "raw": {
+      "path": "pathfinder-engine/.scratch/capture-business-67641d9b-d84a-4b49-8673-4bf913deaf91/business.private.json",
+      "bytes": 1787005,
+      "sha256": "40e2e78c16d487edb783f4cdf13d47bd0abc42bb4c9772315d0a6ce622cfa11b",
+      "exitCode": 0
+    }
+  },
+  "before": {
+    "path": "docs/pathfinder/evidence/batched-capture/business-1792342485528.json",
+    "raw": {
+      "path": "pathfinder-engine/.scratch/capture-business-61c061d2-f3c2-4641-b168-e6cf347e2499/business.private.json",
+      "bytes": 19151,
+      "sha256": "d0790595999856d9673690d4cd18b880cba61a3310216cb3e5d641cf8930d81e",
+      "exitCode": 0
+    }
+  },
+  "seeded": {
+    "path": "docs/pathfinder/evidence/batched-capture/business-1792343369438.json",
+    "raw": {
+      "path": "pathfinder-engine/.scratch/capture-business-182dd99f-a519-4e83-85a6-2e64d5814b2c/business.private.json",
+      "bytes": 1786970,
+      "sha256": "49a06f7ef573fb2777cadb64e9f223ba2310837ecf1a1477690d15a755ed8b79",
+      "exitCode": 0
+    }
+  },
+  "privateWorkRoot": "pathfinder-engine/.scratch/copied-business-verification-2e1f4592-113e-4c12-ba2f-ea1edec157cb"
+}

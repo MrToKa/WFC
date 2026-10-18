@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-3-batched-capture-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-3-copied-project-local-20261018` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -14,6 +14,50 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
 ## Current continuation — actual business input and full-model candidate coverage
+
+LATEST technicaldelivery stage30 COMPLETE on copied-project branch; [report30](30-copied-project.md).
+Actual1527name preparation PASS:6chunks/27278inputbytes,438155of438155SDKrows,
+0omitted, one13objectartifact9723d683. NormalMatchall1527missingidentities/aliases/
+events,0bindings/jobs/proposals/reviews/Apply/syntheticmarkers. CUAmanualformopened
+withoutpoints/saving; reloadpersistssnapshot2140cables+1527counts, rawrulesreset.
+Rootactualaggregate7PASS; finalcore4448188/offline13checks4460403 and23table/
+3bucket4448755 preservationPASS. Old684metadatarecords exact/342newscopedkeys;
+oldQAworkflow/bindings unchanged. Wider12PASS4580754/b40ce9c6 all18baseline unchanged.
+7servedchecks4004797,sameproductimages. No originalDBqueries/restarts/publication,
+newtestcontainers/images0; all7deniedchildren untouched. Needed5191/project1af0f807
+and privateprovenance retained. Next localcommit→prepare-stage-handoff→inheriting
+PF8copied-project recovery branch: explicit5191backup, privatehostadjunct, fresh5192
+restore/lossless27tables+fencing, retireonlynew5192. Nevercallold defaultdrill/retire
+againstsource5191. Human mappings/engineering review remain pending.
+
+Chronological stage30 entries below retain the actual execution sequence.
+
+LATEST continuation: stage29 technical delivery committed at
+`3a1a212b3dd5e06930e22c758876db634cebb348`; next standalone handoff committed at
+`272b3a025d0ac107c44b1ab6b9b8d3bf20c50965` on the inheriting copied-project branch.
+Executing [copied-project assignment](handoffs/PF-3-copied-project.md): additive
+local project with2140actual copied cable inputs,50minimal types, exact source
+allowances plus approved gap1m, and its own protected normal model import on5191.
+Seed/import writers have separate file ownership; independent read-only reviewer
+checks frozen source before root alone executes actual mutations. Seed52controls/
+syntax3 and four frozen source pins closed. Root actualplan3286531/apply3294599/
+ROverify3302360/reapply3313718 PASS; secondapply already_seeded. Newproject
+`1af0f807-7653-40ea-8391-7eea6c54e7d4`, private planSHA3ac537e0, own5191 only.
+Postseedcore3369438 PASS protectedoldrows; exactnewID/offline8checks3554471 PASS.
+Model import50controls/syntax3 and independent4fileclosure PASS. Inspect-only3635228
+PASS persistedintent/key, noHTTP/SQLmutation; rootactualimport3771358 PASS with same
+private work `.scratch/copied-import-cec74539-2706-4833-b86b-9e3fd11d6469` and same
+immutable plan/seedreceipt pins. Newversiona613151e-c370-45c5-80f3-42ae58603b9a,
+342resources/439007803rawbytes,b5fingerprint,newprefix,selectionrevision1.
+Samejournal explicitresumeverification3839359 PASS, reconciledsameimport/already_selected
+at revision1; no duplicateupload/CAS. CUAnewproject2140/2140 observed, active modelready.
+Routesselectedactualgroup /BC022-2(425797), LV+Control diagnosticrule; preparation
+NOWRUNNING with actual1527names, latest197632of438155SDKrows. Do notduplicate
+preparation while active. CUAhandlepfBatchTab tab3 onnewproject5191. Sourcequalification
+7PASS4004797, sameAPI/web/runnerimages. Offline8exactaddition/oldrowchecks PASS
+3554471. CUAactualDetails7/5/10/gap1 andbothformulas observed; noformwrites.
+No synthetic-project marker,
+borrowed QA ownership/acceptance, original queries, publication or guessed locations.
 
 LATEST16:45UTC: bounded capture/eligibility delivery TECHNICALLY COMPLETE on
 pf-3-batched-capture-local-20261018; [report29](29-batched-capture.md). Final101

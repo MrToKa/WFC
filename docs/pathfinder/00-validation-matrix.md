@@ -333,3 +333,18 @@ Branchpf-3-batched-capture-local-20261018, handoff6761cb76, [report29](29-batche
 | PF3-CAPTURE-PRESERVE |Exact PostgreSQL JSONB text core rows through latestbuild/reload/secondcapture | PASS2projects/2types/3cables/2selections unchanged/0added; firstv1baseline precision limitation retained, not retroproof |
 | PF3-CAPTURE-CLEAN |Unused exact own resources and wider original5190 preservation | PASS6ownunusedimages/3framingfiles deleted; physicalreclaimNOT_MEASURED; wider12PASS/all18baseline unchanged;7deniedchildren untouched |
 | PF3-CAPTURE-NEXT |Separatecopied2140businessproject/modelstorage +actual1527SDKcapture | NOT_RUN; nextinheritinghandoff, no nativeoracle or inventedmapping/Apply |
+
+## PF-3 copied engineering project — 18 October 2026
+
+Branchpf-3-copied-project-local-20261018, handoff272b3a0,
+[report30](30-copied-project.md); actualnewproject1af0f807 on own5191.
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF3-COPY-SEED |Immutable private UUID map, exactsourcefields/decimalallowances, new1project/50types/2140cables, no synthetic marker | PASS52hostcontrols+syntax3/source-review; actualcreated/initialROverify/already_seeded replay |
+| PF3-COPY-IMPORT |Normal protected ZIPimport, newproject/version/storageownership,342resources/fullhashreadback, CASselection1 | PASS50hostcontrols+syntax3/source-review; actualimport3771358 and resumed3839359 without duplicateupload/CAS |
+| PF3-COPY-SDK |Actualall1527names/6chunks,438155SDKrecords/0omissions, one13objectdiagnosticartifact | PASS; inputscope persistsreload, rawrulesnotrecovered; allconverted/nativeproofflagsfalse |
+| PF3-COPY-MATCH |1527sharedidentities/aliases/missingstates;3emptyendpointuses; no guessedpoints | PASSactual7aggregatechecks;0newbindings/jobs/proposals/reviews/Apply, manualformopenedonly |
+| PF3-COPY-PRESERVE |InitialSQLfieldfidelity plus lossless old/newcore comparison and exactaddedIDs | PASS8initial/13finalofflinechecks;23existingregistry/PFtables exact,684oldobjectmetadata exact/342newscopedkeys |
+| PF3-COPY-ISOLATE |Sameproductimages/7servedchecks, original/5190preservation | PASS12widerchecks/all18baseline unchanged; no originalDBquery/restart/newtestcontainers/images,7deniedchildren untouched |
+| PF8-COPY-NEXT |Currentrealcopiedproject combinedbackup/restore/privatehostprovenance/authfencing | NOT_RUN; nextlocalrecoveryhandoff, separate from humanmapping/engineeringacceptance |
