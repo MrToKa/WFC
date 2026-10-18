@@ -134,3 +134,19 @@ equivalence or authorize original-installation updates.
 
 Final operational audit/cleanup outcomes append below after their actual checks.
 
+## PF-8 operational execution — 18 October 2026, 02:41 UTC
+
+| ID | Actual scope / evidence | Result |
+|---|---|---|
+| PF8-OPS-01 |Final cold ownDB/MinIO/staging/PF-artifacts/four exact images backup43365396; fresh extra5191restore, equal inventory/model selection,2versions/684resources/10PFfiles; final-drill-1792291231726 | PASS same-host/platform |
+| PF8-SESSION-01 |Positive source200 before/after; copied targetViewer410SESSION_REVOKED, oldJWT401, fresh cookie200 | PASS |
+| PF8-RECOVERY-01 |Actual .NETpair observed; extraAPIkilled at8/64; natural lease attempt2 completes64/64/0duplicates/noApply with preserved install/routing/design/revisions | PASS at restored synthetic scope |
+| PF8-PRESERVE-01 |Final5-group audit evidence/pf8/isolation-1792291275364; original checkouts/dirtyfiles/13container IDs/images/starttimes and pinned/frozen sources preserved | PASS |
+| PF8-CLEAN-01 |Extra target0containers/networks/volumes,8oldownimages and903979537oldarchivebytes removed after finalreplacement verified | PASS newownscope; two historicpolicydeniedchildren remain BLOCKED |
+| PF8-PORTABILITY-01 |Restore onto another computer/platform | NOT_RUN; actual drill samehost |
+| PF8-LOCAL-01 |Final offline/CSP/internal-network +actual local runtime computation scope | PASS at observed scope; hostnetworkdisconnect NOT_RUN |
+| PF8-USER-01 |New localfeature accepted by user/authorized for originalapp merge | NOT_RUN; no merge/push/deployment |
+
+See [PF-8 report](08-stage-report.md) for exact retained backup, images, source
+hashes, limits and next unmet-gate handoff. PF-2/PF-7 engineering gate and
+PF2-GRAPH-01 remain unresolved; operationalPASS does not change them.

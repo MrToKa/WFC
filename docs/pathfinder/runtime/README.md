@@ -264,8 +264,52 @@ private companion and both previously denied scratch directories remain.
 
 ## Verification status
 
-Preflight currently verifies nine configuration/ownership/path/artifact negative
-controls. Actual image build, start, model import, backup/restore and browser
-checks require their own recorded results. The presence of these tools does not
-establish a PASS for those operations or resolve the native/converted engineering
-parity limitation documented in the PF-2 report.
+The current own safety suite passes nine configuration/ownership/path/artifact
+controls. The protected capture module passes 15 tests, including its strict
+C# SnapshotReader/worker boundary. Actual proxy transport evidence is scoped
+above; the separate PF-7 report owns the UI and server integration results.
+
+The final combined operational drill is **PASS**, recorded in
+[final-drill-1792291231726.json](final-drill-1792291231726.json). It binds API
+`562e80739ed2c105f280a8f460ba449b26aaa6a7a63bcb9b311ff58345407a01`
+and web `81bb13b4c3370c903e364503f99ef28341fa840e6c451adf9b5163281fd345cb`.
+Its retained backup is
+`pathfinder-engine/.scratch/pf-final-backup-20261018-0237`, backup ID
+`43365396-de8c-4f4f-a680-76819e06af0f`; the matching private companion remains
+outside that directory. The eight captured data/image files total
+1,346,316,196 bytes. Readback covers both selected-model versions, 684 resources
+(878,015,606 bytes), and all ten PathFinder artifact files (2,533,791 bytes).
+
+The source Viewer cookie remained valid before/after its own cold backup and
+after the separate target drill. The copied cookie was rejected on the target
+with 410 SESSION_REVOKED, the source bearer with 401, and a fresh target cookie
+worked with 200. Model selection and raw artifact/database inventories matched.
+
+The actual additional target's .NET supervisor/worker pair was observed before
+SIGKILL at 8/64 completed cables. Its stopped API reported exit 137, PID 0 and no
+OOM; recovery waited for the natural lease, then completed all 64 on attempt 2
+within 46,170ms after restart. Exactly 64 distinct proposals were published with
+zero duplicate groups. All disposable cable install lengths stayed 77,
+routing/design length stayed NULL, and write revisions stayed zero. Current
+admin/login authority was verified. The source remained healthy. Only that
+extra target was interrupted and retired, leaving zero target containers,
+networks or volumes; the primary 5190 demonstration remains available.
+
+[cleanup-1792291263831.json](cleanup-1792291263831.json) records successful
+removal of exactly 903,979,537 bytes of superseded initial backup archives and
+eight unreferenced own candidate images. Compact initial receipts/manifests,
+the final verified backup/private companion, capture/native inputs and both
+previously denied scratch directories were retained. Shared Docker build cache
+was not pruned; image sizes are not treated as physical reclaimed-byte proof.
+The old initial backup directory now contains `archive-retired.json` and is
+intentionally no longer a restorable archive set.
+
+[final-health-1792291335683.json](final-health-1792291335683.json) verifies
+the primary application still returns 200 after the drill and cleanup, with
+the exact retained candidate images, four own volumes, private topology,
+loopback-only port and actual configured memory/process ceilings.
+
+This is same-host/platform operational acceptance. Cross-computer restoration
+is NOT_RUN. Native/converted engineering parity remains unaccepted as documented
+in the PF-2/PF-7 reports; operational PASS does not promote the real model or
+authorize engineering Apply.

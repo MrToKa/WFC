@@ -1,40 +1,48 @@
 # Local PathFinder delivery — changed-file manifest
 
-This is a review snapshot of the current local integration, relative to committed
-PF-3 checkpoint `c95ad56ebbd6b020966fa0690c98c37516df1db1`. It includes both
-staged and unstaged tracked changes and the new intended source/documentation/
-evidence files visible at the observation time. It is not a claim that every
-PF-0–PF-8 file was introduced after that checkpoint: earlier Core, Model, frozen
-contract/fixture and registry deliveries are already in the inherited history.
+This final PF-8 review snapshot is relative to committed PF-3 checkpoint
+`c95ad56ebbd6b020966fa0690c98c37516df1db1`. It includes committed changes since
+that checkpoint, current staged/unstaged tracked changes and new intended
+source/documentation/evidence files present at the observation time. It replaces
+the earlier 140-file PF-4-branch observation; the final reports, validation matrix,
+resume handoff, browser/source manifests, PF-8 audit and operational receipts are
+now included. Earlier Core, Model and frozen contract/fixture deliveries are
+already in the inherited history and are not falsely listed as newly changed.
 
 All paths below are repository-relative to
 `C:/Users/todor.chankov/source/WFC-pathfinder-local`. `A` means new relative to the
 checkpoint, including intended untracked files; `M` means an existing checkpoint
-file changed. Index/worktree staging does not change this meaning. The snapshot
-can precede the final local commit and later final-report/DR receipt additions;
-those must be read with the final commit and source/evidence manifests.
+file changed. Index/worktree staging does not change this meaning. The integrated
+source is committed at `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; the PF-7/PF-8
+handoff checkpoint is `03db8f7b557c1afcf05c18b81e704119db459503`. The delivery commit
+will additionally record the final reports/receipts. Read subsequent progress and
+automation-state receipt updates with their own final commit; this dated inventory
+does not claim those future files already existed.
 
 The original `C:/Users/todor.chankov/source/WFC` checkout and both original
 PathFinder checkouts remain reference-only. No push, PR, merge, deployment or
 update to the original application, containers, database, storage or volumes is
-part of this delivery. The local demonstration uses a separate installation and
-copied/test data. Its review does not authorize later integration.
+part of this delivery. The retained demonstration at `http://127.0.0.1:5190` uses
+a separate installation and copied/test data. Its review does not authorize later
+integration.
 
 **Not accepted:** native/converted engineering correspondence, real engineering
 length parity, full-plant geometry/category/visibility completeness, reusable
 graph adjacency and production/full-plant capacity. Real-model Apply remains
 blocked. The exact CLI-seeded synthetic fixture demonstrates local transactional
 behavior only; selected-model diagnostic paths are not a native parity PASS.
+The graph is still built per query over cached fitted geometry.
 
 The two historic policy-denied `.pf0-work/` and `.pf2-work/` children are excluded
 from this manifest and remain untouched. Private environment files, credentials,
 build outputs, caches, scratch/runtime state, copied model payloads and backup
-archives are excluded. Retained evidence, source and the demonstration are not
-classified as disposable cleanup. No tests were run to prepare this manifest.
+archives are excluded. Retained evidence, source, the final verified backup and
+the demonstration are not disposable cleanup. No code or tests were changed or
+run to prepare this documentation refresh.
 
-Observation UTC: 2026-10-18T02:36:39.9407685Z
-Branch: `pf-4-viewer-local-20261018`; observed HEAD: `c95ad56ebbd6b020966fa0690c98c37516df1db1`.
-Listed intended changed files, including this manifest: **140**.
+Observation UTC: 2026-10-18T02:44:50.1363167Z
+Branch: `pf-8-delivery-local-20261018`; observed HEAD: `03db8f7b557c1afcf05c18b81e704119db459503`.
+Listed intended changed files, including this manifest: **150**.
 
 ## Engine integration (4)
 
@@ -164,12 +172,13 @@ Adds bounded fixture and observation tools for current-role denial, copied model
 | A | `scripts/pathfinder-tests/source-manifest.mjs` |
 | A | `scripts/pathfinder-tests/ui-missing-fixture.mjs` |
 
-## Stage reports and handoffs (11)
+## Stage reports and handoffs (14)
 
-Records stage delivery, graph/cache limitations, continuation handoffs, final local usage and progress. Reports distinguish technical verification from user acceptance and native engineering acceptance. This manifest is included as a newly created documentation file.
+Records the revised validation matrix, local stage reports and usage, graph/cache limitations, continuation handoffs, final PF-8 report and progress. The next executable native-validation handoff carries the external entitlement/oracle gate. Technical delivery, user acceptance and native engineering acceptance remain distinct. This manifest is itself a changed documentation file.
 
 | Delta | File |
 |---|---|
+| M | `docs/pathfinder/00-validation-matrix.md` |
 | M | `docs/pathfinder/03-stage-report.md` |
 | A | `docs/pathfinder/04-stage-report.md` |
 | A | `docs/pathfinder/05-stage-report.md` |
@@ -177,8 +186,10 @@ Records stage delivery, graph/cache limitations, continuation handoffs, final lo
 | A | `docs/pathfinder/07-stage-report.md` |
 | A | `docs/pathfinder/08-changed-files.md` |
 | A | `docs/pathfinder/08-local-user-guide.md` |
+| A | `docs/pathfinder/08-stage-report.md` |
 | A | `docs/pathfinder/19-graph-preparation-review.md` |
 | M | `docs/pathfinder/automation-progress.md` |
+| A | `docs/pathfinder/handoffs/PF-2-resume-native-validation.md` |
 | A | `docs/pathfinder/handoffs/PF-7.md` |
 | A | `docs/pathfinder/handoffs/PF-8.md` |
 
@@ -209,7 +220,7 @@ Retains immutable run outputs and receipts for core regression/parity, ModelRunn
 | A | `docs/pathfinder/evidence/pf5/verification-final-20261018T022415Z.json` |
 | A | `docs/pathfinder/evidence/pf5/verification-final-20261018T023201Z.json` |
 
-## Browser and integration evidence (22)
+## Browser and integration evidence (24)
 
 Retains the actual browser actions, selected-model diagnostics, admin/non-admin checks, shared locations, settings-only recalculation, synthetic Apply/history, Ghost/yellow-path restoration, offline observations and isolation/source inventories. Before-fix screenshots remain deliberately historical. Selected geometry and synthetic results do not establish full-plant engineering parity.
 
@@ -220,6 +231,7 @@ Retains the actual browser actions, selected-model diagnostics, admin/non-admin 
 | A | `docs/pathfinder/evidence/pf7/actual-lookup-before-yellow-fix.png` |
 | A | `docs/pathfinder/evidence/pf7/actual-model-shared-pick.png` |
 | A | `docs/pathfinder/evidence/pf7/computer-use-20261018T0211Z.json` |
+| A | `docs/pathfinder/evidence/pf7/computer-use-final-20261018T0237Z.json` |
 | A | `docs/pathfinder/evidence/pf7/details-reserve-recalculated-19.png` |
 | A | `docs/pathfinder/evidence/pf7/engineer-deep-link-denied.png` |
 | A | `docs/pathfinder/evidence/pf7/isolation-1792289542491.json` |
@@ -231,6 +243,7 @@ Retains the actual browser actions, selected-model diagnostics, admin/non-admin 
 | A | `docs/pathfinder/evidence/pf7/shared-location-after-resolution.png` |
 | A | `docs/pathfinder/evidence/pf7/shared-location-before-resolution.png` |
 | A | `docs/pathfinder/evidence/pf7/sources-1792290715644.json` |
+| A | `docs/pathfinder/evidence/pf7/sources-1792291275723.json` |
 | A | `docs/pathfinder/evidence/pf7/synthetic-apply-confirmed.png` |
 | A | `docs/pathfinder/evidence/pf7/synthetic-cable-history.png` |
 | A | `docs/pathfinder/evidence/pf7/synthetic-clear-restored-final.png` |
@@ -238,14 +251,17 @@ Retains the actual browser actions, selected-model diagnostics, admin/non-admin 
 | A | `docs/pathfinder/evidence/pf7/synthetic-one-point-final.png` |
 | A | `docs/pathfinder/evidence/pf7/synthetic-review-final.png` |
 
-## Runtime documentation and receipts (8)
+## Runtime documentation and receipts (11)
 
-Provides the installation guide, selected-network capture instructions and timestamped seed/runtime/transport/restore observations. Private runtime state, credentials, copied databases, storage payloads and backup archives are excluded from the Git delivery.
+Includes installation/selected-network instructions plus the final combined backup, restore, cookie/JWT session fencing, actual extra-target process interruption/natural recovery, final primary health and ownership-checked cleanup receipts. The primary demo and verified backup remain retained; the extra restore target and exact superseded own resources were retired. Private runtime state, credentials, copied databases, storage payloads and backup archives are excluded from Git.
 
 | Delta | File |
 |---|---|
 | A | `docs/pathfinder/runtime/artifact-transport-1792290198792.json` |
 | A | `docs/pathfinder/runtime/artifact-transport-1792290628158.json` |
+| A | `docs/pathfinder/runtime/cleanup-1792291263831.json` |
+| A | `docs/pathfinder/runtime/final-drill-1792291231726.json` |
+| A | `docs/pathfinder/runtime/final-health-1792291335683.json` |
 | A | `docs/pathfinder/runtime/README.md` |
 | A | `docs/pathfinder/runtime/restore-check-1792288076606.json` |
 | A | `docs/pathfinder/runtime/runtime-initial-1792288142643.json` |
@@ -253,6 +269,43 @@ Provides the installation guide, selected-network capture instructions and times
 | A | `docs/pathfinder/runtime/selected-model-capture.md` |
 | A | `docs/pathfinder/runtime/synthetic-seed-1792289050427.json` |
 
-## Reading the evidence
+## Final preservation and document audit evidence (2)
 
-Use the per-stage reports and timestamped receipts for exact commands, revisions/images, outcomes and limitations. The latest backend receipt proves 20 scoped SQL/HTTP controls with cleanup; the 34 engine/registry and 40 legacy controls have their own receipts. Backup/restore/crash, final browser and preservation results require their separate recorded evidence. Earlier failed observations are preserved rather than relabelled. No native or full-plant acceptance follows from a broad file manifest.
+Adds the final PF-8 isolation audit and the scoped documentation-link audit. The isolation audit records preservation of the original checkouts and local edits, original thirteen container identities/images/start times, pinned engine/native/test sources and frozen PF-0 deliveries. The separate document receipt checks 24 local links across its 15 listed documents. Neither scope establishes native engineering or plant-capacity acceptance.
+
+| Delta | File |
+|---|---|
+| A | `docs/pathfinder/evidence/pf8/delivery-doc-audit-1792291445568.json` |
+| A | `docs/pathfinder/evidence/pf8/isolation-1792291275364.json` |
+
+## Reading the final evidence
+
+Use the stage reports and timestamped receipts for exact commands, revisions,
+images, outcomes and limitations. The final backend receipt proves 20 scoped
+SQL/HTTP controls with cleanup; 34 engine/registry and 40 legacy controls have
+separate receipts. The final browser receipt covers the rendering/picking/review
+cases actually exercised. Earlier failed/configuration attempts and before-fix
+screenshots are deliberately preserved rather than relabelled.
+
+The final 805-file source manifest is
+`docs/pathfinder/evidence/pf7/sources-1792291275723.json`, with aggregate SHA256
+`3ea5002ae0c0c32ebaa8fda491b44003002f8b9a2ec78e67dcc48962010c985b`.
+It is a separate source-set inventory, not the number of files changed since the
+PF-3 checkpoint. The final preservation audit is
+`docs/pathfinder/evidence/pf8/isolation-1792291275364.json`.
+
+The final operational records are
+`docs/pathfinder/runtime/final-drill-1792291231726.json`,
+`docs/pathfinder/runtime/final-health-1792291335683.json` and
+`docs/pathfinder/runtime/cleanup-1792291263831.json`. Their actual scoped results
+include combined backup/restore, copied-session fencing and an observed .NET
+supervisor/worker interruption on only the extra restored target. Natural lease
+recovery completed 64/64 with one proposal per cable and unchanged cable fields;
+that target was then retired. The primary demonstration remains available.
+Same-host operational PASS does not establish cross-computer restore, host-wide
+Internet-disconnect behavior, native engineering parity or full-plant capacity.
+
+The next dependent work is specified in
+`docs/pathfinder/handoffs/PF-2-resume-native-validation.md`. No native or full-plant
+acceptance and no authorization to merge into the original app follow from this
+manifest or the scoped local passes.

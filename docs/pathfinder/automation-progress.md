@@ -5,14 +5,39 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-4-viewer-local-20261018` (inspect live branch/HEAD before each continuation).
-- Current committed checkpoint: `c95ad56ebbd6b020966fa0690c98c37516df1db1` (PF-3 implementation, partial verification). Additive PF-4–PF-6 source and isolated runtime work is uncommitted and owned by three coordinated writers; preserve it. This checkpoint is not real engineering acceptance.
+- Current branch: `pf-8-delivery-local-20261018` (inspect live branch/HEAD before each continuation).
+- Integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. The local commit containing this final progress/report records the remaining PF-8 evidence. Read live HEAD rather than inferring a self-referential hash from this file. No implementation changes are left outside these deliveries.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
 - Canonical reference: PathFinder `45c24bf5f433f13e102600b36f20327c77961d0a`.
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current work — final independent technical checkpoint, 02:38 UTC
+## Current work — independent local delivery complete, real gate BLOCKED
+
+The isolated5190 demonstration is healthy. Final combined cold backup/restore,
+cookie/JWT fencing, actual .NET-child death/natural recovery64/64/0duplicates,
+extra-target retirement and exact obsolete-resource cleanup all PASS.
+Final preserved backup43365396 is retained. Final original-environment audit
+PASS preserves13originalcontainer IDs/images/starttimes, threeoriginalsource
+trees/dirtyfiles and frozen/pinned bytes. Only the two denied cleanup children
+remain intended untracked. See `08-stage-report.md` and linked final receipts.
+
+Final805sourcefile manifest3ea5002a differs from earlier63081706 only in the
+strengthened operations crash driver; application images remain562e8073/81bb13b4.
+Technical checks: Core105/215, ModelRunner38, registryHTTP13, backend34/20live,
+legacy40, frontend71, runtime104, runtimeownership9. Exactscopes/receipts inPF-7.
+Actual browser final yellow/Ghost/Review/onepoint/Clear passes are recorded.
+
+Next executable task: `handoffs/PF-2-resume-native-validation.md`. It requires
+a complete same-source full-precision native export from an authorized host or
+working local entitlement plus permission for another capture. No repeat of
+unchanged entitlement refusal is useful. Real engineering parity/acceptance is
+BLOCKED; fullplantcapture/capacity NOT_RUN, reusablegraph NOT_IMPLEMENTED.
+These unmet PF-2/PF-7 gates and user acceptance are not waived. The heartbeat
+will be paused through the application tool after the final local commit.
+No merge/push/PR/deployment/original-app or data write occurred.
+
+## Earlier final technical checkpoint — 02:38 UTC
 
 Final API562e8073 / web81bb13b4 is healthy on own5190. Backend20/20 actual,
 34 process/registry,40 legacy, ModelRunner38, frontend71, runtime104 and
@@ -57,11 +82,11 @@ PF-1 has no user interface. Automated code/math checks use the normal build/test
 | PF-1 | TECHNICAL_PASS | Extracted DLL; 105 original regression and 215 parity/boundary checks; source/environment preservation PASS |
 | PF-2 | BLOCKED; partial implementation verified | Native host reports entitlement not found; full-precision reference and remaining graph/capacity work required |
 | PF-3 | IMPLEMENTED; scoped technical verification PASS | 20 pure +10 actual SQL, refreshed HTTP13/13; actual protected capture/pick/save/reload; native gate unchanged |
-| PF-4 | IMPLEMENTED; actual UI findings being fixed | Actual admin/non-admin deep links, capture/pick/shared resolution PASS; empty-object Ghost/text spacing fixes and lookup UI await fresh image |
-| PF-5 | IN_PROGRESS | Durable jobs/new module work; no completion claim |
-| PF-6 | IMPLEMENTED; integration verification pending | Explicit Review + Apply, atomic revisions and provenance; real artifacts remain blocked |
-| PF-7 | IN_PROGRESS at independent scope | Actual engine client 30 checks PASS; fresh candidate security/jobs/Apply/browser checks pending; native parity BLOCKED |
-| PF-8 | IN_PROGRESS at operations scope | Own port 5190; initial isolated backup/restore passed, final combined-state drill pending |
+| PF-4 | TECHNICAL_PASS at tested local scope | Admin/engineer deep links, protected capture/picking/shared resolution, final yellow/Ghost/onepoint/Clear verified |
+| PF-5 | TECHNICAL_PASS at tested local scope | Automatic/durable jobs, staleness/designreuse, cancellation and actual extra-target crash recovery; fullplant throughput NOT_RUN |
+| PF-6 | TECHNICAL_PASS for trusted synthetic fixture | Review/atomicApply/idempotency/history/install preservation tested; real engineering Apply blocked |
+| PF-7 | Independent integration PASS; native parity BLOCKED | Final20live,34backend,71frontend,104runtime and stated regression receipts; exactsource/images bound |
+| PF-8 | Local operational PASS; user acceptance NOT_RUN | Own5190, combinedbackup/restore/sessionfencing/realcrash/cleanup/finalpreservation PASS; crosscomputerrestore NOT_RUN |
 
 ## Inherited limitations
 
