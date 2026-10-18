@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-2-model-geometry-20261017`.
+- Current branch at resumed implementation: `pf-3-locations-local-20261018` (inspect live branch/HEAD before each continuation).
 - Current implementation/evidence checkpoint: `491c11c4398038854dd71674ee77df0c51661fff` (blocked partial PF-2, not stage completion). The accompanying progress index is committed separately; inspect live HEAD on resume.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
 - Canonical reference: PathFinder `45c24bf5f433f13e102600b36f20327c77961d0a`.
@@ -13,6 +13,18 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
 ## Current work
+
+**18 October user resumption supersedes the earlier routine stop:** automation is
+ACTIVE again. See `18-execution-resume.md`. Independent PF-3 registry, PF-4
+protected Viewer/UI, PF-5/PF-6 jobs/Apply and separate runtime work are progressing
+in parallel; this does not waive PF-2/PF-7 engineering evidence. Current registry
+source milestone: 20 pure +10 real SQL checks PASS, new ModelRunner 26 PASS,
+fresh Core 105/215 PASS. Initial HTTP 12/13; alias-update needs refreshed-image
+retest (source includes endpoint). See `03-stage-report.md`; no overall stage
+acceptance or engineering Apply claimed. Runtime is new own localhost5190 with
+fresh credentials/database/storage and copied model. Original resources stay
+reference-only. Generate/finalize each subsequent handoff from real interfaces
+and continue; do not treat old PAUSED entries below as current authorization.
 
 PF-1 is **technically complete and verified** at local commit `db1b76ec32286d290210ba11adc0738c96665372`: 105/105 original regression checks and 215/215 parity/boundary checks, including 43 frozen cases, 33 production DTO replays and 14 CLI scenarios. Independent review fixes were verified, followed by the combined verification entry point. PF-2 has a **BLOCKED partial delivery** under `handoffs/PF-2.md`, inherited handoff commit `859949c` and earlier WIP checkpoint `f4d46ab5281ded40d0a0357c2f1cb1e23f5a5dc4`. This continuation records actual converted checks and the now-proven native licence blocker. Final human acceptance remains separate.
 
@@ -25,10 +37,10 @@ PF-1 has no user interface. Automated code/math checks use the normal build/test
 | PF-0 | Technical PASS; inherited cleanup BLOCKED | Frozen receipts and local commit above |
 | PF-1 | TECHNICAL_PASS | Extracted DLL; 105 original regression and 215 parity/boundary checks; source/environment preservation PASS |
 | PF-2 | BLOCKED; partial implementation verified | Native host reports entitlement not found; full-precision reference and remaining graph/capacity work required |
-| PF-3 | NOT_STARTED | Shared project locations and From/To resolution |
-| PF-4 | NOT_STARTED | Strict-admin tab, exact path rendering and picking |
-| PF-5 | NOT_STARTED | Jobs, cancellation/recovery, settings and staleness |
-| PF-6 | NOT_STARTED | Explicit Review + Apply, atomic revisions and provenance |
+| PF-3 | IMPLEMENTED; verification in progress | 20 pure +10 actual SQL PASS; refresh candidate HTTP alias-update check |
+| PF-4 | IN_PROGRESS | Additive protected exact renderer/picking/metadata and strict-admin UI; source tests recorded separately |
+| PF-5 | IN_PROGRESS | Durable jobs/new module work; no completion claim |
+| PF-6 | PLANNED | Explicit Review + Apply, atomic revisions and provenance |
 | PF-7 | NOT_STARTED | Integration, real-model parity, security and regression |
 | PF-8 | NOT_STARTED | Isolated delivery, operations and demonstration |
 

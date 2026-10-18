@@ -16,7 +16,7 @@ import { materialsRouter } from './routes/materialsRoutes.js';
 import { projectsRouter } from './routes/projectsRoutes.js';
 import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
-import { authenticate, requireCatalogAccess } from './middleware.js';
+import { authenticate, requireAdmin, requireCatalogAccess } from './middleware.js';
 import { createViewerSessionRouter } from './routes/viewerSessionRoutes.js';
 
 export const createApp = (): Express => {
@@ -34,6 +34,14 @@ export const createApp = (): Express => {
   app.use(
     /^\/api\/projects\/[^/]+\/(change-orders|internal-ncrs)\/[^/]+\/materials(\/preview)?$/,
     express.json({ limit: '5mb' }),
+  );
+  // Reject unauthenticated/non-admin artifact uploads before buffering a large
+  // computational snapshot. The PF router rechecks project/model dependencies.
+  app.use(
+    /^\/api\/projects\/[0-9a-f-]{36}\/pathfinder\/artifacts\/?$/i,
+    authenticate,
+    requireAdmin,
+    express.json({ limit: '256mb' }),
   );
   app.use(express.json());
 
