@@ -1,0 +1,225 @@
+{
+  "schemaVersion": "pathfinder.model.runner.tests.v1",
+  "observedAtUtc": "2026-10-18T12:40:22.039Z",
+  "scope": "synthetic-private-model-worker-and-frozen-saved-design-controls",
+  "status": "PASS",
+  "passed": 42,
+  "checks": [
+    {
+      "name": "independent-lookup-plan-needs-no-snapshot-planning-artifact-or-private-root",
+      "status": "PASS"
+    },
+    {
+      "name": "lookup-plan-rejects-invalid-syntax-and-inappropriate-snapshot-fields",
+      "status": "PASS"
+    },
+    {
+      "name": "dedicated-lookup-resolves-owner-scope-and-cannot-be-promoted-to-planning",
+      "status": "PASS",
+      "details": {
+        "scope": {
+          "requestedCodeCount": 1,
+          "uniqueCodeCount": 1,
+          "discoveredObjectCount": 2,
+          "resolvedOwnerCount": 1,
+          "resolvedLeafCount": 1,
+          "warnings": [
+            "Scope uses current SDK display visibility; native visibility, native-converted parity and engineering acceptance remain unverified."
+          ]
+        },
+        "usedConnectionGapMeters": 0.25
+      }
+    },
+    {
+      "name": "strict-prepare-and-private-fit-cache",
+      "status": "PASS",
+      "details": {
+        "key": "3c7e76b38161a03b6c8d85fd8bf2823d4a7ecf2b897b6d289c80a85352fb7b26",
+        "readiness": "needs_review",
+        "counts": {
+          "validatedBends": 0,
+          "fallbackBends": 0,
+          "validatedStraights": 0,
+          "fallbackStraights": 1,
+          "fallbackClearances": 0
+        },
+        "cacheScope": "fitted-centerlines-ports-and-canonical-mesh;surface-bvh-reconstructed-on-disk-load;graph-per-calculation",
+        "loadedFromDisk": false,
+        "objectCount": 1,
+        "segmentCount": 1,
+        "diagnosticCount": 1,
+        "diagnostics": [
+          "tray-1: no repeated mesh end sections prove a straight extrusion"
+        ],
+        "diagnosticsTruncated": false,
+        "engineeringAccepted": false
+      }
+    },
+    {
+      "name": "real-core-calculation-instrumentation-maps-to-control",
+      "status": "PASS",
+      "details": {
+        "length": 10,
+        "design": {
+          "lengthBeforePercentageMeters": "16",
+          "unroundedLengthMeters": "17.6",
+          "designLengthMeters": "18"
+        },
+        "engineeringAccepted": false
+      }
+    },
+    {
+      "name": "coincident-endpoints-preserve-one-exact-native-point",
+      "status": "PASS"
+    },
+    {
+      "name": "null-secondary-does-not-become-zero-when-flagged",
+      "status": "PASS"
+    },
+    {
+      "name": "unknown-category-requires-resolution",
+      "status": "PASS"
+    },
+    {
+      "name": "ordered-lookup-native-parser-without-equipment-tails-or-design",
+      "status": "PASS"
+    },
+    {
+      "name": "reverse-lookup-is-native-exact-reversal",
+      "status": "PASS"
+    },
+    {
+      "name": "reverse-calculation-swaps-approaches-and-keeps-original-formula",
+      "status": "PASS"
+    },
+    {
+      "name": "lookup-missing-code-is-no-path",
+      "status": "PASS"
+    },
+    {
+      "name": "legacy-planning-lookup-retains-original-long-code-contract",
+      "status": "PASS"
+    },
+    {
+      "name": "lookup-invalid-and-secondary-only-input-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "core-graph-budget-is-controlled-resource-limit",
+      "status": "PASS"
+    },
+    {
+      "name": "mode-specific-route-and-reverse-fields-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "nonfinite-coordinate-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "cross-project-snapshot-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "snapshot-byte-integrity-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "path-injection-identity-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "unexpected-proof-property-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "duplicate-json-member-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "hard-worker-deadline",
+      "status": "PASS"
+    },
+    {
+      "name": "exact-decimal-underflow-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "smallest-exact-decimal-is-fixed-and-not-rounded-or-exponential",
+      "status": "PASS"
+    },
+    {
+      "name": "null-setting-revision-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "null-required-scalar-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "missing-explicit-private-root-rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "unassigned-model-category-is-not-invented",
+      "status": "PASS"
+    },
+    {
+      "name": "unassigned-native-hidden-does-not-block-eligible-routing",
+      "status": "PASS"
+    },
+    {
+      "name": "unassigned-hidden-ancestor-does-not-block-eligible-routing",
+      "status": "PASS"
+    },
+    {
+      "name": "unassigned-planning-rule-exclusion-does-not-block-eligible-routing",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-no-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-one-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-one-secondary-reverse",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-both-secondary",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-zero-secondary-replacement",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-exact-integer",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-ceiling-fraction",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-zero",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-invalid-negative",
+      "status": "PASS"
+    },
+    {
+      "name": "frozen-saved-design-design-approach-exceeds-length",
+      "status": "PASS"
+    }
+  ],
+  "scratch": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\modelrunner-19eeeea5-fad4-4d46-9b49-a1edc497a422",
+  "sourceSha256": "f473629d4f3f95c7a0689e465d6bc90545c15400e8c4e2ddde42f195b86009e0",
+  "snapshotSha256": "622be1b899a4325c68b85835879081c01d4aa3cffb5fbd493457739cae7bb02a",
+  "corePinsChanged": false,
+  "nativeParity": "BLOCKED; not established by synthetic controls"
+}

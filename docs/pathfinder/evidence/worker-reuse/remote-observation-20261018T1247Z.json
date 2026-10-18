@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "pathfinder.stage.remote-observation.v1",
+  "recordedAtUtc": "2026-10-18T12:47:36.584Z",
+  "local": {
+    "branch": "pf-2-worker-reuse-local-20261018",
+    "baselineCommit": "ed0770f39790fdedf937a190d99908681c11a532",
+    "cachedOriginMainAhead": 26,
+    "cachedOriginMainBehind": 0,
+    "workingChanges": "Active bounded session source/tests/report; not committed at observation."
+  },
+  "connector": "Configured GitHub read-only fetch",
+  "observations": [
+    {
+      "url": "https://api.github.com/repos/MrToKa/WFC/branches/main",
+      "status": "PASS",
+      "branch": "main",
+      "commit": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00"
+    },
+    {
+      "url": "https://api.github.com/repos/MrToKa/PathFinder/branches/master",
+      "status": "PASS",
+      "branch": "master",
+      "commit": "45c24bf5f433f13e102600b36f20327c77961d0a"
+    },
+    {
+      "url": "https://api.github.com/repos/MrToKa/WFC/pulls?state=all&head=MrToKa%3Apf-2-worker-reuse-local-20261018&per_page=20",
+      "status": "PASS",
+      "count": 0
+    }
+  ],
+  "limitations": [
+    "Empty PR list is not a candidate CI/review PASS; no remote candidate commit was established.",
+    "No remote mutation, fetch updating local refs, push, PR or merge."
+  ]
+}

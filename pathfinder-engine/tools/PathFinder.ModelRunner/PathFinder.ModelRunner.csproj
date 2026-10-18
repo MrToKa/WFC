@@ -4,6 +4,7 @@
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="PathFinder.RunnerSession.Tests" />
     <ProjectReference Include="../../src/PathFinder.Model/PathFinder.Model.csproj" />
     <ProjectReference Include="../../src/PathFinder.Adapter/PathFinder.Adapter.csproj" />
   </ItemGroup>

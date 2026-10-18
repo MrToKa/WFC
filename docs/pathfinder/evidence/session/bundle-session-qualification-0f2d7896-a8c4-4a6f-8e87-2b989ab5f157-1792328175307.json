@@ -1,0 +1,1234 @@
+{
+  "schemaVersion": "pathfinder.session.bundle.v1",
+  "root": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157",
+  "bundle": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-qualification-0f2d7896-a8c4-4a6f-8e87-2b989ab5f157\\bundle",
+  "createdAt": "2026-10-18T12:44:39.335Z",
+  "files": [
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.Adapter.dll",
+      "file": "runner/PathFinder.Adapter.dll",
+      "bytes": 62976,
+      "sha256": "af454cadf809a6da12df7974f0b9928c34cf25e82902fd2beeaf80bbe1cc2627"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.Adapter.pdb",
+      "file": "runner/PathFinder.Adapter.pdb",
+      "bytes": 21360,
+      "sha256": "1e31e2938c8347ba2170660c271960a1bdb74dba9df276d48ec10019d805ade4"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.Core.dll",
+      "file": "runner/PathFinder.Core.dll",
+      "bytes": 127488,
+      "sha256": "423c6eeaf0278cacc38962ba19bbbd2b5c1f6d49f7688f5ca652f972cde18dce"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.Core.pdb",
+      "file": "runner/PathFinder.Core.pdb",
+      "bytes": 55108,
+      "sha256": "af7d8cdc04179c532730cd8497601a400e7b14bf546fab7a27fb39b9886b6772"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.Model.dll",
+      "file": "runner/PathFinder.Model.dll",
+      "bytes": 98816,
+      "sha256": "d562fec7e46b30864bfec9165aecfaf6165725eed7cb6a2a852be23d187c81ca"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.Model.pdb",
+      "file": "runner/PathFinder.Model.pdb",
+      "bytes": 28760,
+      "sha256": "b9b48a3b6da08a55b42774e5e241bdc1a45d5c068ad477df946e709b0f7ce60f"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.ModelRunner.deps.json",
+      "file": "runner/PathFinder.ModelRunner.deps.json",
+      "bytes": 1710,
+      "sha256": "c7e6d9cb4afef731af751b21eb86a7862f5868429495955e7ecb86e60290d673"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.ModelRunner.dll",
+      "file": "runner/PathFinder.ModelRunner.dll",
+      "bytes": 79360,
+      "sha256": "0a421550ac7e01a7e4659a543927cb5fd20eacac7a9cc687cc08c812a5b8c56a"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.ModelRunner.pdb",
+      "file": "runner/PathFinder.ModelRunner.pdb",
+      "bytes": 21412,
+      "sha256": "037e577bccdcfc2edb2aa0824e9520e660d9d057f7cef909da2a047d49ea80c8"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.ModelRunner.runtimeconfig.json",
+      "file": "runner/PathFinder.ModelRunner.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.RunnerSession.Tests.deps.json",
+      "file": "runner/PathFinder.RunnerSession.Tests.deps.json",
+      "bytes": 2161,
+      "sha256": "50c825d7c0b1a7bceeed7e1e36c26dedc1d3dd4214d206f89b97d395f73b9201"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.RunnerSession.Tests.dll",
+      "file": "runner/PathFinder.RunnerSession.Tests.dll",
+      "bytes": 61952,
+      "sha256": "0ff07f7775d045dde59db56d5fde9162c6f5aff7350de8e8789b98d8c0305ad4"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.RunnerSession.Tests.pdb",
+      "file": "runner/PathFinder.RunnerSession.Tests.pdb",
+      "bytes": 18692,
+      "sha256": "702b4a4ecb2363b280b440cffa72fbf908ea93f6785968f5631e6f21e075918d"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\runner-session-tests-94f20d805e4f4fd593cc119583ec62e7\\publish\\PathFinder.RunnerSession.Tests.runtimeconfig.json",
+      "file": "runner/PathFinder.RunnerSession.Tests.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-memory-fixture-d6fc3563-37d7-4a65-84ce-1817912b9100\\publish\\MemoryLane.deps.json",
+      "file": "fixture/MemoryLane.deps.json",
+      "bytes": 422,
+      "sha256": "6fbdd448e2422e3563dde3b79fff4994eb712dad70c991c478fd57e9974ace64"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-memory-fixture-d6fc3563-37d7-4a65-84ce-1817912b9100\\publish\\MemoryLane.dll",
+      "file": "fixture/MemoryLane.dll",
+      "bytes": 14848,
+      "sha256": "c73c10f5b94bf622f323d561f20c7592a266747e016ad3c5c23723c9c87d4c08"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-memory-fixture-d6fc3563-37d7-4a65-84ce-1817912b9100\\publish\\MemoryLane.pdb",
+      "file": "fixture/MemoryLane.pdb",
+      "bytes": 12768,
+      "sha256": "acf87096154cdd7044ac6582fdf0bb91a918de01d5f1112918d7debd86562269"
+    },
+    {
+      "source": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-memory-fixture-d6fc3563-37d7-4a65-84ce-1817912b9100\\publish\\MemoryLane.runtimeconfig.json",
+      "file": "fixture/MemoryLane.runtimeconfig.json",
+      "bytes": 340,
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0"
+    },
+    {
+      "file": "fixture/MemoryLane.deps.json",
+      "sha256": "6fbdd448e2422e3563dde3b79fff4994eb712dad70c991c478fd57e9974ace64",
+      "bytes": 422
+    },
+    {
+      "file": "fixture/MemoryLane.dll",
+      "sha256": "c73c10f5b94bf622f323d561f20c7592a266747e016ad3c5c23723c9c87d4c08",
+      "bytes": 14848
+    },
+    {
+      "file": "fixture/MemoryLane.pdb",
+      "sha256": "acf87096154cdd7044ac6582fdf0bb91a918de01d5f1112918d7debd86562269",
+      "bytes": 12768
+    },
+    {
+      "file": "fixture/MemoryLane.runtimeconfig.json",
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0",
+      "bytes": 340
+    },
+    {
+      "file": "input/manifest.json",
+      "sha256": "732345400f0c09efa5a9ac1e228bba24b08f92ba5a79c833ce46ee4be57e3b45",
+      "bytes": 40361
+    },
+    {
+      "file": "input/snapshots/20000000-0000-4000-8000-000000000001.json",
+      "sha256": "3ca429c10d3d0f88748df0f7ae2fc0e3e32290dd36993a4a57796f133d5abfe2",
+      "bytes": 2981
+    },
+    {
+      "file": "input/snapshots/20000000-0000-4000-8000-000000000002.json",
+      "sha256": "985b7e5db2b73ebfffc3883be032b6ace7599331987cd536c79c4471a449c746",
+      "bytes": 2232
+    },
+    {
+      "file": "input/snapshots/20000000-0000-4000-8000-000000000003.json",
+      "sha256": "78d1855c950d34a8e8f94635e823e7a7bbd9bcd737985f477bfd03fee29750c5",
+      "bytes": 2966
+    },
+    {
+      "file": "input/snapshots/20000000-0000-4000-8000-000000000004.json",
+      "sha256": "14d00702d3d425c25f669b7e215dcd53397f1da1b923685b34fc67271a57226b",
+      "bytes": 1974
+    },
+    {
+      "file": "real/reference.json",
+      "sha256": "964014caacd7406f5e6f3440f1c73c6f9ef7bde7c0d9d43edaf3277a7dfd41e1",
+      "bytes": 16260
+    },
+    {
+      "file": "real/request.json",
+      "sha256": "7bef6af1eff1360b37e99f2fdd92f4f056a3641ec58fbe662e5a963c7537cc44",
+      "bytes": 1027
+    },
+    {
+      "file": "real/snapshot.json",
+      "sha256": "b47365401aaf078374607c944e22ac5100f2aa6fe4389c056fbdd963526f17ed",
+      "bytes": 2501953
+    },
+    {
+      "file": "runner/PathFinder.Adapter.dll",
+      "sha256": "af454cadf809a6da12df7974f0b9928c34cf25e82902fd2beeaf80bbe1cc2627",
+      "bytes": 62976
+    },
+    {
+      "file": "runner/PathFinder.Adapter.pdb",
+      "sha256": "1e31e2938c8347ba2170660c271960a1bdb74dba9df276d48ec10019d805ade4",
+      "bytes": 21360
+    },
+    {
+      "file": "runner/PathFinder.Core.dll",
+      "sha256": "423c6eeaf0278cacc38962ba19bbbd2b5c1f6d49f7688f5ca652f972cde18dce",
+      "bytes": 127488
+    },
+    {
+      "file": "runner/PathFinder.Core.pdb",
+      "sha256": "af7d8cdc04179c532730cd8497601a400e7b14bf546fab7a27fb39b9886b6772",
+      "bytes": 55108
+    },
+    {
+      "file": "runner/PathFinder.Model.dll",
+      "sha256": "d562fec7e46b30864bfec9165aecfaf6165725eed7cb6a2a852be23d187c81ca",
+      "bytes": 98816
+    },
+    {
+      "file": "runner/PathFinder.Model.pdb",
+      "sha256": "b9b48a3b6da08a55b42774e5e241bdc1a45d5c068ad477df946e709b0f7ce60f",
+      "bytes": 28760
+    },
+    {
+      "file": "runner/PathFinder.ModelRunner.deps.json",
+      "sha256": "c7e6d9cb4afef731af751b21eb86a7862f5868429495955e7ecb86e60290d673",
+      "bytes": 1710
+    },
+    {
+      "file": "runner/PathFinder.ModelRunner.dll",
+      "sha256": "0a421550ac7e01a7e4659a543927cb5fd20eacac7a9cc687cc08c812a5b8c56a",
+      "bytes": 79360
+    },
+    {
+      "file": "runner/PathFinder.ModelRunner.pdb",
+      "sha256": "037e577bccdcfc2edb2aa0824e9520e660d9d057f7cef909da2a047d49ea80c8",
+      "bytes": 21412
+    },
+    {
+      "file": "runner/PathFinder.ModelRunner.runtimeconfig.json",
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0",
+      "bytes": 340
+    },
+    {
+      "file": "runner/PathFinder.RunnerSession.Tests.deps.json",
+      "sha256": "50c825d7c0b1a7bceeed7e1e36c26dedc1d3dd4214d206f89b97d395f73b9201",
+      "bytes": 2161
+    },
+    {
+      "file": "runner/PathFinder.RunnerSession.Tests.dll",
+      "sha256": "0ff07f7775d045dde59db56d5fde9162c6f5aff7350de8e8789b98d8c0305ad4",
+      "bytes": 61952
+    },
+    {
+      "file": "runner/PathFinder.RunnerSession.Tests.pdb",
+      "sha256": "702b4a4ecb2363b280b440cffa72fbf908ea93f6785968f5631e6f21e075918d",
+      "bytes": 18692
+    },
+    {
+      "file": "runner/PathFinder.RunnerSession.Tests.runtimeconfig.json",
+      "sha256": "3c0bf772b95c93363a0a14e5df78e4ec408c90f04cb7103205af97b2d276fab0",
+      "bytes": 340
+    },
+    {
+      "file": "scripts/pathfinder-capacity/lib.mjs",
+      "sha256": "4a5eb36b44a60c5e4b4a736f1c113e3b6f3062145103b9e2574ccca940a8d58c",
+      "bytes": 10276
+    },
+    {
+      "file": "scripts/pathfinder-session/lib.mjs",
+      "sha256": "795f0dac3de590e9a3141f6f9dfbb446b0ae497c984694468dd18b75e5a741a9",
+      "bytes": 2598
+    },
+    {
+      "file": "scripts/pathfinder-session/qualify.mjs",
+      "sha256": "82616e87a31effa1010cd8a177402db4a054ca3bc04dc8d87d5908de4ec0b4f7",
+      "bytes": 12073
+    },
+    {
+      "file": "server/server/app.js",
+      "sha256": "eb254609b3dc4387a131e7fa73b5197bc672377891bb7b336a66180e7fefb3f8",
+      "bytes": 5005
+    },
+    {
+      "file": "server/server/auth.js",
+      "sha256": "50340029003b2cf3deb2c0f4c3c615b1f49fa354982346cbeb234bfed43e131c",
+      "bytes": 783
+    },
+    {
+      "file": "server/server/config.js",
+      "sha256": "f0f4656fff66e455ee557fbd596763721717e9399e1cb4bcbcbf424cc07fc354",
+      "bytes": 4865
+    },
+    {
+      "file": "server/server/db.js",
+      "sha256": "4daf71d000ca0d3f9849e2c52d540e43e11343f0da7e620cbed62cf4eec1f8b8",
+      "bytes": 84790
+    },
+    {
+      "file": "server/server/index.js",
+      "sha256": "75ad1e980685ebea7a2a82920447b592f34c82867a95add4f3a31b05ef5c9d33",
+      "bytes": 3562
+    },
+    {
+      "file": "server/server/middleware.js",
+      "sha256": "f0367582ad0df9c9ff55e1a8e183dcb65d03a09818328b59677eac78c59fe746",
+      "bytes": 8937
+    },
+    {
+      "file": "server/server/middleware.test.js",
+      "sha256": "d067a9dde6dbeb82e3d2e7b0908afe912da4c9fa23af02786bacf08228da6e30",
+      "bytes": 3355
+    },
+    {
+      "file": "server/server/modelRegistry/errors.js",
+      "sha256": "e1e7e2570800cbff5e5bb93177a741c582634f1ff50c6b5aa18f3bfc1b1b33eb",
+      "bytes": 3149
+    },
+    {
+      "file": "server/server/modelRegistry/importService.js",
+      "sha256": "d594ae258f970f84afbfd71fb96baad6bae2e1d930683fa29bd1ab587e1aebcb",
+      "bytes": 20209
+    },
+    {
+      "file": "server/server/modelRegistry/importService.test.js",
+      "sha256": "f23dcaf31fb869df7d528508cb44eeef38a5dfc96393879fb9fe1e39880cd489",
+      "bytes": 21159
+    },
+    {
+      "file": "server/server/modelRegistry/repository.js",
+      "sha256": "e10169f882a81fe01e05fadd535fa6fc03c2ef8bf7023465d0de9d4b8ef6962d",
+      "bytes": 28766
+    },
+    {
+      "file": "server/server/modelRegistry/runtime.js",
+      "sha256": "17f40339abb32f216d7b9ca3630ebe9affe9418c141c031a218bb4ef30d76691",
+      "bytes": 571
+    },
+    {
+      "file": "server/server/modelRegistry/schema.js",
+      "sha256": "6a544845bc7b958c889123cb21bde2e16bc41aa8d2e3c0c5b8ef9e4825a84011",
+      "bytes": 15148
+    },
+    {
+      "file": "server/server/modelRegistry/storage.js",
+      "sha256": "2598978a4fc89e17f9bfe1339b2480be427d9f93b0031f246cb3854787f653e7",
+      "bytes": 26812
+    },
+    {
+      "file": "server/server/modelRegistry/storage.test.js",
+      "sha256": "ba90019ac02c6a1f3f3373c4ee5a3d9657f1cc762635e5092a0ade10c5c52d04",
+      "bytes": 20214
+    },
+    {
+      "file": "server/server/modelRegistry/types.js",
+      "sha256": "e70965fb1adb72cc3980489b53b428611dc74faa6366ff8b7663fc81c18a20ad",
+      "bytes": 1186
+    },
+    {
+      "file": "server/server/models/cable.js",
+      "sha256": "29f726b81d899c66f1d386f0bdc836d2c688ebe0f797a095f94e81e5cae8945e",
+      "bytes": 1948
+    },
+    {
+      "file": "server/server/models/cableListColumns.js",
+      "sha256": "ea3224de07b47942c5849b55d4926a17a93a40e3f4fe5fa5000131a2f0b23b39",
+      "bytes": 199
+    },
+    {
+      "file": "server/server/models/cableMaterial.js",
+      "sha256": "9e4dee77b15a207a927b12b84faaac422475a13986b3abeab80b152b5f9bf8d3",
+      "bytes": 553
+    },
+    {
+      "file": "server/server/models/cableType.js",
+      "sha256": "c18f16a07892e4512695ff2da395d18eefce6eadf4acbf01925ceeb9e5669238",
+      "bytes": 823
+    },
+    {
+      "file": "server/server/models/cableTypeDefaultMaterial.js",
+      "sha256": "ba9da310fb5fd7f7c2d1dc3e977d741e9d3e3af385002426ec70c6e77a1dee0f",
+      "bytes": 664
+    },
+    {
+      "file": "server/server/models/cableVersion.js",
+      "sha256": "960fd29d8359cfda6894574972ef9e74c2ffd881ffbed4f7587bf360a2066750",
+      "bytes": 2067
+    },
+    {
+      "file": "server/server/models/cableVersion.test.js",
+      "sha256": "81262887bc4feb3900266d08b3b2bca0a4e6c2e7fd276b1ac15bfa880f1e59a8",
+      "bytes": 2605
+    },
+    {
+      "file": "server/server/models/changeOrder.js",
+      "sha256": "db80ebac9f93657b8b3910b2794814146cced954453f5ee0aedbf37650181c94",
+      "bytes": 4224
+    },
+    {
+      "file": "server/server/models/changeOrder.test.js",
+      "sha256": "28620c676d15123dc2bd1cc683aca27e7bc4ed64ce9c25b02c48036c99af9832",
+      "bytes": 1988
+    },
+    {
+      "file": "server/server/models/materialCableInstallationMaterial.js",
+      "sha256": "3bea125327a840e56ec07855b4fef302404ef951bbf450ce3524f4aaa83cdf28",
+      "bytes": 792
+    },
+    {
+      "file": "server/server/models/materialCableType.js",
+      "sha256": "f036c3651fb960b2b068830d211c71b70cb67d19cc660131fc8b33a1e258571c",
+      "bytes": 1083
+    },
+    {
+      "file": "server/server/models/materialInstrument.js",
+      "sha256": "42d8835e3c0c7f02c539c68e637ddcbbd19456b552026a1eb8f4ccd935212f90",
+      "bytes": 304
+    },
+    {
+      "file": "server/server/models/materialLoadCurve.js",
+      "sha256": "72d8fba08aa07cb425c7eeca6c0258d6fedf7d31ee231e2f5a58b445fa3a230a",
+      "bytes": 1425
+    },
+    {
+      "file": "server/server/models/materialSupport.js",
+      "sha256": "2cca79974c5205e25fae3fa36a7c1f0719277b1eb9898a8ac8afe2c7c57e1ceb",
+      "bytes": 1172
+    },
+    {
+      "file": "server/server/models/materialTray.js",
+      "sha256": "a5c69051faecb7cd010a39bd962bb6c46c09c0809547b405597d0521f5765ce2",
+      "bytes": 1277
+    },
+    {
+      "file": "server/server/models/materialTrayInstallationMaterial.js",
+      "sha256": "d8433089351a85a99a2d913330695545493bcf8af9cf198784a3e6df31ad2925",
+      "bytes": 791
+    },
+    {
+      "file": "server/server/models/materialTrayInstallationMaterial.test.js",
+      "sha256": "469c26f7be43e28a01f99337719a75fe3b24eedc395317a44f485d5d4c477f4a",
+      "bytes": 1674
+    },
+    {
+      "file": "server/server/models/project.js",
+      "sha256": "54fb99520c9f47c8dec29862626d7cb9082d96814604c970c7ca0112858edb6e",
+      "bytes": 9250
+    },
+    {
+      "file": "server/server/models/projectFile.js",
+      "sha256": "2937db9dcc633afe80c81320da719034dc569bd0436739b57013cf8eb7c89175",
+      "bytes": 566
+    },
+    {
+      "file": "server/server/models/projectFileVersion.js",
+      "sha256": "18fdd27e77dae6a499941f6b492f91caa85035cb01ef129728baf2c8c2cc70f5",
+      "bytes": 668
+    },
+    {
+      "file": "server/server/models/roxtecEntry.js",
+      "sha256": "b47275e57c9d5c5582f78f4e3bbe2d95b7a4e6325c3d0e44fe557d462763706d",
+      "bytes": 371
+    },
+    {
+      "file": "server/server/models/standardMaterial.js",
+      "sha256": "5a072069ec93e26b98ae9d6fcbe34e50c23309c76bc26d1ca3e9cda5845bcf8a",
+      "bytes": 1972
+    },
+    {
+      "file": "server/server/models/templateFile.js",
+      "sha256": "36634d3a1aa6f0a1856469ebf6ffbbdfc72fea3825476c6aa1df3f7aaae17c00",
+      "bytes": 536
+    },
+    {
+      "file": "server/server/models/templateFileVersion.js",
+      "sha256": "c50d590b93f69acbe261f17b57a2057ca7fb10116ac9466bcda05514cabaa204",
+      "bytes": 662
+    },
+    {
+      "file": "server/server/models/tray.js",
+      "sha256": "eca566721ae4042d3b54741eebb1a400b03cd12486e2fa5a2e7a7e52a2de5252",
+      "bytes": 1047
+    },
+    {
+      "file": "server/server/models/tray.test.js",
+      "sha256": "29b4a73eed26da7945faf40288c04f5601152860f88de775bf3d18e5351b322f",
+      "bytes": 918
+    },
+    {
+      "file": "server/server/models/user.js",
+      "sha256": "edea99d70593e917f0a5d6a99c5682871b84ca1eef58eff6357b779e54b7738a",
+      "bytes": 584
+    },
+    {
+      "file": "server/server/operations/cli.js",
+      "sha256": "02edf027a92b1b9d671a6c7403e480614281d2aea8c6a4f25a5ac86b69e4777a",
+      "bytes": 1717
+    },
+    {
+      "file": "server/server/operations/service.js",
+      "sha256": "6ce52147457f85bbd44b31fc61b0bb1ded11e3de32b69dd0e366437085920d90",
+      "bytes": 12189
+    },
+    {
+      "file": "server/server/pathfinder/applicability.test.js",
+      "sha256": "d34f34ddccac7445167222c9998d701ff0f7aa995817a3fcecb0dca746199811",
+      "bytes": 661
+    },
+    {
+      "file": "server/server/pathfinder/apply.js",
+      "sha256": "58db6bf4f5f09ef215512de86ca53e22c5ddd357982fee42d3b6447c6f783a26",
+      "bytes": 7237
+    },
+    {
+      "file": "server/server/pathfinder/audit.js",
+      "sha256": "45ca9812173169dfdbc0ee614fbca7a370865c2ee3906dc4ff69a18f395df6c6",
+      "bytes": 1615
+    },
+    {
+      "file": "server/server/pathfinder/auth.js",
+      "sha256": "006bde2a4bb72333e26c72566df3d68c971caef9c39bff52c068131c88f8d6ad",
+      "bytes": 2260
+    },
+    {
+      "file": "server/server/pathfinder/contracts.js",
+      "sha256": "b650290811c20d009c4ed3e182a2f12563e95d7a9354e979e6ba6d30d2ef74a4",
+      "bytes": 5319
+    },
+    {
+      "file": "server/server/pathfinder/demoSeed.js",
+      "sha256": "effb693e62970aacbf5efed7e012c4c6612f0ffb130bb2ebb90e563270ac58cd",
+      "bytes": 5625
+    },
+    {
+      "file": "server/server/pathfinder/dependencies.js",
+      "sha256": "f5db0fd8d3bbcd420c683f9c927f6df8bd46eddb571d84badffab97da3010b88",
+      "bytes": 6105
+    },
+    {
+      "file": "server/server/pathfinder/engine.js",
+      "sha256": "e43b8223cdf657f107e54e25461d3bb3d2883d126fc58280d043f556ba5591df",
+      "bytes": 3738
+    },
+    {
+      "file": "server/server/pathfinder/engine.test.js",
+      "sha256": "7c572c0c97c3662f0493918b161b7692772001654095e69c8137538d659bc943",
+      "bytes": 10967
+    },
+    {
+      "file": "server/server/pathfinder/engineSession.js",
+      "sha256": "5d0dfe630d46252c98461bfb4b208d98f82437d50ebc05153fe299d7d38400a8",
+      "bytes": 24114
+    },
+    {
+      "file": "server/server/pathfinder/engineSession.test.js",
+      "sha256": "a374d41f9729eca8f33a01b578b8e4502df36cae245023b8dc7efcb7469a7eba",
+      "bytes": 24544
+    },
+    {
+      "file": "server/server/pathfinder/errors.js",
+      "sha256": "c8178daeea72fb50913028f109316f06da6f94bee63e6cfd65c6830913b23cfd",
+      "bytes": 248
+    },
+    {
+      "file": "server/server/pathfinder/integration.js",
+      "sha256": "b66420a5a89ef191695e899ffc71b761c183a799dddf8951b827331f1577277a",
+      "bytes": 55998
+    },
+    {
+      "file": "server/server/pathfinder/jobContracts.js",
+      "sha256": "27242208d4eff5301da97e798c15508ffe53bf6f18d7dba480e71d6e3054c070",
+      "bytes": 6001
+    },
+    {
+      "file": "server/server/pathfinder/jobs.js",
+      "sha256": "80f52f1892a4d6823d0f24e90a7f91b241d96027c9dca9c9549b6b72d8544df9",
+      "bytes": 10911
+    },
+    {
+      "file": "server/server/pathfinder/jobsSchema.js",
+      "sha256": "3e23a9bb20698cd01cd65681d94a53189e2a4dd465d90ef9e0f566369877618b",
+      "bytes": 8219
+    },
+    {
+      "file": "server/server/pathfinder/lookup-engine.test.js",
+      "sha256": "c49ab47b9b969d535d0e629a0fe46c6ac2adafd3b8d5b7c8314c8908f7f38074",
+      "bytes": 4853
+    },
+    {
+      "file": "server/server/pathfinder/lookup-transport.test.js",
+      "sha256": "18f0cff90c1d074f1fb780959eb4b3d5f3c584d8373d3febcef24cbef92625d4",
+      "bytes": 5411
+    },
+    {
+      "file": "server/server/pathfinder/lookup.integration.js",
+      "sha256": "89b7ac6c2a18b8c4189979d95dd6d214b4e5bd26488eba05ed81521f1ddcb78e",
+      "bytes": 20418
+    },
+    {
+      "file": "server/server/pathfinder/lookupAudit.js",
+      "sha256": "9496ca3ecce0da3cc2eebb039dc25e5e301dd4d681d17f4c16b1c030edb8fcd6",
+      "bytes": 4619
+    },
+    {
+      "file": "server/server/pathfinder/lookupFixture.js",
+      "sha256": "102bf36729e2ee2d6f8a4569dfc564286839c92ec231cda8e3462971e2ebeb8d",
+      "bytes": 1465
+    },
+    {
+      "file": "server/server/pathfinder/lookups.js",
+      "sha256": "0010a08bff9199f3f45d77c36c3f58a6807dd222470345bf8da75c2fde511993",
+      "bytes": 12689
+    },
+    {
+      "file": "server/server/pathfinder/lookups.test.js",
+      "sha256": "89c32db28a776c1ae107f771e1deae84787af34a13fb99a95609e67d93f4b459",
+      "bytes": 19512
+    },
+    {
+      "file": "server/server/pathfinder/matching.js",
+      "sha256": "ce1b3976d838516ed2a769da7adfa3a27eb7ced4f8c689017f9f03a64d040ca6",
+      "bytes": 5429
+    },
+    {
+      "file": "server/server/pathfinder/matching.test.js",
+      "sha256": "fa61e329f382a932a0efedddd3cdf18f980be6b5b6151634fff51a9451e7918f",
+      "bytes": 6406
+    },
+    {
+      "file": "server/server/pathfinder/previews.js",
+      "sha256": "898bfa1a417e3c15dcec70b4a43f4462a30729225be1d30f915892429f913d42",
+      "bytes": 9469
+    },
+    {
+      "file": "server/server/pathfinder/previews.test.js",
+      "sha256": "77417f7168f69c863c6dc1857354b4730dd3c091591e7af74018451bcc5ea8a0",
+      "bytes": 17261
+    },
+    {
+      "file": "server/server/pathfinder/repository.js",
+      "sha256": "fa4b222d93129bab32c395e19c8d141c57fc82f700af8ea468b80260e139736b",
+      "bytes": 22600
+    },
+    {
+      "file": "server/server/pathfinder/runtime.js",
+      "sha256": "73f7de42b683fbd934fd63f2bc2d4f849d33646dbd407d1e3a537022731b6a82",
+      "bytes": 1126
+    },
+    {
+      "file": "server/server/pathfinder/schema.js",
+      "sha256": "896fb4691eee45c0739a1e6a732e80cc118658a6e7f5f7cd40a3400ffd72e5eb",
+      "bytes": 8478
+    },
+    {
+      "file": "server/server/pathfinder/settings.js",
+      "sha256": "8ba6b95353d3d27c7c83dd0fdb1c0bbf33a2abaa9e42e0677b75ece567d4aaca",
+      "bytes": 1403
+    },
+    {
+      "file": "server/server/pathfinder/settings.test.js",
+      "sha256": "49a22c40bff8ac3f443a46a4569a4bb0f83ea89296780f7638c1e0f7afdb43b1",
+      "bytes": 2716
+    },
+    {
+      "file": "server/server/pathfinder/storage-digest.test.js",
+      "sha256": "e25ba4ca40066597d0e8338ed627e6387c9217a42eb88f46421b0abc39f8b0ef",
+      "bytes": 1076
+    },
+    {
+      "file": "server/server/pathfinder/storage.js",
+      "sha256": "c9c93e69aeb981c38d2f8d6f9b26a9b170a33e2e257fe098ef9081cc07305443",
+      "bytes": 3079
+    },
+    {
+      "file": "server/server/pathfinder/syntheticFixture.js",
+      "sha256": "3f038fafb1f43b1c7537d4cb8c6a6f7bb6736ae27613d55e9bcc91ebdd50d089",
+      "bytes": 2878
+    },
+    {
+      "file": "server/server/pathfinder/transactions.js",
+      "sha256": "1bb09f109e26aa1ea345b4c0aeed5bb4cb74f6f23889e9929f485b2b693fc46e",
+      "bytes": 412
+    },
+    {
+      "file": "server/server/pathfinder/worker-retained.test.js",
+      "sha256": "e0a000e5a0f5b1d45ea1c5925a5cdf1ad270612879f7de459d32c52146a8226a",
+      "bytes": 3976
+    },
+    {
+      "file": "server/server/pathfinder/worker-session.test.js",
+      "sha256": "9d9ffe10f898e52bbadb59d7437332faf2930f3c9ff03118285175a2a43b4795",
+      "bytes": 3729
+    },
+    {
+      "file": "server/server/pathfinder/worker.js",
+      "sha256": "fffc9e6a74a4ac6eb1a69b66a75db29a4cf5d1f5be2dc65c3a0ebbc890f12997",
+      "bytes": 18461
+    },
+    {
+      "file": "server/server/routes/adminUserRoutes.js",
+      "sha256": "bfe54d5e3b68cd804f0072fd5d57ce80d31e445142446efebd92757bbdcc4401",
+      "bytes": 8611
+    },
+    {
+      "file": "server/server/routes/authRoutes.js",
+      "sha256": "b76e201814e6853abe62190d7548ef81cf4f76e9803357158d596de17663bb8b",
+      "bytes": 3896
+    },
+    {
+      "file": "server/server/routes/cablesExport.test.js",
+      "sha256": "a547efe94086a8923198ef3748a1fb6373c1f50863bc5fbfcc06ce80b813d24d",
+      "bytes": 8710
+    },
+    {
+      "file": "server/server/routes/cablesRoutes.js",
+      "sha256": "f5c750ce913a3f8021a10b7c6515ee61d05d4de56b3ea1d56a8780bf84b4de43",
+      "bytes": 132457
+    },
+    {
+      "file": "server/server/routes/cablesRoutes.test.js",
+      "sha256": "15efc8b615c65e8d3f22adef03095465a8ad7f217329aaaddd311dcb09b86207",
+      "bytes": 9355
+    },
+    {
+      "file": "server/server/routes/cableTypesRoutes.js",
+      "sha256": "5e7d9aca7abefd62de1702c0aaf8360862e7387dc2bc93e7439542ce0051a597",
+      "bytes": 45387
+    },
+    {
+      "file": "server/server/routes/cableTypesRoutes.test.js",
+      "sha256": "f2838d9afb6e8f47a1263dedb7cc522c106d0c84bab171fe06e8a3b4b8287d13",
+      "bytes": 9366
+    },
+    {
+      "file": "server/server/routes/changeOrdersRoutes.js",
+      "sha256": "ac5783de0ad55615383432db043c3c52d3d5574503892c30b5e2573764b2622f",
+      "bytes": 13816
+    },
+    {
+      "file": "server/server/routes/changeOrdersRoutes.test.js",
+      "sha256": "5cf045f898205ef72dc14267d74248b2da7e30af67cf20318399c84b2bc81656",
+      "bytes": 8565
+    },
+    {
+      "file": "server/server/routes/databaseFailures.test.js",
+      "sha256": "773beccb1b1d84cf0b3ec3293a9e177da590f482081066547ed79164ab98b928",
+      "bytes": 6218
+    },
+    {
+      "file": "server/server/routes/installationMaterialCatalogRoutes.js",
+      "sha256": "3073f079ce1a0a43aac234e7bd7e2d9175f311668913aad09132966d95812d80",
+      "bytes": 24375
+    },
+    {
+      "file": "server/server/routes/materialCableInstallationMaterialsRoutes.js",
+      "sha256": "e68be0953fc162971188ad604c57f8d6fd659f9e93abdb3e3f787a39796da06d",
+      "bytes": 30235
+    },
+    {
+      "file": "server/server/routes/materialCableTypesRoutes.js",
+      "sha256": "d81c2618f0ad0f0ef8a933f2ef5d8b8e63cd62b86ff1f18031699be0133e3c33",
+      "bytes": 29226
+    },
+    {
+      "file": "server/server/routes/materialCatalogImportPrice.test.js",
+      "sha256": "eaec9c0d88b1c340f0e80e9caec6be78c856b6298d7250834a7d516b5f1057fc",
+      "bytes": 8108
+    },
+    {
+      "file": "server/server/routes/materialCatalogImportValidation.test.js",
+      "sha256": "83404f41ce06797e7477a6b3425191c34838035bf641a87b6e8f8416205bba20",
+      "bytes": 11061
+    },
+    {
+      "file": "server/server/routes/materialCatalogPricePatch.test.js",
+      "sha256": "9efdc5b68353749e7699a87518568e59aecfeac7e2c0400c8bfb5270319dece5",
+      "bytes": 8250
+    },
+    {
+      "file": "server/server/routes/materialChangeLogsRoutes.js",
+      "sha256": "6cab9218d5105b15941db2b2a640daa1cd32ffcf59c9359147c1fc3c5de5845f",
+      "bytes": 1703
+    },
+    {
+      "file": "server/server/routes/materialExcelExports.test.js",
+      "sha256": "90286d5fbd6022eef4f58cdf2508bf90f18bc92c955b2badd65474b113023d29",
+      "bytes": 4867
+    },
+    {
+      "file": "server/server/routes/materialInstrumentsRoutes.js",
+      "sha256": "b40332e62cabab2be1f7c16b7fca4fb45ec4867e4511a5e65aee126cec8decba",
+      "bytes": 1096
+    },
+    {
+      "file": "server/server/routes/materialInstrumentsRoutes.test.js",
+      "sha256": "d2195be2644f9680491883f77c7b131ff1d447a86a3bd7c65b193dab386f4f8e",
+      "bytes": 8644
+    },
+    {
+      "file": "server/server/routes/materialsImportValidation.test.js",
+      "sha256": "85bd444c12a5c2d666b7df0d8d5495ec027f87efaadcdf3673316a02ba286b05",
+      "bytes": 13030
+    },
+    {
+      "file": "server/server/routes/materialsRoutes.js",
+      "sha256": "da41f009d3577b63cbebed46eb9cd5aac62b53eb985b6896a02b4f12f92c2f41",
+      "bytes": 75879
+    },
+    {
+      "file": "server/server/routes/materialSupportsRoutes.test.js",
+      "sha256": "02fce65d755c0371eb42034a231178bf1c9cd09aa2b79392e822581422fc816a",
+      "bytes": 4642
+    },
+    {
+      "file": "server/server/routes/materialTrayInstallationMaterialsRoutes.js",
+      "sha256": "c55d8a787624b37f75987ae952e756ebbf400e1e70c8e27c99d67b2d0d880536",
+      "bytes": 619
+    },
+    {
+      "file": "server/server/routes/modelRegistryRoutes.js",
+      "sha256": "baa9eefeb9682318332a276952719639dc55690fd329155b33c41cfa399c2d2d",
+      "bytes": 5403
+    },
+    {
+      "file": "server/server/routes/pathfinderRoutes.js",
+      "sha256": "7cf58393db60e4f2dfdcf23f88e89f271bafc34465c896d0546b7115a05306cf",
+      "bytes": 7769
+    },
+    {
+      "file": "server/server/routes/projectAccess.test.js",
+      "sha256": "d36f92d9cc62824d0c6e296f9393ce756c8c42c792cc4f02f97ca16a52bcd9c1",
+      "bytes": 28430
+    },
+    {
+      "file": "server/server/routes/projectExcelImportValidation.test.js",
+      "sha256": "adf13518d867b90aa259543e75f46f4d768d9c09dc46bce0ec589262f758b3dc",
+      "bytes": 27634
+    },
+    {
+      "file": "server/server/routes/projectFilesRoutes.js",
+      "sha256": "9220fa46f431d5b44de93c05a44c3181d7e4ec7e0e23365c507c2c486345179f",
+      "bytes": 26219
+    },
+    {
+      "file": "server/server/routes/projectsRoutes.js",
+      "sha256": "f0386fda9b76138058b641c58c00042ba5e61245adc96fe932654b607d2f12e6",
+      "bytes": 27716
+    },
+    {
+      "file": "server/server/routes/projectsRoutes.test.js",
+      "sha256": "e9eadcf989c19809b898216c3f0c8e07c63c2e807c6c95102e99fed331753b8e",
+      "bytes": 9505
+    },
+    {
+      "file": "server/server/routes/projectTrayDataRoutes.js",
+      "sha256": "bd678d3a765f2b1bc9dee6d43082245c4f29309e840d435490f8a6683db19866",
+      "bytes": 2424
+    },
+    {
+      "file": "server/server/routes/roxtecEntriesRoutes.js",
+      "sha256": "30ad4812a232e114ff90ac891601493426680bf0bcd70d1830d9f5fe0d41f0c3",
+      "bytes": 11574
+    },
+    {
+      "file": "server/server/routes/standardMaterialRoutes.js",
+      "sha256": "fe0a19f132b11a0d570c7389f08ffbcc98d9b6799a45667e78eaf6975e05ee3a",
+      "bytes": 4903
+    },
+    {
+      "file": "server/server/routes/standardMaterialRoutes.test.js",
+      "sha256": "f25aeacc8846b1147d9a159b444946b468870f5397eceff4e13ab7c5208f572b",
+      "bytes": 1688
+    },
+    {
+      "file": "server/server/routes/templateFilesRoutes.js",
+      "sha256": "7a23e80e1bbcedb4c65206492bc72431b0b76c8f3aba624d26263fedb3e331ce",
+      "bytes": 21517
+    },
+    {
+      "file": "server/server/routes/traysRoutes.js",
+      "sha256": "5f42cf33a50be059b5968a87d5adeef314388d8b49a990d9192a13fa5f0e527d",
+      "bytes": 30215
+    },
+    {
+      "file": "server/server/routes/traysRoutes.test.js",
+      "sha256": "129a3945080343c35e8171fbd3b1001727e0f758dc237bb5b2f3961a0b33b0f8",
+      "bytes": 10286
+    },
+    {
+      "file": "server/server/routes/userRoutes.js",
+      "sha256": "20f69839f757b542027bfabdc2cba557743036dc8afeefba109f4828b8e65e92",
+      "bytes": 4528
+    },
+    {
+      "file": "server/server/routes/userRoutes.test.js",
+      "sha256": "4ee7c591e9808b8a9e2f142fb5d472cb10ed947284e6d154da07e01a8e09230c",
+      "bytes": 9675
+    },
+    {
+      "file": "server/server/routes/viewerSessionRoutes.js",
+      "sha256": "fd63ec9e420bbb271809b095462552fd3169df9e82e6c9c690b7707878cd122b",
+      "bytes": 12458
+    },
+    {
+      "file": "server/server/services/cableMaterialChangeLogService.js",
+      "sha256": "da7506edea3aa45b299b9a89b9047e644c027f6e071c56eaf2f2175a5f15b1fd",
+      "bytes": 2905
+    },
+    {
+      "file": "server/server/services/cableMaterialChangeLogService.test.js",
+      "sha256": "7ec090f22537e2f22fc187382f6a2449ab4d6aa56455b447afabd63eb52cd9c6",
+      "bytes": 2244
+    },
+    {
+      "file": "server/server/services/cableTypeChangeLogService.js",
+      "sha256": "fad8b15278af8242681459f88c33065e87cbff104ecf134c64a48ac210b7f36f",
+      "bytes": 4598
+    },
+    {
+      "file": "server/server/services/cableTypeChangeLogService.test.js",
+      "sha256": "6651b94f3e7524abef856f8caab08d03c31afa99a63b724968663fe2f990f7f9",
+      "bytes": 5276
+    },
+    {
+      "file": "server/server/services/changeOrderCatalogService.js",
+      "sha256": "9016823235df7f05558d22eddb7ac66bd5a5092991105dd87914277f1cbd9466",
+      "bytes": 8557
+    },
+    {
+      "file": "server/server/services/changeOrderCatalogService.test.js",
+      "sha256": "be53abf15290bbb32ebfdbf41f8d587fbc1c765b3927c5993fec33858fadcab4",
+      "bytes": 14527
+    },
+    {
+      "file": "server/server/services/changeOrderExcelExportService.js",
+      "sha256": "c8221fa20be178ed2422db5949a58f962cb160460454e00453752bf6b6cb9d2e",
+      "bytes": 27691
+    },
+    {
+      "file": "server/server/services/changeOrderExcelExportService.test.js",
+      "sha256": "34f718462bc511af77fac170afed472dc43d2441845baf2a69f199a6dc34e9fa",
+      "bytes": 41607
+    },
+    {
+      "file": "server/server/services/changeOrderMaterials.test.js",
+      "sha256": "acebd4f906f5ec9a49e9844bf5aa1e6698d66309ee03462443b7e6c5ec2eafcd",
+      "bytes": 35643
+    },
+    {
+      "file": "server/server/services/changeOrderService.documentType.test.js",
+      "sha256": "4695e948b418267acd0ed017e347f3c48089ca0fa2c12b74339fd4c7a8827f2e",
+      "bytes": 16087
+    },
+    {
+      "file": "server/server/services/changeOrderService.js",
+      "sha256": "c34046e927973e1e0395588d859577bbf826ce8ae51a7c47b5c1637425e15929",
+      "bytes": 45887
+    },
+    {
+      "file": "server/server/services/materialAuditContext.js",
+      "sha256": "71e1367e9a90ca33d50f369061f2ed3b08ba02e09a6db7bae6529f6da6d1351b",
+      "bytes": 405
+    },
+    {
+      "file": "server/server/services/materialAuditPool.js",
+      "sha256": "944007a262d0c5e34eae16e4af430b0493405413cb62e708b17ec42198a10f55",
+      "bytes": 2444
+    },
+    {
+      "file": "server/server/services/materialAuditPool.test.js",
+      "sha256": "2ad75e9add338c4aa8243bd4b59f8fa03a7fcf00a213a7b508482787a76d1708",
+      "bytes": 2850
+    },
+    {
+      "file": "server/server/services/materialCapabilities.js",
+      "sha256": "47a041b2892a0011ce8f980abc07400b227da4e3ad7ca375693164ab1a2e8c0c",
+      "bytes": 4001
+    },
+    {
+      "file": "server/server/services/materialCapabilities.test.js",
+      "sha256": "60f39adc7fcd52a76c282ef7170ac74165c5bc6c18c1fe02406738ece9fc30f5",
+      "bytes": 1277
+    },
+    {
+      "file": "server/server/services/materialChangeLogSchema.js",
+      "sha256": "d08cc8a17aab8e28df85d92203631144f2de99ba02cba6685f395213367ef4b6",
+      "bytes": 4351
+    },
+    {
+      "file": "server/server/services/materialChangeLogService.js",
+      "sha256": "c10007686c5abab4189cff074eda9b122766529e7548fd591b6b3663eb00e5de",
+      "bytes": 3400
+    },
+    {
+      "file": "server/server/services/materialChangeLogService.test.js",
+      "sha256": "0f41a9902b9a3d8f764249e937c793c8aa346a82663cc3c6a484f62443b0392e",
+      "bytes": 3272
+    },
+    {
+      "file": "server/server/services/materialIdentitySchema.js",
+      "sha256": "99b80f1a3ec5c7c2024bc8acaf40c2c5b340b7a271d0a502306f65420053a39b",
+      "bytes": 6214
+    },
+    {
+      "file": "server/server/services/materialIdentitySchema.test.js",
+      "sha256": "5cc4147f3112d06d940ea004a0a3007cd83026269f87fea0a2093f52975e0e3e",
+      "bytes": 5805
+    },
+    {
+      "file": "server/server/services/objectStorageService.js",
+      "sha256": "13f1aabf8d52e8c7af5b5429ea0bb66a832239f0554a3215b5343724b52da6c1",
+      "bytes": 2126
+    },
+    {
+      "file": "server/server/services/projectCableTypeSnapshotService.js",
+      "sha256": "6a9c476e3d4a4c1697f146b68114f11d5e634220c18948df96bbda570798dba5",
+      "bytes": 1186
+    },
+    {
+      "file": "server/server/services/projectCableTypeSnapshotService.test.js",
+      "sha256": "13a2c8335cefb84a8ef8149dfd18030d4c81f54873d6f02cde8686fcb72e59d7",
+      "bytes": 2856
+    },
+    {
+      "file": "server/server/services/projectChangeLogService.js",
+      "sha256": "b3bee198b9487bb21a4b92b1ca1d787d4d7ae97a84c3e1da28af2807b5d1ab53",
+      "bytes": 3807
+    },
+    {
+      "file": "server/server/services/projectChangeLogService.test.js",
+      "sha256": "1c35cb8236012e487ade3286dd90c34c2a440fa68087981ffac51b9244d5f1cb",
+      "bytes": 2241
+    },
+    {
+      "file": "server/server/services/projectService.js",
+      "sha256": "e945ea92ba364f195afd4bdae0c154180b50c4bfd96edbb3597ba7dde6ba391c",
+      "bytes": 1833
+    },
+    {
+      "file": "server/server/services/roxtecChangeLogService.js",
+      "sha256": "38e440209811e0de15e2a9fb160343ee3186e7093e224780ad48e5de61d3dede",
+      "bytes": 2375
+    },
+    {
+      "file": "server/server/services/roxtecChangeLogService.test.js",
+      "sha256": "98ebc7762c20828dbbf73bb2fc6b482726f93635b334f757a07f09d7059deb28",
+      "bytes": 2885
+    },
+    {
+      "file": "server/server/services/standardMaterialCategorySchema.js",
+      "sha256": "55faabf11e52750f8125281a8049c8eb2d8976cdae1a9552042873cd1635760e",
+      "bytes": 5202
+    },
+    {
+      "file": "server/server/services/standardMaterialService.js",
+      "sha256": "8932c12901a043b6293cff19bee35cb3df47f129efd4498652e9df9cd6eada63",
+      "bytes": 14147
+    },
+    {
+      "file": "server/server/services/standardMaterialService.test.js",
+      "sha256": "7783c0eb8fbcd5d0bc39e04e7347b7d4e08dc07160f0eb1ea59e11a08e99c4ed",
+      "bytes": 7436
+    },
+    {
+      "file": "server/server/services/trayChangeLogService.js",
+      "sha256": "ad856ad3cf7622f0b2527d79f641f45686bd62029ceb4a8562b35447dce3f9e9",
+      "bytes": 2117
+    },
+    {
+      "file": "server/server/services/trayChangeLogService.test.js",
+      "sha256": "a520f97b6afedf87cdf766443bbc99a2e0d1d86b5314872c3c67407f66691691",
+      "bytes": 3465
+    },
+    {
+      "file": "server/server/services/userService.js",
+      "sha256": "5eefc6b479a24703ec2340e6008ad8e08610fc515c10f0734f3642bdf4621926",
+      "bytes": 1043
+    },
+    {
+      "file": "server/server/utils/catalogNameMatching.js",
+      "sha256": "b573a52905addddd220016847d85c8c70e548cabb9715207b4a694eaaefdef25",
+      "bytes": 1556
+    },
+    {
+      "file": "server/server/utils/excelImport.js",
+      "sha256": "f775cfe479109bb94d7c1c9fc9da3a7a4f6b7f53ebdb4ee48d5b1f3ec3242551",
+      "bytes": 7101
+    },
+    {
+      "file": "server/server/utils/excelImport.test.js",
+      "sha256": "8b626d0e7c0d14113232b165ae5a03f0f99e6676b9563b2abfdbba7be5451880",
+      "bytes": 3102
+    },
+    {
+      "file": "server/server/utils/excelUpload.js",
+      "sha256": "c523a79150fbb34827b0a380bcd31a8c50a7b0e7c9349a87d82083f3b322e396",
+      "bytes": 1732
+    },
+    {
+      "file": "server/server/utils/excelUpload.test.js",
+      "sha256": "95a055ee6d0f1ab14a034dc555da93240a6550655ae5d19edc42148a2fb6ad1e",
+      "bytes": 3088
+    },
+    {
+      "file": "server/server/utils/materialExcelExport.js",
+      "sha256": "3cce6e8ecffba7f0e5c707ac02b0f03bac266c7a5237df3fb3dd472f79c562e3",
+      "bytes": 858
+    },
+    {
+      "file": "server/server/utils/materialExcelImport.js",
+      "sha256": "a624a3898e89c1db2d5748ed794219e4c067569623b1dc3de3ec533de34b5c08",
+      "bytes": 2268
+    },
+    {
+      "file": "server/server/utils/materialIdentity.js",
+      "sha256": "700b1cfaaa3606b4a082e628eeac4d3770b3510158deda60093551e4558f893d",
+      "bytes": 977
+    },
+    {
+      "file": "server/server/utils/transaction.js",
+      "sha256": "d127ca4cb1320734248e10a34b43a92adbbf3cc09debb8d20d84d9a0035a7f36",
+      "bytes": 573
+    },
+    {
+      "file": "server/server/utils/transaction.test.js",
+      "sha256": "1d619a7dd57775034c9be5c1808aee507da39ac8bb6cc767c28c4bb86a3aa632",
+      "bytes": 1685
+    },
+    {
+      "file": "server/server/utils/trayFreeSpace.js",
+      "sha256": "22664299065ec8812ed43f177e3796c1cbd164c17201e932673ecc21328c10b8",
+      "bytes": 10775
+    },
+    {
+      "file": "server/server/validators.cableLength.test.js",
+      "sha256": "b5ceb21783428c6ba507487c5e4efd3f7a5dd4f5b6d16f2adb88f42c70a16f21",
+      "bytes": 1175
+    },
+    {
+      "file": "server/server/validators.changeOrder.test.js",
+      "sha256": "f19c6f882711597e86f56cce62f74b48965671e843efc66fd22871cd6751382c",
+      "bytes": 3259
+    },
+    {
+      "file": "server/server/validators.js",
+      "sha256": "10e7e60dc0669903a2d565a30130fa81098d085a41eedeefce423d48c273f18d",
+      "bytes": 30892
+    },
+    {
+      "file": "server/server/validators.standardMaterial.test.js",
+      "sha256": "d55c43ee1dbb394c3fa2d1407c50f7b04aaea2f00530d26b4a5394c9bec1b29b",
+      "bytes": 4706
+    },
+    {
+      "file": "server/server/validators.tray.test.js",
+      "sha256": "808ef470e941c9d5341b3b582d072e7986520a2560ffbe00dad9f7c18a860f70",
+      "bytes": 1315
+    },
+    {
+      "file": "server/server/viewerSessions/errors.js",
+      "sha256": "98c12cac646134db75691d87a1bfb42461cdf52a96541d6640856a55c5d8066e",
+      "bytes": 1635
+    },
+    {
+      "file": "server/server/viewerSessions/http.js",
+      "sha256": "56007074c571f2f20715e15cdc9d87c77ae00b1dffa6968ae8bbbfd763bd9162",
+      "bytes": 4560
+    },
+    {
+      "file": "server/server/viewerSessions/http.test.js",
+      "sha256": "ab3e143bc7d1a9f8f7a74ae608988a54d7bfc53a90840c3e4938344d16d8481c",
+      "bytes": 5135
+    },
+    {
+      "file": "server/server/viewerSessions/resources.test.js",
+      "sha256": "1828e582fba373925cf40296103ad1e2e20575dc8e91ee99e622717075afc6d1",
+      "bytes": 14665
+    },
+    {
+      "file": "server/server/viewerSessions/runtime.js",
+      "sha256": "1a5aa0aa553af8cd85f44911518ad207a41f7e3fe912363c5eb613050da5941c",
+      "bytes": 1838
+    },
+    {
+      "file": "server/server/viewerSessions/schema.js",
+      "sha256": "0071d31c3afac3ce29c071cce5eccbbd71f96fb588fc72a354c5c7e3f15c08ef",
+      "bytes": 3862
+    },
+    {
+      "file": "server/server/viewerSessions/service.js",
+      "sha256": "ce62ff7213a1ede39d590118df04ded0a481fe5972db1ca5c4a38fe8b1ba40a8",
+      "bytes": 12720
+    },
+    {
+      "file": "server/server/viewerSessions/types.js",
+      "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+      "bytes": 11
+    },
+    {
+      "file": "server/server/__tests__/modelRegistryDatabase.node-test.js",
+      "sha256": "1b576ad654a67a97e8c589c138a1adf3bd43adf77f9b4c42ba7eb5980d099c79",
+      "bytes": 15438
+    },
+    {
+      "file": "server/server/__tests__/modelRegistryPackage.node-test.js",
+      "sha256": "81e4a0549508d1c43542e8637d20e6ce8663cdd06a97d4874ed4fb42d23ff9e8",
+      "bytes": 7760
+    },
+    {
+      "file": "server/server/__tests__/modelRegistrySchema.test.js",
+      "sha256": "4a53bdf83b0ac3897cc1257b811edeb1c8a3f1c3f44e06033f4841cde5f4c1cd",
+      "bytes": 6282
+    },
+    {
+      "file": "server/server/__tests__/modelRegistryService.node-test.js",
+      "sha256": "e95b2436654c32da023ec82b5a2caf9c27c26bb52af764bc3bf0a8c838d9a330",
+      "bytes": 35746
+    },
+    {
+      "file": "server/server/__tests__/operationsService.node-test.js",
+      "sha256": "00279d0b5530ba678f7157b1c98afd37b993b30172c34153ec0a1b06bc426a12",
+      "bytes": 26521
+    },
+    {
+      "file": "server/server/__tests__/viewerSessions.node-test.js",
+      "sha256": "5c97b85c136655660ebcdb632348525a1c7ec649ee74010065d2a071f4580a6d",
+      "bytes": 27233
+    },
+    {
+      "file": "server/shared/changeOrderSummary.js",
+      "sha256": "48504bc95ff30d21d82bf0ef09ded13fc3351d48411afa9affe8987940932c16",
+      "bytes": 5197
+    },
+    {
+      "file": "server/src/api/types/changeOrder.js",
+      "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+      "bytes": 11
+    },
+    {
+      "file": "source.json",
+      "sha256": "7184c635066b6b8f8bba19713f1b5a02010e1d28ef9cff730009e51e49ee8319",
+      "bytes": 758
+    }
+  ],
+  "omittedAppHosts": [],
+  "status": "PASS",
+  "types": {
+    "status": "PASS",
+    "stdoutBytes": 0,
+    "stderrBytes": 0
+  },
+  "corpusCases": 31
+}

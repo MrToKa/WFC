@@ -249,3 +249,24 @@ This does not reclassify native comparison or whole-plant acceptance.
 | PF2-GRAPH-01 |Reusable graph prepared once per appropriate revision | NOT_IMPLEMENTED; unchanged Core graph still per query |
 | PF2-CAP-PLANT |Representative complete real-plant geometry/category/capacity | NOT_RUN; selected26segments and sparse syntheticchains are insufficient |
 | PF8-USER-01 |Human engineering route/length acceptance and main integration | PENDING_USER_REVIEW; no real Apply/push/PR/merge/deployment |
+
+## PF-2 bounded private worker reuse — 18 October 2026
+
+Source on `pf-2-worker-reuse-local-20261018`, inheriting capacity deliveryadcb55da
+and handoffed0770f3. [Report25](25-private-worker-reuse.md) separates exact source,
+private process qualification and restored-target controls. Scoped lifecycle and
+browser checks are complete; final target post-UI data preservation remains
+FAIL_NOT_RETAINED after a cleanup sequencing error. No activation is inferred.
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| PF2-SESSION-RUNNER |Private framed single lane/supervisor, one prepared identity, exact mixed-result semantics, no Core/Model changes | PASS308session/42one-shot at DLL0a421550; independent closing review |
+| PF5-SESSION-NODE |Bounded transport/identity/deadline/reap/poison, advisory-owner factory, repeated PG errors and shutdown failure status | PASS61affected/types/lint at worker3ce7708; earlier55scope/actual lock-loss FAIL retained; independent closing review |
+| PF2-SESSION-PARITY |Actual production Node executor+DLL real A/B/A and31synthetic forward/reverse full DTO equality/private memory reuse | PASS117checks; selected26leaf scope, not engineering/fullplant |
+| PF5-SESSION-BOUNDS |Actual64count/31.5s idle/601.072s age/512MiB fixture/abort/crash/deadline/recovery and owned group reap | PASS210total across five modes, including parity117; no double-counted total |
+| PF5-SESSION-AUTH |Actual current admin/login revocation, Settings/cable dependency staleness, active-owner rollover, cancel and unique publication | PASS10corrected API5cd3eca8;218later-ID Settings proposals stale; no per-Core-instruction or per-proposal owner instrumentation; previous10scope retained |
+| PF8-SESSION-OPS |Actual own PG advisory backend loss, complete lane retirement, explicit restart, graceful stop and natural crash recovery | PASS21corrected individual controls plus separate9actual crash/7read-only closure; historical aggregate failures retained; crash replacement UUID NOT_RETAINED |
+| PF8-SESSION-REAL |Rebuilt Linux targetDLL real route/design/full DTO repeat/private reuse; actual protected UI/Ghost/Clear | PASS at4b940d5c/API5cd3eca8 and browser receipt20261018T1324Z; selected scope only |
+| PF8-SESSION-PRESERVE |Original sources/data/5190 unchanged; target/test cleanup and final preservation | Primary5190/all18baseline12auditchecks PASS; fresh5-group isolation PASS; own5191 retired. Final target post-UI workflow comparison FAIL_NOT_RETAINED after audit/retirement sequencing error, not repaired by primary audit |
+| PF2-GRAPH-01/PF2-CAP-PLANT |Once-prepared graph and representative wholeplant scope | NOT_IMPLEMENTED / NOT_RUN; fitted geometry/session reuse does not close these requirements |
+| PF8-USER-01 |Human engineering acceptance and main integration | PENDING_USER_REVIEW; no real Apply or publication |

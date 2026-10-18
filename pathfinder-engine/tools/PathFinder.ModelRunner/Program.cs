@@ -10,7 +10,7 @@ using PathFinder.Model;
 
 // Private stdio worker. WFC owns actor/dependency/provenance authorization;
 // this process owns strict input, immutable file hashes and C# computation.
-internal static class Program
+internal static partial class Program
 {
     private const int MaximumInput = 1024 * 1024;
     private const int MaximumOutput = 32 * 1024 * 1024;
@@ -30,6 +30,12 @@ internal static class Program
     }
     private static async Task<int> Main(string[] args)
     {
+        if (args is ["--session-supervisor"] or ["--session-worker"])
+        {
+            // Session stdout is framed protocol only, including on terminal faults.
+            try { return args[0] == "--session-supervisor" ? await RunSessionSupervisor() : await RunSessionWorker(); }
+            catch { return 2; }
+        }
         Request? request = null;
         try
         {
@@ -48,7 +54,7 @@ internal static class Program
         { return await Emit(Failure(request, "invalid_request", error is IOException ? "An owned input or cache file could not be read." : error.Message)); }
     }
 
-    private static object Execute(Request request, CancellationToken token)
+    private static object Execute(Request request, CancellationToken token, SessionExecutionContext? session = null)
     {
         var settings = request.ProjectSettings;
         if (request.Operation == "lookup-plan") return new
@@ -89,7 +95,9 @@ internal static class Program
             snapshot = resolved.Snapshot; lookupScope = resolved.Scope;
             snapshotBytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, SnapshotReader.JsonOptions);
         }
-        var prepared = new FittedModelCache(SafeChild(root, "cache", create: true)).GetOrBuild(snapshotBytes, request.Rules, token);
+        var cacheRoot = SafeChild(root, "cache", create: true);
+        var prepared = session is null ? new FittedModelCache(cacheRoot).GetOrBuild(snapshotBytes, request.Rules, token)
+            : session.Prepare(cacheRoot, snapshotBytes, request.Rules, token);
         var summary = new
         {
             prepared.Key, prepared.Readiness, prepared.Counts, prepared.CacheScope, prepared.LoadedFromDisk,

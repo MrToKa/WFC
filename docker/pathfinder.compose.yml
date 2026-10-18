@@ -79,6 +79,7 @@ services:
       WFC_VIEWER_TRUST_PROXY: "true"
       PF_ROOT: /var/lib/wfc/pathfinder
       PF_ENGINE_DLL: /opt/pathfinder/PathFinder.ModelRunner.dll
+      PF_ENGINE_MODE: ${PF_ENGINE_MODE:-oneshot}
       PF_LOCAL_DEMO: "true"
     volumes: ["staging:/var/lib/wfc/model-imports", "pathfinder:/var/lib/wfc/pathfinder"]
     depends_on:

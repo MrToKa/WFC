@@ -13,14 +13,148 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current continuation — PF-2 private worker reuse, 18 October 2026
+## Latest checkpoint — private worker reuse delivery, 18 October 2026
+
+Implementation is complete at scoped test coverage, but the delivery is PARTIAL:
+final restored5191 post-UI workflow comparison is FAIL_NOT_RETAINED. It reported
+a mismatch; its full object was not saved before an assertion, and the operator
+then retired the owned target without gating on that result. Do not infer a final
+target noApply/database-equality PASS or recreate it as if that recovered evidence.
+See [report25](25-private-worker-reuse.md) and
+`evidence/session/cleanup-checkpoint-1792330908283.json`.
+
+- Current branch `pf-2-worker-reuse-local-20261018`, baselineed0770f3; delivery
+  commit follows final inventory. All production source is frozen.
+- C#308session/42one-shot, Node61affected/types/lint, methodology23, profile19,
+  actual network-none210 controls PASS at their bound exact source/binary scopes.
+  Unchanged pinned Core/Model; graph remains per query. No raised limits.
+- Corrected restored-target job10, operational21individual controls, actual
+  interrupted64batch9 and read-only closure7 PASS. Historical failed aggregate
+  receipts remain. Crash attempt2/all64unique/recovered29.001s, install preserved;
+  exact replacement-owner UUID not retained. Current authority/dependency fences
+  remain. Healthy advisory ownership and already-lost DB session have different
+  safety claims; no global quarantine claimed for a lost DB session.
+- Actual computer-use on final candidate confirms protected model, English three
+  tabs, real35.30345579516123m/design45, filledGhost/route colors/yellow and Clear.
+  Screenshots saved; own browser tab closed. No Review/Apply UI request.
+- Only target5191 was retired:5containers/4volumes/2networks. Exact Linux runner
+  and compiled PF modules retained first (50files/851629bytes). Final cleanup
+  `evidence/session/final-cleanup-1792331030292.json` removes4unreferencedownimages,
+  479405178logicalbytes (physicalreclamation NOT_MEASURED); finalsourceinventory
+  saved. Never touch the six denied children or their parents.
+- Separate final primary5190 preservation PASS12 at
+  `evidence/worker-reuse/preservation-1792330963032-1cb78243.json`: all12workflow
+  groups/counts, all18baselinecontainer IDs/images/start times and source/copy
+  bytes preserved. Fresh original/Core/PF0/native5-group isolation PASS at
+  `evidence/pf2/isolation-1792329686848.json`. Neither repairs lost target evidence.
+- Current5190 remains old APIee402/web1895/defaultone-shot. No activation,
+  original checkout/app/data update, realApply or remote publication occurred.
+- Next independent work: bounded retained whole-hierarchy/name/fragment coverage
+  audit versus52selectedobjects/26leaves, and actually supplied3QA endpoint/registry
+  records. Native comparison not mandatory by user decision; engineering review
+  pending, globalgraph and fullplantgeometry/capacity still open. Save a traceable
+  handoff/new inheriting branch, then execute immediately. No invented categories,
+  business cables, source proof or wholeplant PASS.
+
+## Historical worker development checkpoints
 
 IN_PROGRESS, branch `pf-2-worker-reuse-local-20261018`, inheriting completed
 capacity commit `adcb55da93564571deb0a5bc11ef9921c54c0a53`. The next self-contained
 assignment is [PF-2 worker reuse](handoffs/PF-2-worker-reuse.md), prepared through
 prepare-stage-handoff under the user's automatic continuation instruction.
-Feasibility review is read-only so far; implementation/runtime parity tests are
-NOT_RUN. Current5190/original resources remain unchanged.
+Read-only feasibility is complete and the shared private protocol is acknowledged.
+C# and server modules are implemented and source frozen; restored-target runtime
+qualification remains in progress. Current5190/original resources remain unchanged.
+
+- Initial C#151/165 and later303/303 session checks PASS at their intermediate
+  bytes, final-pre-review DLLd54d1463...,31semantic corpus cases,3actual64request
+  retirements; separate one-shot42/42 PASS againstthatDLL. Server53/53 cases,
+  types/scopedlint including parentindexshutdownstatusfix PASS at pre-reviewscope.
+- Both cross-review gaps are corrected and final source frozen at12:41UTC:
+  first-byte activity rejects partial pipelining before any result publication;
+  Node checks cancellation/original deadline again after retirement join.
+  Final C#308/308 session checks,31semantic corpus cases and42/42 one-shot PASS,
+  DLL0a421550ac7e01a7e4659a543927cb5fd20eacac7a9cc687cc08c812a5b8c56a.
+  Final server55/55 affected checks/types/scopedlint PASS, engineSession source
+  SHA5cfa14c83dd0566009baecaf757ed1698f0c339043faaff48b24d36eb84a4513.
+  See evidence/worker-reuse/runner-source-final-20261018T124105Z.json and
+  server-cross-review-closed-20261018T124041Z.json. Failed/intermediate receipts
+  remain historical. Runtime qualification hold released; no math/wire/Core change.
+  Independent C# closing review PASS/no remaining material finding at
+  evidence/worker-reuse/cross-review-closed-1792327496205.json.
+- Actual production-source Linux age qualification completed PASS4/4 after
+  601071.96ms observed elapsed; old group reaped/new lane.
+  Final five actual modes total210checks PASS:117mixed,77policy,4RSS,4age and
+  8correcteddeadline. The actual warmed1ms request was dispatched and returned
+  deadline_exceeded; separate no-response fixture proves the Node hard deadline
+  at1600ms and subsequent real-runner recovery. All five final containers and
+  the retained historical label-collision attempt are retired. Public bound
+  receipts: evidence/session/summary-1792328175307.json with raw results,
+  orchestrations/source manifests. Harness15/15 pure controls PASS at the owner's
+  recorded source scope. Restored5191 first job-driver10/10 controls PASS against
+  API323f876a (256owncables/9jobs, auth/settings/active-owner rollover/cancel and
+  noApply/noReview/seed+copiedreal preservation). These are scoped historical
+  bytes; publication of exact raw/source receipts is in progress.
+- Actual advisory-backend termination found a material production lifecycle
+  failure: targetAPI323f876a exits1 on unhandled repeated pg Client error after
+  uniquely identified ownPGbackend438 was terminated. Original target-ops failure
+  and sanitized context are preserved under evidence/session/. The same receipt
+  separately proves exact rebuiltDLL4b940d5c real35.30345579516123m/design45,
+  fullDTO repeat and memory reuse before the lifecycle failure. No graceful stop,
+  quarantine or crash gate PASS is inferred. Only restored5191 is affected/stopped.
+  Minimal worker listener fix is frozen at3ce7708d, repeated-error/terminalclose
+  regressions61/61/types/lint PASS; independent closing review no materialfinding.
+  See evidence/worker-reuse/pg-owner-fix-1792328904528.json and
+  worker-owner-listener-review-20261018T130804Z.json. A healthy retained advisory
+  session blocks other owners; an already-lost session cannot hold its released
+  DB lock, so only same-worker stop/publication fencing is claimed in that case.
+  Corrected5191 API5cd3eca8/web4d6022fa session readback PASS; unchanged driver
+  retake10/10 PASS at evidence/session/job-controls-corrected-1792329096322.json,
+  fresh256owncables/9jobs, previousrows/seed/copiedreal12groups preserved.
+  Runtime ops hold released for actual new-candidate lock-loss/stop/crash retake.
+  EngineSession/C#/Core/Model remain frozen; previous210 measurement checks retain
+  their original exact source/binary scopes. Final browser/audit/cleanup pending.
+- Corrected actual ops now pass21individual gates (real semantics, advisory
+  connection loss/API healthy/group join/no reacquire5.2s, explicit restart,
+  graceful exit0/507ms/advisory release/namespace reaping). Aggregate
+  target-ops-1792329135705.json remains FAIL because the old64helper misses its
+  active observation window (NOT_RUN, no crash). A separate faster observer
+  actually KILLed a batch observed0/64+activeitem+exactpair; persisted state was
+  RUNNING4/64 between items, but its overly strict runningItems>0 assertion
+  aborted before recovery and finally cancelled the job. Raw
+  crash-once-1792329339791.json remains FAIL; no recovery PASS inferred. The initial
+  runtime inference 'already completed64' is explicitly corrected by full raw read.
+  Root authorizes one new evidence-supported harness retake: unfinished durable
+  batch may be between items after KILL, but must retain exact pending counts/
+  owner/attempt and naturally recover to64unique results without lease edits or
+  fake engine delays. Existing64fixture reused/new explicit job. Runtime owns
+  scripts/pathfinder-session/ only; browser waits for closure. Three-original-cable
+  location/model metadata copy is retained for the next bounded coverage audit.
+- Restored-target lifecycle gates remain separate from the completed networkless
+  process qualification; restored job controls are pending.
+  Extra5191 direct restore from retained3db9fa33archive and session mode readback
+  PASS at evidence/session/target-startup-1792327913104.json, API323f876a/web511ba97e.
+  Target Linux build DLL4b940d5c differs from host0a421550 build metadata; source
+  bindings and actual target semantic checks are separate gates, not binary parity.
+  A bounded actual deadline control was repeated after a receipt-helper label
+  collision; original result/attempt preserved, final8/8 PASS, no production fix.
+  Parent affected Compose/profile19/19 controls PASS at
+  evidence/worker-reuse/parent-profile-checks-20261018T1252Z.json.
+  C# design intentionally has server-side snapshot
+  validation; lookup-plan needs no snapshot. Do not claim every C# operation
+  rehashes geometry. Current5190/original resources remain unchanged.
+- Runtime test-only MemoryLane fixture builds0warnings; actual512MiB guard branch
+  passes at the explicit fixture scope above. SDK first-run logged certificate installation/ensure; filtered
+  read-only current certificate is older(29July), no prior store inventory so
+  actual creation is UNKNOWN. No key access/removal; later builds suppress
+  generation. Receipt: evidence/session/sdk-environment-1792326425587.json.
+
+Existing heartbeat `pathfinder` was updated/resumed through the app tool at
+12:19UTC, preserving its10minute schedule/name/target thread. Its prompt now
+points to this branch/handoff and all six denied children. It stays quiet on
+unchanged/nonactionable state and checks active agents before any continuation.
+Current direct implementation continues; this is recovery scheduling, not a
+second concurrent stage or proof of completed worker qualification.
 
 - C# owner: ModelRunner/session +runner tests only; server owner: private session/
   worker injection/tests; runtime owner: separate session test/orchestration and
@@ -29,9 +163,9 @@ NOT_RUN. Current5190/original resources remain unchanged.
   request/response/handshake, one prepared identity, hard supervisor/Node deadlines,
   bounded count/age/idle/RSS and no hidden queue/replay. One-shot stays default
   pending varied-query/parity/security/lifecycle gates. Current caps are not raised.
-- Next: acknowledge shared private protocol, implement isolated modules, validate
-  fresh-vs-reused mixed queries and actual process/job lifecycle, then measure the
-  actual persistent path. No real review/Apply or whole-plant claim.
+- Next: finish restored durable job authority/dependency/lease and operational
+  lifecycle, actual target-binary real semantics/browser checks, then final
+  preservation/cleanup and local delivery. No real review/Apply or whole-plant claim.
 
 ## Latest delivery — PF-2 capacity baseline, 18 October 2026
 

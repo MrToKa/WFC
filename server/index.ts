@@ -29,7 +29,8 @@ function startListening(server: http.Server | https.Server, protocol: string): v
     server.close();
     const deadline = setTimeout(() => process.exit(1), 30_000);
     deadline.unref();
-    void Promise.allSettled([stopViewerSessions(),stopModelRegistry(),stopPathFinderRuntime()]).finally(() => process.exit(0));
+    void Promise.allSettled([stopViewerSessions(),stopModelRegistry(),stopPathFinderRuntime()])
+      .then(results => process.exit(results.some(result => result.status === 'rejected') ? 1 : 0));
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);

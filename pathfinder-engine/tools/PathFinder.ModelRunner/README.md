@@ -54,3 +54,43 @@ Build with the private .NET home configured, then run
 worktree. It records fresh synthetic/boundary controls and replays all ten frozen
 design inputs against their unchanged expected values. It never regenerates
 expected files or touches original checkouts/data.
+
+# Private runner sessions
+
+The default one-shot supervisor and `--worker` modes retain their original JSON
+contract. `--session-supervisor` starts one private long-lived supervisor and one
+computational child (`--session-worker`). No HTTP listener or credentials are
+introduced. WFC still owns authorization, file provenance and publication fences.
+
+Session frames are an unsigned four-byte big-endian byte length followed by strict
+UTF-8 JSON, without a newline. A closed `pathfinder.engine.session.v1` ready frame
+announces the runner SHA-256, pinned engine version and byte limits. Subsequent
+request frames contain the unchanged runner DTO. A result frame wraps the unchanged
+model response in `{schemaVersion,type:'result',response,session}`. Session metadata
+contains only `requestOrdinal`, `preparedReuse` (`none`, `build`, `disk`, `memory`),
+and `retireAfterResponse`. Memory reuse proves reference identity; the original
+`prepared.loadedFromDisk` continues to describe how that object was constructed.
+
+One request is active, with no application queue. Pipelined input, partial/invalid
+frames, malformed JSON, unexpected fields, duplicate fields, bad identities and
+unexpected process failure terminate the lane. Every geometry request still reads
+the immutable snapshot, checks SHA and project/model identity, validates purpose,
+and resolves dedicated lookup scope. Only one exact normalized input/rules identity
+is retained. Changing it replaces the cache instance without changing ModelLimits
+or disk key serialization. Graphs remain per calculation. Core and Model are
+unchanged. Settings, options and category are always supplied per request.
+
+Initial policies are 64 requests, 30 seconds idle, 10 minutes lifetime and five
+seconds for ready. A client must recycle before dispatch if remaining lifetime
+cannot cover the original request deadline. The independent .NET supervisor
+enforces the request deadline even when synchronous computation cannot cooperate;
+Node additionally owns the process-group hard deadline and kill/join. A deadline,
+resource failure or executor exception retires the child and lane. No request is
+silently replayed. Domain results such as `no_path` remain ordinary results.
+
+Request payloads are capped at 1 MiB, whole response frames at 32 MiB, and child
+stderr at 64 KiB for its lifetime. The supervisor samples combined supervisor/child
+RSS every 100 ms and refuses above 512 MiB (or when the guard is unavailable).
+This is a sampled soft guard and can miss short peaks; the isolated container's
+existing 4 GiB limit is the separate hard OS bound. Thresholds are provisional,
+not evidence of whole-plant capacity. Stdout contains protocol only.

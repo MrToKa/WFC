@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "pathfinder.coverage.metadata-copy.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T13:13:59.890Z",
+  "scope": "Read-only exact three original cable rows plus project registry/bindings/current selection; no coverage calculation, users, login data, test cables or database dump exported.",
+  "target": {
+    "project": "wfc-pathfinder-local-bf1cba239f40",
+    "owner": "59d9d5bc-9c8f-4b4c-b97d-bb56751e5a6e",
+    "apiId": "3b02c809bac059ed210886766812ed002bfb89e95b3d18258875869b3a1c9284",
+    "postgresId": "537355846bb844629004d97ce91f8fd10dcae660646b759702c5d22d40591614",
+    "images": {
+      "api": "sha256:5cd3eca8f8a6972f038bd9766a8e5a68c1ac2cb59546d4ed96763c6de528c3f5",
+      "web": "sha256:4d6022fa8de5348d02d1a86cc691214142e3a3866032de9ba9a08a5068d10c66"
+    }
+  },
+  "sourceArchive": {
+    "backupId": "3db9fa33-c10e-4646-82bc-fe99f3d8af35",
+    "manifestSha256": "8a2b1ce69a43e0371235feeef4d56e577d82e29ac1766539df33fb762b4d6c63",
+    "databaseDumpSha256": "5c9272515c147e9ebe67a755af824946da01772376ee9eef78bd7acd8e98d360",
+    "originalBusinessFingerprint": "353020b7bdf920988f65bd575533f43900720468ba4b23bbb928aedb0492f450",
+    "originalRegistryFingerprint": "9f6d399ddb543f480f4c32889669fc6dbd4fc1065b2c7401bf551a2a0995c53d",
+    "scope": "Archived source fingerprints before target-only test fixtures; not current whole-target equality."
+  },
+  "export": {
+    "path": "C:\\Users\\todor.chankov\\source\\WFC-pathfinder-local\\pathfinder-engine\\.scratch\\session-coverage-metadata-a9fb410e-504c-4679-b359-b9171fa5501f\\metadata.json",
+    "sha256": "85af065d0f31943f6cc1e0fecbb1eebca7f97f50a96c2f99a47b17fc6017648b",
+    "canonicalSha256": "07d152e11d69d67938b647ae4add92dcccc1041db0c4e3304ef270dfcb0c7ec9",
+    "bytes": 7874,
+    "cables": 3,
+    "locations": 6,
+    "aliases": 7,
+    "bindings": 6,
+    "cableIds": [
+      "a49521ad-e4e1-47d9-b3b2-948375a83905",
+      "519c4d9f-d919-435d-8f57-2c606d2259ec",
+      "a642bb9e-6ede-4200-91da-64a828f3b9fd"
+    ]
+  },
+  "limits": [
+    "Retains manual point/alias provenance; a model-name miss must not be relabelled unresolved when a valid confirmed binding exists.",
+    "No full-model matching or coverage audit was performed."
+  ]
+}

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { Pool, PoolClient } from 'pg';
+import type { Client, Pool, PoolClient } from 'pg';
 import { setTimeout as delay } from 'node:timers/promises';
-import { runEngine } from './engine.js';
+import { createConfiguredEngineExecutor, type EngineExecutor } from './engineSession.js';
 import { collectDependencies, geometryHash, hash } from './dependencies.js';
 import { transaction } from './transactions.js';
 import { readSnapshot } from './storage.js';
@@ -43,7 +43,7 @@ async function fencedJob(client:PoolClient,job:Row):Promise<void> {
   const current = (await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 AND id=$2 FOR UPDATE',[job.project_id,job.id])).rows[0];
   if (!current || current.owner_token !== job.owner_token || current.state !== 'running' || current.cancel_requested || new Date(current.lease_until).getTime() <= Date.now()) throw new PathFinderError('JOB_FENCED',409);
 }
-async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> {
+async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineExecutor):Promise<void> {
   const controller = new AbortController(),signal = AbortSignal.any([stopping,controller.signal]);
   let heartbeatBusy = false;
   const heartbeat = setInterval(() => {
@@ -62,7 +62,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
         if (hash(await collectLookupDependencies(client,job.project_id,dependencies))!==hash(dependencies)) throw new PathFinderError('LOOKUP_STALE',409,'The active model or artifact changed before lookup.');
       });
       await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
-      const response=await runEngine({schemaVersion:'pathfinder.model.runner.v1',requestId:randomUUID(),operation:'lookup',projectId:job.project_id,
+      const response=await engine.execute({schemaVersion:'pathfinder.model.runner.v1',requestId:randomUUID(),operation:'lookup',projectId:job.project_id,
         modelVersionId:dependencies.modelVersionId,snapshotId:dependencies.artifactId,snapshotSha256:dependencies.snapshotSha256,timeoutMilliseconds:job.timeout_ms,
         routeText:dependencies.routeText,reverse:dependencies.reverse,options:dependencies.options},signal);
       signal.throwIfAborted();
@@ -82,7 +82,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
           throw new PathFinderError('PREVIEW_STALE',409,'The model, locations or Project Details changed before this preview.');
       });
       await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
-      const response=await runEngine(previewEngineRequest(dependencies,randomUUID(),job.timeout_ms),signal);
+      const response=await engine.execute(previewEngineRequest(dependencies,randomUUID(),job.timeout_ms),signal);
       signal.throwIfAborted();
       await principalTransaction(pool,job.project_id,principal(job),async client=>{
         await fencedJob(client,job);let stale=false;
@@ -110,7 +110,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
         retainedResult = previous.rows[0]?.result as EngineResponse|undefined;
         retained = retainedResult?.route;
         calculationMode = retained ? 'design' : 'calculate';
-        response = await runEngine({schemaVersion:'pathfinder.model.runner.v1',requestId,operation:calculationMode,projectId:job.project_id,
+        response = await engine.execute({schemaVersion:'pathfinder.model.runner.v1',requestId,operation:calculationMode,projectId:job.project_id,
           modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds:job.timeout_ms,
           ...(retained ? {route:{success:true,lengthMeters:retained.lengthMeters,fromDistanceMeters:retained.fromDistanceMeters,toDistanceMeters:retained.toDistanceMeters,
             fromRequiresSecondary:retained.fromRequiresSecondary,toRequiresSecondary:retained.toRequiresSecondary}} : {
@@ -148,8 +148,8 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal):Promise<void> 
 }
 
 /** One DB advisory-lock owner serializes .NET/cache access across backend processes. */
-export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs) {
-  const controller = new AbortController(); let work:Promise<void>|undefined;
+export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFactory:()=>EngineExecutor=createConfiguredEngineExecutor) {
+  const controller = new AbortController(); let work:Promise<void>|undefined,fatalStop:unknown;
   let lastAutomatic = 0;
   let automaticAfter:string|null = null;
   async function automatic():Promise<void> {
@@ -172,24 +172,66 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs) {
       if (work) return;
       work = (async () => {
         while (!controller.signal.aborted) {
-          let owner:PoolClient|undefined;
+          let owner:PoolClient|undefined,releaseOwner=true,discardOwner=false;
+          const lost = ():void => {discardOwner=true;controller.abort();};
+          async function release():Promise<void> {
+            if (!owner || !releaseOwner) return;
+            if (discardOwner) {
+              // pg-pool installs its idle error listener during release. Finish
+              // the damaged transport first, while repeated errors are still
+              // handled by this owner, then discard instead of pooling it.
+              // Keep the handler on this terminal, never-reused client.
+              // pg-pool returns the concrete pg Client; its PoolClient typing
+              // omits end(). Refuse unknown implementations rather than losing
+              // the transport-error handler during an unsafe pool handoff.
+              const terminal=owner as PoolClient & Partial<Pick<Client,'end'>>;
+              try {
+                if(typeof terminal.end!=='function')throw new Error('Missing terminal client close.');
+                await terminal.end();
+              } catch {
+                controller.abort();releaseOwner=false;
+                fatalStop=new PathFinderError('WORKER_OWNER_CLOSE_FAILED',500,'The PathFinder worker database owner could not be closed safely.');
+                return;
+              }
+              owner.release(true);
+            } else {
+              owner.release();
+              owner.off('error',lost);
+            }
+            owner=undefined;
+          }
           try {
             owner = await pool.connect();
-            const locked = await owner.query<{locked:boolean}>("SELECT pg_try_advisory_lock(hashtext('wfc-pathfinder-engine-worker-v1')) AS locked");
-            if (!locked.rows[0]?.locked) {owner.release(); owner = undefined; await delay(5000,undefined,{signal:controller.signal}); continue;}
-            const lost = ():void => controller.abort(); owner.once('error',lost);
+            // A checked-out pg client has no pool idle error handler. Subscribe
+            // before the lock query, and keep handling transport errors until
+            // the lane has joined and the client is safely returned/discarded.
+            owner.on('error',lost);
+            let locked;
+            try {locked = await owner.query<{locked:boolean}>("SELECT pg_try_advisory_lock(hashtext('wfc-pathfinder-engine-worker-v1')) AS locked");}
+            catch(error) {discardOwner=true;throw error;}
+            if (!locked.rows[0]?.locked) {await release(); await delay(5000,undefined,{signal:controller.signal}); continue;}
+            let engine:EngineExecutor|undefined;
             try {
+              if (!controller.signal.aborted) engine=engineFactory();
               while (!controller.signal.aborted) {
                 const job = await claim(pool);
-                if (job) await executeJob(pool,job,controller.signal);
+                if (job) await executeJob(pool,job,controller.signal,engine!);
                 else {await automatic(); await delay(1000,undefined,{signal:controller.signal});}
               }
-            } finally {owner.off('error',lost); await owner.query("SELECT pg_advisory_unlock(hashtext('wfc-pathfinder-engine-worker-v1'))").catch(() => undefined);}
+            } finally {
+              try {await engine?.close();}
+              catch(error) {
+                // An unreaped lane must not start another owner or return its locked
+                // connection to the pool. Quarantine until the backend terminates.
+                controller.abort();releaseOwner=false;fatalStop=error;
+              }
+              if(releaseOwner&&!discardOwner)await owner.query("SELECT pg_advisory_unlock(hashtext('wfc-pathfinder-engine-worker-v1'))").catch(() => {discardOwner=true;});
+            }
           } catch(error) {if (!controller.signal.aborted) {console.error('PathFinder worker temporarily unavailable.'); await delay(5000,undefined,{signal:controller.signal}).catch(() => undefined);}}
-          finally {owner?.release();}
+          finally {await release();}
         }
       })();
     },
-    async stop():Promise<void> {controller.abort(); await work;},
+    async stop():Promise<void> {controller.abort(); await work;if(fatalStop)throw fatalStop;},
   };
 }
