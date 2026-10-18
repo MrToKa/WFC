@@ -27,8 +27,20 @@ See `20-manual-review-and-project-gap.md` and
 `handoffs/PF-project-settings-manual-review.md`. Sourcefrozen: backend51/51
 engine/settings/registry and191/191 project/access/cable regressions PASS,
 serverbuildPASS; frontend147/147 before finaleligibilityguard and finalaffected
-PFtab17/17/tsc/lintPASS; runtimeownership/path17/17PASS. Jointnewimage build,
-23-case liveSQL/HTTP, computer-use and replacementbackup remainIN_PROGRESS.
+PFtab17/17/tsc/lintPASS; runtimeownership/path17/17PASS. Checkpoint873afeb
+contains the frozen production source. Own APIe8844ae8/web a71c01cf built/start
+PASS; actual23/23SQL/HTTP and fixture cleanup PASS. Computer-use confirms
+default1, invalid0 rejection, saved0.25 persistence/reload, formula card and
+actual converted PF-MANUAL-DEMO35.30345579516123m/design45m, filledGhost/yellow,
+explicit Confirm enables Apply and reload clears that eligibility. No real
+demo Apply was performed; human acceptance remains PENDING. Source and image
+bindings are in evidence/manual-settings/ and runtime/manual-candidate-health-1792305394069.json.
+At06:52UTC both review follow-ups are frozen: frontend19/19 plus tsc/lintPASS
+fences the reproduced stale panel (no observed Apply bypass); backend17boundary
++16actualNode/.NET PASS plus serverbuild makes DTO/Apply agree on existing
+canonical0..1,000,000m limit. Finalbackup remains held: checkpoint locally,
+build/start one candidate, run expanded23live, verify affected UI, then perform
+replacement backup/restore/drill and retire only superseded owned payloads.
 Heartbeat updatedACTIVE throughapp with latesthuman
 decision appended, to avoid stopping on superseded native requirement.
 No original resources are changed; no push/PR/merge/deployment/native launch.

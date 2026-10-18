@@ -5,7 +5,7 @@ import { PathFinderError } from './errors.js';
 import { collectDependencies, hash, hasSyntheticProof } from './dependencies.js';
 import { readSnapshot } from './storage.js';
 import type { applySchema, DependencySnapshot, JobPrincipal } from './jobContracts.js';
-import { routeCompatibilityIssue } from './jobContracts.js';
+import { designLengthCompatibilityIssue,routeCompatibilityIssue } from './jobContracts.js';
 import { assertLoginNotExpired, principalTransaction } from './auth.js';
 
 type Row = Record<string,any>;
@@ -35,7 +35,8 @@ export function createPathFinderApply(pool:Pool) {
     if (!current.dependencies || hash(current.dependencies) !== proposal.dependency_hash || input.expectedCableWriteRevision !== current.cable.cable_write_revision) throw new PathFinderError('PROPOSAL_STALE',409,'The cable or a calculation dependency changed. Recalculate and review.');
     await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
     const length = result.design.designLengthMeters;
-    if (typeof length !== 'string' || !/^(0|[1-9][0-9]*)$/.test(length) || BigInt(length) > 1_000_000n) throw new PathFinderError('DESIGN_LENGTH_OUTSIDE_WFC_LIMIT',409);
+    const designIssue=designLengthCompatibilityIssue(length);
+    if (designIssue) throw new PathFinderError('DESIGN_LENGTH_OUTSIDE_WFC_LIMIT',409,designIssue);
     const route = result.route.routeText;
     if (typeof route !== 'string') throw new PathFinderError('ROUTING_OUTSIDE_WFC_LIMIT',409);
     const compatibilityIssue = routeCompatibilityIssue(route);

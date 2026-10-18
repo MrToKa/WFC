@@ -120,6 +120,26 @@ describe('admin PathFinder interface', () => {
     view.rerender(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" isAdmin />);
     expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled(); expect(screen.getByText('This result is outdated. Calculate a new proposal before reviewing or applying it.')).toBeVisible(); expect(pf.action).not.toHaveBeenCalled();
   });
+  it('discards a delayed review response after the selected cable changes', async () => {
+    const user = userEvent.setup(), detail = { ...proposal(false), acceptanceScope: 'manual-review', canApply: true }, reviewId = '88888888-8888-4888-8888-888888888888';
+    let finishReview!: (value: { reviewId: string; proposal: PathFinderProposal }) => void;
+    const reviewProposal = vi.fn(() => new Promise<{ reviewId: string; proposal: PathFinderProposal }>(resolve => { finishReview = resolve; }));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'display-ack'), reviewProposal }); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1From:/ })); await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ })); await screen.findByText('Design length: 21 m');
+    await user.click(screen.getByRole('button', { name: 'Confirm proposal review' })); await waitFor(() => expect(reviewProposal).toHaveBeenCalledOnce());
+    await user.click(screen.getByRole('button', { name: /=CABLE-2From:/ })); expect(screen.queryByRole('region', { name: 'Proposal review' })).toBeNull();
+    await act(async () => finishReview({ reviewId, proposal: detail }));
+    expect(screen.getByText('Selected: =CABLE-2')).toBeVisible(); expect(screen.queryByRole('region', { name: 'Proposal review' })).toBeNull(); expect(screen.queryByText('Review confirmed for this immutable proposal.')).toBeNull(); expect(pf.action).not.toHaveBeenCalled();
+  });
+  it('does not show a late Apply success in a different selected cable context', async () => {
+    const user = userEvent.setup(), detail = { ...proposal(false), acceptanceScope: 'manual-review', canApply: true }, reviewId = '88888888-8888-4888-8888-888888888888';
+    let finishApply!: (value: { receipt: object; duplicate: boolean }) => void;
+    const action = vi.fn(() => new Promise<{ receipt: object; duplicate: boolean }>(resolve => { finishApply = resolve; }));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, proposals: [detail] }, readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'display-ack'), reviewProposal: vi.fn(async () => ({ reviewId, proposal: detail })), action }); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1From:/ })); await user.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ })); await screen.findByText('Design length: 21 m'); await user.click(screen.getByRole('button', { name: 'Confirm proposal review' })); await waitFor(() => expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Apply reviewed result' })); await waitFor(() => expect(action).toHaveBeenCalledOnce()); await user.click(screen.getByRole('button', { name: /=CABLE-2From:/ }));
+    await act(async () => finishApply({ receipt: {}, duplicate: false })); expect(screen.getByText('Selected: =CABLE-2')).toBeVisible(); expect(screen.queryByText('Routing and design length applied together. Installed length was preserved.')).toBeNull();
+  });
   it('shows path loading and enables proposal review only after the protected display acknowledgement', async () => {
     const user = userEvent.setup(), detail = proposal(true); let acknowledge!: (requestId: string) => void;
     const showPath = vi.fn(() => new Promise<string>(resolve => { acknowledge = resolve; }));

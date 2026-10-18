@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.computer-use.v1",
+  "recordedAtUtc": "2026-10-18T06:48:34Z",
+  "sourceCheckpoint": "873afeb3544fad56717eb07007d419852e66dc60",
+  "origin": "http://127.0.0.1:5190",
+  "images": {
+    "api": "sha256:e8844ae844819d75353059abfbc62ca17591b06a558a02250aba255def407b4e",
+    "web": "sha256:a71c01cfa8d2c003357852bbb12e5a2c3667c2b6ddcabaac4e1912d3e81409bb"
+  },
+  "scope": "Actual in-app browser actions during 06:40-06:48 UTC on isolated copied/synthetic data, before pending deferred Review state fence. Not human engineering acceptance.",
+  "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+  "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+  "checks": [
+    { "name": "Separate Connection gap card defaults to 1 metre", "status": "PASS", "screenshot": "details-connection-gap-default-1.png" },
+    { "name": "Existing formula card separates legacy estimate and exact PathFinder formula with current three allowances", "status": "PASS", "screenshot": "details-pathfinder-formula.png" },
+    { "name": "Saving zero shows validation and leaves stored one metre unchanged", "status": "PASS", "screenshot": "details-gap-zero-rejected.png" },
+    { "name": "0.25 metre saved and retained after full reload without rounding to 0.3", "status": "PASS", "screenshot": "details-gap-quarter-after-reload.png" },
+    { "name": "Gap restored to 1 metre; old proposal stale and automatic new proposal ready", "status": "PASS", "note": "A to B to A may reuse exact prior gap-1 geometry in design mode; live23 separately proves changed-gap rerouting." },
+    { "name": "Real converted proposal shows exact yellow path and filled Ghost; original tray colors retained", "status": "PASS", "screenshot": "real-manual-proposal-ghost.png" },
+    { "name": "Explicit Confirm proposal review enables Apply despite engineeringAccepted false under manual-review scope", "status": "PASS", "screenshot": "real-manual-review-enables-apply.png" },
+    { "name": "Manual ordered lookup shows read-only current Details gap; no competing gap input", "status": "PASS" },
+    { "name": "Reload and reselect clears frontend Review eligibility; Apply disabled for next human review", "status": "PASS", "screenshot": "real-manual-ready-for-human-review.png" }
+  ],
+  "currentSettings": { "connectionGap": "1", "secondaryTrayLength": "3", "endConnectionLength": "5", "additionalBendingPercent": "10" },
+  "route": { "lengthMeters": 35.30345579516123, "pointCount": 90, "connectionGapCount": 4, "surfaceGapTotalMeters": 0.9840583861033791, "lengthBeforePercentageMeters": "40.3034557951612", "unroundedDesignMeters": "44.33380137467732", "designLengthMeters": "45" },
+  "actualDemoApplyPerformed": false,
+  "humanAcceptance": "PENDING",
+  "nativeComparison": "NOT_PERFORMED / NOT_REQUIRED_BY_USER",
+  "originalResourcesChanged": false,
+  "credentialsRecorded": false
+}

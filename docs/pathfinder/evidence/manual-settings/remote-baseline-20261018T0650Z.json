@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "pathfinder.handoff.remote-baseline.v1",
+  "recordedAtUtc": "2026-10-18T06:50:27Z",
+  "localFeature": { "branch": "pf-manual-validation-settings-20261018", "head": "873afeb3544fad56717eb07007d419852e66dc60", "uncommittedChanges": "Coordinated docs, QA demo helper and focused frontend Review race follow-up; inspect live status before resuming", "behindLiveMain": 0, "aheadOfLiveMain": 13, "remoteBranch": "ABSENT" },
+  "wfcLiveMain": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+  "canonicalPathfinder": { "localBranch": "master", "localHead": "45c24bf5f433f13e102600b36f20327c77961d0a", "trackedChanges": 0, "liveMaster": "45c24bf5f433f13e102600b36f20327c77961d0a" },
+  "method": "Read-only git ls-remote --heads and local rev-list/status; no fetch into original checkout, no publication",
+  "connectorObservation": "Earlier configured GitHub connector results remain dated at05:38 UTC in evidence/pf8/automation-wakeup-20261018T0538Z.json; not refreshed here",
+  "remoteFeatureCi": "NOT_AVAILABLE: local unpublished branch has no remote CI result",
+  "originalEnvironmentPreservation": "Final separate isolation receipt required; this remote observation alone does not prove it",
+  "remoteMutations": false
+}

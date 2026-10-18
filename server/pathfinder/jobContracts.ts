@@ -41,6 +41,14 @@ export const reviewSchema = z.object({expectedProposalHash:z.string().regex(/^[a
 export const applySchema = z.object({idempotencyKey:uuid,reviewId:uuid,expectedCableWriteRevision:revision}).strict();
 export const lookupSchema = z.object({routeText:z.string().min(1).max(8000).refine(value=>routeCompatibilityIssue(value)===null,'The route is outside existing Viewer identifier limits.'),
   reverse:z.boolean(),expectedSelectionRevision:revision,artifactId:uuid,options:optionsSchema.optional()}).strict();
+/** Match the exact existing cable-write bound before inviting Review/Apply. */
+export function designLengthCompatibilityIssue(value:unknown):string|null {
+  const message='The design length must be a canonical whole number from 0 to 1,000,000 metres for WFC Apply.';
+  if (typeof value!=='string' || value.length>7) return message;
+  const canonical=/^(?:0|[1-9][0-9]*)$/.exec(value);
+  if (!canonical || canonical[0]!==value || BigInt(value)>1_000_000n) return message;
+  return null;
+}
 /** Existing Routings viewer compatibility; exact computed results themselves remain untruncated. */
 export function routeCompatibilityIssue(value:string):string|null {
   if (!value || value.length > 8000) return 'The route exceeds the existing cable routing limit of 8,000 characters.';

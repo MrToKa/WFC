@@ -150,3 +150,24 @@ Final operational audit/cleanup outcomes append below after their actual checks.
 See [PF-8 report](08-stage-report.md) for exact retained backup, images, source
 hashes, limits and next unmet-gate handoff. PF-2/PF-7 engineering gate and
 PF2-GRAPH-01 remain unresolved; operationalPASS does not change them.
+
+## Revised user acceptance path — 18 October 2026, project gap/manual review
+
+The user confirmed the exact source filename, no available Navisworks licence,
+and chose to manually inspect generated routes/lengths instead of requiring a
+native oracle. This supersedes the earlier prerequisite, not the historical
+test results. See [current decision](20-manual-review-and-project-gap.md).
+
+| ID | Current required outcome | Observed status at873afeb |
+|---|---|---|
+| PF7-PARITY-01 native oracle |No longer mandatory for the user's chosen manual local acceptance path; no native-parity PASS implied | NOT_PERFORMED / NOT_REQUIRED_BY_USER |
+| PF6-MANUAL-01 |Current strict-admin exact proposal review permits real Apply with manual-review provenance; no blanket acceptance flag | IMPLEMENTED; automated source guardsPASS; actual23live/UI pending |
+| PF5-GAP-01 |Project Details connectionGap defaults1m, persists, positive<=100, cannot be overridden by request/job options | IMPLEMENTED; backend51source/process and191regression PASS; actualnewimage/API pending |
+| PF5-GAP-02 |Gap edits force reroute/staleness; three allowance-only edits retain geometry and recalculate design | IMPLEMENTED; sourcechecksPASS; final23live pending |
+| PF4-GAP-01 |Separate gap card,3decimal precision, exact labelled formula/current Details values; read-only lookup gap | IMPLEMENTED;147frontendpre-finalguard and finalPFtab17/tsc/lintPASS; computer-use pending |
+| PF8-CLEAN-02 |Only verified older same-owner/project backup payload may be retired after verified replacement, no root/escape/junction targets |17safetycontrolsPASS; actualreplacementdrill/cleanup pending |
+| PF8-USER-01 |Human checks actual generated routes and lengths and supplies acceptance or corrections | PENDING_USER_REVIEW |
+| PF2-GRAPH-01/fullplant |Reusable graph preparation, complete plant capture and capacity | NOT_IMPLEMENTED / NOT_RUN at previously reported scopes |
+
+No original source/app/data update or publication is authorized. Later actual
+API/UI/operations results append or link to the new revision report.

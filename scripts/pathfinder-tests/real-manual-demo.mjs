@@ -30,6 +30,8 @@ const api = async (method, suffix, body) => {
   assert.ok(response.ok, method + ' ' + suffix + ' failed (' + response.status + '): ' + String(value?.code ?? value?.message ?? 'request rejected'));
   return value;
 };
+let seedingLoginRevoked = false;
+try {
 const getState = () => api('GET', base + '/pathfinder/state');
 let state = await getState();
 assert.equal(state.activeModel.modelVersionId, modelId);
@@ -37,7 +39,13 @@ assert.equal(state.artifacts[0]?.snapshotSha256, captured.snapshotSha256, 'Retai
 const settingsBefore = state.settings;
 const types = (await api('GET', base + '/cable-types')).cableTypes;
 let type = types.find(item => item.name === 'PF Manual converted-network demo');
-if (!type) type = (await api('POST', base + '/cable-types', {name:'PF Manual converted-network demo',purpose:'Explicit local QA fixture; not a business cable or an engineering acceptance claim.'})).cableType;
+if (!type) {
+  const catalogue = (await api('GET', '/api/materials/cable-types')).cableTypes;
+  let material = catalogue.find(item => item.name === 'PF Manual converted-network demo');
+  if (!material) material = (await api('POST', '/api/materials/cable-types', {name:'PF Manual converted-network demo',
+    purpose:'Explicit local QA fixture; not a business cable or an engineering acceptance claim.'})).cableType;
+  type = (await api('POST', base + '/cable-types', {name:material.name,sourceMaterialCableTypeId:material.id})).cableType;
+}
 const locationIds = [];
 for (const [index, name] of [fromName, toName].entries()) {
   state = await getState();
@@ -94,6 +102,13 @@ const output = path.join(root, 'docs/pathfinder/evidence/manual-settings', 'real
 await fs.mkdir(path.dirname(output), {recursive:true});
 const revoke = await fetch(origin + '/api/viewer-sessions/revoke-login', {method:'POST',headers:{authorization:'Bearer ' + token,origin}});
 assert.equal(revoke.status, 204, 'Revoke only this seeding login; keep the browser login separate.');
+seedingLoginRevoked = true;
 receipt.seedingLoginRevoked = true;
 await fs.writeFile(output, JSON.stringify(receipt,null,2) + '\n', {flag:'wx'});
 console.log(JSON.stringify({status:receipt.status,output,projectId,cableId:cable.id,proposalId:proposal.id,calculationStatus:proposal.status,applyPerformed:false,settingsChanged:false}));
+} finally {
+  if (!seedingLoginRevoked) {
+    const response = await fetch(origin + '/api/viewer-sessions/revoke-login', {method:'POST',headers:{authorization:'Bearer ' + token,origin}});
+    assert.equal(response.status, 204, 'Seeding login cleanup must succeed even when setup fails.');
+  }
+}

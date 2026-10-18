@@ -13,11 +13,11 @@ export function PathFinderResults({ pf, selectedCableId }: Props) {
   const [reviewId, setReviewId] = useState<string | null>(null), [applyKey, setApplyKey] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null), data = pf.data;
-  const operation = useRef(0);
-  useEffect(() => { operation.current++; setProposal(null); setReviewId(null); setApplyKey(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); }, [selectedCableId, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
+  const operation = useRef(0), reviewContext = useRef('');
+  useEffect(() => { operation.current++; setProposal(null); setReviewId(null); setApplyKey(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { operation.current++; }; }, [selectedCableId, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
   const selectedRevision = data?.cables.find(cable => cable.id === proposal?.cableId)?.cableWriteRevision;
   const settingsKey = JSON.stringify(data?.settings);
-  useEffect(() => { setReviewId(null); setApplyKey(null); setApplied(false); }, [data?.registryRevision, data?.activeModel.selectionRevision, settingsKey, selectedRevision]);
+  useEffect(() => { setReviewId(null); setApplyKey(null); setApplied(false); setNotice(null); }, [data?.registryRevision, data?.activeModel.selectionRevision, settingsKey, selectedRevision]);
   const automaticKey = data ? JSON.stringify([data.registryRevision, data.activeModel, data.settings, data.artifacts.map(value => value.id), data.cables.map(value => [value.id, value.cableWriteRevision])]) : null;
   const hasReadyCable = data?.cables.some(cable => cable.fromMatch.status === 'matched' && cable.toMatch.status === 'matched' && ['MV', 'LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '')) ?? false;
   useEffect(() => {
@@ -40,16 +40,20 @@ export function PathFinderResults({ pf, selectedCableId }: Props) {
   };
   const confirmReview = async () => {
     if (!proposal || !pathDisplayed || !effectiveCanApply || stale || pf.busy) return;
-    const reviewed = await pf.reviewProposal(proposal); if (!reviewed) return;
+    const current = operation.current, context = reviewContext.current, target = proposal;
+    const reviewed = await pf.reviewProposal(target);
+    if (!reviewed || operation.current !== current || reviewContext.current !== context || reviewed.proposal.id !== target.id || reviewed.proposal.proposalHash !== target.proposalHash) return;
     setProposal(reviewed.proposal); setReviewId(reviewed.reviewId); setApplyKey(crypto.randomUUID()); setNotice('Review confirmed for this immutable proposal.');
   };
   const apply = async () => {
     if (!proposal || !reviewId || !applyKey || !effectiveCanApply || stale) return;
+    const current = operation.current;
     const result = await pf.action(`/proposals/${proposal.id}/apply`, { idempotencyKey: applyKey, reviewId, expectedCableWriteRevision: proposal.cableWriteRevision });
-    if (result) { setApplied(true); setNotice('Routing and design length applied together. Installed length was preserved.'); }
+    if (result && operation.current === current) { setApplied(true); setNotice('Routing and design length applied together. Installed length was preserved.'); }
   };
   const summary = data?.proposals.find(value => value.id === proposal?.id), stale = proposal?.stale || summary?.stale || false;
   const effectiveCanApply = summary && summary.proposalHash === proposal?.proposalHash ? summary.canApply : proposal?.canApply;
+  reviewContext.current = JSON.stringify([selectedCableId, data?.activeModel, data?.registryRevision, settingsKey, selectedRevision, proposal?.id, proposal?.proposalHash, stale, effectiveCanApply]);
   const proposals = (data?.proposals ?? []).filter(value => !selectedCableId || value.cableId === selectedCableId);
   return <section className={styles.result} aria-label="PathFinder calculations">
     <h3>Calculate and review</h3>

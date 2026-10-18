@@ -1,5 +1,12 @@
 # Graph preparation and capacity boundary
 
+Current acceptance note,18October2026: the user chose manual result review
+instead of a mandatory native oracle; see
+[the revised decision](20-manual-review-and-project-gap.md). Historical native
+limitations below remain recorded facts, but are no longer a prerequisite for
+this local manual-review workflow. This decision does not implement graph
+reuse or prove whole-plant capacity.
+
 Read-only independent review on 18 October 2026, against the current isolated
 worktree inheriting `c95ad56ebbd6b020966fa0690c98c37516df1db1` and the unchanged
 eleven canonical Routing source files. This is an implementation limitation,
