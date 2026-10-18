@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "pathfinder.manual-settings.computer-use.v1",
+  "recordedAtUtc": "2026-10-18T07:00:52Z",
+  "sourceCheckpoint": "cfdcd3f5974636737ff34acec0fc3de391d35ab1",
+  "origin": "http://127.0.0.1:5190",
+  "images": {
+    "api": "sha256:286e0d43fb12d23c77727eb2c899eac161571d98998e0eb0f212911006adb500",
+    "web": "sha256:500345218d8c3f4629725ce6b1d3cbeeb6dc12f7b4cb1f06d5b92ecf8949ba64"
+  },
+  "scope": "Actual in-app browser actions after corrected23 controls and fixture cleanup, on final candidate. Gap-card persistence checks remain in the earlier dated UI receipt; they are not claimed as rerun here.",
+  "projectId": "105913f0-7ee4-45f2-bfd8-2c01f9be9f2a",
+  "cableId": "a49521ad-e4e1-47d9-b3b2-948375a83905",
+  "checks": [
+    { "name": "Fresh reload and ready real converted proposal show geometry35.30345579516123m/design45m,0m approaches,4gaps", "status": "PASS" },
+    { "name": "Exact yellow path, filled Ghost and original green/cyan tray colors visible", "status": "PASS" },
+    { "name": "Confirm proposal review succeeds and enables separate Apply", "status": "PASS", "screenshot": "final-review-enables-apply.png" },
+    { "name": "Full reload and reselect clears frontend review eligibility; after protected path acknowledgement Confirm enabled and Apply disabled", "status": "PASS", "screenshot": "final-ready-for-human-review.png" }
+  ],
+  "deferredResponseControls": "19/19 affected frontend tests, including two deferred-response cases, in focused-review-followups-20261018T0652Z.json; browser network delay was not injected",
+  "actualDemoApplyPerformed": false,
+  "demoWriteReadback": "cleanup-readback-20261018T065834Z.json: routing/designNULL,0Applyreceipts; gap1/S3/E5/P10",
+  "currentViewport": "Ready PF-MANUAL-DEMO proposal, human review not confirmed by the user",
+  "humanAcceptance": "PENDING",
+  "nativeComparison": "NOT_PERFORMED / NOT_REQUIRED_BY_USER",
+  "originalResourcesChanged": false,
+  "credentialsRecorded": false,
+  "runtimeMaintenanceReleasedAfterCheck": true
+}

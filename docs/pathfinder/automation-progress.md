@@ -13,37 +13,54 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Active revision — user manual validation and project gap
+## Current delivery — project gap and manual real-result review
 
-User18October2026confirmed exactNWD/no licence and chose manual result review
-instead of required Navisworks reference. This supersedes the native prerequisite
-in historical sections below. No native parity PASS/user acceptance is invented.
-Newbranch `pf-manual-validation-settings-20261018` inherits5485283. Threewriters
-own server/frontend/runtime separately; parentdocs/UI/coordination. Current
-task is explicit ProjectDetails connectionGap default1m, server-owned tolerance
-and hashes/fullroute recomputation, existing3allowances, formula-card explanation,
-and existing manual per-proposal Review+Apply for realresults with honest scope.
-See `20-manual-review-and-project-gap.md` and
-`handoffs/PF-project-settings-manual-review.md`. Sourcefrozen: backend51/51
-engine/settings/registry and191/191 project/access/cable regressions PASS,
-serverbuildPASS; frontend147/147 before finaleligibilityguard and finalaffected
-PFtab17/17/tsc/lintPASS; runtimeownership/path17/17PASS. Checkpoint873afeb
-contains the frozen production source. Own APIe8844ae8/web a71c01cf built/start
-PASS; actual23/23SQL/HTTP and fixture cleanup PASS. Computer-use confirms
-default1, invalid0 rejection, saved0.25 persistence/reload, formula card and
-actual converted PF-MANUAL-DEMO35.30345579516123m/design45m, filledGhost/yellow,
-explicit Confirm enables Apply and reload clears that eligibility. No real
-demo Apply was performed; human acceptance remains PENDING. Source and image
-bindings are in evidence/manual-settings/ and runtime/manual-candidate-health-1792305394069.json.
-At06:52UTC both review follow-ups are frozen: frontend19/19 plus tsc/lintPASS
-fences the reproduced stale panel (no observed Apply bypass); backend17boundary
-+16actualNode/.NET PASS plus serverbuild makes DTO/Apply agree on existing
-canonical0..1,000,000m limit. Finalbackup remains held: checkpoint locally,
-build/start one candidate, run expanded23live, verify affected UI, then perform
-replacement backup/restore/drill and retire only superseded owned payloads.
-Heartbeat updatedACTIVE throughapp with latesthuman
-decision appended, to avoid stopping on superseded native requirement.
-No original resources are changed; no push/PR/merge/deployment/native launch.
+The latest user decision supersedes the earlier native-oracle prerequisite:
+manual inspection of generated routes/lengths is the chosen acceptance path.
+Native parity is NOT_PERFORMED / NOT_REQUIRED_BY_USER, never PASS. The exact
+source filename is confirmed by the user. Human acceptance remains PENDING.
+
+- Isolated branch: pf-manual-validation-settings-20261018. Settings/manual review
+  checkpoint873afeb; production follow-upsfeac4eb; corrected live test driver
+  and actual candidate checkpointcfdcd3f5974636737ff34acec0fc3de391d35ab1.
+  Later commits deliver reports/evidence only. Inspect live HEAD/status first.
+- Current5190 API286e0d43/web50034521 are healthy, rebuilt/restarted only in the
+  owned stack. Details connectionGap default1m is persisted and authoritative;
+  the three design allowances stay in Details; the formula card distinguishes
+  legacy tray estimate and exact PathFinder math. Real Review+Apply is explicit,
+  per proposal, with manual provenance and all current-state/write guards.
+- Source checks: backend51process/settings plus191regressions at873afeb;
+  final17boundary+16actualNode/.NET, frontend19affected plus tsc/lint PASS;
+  earlier147frontend before follow-ups; runtime safety17PASS. These are separate
+  scoped runs, not a new aggregate. Core/frozen source bytes unchanged.
+- Final actual23SQL/HTTP and cleanup PASS on cfd/286e. Earlier22/23 test-baseline
+  failure is retained separately; only test baseline ordering was corrected.
+- Computer-use PASS: gap1/invalid0/0.25save+reload, formula/current values,
+  read-only lookup; final real proposal35.30345579516123m/design45m, filledGhost,
+  original tray colors/yellow; Confirm enables Apply, reload/reselect resets it.
+  Real PF-MANUAL-DEMO has no Apply; routing/designNULL and0Applyreceipts.
+- Final combined cold backup/restore/session/crash drill PASS: backup2ae6f51b,
+  pf-manual-backup-20261018-0703 plus private companion retained;684resources,
+  13PFfiles, actual worker interruption/natural retry64/64/no duplicates/noApply.
+  Extra target retired to0containers/volumes/networks. Old433's8payloads
+  1,346,316,196bytes and6unusedownimages removed; no physical layer savings
+  inferred. Finalhealth200 and5-group preservation audit PASS. Original3trees,
+  dirty reference files,13originalcontainer IDs/images/starttimes preserved.
+- Source manifest810files d0ad1efa; final preservation receipt
+  evidence/pf8/isolation-1792307166050.json. Exact source/image/test/backup/cleanup
+  receipts and screenshots are linked in21-manual-review-settings-report.md.
+- Two historic policy-denied scratch children remain visible/untracked and were
+  not retried. No push/PR/merge/deployment/original app or data write occurred.
+- Next handoff: handoffs/PF-user-manual-review.md, prepared using
+  prepare-stage-handoff and actual local/remote evidence. Human review cannot
+  be impersonated by another technical run. Whole-plant capacity/category
+  completeness and reusable graph remain explicitly unperformed/unimplemented.
+
+Technical delivery is ready for the user's manual review. The heartbeat is
+being paused through the app after the local report/evidence commit; its exact
+stored result will be recorded separately. Do not repeat the old licence refusal
+or unchanged completed tests. Resume from concrete feedback/remaining measured
+scope while preserving the original installation and accepted algorithm.
 
 ## Latest wakeup audit — 18 October 2026, 05:38 UTC
 

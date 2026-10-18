@@ -5,6 +5,13 @@ project, images, networks, PostgreSQL database, MinIO storage, staging and
 PathFinder artifact volumes. The original WFC application and its thirteen
 containers are outside this lifecycle. There is no push, merge or deployment.
 
+For the latest18October project-gap/manual-review candidate, use
+[the current delivery report](../21-manual-review-settings-report.md) for exact
+images, retained backup and verification. The older operational receipts near
+the end of this page retain their historical scope. Native comparison is no
+longer a prerequisite for the user-selected manual per-proposal Review+Apply;
+it has not been performed or reported as PASS.
+
 The default address is **http://127.0.0.1:5190**. Only the web service publishes a
 port, bound to IPv4 loopback. API, database, object storage and calculation inputs
 remain on the project's private Docker network. The front network permits local
@@ -247,8 +254,9 @@ snapshot. No accepted artifact is written. The recorded check is
 This does not establish a successful 64MiB capture or 256MiB capacity benchmark.
 
 After a combined final drill and its retained backup both verify successfully,
-`cleanup-obsolete.mjs` can retire only the exact superseded initial PF3 backup
-archives and unreferenced images carrying this installation's ownership:
+`cleanup-obsolete.mjs` can retire only a verified older same-owner/project
+backup's exact payload files and unreferenced images carrying this
+installation's ownership:
 
 ```powershell
 node scripts/pathfinder-local/cleanup-obsolete.mjs `
@@ -262,7 +270,7 @@ and non-forced own-image removals, with no recursive parent deletion, cache
 prune or removal of capture/native inputs. The primary runtime, final backup,
 private companion and both previously denied scratch directories remain.
 
-## Verification status
+## Historical verification — before project-gap/manual-review revision
 
 The current own safety suite passes nine configuration/ownership/path/artifact
 controls. The protected capture module passes 15 tests, including its strict
@@ -279,6 +287,12 @@ Its retained backup is
 outside that directory. The eight captured data/image files total
 1,346,316,196 bytes. Readback covers both selected-model versions, 684 resources
 (878,015,606 bytes), and all ten PathFinder artifact files (2,533,791 bytes).
+
+That433 backup's payloads have since been retired after the newer manual-review
+candidate's verified replacement. They are no longer a restorable archive set.
+The current retained backup is pf-manual-backup-20261018-0703,
+ID2ae6f51b-34ee-46d4-8594-757f882fd216; exact images, final receipts and its
+separate private companion are described in [the current report](../21-manual-review-settings-report.md).
 
 The source Viewer cookie remained valid before/after its own cold backup and
 after the separate target drill. The copied cookie was rejected on the target
@@ -309,7 +323,9 @@ the primary application still returns 200 after the drill and cleanup, with
 the exact retained candidate images, four own volumes, private topology,
 loopback-only port and actual configured memory/process ceilings.
 
-This is same-host/platform operational acceptance. Cross-computer restoration
-is NOT_RUN. Native/converted engineering parity remains unaccepted as documented
-in the PF-2/PF-7 reports; operational PASS does not promote the real model or
-authorize engineering Apply.
+This was same-host/platform operational acceptance at the recorded images.
+Cross-computer restoration was NOT_RUN. Native/converted engineering parity
+was unaccepted under the former criterion. The later user decision and current
+real-result manual Review+Apply policy are in
+[20-manual-review-and-project-gap.md](../20-manual-review-and-project-gap.md);
+the historical operational PASS does not itself establish human acceptance.

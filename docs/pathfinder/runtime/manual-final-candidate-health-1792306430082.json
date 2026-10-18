@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T06:53:47.076Z",
+  "scope": "Isolated final context-fence and bounded-eligibility candidate startup. Only owned API/web/storage-ready recreated; no original resources touched.",
+  "buildObservedHead": "feac4eb8b85f38ef4f9a0ec6f53845e8df2bb033",
+  "origin": "http://127.0.0.1:5190",
+  "healthStatus": 200,
+  "health": {
+    "status": "ok"
+  },
+  "images": {
+    "api": "sha256:21217ed7aff55b9a101f65bd2e6eb75f7c5d818318a25c6ea52a8ced14baeb55",
+    "web": "sha256:0f51326f43f82dbcbbae64ce8fe7763c6abe101a131f0130a3133c1d696ce280"
+  },
+  "build": {
+    "finishedAt": "2026-10-18T06:52:56.623Z",
+    "files": [
+      {
+        "path": "docker/pathfinder.Dockerfile",
+        "bytes": 2082,
+        "sha256": "682018b4ff47990ea58b5657bccf434a948a16bdd99d06d0a84cd38ed53d0bc4"
+      },
+      {
+        "path": "docker/pathfinder.Dockerfile.dockerignore",
+        "bytes": 402,
+        "sha256": "68e8f31e1fa9e2b47e02f7184ad40d866387da57bdecc216284f83fce18c0a51"
+      },
+      {
+        "path": "docker/pathfinder.compose.yml",
+        "bytes": 4140,
+        "sha256": "4d50d6e8ef39ca8d317ba31ad28fb0061688f862078c641c9f4787aac523202e"
+      },
+      {
+        "path": "docker/pathfinder.nginx.conf",
+        "bytes": 6091,
+        "sha256": "562778962e2d97fe6a8265a0f5e5519e4dd919f9e7582e6f052d7d283e11058b"
+      }
+    ]
+  },
+  "topology": {
+    "status": "PASS",
+    "project": "wfc-pathfinder-local",
+    "origin": "http://127.0.0.1:5190",
+    "services": [
+      "postgres",
+      "minio",
+      "storage-ready",
+      "api",
+      "web"
+    ],
+    "volumes": [
+      "postgres",
+      "minio",
+      "staging",
+      "pathfinder"
+    ],
+    "privateBackend": true,
+    "publishedPorts": [
+      5190
+    ]
+  },
+  "resources": {
+    "containers": [
+      {
+        "role": "web",
+        "id": "5d41bfdf68a8db4c7d97ef429c09d98da0797d1d8a7dedfe057f9588c86cc631",
+        "image": "sha256:0f51326f43f82dbcbbae64ce8fe7763c6abe101a131f0130a3133c1d696ce280",
+        "name": "wfc-pathfinder-local-web-1",
+        "running": true,
+        "startedAt": "2026-10-18T06:53:20.293216878Z"
+      },
+      {
+        "role": "api",
+        "id": "ce13a2b3d3fc51272e57957ef99618cce94203eb7453d1752ea965a49ed7befe",
+        "image": "sha256:21217ed7aff55b9a101f65bd2e6eb75f7c5d818318a25c6ea52a8ced14baeb55",
+        "name": "wfc-pathfinder-local-api-1",
+        "running": true,
+        "startedAt": "2026-10-18T06:53:14.506950386Z"
+      },
+      {
+        "role": "storage-ready",
+        "id": "5ded696481182874c23d11d522ffe85929d5b857490a3ef6507f5ff7d25b22a8",
+        "image": "sha256:21217ed7aff55b9a101f65bd2e6eb75f7c5d818318a25c6ea52a8ced14baeb55",
+        "name": "wfc-pathfinder-local-storage-ready-1",
+        "running": false,
+        "startedAt": "2026-10-18T06:53:13.79842661Z"
+      },
+      {
+        "role": "postgres",
+        "id": "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9",
+        "image": "sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751",
+        "name": "wfc-pathfinder-local-postgres-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:03:12.60010978Z"
+      },
+      {
+        "role": "minio",
+        "id": "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820",
+        "image": "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e",
+        "name": "wfc-pathfinder-local-minio-1",
+        "running": true,
+        "startedAt": "2026-10-18T02:37:54.346155692Z"
+      }
+    ],
+    "volumes": [
+      "wfc-pathfinder-local_postgres",
+      "wfc-pathfinder-local_minio",
+      "wfc-pathfinder-local_staging",
+      "wfc-pathfinder-local_pathfinder"
+    ],
+    "networks": [
+      {
+        "id": "7e58e2a7f9544ca1b5efc7ae9773e69088168620ad34a6afb7abcea2a26b6cc0",
+        "name": "wfc-pathfinder-local_front"
+      },
+      {
+        "id": "77abead34a6b25bce147efa3a1eacd67d9a9b110028ea634ab904768e3e2274d",
+        "name": "wfc-pathfinder-local_backend"
+      }
+    ]
+  }
+}

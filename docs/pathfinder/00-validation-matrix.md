@@ -171,3 +171,23 @@ test results. See [current decision](20-manual-review-and-project-gap.md).
 
 No original source/app/data update or publication is authorized. Later actual
 API/UI/operations results append or link to the new revision report.
+
+## Final project-gap/manual-review delivery — 18 October 2026,07:06 UTC
+
+Production follow-upsfeac4eb; corrected test-driver/image checkpointcfdcd3f.
+Actual API286e0d43/web50034521, source810manifestd0ad1efa. The earlier22/23
+test-baseline failure is preserved, not relabelled; corrected final23/23PASS.
+See [the scoped report](21-manual-review-settings-report.md) for exact identities,
+counts and receipts. Historical rows above retain their original scope/status.
+
+| ID | Final observed result | Status |
+|---|---|---|
+| PF5-GAP-01/02 |Actual23SQL/HTTP plus earlier51process/settings and191regressions; current stored gap governs jobs/lookup; invalid values refused; gap reroute/ABA staleness and all3allowance design reuse | PASS at fixture scope |
+| PF6-MANUAL-01 |Fresh per-proposal manual Review/atomicApply/provenance/idempotency/install preservation; currentauth/dependency fences; actual over-limit design cannot be reviewed/applied | PASS in own disposable fixture; actual real demo unapplied |
+| PF4-GAP-01 |Actual1default card/invalid0/0.25savedreload/formula/read-onlylookup; final browser Confirm enables Apply and reload resets it; final19affected frontend checks | PASS at recorded source/image scopes |
+| PF4-REVIEW-ASYNC |Deferred Review cannot restore another cable's old panel; late Apply notice fenced; prior reproduced case had Applydisabled | PASS; no observed authorization bypass claimed |
+| PF8-OPS/SESSION/RECOVERY |Final backup2ae6f51b, samehostrestore/684resources/13PFfiles, cookie/JWT fences, actual interrupted worker recovers64/64/no duplicates/noApply, extra target0resources | PASS |
+| PF8-CLEAN/PRESERVE |8oldpayloads1,346,316,196bytes and6unusedownimages removed; final5-group original-source/container/pinned preservation | PASS for new own cleanup; inherited denied scratch children retained BLOCKED |
+| PF8-USER-01 |Human reviews new generated route/length and decides whether to accept | PENDING_USER_REVIEW |
+| PF7-PARITY-01 |Native comparison declined as mandatory acceptance by user | NOT_PERFORMED / NOT_REQUIRED_BY_USER |
+| PF2-GRAPH-01/fullplant |Reusable graph, wholeplant capture/category completeness/capacity; crosscomputer restore/host networkdisconnect | NOT_IMPLEMENTED / NOT_RUN as scoped in report |
