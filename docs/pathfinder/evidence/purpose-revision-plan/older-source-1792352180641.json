@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "pathfinder.revision-plan.older-source.v1",
+  "status": "PASS",
+  "checkedAt": "2026-10-18T19:36:20.613Z",
+  "source": {
+    "name": "Aalborg_ACS_CABLETRAY_07_10_24.nwd",
+    "bytes": 69785194,
+    "sha256": "cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36",
+    "sha1": "2d7b9ffa98479e65d7512e72b907d7a59587a29d",
+    "sourceStampUnchanged": true
+  },
+  "userReportedChanges": [
+    "tray purposes changed",
+    "trays moved",
+    "equipment moved"
+  ],
+  "changesIndependentlyVerified": false,
+  "conversion": "NOT_RUN",
+  "comparison": "NOT_RUN",
+  "nativeOracle": "WAIVED_USER_NO_LICENSE",
+  "work": "pathfinder-engine/.scratch/older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d"
+}

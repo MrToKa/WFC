@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-8-copied-project-recovery-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-plan-purpose-revisions-20261018` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -13,7 +13,43 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current continuation — actual business input and full-model candidate coverage
+## Current continuation — purpose/revision plan and older-model preparation
+
+The new request is a detailed implementation plan, plus explicitly authorized
+Autodesk conversion of the older NWD for later revision comparison. The new
+local planning branch inherits `c81328e0c6127d6633d15be51126128e2f8036bd`.
+See [plan32](32-purpose-and-revision-plan.md) and the prepared, NOT_EXECUTED
+[PF-R0 assignment](handoffs/PF-R0-purpose-revisions.md). PF-R0–PF-R10, including
+R2a, remain PLANNED; no WFC feature code/runtime/database changes are made here.
+
+Final user clarification: Left/Right affects ONLY tray drawings. Same-side types
+are jointly distributed into compatible bundles; occupied left AND right sides
+get an automatic divider. Existing default sides remain. 3D selected route,
+yellow line/Filled Ghost and engineering lengths are unchanged by this setting.
+Routing permissions and drawing sides are separate project-wide settings.
+
+The older source is actually verified: 69,785,194 bytes, SHA256
+`cf61d87b355b3d77d4c6f71a06183fb1d225cbe1bd937b60783d156aedc4df36`.
+Owned isolated conversion work is under
+`pathfinder-engine/.scratch/older-model-3bf01791-b0b5-427d-b2f7-4091d39abe3d`.
+The current authenticated Free/team/hub/application review is source-bound;
+private account captures and credentials stay outside Git. Conversion outcome
+and exact verification scope are recorded in the
+[older-model report](33-older-model-preparation.md) and its evidence.
+The current model is not replaced or imported by this preparation.
+Actual derivative conversion PASS with exactly one submit. First download stopped
+on COST_EXPIRED; a genuinely refreshed proof has zero mutation authority.
+Read-only download is active from20:16:12UTC, invocation
+`ad20ba27-4831-49f8-bb4a-7c0fd9c75080` / exec session98950. Shared own runner.lock
+prevents duplicate execution. Read the report/journals before any continuation.
+
+Independent source review of the plan/handoff PASS. New implementation checks,
+actual cross-revision geometry comparison and engineering acceptance NOT_RUN.
+The automatic task remains deleted; the planning request does not restart it.
+Next implementation step is PF-R0 contracts, then the actual tray catalog in R1.
+The old human-only handoff below is historical and does not cover this new scope.
+
+## Previous operational delivery — actual business input and full-model candidate coverage
 
 Stage31 technically COMPLETE on `pf-8-copied-project-recovery-local-20261018`,
 implementation baseline `94f83c11747e3ff6d3efb7b8064ef115b364c5df`; technical
