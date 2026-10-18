@@ -1,0 +1,448 @@
+TAP version 13
+# Subtest: exact source profile remains readable
+ok 1 - exact source profile remains readable
+  ---
+  duration_ms: 0.8608
+  type: 'test'
+  ...
+# Subtest: fresh restored target has explicit archive and fence proof
+ok 2 - fresh restored target has explicit archive and fence proof
+  ---
+  duration_ms: 0.2473
+  type: 'test'
+  ...
+# Subtest: generic-restored source is never a retirement target
+ok 3 - generic-restored source is never a retirement target
+  ---
+  duration_ms: 0.4307
+  type: 'test'
+  ...
+# Subtest: source owner cannot be relabelled into target
+ok 4 - source owner cannot be relabelled into target
+  ---
+  duration_ms: 0.5982
+  type: 'test'
+  ...
+# Subtest: old5190 primary project is refused
+ok 5 - old5190 primary project is refused
+  ---
+  duration_ms: 0.1761
+  type: 'test'
+  ...
+# Subtest: source project is refused even on5192
+ok 6 - source project is refused even on5192
+  ---
+  duration_ms: 0.0961
+  type: 'test'
+  ...
+# Subtest: other target port is refused
+ok 7 - other target port is refused
+  ---
+  duration_ms: 0.1072
+  type: 'test'
+  ...
+# Subtest: foreign runtime directory is refused
+ok 8 - foreign runtime directory is refused
+  ---
+  duration_ms: 0.1381
+  type: 'test'
+  ...
+# Subtest: wrong archive is refused
+ok 9 - wrong archive is refused
+  ---
+  duration_ms: 0.1595
+  type: 'test'
+  ...
+# Subtest: missing restore inventoriesEqual refuses cleanup
+ok 10 - missing restore inventoriesEqual refuses cleanup
+  ---
+  duration_ms: 0.2111
+  type: 'test'
+  ...
+# Subtest: missing restore jwtRotated refuses cleanup
+ok 11 - missing restore jwtRotated refuses cleanup
+  ---
+  duration_ms: 0.1369
+  type: 'test'
+  ...
+# Subtest: missing restore sessionsFenced refuses cleanup
+ok 12 - missing restore sessionsFenced refuses cleanup
+  ---
+  duration_ms: 0.1349
+  type: 'test'
+  ...
+# Subtest: only recorded fully verified target may retire
+ok 13 - only recorded fully verified target may retire
+  ---
+  duration_ms: 0.1371
+  type: 'test'
+  ...
+# Subtest: unverified target record refuses retirement
+ok 14 - unverified target record refuses retirement
+  ---
+  duration_ms: 0.1349
+  type: 'test'
+  ...
+# Subtest: record path mismatch refuses retirement
+ok 15 - record path mismatch refuses retirement
+  ---
+  duration_ms: 0.1632
+  type: 'test'
+  ...
+# Subtest: record project mismatch refuses retirement
+ok 16 - record project mismatch refuses retirement
+  ---
+  duration_ms: 0.4066
+  type: 'test'
+  ...
+# Subtest: source identity record is mandatory
+ok 17 - source identity record is mandatory
+  ---
+  duration_ms: 0.1373
+  type: 'test'
+  ...
+# Subtest: unknown profile kind refuses both paths
+ok 18 - unknown profile kind refuses both paths
+  ---
+  duration_ms: 0.1271
+  type: 'test'
+  ...
+# Subtest: hash helper agrees with a known SHA256 vector
+ok 19 - hash helper agrees with a known SHA256 vector
+  ---
+  duration_ms: 1.1346
+  type: 'test'
+  ...
+# Subtest: plain synthetic provenance and project calculation inputs are allowed
+ok 20 - plain synthetic provenance and project calculation inputs are allowed
+  ---
+  duration_ms: 0.5407
+  type: 'test'
+  ...
+# Subtest: safe nested JSON response bodies are scanned without changing their value
+ok 21 - safe nested JSON response bodies are scanned without changing their value
+  ---
+  duration_ms: 0.1535
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: password
+ok 22 - sensitive nested key is refused: password
+  ---
+  duration_ms: 0.3305
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: token
+ok 23 - sensitive nested key is refused: token
+  ---
+  duration_ms: 0.0851
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: accessToken
+ok 24 - sensitive nested key is refused: accessToken
+  ---
+  duration_ms: 0.063
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: refreshToken
+ok 25 - sensitive nested key is refused: refreshToken
+  ---
+  duration_ms: 0.0734
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: bearer
+ok 26 - sensitive nested key is refused: bearer
+  ---
+  duration_ms: 0.0615
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: cookie
+ok 27 - sensitive nested key is refused: cookie
+  ---
+  duration_ms: 0.1153
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: authorization
+ok 28 - sensitive nested key is refused: authorization
+  ---
+  duration_ms: 0.118
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: jwtSecret
+ok 29 - sensitive nested key is refused: jwtSecret
+  ---
+  duration_ms: 0.072
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: databasePassword
+ok 30 - sensitive nested key is refused: databasePassword
+  ---
+  duration_ms: 0.1099
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: storagePassword
+ok 31 - sensitive nested key is refused: storagePassword
+  ---
+  duration_ms: 0.049
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: secret
+ok 32 - sensitive nested key is refused: secret
+  ---
+  duration_ms: 0.042
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: secretSha256
+ok 33 - sensitive nested key is refused: secretSha256
+  ---
+  duration_ms: 0.0367
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: settings
+ok 34 - sensitive nested key is refused: settings
+  ---
+  duration_ms: 0.0441
+  type: 'test'
+  ...
+# Subtest: sensitive nested key is refused: credentials
+ok 35 - sensitive nested key is refused: credentials
+  ---
+  duration_ms: 0.0339
+  type: 'test'
+  ...
+# Subtest: authentication key guard is case insensitive
+ok 36 - authentication key guard is case insensitive
+  ---
+  duration_ms: 0.0623
+  type: 'test'
+  ...
+# Subtest: a sensitive key in stringified JSON is refused
+ok 37 - a sensitive key in stringified JSON is refused
+  ---
+  duration_ms: 0.0614
+  type: 'test'
+  ...
+# Subtest: a sensitive key in twice-stringified nested JSON is refused
+ok 38 - a sensitive key in twice-stringified nested JSON is refused
+  ---
+  duration_ms: 0.0512
+  type: 'test'
+  ...
+# Subtest: sensitive value guard refuses bearer
+ok 39 - sensitive value guard refuses bearer
+  ---
+  duration_ms: 0.0573
+  type: 'test'
+  ...
+# Subtest: sensitive value guard refuses case-insensitive bearer
+ok 40 - sensitive value guard refuses case-insensitive bearer
+  ---
+  duration_ms: 0.0379
+  type: 'test'
+  ...
+# Subtest: sensitive value guard refuses JWT-shaped text
+ok 41 - sensitive value guard refuses JWT-shaped text
+  ---
+  duration_ms: 0.0372
+  type: 'test'
+  ...
+# Subtest: sensitive value guard refuses Viewer cookie
+ok 42 - sensitive value guard refuses Viewer cookie
+  ---
+  duration_ms: 0.0303
+  type: 'test'
+  ...
+# Subtest: sensitive value guard refuses case-insensitive Viewer cookie
+ok 43 - sensitive value guard refuses case-insensitive Viewer cookie
+  ---
+  duration_ms: 0.0302
+  type: 'test'
+  ...
+# Subtest: malformed JSON-shaped benign string does not bypass a sensitive raw value
+ok 44 - malformed JSON-shaped benign string does not bypass a sensitive raw value
+  ---
+  duration_ms: 0.0412
+  type: 'test'
+  ...
+# Subtest: malformed JSON-shaped benign string is allowed without inventing fields
+ok 45 - malformed JSON-shaped benign string is allowed without inventing fields
+  ---
+  duration_ms: 0.0508
+  type: 'test'
+  ...
+# Subtest: depth64 is allowed but one deeper node is refused
+ok 46 - depth64 is allowed but one deeper node is refused
+  ---
+  duration_ms: 0.221
+  type: 'test'
+  ...
+# Subtest: wide untrusted JSON is bounded by scanned node count
+ok 47 - wide untrusted JSON is bounded by scanned node count
+  ---
+  duration_ms: 122.1969
+  type: 'test'
+  ...
+# Subtest: a cyclic non-JSON input is still bounded
+ok 48 - a cyclic non-JSON input is still bounded
+  ---
+  duration_ms: 0.1687
+  type: 'test'
+  ...
+# Subtest: exact67-event synthetic chain matches independently constructed receipt pins
+ok 49 - exact67-event synthetic chain matches independently constructed receipt pins
+  ---
+  duration_ms: 1.4812
+  type: 'test'
+  ...
+# Subtest: chain verification does not mutate source bytes, event order or receipt
+ok 50 - chain verification does not mutate source bytes, event order or receipt
+  ---
+  duration_ms: 1.0818
+  type: 'test'
+  ...
+# Subtest: a missing event is refused even when all remaining records are valid
+ok 51 - a missing event is refused even when all remaining records are valid
+  ---
+  duration_ms: 0.3121
+  type: 'test'
+  ...
+# Subtest: an additional event is refused
+ok 52 - an additional event is refused
+  ---
+  duration_ms: 0.3432
+  type: 'test'
+  ...
+# Subtest: receipt must independently assert exactly67 events
+ok 53 - receipt must independently assert exactly67 events
+  ---
+  duration_ms: 0.2318
+  type: 'test'
+  ...
+# Subtest: non-array event input is refused
+ok 54 - non-array event input is refused
+  ---
+  duration_ms: 0.3604
+  type: 'test'
+  ...
+# Subtest: event filesystem order is verified
+ok 55 - event filesystem order is verified
+  ---
+  duration_ms: 0.4078
+  type: 'test'
+  ...
+# Subtest: event filename is exact and does not accept path traversal
+ok 56 - event filename is exact and does not accept path traversal
+  ---
+  duration_ms: 0.323
+  type: 'test'
+  ...
+# Subtest: event filename requires zero padding and exact suffix
+ok 57 - event filename requires zero padding and exact suffix
+  ---
+  duration_ms: 0.2246
+  type: 'test'
+  ...
+# Subtest: duplicate event name cannot be substituted for another sequence
+ok 58 - duplicate event name cannot be substituted for another sequence
+  ---
+  duration_ms: 0.2404
+  type: 'test'
+  ...
+# Subtest: event schema is pinned
+ok 59 - event schema is pinned
+  ---
+  duration_ms: 0.2345
+  type: 'test'
+  ...
+# Subtest: event sequence must equal its position
+ok 60 - event sequence must equal its position
+  ---
+  duration_ms: 0.2382
+  type: 'test'
+  ...
+# Subtest: event sequence numeric type is strict
+ok 61 - event sequence numeric type is strict
+  ---
+  duration_ms: 0.2334
+  type: 'test'
+  ...
+# Subtest: the first event is pinned to exact intent bytes
+ok 62 - the first event is pinned to exact intent bytes
+  ---
+  duration_ms: 0.2064
+  type: 'test'
+  ...
+# Subtest: each event references the immediately preceding raw bytes
+ok 63 - each event references the immediately preceding raw bytes
+  ---
+  duration_ms: 0.2799
+  type: 'test'
+  ...
+# Subtest: middle event content tamper is detected by the following link
+ok 64 - middle event content tamper is detected by the following link
+  ---
+  duration_ms: 0.2986
+  type: 'test'
+  ...
+# Subtest: last event content tamper is detected by the trusted final pin
+ok 65 - last event content tamper is detected by the trusted final pin
+  ---
+  duration_ms: 0.3735
+  type: 'test'
+  ...
+# Subtest: raw whitespace-only alteration is detected rather than canonicalized away
+ok 66 - raw whitespace-only alteration is detected rather than canonicalized away
+  ---
+  duration_ms: 0.4605
+  type: 'test'
+  ...
+# Subtest: malformed event JSON fails verification
+ok 67 - malformed event JSON fails verification
+  ---
+  duration_ms: 0.2171
+  type: 'test'
+  ...
+# Subtest: trusted finalSHA cannot be replaced
+ok 68 - trusted finalSHA cannot be replaced
+  ---
+  duration_ms: 0.3389
+  type: 'test'
+  ...
+# Subtest: total raw byte length includes the intent
+ok 69 - total raw byte length includes the intent
+  ---
+  duration_ms: 0.3866
+  type: 'test'
+  ...
+# Subtest: trusted intent SHA is independently checked
+ok 70 - trusted intent SHA is independently checked
+  ---
+  duration_ms: 0.3899
+  type: 'test'
+  ...
+# Subtest: record pin binds event path and directory identity
+ok 71 - record pin binds event path and directory identity
+  ---
+  duration_ms: 0.3588
+  type: 'test'
+  ...
+# Subtest: record pin binds exact independently ordered path-byte-hash projection
+ok 72 - record pin binds exact independently ordered path-byte-hash projection
+  ---
+  duration_ms: 0.4976
+  type: 'test'
+  ...
+# Subtest: altered intent bytes cannot retain the original chain
+ok 73 - altered intent bytes cannot retain the original chain
+  ---
+  duration_ms: 0.2283
+  type: 'test'
+  ...
+1..73
+# tests 73
+# suites 0
+# pass 73
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 243.1262

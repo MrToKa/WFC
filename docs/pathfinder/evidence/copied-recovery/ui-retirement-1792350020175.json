@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.ui-retirement.v1",
+  "status": "PASS",
+  "work": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc",
+  "browser": {
+    "role": "browser",
+    "path": "docs/pathfinder/evidence/copied-recovery/browser-1792349997235.json",
+    "sha256": "375f63df0a010ef02be440414534636ded88263e1790595cc88959af82a8b2e0"
+  },
+  "postUi": {
+    "role": "target-ui-business",
+    "path": "docs/pathfinder/evidence/copied-recovery/audit-1792350000182-90246b71.json",
+    "sha256": "ce1ef7669709e9991e83fc745ba821602d7078aa1ecfd02c75e7d8144bb0393e"
+  },
+  "proof": {
+    "path": "docs/pathfinder/evidence/copied-recovery/proof-target-qualified-1792350000194.json",
+    "sha256": "ebb34c2fabb11983037795af2259d43b74d7937fac08b7eec3bcd46d60ff2224"
+  },
+  "approve": {
+    "path": "docs/pathfinder/evidence/copied-recovery/drill-1792350000961-14ef8ac2.json",
+    "bytes": 4495,
+    "sha256": "1d073c1627d789ac620cca9117ce842606d421be3248e26150178ba48838f0d6"
+  },
+  "retirement": {
+    "path": "docs/pathfinder/evidence/copied-recovery/drill-1792350020124-d40ce548.json",
+    "bytes": 8149,
+    "sha256": "08fb44158e3ef7f7f024979b8f5ac5a193b43c69aaab3c7e126e1172b84d0bba"
+  }
+}

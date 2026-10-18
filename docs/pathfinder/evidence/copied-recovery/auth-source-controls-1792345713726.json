@@ -1,0 +1,105 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.auth-source-controls.v1",
+  "recordedAt": "2026-10-18T17:48:33.679Z",
+  "branch": "pf-8-copied-project-recovery-local-20261018",
+  "head": "94f83c11747e3ff6d3efb7b8064ef115b364c5df",
+  "status": "PASS",
+  "sources": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth.mjs",
+      "bytes": 10050,
+      "sha256": "731b1e80bbfce6dc9251f94b3d9aa277e5a592615213254a37ae2ae419d972f3"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.mjs",
+      "bytes": 18501,
+      "sha256": "273896e9f64771c74578cd5de61936f723ed7fe24ebc387d392126fffff0d1ce"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "bytes": 16939,
+      "sha256": "bd51d2bb9ba4faecd00b7cc42ce233dc2e0ca7d247ecee53530e44f072d47930"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-auth.md",
+      "bytes": 5541,
+      "sha256": "c0b62bb6b228edb3c1160dde56da518fee6466e13c1249c5b584833d6269abe3"
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "bytes": 9303,
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f"
+    }
+  ],
+  "commands": [
+    {
+      "command": "node --test --test-concurrency=1 scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "exitCode": 0,
+      "passed": 45,
+      "failed": 0
+    },
+    {
+      "command": "node --check scripts/pathfinder-copied-recovery/auth.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node --check scripts/pathfinder-copied-recovery/auth-lib.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node --check scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "exitCode": 0
+    }
+  ],
+  "logs": [
+    {
+      "path": "pathfinder-engine/.scratch/recovery-auth-controls-67ef59c1-7c70-4d18-9fe6-0250ebcc1339/controls.tap",
+      "bytes": 3444,
+      "sha256": "95f809993e535ac468f8d6cde6285bb71abed4e76eb29efea7a24f85289effad"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/recovery-auth-controls-67ef59c1-7c70-4d18-9fe6-0250ebcc1339/syntax-auth.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/recovery-auth-controls-67ef59c1-7c70-4d18-9fe6-0250ebcc1339/syntax-lib.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/recovery-auth-controls-67ef59c1-7c70-4d18-9fe6-0250ebcc1339/syntax-tests.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "history": [
+    {
+      "status": "PASS",
+      "passed": 43,
+      "failed": 0,
+      "path": "pathfinder-engine/.scratch/recovery-auth-controls-593f80fd-f421-463d-ab27-22e3175674ec/controls.tap",
+      "bytes": 3248,
+      "sha256": "acdc6e2ecdddfb3cda74449b6d45885787538d703a81f7f567d0ecb2c490b8a4",
+      "scope": "Initial fixture controls before addition of allowed-auth metadata checks; superseded by45."
+    },
+    {
+      "status": "SOURCE_REVIEW_CORRECTED_BEFORE_TEST",
+      "scope": "Provisional24h login cap replaced with actual604800-second seven-day contract before any controls or actualHTTP; no historical test failure claimed."
+    }
+  ],
+  "scope": {
+    "httpRequests": 0,
+    "dockerOperations": 0,
+    "databaseQueries": 0,
+    "runtimeMutations": 0,
+    "fixtureHttpInjected": true,
+    "realAttrsFixture": {
+      "path": "pathfinder-engine/.scratch/pf2-converted/package/resources/output/0/objects_attrs.json.gz",
+      "bytes": 997,
+      "sha256": "ee4df15128a2ad51a42603ba7a0bbfb52b1bfbf2cee07139af1fac2545fdac57"
+    },
+    "actualRecovery": "NOT_RUN_PARENT_ONLY"
+  },
+  "remaining": "Independent source review and parent-only prepare-source/cold backup/source proof/target proof with safe allowed-auth metadata."
+}

@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.independent-source-review-delta.v1",
+  "status": "PASS",
+  "findingStatus": "NO_REMAINING_MATERIAL_FINDINGS",
+  "recordedAt": "2026-10-18T18:08:05.1856374Z",
+  "reviewer": "pf_runtime_map",
+  "branch": "pf-8-copied-project-recovery-local-20261018",
+  "baselineRevision": "94f83c11747e3ff6d3efb7b8064ef115b364c5df",
+  "previousReview": {
+    "path": "docs/pathfinder/evidence/copied-recovery/source-review-1792346678612.json",
+    "bytes": 7909,
+    "sha256": "a0b92b0f7bb81b98025f0f9f7df9492c6982b1f3657f01856808525f780843d1"
+  },
+  "previousSourcesUnchanged": [
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit.mjs",
+      "sha256": "920748cba87be8a4b658ae5228c41f1ae9b19f0c936bbc17ff7dfe585ae13588",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.mjs",
+      "sha256": "48d5e75e674ce76a6170c223cd333fd30b9e04efb7ea80ec6023d5045b9195af",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/audit-lib.test.mjs",
+      "sha256": "7463cbdbc7e69053efb28b42f80de1a4b11c97b6ec87fc3777fe2d4744ba2d28",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-audit.md",
+      "sha256": "56c3215b04776602083cb91bb6df41447ca3d77eb4ba94e3aa038212682e81e9",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth.mjs",
+      "sha256": "731b1e80bbfce6dc9251f94b3d9aa277e5a592615213254a37ae2ae419d972f3",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.mjs",
+      "sha256": "273896e9f64771c74578cd5de61936f723ed7fe24ebc387d392126fffff0d1ce",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/auth-lib.test.mjs",
+      "sha256": "bd51d2bb9ba4faecd00b7cc42ce233dc2e0ca7d247ecee53530e44f072d47930",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README-auth.md",
+      "sha256": "c0b62bb6b228edb3c1160dde56da518fee6466e13c1249c5b584833d6269abe3",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.mjs",
+      "sha256": "5e242570745973a4af42af110e8eb29665331a3323f2d7ebb9016ba286c8046f",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/binding.test.mjs",
+      "sha256": "af64d6fb645f78c24e69ce62d0a7f8018d536caf61768ed4307ea9879ee80dcb",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/drill.mjs",
+      "sha256": "775dde06b8e77e95480c10375d52f2a0a5715ae61993c2138846ed16de26352a",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance.mjs",
+      "sha256": "d1e8e364669158f73c10adbd99ecaf2cb3034efcac761b19b3131e332fe51a59",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance-lib.mjs",
+      "sha256": "bd2546bc979c547b3be1508f14e7e3940b1dad79563164292939c9b4d9769597",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/provenance-lib.test.mjs",
+      "sha256": "dea49243bee5c122012ce4ccb7d3e1af0a1a52b8fe084aada2e70a59d4f80bc7",
+      "unchanged": true
+    },
+    {
+      "path": "scripts/pathfinder-copied-recovery/README.md",
+      "sha256": "b453e863b7c179e6e94913c7b583bbc102b3b37e887368b542a09da8cba699fc",
+      "unchanged": true
+    }
+  ],
+  "additionalSource": {
+    "path": "scripts/pathfinder-copied-recovery/drill.test.mjs",
+    "bytes": 8969,
+    "sha256": "1b8deadfce47ebe1444a0180d8d391a3d0bf25bf6b39751b2022fdefafcd22c8"
+  },
+  "reviewedFileCount": 16,
+  "controlReceipt": {
+    "path": "docs/pathfinder/evidence/copied-recovery/drill-source-controls-1792346747884.json",
+    "bytes": 4592,
+    "sha256": "12818b1fdec9c6c5b55bb221d90fc25a0b78373f15a5bc9e2ffe9f75173772af"
+  },
+  "ownerExecution": {
+    "tests": 8,
+    "passed": 8,
+    "failed": 0,
+    "syntaxChecks": 1,
+    "realCli": true,
+    "testOnlyProcessPreload": true,
+    "dockerDispatches": 0,
+    "coreDispatches": 0,
+    "databaseQueries": 0,
+    "httpRequests": 0,
+    "actualRuntimeMutations": 0,
+    "localFileFixturesOnly": true
+  },
+  "reviewMethod": "Static read of the CLI negative-control implementation and owner receipt; exact final file hash readback. Reviewer ran no tests or runtime operation.",
+  "reviewedClosure": [
+    "Test-only preload permits local icacls but rejects every other process spawn or execFile dispatch and verifies an empty external-dispatch sentinel.",
+    "Eight real-CLI cases create separate new owner-marked file fixtures and reject begun backup, premature restore, actual source retirement, wrong proof hash/drill/project and missing source-audit role before binding/core.",
+    "Rejected actions preserve the private drill record bytes exactly; actual active drill record and runtime are not modified.",
+    "Every created CLI receipt is hash-bound in the private control receipt; all current fifteen previously reviewed files remain byte-identical."
+  ],
+  "history": {
+    "initialPassed": 0,
+    "initialFailed": 8,
+    "classification": "TEST_HARNESS_FAILURE",
+    "cause": "The test-only process sentinel also blocked the permitted local icacls spawn. Sentinel allowlist alone was corrected.",
+    "retainedInOwnerReceipt": true,
+    "productionFailureClaimed": false
+  },
+  "reviewerDraftFailure": {
+    "path": "docs/pathfinder/evidence/copied-recovery/source-review-drill-delta-1792346849532.json",
+    "bytes": 6,
+    "sha256": "abdfbffecbe18ed94df9829819e596ee285b52a94aa108514452a9121721c789",
+    "classification": "INVALID_REVIEW_DRAFT",
+    "cause": "PowerShell boolean-literal typo caused a null draft. This file is not a review receipt or a product/test result."
+  },
+  "limitations": [
+    "These eight controls test local CLI refusal paths, not successful backup, restore, full resource audit, source resumption or target retirement.",
+    "Parent operational execution and its actual receipts remain separate from this source-only closure.",
+    "The previous fifteen-file review and all of its proof boundaries continue to apply."
+  ],
+  "reviewerActions": {
+    "testsExecuted": 0,
+    "databaseQueries": 0,
+    "httpRequests": 0,
+    "dockerCalls": 0,
+    "runtimeMutations": 0,
+    "sourceEdits": 0,
+    "newReviewReceipt": 1
+  }
+}

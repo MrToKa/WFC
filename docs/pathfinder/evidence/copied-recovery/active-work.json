@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.active-work.v1",
+  "status": "TECHNICALLY_COMPLETE",
+  "work": "pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc",
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "initReceipt": "docs/pathfinder/evidence/copied-recovery/drill-1792346538507-032506ea.json",
+  "phase": "retired",
+  "finishedAt": "2026-10-18T19:06:42.255Z",
+  "sourceRetained": true,
+  "finalSourceAudit": "docs/pathfinder/evidence/copied-recovery/audit-1792350219641-c8fd4257.json",
+  "next": "Human route classification/location mapping and engineering review"
+}

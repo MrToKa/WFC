@@ -1,0 +1,298 @@
+TAP version 13
+# Subtest: a complete synthetic snapshot carries exactly27 lossless groups,2 auth groups and3 metadata buckets
+ok 1 - a complete synthetic snapshot carries exactly27 lossless groups,2 auth groups and3 metadata buckets
+  ---
+  duration_ms: 2.0531
+  type: 'test'
+  ...
+# Subtest: unchanged source snapshot compares exactly across an authorized cold restart start-time change
+ok 2 - unchanged source snapshot compares exactly across an authorized cold restart start-time change
+  ---
+  duration_ms: 0.8242
+  type: 'test'
+  ...
+# Subtest: lossless decimal comparison detects a change which decoded JavaScript values round together
+ok 3 - lossless decimal comparison detects a change which decoded JavaScript values round together
+  ---
+  duration_ms: 0.5018
+  type: 'test'
+  ...
+# Subtest: lossless bigint comparison detects adjacent values beyond safe integer decoding
+ok 4 - lossless bigint comparison detects adjacent values beyond safe integer decoding
+  ---
+  duration_ms: 0.3643
+  type: 'test'
+  ...
+# Subtest: snapshot refuses missing table
+ok 5 - snapshot refuses missing table
+  ---
+  duration_ms: 0.5616
+  type: 'test'
+  ...
+# Subtest: snapshot refuses extra table
+ok 6 - snapshot refuses extra table
+  ---
+  duration_ms: 0.1564
+  type: 'test'
+  ...
+# Subtest: snapshot refuses missing auth table
+ok 7 - snapshot refuses missing auth table
+  ---
+  duration_ms: 0.1316
+  type: 'test'
+  ...
+# Subtest: snapshot refuses wrong precision witness
+ok 8 - snapshot refuses wrong precision witness
+  ---
+  duration_ms: 0.5792
+  type: 'test'
+  ...
+# Subtest: snapshot refuses wrong SQL address
+ok 9 - snapshot refuses wrong SQL address
+  ---
+  duration_ms: 0.1305
+  type: 'test'
+  ...
+# Subtest: snapshot refuses write transaction
+ok 10 - snapshot refuses write transaction
+  ---
+  duration_ms: 0.176
+  type: 'test'
+  ...
+# Subtest: snapshot refuses queued work
+ok 11 - snapshot refuses queued work
+  ---
+  duration_ms: 0.2582
+  type: 'test'
+  ...
+# Subtest: snapshot refuses new work after storage scan
+ok 12 - snapshot refuses new work after storage scan
+  ---
+  duration_ms: 0.1449
+  type: 'test'
+  ...
+# Subtest: snapshot refuses source owner used on target
+ok 13 - snapshot refuses source owner used on target
+  ---
+  duration_ms: 0.0735
+  type: 'test'
+  ...
+# Subtest: snapshot refuses wrong source port
+ok 14 - snapshot refuses wrong source port
+  ---
+  duration_ms: 0.0599
+  type: 'test'
+  ...
+# Subtest: snapshot refuses different DB image
+ok 15 - snapshot refuses different DB image
+  ---
+  duration_ms: 0.1213
+  type: 'test'
+  ...
+# Subtest: snapshot refuses synthetic engineering marker
+ok 16 - snapshot refuses synthetic engineering marker
+  ---
+  duration_ms: 0.1653
+  type: 'test'
+  ...
+# Subtest: snapshot refuses invalid row JSON
+ok 17 - snapshot refuses invalid row JSON
+  ---
+  duration_ms: 0.1208
+  type: 'test'
+  ...
+# Subtest: all group additions/deletions and same-key replacements remain in a complete private difference
+ok 18 - all group additions/deletions and same-key replacements remain in a complete private difference
+  ---
+  duration_ms: 0.5422
+  type: 'test'
+  ...
+# Subtest: UTF8 C ordering accepts BMP/astral keys in byte order and rejects JavaScript UTF16 order
+ok 19 - UTF8 C ordering accepts BMP/astral keys in byte order and rejects JavaScript UTF16 order
+  ---
+  duration_ms: 0.2504
+  type: 'test'
+  ...
+# Subtest: duplicate keys cannot masquerade as unchanged rows
+ok 20 - duplicate keys cannot masquerade as unchanged rows
+  ---
+  duration_ms: 0.1009
+  type: 'test'
+  ...
+# Subtest: row count and row byte caps refuse without truncation
+ok 21 - row count and row byte caps refuse without truncation
+  ---
+  duration_ms: 2.6653
+  type: 'test'
+  ...
+# Subtest: storage metadata is compared without claiming content SHA verification
+ok 22 - storage metadata is compared without claiming content SHA verification
+  ---
+  duration_ms: 0.6847
+  type: 'test'
+  ...
+# Subtest: storage count and unsafe numeric size are refused
+ok 23 - storage count and unsafe numeric size are refused
+  ---
+  duration_ms: 0.6765
+  type: 'test'
+  ...
+# Subtest: source to fresh target permits only real revocation tombstones and retains all old rows
+ok 24 - source to fresh target permits only real revocation tombstones and retains all old rows
+  ---
+  duration_ms: 0.5181
+  type: 'test'
+  ...
+# Subtest: an unrevoked restored row is a failed fence even if byte-identical
+ok 25 - an unrevoked restored row is a failed fence even if byte-identical
+  ---
+  duration_ms: 0.2366
+  type: 'test'
+  ...
+# Subtest: restore fence refuses resource secret hash rewrite
+ok 26 - restore fence refuses resource secret hash rewrite
+  ---
+  duration_ms: 0.2403
+  type: 'test'
+  ...
+# Subtest: restore fence refuses login expiry rewrite
+ok 27 - restore fence refuses login expiry rewrite
+  ---
+  duration_ms: 0.2146
+  type: 'test'
+  ...
+# Subtest: restore fence refuses resource idle expiry rewrite
+ok 28 - restore fence refuses resource idle expiry rewrite
+  ---
+  duration_ms: 0.2314
+  type: 'test'
+  ...
+# Subtest: restore fence refuses wrong revocation reason
+ok 29 - restore fence refuses wrong revocation reason
+  ---
+  duration_ms: 0.2156
+  type: 'test'
+  ...
+# Subtest: restore fence refuses deleted login
+ok 30 - restore fence refuses deleted login
+  ---
+  duration_ms: 0.1918
+  type: 'test'
+  ...
+# Subtest: restore fence refuses extra login before authorized fresh login
+ok 31 - restore fence refuses extra login before authorized fresh login
+  ---
+  duration_ms: 0.2426
+  type: 'test'
+  ...
+# Subtest: previously revoked rows cannot have their prior reason/timestamp rewritten
+ok 32 - previously revoked rows cannot have their prior reason/timestamp rewritten
+  ---
+  duration_ms: 0.401
+  type: 'test'
+  ...
+# Subtest: claimed immutable auth text cannot conceal a changed raw expiry
+ok 33 - claimed immutable auth text cannot conceal a changed raw expiry
+  ---
+  duration_ms: 0.1556
+  type: 'test'
+  ...
+# Subtest: owned auth accepts exactly one metadata-pinned new login and linked Viewer session
+ok 34 - owned auth accepts exactly one metadata-pinned new login and linked Viewer session
+  ---
+  duration_ms: 1.2374
+  type: 'test'
+  ...
+# Subtest: owned auth refuses foreign login
+ok 35 - owned auth refuses foreign login
+  ---
+  duration_ms: 0.4582
+  type: 'test'
+  ...
+# Subtest: owned auth refuses different actor
+ok 36 - owned auth refuses different actor
+  ---
+  duration_ms: 0.3408
+  type: 'test'
+  ...
+# Subtest: owned auth refuses different session secret hash
+ok 37 - owned auth refuses different session secret hash
+  ---
+  duration_ms: 0.3332
+  type: 'test'
+  ...
+# Subtest: owned auth refuses different load
+ok 38 - owned auth refuses different load
+  ---
+  duration_ms: 0.3442
+  type: 'test'
+  ...
+# Subtest: owned auth refuses different login expiry
+ok 39 - owned auth refuses different login expiry
+  ---
+  duration_ms: 0.3115
+  type: 'test'
+  ...
+# Subtest: owned auth refuses different session expiry
+ok 40 - owned auth refuses different session expiry
+  ---
+  duration_ms: 0.3141
+  type: 'test'
+  ...
+# Subtest: owned auth refuses different absolute expiry
+ok 41 - owned auth refuses different absolute expiry
+  ---
+  duration_ms: 0.5763
+  type: 'test'
+  ...
+# Subtest: owned auth refuses additional unlisted login
+ok 42 - owned auth refuses additional unlisted login
+  ---
+  duration_ms: 0.3517
+  type: 'test'
+  ...
+# Subtest: owned auth still forbids updates to every previously restored row
+ok 43 - owned auth still forbids updates to every previously restored row
+  ---
+  duration_ms: 0.3925
+  type: 'test'
+  ...
+# Subtest: safe auth metadata rejects credential fields, foreign backup and unknown properties
+ok 44 - safe auth metadata rejects credential fields, foreign backup and unknown properties
+  ---
+  duration_ms: 0.2613
+  type: 'test'
+  ...
+# Subtest: timestamp equality preserves PostgreSQL microseconds while normalizing timezone notation
+ok 45 - timestamp equality preserves PostgreSQL microseconds while normalizing timezone notation
+  ---
+  duration_ms: 0.0651
+  type: 'test'
+  ...
+# Subtest: post-UI business-only mode explicitly leaves authentication unchecked and still compares all27 tables
+ok 46 - post-UI business-only mode explicitly leaves authentication unchecked and still compares all27 tables
+  ---
+  duration_ms: 0.5373
+  type: 'test'
+  ...
+# Subtest: restore comparisons refuse source-as-target and reusing any original container identity
+ok 47 - restore comparisons refuse source-as-target and reusing any original container identity
+  ---
+  duration_ms: 0.313
+  type: 'test'
+  ...
+# Subtest: the actual helper watchdog begins before stdin or dependency import
+ok 48 - the actual helper watchdog begins before stdin or dependency import
+  ---
+  duration_ms: 90.6684
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 195.0904

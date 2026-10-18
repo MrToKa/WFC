@@ -15,13 +15,49 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current continuation — actual business input and full-model candidate coverage
 
-LATEST nextstage: report30delivery committed `3fbdc9d41a82a06d9d91af20c028bdbb7584ac62`.
-Newinheritingrecoverybranch created; executing standalone
-[PF8copied-project recovery](handoffs/PF-8-copied-project-recovery.md) understanding
-authority. Actualbackup/restore/retirement NOT_RUN. Source5191/project1af0f807
-mustremain; newtesttarget5192only. Preparing sharedguard/audit/auth controls and
-independent source review before rootsole actualexecutor. No olddefaultdrill,
-genericretireagainstsource, original/5190writes or inventedlocationmapping.
+Stage31 technically COMPLETE on `pf-8-copied-project-recovery-local-20261018`,
+implementation baseline `94f83c11747e3ff6d3efb7b8064ef115b364c5df`; local delivery
+commit pending. See [report31](31-copied-project-recovery.md) and
+[local delivery guide](31-local-delivery.md). Root was the sole actual runtime
+executor. Source controls174 PASS (auth45/audit48/provenance55/binding18/drill8),
+syntax checks and independent16-file source review PASS. Initial drill0/8 failure
+was a test-preload defect; its failed evidence and corrected8/8 are retained.
+
+Actual source phase PASS in owned work
+`pathfinder-engine/.scratch/copied-recovery-c8f5c134-d041-45b9-ab20-214ff70d30dc`:
+backupId `b77a1ed0-2fa2-48a3-92f8-207a60b2035e`,8members/1793208640bytes;
+full3model1026resource/1317023409rawbyte audit and30artifact9342710byte inventory.
+Source normal bearer/session/descriptor/resource positives before and after cold
+backup PASS while valid, exact27+auth2tables/storage3 PASS. Provenance prepare/
+seal/verify PASS75files/4148668bytes/exact67-event chain. Source5191 web/API/MinIO
+underwent authorized cold stop/resume; IDs/images preserved, start times changed.
+
+Fresh target5192 owner7a64aa2a-88c3-43b9-962d-af391b72300d, project
+wfc-pathfinder-local-63ab3043713e restored PASS. T0lossless27/storage3 plus auth
+fencing PASS, old bearer401/old cookie410 SESSION_REVOKED before original expiry,
+fresh normal admin/resource positive. T1exactly one new owned login/session and
+all business/storage unchanged PASS; separate full raw model audit PASS. CUAmodel,
+2140cables/1527scope/reload PASS, no mappings/calculation/Review/Apply. Post-UI27+
+storage3 PASS; auth explicitly NOT_CHECKED after UI. Exact target qualified, then
+retired:5containers/4volumes/2networks removed, lists empty. Source retained.
+
+Final source CUA PASS (`evidence/copied-recovery/source-browser-final-1792350249313.json`),
+source final27/storage3 PASS1792350219641 (post-UIauth NOT_CHECKED), wider12PASS
+1792350218341/5dce53ce preserves18baseline original/5190 IDs/images/start times,
+workflow/checkouts/inputs. All7denied children existence-only checked; no deletion
+retry/parent operation/prune. No originalDB content audit is claimed. Needed5191
+model/demo/archive/privatecompanion/adjunct/evidence retained. Source screenshot
+`evidence/copied-recovery/source-final.png` visibly shows three tools,1527/438155
+saved counters and loaded3D. Browser numeric IDs remapped on heartbeat reconnect;
+final source selected by exact5191URL; exact retired5192URL page closed.
+
+Remaining: local commit, prepare-stage-handoff for human route classification/
+location mapping and engineering review, then disable automatic repetition. All
+1527real names missing/3empty endpoint uses and13-object diagnostic group remain
+honest limits; no whole-plant/native or engineering acceptance, no push/PR/merge/
+deployment. No useful independent development stage remains without these facts.
+
+## Previous stage30 chronology (historical)
 
 LATEST technicaldelivery stage30 COMPLETE on copied-project branch; [report30](30-copied-project.md).
 Actual1527name preparation PASS:6chunks/27278inputbytes,438155of438155SDKrows,

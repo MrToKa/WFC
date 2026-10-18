@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "pathfinder.copied-recovery.phase-proof.v1",
+  "status": "PASS",
+  "phase": "source-ready",
+  "drillId": "e09d28fa-580f-484a-a7f7-ac8b8a00cee7",
+  "sourceOwner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "recordedAt": "2026-10-18T18:06:06.991Z",
+  "quiescent": true,
+  "provenancePrepared": true,
+  "provenanceReceipt": {
+    "path": "docs/pathfinder/evidence/copied-recovery/provenance-1792346538908-d57b672c.json",
+    "sha256": "ea1e69125a069845f89e38737dbb09fbf5ae41f8cc0523b50af51f65a09af994"
+  },
+  "receipts": [
+    {
+      "role": "source-audit",
+      "path": "docs/pathfinder/evidence/copied-recovery/audit-1792346766950-f2483ab0.json",
+      "sha256": "e6f3b8d536a084864b5a68f6a407bd0f839d149f0ec27e32b6e1a61b44564629"
+    },
+    {
+      "role": "source-auth",
+      "path": "docs/pathfinder/evidence/copied-recovery/auth-prepare-1792346762405.json",
+      "sha256": "e0513ce902be8578f7eaf4e4bc0a4a6f36c84a48272bf70de3c5d90f3445428a"
+    }
+  ]
+}
