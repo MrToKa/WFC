@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r0-purpose-contracts-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r1-tray-catalog-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -21,24 +21,83 @@ earlier deliveries and execute that prompt immediately. Routine questions use th
 recommended engineering choice and are recorded; no routine stage pause.
 
 - Starting revision: `916256f0da14b8f21ca039b34bfae2de33b2bb0d`.
-- Current stage: PF-R0 contracts/examples/validation/capacity technically COMPLETE;
-  final local commit and PF-R1 handoff/branch transition in progress.
+- Completed R0 commit: `09f0e1dbdded9abca35b493db6eda7e9df9b94e4`.
+- Detailed R1 handoff: `handoffs/PF-R1-project-tray-catalog.md`, committed at
+  `9c5fa34` after prepare-stage-handoff. Current stage PF-R1 technically COMPLETE
+  on its inherited branch; final local commit and R2 handoff are being recorded.
+  Do not repeat R0, source seed/catalog copy or model conversion/import.
 - Active app heartbeat: `path-finder-purpose-rules-and-model-revisions`, ACTIVE,
   every ten minutes, created through the app tool; the old `pathfinder` remains deleted.
 - Root owns overview/catalog examples, baseline/frozen hashes, validation matrix,
   report/progress/handoffs and ALL actual runtime/SQL/HTTP operations.
-- Agent `revision_geometry_ingestion_plan` owns only `r0/geometry-revision-contracts.md`
-  and `r0/geometry-revision-examples.json`.
-- Agent `purpose_revision_plan_review` owns only `r0/policy-drawing-contracts.md`
-  and `r0/policy-drawing-examples.json`.
-- Agent `old_model_conversion_map` performs read-only catalog/source/capacity audit.
-- No active download, package, build, test or runtime mutation. No PF-R acceptance
+- R1 ownership: source-lib (old_model_conversion_map), transfer-lib
+  (revision_geometry_ingestion_plan), guard-io (purpose_revision_plan_review).
+  Root owns catalog CLI, independent preservation audit, docs and all actual
+  runtime operations. The module writers finished their scoped deliveries;
+  read-only source reviews continue when assigned. Do not duplicate root's run.
+- Fresh original source metadata inspection PASS at 21:39:34 UTC on18October;
+  receipt `evidence/current-inputs/pfr1-source-inspection-cdaae722-7163-45fb-a156-864d660d93fc.json`.
+  Original checkout/container/endpoint/module pins unchanged.
+- Root actual read-only capture PASS:330trays,51types,9default materials,
+  15material trays,14project supports,5supports,3curves/803points,6report mappings,
+  6files. Work `.scratch/tray-catalog-17cadea1-d54c-42b1-a563-2d3c514e7704`;
+  capture receipt `evidence/tray-catalog/operator-1792360720690-8e9f1173.json`.
+  Source before/copy hashes match. Independent full audit covers45tables.
+  Actual original GET/readback6files/872680bytes PASS, private hash-pinned evidence.
+- All4 project drawing preferences were NONNULL in original and NULL in copied
+  seed: support_distance/support_weight/tray_load_safety_factor/cable_layout_settings.
+  Necessary R1 scope now includes exact4-field NULL/CAS enrichment in SAME
+  transaction. All identity/S/E/P/gap/model/timestamps/otherfields stay protected.
+- Final combined synthetic controls192/192 PASS, exact source hashes and raw
+  evidence in `evidence/tray-catalog/final-controls-1792361864308.json` (40source,
+  76transfer,30guard,12preservation,5operator,29diagnostics). These are synthetic
+  controls, separate from real capture/copy/replay/readonlyverification below.
+- Runtime guard review closed: bounded stdin packet fixes44906-char Windows
+  argv issue; AsyncFunction resolves bare packages; raw evidence durable before
+  parsing; source mutation denied. Root CLI has same-plan staging resume,
+  missing-descriptor recovery, complete source/seed map binding, pre-apply source
+  guard, pre-write independent typed audit and explicit COMMIT outcome receipts.
+- Source catalog diagnostics:330distinct names/6purposes, no observed missing
+  purposes/types/unsupported codes/name-key collisions. Pure material collation
+  remains explicitly NOT_VERIFIED; no synthetic claim of SQL collation parity.
+- Actual prepare PASS:6new owned file objects/872680bytes;1026oldmodelobjects
+  unchanged; immutable1313111byte planSHA31dee403bcbb79a0e54c737b50224873f0df32328a839e0717c7ee155f364884.
+  Prepared descriptorSHA41e8cb8c00b12b3c3a12471d0b8db709a7c780362665ddc92ab82641f1a1f98c.
+  Receipt `evidence/tray-catalog/operator-1792361207244-a3ea05ac.json`.
+  Existing-descriptor recovery check PASS, sameplan/sameIDs/no writes, receipt
+  `evidence/tray-catalog/operator-1792361309372-218493b7.json`.
+- First actual writer FAILED before writes/COMMIT and rolled back. Root actual
+  independent45table reconciliation PASS exactly initial state; real readonlyPG
+  control confirmed SQLSTATE22023 forJSONnull-minus-array. Fixed unused INSERT
+  comparison operand to{};76transfercontrolsPASS. Corrected sameplan readonly
+  reconciliation PASS: complete typed projection reaches expected VERIFY_NOT_FINAL,
+  writesAttemptedfalse/rollbackConfirmedtrue. All failed receipts retained.
+- Corrected sameplan actualcopy PASS/COMMITconfirmed:
+  `evidence/tray-catalog/operator-1792361561541-c4524e45.json`.
+  1192insertions/50type enrichments/project4drawingprefs only. Full45table
+  auditPASS, all2143targetcables unchanged, originalprojectionunchanged,
+  old1026modelobjects unchanged and6plannedfiles only.
+- Exactsameplan replay PASS/already_transferred, no additional rows changed:
+  `evidence/tray-catalog/operator-1792361615735-eb7c64dc.json`.
+  Readonlyfinalverification PASS:
+  `evidence/tray-catalog/operator-1792361791842-2672b4a9.json`.
+- Computer-use Trays/detail/material/support/loadcurve +PathFinder3tools,
+  protected3Dmodelloaded andDetails1/7/5/10 PASS:
+  `evidence/tray-catalog/computer-use-1792361908753.json`. Browser2/tab6 held
+  for continued work at5191PathFinder. Screenshots private/notGit. Existing
+  diagnosticnetwork13objects remains; fullnetwork/engineeringApply NOT_RUN.
+- No active root subprocess. All R1 source/evidence review findings are closed;
+  final report36 and operatorguide are written. KnownemptyACLdiagnosticTemp
+  residue is documented, not retried. Seven denied historicalpaths untouched.
+  No active download/package. PF-R0 documentation is
+  technically delivered; no implemented R1/R2 function or engineering acceptance
   is yet claimed. Original checkout/container/database restrictions still apply.
 - Evidence: 35-r0-stage-report.md; 12/12 documentation checks PASS, 24 locked
   references/11 Core, 29 unique synthetic policy cases, 54 links/0 missing,
   zero known credential matches; independent review findings closed.
-- Next: local R0 commit, prepare detailed PF-R1, new inheriting branch, immediately
-  execute exact catalog/dependency copy. No completed future-stage claim.
+- Next: scoped final checks/localR1commit; prepare detailed PF-R2 purpose policy
+  handoff with actual revisions/evidence, create inherited R2branch and execute
+  immediately. R2 entrypoint read-only map is assigned to purpose_revision_plan_review.
 
 ## Previous continuation — purpose/revision plan and older-model preparation
 

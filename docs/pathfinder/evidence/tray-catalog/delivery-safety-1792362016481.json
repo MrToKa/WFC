@@ -1,0 +1,175 @@
+{
+  "schemaVersion": "wfc.pf.catalog-delivery-safety.v1",
+  "recordedAt": "2026-10-18T22:20:16.480Z",
+  "status": "PASS",
+  "files": 32,
+  "knownOwnedRuntimeSecretMatches": 0,
+  "publicJsonForbiddenBusinessCredentialKeys": 0,
+  "checkedMarkdownLinks": 34,
+  "missingLinks": [],
+  "localCachedAhead": 44,
+  "localCachedBehind": 0,
+  "upstreamBranch": "none; comparison is cached origin/main",
+  "sourceFiles": [
+    {
+      "path": "scripts/pathfinder-tray-catalog/catalog.mjs",
+      "bytes": 21689,
+      "sha256": "ee89cb58c75ad88870466b91fb427d4dde07468538be69a43ca11ea5377761f8"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/diagnostics-lib.mjs",
+      "bytes": 8746,
+      "sha256": "5adbc03cb61f5c17a5cb16236f7ba32394d1b66854ad14878ca0180bc3aaacd0"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/diagnostics-lib.test.mjs",
+      "bytes": 10988,
+      "sha256": "2faebb369d83586a142896ef046e7d274b1ac5d96428a07a30bedb84ceab1bf8"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/guard-io.mjs",
+      "bytes": 41404,
+      "sha256": "48d12d9df8a62e32901454096bcd94a21f1a9c3912ff139ee13726deceb9d5d1"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/guard-io.test.mjs",
+      "bytes": 18339,
+      "sha256": "c2e641cf5465af5fce14b9c754a4b1673a8a846784f7ed2fd7b70762222076e5"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/operator-lib.mjs",
+      "bytes": 2030,
+      "sha256": "039006bec4fa345a1fa62cd68189c94abf165200ef42c36acc0ba86ac2eb0722"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/operator-lib.test.mjs",
+      "bytes": 4844,
+      "sha256": "0788b56afb2bc71466d4abfb473d13a42f333d24f7c56aef11d5bef8c2c675f9"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/preservation-lib.mjs",
+      "bytes": 13449,
+      "sha256": "d581d575ce5dbc5af3fc01b31c9858d48a8c28ce8a26a726b6afbe0b38306d0d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/preservation-lib.test.mjs",
+      "bytes": 11234,
+      "sha256": "92bd6beca6be74d5ca478b51f74abadbc06764b1c2ccdf1503899bb8a4d580e1"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/README.md",
+      "bytes": 5358,
+      "sha256": "4a2a89303d381de85c318c3e51f7c0b5fbdad87df0f47134bf26fe51adaab53d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/source-lib.mjs",
+      "bytes": 34657,
+      "sha256": "9091da99b6624024e910367fa53254f3cdb6f4dcb94137f47487656dcb7d594d"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/source-lib.test.mjs",
+      "bytes": 22766,
+      "sha256": "08ec4c867670ee2f4210da78f4672843e778b3bc59892f4c2212da6f5d86379c"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/transfer-lib.mjs",
+      "bytes": 43927,
+      "sha256": "4ff9970d627f55558729d5dceced362ae934edf7e6b2652e0b884ed30e5ff9e3"
+    },
+    {
+      "path": "scripts/pathfinder-tray-catalog/transfer-lib.test.mjs",
+      "bytes": 40486,
+      "sha256": "3500ec474f495643b3450f8233c4d1349d06e7feec47cc6a3f0a57ab217faddc"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/computer-use-1792361908753.json",
+      "bytes": 2081,
+      "sha256": "b24c8f18b8b2de91b105920ac698e2e09da854f5412bdf902e9d7d927ae550bf"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/controls-1792361143444.json",
+      "bytes": 2793,
+      "sha256": "34457acea7c41007a56615d3ffe4a23e0e1ccc5898f5fccceba342190d4ee0bf"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/corrected-plan-reconciliation-1792361522861.json",
+      "bytes": 1355,
+      "sha256": "ffc2ee6b3669ea8854377cb57d6e720218d4c11d2c492fda9f0acf21d5893045"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/diagnostics-1792361085437.json",
+      "bytes": 2411,
+      "sha256": "a43ee94bfe6dcaf4f0ccc61ab9b80955c2912b3859fec28e9673f87605273e5e"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/final-controls-1792361864308.json",
+      "bytes": 2836,
+      "sha256": "05993b6132ca0d4909ae4f7e193888f4526b4c0e1c08fd741b92f76d0e5df3d8"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/operator-1792360720690-8e9f1173.json",
+      "bytes": 4927,
+      "sha256": "a5e41cff1f0be25c29060130d82d143979e63142af6e17df995432e31a0624a8"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/operator-1792361207244-a3ea05ac.json",
+      "bytes": 8942,
+      "sha256": "934c96fa2b85aae10e3ca44dfafda7f963b8f31f6c6944096e2e93fc801aff2a"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/operator-1792361309372-218493b7.json",
+      "bytes": 5199,
+      "sha256": "88eb2e3c4389db11698582dfb14e51e0ce82fdfe741b11884add9ad1c23098a3"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/operator-1792361378114-dd620ad1.json",
+      "bytes": 5435,
+      "sha256": "371eb6f31769a663b59d997d93b2d94e180df85d12673705d8d47b538fdace64"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/operator-1792361561541-c4524e45.json",
+      "bytes": 27000,
+      "sha256": "d64e0fd321d6eb9ba8cbf7b2c2d6d2230d3497c77f97c5e1285aacd7efaa9c62"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/operator-1792361615735-eb7c64dc.json",
+      "bytes": 27022,
+      "sha256": "a0c9dcf5b9f502f3023daddb1490807aa5b2b6e10b49baf22ec3b3fb21c07b58"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/operator-1792361791842-2672b4a9.json",
+      "bytes": 27025,
+      "sha256": "e944526b5eddd711bf1210aeca68a3f5e15448e509f7d8d6b9dfda5941423a53"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/postgresql-jsonb-control-1792361473333.json",
+      "bytes": 535,
+      "sha256": "9aeb91375a76744e21dca00c2663df6f253af926fb3ff49d183ebcc007705385"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/remote-observations.json",
+      "bytes": 732,
+      "sha256": "1b2f9a51e6b0a9c8276e816a31d7ebdbbbd1b1ad73c64eb1b2e6a279f8d08f75"
+    },
+    {
+      "path": "docs/pathfinder/evidence/tray-catalog/rollback-reconciliation-1792361445541.json",
+      "bytes": 16990,
+      "sha256": "c8dbe3e4e58895c94e303f3ec7c5043d2cd88e06bdd82711cacb5ae500e998eb"
+    },
+    {
+      "path": "docs/pathfinder/36-r1-stage-report.md",
+      "bytes": 10132,
+      "sha256": "208f22aad813232785c7af82bf0a4c109dfdb82cd836ab48f7e7fdf921fe0e4b"
+    },
+    {
+      "path": "docs/pathfinder/automation-progress.md",
+      "bytes": 75412,
+      "sha256": "d7045ed2f10c2eff6c646cc236353049fc623b52accccc90bd7e3bbbe934246a"
+    },
+    {
+      "path": "docs/pathfinder/evidence/current-inputs/pfr1-source-inspection-cdaae722-7163-45fb-a156-864d660d93fc.json",
+      "bytes": 2937,
+      "sha256": "357b16a25ecc2ca86b8c1af806baacbbe7f8a99c5efa4bfac982f20c1843fd95"
+    }
+  ]
+}
