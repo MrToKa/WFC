@@ -8,9 +8,10 @@ Worktree: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
 Branch: `pf-8-delivery-local-20261018`.
 Integrated source commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`.
 Integration handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`.
-The following local delivery commit contains this report, final operational
-receipts and preservation audit; inspect live HEAD for its identity. Nothing
-was published or merged into main.
+Local delivery commit `bf9dfdf8b075259880b58cc7a31202844a902f87` contains this
+report, final operational receipts and preservation audit. The following
+metadata-only commit records the actual automation pause; inspect live HEAD.
+Nothing was published or merged into main.
 
 ## Available functionality
 
@@ -110,6 +111,9 @@ itself does not need Navisworks; the native requirement is validation evidence.
 
 The user has not accepted this new feature or authorized its integration into
 the existing app. No push, PR, merge, deployment, original checkout change or
-original application/data/volume/container write was performed. The heartbeat
-is paused through the application tool once this local report/audit/commit is
-finished, because only the unmet external gate remains actionable.
+original application/data/volume/container write was performed. After delivery
+commitbf9dfdf the application tool set heartbeatpathfinder to **PAUSED**; stored
+status and unchanged name/prompt/schedule/target were independently read back.
+[Automation receipt](evidence/pf8/automation-paused-20261018.json) records the
+remaining external gate. The native reference prerequisite, graph preparation
+and capacity work carry forward explicitly; the whole task is not accepted.

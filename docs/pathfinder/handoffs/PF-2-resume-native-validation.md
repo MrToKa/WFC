@@ -12,6 +12,10 @@ Integrated source commit:
 `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`.
 Integration evidence/handoff commit:
 `03db8f7`.
+Verified local operations delivery:
+`bf9dfdf8b075259880b58cc7a31202844a902f87`.
+Heartbeatpathfinder is now PAUSED through the application tool with its other
+fields preserved; see `evidence/pf8/automation-paused-20261018.json`.
 Current delivery branch:
 `pf-8-delivery-local-20261018`; inspect its live HEAD/status and the final
 `automation-progress.md`/`08-stage-report.md` before acting.

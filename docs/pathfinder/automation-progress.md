@@ -7,6 +7,7 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
 - Current branch: `pf-8-delivery-local-20261018` (inspect live branch/HEAD before each continuation).
 - Integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. The local commit containing this final progress/report records the remaining PF-8 evidence. Read live HEAD rather than inferring a self-referential hash from this file. No implementation changes are left outside these deliveries.
+- Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
 - Canonical reference: PathFinder `45c24bf5f433f13e102600b36f20327c77961d0a`.
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
@@ -34,7 +35,10 @@ working local entitlement plus permission for another capture. No repeat of
 unchanged entitlement refusal is useful. Real engineering parity/acceptance is
 BLOCKED; fullplantcapture/capacity NOT_RUN, reusablegraph NOT_IMPLEMENTED.
 These unmet PF-2/PF-7 gates and user acceptance are not waived. The heartbeat
-will be paused through the application tool after the final local commit.
+is now **PAUSED**, updated through the application tool after commitbf9dfdf;
+its actual stored status and unchanged prompt/name/schedule/target were checked.
+See `evidence/pf8/automation-paused-20261018.json`. Do not restart repeated
+attempts without an actual change to the recorded external prerequisite.
 No merge/push/PR/deployment/original-app or data write occurred.
 
 ## Earlier final technical checkpoint — 02:38 UTC

@@ -309,3 +309,11 @@ The next dependent work is specified in
 `docs/pathfinder/handoffs/PF-2-resume-native-validation.md`. No native or full-plant
 acceptance and no authorization to merge into the original app follow from this
 manifest or the scoped local passes.
+
+## Final metadata addendum
+
+After the150-path snapshot, new
+`docs/pathfinder/evidence/pf8/automation-paused-20261018.json` records the actual
+application-tool pause after deliverycommitbf9dfdf. Existing progress/report/
+handoff entries were updated to reference that delivery. This adds one unique
+path for151total relative to c95ad56; no production source change follows.
