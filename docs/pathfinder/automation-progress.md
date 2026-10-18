@@ -13,6 +13,23 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
+## Latest wakeup audit — 18 October 2026, 05:38 UTC
+
+Fresh HEADce8eab0/pf-8-delivery-local-20261018, clean trackedfiles and only two
+denied untracked children. No native export appeared in inspected retained
+evidence/output paths after02:46. No code/native-host/test/runtime/cleanup
+operation was repeated. Existing technical passes remain historical evidence,
+not new results. Refreshed remote/default revisions are unchanged; localfeature
+is11ahead/0behind WFCmain, unpublished. The configured GitHub connector found
+only unrelatedWFC#1 COMMENTEDreviews and no featureCI proof.
+
+Automation was observedACTIVE again (reasonUNKNOWN), despite the prior actual
+PAUSED receipt. It was setPAUSED again through the application tool; stored
+status and unchanged prompt/name/schedule/target were checked. New receipt:
+`evidence/pf8/automation-wakeup-20261018T0538Z.json`. The native-resume handoff
+now includes this fresh baseline. Remain blocked on the same external reference;
+no engineering acceptance, merge or deployment is inferred from a heartbeat.
+
 ## Current work — independent local delivery complete, real gate BLOCKED
 
 The isolated5190 demonstration is healthy. Final combined cold backup/restore,

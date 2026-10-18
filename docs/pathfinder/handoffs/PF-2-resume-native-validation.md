@@ -4,6 +4,35 @@ This is the next unmet part of the accepted PF-0–PF-8 plan, not a newPF-9 or a
 success claim. The independent admin workflow and operations delivery are
 already implemented; do not duplicate them.
 
+## Refreshed readiness observation — 18 October 2026, 05:38 UTC
+
+Fresh inspected baseline is `ce8eab091990807d11f2a2230117e9f9689be93d` on
+`pf-8-delivery-local-20261018`. Tracked files were clean; only the two previously
+denied cleanup children were untracked. The local feature is11commits ahead/0
+behind live WFCmain e1ef2020; its same-named remote branch is absent. Original
+WFC and canonicalPF heads/branches are unchanged and clean. Old dirtyPF retains
+its stated files and is24commits behind live canonicalPF; its own cached
+origin/master is stale and must not be used as live evidence.
+
+The configured GitHub connector confirmed both repositories. Open-PR search
+found only unrelated WFC#1 (two COMMENTED reviews), no PathFinder PR, and no
+feature PR. Default-commit status arrays and the wrapper's first-page
+PR-triggered workflow arrays are empty; this is not a passing CI result.
+No remote mutation, implementation, tests, runtime refresh or native launch
+occurred during this readiness review. Prior functional results keep their
+original recorded scopes/revisions.
+
+Bounded inspection of native-prefixed PF-2 evidence and the two retained
+pf2-native output runs found no new capture/reference after02:46UTC. Both
+capture files remain absent; entitlement status was not retested. A heartbeat
+arrived while automation had become ACTIVE again, despite its earlier PAUSED
+receipt. The cause is unknown. The application tool set it PAUSED again and
+stored status/preserved fields were verified. See the new immutable receipt
+`evidence/pf8/automation-wakeup-20261018T0538Z.json`. Historical pause evidence
+was not rewritten. The substantive prerequisite and acceptance boundary below
+remain unchanged; do not create a duplicate implementation or retry a licence
+refusal merely because another scheduled message arrives.
+
 ## Verified baseline and authority
 
 As observed18October2026, the isolated worktree is
