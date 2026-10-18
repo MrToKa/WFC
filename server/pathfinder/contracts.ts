@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const uuid = z.string().uuid().transform(value => value.toLowerCase());
 export const revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/).refine(value => BigInt(value) <= 9223372036854775807n);
-const coordinate = z.number().finite().min(-1e12).max(1e12);
+const coordinate = z.number().finite().min(-1e9).max(1e9);
 export const point = z.tuple([coordinate, coordinate, coordinate]);
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const text = z.string().max(2048).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
@@ -43,11 +43,13 @@ export type SnapshotObject = z.infer<typeof snapshotObject>;
 const locationName = z.string().trim().min(1).max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
 export const createLocationSchema = z.object({ name: locationName, aliases: z.array(locationName).max(100), expectedRegistryRevision: revision }).strict();
 export const bindLocationSchema = z.object({ modelVersionId: uuid, expectedSelectionRevision: revision, expectedRegistryRevision: revision,
-  point, objectId: identity.nullable(), externalId: z.string().min(1).max(1024).nullable() }).strict();
+  point, objectId: identity.nullable(), externalId: z.string().min(1).max(1024).nullable(),
+  derivation:z.enum(['manual-world-point','picked-surface-point','equipment-bottom-aabb']).optional() }).strict();
 export const artifactSchema = z.object({ modelVersionId: uuid, expectedSelectionRevision: revision, expectedRegistryRevision: revision, snapshot: snapshotSchema }).strict();
 
 export type LocationMatch = { status: 'matched' | 'missing' | 'ambiguous' | 'stale'; locationId: string | null; candidates: string[] };
 export type LocationDto = { id: string; name: string; aliases: string[]; revision: string; matching?: { status: 'missing' | 'ambiguous' | 'unverified'; candidateObjectIds: string[] }; binding: null | {
   modelVersionId: string; revision: string; point: [number, number, number]; objectId: string | null; externalId: string | null;
   source: 'manual' | 'automatic'; status: 'confirmed' | 'stale';
+  derivation?:'manual-world-point'|'picked-surface-point'|'equipment-bottom-aabb';coordinateFrame?:'canonical-world-metres';
 } };

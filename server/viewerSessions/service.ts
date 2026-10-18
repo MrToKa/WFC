@@ -119,6 +119,7 @@ export function createViewerSessionService(options: { pool: Pool; clock?: () => 
         const user = await client.query<{ is_admin: boolean }>(`SELECT u.is_admin FROM users u
           JOIN viewer_resource_sessions s ON s.user_id=u.id WHERE s.id=$1 FOR SHARE OF u`,[current.session.sessionId]);
         if (user.rows[0]?.is_admin !== true) throw new ViewerSessionError('ACCESS_REVOKED',403);
+        unwrap(await authorize(client,input));
         return { authorized: true, loadId: current.session.loadId };
       });
     },

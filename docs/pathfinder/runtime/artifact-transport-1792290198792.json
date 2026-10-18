@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "recordedAtUtc": "2026-10-18T02:23:18.788Z",
+  "sourceProject": "wfc-pathfinder-local",
+  "images": {
+    "api": "sha256:6b226c434b4d23a456ed8add0c87edb105d0ace3a5ea4d982556d16e3dea64e3",
+    "web": "sha256:c2535ca007ec1ba2045e125bf35174e0d5a8a05032af35b10837ce409be38d4d"
+  },
+  "scope": "Only the isolated loopback Nginx artifact-upload path; intentionally invalid body, no accepted artifact writes.",
+  "checks": {
+    "currentAdminAuthorization": 204,
+    "unauthorizedHeadersOnly": {
+      "status": 401,
+      "sentBodyBytes": 0,
+      "declaredBodyBytes": 11534336,
+      "milliseconds": 5,
+      "code": "UNAUTHORIZED"
+    },
+    "overLimitHeadersOnly": {
+      "status": 413,
+      "sentBodyBytes": 0,
+      "declaredBodyBytes": 268435457,
+      "milliseconds": 2,
+      "code": "ARTIFACT_LIMIT"
+    },
+    "actualBodyAboveOld10MiBLimit": {
+      "status": 400,
+      "code": "INVALID_PATHFINDER_REQUEST",
+      "bodyBytes": 11534367
+    }
+  },
+  "limits": [
+    "An actual 11MiB invalid JSON-schema request reached the backend; this is not an accepted 64MiB geometry capture or full 256MiB capacity benchmark.",
+    "The 256MiB+1 rejection sent headers only; no oversized body was allocated or uploaded."
+  ]
+}

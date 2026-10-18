@@ -57,7 +57,7 @@ export function RoutingsViewerTab({ projectId, loadedProjectId, token }: Props) 
         </div>
         {mode === 'manual' ? <form onSubmit={event => { event.preventDefault(); void viewer.show(routing); }}>
           <Field className={styles.field} label="Manual routing" hint="Separate tray names with /. SECONDARY markers are ignored.">
-            <Textarea aria-label="Manual routing" value={routing} resize="vertical" rows={4}
+            <Textarea aria-label="Manual routing" value={routing} maxLength={8000} resize="vertical" rows={4}
               onChange={(_, data) => setDraft({ projectId, token, value: data.value })}
               onKeyDown={event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void viewer.show(routing); } }} />
           </Field>

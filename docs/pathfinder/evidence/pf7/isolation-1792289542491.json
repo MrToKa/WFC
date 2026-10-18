@@ -1,0 +1,478 @@
+{
+  "schemaVersion": "pathfinder.isolation-audit.v1",
+  "stage": "PF-7",
+  "observedAtUtc": "2026-10-18T02:12:22.405Z",
+  "checkedBaseCommit": "c95ad56ebbd6b020966fa0690c98c37516df1db1",
+  "branch": "pf-4-viewer-local-20261018",
+  "scope": "local-source-and-original-environment-preservation;not-native-model-parity",
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "unchanged-core-and-original-regression-sources",
+      "status": "PASS",
+      "details": {
+        "coreFiles": 11,
+        "originalTestFiles": 8
+      }
+    },
+    {
+      "name": "frozen-pf0-deliveries-preserved",
+      "status": "PASS",
+      "details": {
+        "files": 31,
+        "matrixAppendOnly": true,
+        "validationGeneratorsRun": false
+      }
+    },
+    {
+      "name": "native-oracle-pinned-source-bytes-preserved",
+      "status": "PASS",
+      "details": {
+        "pinnedFiles": 14,
+        "canonicalCommit": "45c24bf5f433f13e102600b36f20327c77961d0a"
+      }
+    },
+    {
+      "name": "original-checkouts-and-dirty-files-preserved",
+      "status": "PASS",
+      "details": [
+        {
+          "name": "originalWfc",
+          "head": "e1ef20202598bb4d3d78e4772cbbb9747ec23a00",
+          "branch": "main",
+          "status": []
+        },
+        {
+          "name": "referencePathFinder",
+          "head": "45c24bf5f433f13e102600b36f20327c77961d0a",
+          "branch": "master",
+          "status": []
+        },
+        {
+          "name": "oldPathFinder",
+          "head": "35f4fb46f7762503576bdacd9668f34a1be2b0ed",
+          "branch": "master",
+          "status": [
+            "M AddinRibbon/AddinRibbon.csproj",
+            "M AddinRibbon/ClAddin.cs",
+            "?? .vscode/settings.json"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "original-container-inventory-images-and-start-times-preserved",
+      "status": "PASS",
+      "details": {
+        "originalContainerCount": 13,
+        "additionalOwnedIsolatedContainers": [
+          "5346f7adf81f952c7fe8209cdd4472d6268dd6ad21e64b0921101462fd813f6a|/wfc-pathfinder-local-web-1|true|7c713695-a3c9-40b6-852e-5ceb51642d65|wfc-pathfinder-local",
+          "20352cc1fc82dcf189a759555c3698f8666c050838cc50cff753f051f8c25384|/wfc-pathfinder-local-api-1|true|7c713695-a3c9-40b6-852e-5ceb51642d65|wfc-pathfinder-local",
+          "65a72f7f15e0f73a6ccb7e02f2d357af189dc6007c4cc65fe0a34f8efb7d81ec|/wfc-pathfinder-local-storage-ready-1|true|7c713695-a3c9-40b6-852e-5ceb51642d65|wfc-pathfinder-local",
+          "6830635a4597dad696f1a5ced6846853cd9e1fee0f858450ad6f858e4c2e30b9|/wfc-pathfinder-local-postgres-1|true|7c713695-a3c9-40b6-852e-5ceb51642d65|wfc-pathfinder-local",
+          "e27a690c80957356c8a562e02b72249cf85a3d965f9a32fe596048a15f499820|/wfc-pathfinder-local-minio-1|true|7c713695-a3c9-40b6-852e-5ceb51642d65|wfc-pathfinder-local"
+        ],
+        "credentialsOrEnvironmentRead": false,
+        "databaseContentAudit": false,
+        "originalDatabaseOrStorageWritesPerformed": false
+      }
+    }
+  ],
+  "sources": [
+    {
+      "file": "pathfinder-engine/.gitattributes",
+      "sha256": "f6cdf1f72bcd3db99aeae6b93d848248000c96f08c32a93604ad724b9becf6dd"
+    },
+    {
+      "file": "pathfinder-engine/.gitignore",
+      "sha256": "f91df71a020daeec38c261f3b0422256a5c0ddf0170c4464b19a39005c656aed"
+    },
+    {
+      "file": "pathfinder-engine/README.md",
+      "sha256": "71110067f8ae491fb0ca96756fe3b7a22488b0f70676d0b5f201d3f7a33e5c3e"
+    },
+    {
+      "file": "pathfinder-engine/source-provenance.json",
+      "sha256": "3b4728058ab7eaa417ba3d5f1f23f28119e84f12ad26f14c5aea2cf1fe9f0545"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Adapter/Contracts.cs",
+      "sha256": "2e173aa50690624cefb1f1309d7060e44eaac42c8c41fa8ea9e9b1428069712b"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Adapter/PathFinder.Adapter.csproj",
+      "sha256": "1c5eeadfc838af4fb8825d9803b0c5fa195bdaa89611584ccf8bb1a28ec88173"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Adapter/PathfinderAdapter.cs",
+      "sha256": "116f815fad2d7268d6f0f258f2378d23bb4e85d8c5a372810871b5207c47950e"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/PathFinder.Core.csproj",
+      "sha256": "7e11f51f4a64b09c35fbff31b2efbb2a4fbc5d8b42bc42ffead1de50043192f9"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Properties/AssemblyInfo.cs",
+      "sha256": "cdb3513c12901b8a5942b73ba84de72509764520bf24738c3f460a93bf4e3704"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/CableDesignLength.cs",
+      "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/RouteCalculator.cs",
+      "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/RouteCodeParser.cs",
+      "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/RouteLookupCalculator.cs",
+      "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/RouteNameResolver.cs",
+      "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/RoutingModels.cs",
+      "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/TrayBendMeshGeometry.cs",
+      "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/TrayGeometryBuilder.cs",
+      "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshClearance.cs",
+      "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshData.cs",
+      "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Routing/TrayMeshGeometry.cs",
+      "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Core/Support/SavedRouteDesign.cs",
+      "sha256": "510435e39b2cc75c8591a799c8759bf735afefbc3250a8c581476eb65d5be8eb"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/AffineTransform.cs",
+      "sha256": "890bc33414d2ee6c900cb3010d813003cf16bd37b6d9d4c6168dcd7f748be6da"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/Contracts.cs",
+      "sha256": "1640cc4c9243581f3cdf5ad64ce579d7617946d7708f9c359d85420d9bd8586c"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/FittedModelCache.cs",
+      "sha256": "590336f82f7d4856dee78d1de1a090af3c0f4eb69dccb29ef067250cbf4e21cc"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/PathFinder.Model.csproj",
+      "sha256": "1c5eeadfc838af4fb8825d9803b0c5fa195bdaa89611584ccf8bb1a28ec88173"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/README.md",
+      "sha256": "a36829c77dd1167ee13b7f1dab3de410e611a9b3c2c28b732579f36da82ba199"
+    },
+    {
+      "file": "pathfinder-engine/src/PathFinder.Model/SnapshotReader.cs",
+      "sha256": "6792a3d241c10f6cf150900bb6f2a2e1b1b48d52674906a21dd8f0616dc554c0"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Model.Tests/PathFinder.Model.Tests.csproj",
+      "sha256": "c27ee4188ece44732d6d999093c9c1f5ba5d1775747082bd1850bd7404c63b68"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Model.Tests/Program.cs",
+      "sha256": "53a01c6d6c567ae72ee41c61f3205a7ebeee36cc2dddafef9eb001429038e018"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Parity/BoundaryTests.cs",
+      "sha256": "402657313cb91bf1f1e53ba5b1b63464119b64e3bd32e61fd2629d9ffe4aaf66"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Parity/FrozenReplay.cs",
+      "sha256": "776ccd207da7958cebb18f3ad3cedfd15e5c5886f0bb50500a3996df162ccc26"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Parity/PathFinder.Parity.csproj",
+      "sha256": "ac09eb8777d9cef62cea21e7e5cd1e7ada16897b81bb39a917d45dfbebaaf4fd"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Parity/Program.cs",
+      "sha256": "431c0077fda582e34db71b3610c26d36a4a1cc7d62f2c53192f9039b4efffa5e"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/DesignLengthTests.cs",
+      "sha256": "c27fa32decb3dadd33aab05a77c7c2ba7346b0e3a32fd94909f465b4ace7e0ba"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/EndpointApproachTests.cs",
+      "sha256": "42ffcae2087c43f80e785f85ea0a25286e1077f5910009011798334a5f77aa2b"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/EntryPoint.cs",
+      "sha256": "7e335119aa59142b92642052d77aa2a3df808cb8c47ca361ec7ca7b227fe69ab"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/GeometryTests.cs",
+      "sha256": "17e653678f35f39c1e19c597fe0947e66fefb65c1da5688ec6a91c437ae08d9a"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/MeshClearanceTests.cs",
+      "sha256": "b990c4a789b9bd7821b514208d632b964a30dd46f90bb8620b30ea9d810a7087"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/PathFinder.Regression.csproj",
+      "sha256": "2f0b218a62075bb828d653299b83b631149d2621c0fb4379340f0d7723bef55f"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/Program.cs",
+      "sha256": "40c2c7ef53a04ab7b38b398748d217418ce32d0a016a39688b3042ca7b93952e"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/README.md",
+      "sha256": "ce48675679912a9762c885adfdd91925074a94877b998066dbb0d283ce0139ce"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/RouteLookupTests.cs",
+      "sha256": "d7a74b2f37a1430132114d7e887a9893335284a13ebb667a720e2a4a6bfe0843"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/RouteNameResolverTests.cs",
+      "sha256": "d5ffc9da399d13d10332d039ec89e1d2440237d5f0610bd842a6d47f80d24377"
+    },
+    {
+      "file": "pathfinder-engine/tests/PathFinder.Regression/VerifiedPortTests.cs",
+      "sha256": "9faf7e94ae79394195cfd4858148753bae0afe2fcfaf43b3dd0ebeb472c97a47"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.LocalRunner/PathFinder.LocalRunner.csproj",
+      "sha256": "97b907a3e33fe35341f970d66639fe9ed610de5a634cdb76782c9a62e055dc77"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.LocalRunner/Program.cs",
+      "sha256": "91a6973f29d7d52119919b9d8ac80cc99359a374be14513bec5d0aacef0efd30"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelCheck/PathFinder.ModelCheck.csproj",
+      "sha256": "c27ee4188ece44732d6d999093c9c1f5ba5d1775747082bd1850bd7404c63b68"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelCheck/Program.cs",
+      "sha256": "64ddf8e29c896e89be4e8346a0437963cf2a3e1a8ab8f134c52722b519501c45"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelCheck/README.md",
+      "sha256": "29fe971c704ae9c91308ab97553323d46f4022b9bffeebdefc386717726b2e83"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelCheck/test-smoke.ps1",
+      "sha256": "fd4f81578e3ce9a0d2910adbc0d1d16ebcf2df0cba539a5c79a5e5894c0371b0"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/PathFinder.ModelRunner.csproj",
+      "sha256": "a89385bd290d67e3772960a748aaf4b76e9ac8fd9dc1c3f69baa44b2760a84ff"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/Program.cs",
+      "sha256": "039ad91590760d4110592563bf8377c9c3d0ab8e117ff6af9282236bdc46fa08"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/README.md",
+      "sha256": "2bb2e79861b5b34c137b274871f5d9001211aad44491d62a49b04440ff66209d"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.ModelRunner/test-smoke.mjs",
+      "sha256": "710dd154ae47fcbbe486fe299d46aaad74f9019952ab111eb7627b68de545a06"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/NativeOracle.Plugin.csproj",
+      "sha256": "dcdf206067d4f296eb688b1f5d91d5bd3eba824e759cfc0ff80f9990985ddb93"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/NativeOracle.Runner.csproj",
+      "sha256": "57822655d38316c861b0c73974f5f3bf68ba171cb39393e02b0e749bbd07565c"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/OraclePlugin.cs",
+      "sha256": "a44ed55d14bb4eefda008db9e11acd89ea8a6d021684a217ac3c612054b6852e"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/CableDesignLength.cs",
+      "sha256": "fa489d2948f3c7a4af8931cb79d775a61f4718d5ad3187bd5637598665d1ff5f"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/RouteCalculator.cs",
+      "sha256": "12e96c787902850bffad660d5d2a43333960d9920890cf8f547a730f67e0d0b8"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/RouteCodeParser.cs",
+      "sha256": "a97e2358374f0798c94103a8f0b20bf7c5a04208de523ea384afa528f70ec05f"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/RouteLookupCalculator.cs",
+      "sha256": "1914b875b675bc61e274a46f221d0633e5db21eab2fe0e34214c7c05aa5485ae"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/RouteNameResolver.cs",
+      "sha256": "9bf4964a00833f91a38f11f34e2eb377f1fb27ccd48d389731248ecf07174c34"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/RoutingModels.cs",
+      "sha256": "2de71cc5410e04cce309276cbd2591d218530d5ddfca4c77a2ad98f2ee02e4ea"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/TrayBendMeshGeometry.cs",
+      "sha256": "4d6f0c574166fbcb880cdc38bd10e589905fc74b1fe5709c33fd5e2ecab35948"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/TrayGeometryBuilder.cs",
+      "sha256": "9dd9abe707b3908c8d55a404e12d6b79b7785659f284dc4d84d9d2391dd225c7"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/TrayMeshClearance.cs",
+      "sha256": "75075cbf5b13d385f9932e1ad755815e39934e55bcbf123b657ae3b5363541e8"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/TrayMeshData.cs",
+      "sha256": "4ff9170f90a57f8509a9acb5b84dd95262e55b942d6ee892a0dd231563b3af31"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Routing/TrayMeshGeometry.cs",
+      "sha256": "c88ed49513778ef809e581ecf8b4418b746b982c5b12f533d96478275de8deba"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Services/RoutingSession.Lookup.cs",
+      "sha256": "87c35cc315f913415531d0d25ab8dd398a880381d660202966d18214f1553702"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Services/RoutingSession.cs",
+      "sha256": "4249f982005015ef9e6975f5a89b8fa065fa47a2b97e637ca27e6131783c42c0"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Pinned/Services/TrayMeshReader.cs",
+      "sha256": "12ab6acee2cd4b9c881447fefbf751c3141f0405c4c37e0c379b8bec87e76815"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/README.md",
+      "sha256": "c91c92c4274bbdacfcbb6475c6c1c24b12ef8f77097e25708edfce87f34fea34"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Run-NativeOracle.ps1",
+      "sha256": "206de282f99010094105a4e008139b37bde73261c9dc8eaf05e3724191d88ea4"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Run-NativeOracleCli.ps1",
+      "sha256": "967f5a96506f417d6934e9e9c5b17c494685a316b7fe5e87d582c6237c8755d2"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/Runner.cs",
+      "sha256": "62d3cdf0b5bf1e037c69ed37fafdf7ae05b8f746464d90ededbc887ff2533f38"
+    },
+    {
+      "file": "pathfinder-engine/tools/PathFinder.NativeOracle/source-provenance.json",
+      "sha256": "7ed173090eb42b83931fcb3c14147837c3fd702749011c3f80f47cb470b436e6"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/README.md",
+      "sha256": "a0df2df61e04a867bc59ff5c68824ce4748ffa4099b8d1835446f4c9dad5f39e"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/capture.mjs",
+      "sha256": "c5f8ce64dc909b95927d61ffc65ecd1abc3fe211b84c44c90ebf5c7a8880e49c"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/compare-lib.mjs",
+      "sha256": "bafa2582c87320b0ce1090e091ab5a212a3348f7d0704987bcea416b3bf56e82"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/compare.mjs",
+      "sha256": "9c2d4e9eaf4730b8766d14a75a4c103cf246d62438a4dc33b3e4acc10888be5c"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/index.html",
+      "sha256": "7585ec7c9206e29a9c5c87fd14a0c45ab76e15b46cf2e93f24d1d64a0364516e"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/mesh-indices.mjs",
+      "sha256": "17e276d3a03dfb9e66c81e165d75f1fb7051b894e14f88344932aa860be1822e"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/normalize-README.md",
+      "sha256": "99189183dfa5c0b472535a80d3f18374b172055aacc561455e27e88bff2dbdb4"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/normalize-lib.mjs",
+      "sha256": "a585cd021c0013d296403dd4a2d4f1e3e5ce5a3d915f7e69c39277d31bbe517e"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/normalize.mjs",
+      "sha256": "3b1bfe39c42d95dabd8e9e3587c3aaf46abf1739e246109ff7e60d1076a43e13"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/prepare.mjs",
+      "sha256": "3b9582e6f165fa1180e096c1dee7eadf9245c07b6bde538ee12d5b2058e984a4"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/server.mjs",
+      "sha256": "4eab61a64ec4e4ba5ec70fdd614ba7f848f8fb29bbd6d425dce2ffc365b1bd36"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/test/Program.cs",
+      "sha256": "cc91c92426c293548cebf3f1d4f82cbba6ae8e431be8e2d5b28d2cbd18783f1d"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/test/SnapshotInterop.csproj",
+      "sha256": "34a80e716c4a80cec2a6711d844af9ae487683364eb4c32db39901820bc8dc5d"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/test/fixtures.mjs",
+      "sha256": "a3ef16a41f5b40f4c15b6c1b4cf016c0fc3c2ee600b7e878897f3edd3937d69b"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/test/mesh-indices.test.mjs",
+      "sha256": "36401ae02f7f05e9d533f6151f98a47e3a4b0f42c1b050b7286231423027c41f"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/test/normalization.test.mjs",
+      "sha256": "3e78ee2c58b521e7924d46e72dd5b1080adaeb607efc986cba2748d605bff5ef"
+    },
+    {
+      "file": "pathfinder-engine/tools/model-capture/verify-local.mjs",
+      "sha256": "54b806cba47aaaea2b3075f637c946c3a065058c36cd06a08119062416ce2bbc"
+    },
+    {
+      "file": "pathfinder-engine/verify-isolation.mjs",
+      "sha256": "e71ad6289f488973036b5a734dd9d6ad2fc6fc5f7243b5898a5cf75fca205b7d"
+    },
+    {
+      "file": "pathfinder-engine/verify-source.mjs",
+      "sha256": "5be50ef6bfc0f465c9c8aefccb5eae576d70fa3106d82ea80c5ba6248cb2de65"
+    },
+    {
+      "file": "pathfinder-engine/verify.mjs",
+      "sha256": "f3aef95b04846991e34bc32d9bbd73d2c35097fc4526fe1a7f01ddac3d37c61e"
+    }
+  ],
+  "sourceSetSha256": "cc72d97c244652615379fb3a2b3fd0eec886525fb77d1e782671d9fc3c092ce3",
+  "inheritedCleanup": {
+    "status": "BLOCKED",
+    "reason": "Two earlier removals denied: blocked by policy",
+    "retried": false,
+    "retained": [
+      ".pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c",
+      ".pf2-work/model-tests-2733f823d57d477ba5e338a7d9a08cc9"
+    ]
+  },
+  "noPushPullRequestMergeOrDeployment": true
+}

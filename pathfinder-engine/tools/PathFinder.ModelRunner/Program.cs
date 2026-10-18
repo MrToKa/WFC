@@ -26,7 +26,7 @@ internal static class Program
         public override decimal Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
             ((JsonConverter<decimal>)PathfinderAdapter.JsonOptions.GetConverter(typeof(decimal))).Read(ref reader, type, PathfinderAdapter.JsonOptions);
         public override void Write(Utf8JsonWriter writer, decimal value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(value.ToString("G29", CultureInfo.InvariantCulture));
+            writer.WriteStringValue(value.ToString("0.############################", CultureInfo.InvariantCulture));
     }
     private static async Task<int> Main(string[] args)
     {
@@ -95,8 +95,10 @@ internal static class Program
             "MV" => CableCategory.MV, "LV" => CableCategory.LV,
             "Control" or "Instrumentation" => CableCategory.Control, _ => CableCategory.None
         };
-        if (category == CableCategory.None) return Failure(request, "category_required", "Resolve the cable category before calculation.");
-        if (snapshot.Objects.Any(o => o.GeometryRole == "routing-leaf" && !o.PlanningExcluded && (o.CategoryAssignmentSource == "unassigned" || o.AllowedCategories.Length == 0)))
+        if (request.Operation == "calculate" && category == CableCategory.None) return Failure(request, "category_required", "Resolve the cable category before calculation.");
+        var includedRoutingObjects = prepared.Objects.Where(o => o.GeometryRole == "routing-leaf" && o.Visibility is not ("hidden" or "excluded"))
+            .Select(o => o.Id).ToHashSet(StringComparer.Ordinal);
+        if (request.Operation == "calculate" && snapshot.Objects.Any(o => includedRoutingObjects.Contains(o.Id) && (o.CategoryAssignmentSource == "unassigned" || o.AllowedCategories.Length == 0)))
             return Failure(request, "model_needs_review", "Assign explicit planning categories to the selected routing geometry.");
         var options = request.Options ?? throw new ArgumentException("Explicit routing options are required.");
         var routeOptions = new RoutingOptions
@@ -105,12 +107,14 @@ internal static class Program
             SecondaryDistanceMeters = options.SecondaryDistanceMeters, PreferVerticalApproach = options.PreferVerticalApproach,
             MaxGraphNodes = options.MaxGraphNodes, MaxGraphConnections = options.MaxGraphConnections
         };
-        var routeResult = new RouteCalculator().Calculate(prepared.Segments,
-            Point(request.From), Point(request.To), category, routeOptions, token);
+        var routeResult = request.Operation == "lookup"
+            ? RouteLookupCalculator.Calculate(prepared.Segments, RouteLookupCalculator.Parse(request.RouteText), routeOptions, token)
+            : new RouteCalculator().Calculate(prepared.Segments, Point(request.From), Point(request.To), category, routeOptions, token);
         token.ThrowIfCancellationRequested();
+        if (request.Reverse) routeResult = routeResult.Reverse();
         CableDesignLength? resultDesign = null;
-        var status = routeResult.Success ? "calculated" : "no_path";
-        if (routeResult.Success)
+        var status = routeResult.Success ? "calculated" : IsCoreResourceLimit(routeResult.Message) ? "resource_limit" : "no_path";
+        if (routeResult.Success && request.Operation == "calculate")
         {
             if (settings is null) throw new ArgumentException("Project Details settings are required.");
             if ((routeResult.FromRequiresSecondary || routeResult.ToRequiresSecondary) && settings.SecondaryTrayLength is null)
@@ -121,8 +125,9 @@ internal static class Program
         return new
         {
             schemaVersion = "pathfinder.model.response.v1", request.RequestId, status,
-            message = status == "settings_required" ? "Project Details SECONDARY length is required." : routeResult.Message,
-            snapshot.Model, prepared = summary, effectiveCategory = category.ToString(),
+            message = status == "settings_required" ? "Project Details SECONDARY length is required."
+                : request.Operation == "lookup" && routeResult.Success ? "Ordered lookup calculated without equipment approaches or full cable design allowances." : routeResult.Message,
+            snapshot.Model, prepared = summary, effectiveCategory = request.Operation == "lookup" ? null : category.ToString(),
             route = routeResult, design = resultDesign, projectSettings = settings,
             engineeringAccepted = false
         };
@@ -133,8 +138,15 @@ internal static class Program
         if (r.SchemaVersion != "pathfinder.model.runner.v1" || !Guid.TryParseExact(r.RequestId, "D", out _) ||
             !Guid.TryParseExact(r.ProjectId, "D", out _) || !Guid.TryParseExact(r.ModelVersionId, "D", out _) ||
             !Guid.TryParseExact(r.SnapshotId, "D", out _) || !Regex.IsMatch(r.SnapshotSha256, "^[a-f0-9]{64}$") ||
-            r.Operation is not ("prepare" or "calculate" or "design") || r.TimeoutMilliseconds is < 1 or > 120000)
+            r.Operation is not ("prepare" or "calculate" or "design" or "lookup") || r.TimeoutMilliseconds is < 1 or > 120000)
             throw new ArgumentException("Unknown schema, operation, identity, hash or deadline.");
+        if (r.Reverse && r.Operation is not ("calculate" or "lookup")) throw new ArgumentException("Reverse applies only to calculated paths or ordered lookup.");
+        if (r.Operation == "lookup")
+        {
+            if (string.IsNullOrWhiteSpace(r.RouteText) || r.RouteText.Length > 8000 || RouteLookupCalculator.Parse(r.RouteText).Count > 100)
+                throw new ArgumentException("Ordered lookup requires 1 to 100 route codes in at most 8000 characters.");
+        }
+        else if (r.RouteText is not null) throw new ArgumentException("Route text applies only to ordered lookup.");
         if (r.ProjectSettings is { } s && (s.Revision is null || s.Revision.Length is < 1 or > 256 || s.EndConnectionLength < 0 ||
             s.SecondaryTrayLength < 0 || s.AdditionalBendingPercent < 0)) throw new ArgumentException("Invalid Project Details settings.");
         if (r.Options is { } o && (!double.IsFinite(o.ConnectionToleranceMeters) || o.ConnectionToleranceMeters is < 0 or > 100 ||
@@ -143,6 +155,8 @@ internal static class Program
             o.MaxGraphNodes is < 1 or > 1000000 || o.MaxGraphConnections is < 1 or > 4000000))
             throw new ArgumentException("Routing options exceed finite resource bounds.");
     }
+    private static bool IsCoreResourceLimit(string message) => message.Contains("routing-node limit", StringComparison.Ordinal)
+        || message.Contains("routing-connection limit", StringComparison.Ordinal) || message.Contains("routing-candidate limit", StringComparison.Ordinal);
     private static RoutePoint Point(PointInput? point)
     {
         if (point is null || !new[] { point.X, point.Y, point.Z }.All(v => double.IsFinite(v) && Math.Abs(v) <= 1e9))
@@ -241,6 +255,8 @@ internal sealed record Request
     public ProjectSettingsSnapshot? ProjectSettings { get; init; }
     public ModelBuildRules? Rules { get; init; }
     public RetainedRoute? Route { get; init; }
+    public string? RouteText { get; init; }
+    public bool Reverse { get; init; }
 }
 internal sealed record RetainedRoute
 {

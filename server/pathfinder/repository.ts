@@ -5,6 +5,10 @@ import type { artifactSchema, bindLocationSchema, createLocationSchema, Location
 import { PathFinderError } from './errors.js';
 import { matchLocation, normalizeLocation, objectMatchNames, validateSnapshotStructure } from './matching.js';
 import { storeSnapshot } from './storage.js';
+import type { JobPrincipal } from './jobContracts.js';
+import { principalTransaction } from './auth.js';
+export { transaction } from './transactions.js';
+import { bindingAuditState, locationAuditState, recordLocationEvent } from './audit.js';
 
 type Row = Record<string, any>;
 export async function requireTransactionalAdmin(client: PoolClient, actorId: string): Promise<void> {
@@ -12,13 +16,11 @@ export async function requireTransactionalAdmin(client: PoolClient, actorId: str
   if (result.rows[0]?.is_admin !== true) throw new PathFinderError('ADMIN_REQUIRED',403,'Administrator access required.');
 }
 export async function lockProject(client: PoolClient, projectId: string): Promise<void> {
-  const project = await client.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE',[projectId]);
+  const project = await client.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE',[projectId]);
   if (!project.rows.length) throw new PathFinderError('PROJECT_NOT_FOUND',404);
 }
-export async function transaction<T>(pool: Pool, operation: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect();
-  try { await client.query('BEGIN'); const result = await operation(client); await client.query('COMMIT'); return result; }
-  catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; } finally { client.release(); }
+async function registryTransaction<T>(pool:Pool,projectId:string,who:JobPrincipal,operation:(client:PoolClient) => Promise<T>):Promise<T> {
+  return principalTransaction(pool,projectId,who,operation);
 }
 async function stateRevision(client: PoolClient, projectId: string, expected?: string): Promise<string> {
   const row = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR UPDATE',[projectId])).rows[0];
@@ -45,7 +47,7 @@ export async function latestArtifact(client: PoolClient, projectId: string, mode
 async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null): Promise<LocationDto[]> {
   const rows = await client.query<Row>(`SELECT l.id,l.name,l.revision::text,
     COALESCE((SELECT jsonb_agg(a.display_alias ORDER BY a.normalized_alias) FROM pf_location_aliases a WHERE a.project_id=l.project_id AND a.location_id=l.id),'[]'::jsonb) AS aliases,
-    b.model_version_id,b.revision::text AS binding_revision,b.point,b.object_id,b.external_id,b.source,b.artifact_id,
+    b.model_version_id,b.revision::text AS binding_revision,b.point,b.object_id,b.external_id,b.source,b.artifact_id,b.derivation,b.coordinate_frame,
     m.status AS matching_status,m.candidate_object_ids
     FROM pf_locations l LEFT JOIN LATERAL(SELECT * FROM pf_location_bindings b WHERE b.project_id=l.project_id AND b.location_id=l.id
       ORDER BY (b.model_version_id=$2) DESC,b.confirmed_at DESC LIMIT 1) b ON TRUE
@@ -53,16 +55,15 @@ async function locations(client: PoolClient, projectId: string, modelId: string 
     WHERE l.project_id=$1 ORDER BY l.name,l.id`,[projectId,modelId]);
   return rows.rows.map(row => ({id:row.id,name:row.name,aliases:row.aliases,revision:row.revision,
     ...(row.matching_status ? {matching:{status:row.matching_status,candidateObjectIds:row.candidate_object_ids}} : {}),binding:row.model_version_id ? {
-    modelVersionId:row.model_version_id,revision:row.binding_revision,point:row.point,objectId:row.object_id,externalId:row.external_id,source:row.source,
+    modelVersionId:row.model_version_id,revision:row.binding_revision,point:row.point,objectId:row.object_id,externalId:row.external_id,source:row.source,derivation:row.derivation,coordinateFrame:row.coordinate_frame,
     status:row.model_version_id === modelId && (!row.artifact_id || row.artifact_id === artifactId) ? 'confirmed' : 'stale',
   } : null}));
 }
 export function createPathFinderRepository(pool: Pool) {
   return {
     pool,
-    async state(projectId: string, actorId: string) {
-      return transaction(pool,async client => {
-        await requireTransactionalAdmin(client,actorId);
+    async state(projectId: string, who: JobPrincipal) {
+      return registryTransaction(pool,projectId,who,async client => {
         const model = await activeModel(client,projectId), artifact = await latestArtifact(client,projectId,model.active_model_version_id);
         const registry = await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1',[projectId]);
         const setting = (await client.query<Row>('SELECT secondary_tray_length::text,end_connection_length::text,additional_bending_percent::text FROM projects WHERE id=$1',[projectId])).rows[0];
@@ -80,23 +81,27 @@ export function createPathFinderRepository(pool: Pool) {
             engineeringAccepted:false,readiness:'needs_review',capture:artifact.capture,coordinates:artifact.coordinates,createdAt:artifact.created_at}] : [],jobs:[],proposals:[]};
       });
     },
-    async createLocation(projectId: string, actorId: string, input: z.infer<typeof createLocationSchema>) {
-      return transaction(pool,async client => {
-        await lockProject(client,projectId); await requireTransactionalAdmin(client,actorId); await stateRevision(client,projectId,input.expectedRegistryRevision);
+    async createLocation(projectId: string, who: JobPrincipal, input: z.infer<typeof createLocationSchema>) {
+      const actorId = who.userId;
+      return registryTransaction(pool,projectId,who,async client => {
+        await stateRevision(client,projectId,input.expectedRegistryRevision);
         const values = [...new Map([input.name,...input.aliases].map(name => [normalizeLocation(name),name.normalize('NFC').trim()])).entries()];
         if (values.some(([key]) => !key)) throw new PathFinderError('INVALID_LOCATION');
         const conflict = await client.query('SELECT location_id FROM pf_location_aliases WHERE project_id=$1 AND normalized_alias=ANY($2::text[])',[projectId,values.map(([key]) => key)]);
         if (conflict.rows.length) throw new PathFinderError('LOCATION_ALIAS_CONFLICT',409,'A name or alias already belongs to another project location.');
         const id = randomUUID(); await client.query('INSERT INTO pf_locations(id,project_id,name,created_by) VALUES($1,$2,$3,$4)',[id,projectId,input.name.normalize('NFC'),actorId]);
         for (const [normalized,display] of values) await client.query('INSERT INTO pf_location_aliases(project_id,normalized_alias,display_alias,location_id) VALUES($1,$2,$3,$4)',[projectId,normalized,display,id]);
+        await recordLocationEvent(client,{projectId,locationId:id,actorId,kind:'create',before:null,after:await locationAuditState(client,projectId,id)});
         return {locationId:id,registryRevision:await bumpRegistry(client,projectId)};
       });
     },
-    async bindLocation(projectId: string, actorId: string, locationId: string, input: z.infer<typeof bindLocationSchema>) {
-      return transaction(pool,async client => {
-        await lockProject(client,projectId); await requireTransactionalAdmin(client,actorId); await stateRevision(client,projectId,input.expectedRegistryRevision);
+    async bindLocation(projectId: string, who: JobPrincipal, locationId: string, input: z.infer<typeof bindLocationSchema>) {
+      const actorId = who.userId;
+      return registryTransaction(pool,projectId,who,async client => {
+        await stateRevision(client,projectId,input.expectedRegistryRevision);
         await activeModel(client,projectId,input.modelVersionId,input.expectedSelectionRevision);
         if (!(await client.query('SELECT id FROM pf_locations WHERE project_id=$1 AND id=$2 FOR UPDATE',[projectId,locationId])).rows.length) throw new PathFinderError('LOCATION_NOT_FOUND',404);
+        const previousBinding = await bindingAuditState(client,projectId,locationId,input.modelVersionId);
         const artifact = await latestArtifact(client,projectId,input.modelVersionId);
         if (input.objectId) {
           if (!artifact) throw new PathFinderError('MODEL_INDEX_REQUIRED',409);
@@ -104,33 +109,38 @@ export function createPathFinderRepository(pool: Pool) {
           if (!object || object.geometry_role === 'hierarchy' || object.visibility === 'hidden' || input.externalId !== null && input.externalId !== object.external_id)
             throw new PathFinderError('INVALID_LOCATION_OBJECT',409);
         } else if (input.externalId) throw new PathFinderError('OBJECT_ID_REQUIRED');
-        await client.query(`INSERT INTO pf_location_bindings(project_id,location_id,model_version_id,artifact_id,point,object_id,external_id,source,confirmed_by)
-          VALUES($1,$2,$3,$4,$5,$6,$7,'manual',$8) ON CONFLICT(project_id,location_id,model_version_id) DO UPDATE
+        await client.query(`INSERT INTO pf_location_bindings(project_id,location_id,model_version_id,artifact_id,point,object_id,external_id,source,confirmed_by,derivation)
+          VALUES($1,$2,$3,$4,$5,$6,$7,'manual',$8,$9) ON CONFLICT(project_id,location_id,model_version_id) DO UPDATE
           SET artifact_id=EXCLUDED.artifact_id,point=EXCLUDED.point,object_id=EXCLUDED.object_id,external_id=EXCLUDED.external_id,source='manual',
-            revision=pf_location_bindings.revision+1,confirmed_by=EXCLUDED.confirmed_by,confirmed_at=NOW()`,
-        [projectId,locationId,input.modelVersionId,artifact?.id ?? null,JSON.stringify(input.point),input.objectId,input.externalId,actorId]);
+            revision=pf_location_bindings.revision+1,confirmed_by=EXCLUDED.confirmed_by,confirmed_at=NOW(),derivation=EXCLUDED.derivation`,
+        [projectId,locationId,input.modelVersionId,artifact?.id ?? null,JSON.stringify(input.point),input.objectId,input.externalId,actorId,input.derivation ?? 'manual-world-point']);
         await client.query('UPDATE pf_locations SET revision=revision+1,updated_at=NOW() WHERE project_id=$1 AND id=$2',[projectId,locationId]);
+        await recordLocationEvent(client,{projectId,locationId,modelVersionId:input.modelVersionId,actorId,kind:'bind',before:previousBinding,after:await bindingAuditState(client,projectId,locationId,input.modelVersionId)});
         return {locationId,registryRevision:await bumpRegistry(client,projectId)};
       });
     },
-    async updateLocation(projectId: string, actorId: string, locationId: string, input: z.infer<typeof createLocationSchema>) {
-      return transaction(pool,async client => {
-        await lockProject(client,projectId); await requireTransactionalAdmin(client,actorId); await stateRevision(client,projectId,input.expectedRegistryRevision);
+    async updateLocation(projectId: string, who: JobPrincipal, locationId: string, input: z.infer<typeof createLocationSchema>) {
+      const actorId = who.userId;
+      return registryTransaction(pool,projectId,who,async client => {
+        await stateRevision(client,projectId,input.expectedRegistryRevision);
         if (!(await client.query('SELECT id FROM pf_locations WHERE project_id=$1 AND id=$2 FOR UPDATE',[projectId,locationId])).rows.length) throw new PathFinderError('LOCATION_NOT_FOUND',404);
+        const previousLocation = await locationAuditState(client,projectId,locationId);
         const values = [...new Map([input.name,...input.aliases].map(name => [normalizeLocation(name),name.normalize('NFC').trim()])).entries()];
         const conflict = await client.query('SELECT location_id FROM pf_location_aliases WHERE project_id=$1 AND location_id<>$2 AND normalized_alias=ANY($3::text[])',[projectId,locationId,values.map(([key]) => key)]);
         if (conflict.rows.length) throw new PathFinderError('LOCATION_ALIAS_CONFLICT',409,'A name or alias already belongs to another project location.');
         await client.query('DELETE FROM pf_location_aliases WHERE project_id=$1 AND location_id=$2',[projectId,locationId]);
         for (const [normalized,display] of values) await client.query('INSERT INTO pf_location_aliases(project_id,normalized_alias,display_alias,location_id) VALUES($1,$2,$3,$4)',[projectId,normalized,display,locationId]);
         await client.query('UPDATE pf_locations SET name=$3,revision=revision+1,updated_at=NOW() WHERE project_id=$1 AND id=$2',[projectId,locationId,input.name.normalize('NFC')]);
+        await recordLocationEvent(client,{projectId,locationId,actorId,kind:'update',before:previousLocation,after:await locationAuditState(client,projectId,locationId)});
         return {locationId,registryRevision:await bumpRegistry(client,projectId)};
       });
     },
-    async ingestArtifact(projectId: string, actorId: string, input: z.infer<typeof artifactSchema>) {
+    async ingestArtifact(projectId: string, who: JobPrincipal, input: z.infer<typeof artifactSchema>) {
+      const actorId = who.userId;
       const snapshot = {...input.snapshot,model:{...input.snapshot.model,projectId,modelVersionId:input.modelVersionId}};
       const visibility = validateSnapshotStructure(snapshot);
-      return transaction(pool,async client => {
-        await lockProject(client,projectId); await requireTransactionalAdmin(client,actorId); await stateRevision(client,projectId,input.expectedRegistryRevision);
+      return registryTransaction(pool,projectId,who,async client => {
+        await stateRevision(client,projectId,input.expectedRegistryRevision);
         const model = await activeModel(client,projectId,input.modelVersionId,input.expectedSelectionRevision);
         if (snapshot.model.contentSha256 !== model.content_fingerprint) throw new PathFinderError('MODEL_FINGERPRINT_CONFLICT',409);
         const id = randomUUID(), saved = await storeSnapshot(id,snapshot);
@@ -148,9 +158,10 @@ export function createPathFinderRepository(pool: Pool) {
         return {artifactId:id,snapshotSha256:saved.sha256,engineeringAccepted:false,registryRevision:await bumpRegistry(client,projectId)};
       });
     },
-    async match(projectId: string, actorId: string, expectedRegistryRevision: string) {
-      return transaction(pool,async client => {
-        await lockProject(client,projectId); await requireTransactionalAdmin(client,actorId); await stateRevision(client,projectId,expectedRegistryRevision);
+    async match(projectId: string, who: JobPrincipal, expectedRegistryRevision: string) {
+      const actorId = who.userId;
+      return registryTransaction(pool,projectId,who,async client => {
+        await stateRevision(client,projectId,expectedRegistryRevision);
         const model = await activeModel(client,projectId), artifact = await latestArtifact(client,projectId,model.active_model_version_id);
         const endpoints = (await client.query<{name:string}>(`SELECT DISTINCT value AS name FROM cables c CROSS JOIN LATERAL (VALUES(c.from_location),(c.to_location)) e(value)
           WHERE c.project_id=$1 AND value IS NOT NULL AND btrim(value)<>'' LIMIT 100001`,[projectId])).rows;
@@ -163,6 +174,7 @@ export function createPathFinderRepository(pool: Pool) {
             locationId = randomUUID(); created++;
             await client.query('INSERT INTO pf_locations(id,project_id,name,created_by) VALUES($1,$2,$3,$4)',[locationId,projectId,endpoint.name.normalize('NFC').trim(),actorId]);
             await client.query('INSERT INTO pf_location_aliases(project_id,normalized_alias,display_alias,location_id) VALUES($1,$2,$3,$4)',[projectId,normalized,endpoint.name.normalize('NFC').trim(),locationId]);
+            await recordLocationEvent(client,{projectId,locationId,actorId,kind:'auto_create',before:null,after:await locationAuditState(client,projectId,locationId)});
           }
         }
         if (artifact) {
@@ -179,11 +191,13 @@ export function createPathFinderRepository(pool: Pool) {
               continue;
             }
             const object = candidates.rows[0]; bound++;
-            await client.query(`INSERT INTO pf_location_bindings(project_id,location_id,model_version_id,artifact_id,point,object_id,external_id,source,confirmed_by)
-              VALUES($1,$2,$3,$4,$5,$6,$7,'automatic',$8) ON CONFLICT(project_id,location_id,model_version_id) DO UPDATE
+            const previousBinding = await bindingAuditState(client,projectId,location.id,model.active_model_version_id);
+            await client.query(`INSERT INTO pf_location_bindings(project_id,location_id,model_version_id,artifact_id,point,object_id,external_id,source,confirmed_by,derivation)
+              VALUES($1,$2,$3,$4,$5,$6,$7,'automatic',$8,'equipment-bottom-aabb') ON CONFLICT(project_id,location_id,model_version_id) DO UPDATE
               SET artifact_id=EXCLUDED.artifact_id,point=EXCLUDED.point,object_id=EXCLUDED.object_id,external_id=EXCLUDED.external_id,source='automatic',
-                revision=pf_location_bindings.revision+1,confirmed_by=EXCLUDED.confirmed_by,confirmed_at=NOW() WHERE pf_location_bindings.source<>'manual'`,
+                revision=pf_location_bindings.revision+1,confirmed_by=EXCLUDED.confirmed_by,confirmed_at=NOW(),derivation=EXCLUDED.derivation WHERE pf_location_bindings.source<>'manual'`,
             [projectId,location.id,model.active_model_version_id,artifact.id,JSON.stringify(object.anchor),object.object_id,object.external_id,actorId]);
+            await recordLocationEvent(client,{projectId,locationId:location.id,modelVersionId:model.active_model_version_id,actorId,kind:'auto_bind',before:previousBinding,after:await bindingAuditState(client,projectId,location.id,model.active_model_version_id)});
             await client.query('DELETE FROM pf_location_matches WHERE project_id=$1 AND location_id=$2 AND model_version_id=$3',[projectId,location.id,model.active_model_version_id]);
           }
         }

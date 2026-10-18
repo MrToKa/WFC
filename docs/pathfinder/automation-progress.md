@@ -5,22 +5,41 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch at resumed implementation: `pf-3-locations-local-20261018` (inspect live branch/HEAD before each continuation).
-- Current implementation/evidence checkpoint: `491c11c4398038854dd71674ee77df0c51661fff` (blocked partial PF-2, not stage completion). The accompanying progress index is committed separately; inspect live HEAD on resume.
+- Current branch: `pf-4-viewer-local-20261018` (inspect live branch/HEAD before each continuation).
+- Current committed checkpoint: `c95ad56ebbd6b020966fa0690c98c37516df1db1` (PF-3 implementation, partial verification). Additive PF-4–PF-6 source and isolated runtime work is uncommitted and owned by three coordinated writers; preserve it. This checkpoint is not real engineering acceptance.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
 - Canonical reference: PathFinder `45c24bf5f433f13e102600b36f20327c77961d0a`.
 - Original WFC, both PathFinder checkouts, running containers, databases and storage are reference-only.
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
-## Current work
+## Current work — final independent technical checkpoint, 02:38 UTC
+
+Final API562e8073 / web81bb13b4 is healthy on own5190. Backend20/20 actual,
+34 process/registry,40 legacy, ModelRunner38, frontend71, runtime104 and
+fresh Core105/215 checks PASS at their receipts. Actual final computer-use
+now passes bright yellow real lookup/Reverse, filled Ghost including zero-ID
+synthetic paths, readable review, one-point0m/design7m acknowledgment and
+Clear restoration. Test TOX is restored10; automatic2/2 geometry10/design18.
+No extra one-point Apply occurred. See PF-7/final computer-use receipt.
+
+The runtime owner is now executing cold combined backup/restore/cookie fencing
+and actual .NET-child crash recovery only on a fresh extra target. Source5190
+is retained. Final report/audit/local commit and cleanup follow. Native/full
+plant/graph reuse gates remain open. Original resources remain unchanged.
+
+The prior checkpoint text below is historical; it is not the current list of
+pending rendering fixes or final test counts.
+
+## Earlier work checkpoint
 
 **18 October user resumption supersedes the earlier routine stop:** automation is
 ACTIVE again. See `18-execution-resume.md`. Independent PF-3 registry, PF-4
 protected Viewer/UI, PF-5/PF-6 jobs/Apply and separate runtime work are progressing
 in parallel; this does not waive PF-2/PF-7 engineering evidence. Current registry
-source milestone: 20 pure +10 real SQL checks PASS, new ModelRunner 26 PASS,
-fresh Core 105/215 PASS. Initial HTTP 12/13; alias-update needs refreshed-image
-retest (source includes endpoint). See `03-stage-report.md`; no overall stage
+source milestone: 20 pure +10 real SQL checks PASS, new ModelRunner 37 PASS,
+fresh Core 105/215 PASS. Refreshed HTTP13/13 resolves the initial old-image alias
+404; actual first jobs/Apply16/16 and browser workflow checks are recorded. See
+`03-stage-report.md` and `07-stage-report.md`; no overall stage
 acceptance or engineering Apply claimed. Runtime is new own localhost5190 with
 fresh credentials/database/storage and copied model. Original resources stay
 reference-only. Generate/finalize each subsequent handoff from real interfaces
@@ -37,14 +56,51 @@ PF-1 has no user interface. Automated code/math checks use the normal build/test
 | PF-0 | Technical PASS; inherited cleanup BLOCKED | Frozen receipts and local commit above |
 | PF-1 | TECHNICAL_PASS | Extracted DLL; 105 original regression and 215 parity/boundary checks; source/environment preservation PASS |
 | PF-2 | BLOCKED; partial implementation verified | Native host reports entitlement not found; full-precision reference and remaining graph/capacity work required |
-| PF-3 | IMPLEMENTED; verification in progress | 20 pure +10 actual SQL PASS; refresh candidate HTTP alias-update check |
-| PF-4 | IN_PROGRESS | Additive protected exact renderer/picking/metadata and strict-admin UI; source tests recorded separately |
+| PF-3 | IMPLEMENTED; scoped technical verification PASS | 20 pure +10 actual SQL, refreshed HTTP13/13; actual protected capture/pick/save/reload; native gate unchanged |
+| PF-4 | IMPLEMENTED; actual UI findings being fixed | Actual admin/non-admin deep links, capture/pick/shared resolution PASS; empty-object Ghost/text spacing fixes and lookup UI await fresh image |
 | PF-5 | IN_PROGRESS | Durable jobs/new module work; no completion claim |
-| PF-6 | PLANNED | Explicit Review + Apply, atomic revisions and provenance |
-| PF-7 | NOT_STARTED | Integration, real-model parity, security and regression |
-| PF-8 | NOT_STARTED | Isolated delivery, operations and demonstration |
+| PF-6 | IMPLEMENTED; integration verification pending | Explicit Review + Apply, atomic revisions and provenance; real artifacts remain blocked |
+| PF-7 | IN_PROGRESS at independent scope | Actual engine client 30 checks PASS; fresh candidate security/jobs/Apply/browser checks pending; native parity BLOCKED |
+| PF-8 | IN_PROGRESS at operations scope | Own port 5190; initial isolated backup/restore passed, final combined-state drill pending |
 
 ## Inherited limitations
+
+### Latest durable checkpoint — 18 October 2026, 02:28 UTC scope
+
+- Integrated source/evidence is staged locally (119-file checkpoint plus later
+  unstaged report/tool updates); no commit after `c95ad56` yet. Preserve all
+  coordinated edits. Live branch remains `pf-4-viewer-local-20261018`.
+- Current API image `sha256:6b226c434b4d23a456ed8add0c87edb105d0ace3a5ea4d982556d16e3dea64e3`;
+  web `sha256:c2535ca007ec1ba2045e125bf35174e0d5a8a05032af35b10837ce409be38d4d`.
+  Backend final actual **20/20** SQL/HTTP PASS, cleanup PASS; engine/registry
+  **34/34**, legacy **40/40**. See `evidence/pf5/verification-final-20261018T022415Z.json`.
+- Independent review found a project-FK lock inversion with mixed cable imports.
+  PF project mutexes now use FOR NO KEY UPDATE; actual two-connection mixed
+  import/user-assignment ordering controls passed in that20-case run.
+- Scoped large-artifact proxy/prebody current-login authorization is implemented.
+  Actual transport4controls PASS: admin204, unauth header-only11MiB401,
+  oversize256MiB+1 header-only413, actual11MiB schema-invalid body reaches API400.
+  `runtime/artifact-transport-1792290198792.json`. Nginx EOF-only formatting changed
+  after that image copy; no semantic configuration difference.
+- C# worker latest **38/38 PASS** at `evidence/pf3/model-runner-2026-10-18T02-26-42-960Z.json`.
+  One-point zero-length native result is confirmed; last source build0warnings.
+  Eleven pinned core sources remain unchanged.
+- Frontend preceding overlay patch: TypeScript/ESLint PASS, runtime101/101,
+  targeted frontend69/69. Actual new queued lookup/Reverse35.30345579516123m,
+  four gaps/0.9840583861033791m and filled Ghost/Clear PASS at diagnostic scope.
+  Yellow line is visually too weak/absent in the actual screenshot; Viewer owner
+  is replacing thin WebGL line with bounded merged MeshBasic tubes along exact
+  points, adding a one-point marker and related protocol/UI controls. Await its
+  final tests/freeze, incremental candidate rebuild, and actual screenshot retry.
+- Runtime owner is holding backup maintenance until the final visual window ends.
+  Final combined backup/restore, positive copied Viewer cookie fencing and an
+  actual dotnet-child crash/recovery test on an EXTRA restored target are prepared
+  but NOT_RUN. Source5190 must remain retained; retire only verified extra target.
+- Next: finish yellow/one-point patch → final visual checks (real lookup/Reverse,
+  zero-ID synthetic Ghost/readability/review gate, one-point case) → local commit
+  and PF-7/PF-8 branches/evidence → final own backup/drill/cleanup → final audit.
+  Native parity, full-plant completeness/capacity and reusable graph remain open.
+  No original update or publication. Do not end work merely at this checkpoint.
 
 Frozen synthetic data does not prove real converted-model parity. Paired full-precision native/converted evidence is a substantive PF-2/PF-7 prerequisite. Investigate available authorized sources before treating that prerequisite as unavailable; do not fabricate evidence or loosen thresholds.
 

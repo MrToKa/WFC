@@ -1,0 +1,119 @@
+name: ${PF_PROJECT:?Use the isolated runtime helper}
+
+x-labels: &labels
+  wfc.pathfinder.owner: ${PF_OWNER:?Missing isolated ownership ID}
+  wfc.pathfinder.project: ${PF_PROJECT}
+  wfc.pathfinder.isolated: "true"
+
+services:
+  postgres:
+    image: ${PF_POSTGRES_IMAGE:-postgres:18@sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751}
+    restart: "no"
+    mem_limit: 1g
+    pids_limit: 128
+    environment:
+      POSTGRES_USER: pf_local
+      POSTGRES_DB: wfc_pathfinder_local
+      POSTGRES_PASSWORD: ${PF_DATABASE_PASSWORD:?Missing isolated credential}
+    volumes: ["postgres:/var/lib/postgresql"]
+    networks: [backend]
+    labels: *labels
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pf_local", "-d", "wfc_pathfinder_local"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+
+  minio:
+    image: ${PF_MINIO_IMAGE:-minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e}
+    command: ["server", "/data", "--console-address", ":9001"]
+    restart: "no"
+    mem_limit: 1g
+    pids_limit: 256
+    environment:
+      MINIO_ROOT_USER: pf_local_storage
+      MINIO_ROOT_PASSWORD: ${PF_STORAGE_PASSWORD:?Missing isolated credential}
+    volumes: ["minio:/data"]
+    networks: [backend]
+    labels: *labels
+
+  storage-ready:
+    image: ${PF_API_IMAGE:?Build the isolated API image first}
+    restart: "no"
+    entrypoint: ["node", "--input-type=module", "-e"]
+    command:
+      - "for(let i=0;i<90;i++){try{const r=await fetch('http://minio:9000/minio/health/ready',{signal:AbortSignal.timeout(1500)});if(r.ok)process.exit(0);}catch{}await new Promise(r=>setTimeout(r,500));}process.exit(1);"
+    depends_on: {minio: {condition: service_started}}
+    networks: [backend]
+    labels: *labels
+
+  api:
+    image: ${PF_API_IMAGE}
+    restart: "no"
+    mem_limit: 4g
+    pids_limit: 256
+    init: true
+    stop_grace_period: 45s
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=1536
+      API_HOST: 0.0.0.0
+      API_PORT: 4000
+      API_USE_HTTPS: "false"
+      CLIENT_ORIGIN: "false"
+      DATABASE_URL: postgresql://pf_local:${PF_DATABASE_PASSWORD}@postgres:5432/wfc_pathfinder_local
+      JWT_SECRET: ${PF_JWT_SECRET:?Missing isolated signing key}
+      BCRYPT_ROUNDS: 10
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: pf_local_storage
+      MINIO_SECRET_KEY: ${PF_STORAGE_PASSWORD}
+      MINIO_BUCKET_PROJECTS: pf-local-project-files
+      MINIO_BUCKET_TEMPLATES: pf-local-template-files
+      WFC_MODEL_BUCKET: pf-local-models
+      WFC_MODEL_IMPORT_ROOT: /var/lib/wfc/model-imports
+      WFC_MODEL_IMPORT_CONCURRENCY: 1
+      WFC_VIEWER_ALLOWED_ORIGINS: http://127.0.0.1:${PF_HTTP_PORT:-5190},http://localhost:${PF_HTTP_PORT:-5190}
+      WFC_VIEWER_ALLOW_HTTP_LOOPBACK: "true"
+      WFC_VIEWER_TRUST_PROXY: "true"
+      PF_ROOT: /var/lib/wfc/pathfinder
+      PF_ENGINE_DLL: /opt/pathfinder/PathFinder.ModelRunner.dll
+      PF_LOCAL_DEMO: "true"
+    volumes: ["staging:/var/lib/wfc/model-imports", "pathfinder:/var/lib/wfc/pathfinder"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      storage-ready: {condition: service_completed_successfully}
+    networks: [backend]
+    labels: *labels
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 50
+      start_period: 15s
+
+  web:
+    image: ${PF_WEB_IMAGE:?Build the isolated web image first}
+    restart: "no"
+    mem_limit: 256m
+    pids_limit: 128
+    ports: ["127.0.0.1:${PF_HTTP_PORT:-5190}:80"]
+    depends_on: {api: {condition: service_healthy}}
+    networks: [front, backend]
+    labels: *labels
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+networks:
+  front: {labels: *labels}
+  backend: {internal: true, labels: *labels}
+
+volumes:
+  postgres: {labels: *labels}
+  minio: {labels: *labels}
+  staging: {labels: *labels}
+  pathfinder: {labels: *labels}

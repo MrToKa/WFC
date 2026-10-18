@@ -17,11 +17,17 @@ function fixture(options = {}) {
   const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [] };
   const handle = { finish() { facts.finishes++; }, prepareIndex: options.prepareIndex ?? (async () => {}),
     clearRoute() { facts.clears++; }, fitRoute() { facts.fits++; },
+    showComputedPath(value) { facts.computedPath = structuredClone(value); },
+    pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
+    readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
+    startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
+    readModelCapture: options.readModelCapture ?? (async ({ captureId, index }) => ({ captureId, index, done: true, eventJson: JSON.stringify({ type: 'complete', captureId }) })),
     showRoute: options.showRoute ?? (async raw => { facts.shows.push(raw); return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1, diagnostics: {} }; }) };
   const adapter = { initialize: options.initialize ?? (async () => {}), async load(value) { loads.push(value); return options.load ? options.load(value) : handle; }, dispose() { facts.disposed++; } };
   const fetchImpl = async (url, init) => {
     fetches.push({ url, init });
     if (options.fetchImpl) return options.fetchImpl(url, init);
+    if (url.endsWith('/pathfinder-authorization')) return Response.json({ authorized: true, loadId: identity.loadId });
     return Response.json({ projectId: bootstrap.projectId, ...identity, contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 342, totalBytes: 439007803 });
   };
   const bridge = createRuntimeBridge({ window, bootstrap, adapter, fetchImpl, onState: state => states.push(state) });
@@ -48,6 +54,71 @@ test('HELLO uses exact target origin, forged origin/source/identity/direction/re
   const command = f.send('INIT', { locale: 'bg', expectedSdkVersion: '7.130.0' }); await turn();
   f.send(command.type, command.payload, command); await turn();
   assert.equal(f.messages('RUNTIME_READY').length, 1); f.bridge.dispose();
+});
+
+test('computed path requires ordered complete bounded chunks and current cookie-bound admin permission', async () => {
+  const f = fixture(); await f.loaded(); const pathId = uuid(17);
+  f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 3, objectIds: [23] }); await turn();
+  f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points: [[10, 20, 30], [11, 22, 33]] }); await turn();
+  assert.equal(f.facts.computedPath, undefined);
+  f.send('APPEND_COMPUTED_PATH', { pathId, offset: 2, points: [[14, 25, 36]] }); await turn();
+  const commit = f.send('COMMIT_COMPUTED_PATH', { pathId }); await turn();
+  assert.deepEqual(f.facts.computedPath, { objectIds: [23], points: [[10, 20, 30], [11, 22, 33], [14, 25, 36]] });
+  f.send('ZOOM_ROUTE', { routeRequestId: commit.requestId }); assert.equal(f.facts.fits, 1);
+  assert.equal(f.messages('COMPUTED_PATH_UPDATED').at(-1).payload.phase, 'displayed');
+  const authorizations = f.fetches.filter(item => item.url.endsWith('/pathfinder-authorization'));
+  assert.equal(authorizations.length, 4);
+  assert.ok(authorizations.every(item => item.init.credentials === 'same-origin' && item.init.redirect === 'error' && item.init.headers === undefined));
+  f.bridge.dispose();
+});
+
+test('a successful zero-length engine result transports its one exact point without adding a second', async () => {
+  const f = fixture(); await f.loaded(); const pathId = uuid(17), points = [[1, 0, 0.5]];
+  f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 1, objectIds: [] }); await turn();
+  f.send('APPEND_COMPUTED_PATH', { pathId, offset: 0, points }); await turn();
+  f.send('COMMIT_COMPUTED_PATH', { pathId }); await turn();
+  assert.deepEqual(f.facts.computedPath, { points, objectIds: [] }); assert.deepEqual(f.messages('COMPUTED_PATH_UPDATED').map(value => value.payload.received), [0, 1, 1]); f.bridge.dispose();
+});
+
+test('out-of-order/incomplete computed paths fail closed; Clear cancels a pending authorization', async () => {
+  const f = fixture(); await f.loaded(); const pathId = uuid(17);
+  f.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 3, objectIds: [23] }); await turn();
+  f.send('APPEND_COMPUTED_PATH', { pathId, offset: 1, points: [[1, 2, 3]] }); await turn();
+  f.send('COMMIT_COMPUTED_PATH', { pathId }); await turn();
+  assert.equal(f.facts.computedPath, undefined); assert.equal(f.messages('ERROR').at(-1).payload.code, 'PATH_INVALID'); f.bridge.dispose();
+  const permission = deferred();
+  const g = fixture({ fetchImpl: async url => url.endsWith('/pathfinder-authorization') ? permission.promise : Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 }) });
+  await g.loaded(); g.send('BEGIN_COMPUTED_PATH', { pathId, pointCount: 2, objectIds: [] });
+  g.send('CLEAR_ROUTE', { reason: 'user' }); permission.resolve(Response.json({ authorized: true, loadId: uuid(4) })); await turn();
+  assert.equal(g.messages('COMPUTED_PATH_UPDATED').length, 0); g.bridge.dispose();
+});
+
+test('picking and metadata reauthorize after SDK work; cancellation and revoked admin suppress results', async () => {
+  const point = deferred(); let authorizationCount = 0;
+  const f = fixture({ pickPoint: () => point.promise, fetchImpl: async url => {
+    if (url.endsWith('/pathfinder-authorization')) return ++authorizationCount === 1 ? Response.json({ authorized: true, loadId: uuid(4) }) : new Response(null, { status: 403 });
+    return Response.json({ projectId: uuid(2), modelVersionId: uuid(3), loadId: uuid(4), contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 1, totalBytes: 1 });
+  } });
+  await f.loaded(); f.send('PICK_POINT', {}); await turn(); point.resolve({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' }); await turn();
+  assert.equal(f.messages('POINT_PICKED').length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'ACCESS_REVOKED'); f.bridge.dispose();
+  const metadata = deferred(), g = fixture({ readModelObjects: () => metadata.promise }); await g.loaded();
+  const request = g.send('READ_MODEL_OBJECTS', { cursor: 0, limit: 16, query: 'CAB' }); await turn();
+  g.send('CANCEL_REQUEST', { targetRequestId: request.requestId });
+  metadata.resolve({ cursor: 0, nextCursor: null, complete: true, query: 'CAB', coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] }); await turn();
+  assert.equal(g.messages('MODEL_OBJECTS').length, 0); g.bridge.dispose();
+});
+
+test('model capture transport is request-bound, reauthorizes each part and reserves the replay budget', async () => {
+  const f = fixture(); await f.loaded(); const captureId = uuid(17);
+  const start = f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['Control'], equipmentNames: ['EQ-001'] }); await turn();
+  f.send('READ_MODEL_CAPTURE', { captureId, index: 1 }); await turn();
+  assert.deepEqual(f.messages('MODEL_CAPTURE_EVENT').map(value => [value.payload.index, value.payload.done]), [[0, false], [1, true]]);
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT')[0].requestId, start.requestId);
+  assert.equal(f.fetches.filter(value => value.url.endsWith('/pathfinder-authorization')).length, 4); f.bridge.dispose();
+  const g = fixture(); await g.loaded();
+  for (let i = 0; i < 1090; i++) g.send('CANCEL_REQUEST', { targetRequestId: uuid(8000 + i) });
+  g.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+  assert.equal(g.messages('MODEL_CAPTURE_EVENT').length, 0); assert.equal(g.messages('ERROR').at(-1).payload.code, 'CAPTURE_RELOAD_REQUIRED'); g.bridge.dispose();
 });
 
 test('actual index promise gates MODEL_LOADED and descriptors use cookie-only fixed same-origin paths', async () => {

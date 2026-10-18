@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { initializePathFinderJobs } from './jobsSchema.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -11,7 +12,7 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
         IF TG_OP = 'INSERT' THEN NEW.cable_write_revision := 0;
         ELSE
           NEW.cable_write_revision := OLD.cable_write_revision;
-          IF ROW(NEW.cable_id,NEW.revision,NEW.mto,NEW.tag,NEW.cable_type_id,NEW.from_location,NEW.to_location,
+          IF current_setting('wfc.pathfinder_apply',true)='1' OR ROW(NEW.cable_id,NEW.revision,NEW.mto,NEW.tag,NEW.cable_type_id,NEW.from_location,NEW.to_location,
                  NEW.routing,NEW.delivery,NEW.design_length,NEW.install_length,NEW.pull_date,NEW.connected_from,NEW.connected_to,NEW.tested)
              IS DISTINCT FROM
              ROW(OLD.cable_id,OLD.revision,OLD.mto,OLD.tag,OLD.cable_type_id,OLD.from_location,OLD.to_location,
@@ -22,6 +23,7 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
       END $$;
       DROP TRIGGER IF EXISTS cable_write_revision_owned ON cables;
       CREATE TRIGGER cable_write_revision_owned BEFORE INSERT OR UPDATE ON cables FOR EACH ROW EXECUTE FUNCTION own_cable_write_revision();
+      CREATE UNIQUE INDEX IF NOT EXISTS cables_project_record_identity ON cables(project_id,id);
       CREATE TABLE IF NOT EXISTS pf_project_state (
         project_id UUID PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
         registry_revision BIGINT NOT NULL DEFAULT 0 CHECK (registry_revision >= 0),
@@ -78,9 +80,26 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
         FOREIGN KEY(project_id,location_id) REFERENCES pf_locations(project_id,id) ON DELETE CASCADE,
         FOREIGN KEY(project_id,model_version_id) REFERENCES model_versions(project_id,id) ON DELETE CASCADE
       );
+      ALTER TABLE pf_location_bindings ADD COLUMN IF NOT EXISTS derivation TEXT NOT NULL DEFAULT 'manual-world-point'
+        CHECK(derivation IN ('manual-world-point','picked-surface-point','equipment-bottom-aabb'));
+      ALTER TABLE pf_location_bindings ADD COLUMN IF NOT EXISTS coordinate_frame TEXT NOT NULL DEFAULT 'canonical-world-metres'
+        CHECK(coordinate_frame='canonical-world-metres');
+      UPDATE pf_location_bindings SET derivation='equipment-bottom-aabb' WHERE source='automatic' AND derivation='manual-world-point';
+      CREATE TABLE IF NOT EXISTS pf_location_events (
+        id UUID PRIMARY KEY,project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        location_id UUID NOT NULL,model_version_id UUID,actor_id UUID NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('create','update','bind','auto_create','auto_bind')),
+        registry_revision BIGINT NOT NULL,event_data JSONB NOT NULL CHECK(octet_length(event_data::text)<=262144),created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS pf_location_events_project ON pf_location_events(project_id,created_at,id);
+      CREATE OR REPLACE FUNCTION protect_pf_location_event() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+        IF TG_OP='DELETE' AND NOT EXISTS(SELECT 1 FROM projects WHERE id=OLD.project_id) THEN RETURN OLD; END IF;
+        RAISE EXCEPTION 'Location audit events are append-only'; END $$;
+      DROP TRIGGER IF EXISTS pf_location_event_append_only ON pf_location_events;
+      CREATE TRIGGER pf_location_event_append_only BEFORE UPDATE OR DELETE ON pf_location_events FOR EACH ROW EXECUTE FUNCTION protect_pf_location_event();
       CREATE INDEX IF NOT EXISTS pf_artifacts_model ON pf_artifacts(project_id,model_version_id,created_at DESC,id);
     `);
     await client.query('COMMIT');
   } catch (error) { await client.query('ROLLBACK').catch(() => undefined); throw error; }
   finally { client.release(); }
+  await initializePathFinderJobs(pool);
 }

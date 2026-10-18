@@ -1,8 +1,9 @@
-import { FRAME_PATH, validateEnvelope, type BridgeEnvelope } from '../../viewer-runtime/protocol.mjs';
+import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
+import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
-type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number };
+type Pending = { envelope: BridgeEnvelope; terminal: string; timer: number; resolve?: (event: ViewerEvent) => void; reject?: (error: Error) => void };
 export type ViewerEventIdentity = Readonly<Pick<BridgeEnvelope, 'protocolVersion' | 'instanceId' | 'projectId' | 'modelVersionId' | 'loadId' | 'requestId'>>;
 export type ViewerLoadSnapshot = Readonly<{
   instanceId: string; projectId: string; modelVersionId: string; loadId: string;
@@ -75,11 +76,12 @@ export class ViewerController {
     window.clearTimeout(pending.timer);
     pending.timer = window.setTimeout(() => {
       if (!this.pending.delete(pending.envelope.requestId)) return;
+      pending.reject?.(new Error('Viewer request timed out'));
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
-    }, pending.envelope.type === 'LOAD_MODEL' ? 60_000 : 10_000);
+    }, ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
-  private send(type: string, payload: Record<string, unknown>, terminal: string): string {
+  private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject'> = {}): string {
     if (this.disposed) throw new Error('Viewer disposed');
     const envelope = {
       channel: 'wfc-routings-viewer', protocolVersion: 1, instanceId: this.instanceId,
@@ -87,11 +89,15 @@ export class ViewerController {
       loadId: this.loadId, requestId: uuid(), type, payload,
     } as BridgeEnvelope;
     if (!validateEnvelope(envelope, 'parent-to-frame')) throw new Error('Invalid Viewer command');
-    const pending: Pending = { envelope, terminal, timer: 0 };
+    const pending: Pending = { envelope, terminal, timer: 0, ...callbacks };
     this.pending.set(envelope.requestId, pending);
     this.arm(pending);
     this.iframe.contentWindow?.postMessage(envelope, window.location.origin);
     return envelope.requestId;
+  }
+
+  private sendAsync(type: string, payload: Record<string, unknown>, terminal: string): Promise<ViewerEvent> {
+    return new Promise((resolve, reject) => { try { this.send(type, payload, terminal, { resolve, reject }); } catch (error) { reject(error); } });
   }
 
   private onMessage = (event: MessageEvent): void => {
@@ -119,11 +125,15 @@ export class ViewerController {
       this.emit(message.type, message.payload, message.requestId, identity);
       return;
     }
+    if (message.type === 'MODEL_CAPTURE_PROGRESS' && ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) && message.payload.captureId === pending.envelope.payload.captureId) {
+      this.arm(pending); this.emit(message.type, message.payload, message.requestId, identity); return;
+    }
     if (message.type === 'WARNING') { this.emit(message.type, message.payload, message.requestId, identity); return; }
     if (message.type !== pending.terminal && message.type !== 'ERROR') return;
     window.clearTimeout(pending.timer);
     this.pending.delete(message.requestId);
     if (message.type === 'ERROR') {
+      pending.reject?.(new ViewerAccessError(String(message.payload.code), 0));
       if (pending.envelope.type === 'LOAD_MODEL' || ['SESSION_EXPIRED', 'ACCESS_REVOKED', 'MODEL_SELECTION_CHANGED', 'MODEL_UNAVAILABLE', 'RESOURCE_FAILED'].includes(String(message.payload.code))) {
         this.fail(String(message.payload.code));
       } else this.emit('ERROR', message.payload, message.requestId, identity);
@@ -151,6 +161,18 @@ export class ViewerController {
       if (Number(message.payload.drawableCount) > 0 && Number(message.payload.lineCount) > 0) this.routeRequestId = message.requestId;
       else this.routeRequestId = null;
     }
+    if (message.type === 'COMPUTED_PATH_UPDATED') {
+      const expectedPhase = pending.envelope.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : pending.envelope.type === 'APPEND_COMPUTED_PATH' ? 'appended' : 'displayed';
+      const expectedCount = expectedPhase === 'begun' ? 0 : expectedPhase === 'appended' ? Number(pending.envelope.payload.offset) + (pending.envelope.payload.points as unknown[]).length : undefined;
+      if (message.payload.pathId !== pending.envelope.payload.pathId || message.payload.phase !== expectedPhase || expectedCount !== undefined && message.payload.received !== expectedCount) {
+        pending.reject?.(new Error('Computed path acknowledgement mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
+      }
+      if (expectedPhase === 'displayed') this.routeRequestId = message.requestId;
+    }
+    if (message.type === 'MODEL_CAPTURE_EVENT' && (message.payload.captureId !== pending.envelope.payload.captureId || message.payload.index !== (pending.envelope.type === 'START_MODEL_CAPTURE' ? 0 : pending.envelope.payload.index))) {
+      pending.reject?.(new Error('Model capture identity mismatch')); this.fail('ROUTE_RESULT_MISMATCH'); return;
+    }
+    pending.resolve?.({ type: message.type, payload: message.payload, requestId: message.requestId, identity });
     this.emit(message.type, message.payload, message.requestId, identity);
   };
 
@@ -159,6 +181,7 @@ export class ViewerController {
       if (!types || types.includes(pending.envelope.type)) {
         window.clearTimeout(pending.timer);
         this.pending.delete(id);
+        pending.reject?.(new DOMException('Viewer request cancelled.', 'AbortError'));
       }
     }
   }
@@ -284,7 +307,7 @@ export class ViewerController {
 
   async showRoute(rawRouting: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null): Promise<string | null> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
     // Clear immediately, even for malformed input or a superseded access check.
@@ -293,10 +316,77 @@ export class ViewerController {
     return this.send('SHOW_ROUTE', { rawRouting, source, cableId }, 'ROUTE_RESULT');
   }
   private routeGeneration = 0;
+  /** Render the engine's exact ordered metre points; no browser route fitting. */
+  async showComputedPath(path: ComputedPath): Promise<string | null> {
+    if (this.disposed || !this.loaded) throw new Error('Model is not ready');
+    if (!UUID.test(path.pathId) || !Array.isArray(path.points) || path.points.length < 1 || path.points.length > MAX_PATH_POINTS || !path.points.every(isCanonicalPoint) || !Array.isArray(path.objectIds) || path.objectIds.length > 512 || !path.objectIds.every(id => Number.isInteger(id) && id > 0 && id <= 2147483647) || new Set(path.objectIds).size !== path.objectIds.length) throw new Error('Invalid computed path');
+    // Freeze caller-owned arrays before asynchronous selection and capability checks.
+    const points = path.points.map(point => [...point]), objectIds = [...path.objectIds], pathId = path.pathId;
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+    this.routeRequestId = null;
+    const generation = ++this.routeGeneration;
+    this.send('CLEAR_ROUTE', { reason: 'selection' }, 'ROUTE_CLEARED');
+    if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) return null;
+    const begin = await this.sendAsync('BEGIN_COMPUTED_PATH', { pathId, pointCount: points.length, objectIds }, 'COMPUTED_PATH_UPDATED');
+    if (begin.payload.pathId !== pathId || begin.payload.phase !== 'begun' || begin.payload.received !== 0) throw new Error('Computed path acknowledgement mismatch');
+    for (let offset = 0; offset < points.length; offset += MAX_PATH_CHUNK_POINTS) {
+      if (this.disposed || generation !== this.routeGeneration) return null;
+      const chunk = points.slice(offset, offset + MAX_PATH_CHUNK_POINTS);
+      const reply = await this.sendAsync('APPEND_COMPUTED_PATH', { pathId, offset, points: chunk }, 'COMPUTED_PATH_UPDATED');
+      if (reply.payload.pathId !== pathId || reply.payload.phase !== 'appended' || reply.payload.received !== offset + chunk.length) throw new Error('Computed path acknowledgement mismatch');
+    }
+    if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) return null;
+    const committed = await this.sendAsync('COMMIT_COMPUTED_PATH', { pathId }, 'COMPUTED_PATH_UPDATED');
+    if (committed.payload.pathId !== pathId || committed.payload.phase !== 'displayed' || committed.payload.received !== points.length) throw new Error('Computed path acknowledgement mismatch');
+    return committed.requestId ?? null;
+  }
+
+  async pickPoint(): Promise<PickedPoint> {
+    if (this.disposed || !this.loaded || !await this.checkSelection()) throw new Error('Model is not ready');
+    const reply = await this.sendAsync('PICK_POINT', {}, 'POINT_PICKED');
+    return reply.payload as unknown as PickedPoint;
+  }
+
+  async readModelObjects(cursor = 0, query = '', limit = 16): Promise<ViewerModelObjectsPage> {
+    if (this.disposed || !this.loaded || !await this.checkSelection()) throw new Error('Model is not ready');
+    const reply = await this.sendAsync('READ_MODEL_OBJECTS', { cursor, query, limit }, 'MODEL_OBJECTS');
+    if (reply.payload.cursor !== cursor || reply.payload.query !== query) throw new Error('Model metadata acknowledgement mismatch');
+    return reply.payload as unknown as ViewerModelObjectsPage;
+  }
+
+  cancelPicking(): void {
+    for (const pending of [...this.pending.values()]) if (pending.envelope.type === 'PICK_POINT') this.cancel(pending.envelope.requestId);
+  }
+
+  async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}): Promise<{ snapshot: unknown; summary: Record<string, unknown> }> {
+    if (this.disposed || !this.loaded) throw new Error('Model is not ready');
+    const input = { routeCodes: [...request.routeCodes], allowedCategories: [...request.allowedCategories], equipmentNames: [...request.equipmentNames] };
+    this.clear('selection'); const generation = this.routeGeneration;
+    if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) throw new DOMException('Model capture cancelled.', 'AbortError');
+    const captureId = uuid(), assembler = createModelCaptureAssembler();
+    try {
+      let reply = await this.sendAsync('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
+      for (let index = 0; index < 3000; index++) {
+        if (this.disposed || generation !== this.routeGeneration) throw new DOMException('Model capture cancelled.', 'AbortError');
+        const event: unknown = JSON.parse(String(reply.payload.eventJson));
+        assembler.accept(event);
+        const eventRecord = event as Record<string, unknown>;
+        onProgress({ index, type: String(eventRecord.type), ...(typeof eventRecord.objectCount === 'number' ? { objectCount: eventRecord.objectCount } : {}) });
+        if (reply.payload.done === true) {
+          if (eventRecord.type !== 'complete') throw new Error('Model capture ended without a complete receipt');
+          return { snapshot: assembler.finish(), summary: assembler.summary() };
+        }
+        if (eventRecord.type === 'complete') throw new Error('Model capture completion mismatch');
+        reply = await this.sendAsync('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
+      }
+      throw new Error('Model capture exceeded its bounded event budget');
+    } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw error; }
+  }
+
   clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {
     ++this.routeGeneration;
     this.routeRequestId = null;
-    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE']);
+    this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
     return this.send('CLEAR_ROUTE', { reason }, 'ROUTE_CLEARED');
   }
   zoom(): string {
@@ -306,7 +396,7 @@ export class ViewerController {
   cancel(targetRequestId: string): string {
     if (this.activeLoadRequestId === targetRequestId) this.activeLoadRequestId = null;
     const target = this.pending.get(targetRequestId);
-    if (target) { window.clearTimeout(target.timer); this.pending.delete(targetRequestId); }
+    if (target) { window.clearTimeout(target.timer); this.pending.delete(targetRequestId); target.reject?.(new DOMException('Viewer request cancelled.', 'AbortError')); }
     return this.send('CANCEL_REQUEST', { targetRequestId }, 'REQUEST_CANCELLED');
   }
   private async closeSession(session: ViewerSession): Promise<void> {

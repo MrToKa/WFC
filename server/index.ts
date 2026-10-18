@@ -8,6 +8,7 @@ import { initializeDatabase } from './db.js';
 import { initializeObjectStorage } from './services/objectStorageService.js';
 import { initializeModelRegistry, stopModelRegistry } from './modelRegistry/runtime.js';
 import { stopViewerSessions } from './viewerSessions/runtime.js';
+import { initializePathFinderRuntime, stopPathFinderRuntime } from './pathfinder/runtime.js';
 
 const app = createApp();
 function startListening(server: http.Server | https.Server, protocol: string): void {
@@ -28,7 +29,7 @@ function startListening(server: http.Server | https.Server, protocol: string): v
     server.close();
     const deadline = setTimeout(() => process.exit(1), 30_000);
     deadline.unref();
-    void Promise.allSettled([stopViewerSessions(),stopModelRegistry()]).finally(() => process.exit(0));
+    void Promise.allSettled([stopViewerSessions(),stopModelRegistry(),stopPathFinderRuntime()]).finally(() => process.exit(0));
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
@@ -42,6 +43,7 @@ const startServer = async (): Promise<void> => {
     await initializeDatabase();
     await initializeObjectStorage();
     await initializeModelRegistry();
+    await initializePathFinderRuntime();
     if (config.https.enabled) {
       const resolvePath = (value: string): string =>
         path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);

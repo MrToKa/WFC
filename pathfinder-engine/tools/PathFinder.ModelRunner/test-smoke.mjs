@@ -41,11 +41,46 @@ test('real-core-calculation-instrumentation-maps-to-control', () => {
   const r = run(base()); assert.equal(r.status, 'calculated'); assert.equal(r.effectiveCategory, 'Control'); assert.equal(r.route.lengthMeters, 10);
   assert.equal(r.design.designLengthMeters, '18'); return { length: r.route.lengthMeters, design: r.design, engineeringAccepted: r.engineeringAccepted };
 });
+test('coincident-endpoints-preserve-one-exact-native-point', () => {
+  const point = { x: 1, y: 0, z: .5 };
+  const r = run({ ...base(), from: point, to: point });
+  assert.equal(r.status, 'calculated'); assert.equal(r.route.lengthMeters, 0); assert.deepEqual(r.route.pathPoints, [point]);
+  assert.equal(r.design.designLengthMeters, '7');
+});
 test('null-secondary-does-not-become-zero-when-flagged', () => {
   const r = run({ ...base(), from: { x: 0, y: 4, z: .5 }, projectSettings: { ...settings, secondaryTrayLength: null } });
   assert.equal(r.status, 'settings_required'); assert.equal(r.route.fromRequiresSecondary, true);
 });
 test('unknown-category-requires-resolution', () => assert.equal(run({ ...base(), category: 'Power' }).status, 'category_required'));
+test('ordered-lookup-native-parser-without-equipment-tails-or-design', () => {
+  const r = run({ ...base(), operation: 'lookup', routeText: '/SECONDARY/bc001/BC001', category: null, from: null, to: null, projectSettings: null });
+  assert.equal(r.status, 'calculated'); assert.equal(r.route.routeText, '/BC001'); assert.equal(r.route.lengthMeters, 10);
+  assert.equal(r.route.fromDistanceMeters, 0); assert.equal(r.route.toDistanceMeters, 0); assert.equal(r.route.fromRequiresSecondary, false);
+  assert.equal(r.route.toRequiresSecondary, false); assert.equal(r.design, null); assert.equal(r.effectiveCategory, null);
+});
+test('reverse-lookup-is-native-exact-reversal', () => {
+  const request = { ...base(), operation: 'lookup', routeText: '/BC001' };
+  const forward = run(request), reverse = run({ ...request, reverse: true });
+  assert.equal(reverse.status, 'calculated'); assert.equal(reverse.route.lengthMeters, forward.route.lengthMeters);
+  assert.deepEqual(reverse.route.pathPoints, forward.route.pathPoints.toReversed());
+  assert.deepEqual(reverse.route.segmentIds, forward.route.segmentIds.toReversed());
+});
+test('reverse-calculation-swaps-approaches-and-keeps-original-formula', () => {
+  const request = { ...base(), from: { x: 0, y: 4, z: .5 }, to: { x: 10, y: 1, z: .5 } };
+  const forward = run(request), reverse = run({ ...request, reverse: true });
+  assert.equal(reverse.status, 'calculated'); assert.equal(reverse.route.fromDistanceMeters, forward.route.toDistanceMeters);
+  assert.equal(reverse.route.toDistanceMeters, forward.route.fromDistanceMeters); assert.deepEqual(reverse.route.pathPoints, forward.route.pathPoints.toReversed());
+  assert.equal(reverse.route.fromRequiresSecondary, forward.route.toRequiresSecondary); assert.deepEqual(reverse.design, forward.design);
+});
+test('lookup-missing-code-is-no-path', () => assert.equal(run({ ...base(), operation: 'lookup', routeText: '/MISSING' }).status, 'no_path'));
+test('lookup-invalid-and-secondary-only-input-rejected', () => {
+  for (const routeText of ['/SECONDARY', '/BAD CODE', Array.from({ length: 101 }, (_, i) => '/A' + i).join('')]) assert.equal(run({ ...base(), operation: 'lookup', routeText }).status, 'invalid_request');
+});
+test('core-graph-budget-is-controlled-resource-limit', () => assert.equal(run({ ...base(), from: { x: 1, y: 0, z: .5 }, to: { x: 9, y: 0, z: .5 }, options: { ...base().options, maxGraphNodes: 2 } }).status, 'resource_limit'));
+test('mode-specific-route-and-reverse-fields-rejected', () => {
+  assert.equal(run({ ...base(), routeText: '/BC001' }).status, 'invalid_request');
+  assert.equal(run({ ...base(), operation: 'prepare', reverse: true }).status, 'invalid_request');
+});
 test('nonfinite-coordinate-rejected', () => assert.equal(run(JSON.stringify(base()).replace('"x":0', '"x":1e999')).status, 'invalid_request'));
 test('cross-project-snapshot-rejected', () => assert.equal(run({ ...base(), projectId: crypto.randomUUID() }).status, 'invalid_request'));
 test('snapshot-byte-integrity-rejected', () => assert.equal(run({ ...base(), snapshotSha256: '0'.repeat(64) }).status, 'invalid_request'));
@@ -54,6 +89,11 @@ test('unexpected-proof-property-rejected', () => assert.equal(run({ ...base(), e
 test('duplicate-json-member-rejected', () => assert.equal(run(JSON.stringify(base()).replace('{', '{"operation":"prepare",')).status, 'invalid_request'));
 test('hard-worker-deadline', () => assert.equal(run({ ...base(), timeoutMilliseconds: 1 }).status, 'deadline_exceeded'));
 test('exact-decimal-underflow-rejected', () => assert.equal(run({ ...base(), projectSettings: { ...settings, endConnectionLength: '1e-29' } }).status, 'invalid_request'));
+test('smallest-exact-decimal-is-fixed-and-not-rounded-or-exponential', () => {
+  const r = run({ ...base(), operation: 'design', route: { success: true, lengthMeters: 0, fromDistanceMeters: 0, toDistanceMeters: 0, fromRequiresSecondary: false, toRequiresSecondary: false },
+    projectSettings: { ...settings, endConnectionLength: '1e-28', additionalBendingPercent: '0' } });
+  assert.equal(r.status, 'calculated'); assert.equal(r.design.unroundedLengthMeters, '0.0000000000000000000000000001'); assert.equal(r.design.designLengthMeters, '1');
+});
 test('null-setting-revision-rejected', () => assert.equal(run({ ...base(), projectSettings: { ...settings, revision: null } }).status, 'invalid_request'));
 test('null-required-scalar-rejected', () => assert.equal(run({ ...base(), snapshotSha256: null }).status, 'invalid_request'));
 test('missing-explicit-private-root-rejected', () => assert.equal(run({ ...base(), operation: 'prepare' }, { ...env, PF_ROOT: '' }).status, 'invalid_request'));
@@ -62,6 +102,22 @@ test('unassigned-model-category-is-not-invented', () => {
   const bytes = Buffer.from(JSON.stringify(changed)); fs.writeFileSync(snapshotPath, bytes);
   try { assert.equal(run({ ...base(), snapshotSha256: hash(bytes) }).status, 'model_needs_review'); }
   finally { fs.writeFileSync(snapshotPath, snapshotBytes); }
+});
+for (const kind of ['native-hidden', 'hidden-ancestor', 'planning-rule-exclusion']) test('unassigned-' + kind + '-does-not-block-eligible-routing', () => {
+  const changed = structuredClone(snapshot), hidden = structuredClone(snapshot.objects[0]);
+  hidden.id = 'ignored-tray'; hidden.dbId = 2; hidden.routeName = '/IGNORED'; hidden.categoryAssignmentSource = 'unassigned'; hidden.allowedCategories = [];
+  hidden.fragments.forEach((fragment, i) => { fragment.id = 'ignored-fragment-' + i; });
+  if (kind === 'native-hidden') hidden.nativeHidden = true;
+  if (kind === 'hidden-ancestor') {
+    const ancestor = structuredClone(hidden); ancestor.id = 'hidden-parent'; ancestor.dbId = 3; ancestor.geometryRole = 'hierarchy'; ancestor.fragments = []; ancestor.routeName = null; ancestor.nativeHidden = true;
+    changed.objects.push(ancestor); hidden.parentId = ancestor.id;
+  }
+  changed.objects.push(hidden);
+  const bytes = Buffer.from(JSON.stringify(changed)); fs.writeFileSync(snapshotPath, bytes);
+  try {
+    const response = run({ ...base(), snapshotSha256: hash(bytes), ...(kind === 'planning-rule-exclusion' ? { rules: { excludedObjectIds: [hidden.id] } } : {}) });
+    assert.equal(response.status, 'calculated'); assert.equal(response.route.lengthMeters, 10); assert.equal(response.prepared.segmentCount, 1);
+  } finally { fs.writeFileSync(snapshotPath, snapshotBytes); }
 });
 const inputs = JSON.parse(fs.readFileSync(path.join(root, 'docs/pathfinder/fixtures/pf-core-v1.inputs.json'), 'utf8'));
 const expected = JSON.parse(fs.readFileSync(path.join(root, 'docs/pathfinder/fixtures/pf-core-v1.expected.json'), 'utf8'));

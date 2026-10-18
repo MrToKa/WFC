@@ -10,11 +10,21 @@ project/model identity are rechecked before fitting. Callers cannot pass paths.
 
 Requests use `pathfinder.model.runner.v1`: requestId, operation, projectId,
 modelVersionId, snapshotId, snapshotSha256 and timeoutMilliseconds (1–120000).
-Operations are `prepare`, `calculate`, `design`. Calculate additionally needs
+Operations are `prepare`, `calculate`, `design`, `lookup`. Calculate additionally needs
 from/to `{x,y,z}` canonical points, category, explicit PF-1 options and Project
 Details settings. Instrumentation maps to Control. Unassigned routing categories
 require resolution. Project settings use exact decimal strings; missing
 SECONDARY remains null. Duplicate/unknown members and nonfinite numbers fail.
+
+Lookup accepts `routeText` (at most 8000 characters and 100 parsed codes) and
+explicit options. It invokes the unchanged native ordered lookup: SECONDARY is
+ignored, adjacent repeated names coalesce, nonadjacent repeats and continuity
+rules remain intact. It neither invents equipment approaches nor calculates
+full cable design allowances. Its effective category and design are null.
+`reverse:true` on calculate/lookup invokes the original `RouteResult.Reverse`;
+it reverses exact points/segments and swaps endpoint metrics consistently.
+The server must preserve cable endpoint identity when exposing reverse results;
+a diagnostic preview does not authorize applying an inconsistent cable route.
 
 Design uses only server-retained successful route metrics (`success`,
 lengthMeters/fromDistanceMeters/toDistanceMeters/fromRequiresSecondary/
@@ -30,7 +40,8 @@ bounded to 32MiB; request transport to 1MiB; snapshot to 256MiB. The supervisor
 kills and awaits its owned process on timeout. The WFC job owner must also kill
 its child on explicit cancellation or lost lease. Diagnostic lists have explicit
 total/truncated fields; geometry/path outputs are never silently truncated.
-Decimal output uses canonical invariant G29 strings without changing arithmetic.
+Decimal output uses canonical invariant fixed strings with up to 28 fractional
+digits, without exponent notation, rounding or a change to arithmetic.
 
 Every response has `engineeringAccepted:false`: this worker does not authorize
 Apply or turn metadata booleans into native parity. WFC owns current admin,

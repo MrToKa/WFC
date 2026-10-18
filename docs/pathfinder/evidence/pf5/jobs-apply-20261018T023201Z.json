@@ -1,0 +1,124 @@
+{
+  "schemaVersion": "pathfinder.integration.v1",
+  "recordedAtUtc": "2026-10-18T02:32:01.087Z",
+  "projectId": "54cfad40-bd12-41e9-ab24-d90bdaafc993",
+  "scope": "separate local synthetic fixture only",
+  "status": "PASS",
+  "passed": 20,
+  "total": 20,
+  "checks": [
+    {
+      "name": "shared project locations resolve both From/To uses",
+      "status": "PASS",
+      "milliseconds": 51
+    },
+    {
+      "name": "project mutex permits mixed-import and admin-assignment FK lock orders without a deadlock",
+      "status": "PASS",
+      "milliseconds": 18
+    },
+    {
+      "name": "actual durable job creates exact synthetic Instrumentation proposal",
+      "status": "PASS",
+      "milliseconds": 1435,
+      "details": {
+        "geometry": 10,
+        "design": "18",
+        "scope": "local-synthetic-fixture"
+      }
+    },
+    {
+      "name": "queued ordered lookup and Reverse preserve exact points without Apply or cable changes",
+      "status": "PASS",
+      "milliseconds": 2663
+    },
+    {
+      "name": "lookup result becomes stale after model selection revision changes",
+      "status": "PASS",
+      "milliseconds": 2323
+    },
+    {
+      "name": "explicit forced retry replaces a seeded transient failure while automatic requests deduplicate",
+      "status": "PASS",
+      "milliseconds": 2679
+    },
+    {
+      "name": "explicit Review + Apply preserves installLength, adds history and replays idempotently",
+      "status": "PASS",
+      "milliseconds": 2458
+    },
+    {
+      "name": "manual routing A to B to A conflicts despite identical final inputs",
+      "status": "PASS",
+      "milliseconds": 1262
+    },
+    {
+      "name": "settings-only rerun uses retained geometry and exact Project Details formula",
+      "status": "PASS",
+      "milliseconds": 2523
+    },
+    {
+      "name": "allowance A to B to A revision invalidates reviewed result",
+      "status": "PASS",
+      "milliseconds": 1240
+    },
+    {
+      "name": "active model selection A to null to A invalidates reviewed result",
+      "status": "PASS",
+      "milliseconds": 1237
+    },
+    {
+      "name": "revoked login cannot write locations, match, enqueue or read PF state",
+      "status": "PASS",
+      "milliseconds": 67
+    },
+    {
+      "name": "current admin revocation and cross-project proposal lookup are denied",
+      "status": "PASS",
+      "milliseconds": 1310
+    },
+    {
+      "name": "cancellation reaches terminal only after owned calculation stops",
+      "status": "PASS",
+      "milliseconds": 16262
+    },
+    {
+      "name": "expired lease recovery fences the obsolete owner and publishes once",
+      "status": "PASS",
+      "milliseconds": 1154
+    },
+    {
+      "name": "receipt failure rolls back cable, history and receipt atomically",
+      "status": "PASS",
+      "milliseconds": 1301
+    },
+    {
+      "name": "admin revocation waits until protected Apply commits",
+      "status": "PASS",
+      "milliseconds": 1364
+    },
+    {
+      "name": "model health changes wait until protected Apply commits",
+      "status": "PASS",
+      "milliseconds": 1300
+    },
+    {
+      "name": "login expiration while Apply is paused rolls the write back",
+      "status": "PASS",
+      "milliseconds": 3427
+    },
+    {
+      "name": "HTTP-uploaded geometry cannot acquire the seeded synthetic proof",
+      "status": "PASS",
+      "milliseconds": 926
+    }
+  ],
+  "cleanup": [
+    {
+      "name": "fixture admin/cables/locations/jobs/uploads removed; original synthetic allowances/model restored; immutable audit events retained",
+      "status": "PASS"
+    }
+  ],
+  "nativeParity": "BLOCKED; synthetic integration does not establish real model engineering acceptance.",
+  "sourceSha256": "17d3fa559c337a2d6a4724c8dbd65de956edff3a4e05c7534fdb9aedc1ac2404"
+}

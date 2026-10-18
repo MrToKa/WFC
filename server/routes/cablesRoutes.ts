@@ -566,7 +566,7 @@ const formatCableVersionUserLabel = (version: PublicCableVersion): string => {
 
 const formatCableVersionChangeLabel = (version: PublicCableVersion): string => {
   const changeLabel = version.changeType === 'create' ? 'Created' : 'Updated';
-  const sourceLabel = version.changeSource === 'import' ? 'import' : 'manual save';
+  const sourceLabel = version.changeSource === 'import' ? 'import' : version.changeSource === 'pathfinder' ? 'PathFinder apply' : 'manual save';
 
   return `${changeLabel} via ${sourceLabel}`;
 };
@@ -860,13 +860,15 @@ const findProjectCableVersionSourceById = async (
   queryable: Queryable,
   projectId: string,
   cableId: string,
+  lockForUpdate = false,
 ): Promise<CableVersionSourceRow | null> => {
   const result = await queryable.query<CableVersionSourceRow>(
     `
       ${selectCableVersionSourceQuery}
       WHERE c.project_id = $1
         AND c.id = $2
-      LIMIT 1;
+      LIMIT 1
+      ${lockForUpdate ? 'FOR UPDATE OF c' : ''};
     `,
     [projectId, cableId],
   );
@@ -2469,7 +2471,7 @@ cablesRouter.patch(
       client = await pool.connect();
       await client.query('BEGIN');
 
-      const existingCable = await findProjectCableVersionSourceById(client, projectId, cableId);
+      const existingCable = await findProjectCableVersionSourceById(client, projectId, cableId,true);
 
       if (!existingCable) {
         await client.query('ROLLBACK');

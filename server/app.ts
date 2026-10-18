@@ -1,7 +1,7 @@
 import { materialChangeLogsRouter } from './routes/materialChangeLogsRoutes.js';
 import { withMaterialAuditActor } from './services/materialAuditContext.js';
 import cors from 'cors';
-import express, { type Express, type Request, type Response } from 'express';
+import express, { type Express, type Request, type Response, type RequestHandler } from 'express';
 import { config } from './config.js';
 import { adminUsersRouter } from './routes/adminUserRoutes.js';
 import { authRouter } from './routes/authRoutes.js';
@@ -18,6 +18,25 @@ import { templateFilesRouter } from './routes/templateFilesRoutes.js';
 import { userRouter } from './routes/userRoutes.js';
 import { authenticate, requireAdmin, requireCatalogAccess } from './middleware.js';
 import { createViewerSessionRouter } from './routes/viewerSessionRoutes.js';
+import { pool } from './db.js';
+import { principalTransaction, requestPrincipal } from './pathfinder/auth.js';
+import { PathFinderError } from './pathfinder/errors.js';
+import { uuid } from './pathfinder/contracts.js';
+
+// Large PF payloads require the current project/admin/login before parsing;
+// the write transaction repeats authorization after the upload completes.
+const authorizePathFinderBody: RequestHandler = async (req, res, next) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  const parsed = uuid.safeParse(/^\/api\/projects\/([^/]+)\/pathfinder\//i.exec(req.originalUrl)?.[1]);
+  if (!parsed.success) { res.status(400).json({ code: 'INVALID_PATHFINDER_REQUEST', error: 'Invalid PathFinder project.' }); return; }
+  try {
+    await principalTransaction(pool, parsed.data, requestPrincipal(req), async () => undefined);
+    next();
+  } catch (error) {
+    const safe = error instanceof PathFinderError ? error : new PathFinderError('PATHFINDER_FAILURE', 500, 'PathFinder authorization failed.');
+    res.status(safe.status).json({ code: safe.code, error: safe.message });
+  }
+};
 
 export const createApp = (): Express => {
   const app = express();
@@ -41,7 +60,15 @@ export const createApp = (): Express => {
     /^\/api\/projects\/[0-9a-f-]{36}\/pathfinder\/artifacts\/?$/i,
     authenticate,
     requireAdmin,
+    authorizePathFinderBody,
     express.json({ limit: '256mb' }),
+  );
+  app.use(
+    /^\/api\/projects\/[0-9a-f-]{36}\/pathfinder\/jobs\/?$/i,
+    authenticate,
+    requireAdmin,
+    authorizePathFinderBody,
+    express.json({ limit: '1mb' }),
   );
   app.use(express.json());
 

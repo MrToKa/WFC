@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "pathfinder.local-offline-scope.v1",
+  "observedAtUtc": "2026-10-18T02:30:51.968Z",
+  "status": "PASS",
+  "scope": "actual-local-viewer-CSP-and-private-backend-network-plus-successful-local-routing-evidence;not-host-network-disconnection",
+  "apiImage": "sha256:562e80739ed2c105f280a8f460ba449b26aaa6a7a63bcb9b311ff58345407a01",
+  "apiNetworks": [
+    {
+      "name": "wfc-pathfinder-local_backend",
+      "internal": true
+    }
+  ],
+  "apiPublishedPorts": [],
+  "viewerHttp": 200,
+  "scriptPolicy": "self",
+  "connectionPolicy": "self",
+  "fontPolicy": "self/data",
+  "externalHtmlAssets": false,
+  "localInitializerAndAnalyticsDisabled": true,
+  "actualRoutingEvidence": [
+    "actual-capture-1792289114650.json",
+    "settings-reuse-1792289459485.json"
+  ],
+  "autodeskOrNativeHostInvokedByThisCheck": false,
+  "hostInternetDisabled": false,
+  "limits": [
+    "The entire host/browser was not disconnected from the Internet.",
+    "This does not prove native geometry parity or whole-plant capacity."
+  ]
+}

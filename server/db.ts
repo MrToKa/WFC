@@ -13,7 +13,7 @@ export const pool = new Pool({
 
 const cableMtoConstraintValues = CABLE_MTO_VALUES.map((value) => `'${value}'`).join(', ');
 const cableVersionChangeTypeConstraintValues = ["'create'", "'update'"].join(', ');
-const cableVersionChangeSourceConstraintValues = ["'manual'", "'import'"].join(', ');
+const cableVersionChangeSourceConstraintValues = ["'manual'", "'import'", "'pathfinder'"].join(', ');
 
 export async function initializeDatabase(): Promise<void> {
   await pool.query(`

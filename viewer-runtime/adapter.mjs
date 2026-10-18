@@ -1,4 +1,6 @@
 import { createRouteController } from './routes.mjs';
+import { createPathFinderController } from './pathfinder.mjs';
+import { captureSelectedModel } from './model-capture.mjs';
 import { SDK_VERSION } from './protocol.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
@@ -106,22 +108,26 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
     await initialization;
     active(signal);
   }
-  async function load({ modelUrl, signal, onProgress = () => {}, onRuntimeError = () => {} }) {
+  async function load({ modelUrl, descriptor, signal, onProgress = () => {}, onRuntimeError = () => {} }) {
     active(signal);
     if (!initialization) throw safeError('INVALID_STATE');
     await initialization;
     active(signal);
     current?.finish();
     const viewing = window.Autodesk.Viewing, viewer = new viewing.GuiViewer3D(container);
-    let finished = false, routes, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
+    let finished = false, routes, pathfinder, observer, geometryLoaded = false, nodeIndexReady = false, nodeCount = 0;
+    let capture;
+    const cancelCapture = () => { if (!capture) return; const old = capture; capture = undefined; old.controller.abort(); void old.iterator.return().catch(() => {}); };
     const runtimeError = () => { if (!finished) onRuntimeError(safeError()); };
     const finish = () => {
       if (finished) return;
       finished = true;
       signal?.removeEventListener('abort', finish);
+      cancelCapture();
       observer?.disconnect();
       if (viewing.ERROR_EVENT) viewer.removeEventListener(viewing.ERROR_EVENT, runtimeError);
       routes?.dispose();
+      pathfinder?.dispose();
       viewer.finish();
       container.replaceChildren();
       onEvidence({ sdkVersion: SDK_VERSION, geometryLoaded: false, nodeIndexReady: false, nodeCount: 0, fragmentCount: 0, propertiesLoaded: false, propertiesCount: 0 });
@@ -164,6 +170,23 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
       observer.observe(container);
       if (viewing.ERROR_EVENT) viewer.addEventListener(viewing.ERROR_EVENT, runtimeError);
       routes = createRouteController(viewer, { signal });
+      pathfinder = createPathFinderController(viewer, { window, signal });
+      let computedPath = false, legacyPath = false;
+      async function captureEvent(captureId, index, operationSignal, onProgress) {
+        if (!capture || capture.id !== captureId || capture.index !== index || capture.reading) throw safeError('EXTRACTION_FAILED');
+        const currentCapture = capture; currentCapture.reading = true; currentCapture.onProgress = onProgress;
+        const abort = () => currentCapture.controller.abort();
+        operationSignal?.addEventListener('abort', abort, { once: true });
+        try {
+          const next = await currentCapture.iterator.next(); active(operationSignal);
+          if (capture !== currentCapture || next.done || !next.value || next.value.captureId !== captureId) throw safeError('EXTRACTION_FAILED');
+          const eventJson = JSON.stringify(next.value, (_key, value) => { if (typeof value === 'number' && !Number.isFinite(value)) throw safeError('EXTRACTION_FAILED'); return value; });
+          const done = next.value.type === 'complete'; currentCapture.index++;
+          if (done) cancelCapture();
+          return { captureId, index, done, eventJson };
+        } catch (error) { cancelCapture(); throw error?.name === 'AbortError' ? error : safeError('EXTRACTION_FAILED'); }
+        finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
+      }
       const handle = {
         finish,
         async prepareIndex() {
@@ -176,9 +199,26 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             propertiesLoaded: true, propertiesCount,
             fragmentCount: viewer.model.getFragmentList()?.getCount?.() ?? viewer.model.getData()?.fragments?.length ?? 0 });
         },
-        showRoute: routes.showRoute,
-        clearRoute: routes.clearRoute,
-        fitRoute: routes.fitRoute,
+        showRoute(...args) { pathfinder.clear(); computedPath = false; legacyPath = true; return routes.showRoute(...args); },
+        clearRoute() {
+          cancelCapture();
+          if (computedPath) pathfinder.clear(); else if (legacyPath) routes.clearRoute(); else { viewer.clearSelection(); viewer.fitToView(); }
+          computedPath = legacyPath = false;
+        },
+        fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
+        showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; return result; },
+        readModelObjects: pathfinder.readObjects,
+        pickPoint: pathfinder.pickPoint,
+        async startModelCapture(request, operationSignal, onProgress) {
+          cancelCapture();
+          if (!descriptor) throw safeError('EXTRACTION_FAILED');
+          const controller = new AbortController();
+          const state = { id: request.captureId, index: 0, reading: false, controller, onProgress, iterator: null };
+          state.iterator = captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint }, { signal: AbortSignal.any([signal, controller.signal].filter(Boolean)), onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
+          capture = state;
+          return captureEvent(request.captureId, 0, operationSignal, onProgress);
+        },
+        readModelCapture(request, operationSignal, onProgress) { return captureEvent(request.captureId, request.index, operationSignal, onProgress); },
       };
       current = handle;
       return handle;

@@ -6,6 +6,9 @@ const messages = {
   RESOURCE_FAILED: 'The model or a local resource could not be loaded.', MODEL_UNAVAILABLE: 'The selected model is unavailable.',
   SESSION_EXPIRED: 'The viewer session has expired.', ACCESS_REVOKED: 'Access to the model has been revoked.',
   MODEL_SELECTION_CHANGED: 'The selected model has changed.', INVALID_MESSAGE: 'The response does not match the requested model.',
+  PATH_INVALID: 'The computed path is incomplete or invalid.', COORDINATES_UNSUPPORTED: 'The model coordinate convention is not supported for PathFinder.',
+  EXTRACTION_FAILED: 'The requested model metadata could not be read completely.', PICK_UNAVAILABLE: 'Point picking is unavailable for this model.', PICK_TIMEOUT: 'Point picking timed out. Start picking again.',
+  CAPTURE_RELOAD_REQUIRED: 'Reload the model before preparing another snapshot; this viewer has reached its bounded command budget.',
 };
 const failure = code => Object.assign(new Error(messages[code] ?? messages.RESOURCE_FAILED), { code });
 const httpCode = status => status === 401 || status === 410 ? 'SESSION_EXPIRED' : status === 403 ? 'ACCESS_REVOKED' : status === 409 ? 'MODEL_SELECTION_CHANGED' : status === 503 ? 'MODEL_UNAVAILABLE' : 'RESOURCE_FAILED';
@@ -14,6 +17,8 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   const origin = window.location.origin;
   const requests = new Map(), usedLoads = new Set(), cleanupRequests = new Set();
   let disposed = false, phase = 'hello', current = null, handle, loadController, initController, initCommand, routeRequest, routeHasLine = false;
+  let computed;
+  const capabilities = new Map();
   const lifetime = new AbortController();
   const identityMatches = command => command.modelVersionId === (current?.modelVersionId ?? null) && command.loadId === (current?.loadId ?? null);
   function emit(command, type, payload) {
@@ -57,10 +62,18 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (!parsed) throw failure('INVALID_MESSAGE');
     return { descriptor: parsed, modelUrl: new URL(parsed.entrypoint, base).href };
   }
-  function stopRoute() {
+  function stopRoute(exceptRequestId) {
     if (routeRequest) { const entry = requests.get(routeRequest.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
     routeRequest = undefined;
     routeHasLine = false;
+    computed = undefined;
+    for (const [id, controller] of capabilities) {
+      const entry = requests.get(id);
+      if (id !== exceptRequestId && (entry?.command.type.includes('COMPUTED_PATH') || entry?.command.type.includes('MODEL_CAPTURE') || entry?.command.type === 'PICK_POINT')) {
+        if (entry?.status === 'pending') entry.status = 'cancelled';
+        controller.abort();
+      }
+    }
     handle?.clearRoute();
   }
   function stopLoad() {
@@ -70,6 +83,68 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     handle = undefined;
     routeRequest = undefined;
     routeHasLine = false;
+    computed = undefined;
+    for (const controller of capabilities.values()) controller.abort();
+    capabilities.clear();
+  }
+  async function requirePathFinder(command, signal) {
+    if (!current || phase !== 'loaded' || !handle || !identityMatches(command)) throw failure('INVALID_STATE');
+    const base = new URL(`/api/projects/${bootstrap.projectId}/model-versions/${command.modelVersionId}/viewer-sessions/${current.payload.sessionId}/`, origin);
+    const response = await fetchImpl(new URL('pathfinder-authorization', base).href, { signal, credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
+    if (!response.ok) throw failure(httpCode(response.status));
+    const permission = await responseJson(response);
+    if (!permission || Object.keys(permission).length !== 2 || permission.authorized !== true || permission.loadId !== command.loadId) throw failure('INVALID_MESSAGE');
+    if (disposed || signal.aborted || !identityMatches(command) || phase !== 'loaded') throw failure('INVALID_STATE');
+  }
+  async function pathFinder(command) {
+    if (capabilities.size >= 2) { error(command, failure('INVALID_STATE')); return; }
+    const controller = new AbortController(); capabilities.set(command.requestId, controller);
+    const signal = AbortSignal.any([lifetime.signal, loadController.signal, controller.signal]);
+    const live = () => !disposed && !signal.aborted && identityMatches(command) && requests.get(command.requestId)?.status === 'pending';
+    try {
+      await requirePathFinder(command, signal);
+      if (!live()) return;
+      if (command.type === 'START_MODEL_CAPTURE' || command.type === 'READ_MODEL_CAPTURE') {
+        // Reserve the generator's complete 3,000-event worst case inside the
+        // unchanged 4,096-command replay budget, leaving room for cleanup.
+        if (command.type === 'START_MODEL_CAPTURE' && requests.size > 1091) throw failure('CAPTURE_RELOAD_REQUIRED');
+        if (command.type === 'START_MODEL_CAPTURE') stopRoute(command.requestId);
+        const progress = value => { if (live()) emit(command, 'MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, ...value }); };
+        const result = command.type === 'START_MODEL_CAPTURE' ? await handle.startModelCapture(command.payload, signal, progress) : await handle.readModelCapture(command.payload, signal, progress);
+        await requirePathFinder(command, signal);
+        if (!live()) return;
+        if (!emit(command, 'MODEL_CAPTURE_EVENT', result)) throw failure('EXTRACTION_FAILED');
+      } else if (command.type === 'BEGIN_COMPUTED_PATH') {
+        stopRoute(command.requestId); computed = { pathId: command.payload.pathId, pointCount: command.payload.pointCount, objectIds: command.payload.objectIds, points: [] };
+        emit(command, 'COMPUTED_PATH_UPDATED', { pathId: computed.pathId, phase: 'begun', received: 0 });
+      } else if (command.type === 'APPEND_COMPUTED_PATH') {
+        if (!computed || computed.pathId !== command.payload.pathId || computed.points.length !== command.payload.offset || computed.points.length + command.payload.points.length > computed.pointCount) throw failure('PATH_INVALID');
+        computed.points.push(...command.payload.points);
+        emit(command, 'COMPUTED_PATH_UPDATED', { pathId: computed.pathId, phase: 'appended', received: computed.points.length });
+      } else if (command.type === 'COMMIT_COMPUTED_PATH') {
+        if (!computed || computed.pathId !== command.payload.pathId || computed.points.length !== computed.pointCount) throw failure('PATH_INVALID');
+        const path = computed;
+        handle.showComputedPath({ points: path.points, objectIds: path.objectIds });
+        computed = undefined; routeRequest = command; routeHasLine = true;
+        emit(command, 'COMPUTED_PATH_UPDATED', { pathId: path.pathId, phase: 'displayed', received: path.points.length });
+      } else if (command.type === 'READ_MODEL_OBJECTS') {
+        const result = await handle.readModelObjects(command.payload, signal);
+        // Metadata and picks may outlive an ACL change while the SDK worker runs.
+        await requirePathFinder(command, signal);
+        if (!live()) return;
+        if (!emit(command, 'MODEL_OBJECTS', result)) throw failure('EXTRACTION_FAILED');
+      } else {
+        const result = await handle.pickPoint(signal);
+        await requirePathFinder(command, signal);
+        if (!live()) return;
+        if (!emit(command, 'POINT_PICKED', result)) throw failure('PICK_UNAVAILABLE');
+      }
+      finish(command);
+    } catch (cause) {
+      if (!live()) return;
+      if (['BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(command.type)) { computed = undefined; handle?.clearRoute(); routeHasLine = false; }
+      error(command, cause);
+    } finally { capabilities.delete(command.requestId); }
   }
   async function load(command) {
     stopLoad();
@@ -146,6 +221,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     switch (command.type) {
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE':
+        if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
+        void pathFinder(command); break;
       case 'INIT':
         if (phase !== 'hello') { error(command, failure('INVALID_STATE')); return; }
         phase = 'initializing';
@@ -175,6 +253,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
           if (entry.command === current) { stopLoad(); phase = 'initialized'; }
           else if (entry.command === routeRequest) stopRoute();
           else if (entry.command === initCommand) { initController?.abort(); initCommand = undefined; phase = 'hello'; }
+          else if (capabilities.has(entry.command.requestId)) { capabilities.get(entry.command.requestId).abort(); if (entry.command.type.includes('COMPUTED_PATH') || entry.command.type.includes('MODEL_CAPTURE')) stopRoute(); }
         }
         finish(command); emit(command, 'REQUEST_CANCELLED', { targetRequestId: command.payload.targetRequestId, outcome }); break;
       }

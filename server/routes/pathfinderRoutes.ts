@@ -5,6 +5,9 @@ import { requireAdmin } from '../middleware.js';
 import { artifactSchema, bindLocationSchema, createLocationSchema, revision, uuid } from '../pathfinder/contracts.js';
 import { PathFinderError } from '../pathfinder/errors.js';
 import { createPathFinderRepository } from '../pathfinder/repository.js';
+import { getPathFinderRuntime } from '../pathfinder/runtime.js';
+import { applySchema, createJobSchema, lookupSchema, reviewSchema } from '../pathfinder/jobContracts.js';
+import { principalTransaction, requestPrincipal as principal } from '../pathfinder/auth.js';
 
 export const pathfinderRouter = Router({mergeParams:true});
 pathfinderRouter.use(requireAdmin,(_req,res,next) => {res.setHeader('Cache-Control','private, no-store'); next();});
@@ -18,22 +21,50 @@ function failure(res: Response,error: unknown): void {
   if (!(error instanceof PathFinderError)) console.error('PathFinder operation failed',error);
   res.status(safe.status).json({code:safe.code,error:safe.message});
 }
+/** Body-free proxy preflight uses exactly the same current-principal boundary as PF writes. */
+pathfinderRouter.get('/authorization',async(req,res)=>{
+  try {const {projectId}=identity(req);await principalTransaction(pool,projectId,principal(req),async()=>undefined);res.status(204).end();}catch(error){failure(res,error);}
+});
 pathfinderRouter.get('/state',async (req,res) => {
-  try {const {projectId,actorId} = identity(req); res.json(await repository.state(projectId,actorId));} catch(error){failure(res,error);}
+  try {const {projectId} = identity(req); res.json({...await repository.state(projectId,principal(req)),...await getPathFinderRuntime().jobs.state(projectId,principal(req))});} catch(error){failure(res,error);}
 });
 pathfinderRouter.post('/locations',async (req,res) => {
-  try {const {projectId,actorId} = identity(req); res.status(201).json(await repository.createLocation(projectId,actorId,createLocationSchema.parse(req.body)));} catch(error){failure(res,error);}
+  try {const {projectId} = identity(req); res.status(201).json(await repository.createLocation(projectId,principal(req),createLocationSchema.parse(req.body)));} catch(error){failure(res,error);}
 });
 pathfinderRouter.put('/locations/:locationId/binding',async (req,res) => {
-  try {const {projectId,actorId} = identity(req); res.json(await repository.bindLocation(projectId,actorId,uuid.parse(req.params.locationId),bindLocationSchema.parse(req.body)));} catch(error){failure(res,error);}
+  try {const {projectId} = identity(req); res.json(await repository.bindLocation(projectId,principal(req),uuid.parse(req.params.locationId),bindLocationSchema.parse(req.body)));} catch(error){failure(res,error);}
 });
 pathfinderRouter.put('/locations/:locationId',async (req,res) => {
-  try {const {projectId,actorId} = identity(req); res.json(await repository.updateLocation(projectId,actorId,uuid.parse(req.params.locationId),createLocationSchema.parse(req.body)));} catch(error){failure(res,error);}
+  try {const {projectId} = identity(req); res.json(await repository.updateLocation(projectId,principal(req),uuid.parse(req.params.locationId),createLocationSchema.parse(req.body)));} catch(error){failure(res,error);}
 });
 pathfinderRouter.post('/artifacts',async (req,res) => {
-  try {const {projectId,actorId} = identity(req); res.status(201).json(await repository.ingestArtifact(projectId,actorId,artifactSchema.parse(req.body)));} catch(error){failure(res,error);}
+  try {const {projectId} = identity(req); res.status(201).json(await repository.ingestArtifact(projectId,principal(req),artifactSchema.parse(req.body)));} catch(error){failure(res,error);}
 });
 const matchSchema = z.object({expectedRegistryRevision:revision}).strict();
 pathfinderRouter.post('/match',async (req,res) => {
-  try {const {projectId,actorId} = identity(req); res.json(await repository.match(projectId,actorId,matchSchema.parse(req.body).expectedRegistryRevision));} catch(error){failure(res,error);}
+  try {const {projectId} = identity(req); res.json(await repository.match(projectId,principal(req),matchSchema.parse(req.body).expectedRegistryRevision));} catch(error){failure(res,error);}
+});
+pathfinderRouter.post('/jobs',async (req,res) => {
+  try {const {projectId} = identity(req); res.status(202).json(await getPathFinderRuntime().jobs.create(projectId,principal(req),createJobSchema.parse(req.body)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.get('/jobs/:jobId',async (req,res) => {
+  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.get(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.delete('/jobs/:jobId',async (req,res) => {
+  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.cancel(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.get('/proposals/:proposalId',async (req,res) => {
+  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.proposal(projectId,principal(req),uuid.parse(req.params.proposalId)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.post('/proposals/:proposalId/review',async (req,res) => {
+  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().jobs.review(projectId,principal(req),uuid.parse(req.params.proposalId),reviewSchema.parse(req.body).expectedProposalHash));} catch(error){failure(res,error);}
+});
+pathfinderRouter.post('/proposals/:proposalId/apply',async (req,res) => {
+  try {const {projectId} = identity(req); res.json(await getPathFinderRuntime().apply(projectId,principal(req),uuid.parse(req.params.proposalId),applySchema.parse(req.body)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.post('/lookups',async (req,res) => {
+  try {const {projectId}=identity(req);res.status(202).json(await getPathFinderRuntime().lookups.create(projectId,principal(req),lookupSchema.parse(req.body)));} catch(error){failure(res,error);}
+});
+pathfinderRouter.get('/lookups/:jobId',async (req,res) => {
+  try {const {projectId}=identity(req);res.json(await getPathFinderRuntime().lookups.get(projectId,principal(req),uuid.parse(req.params.jobId)));} catch(error){failure(res,error);}
 });

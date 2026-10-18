@@ -272,7 +272,7 @@ const formatCableVersionOption = (version: CableVersion): string => {
 
 const formatCableVersionChange = (version: CableVersion): string =>
   `${version.changeType === 'create' ? 'Created' : 'Updated'} via ${
-    version.changeSource === 'import' ? 'import' : 'manual save'
+    version.changeSource === 'import' ? 'import' : version.changeSource === 'pathfinder' ? 'PathFinder apply' : 'manual save'
   }`;
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {

@@ -29,6 +29,7 @@ import { CableTypeDialog } from './ProjectDetails/CableTypeDialog';
 import { CableTypesTab } from './ProjectDetails/CableTypesTab';
 import { DetailsTab } from './ProjectDetails/DetailsTab';
 import { RoutingsViewerTab } from './ProjectDetails/RoutingsViewerTab';
+import { PathFinderTab } from './ProjectDetails/PathFinderTab';
 import { TrayDialog } from './ProjectDetails/TrayDialog';
 import { TraysTab } from './ProjectDetails/TraysTab';
 import { CableListChangeLog, SectionChangeLog } from './ProjectDetails/SectionChangeLog';
@@ -189,6 +190,7 @@ const VALID_TABS: ProjectDetailsTab[] = [
   'cables',
   'cable-list',
   'routings-viewer',
+  'pathfinder',
   'trays',
   'roxtec',
   'files',
@@ -218,7 +220,7 @@ export const ProjectDetails = () => {
     useProjectDetailsData({ projectId, token });
   const canEdit = canEditProject(user, project, projectId);
   const canViewAll = canReadCatalogs(user);
-  const routingTabRequested = searchParams.get('tab') === 'routings-viewer';
+  const routingTabRequested = searchParams.get('tab') === 'routings-viewer' || searchParams.get('tab') === 'pathfinder' && Boolean(user?.isAdmin);
   const { materialTrays } = useMaterialData(routingTabRequested ? undefined : projectId, canViewAll && !routingTabRequested);
   const canExport = Boolean(token && (canViewAll || user?.role === 'technician'));
   const canExportHistory = canExportChangeLogs(user, token);
@@ -254,7 +256,7 @@ export const ProjectDetails = () => {
 
   const tabParam = searchParams.get('tab') as ProjectDetailsTab | null;
   const selectedTab: ProjectDetailsTab =
-    tabParam && VALID_TABS.includes(tabParam) && (canViewAll || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
+    tabParam && VALID_TABS.includes(tabParam) && (tabParam !== 'pathfinder' || Boolean(user?.isAdmin)) && (canViewAll || !ADMIN_TABS.includes(tabParam) || (tabParam === 'files' && canReadFiles))
       ? tabParam
       : 'details';
   const [selectedCableReportMto, setSelectedCableReportMto] = useState<CableMtoOption | null>(null);
@@ -269,7 +271,7 @@ export const ProjectDetails = () => {
 
   const canonicalProjectId = project?.id ?? projectId ?? null;
   // Manual routing owns its fresh full tray read and does not load the cable tables.
-  const tableProjectId = selectedTab === 'routings-viewer' ? undefined : projectId;
+  const tableProjectId = selectedTab === 'routings-viewer' || selectedTab === 'pathfinder' ? undefined : projectId;
 
   const {
     cables,
@@ -1367,6 +1369,7 @@ export const ProjectDetails = () => {
   const handleTabSelect = useCallback(
     (_event: unknown, data: { value: TabValue }) => {
       const requested = data.value as ProjectDetailsTab;
+      if (requested === 'pathfinder' && !user?.isAdmin) return;
       // Apply the same section permissions to navigation events and direct URLs.
       const tab = ADMIN_TABS.includes(requested) && !canViewAll && !(requested === 'files' && canReadFiles) ? selectedTab : requested;
       setSearchParams((previous) => {
@@ -1379,7 +1382,7 @@ export const ProjectDetails = () => {
         return next;
       });
     },
-    [canReadFiles, canViewAll, selectedTab, setSearchParams],
+    [canReadFiles, canViewAll, selectedTab, setSearchParams, user?.isAdmin],
   );
 
   const handleCreateCable = useCallback(() => {
@@ -1588,6 +1591,7 @@ export const ProjectDetails = () => {
         <Tab value="cables">Cable types</Tab>
         <Tab value="cable-list">Cables list</Tab>
         <Tab value="routings-viewer">Routings viewer</Tab>
+        {user?.isAdmin ? <Tab value="pathfinder">PathFinder</Tab> : null}
         <Tab value="trays">Trays</Tab>
         {canViewAll ? <Tab value="cable-report">Cables MTOs</Tab> : null}
         {canViewAll ? <Tab value="change-orders">Change Orders</Tab> : null}
@@ -1599,6 +1603,9 @@ export const ProjectDetails = () => {
 
       {selectedTab === 'routings-viewer' ? (
         <RoutingsViewerTab projectId={projectId ?? null} loadedProjectId={project.id} token={token} />
+      ) : null}
+      {selectedTab === 'pathfinder' && user?.isAdmin ? (
+        <PathFinderTab key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} />
       ) : null}
 
       {selectedTab === 'details' ? (

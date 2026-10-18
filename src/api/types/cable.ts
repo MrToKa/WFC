@@ -51,7 +51,7 @@ export type Cable = {
 
 export type CableVersionChangeType = 'create' | 'update';
 
-export type CableVersionChangeSource = 'manual' | 'import';
+export type CableVersionChangeSource = 'manual' | 'import' | 'pathfinder';
 
 export type CableVersion = {
   id: string;

@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 const engine = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(engine, '..');
+const stage = process.argv[2] ?? 'PF-2';
+if (!/^PF-[2-8]$/.test(stage)) throw new Error('Use an explicit implemented stage PF-2 through PF-8.');
 const evidence = path.join(root, 'docs/pathfinder/evidence');
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
@@ -82,17 +84,26 @@ audit('original-checkouts-and-dirty-files-preserved', () => {
 
 audit('original-container-inventory-images-and-start-times-preserved', () => {
   const ids = lines(run('docker', ['ps', '-aq']));
-  const rows = ids.length ? lines(run('docker', ['inspect', '--format',
-    '{{.Id}}|{{.Name}}|{{.Image}}|{{.State.Status}}|{{.State.StartedAt}}', ...ids])).sort() : [];
+  const originalIds = baseline.docker.containerRows.map(row => row.split('|')[0]);
+  const rows = lines(run('docker', ['inspect', '--format',
+    '{{.Id}}|{{.Name}}|{{.Image}}|{{.State.Status}}|{{.State.StartedAt}}', ...originalIds])).sort();
   check(JSON.stringify(rows) === JSON.stringify([...baseline.docker.containerRows].sort()), 'Container inventory/start state changed');
-  return { containerCount: rows.length, stageContainersCreated: 0, credentialsOrEnvironmentRead: false,
-    databaseContentAudit: false, databaseOrStorageWritesPerformed: false };
+  const extraIds = ids.filter(id => !originalIds.some(original => original.startsWith(id)));
+  const additional = extraIds.length ? lines(run('docker', ['inspect', '--format',
+    '{{.Id}}|{{.Name}}|{{index .Config.Labels "wfc.pathfinder.isolated"}}|{{index .Config.Labels "wfc.pathfinder.owner"}}|{{index .Config.Labels "wfc.pathfinder.project"}}', ...extraIds])) : [];
+  for (const row of additional) {
+    const [, name, isolated, owner, project] = row.split('|');
+    check(isolated === 'true' && /^[0-9a-f-]{36}$/.test(owner) && /^wfc-pathfinder-(local(?:-[a-z0-9-]+)?|restore-[a-z0-9-]+)$/.test(project), `Unexpected additional resource: ${name}`);
+  }
+  return { originalContainerCount: rows.length, additionalOwnedIsolatedContainers: additional,
+    credentialsOrEnvironmentRead: false, databaseContentAudit: false,
+    originalDatabaseOrStorageWritesPerformed: false };
 });
 
 const sourceFiles = lines(git(root, 'ls-files', '--cached', '--others', '--exclude-standard', '--', 'pathfinder-engine'));
 const sources = sourceFiles.map(file => ({ file, sha256: hash(fs.readFileSync(path.join(root, file))) }));
 const report = {
-  schemaVersion: 'pathfinder.isolation-audit.v1', stage: 'PF-2', observedAtUtc: new Date().toISOString(),
+  schemaVersion: 'pathfinder.isolation-audit.v1', stage, observedAtUtc: new Date().toISOString(),
   checkedBaseCommit: git(root, 'rev-parse', 'HEAD'), branch: git(root, 'branch', '--show-current'),
   scope: 'local-source-and-original-environment-preservation;not-native-model-parity',
   status: checks.every(c => c.status === 'PASS') ? 'PASS' : 'FAIL', checks, sources,
@@ -101,7 +112,9 @@ const report = {
     retained: ['.pf0-work/core-1f723e37-f152-4a60-9b1e-46adc6c3179c', '.pf2-work/model-tests-2733f823d57d477ba5e338a7d9a08cc9'] },
   noPushPullRequestMergeOrDeployment: true,
 };
-const output = path.join(evidence, 'pf2', `isolation-${Date.now()}.json`);
+const directory = path.join(evidence, stage.toLowerCase().replace('-', ''));
+fs.mkdirSync(directory, { recursive: true });
+const output = path.join(directory, `isolation-${Date.now()}.json`);
 fs.writeFileSync(output, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
 console.log(JSON.stringify({ output, status: report.status, checks: checks.map(({ name, status }) => ({ name, status })), sourceSetSha256: report.sourceSetSha256 }));
 process.exitCode = report.status === 'PASS' ? 0 : 1;

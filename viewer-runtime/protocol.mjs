@@ -3,12 +3,18 @@ export const PROTOCOL_VERSION = 1;
 export const SDK_VERSION = '7.130.0';
 export const MAX_MESSAGE_BYTES = 65536;
 export const FRAME_PATH = '/viewer-runtime/7.130.0/index.html';
-export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE']);
-export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR']);
+export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS']);
+export const MAX_PATH_POINTS = 20000;
+export const MAX_PATH_CHUNK_POINTS = 128;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value);
 const text = (value, maximum = 1024) => typeof value === 'string' && value.length <= maximum && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value);
 const integer = value => Number.isSafeInteger(value) && value >= 0;
+const positiveId = value => Number.isSafeInteger(value) && value > 0 && value <= 2147483647;
+export const isCanonicalPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => typeof item === 'number' && Number.isFinite(item) && Math.abs(item) <= 1e9);
+const boundedIds = value => Array.isArray(value) && value.length <= 512 && value.every(positiveId) && new Set(value).size === value.length;
+const bounds = value => value === null || exact(value, ['minimum', 'maximum']) && isCanonicalPoint(value.minimum) && isCanonicalPoint(value.maximum) && value.minimum.every((item, i) => item <= value.maximum[i]);
 export const isUuid = value => typeof value === 'string' && UUID.test(value);
 const nullableUuid = value => value === null || isUuid(value);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
@@ -83,6 +89,18 @@ function routeResult(value) {
 
 function payload(type, value) {
   switch (type) {
+    case 'START_MODEL_CAPTURE': return exact(value, ['captureId', 'routeCodes', 'allowedCategories', 'equipmentNames']) && isUuid(value.captureId) && Array.isArray(value.routeCodes) && value.routeCodes.length > 0 && value.routeCodes.length <= 100 && value.routeCodes.every(item => text(item, 256) && item.trim().length > 0) && Array.isArray(value.allowedCategories) && value.allowedCategories.length > 0 && value.allowedCategories.length <= 3 && value.allowedCategories.every(item => oneOf(item, ['MV', 'LV', 'Control'])) && new Set(value.allowedCategories).size === value.allowedCategories.length && Array.isArray(value.equipmentNames) && value.equipmentNames.length <= 256 && value.equipmentNames.every(item => text(item, 256) && item.trim().length > 0);
+    case 'READ_MODEL_CAPTURE': return exact(value, ['captureId', 'index']) && isUuid(value.captureId) && integer(value.index) && value.index > 0 && value.index < 3000;
+    case 'MODEL_CAPTURE_EVENT': return exact(value, ['captureId', 'index', 'done', 'eventJson']) && isUuid(value.captureId) && integer(value.index) && value.index < 3000 && typeof value.done === 'boolean' && text(value.eventJson, 49152) && new TextEncoder().encode(value.eventJson).byteLength <= 24576;
+    case 'MODEL_CAPTURE_PROGRESS': return exact(value, ['captureId', 'phase', 'loaded', 'total']) && isUuid(value.captureId) && oneOf(value.phase, ['index', 'properties', 'geometry']) && integer(value.loaded) && integer(value.total) && value.loaded <= value.total && value.total <= 1000000;
+    case 'BEGIN_COMPUTED_PATH': return exact(value, ['pathId', 'pointCount', 'objectIds']) && isUuid(value.pathId) && integer(value.pointCount) && value.pointCount >= 1 && value.pointCount <= MAX_PATH_POINTS && boundedIds(value.objectIds);
+    case 'APPEND_COMPUTED_PATH': return exact(value, ['pathId', 'offset', 'points']) && isUuid(value.pathId) && integer(value.offset) && value.offset < MAX_PATH_POINTS && Array.isArray(value.points) && value.points.length > 0 && value.points.length <= MAX_PATH_CHUNK_POINTS && value.points.every(isCanonicalPoint);
+    case 'COMMIT_COMPUTED_PATH': return exact(value, ['pathId']) && isUuid(value.pathId);
+    case 'COMPUTED_PATH_UPDATED': return exact(value, ['pathId', 'phase', 'received']) && isUuid(value.pathId) && oneOf(value.phase, ['begun', 'appended', 'displayed']) && integer(value.received) && value.received <= MAX_PATH_POINTS;
+    case 'PICK_POINT': return exact(value, []);
+    case 'POINT_PICKED': return exact(value, ['objectId', 'point', 'derivation']) && positiveId(value.objectId) && isCanonicalPoint(value.point) && value.derivation === 'picked-surface-point';
+    case 'READ_MODEL_OBJECTS': return exact(value, ['cursor', 'limit', 'query']) && integer(value.cursor) && value.cursor <= 1000000 && integer(value.limit) && value.limit > 0 && value.limit <= 16 && text(value.query, 256);
+    case 'MODEL_OBJECTS': return exact(value, ['cursor', 'nextCursor', 'complete', 'query', 'coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && integer(value.cursor) && (value.nextCursor === null || integer(value.nextCursor) && value.nextCursor > value.cursor && value.nextCursor <= 1000000) && typeof value.complete === 'boolean' && value.complete === (value.nextCursor === null) && text(value.query, 256) && value.coordinateFrame === 'world-metres-z-up' && Number.isFinite(value.metresPerDisplayUnit) && value.metresPerDisplayUnit > 0 && isCanonicalPoint(value.globalOffsetMetres) && Array.isArray(value.objects) && value.objects.length <= 16 && value.objects.every(item => exact(item, ['objectId', 'parentId', 'name', 'externalId', 'bounds', 'bottomCentre', 'derivation', 'nativeVisibility', 'properties', 'propertiesTruncated']) && positiveId(item.objectId) && (item.parentId === null || positiveId(item.parentId)) && text(item.name, 2048) && (item.externalId === null || text(item.externalId, 2048)) && bounds(item.bounds) && (item.bottomCentre === null || isCanonicalPoint(item.bottomCentre)) && item.derivation === 'display-aabb-bottom-centre' && item.nativeVisibility === 'unknown' && typeof item.propertiesTruncated === 'boolean' && Array.isArray(item.properties) && item.properties.length <= 8 && item.properties.every(property => exact(property, ['name', 'value']) && text(property.name, 256) && text(property.value, 768)));
     case 'HELLO': return exact(value, ['supportedProtocolVersions', 'sdkVersion']) && Array.isArray(value.supportedProtocolVersions) && same(value.supportedProtocolVersions, [1]) && value.sdkVersion === SDK_VERSION;
     case 'INIT': return exact(value, ['locale', 'expectedSdkVersion']) && oneOf(value.locale, ['en', 'bg']) && value.expectedSdkVersion === SDK_VERSION;
     case 'RUNTIME_READY': return exact(value, ['sdkVersion']) && value.sdkVersion === SDK_VERSION;
@@ -112,7 +130,7 @@ export function validateEnvelope(value, direction) {
     const allowed = direction === 'parent-to-frame' ? PARENT_TYPES : direction === 'frame-to-parent' ? FRAME_TYPES : [...PARENT_TYPES, ...FRAME_TYPES];
     if (!allowed.includes(value.type) || !payload(value.type, value.payload)) return null;
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
-    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED'].includes(value.type) && value.modelVersionId === null) return null;
+    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
     if (new TextEncoder().encode(serialized).byteLength > MAX_MESSAGE_BYTES) return null;
     return JSON.parse(serialized);

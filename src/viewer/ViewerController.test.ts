@@ -28,6 +28,73 @@ function setup(token = 'login-a') {
   return { c, events, send, message, hello, ready };
 }
 
+describe('PathFinder protected Viewer capabilities', () => {
+  async function loaded() {
+    const s = setup(); s.ready();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
+      if (options?.method === 'DELETE') return new Response(null, { status: 204 });
+      if (options?.method === 'POST') return Response.json({ sessionId: crypto.randomUUID(), projectId, modelVersionId: versionId,
+        loadId: JSON.parse(String(options.body)).loadId, expiresAt: new Date(Date.now() + 300_000).toISOString(), absoluteExpiresAt: new Date(Date.now() + 1_800_000).toISOString() });
+      return Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 1 } });
+    });
+    await s.c.load(versionId);
+    const command = s.send.mock.calls.find(call => call[0].type === 'LOAD_MODEL')![0];
+    const identity = { modelVersionId: versionId, loadId: command.loadId };
+    s.message('MODEL_LOADED', { sdkVersion: '7.130.0', format: 'svf', nodeIndexReady: true }, command.requestId, identity);
+    return { ...s, identity };
+  }
+  it('freezes and transports engine points in acknowledged bounded chunks before an exact display commit', async () => {
+    const s = await loaded();
+    let received = 0;
+    s.send.mockImplementation(value => {
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const points: [number, number, number][] = Array.from({ length: 257 }, (_, i) => [i / 7, i / 9, i / 11]);
+    const showing = s.c.showComputedPath({ pathId: crypto.randomUUID(), points, objectIds: [23] });
+    points[0][0] = 9999;
+    const requestId = await showing;
+    const chunks = s.send.mock.calls.filter(call => call[0].type === 'APPEND_COMPUTED_PATH').map(call => call[0]);
+    expect(chunks.map(chunk => chunk.payload.points.length)).toEqual([128, 128, 1]);
+    expect(chunks[0].payload.points[0][0]).toBe(0);
+    expect(chunks.every(chunk => new TextEncoder().encode(JSON.stringify(chunk)).byteLength <= 65536)).toBe(true);
+    expect(requestId).toBeTruthy(); expect(() => s.c.zoom()).not.toThrow();
+    expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId: requestId } });
+  });
+  it('Clear during a chunk cancels the calculated path and cannot commit later', async () => {
+    const s = await loaded();
+    s.send.mockImplementation(value => {
+      if (value.type === 'BEGIN_COMPUTED_PATH') s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase: 'begun', received: 0 }, value.requestId, s.identity);
+      if (value.type === 'APPEND_COMPUTED_PATH') s.c.clear();
+    });
+    await expect(s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0], [1, 2, 3]], objectIds: [23] })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(s.send.mock.calls.some(call => call[0].type === 'COMMIT_COMPUTED_PATH')).toBe(false);
+    expect(() => s.c.zoom()).toThrow();
+  });
+  it('acknowledges a legitimate one-point zero-length path without synthesizing geometry input', async () => {
+    const s = await loaded(); let received = 0;
+    s.send.mockImplementation(value => {
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    await expect(s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[1, 0, 0.5]], objectIds: [] })).resolves.toBeTruthy();
+    expect(s.send.mock.calls.find(call => call[0].type === 'BEGIN_COMPUTED_PATH')![0].payload.pointCount).toBe(1);
+    expect(s.send.mock.calls.find(call => call[0].type === 'APPEND_COMPUTED_PATH')![0].payload.points).toEqual([[1, 0, 0.5]]);
+  });
+  it('one-shot picking and metadata retain typed load identity and reject mismatched pages', async () => {
+    const s = await loaded();
+    s.send.mockImplementation(value => {
+      if (value.type === 'PICK_POINT') s.message('POINT_PICKED', { objectId: 23, point: [12.25, -3, 4.5], derivation: 'picked-surface-point' }, value.requestId, s.identity);
+      if (value.type === 'READ_MODEL_OBJECTS') s.message('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: 'WRONG', coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] }, value.requestId, s.identity);
+    });
+    expect(await s.c.pickPoint()).toEqual({ objectId: 23, point: [12.25, -3, 4.5], derivation: 'picked-surface-point' });
+    await expect(s.c.readModelObjects(0, 'PANEL')).rejects.toThrow('acknowledgement mismatch');
+    expect(s.events.find(event => event.type === 'POINT_PICKED')?.identity).toMatchObject(s.identity);
+  });
+});
+
 describe('Viewer parent identity and lifecycle', () => {
   function realSessionResponses(activeVersion = versionId) {
     return vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {

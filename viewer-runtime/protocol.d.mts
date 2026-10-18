@@ -2,6 +2,8 @@ export const CHANNEL: 'wfc-routings-viewer';
 export const PROTOCOL_VERSION: 1;
 export const SDK_VERSION: '7.130.0';
 export const MAX_MESSAGE_BYTES: 65536;
+export const MAX_PATH_POINTS: 20000;
+export const MAX_PATH_CHUNK_POINTS: 128;
 export const FRAME_PATH: '/viewer-runtime/7.130.0/index.html';
 export const PARENT_TYPES: readonly string[];
 export const FRAME_TYPES: readonly string[];
@@ -28,6 +30,23 @@ export interface ViewerDescriptor {
   supportProfile: 'svf-local-7.130.0-v1'; format: 'svf'; sdkVersion: '7.130.0';
   entrypoint: 'resources/output/0/0.svf'; resourceCount: number; totalBytes: number;
 }
+export type CanonicalPoint = [number, number, number];
+export interface ComputedPath { pathId: string; points: CanonicalPoint[]; objectIds: number[] }
+export interface ModelCaptureRequest { routeCodes: string[]; allowedCategories: ('MV' | 'LV' | 'Control')[]; equipmentNames: string[] }
+export interface ModelCaptureProgress { index: number; type: string; objectCount?: number }
+export interface PickedPoint { objectId: number; point: CanonicalPoint; derivation: 'picked-surface-point' }
+export interface ViewerModelObject {
+  objectId: number; parentId: number | null; name: string; externalId: string | null;
+  bounds: { minimum: CanonicalPoint; maximum: CanonicalPoint } | null;
+  bottomCentre: CanonicalPoint | null; derivation: 'display-aabb-bottom-centre'; nativeVisibility: 'unknown';
+  properties: { name: string; value: string }[]; propertiesTruncated: boolean;
+}
+export interface ViewerModelObjectsPage {
+  cursor: number; nextCursor: number | null; complete: boolean; query: string;
+  coordinateFrame: 'world-metres-z-up'; metresPerDisplayUnit: number; globalOffsetMetres: CanonicalPoint;
+  objects: ViewerModelObject[];
+}
+export function isCanonicalPoint(value: unknown): value is CanonicalPoint;
 export function isUuid(value: unknown): value is string;
 export function parseRouting(rawRouting: string): ParsedRouting;
 export function normalizeRoutingKey(token: string): string;

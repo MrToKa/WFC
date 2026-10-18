@@ -225,6 +225,11 @@ export const DetailsTab = ({
           to the next whole metre. No length is
           calculated if the route is empty or a required segment length is missing or invalid.
         </Caption1>
+        <Body1>
+          This tray-list estimate differs from PathFinder. PathFinder replaces each flagged
+          approach with SECONDARY, adds the end connection reserve once, applies the bending
+          percentage, then rounds up.
+        </Body1>
       </div>
       {supportDistanceOverrides.length > 0 ? (
         <div className={styles.panel}>
