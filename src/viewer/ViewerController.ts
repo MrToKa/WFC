@@ -1,4 +1,5 @@
 import { FRAME_PATH, validateEnvelope, type BridgeEnvelope } from '../../viewer-runtime/protocol.mjs';
+import { generateId } from '@/utils/generateId';
 import { watchViewerLogin } from './loginLifecycle';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
@@ -13,12 +14,11 @@ export type ViewerOptions = {
   container: HTMLElement; projectId: string; token: string;
   onEvent: (event: ViewerEvent) => void;
 };
-const uuid = () => crypto.randomUUID();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** One controller owns one iframe, login, project and current load. */
 export class ViewerController {
-  instanceId = uuid();
+  instanceId = generateId();
   iframe: HTMLIFrameElement;
   private disposed = false;
   private ready = false;
@@ -84,7 +84,7 @@ export class ViewerController {
     const envelope = {
       channel: 'wfc-routings-viewer', protocolVersion: 1, instanceId: this.instanceId,
       projectId: this.options.projectId, modelVersionId: this.modelVersionId,
-      loadId: this.loadId, requestId: uuid(), type, payload,
+      loadId: this.loadId, requestId: generateId(), type, payload,
     } as BridgeEnvelope;
     if (!validateEnvelope(envelope, 'parent-to-frame')) throw new Error('Invalid Viewer command');
     const pending: Pending = { envelope, terminal, timer: 0 };
@@ -188,7 +188,7 @@ export class ViewerController {
       if (this.session) void this.closeSession(this.session);
       this.session = null;
       this.retireFrame('reload');
-      this.instanceId = uuid();
+      this.instanceId = generateId();
       this.modelVersionId = null;
       this.loadId = null;
       this.ready = false;
@@ -218,7 +218,7 @@ export class ViewerController {
     window.clearTimeout(this.selectionTimer);
     for (const request of this.requests) request.abort();
     this.modelVersionId = modelVersionId;
-    this.loadId = uuid();
+    this.loadId = generateId();
     this.emit('MODEL_LOADING');
     if (previousSession) void this.closeSession(previousSession);
     try {
@@ -343,7 +343,7 @@ export class ViewerController {
 
   private retireFrame(reason: 'unmount' | 'project-change' | 'logout' | 'reload'): void {
     const iframe = this.iframe;
-    const requestId = uuid();
+    const requestId = generateId();
     const { instanceId, modelVersionId, loadId } = this;
     const message = { channel: 'wfc-routings-viewer', protocolVersion: 1, instanceId,
       projectId: this.options.projectId, modelVersionId, loadId,

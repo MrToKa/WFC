@@ -66,6 +66,7 @@ services:
       WFC_MODEL_IMPORT_ROOT: /var/lib/wfc/model-imports
       WFC_VIEWER_ALLOWED_ORIGINS: ${WFC_VIEWER_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       WFC_VIEWER_ALLOW_HTTP_LOOPBACK: "true"
+      WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP: ${WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP:-false}
       WFC_VIEWER_TRUST_PROXY: "true"
     volumes:
       - model-imports:/var/lib/wfc/model-imports

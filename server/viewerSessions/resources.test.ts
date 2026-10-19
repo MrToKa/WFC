@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { createHash,randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
+import { request as httpRequest } from 'node:http';
 import { Readable,PassThrough } from 'node:stream';
 import fs from 'node:fs/promises';
 import express from 'express';
@@ -17,12 +18,30 @@ import { createViewerRuntime,type ViewerRuntime } from './runtime.js';
 import type { ViewerSessionService } from './service.js';
 
 const servers: Server[]=[],runtimes: ViewerRuntime[]=[];
+// Node fetch normalizes Host. Use the HTTP client for a real wire request with
+// a LAN Host header while connecting to the isolated local test listener.
+async function httpFetch(url: string, options: { method?: string; headers: Record<string,string>; body?: string }): Promise<Response> {
+  return new Promise((resolve,reject) => {
+    const request=httpRequest(url,{method:options.method,headers:options.headers},response => {
+      const chunks: Buffer[]=[];
+      response.on('data',(chunk: Buffer) => chunks.push(chunk));
+      response.on('error',reject);
+      response.on('end',() => {
+        const headers=new Headers();
+        for(let index=0;index<response.rawHeaders.length;index+=2) headers.append(response.rawHeaders[index],response.rawHeaders[index+1]);
+        const status=response.statusCode ?? 500;
+        resolve(new Response(options.method==='HEAD' || status===204 ? null : Buffer.concat(chunks),{status,headers}));
+      });
+    });
+    request.on('error',reject);request.end(options.body);
+  });
+}
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(runtimes.splice(0).map(runtime => runtime.close()));
   await Promise.all(servers.splice(0).map(server => new Promise<void>((resolve,reject) => {server.closeAllConnections();server.close(error => error ? reject(error) : resolve());})));
 });
-async function fixture() {
+async function fixture(options: { lan?: boolean; https?: boolean } = {}) {
   const projectId=randomUUID(),modelVersionId=randomUUID(),sessionId=randomUUID(),loadId=randomUUID(),userId=randomUUID();
   const cookieSecret=Buffer.alloc(32,9).toString('base64url'),raw=Buffer.from([31,139,8,0,7,9,11,255]);
   const resource={path:'resources/output/0/raw.json.gz',bytes:raw.length,sha256:createHash('sha256').update(raw).digest('hex')};
@@ -34,16 +53,60 @@ async function fixture() {
   const service={create:vi.fn(async () => ({session,cookieSecret})),authorizeResource:vi.fn(async () => ({session,version})),renew:vi.fn(async () => session),revoke:vi.fn(async () => undefined),revokeLogin:vi.fn(async () => undefined),markUnavailable:vi.fn(async () => undefined)} as unknown as ViewerSessionService;
   const runtime=createViewerRuntime({service,storage});runtimes.push(runtime);
   const origins:string[]=[];
-  const app=express();app.use(createViewerSessionRouter({runtime,policy:{origins,allowHttpLoopback:true,trustProxy:false}}));
+  const app=express();app.use(createViewerSessionRouter({runtime,policy:{origins,allowHttpLoopback:true,allowInsecureLanHttp:options.lan===true,trustProxy:options.https===true}}));
   app.use((_req,res) => {res.status(404).end();});
   const server=await new Promise<Server>(resolve => {const server=app.listen(0,'127.0.0.1',() => resolve(server));});servers.push(server);
   const address=server.address();if (!address || typeof address==='string') throw new Error('Missing unit listener');
-  const origin=`http://127.0.0.1:${address.port}`;origins.push(origin);
+  const transportOrigin=`http://127.0.0.1:${address.port}`;
+  const origin=`${options.https ? 'https' : 'http'}://${options.lan ? '192.168.50.10' : '127.0.0.1'}:${address.port}`;origins.push(origin);
   const base=`/api/projects/${projectId}/model-versions/${modelVersionId}/viewer-sessions`,path=`${base}/${sessionId}/resources/output/0/raw.json.gz`;
-  const headers={Origin:origin,Cookie:`wfc_viewer_session=${cookieSecret}`};
-  return {raw,resource,storage,session,version,service,client,runtime,origin,base,path,headers,userId,reads:()=>reads,corrupt:()=>{stored=Buffer.alloc(raw.length,2);}};
+  const headers={Origin:origin,Host:new URL(origin).host,Cookie:`wfc_viewer_session=${cookieSecret}`,...(options.https ? {'X-Forwarded-Proto':'https'} : {})};
+  return {raw,resource,storage,session,version,service,client,runtime,origin,transportOrigin,base,path,headers,userId,reads:()=>reads,corrupt:()=>{stored=Buffer.alloc(raw.length,2);}};
 }
 describe('protected resources through the actual HTTP and full-hash storage boundary',() => {
+  it('supports LAN HTTP creation, descriptor, raw resources, renewal and logout with scoped non-Secure cookies',async () => {
+    // The socket is local, while Host/Origin model the browser-facing LAN address.
+    const f=await fixture({lan:true}),token=signAccessToken(f.userId,'unit@fixture.invalid',false).token;
+    const headers={...f.headers,Authorization:`Bearer ${token}`,'Content-Type':'application/json'};
+    const created=await httpFetch(f.transportOrigin+f.base,{method:'POST',headers,body:JSON.stringify({loadId:f.session.loadId})});
+    expect(created.status).toBe(201);expect(await created.json()).toEqual(f.session);
+    const cookie=created.headers.get('set-cookie')!;
+    expect(cookie).toContain(`Path=${f.base}/${f.session.sessionId}/`);expect(cookie).toContain('HttpOnly');expect(cookie).toContain('SameSite=Strict');
+    expect(cookie).not.toMatch(/;\s*Secure(?:;|$)/i);expect(cookie).not.toContain('Domain=');
+    expect(cookie).toMatch(/Max-Age=[1-9]\d*/);
+    const descriptor=await httpFetch(`${f.transportOrigin}${f.base}/${f.session.sessionId}/descriptor`,{headers:f.headers});
+    expect(descriptor.status).toBe(200);expect(await descriptor.json()).toMatchObject({projectId:f.session.projectId,modelVersionId:f.session.modelVersionId});
+    const resource=await httpFetch(f.transportOrigin+f.path+'?domain='+encodeURIComponent(f.origin),{headers:f.headers});
+    expect(resource.status).toBe(200);expect(Buffer.from(await resource.arrayBuffer())).toEqual(f.raw);
+    const head=await httpFetch(f.transportOrigin+f.path,{method:'HEAD',headers:{...f.headers,Range:'bytes=1-3'}});
+    expect(head.status).toBe(206);expect(head.headers.get('content-length')).toBe('3');
+    const renewed=await httpFetch(`${f.transportOrigin}${f.base}/${f.session.sessionId}/renew`,{method:'POST',headers,body:'{}'});
+    expect(renewed.status).toBe(200);expect(renewed.headers.get('set-cookie')).toContain('HttpOnly');expect(renewed.headers.get('set-cookie')).not.toMatch(/;\s*Secure(?:;|$)/i);
+    const logout=await httpFetch(f.transportOrigin+'/api/viewer-sessions/revoke-login',{method:'POST',headers});
+    expect(logout.status).toBe(204);expect(f.service.revokeLogin).toHaveBeenCalledTimes(1);
+    const revoked=await httpFetch(`${f.transportOrigin}${f.base}/${f.session.sessionId}`,{method:'DELETE',headers});
+    expect(revoked.status).toBe(204);expect(revoked.headers.get('set-cookie')).toContain(`Path=${f.base}/${f.session.sessionId}/`);
+    expect(f.service.revoke).toHaveBeenCalledTimes(1);
+  });
+  it('retains authentication, cookie, exact-origin and revoked-access enforcement in LAN HTTP mode',async () => {
+    const f=await fixture({lan:true});
+    const {Cookie:_cookie,...withoutCookie}=f.headers;
+    const unauthenticated=await httpFetch(f.transportOrigin+f.base,{method:'POST',headers:{...withoutCookie,'Content-Type':'application/json'},body:JSON.stringify({loadId:f.session.loadId})});
+    expect(unauthenticated.status).toBe(401);expect(f.service.create).not.toHaveBeenCalled();
+    const unauthenticatedRenewal=await httpFetch(`${f.transportOrigin}${f.base}/${f.session.sessionId}/renew`,{method:'POST',headers:{...f.headers,'Content-Type':'application/json'},body:'{}'});
+    expect(unauthenticatedRenewal.status).toBe(401);expect(f.service.renew).not.toHaveBeenCalled();
+    expect((await httpFetch(f.transportOrigin+f.path,{headers:withoutCookie})).status).toBe(401);
+    expect((await httpFetch(f.transportOrigin+f.path,{headers:{...f.headers,Origin:'http://192.168.50.11:5173'}})).status).toBe(403);
+    expect((await httpFetch(f.transportOrigin+f.path,{headers:{...f.headers,Host:'192.168.50.11:5173'}})).status).toBe(403);
+    expect(f.service.authorizeResource).not.toHaveBeenCalled();expect(f.reads()).toBe(0);
+    vi.mocked(f.service.authorizeResource).mockRejectedValueOnce(new ViewerSessionError('ACCESS_REVOKED',403));
+    expect((await httpFetch(f.transportOrigin+f.path,{headers:f.headers})).status).toBe(403);expect(f.reads()).toBe(0);
+  });
+  it('continues to set Secure cookies when TLS is terminated by the trusted private proxy',async () => {
+    const f=await fixture({https:true}),token=signAccessToken(f.userId,'unit@fixture.invalid',false).token;
+    const response=await httpFetch(f.transportOrigin+f.base,{method:'POST',headers:{...f.headers,Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({loadId:f.session.loadId})});
+    expect(response.status).toBe(201);expect(response.headers.get('set-cookie')).toMatch(/;\s*Secure(?:;|$)/i);
+  });
   it('serves raw gzip bytes, truthful HEAD and ranges from a fully verified handle each time',async () => {
     const f=await fixture();
     const full=await fetch(f.origin+f.path,{headers:f.headers});

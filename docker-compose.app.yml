@@ -30,9 +30,10 @@ services:
       MINIO_URL_EXPIRY_SECONDS: ${MINIO_URL_EXPIRY_SECONDS:-900}
       WFC_MODEL_BUCKET: ${WFC_MODEL_BUCKET:-wfc-models}
       WFC_MODEL_IMPORT_ROOT: /var/lib/wfc/model-imports
-      WFC_VIEWER_ALLOWED_ORIGINS: http://127.0.0.1:5180,http://localhost:5180
-      WFC_VIEWER_ALLOW_HTTP_LOOPBACK: "true"
-      WFC_VIEWER_TRUST_PROXY: "true"
+      WFC_VIEWER_ALLOWED_ORIGINS: ${WFC_VIEWER_ALLOWED_ORIGINS:-http://127.0.0.1:5180,http://localhost:5180}
+      WFC_VIEWER_ALLOW_HTTP_LOOPBACK: ${WFC_VIEWER_ALLOW_HTTP_LOOPBACK:-true}
+      WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP: ${WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP:-false}
+      WFC_VIEWER_TRUST_PROXY: ${WFC_VIEWER_TRUST_PROXY:-true}
     volumes:
       - model-imports:/var/lib/wfc/model-imports
     networks:
@@ -53,7 +54,7 @@ services:
         VITE_API_URL: /
         VITE_VIEWER_HARNESS: "false"
     restart: unless-stopped
-    ports: ["127.0.0.1:5180:80"]
+    ports: ["${WFC_HTTP_BIND_ADDRESS:-127.0.0.1}:${WFC_HTTP_PORT:-5180}:80"]
     networks: [application]
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/health"]

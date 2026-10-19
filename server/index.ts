@@ -8,8 +8,12 @@ import { initializeDatabase } from './db.js';
 import { initializeObjectStorage } from './services/objectStorageService.js';
 import { initializeModelRegistry, stopModelRegistry } from './modelRegistry/runtime.js';
 import { stopViewerSessions } from './viewerSessions/runtime.js';
+import { viewerHttpPolicy } from './viewerSessions/http.js';
 
 const app = createApp();
+if (viewerHttpPolicy().allowInsecureLanHttp) {
+  console.warn('WFC viewer LAN HTTP mode is enabled: login credentials, session cookies and model data are transmitted without TLS. Restrict access using the host firewall.');
+}
 function startListening(server: http.Server | https.Server, protocol: string): void {
   // Suppress Node's automatic 100 Continue until project edit authorization and durable acceptance.
   server.on('checkContinue', (req, res) => {

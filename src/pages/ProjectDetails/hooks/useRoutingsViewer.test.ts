@@ -1,6 +1,7 @@
+import { generateId } from '@/utils/generateId';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { createRef, useLayoutEffect } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectModelApiError, type ProjectModelSnapshot } from '@/api/projectModels';
 import { RoutingTrayApiError } from '@/api/routingTrays';
 import type { ViewerEvent, ViewerLoadSnapshot } from '@/viewer/ViewerController';
@@ -20,12 +21,12 @@ vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   options; snapshot; requests: ControllerFixture['requests'] = [];
   constructor(options: { projectId: string; onEvent(event: ViewerEvent): void }) {
     this.options = options;
-    this.snapshot = { instanceId: crypto.randomUUID(), projectId: options.projectId, modelVersionId: '', loadId: '', selectionRevision: 1, ready: false };
+    this.snapshot = { instanceId: generateId(), projectId: options.projectId, modelVersionId: '', loadId: '', selectionRevision: 1, ready: false };
     mocks.controllers.push(this as ControllerFixture);
   }
-  load = vi.fn(async (id: string) => { this.snapshot.modelVersionId = id; this.snapshot.loadId = crypto.randomUUID(); });
-  showRoute = vi.fn(async (raw: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null) => { const id = crypto.randomUUID(); this.requests.push({ raw, id, source, cableId }); return id; });
-  clear = vi.fn(() => crypto.randomUUID()); cancel = vi.fn(); zoom = vi.fn();
+  load = vi.fn(async (id: string) => { this.snapshot.modelVersionId = id; this.snapshot.loadId = generateId(); });
+  showRoute = vi.fn(async (raw: string, source: 'manual' | 'cable' = 'manual', cableId: string | null = null) => { const id = generateId(); this.requests.push({ raw, id, source, cableId }); return id; });
+  clear = vi.fn(() => generateId()); cancel = vi.fn(); zoom = vi.fn();
   dispose = vi.fn(() => { this.snapshot.ready = false; });
   getLoadSnapshot() { return { ...this.snapshot }; }
 } }));
@@ -42,7 +43,7 @@ const start = (props = { projectId: projectId as string | null, loadedProjectId:
   const container = createRef<HTMLDivElement>(); container.current = document.createElement('div');
   return renderHook(value => useRoutingsViewer({ ...value, container }), { initialProps: props });
 };
-const emit = (controller: ControllerFixture, type: string, payload: Record<string, unknown> = {}, requestId: string = crypto.randomUUID()) => {
+const emit = (controller: ControllerFixture, type: string, payload: Record<string, unknown> = {}, requestId: string = generateId()) => {
   const { instanceId, projectId, modelVersionId, loadId } = controller.snapshot;
   controller.options.onEvent({ type, payload, requestId, identity: { protocolVersion: 1, instanceId, projectId, modelVersionId, loadId, requestId } });
 };
@@ -61,7 +62,9 @@ const result = (controller: ControllerFixture, index = controller.requests.lengt
     segments: parsed.segments.map(segment => ({ ...segment, model: { state: 'found', matchCount: 1, drawable: true } })),
     ignored: parsed.ignored, drawableCount: parsed.segments.length, lineCount: 1, warnings: [], ...change }, id);
 };
-beforeEach(() => { vi.clearAllMocks(); mocks.controllers.length = 0; mocks.metadata.mockResolvedValue(snapshot()); mocks.trays.mockResolvedValue([{ id: trayId, projectId, name: 'BC001' }]); });
+beforeEach(() => { vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) }); vi.clearAllMocks(); mocks.controllers.length = 0; mocks.metadata.mockResolvedValue(snapshot()); mocks.trays.mockResolvedValue([{ id: trayId, projectId, name: 'BC001' }]); });
+
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('manual Routings viewer lifecycle', () => {
   it('exposes a separate information lifecycle which survives route operations and retires on model loading', async () => {
@@ -71,7 +74,7 @@ describe('manual Routings viewer lifecycle', () => {
     act(() => h.result.current.zoom()); act(() => h.result.current.clear());
     await act(() => h.result.current.showCable({ id: trayId, projectId, routing: '/BC001' }));
     expect(h.result.current.lifecycleKey).toBe(first);
-    act(() => { controller.snapshot.ready = false; controller.snapshot.loadId = crypto.randomUUID(); emit(controller, 'MODEL_LOADING'); });
+    act(() => { controller.snapshot.ready = false; controller.snapshot.loadId = generateId(); emit(controller, 'MODEL_LOADING'); });
     const loadingKey = h.result.current.lifecycleKey; expect(loadingKey).not.toBe(first); expect(loadingKey).not.toBeNull();
     act(() => { controller.snapshot.ready = true; emit(controller, 'MODEL_LOADED'); });
     expect(h.result.current.lifecycleKey).toBe(loadingKey);
@@ -133,7 +136,7 @@ describe('manual Routings viewer lifecycle', () => {
     await act(async () => { old.resolve(stale); }); expect(h.result.current.phase).toBe('ready'); expect(mocks.controllers).toHaveLength(1);
   });
   it('runs fresh DB/model halves in parallel and buffers a response before the show Promise binds', async () => {
-    const h = start(); const controller = await loaded(h); const sent = deferred<string>(); const id = crypto.randomUUID();
+    const h = start(); const controller = await loaded(h); const sent = deferred<string>(); const id = generateId();
     controller.showRoute.mockImplementationOnce((raw: string) => { controller.requests.push({ raw, id, source: 'manual', cableId: null }); result(controller); return sent.promise; });
     let showing!: Promise<void>; act(() => { showing = h.result.current.show('/BC001/SECONDARY/BC001'); });
     expect(mocks.trays).toHaveBeenCalledWith(projectId, 'current-token', expect.objectContaining({ signal: expect.any(AbortSignal) }));
@@ -190,7 +193,7 @@ describe('manual Routings viewer lifecycle', () => {
     const h = start(); const controller = await loaded(h); await act(() => h.result.current.show('/BC001')); act(() => result(controller));
     expect(h.result.current.result?.status).toBe('complete');
     controller.cancel.mockClear();
-    act(() => { controller.snapshot.loadId = crypto.randomUUID(); controller.snapshot.ready = false; emit(controller, 'MODEL_LOADING'); });
+    act(() => { controller.snapshot.loadId = generateId(); controller.snapshot.ready = false; emit(controller, 'MODEL_LOADING'); });
     expect(h.result.current.result).toBeNull(); expect(h.result.current.canShow).toBe(false);
     expect(controller.cancel).not.toHaveBeenCalled();
     act(() => { controller.snapshot.ready = true; emit(controller, 'MODEL_LOADED'); }); expect(h.result.current.canShow).toBe(true); expect(h.result.current.canZoom).toBe(false);
@@ -323,7 +326,7 @@ describe('shared manual and cable route pipeline', () => {
     await act(() => h.result.current.showCable(cable())); act(() => h.result.current.clear());
     await act(async () => { pending.resolve([]); result(controller); }); expect(h.result.current.currentRoute).toBeNull(); expect(h.result.current.result).toBeNull();
     await act(() => h.result.current.showCable(cable())); act(() => result(controller));
-    act(() => { controller.snapshot.loadId = crypto.randomUUID(); controller.snapshot.ready = false; emit(controller, 'MODEL_LOADING'); });
+    act(() => { controller.snapshot.loadId = generateId(); controller.snapshot.ready = false; emit(controller, 'MODEL_LOADING'); });
     expect(h.result.current.currentRoute).toBeNull(); expect(h.result.current.canZoom).toBe(false);
     await act(() => h.result.current.showCable(cable(cableB))); expect(controller.showRoute).toHaveBeenCalledTimes(2);
     act(() => { controller.snapshot.ready = true; emit(controller, 'MODEL_LOADED'); });
@@ -370,7 +373,7 @@ describe('shared manual and cable route pipeline', () => {
   it.each(['different-cable', 'same-cable'] as const)('binds an early current cable reply by exact request ID despite late old replies: %s', async identity => {
     const h = start(), controller = await loaded(h), pending = deferred<string>();
     await act(() => h.result.current.showCable(cable())); act(() => result(controller, 0));
-    const id = crypto.randomUUID(), nextCable = identity === 'same-cable' ? cableA : cableB;
+    const id = generateId(), nextCable = identity === 'same-cable' ? cableA : cableB;
     controller.showRoute.mockImplementationOnce((raw: string, source: 'manual' | 'cable', cableId: string | null) => {
       controller.requests.push({ raw, id, source, cableId });
       result(controller, 0);
@@ -386,7 +389,7 @@ describe('shared manual and cable route pipeline', () => {
   });
 
   it('still rejects an early malformed payload for the exact current request', async () => {
-    const h = start(), controller = await loaded(h), pending = deferred<string>(), id = crypto.randomUUID();
+    const h = start(), controller = await loaded(h), pending = deferred<string>(), id = generateId();
     controller.showRoute.mockImplementationOnce((raw: string, source: 'manual' | 'cable', cableId: string | null) => {
       controller.requests.push({ raw, id, source, cableId }); result(controller, 0, { rawRouting: '/OTHER' }); return pending.promise;
     });
@@ -396,11 +399,11 @@ describe('shared manual and cable route pipeline', () => {
   });
 
   it('bounds early candidates and accepts the current reply after stale candidate churn', async () => {
-    const h = start(), controller = await loaded(h), pending = deferred<string>(), id = crypto.randomUUID();
+    const h = start(), controller = await loaded(h), pending = deferred<string>(), id = generateId();
     controller.showRoute.mockImplementationOnce((raw: string, source: 'manual' | 'cable', cableId: string | null) => {
       controller.requests.push({ raw, id, source, cableId });
       for (let index = 0; index < 20; index++) {
-        const staleId = crypto.randomUUID();
+        const staleId = generateId();
         emit(controller, 'ROUTE_RESULT', { rawRouting: raw, source, cableId, segments: [], ignored: [], drawableCount: 0, lineCount: 0, warnings: [] }, staleId);
       }
       result(controller); return pending.promise;
