@@ -3,6 +3,9 @@ import { initializePathFinderJobs } from './jobsSchema.js';
 import { initializePurposePolicySchema } from './policySchema.js';
 import { initializeArtifactRoutingScope } from './routingScope.js';
 import { initializeRoutingPolicySchema } from './purposePolicy.js';
+import { initializeDrawingPolicySchema } from './drawingPolicy.js';
+import { initializeDrawingSnapshotSchema } from './drawingSnapshots.js';
+import { initializeDrawingExportSchema } from './drawingExports.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -110,4 +113,7 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializePathFinderJobs(pool);
   await initializePurposePolicySchema(pool);
   await initializeRoutingPolicySchema(pool);
+  await initializeDrawingPolicySchema(pool);
+  await initializeDrawingSnapshotSchema(pool);
+  await initializeDrawingExportSchema(pool);
 }

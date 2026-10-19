@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r2-purpose-policy-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r2a-drawing-positioning-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -100,6 +100,53 @@ recommended engineering choice and are recorded; no routine stage pause.
   B new policy repository/router/parser, C API/hook/card and Details integration.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
+
+## Current PF-R2a — technically complete; continue immediately to R3
+
+- Branch pf-r2a-drawing-positioning-local-20261019; baseline HEAD4832f95.
+  Report38 + following local technical commit contain the complete delivery.
+  R2technicala96e45a/R1d997dca/R009f0e1d retained. No publication/merge.
+- Source refrozen after independent report consistency/security review. Final
+  combined **622/622 in31files PASS**, frontend/server typecheck PASS,56-file lint
+  PASS. Includes exact reportTrays snapshot source, offscreen image rendering,
+  cancellation through async generation and verifiedPUT outcome without extraGET.
+- Owned5191 upgraded api/web ONLY (--no-deps); PG/MinIO/storage-ready and all
+  named volumes/networks retained. API IDa2e930da7a641941a776a552c1b048bc59473c9ad4dc99b020bffa4e1e5e25ed,
+  image1ae01697093fa8374af378d16fdacef6158bef167ef419937bd7a309641e8fa0;
+  web ID191de419eae68ca3b9826178f984b19a523e0c14a6f3ea058ba29165b481452b,
+  image134cce47c50621e7ac39f78d22cbcbd57094798ac3bcc4e1fc65a87556cc6698.
+  Private approved profile r2a-approved-runtime4.private.json under owned work
+  .scratch/tray-catalog-bebbc6b5-3be9-4e50-930d-3339074393b9. Root alone runtime.
+- Verified pre-migration backup038dcba7-048b-4475-928b-e2d7327cd2a1 and separate
+  private companion retained. Earlier candidate1 never deployed; two owned unused
+  images removed after reference checks. Final whitespace-only cleanup required a
+  fresh candidate4 build/update; fresh15controls and53/storage reconciliation PASS,
+  protected model reloaded PASS. Candidate2/3 fourunused images also removed.
+  Never generic up-all or retire5191.
+- Actual **15/15SQL/HTTP PASS**, synthetic cleanup PASS. Real drawing metrics
+  **330ready/330proofs/0blocked,19.308seconds**; no route-capacity claim.
+  Computer-use13scopedchecks PASS: choices, save/reload/default, same-side pooling,
+  two-side divider/single-side none, stale conflict, ordinary read-only drawing,
+  blocked layout and retained protected model664556/438156/6 with3tools.
+- Final **53-table** reconciliation PASS: old45 +8R2 tables;2143cables unchanged.
+  Retained catalog v1 proofs only gain default projection discriminator; one new
+  real-project v2 proof +one immutable drawing snapshot allowed. Exact current
+  storage inventory unchanged1032objects(3project/3template/1026model).
+  All18protected containers unchanged; original/canonical/dirtyoldPF metadata
+  matchesR0 and23frozen references unchanged. No expected regenerated.
+- Synthetic SQL/HTTP/UI projects/accounts/objects removed. Normal demo admin
+  restored; own local logout/login changes authentication sessions only.
+  Seven historical denied paths/parents +Tempresidue untouched, no prune.
+- Real330trays/2140selectedcables/51types/0realrules/0bindings/0trustedscopes,
+ 44historicaljobs and13-objectdiagnostic/1527unresolvednames retained.
+  S/E/P/gap7/5/10/1 unchanged. No real engineering Apply/invented mappings.
+- Fresh yellow/Ghost route execution and generatedDOCX visual render NOT_RUN
+  this stage; unchanged Viewer/Core source/inherited evidence separate. R10 must
+  include actual report document workflow. Native/user acceptance not claimed.
+- No active root subprocess; read-only agent reviews closed. Next apply
+  prepare-stage-handoff → detailed PF-R3 bounded project preparation/global
+  calculation scope prompt → localmetadata commit → inheritedR3branch → EXECUTE.
+  Automation remainsACTIVE; no routine stage pause. R4–R10 still pending.
 
 ## Live PF-R2 checkpoint — technically complete
 

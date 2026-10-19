@@ -1,0 +1,33 @@
+{
+  "result": {
+    "status": "PASS",
+    "httpStatus": 200,
+    "elapsedMs": 19307.969429999997,
+    "trayCount": 330,
+    "proofCount": 330,
+    "ready": 330,
+    "blocked": 0,
+    "code": null
+  },
+  "transport": {
+    "schemaVersion": "wfc.pf.catalog-transport.v1",
+    "bindingKind": "target",
+    "containerId": "4470f8d070cca0a8e40a91a717eca5fcab4d383e3c9633c75025bf22ccde09cd",
+    "label": "r2a-real-330-capacity",
+    "programSha256": "a5fc606a1df261505cf0154fb6889e697767b8aa84ad18758cb7544ae619d5b7",
+    "inputSha256": "127322a5e3117c2a25c665af5dd1f2fd7acf6d46b6d145af9789823c37124976",
+    "exitCode": 0,
+    "signal": null,
+    "error": null,
+    "stdoutBytesObserved": 134,
+    "stderrBytes": 0,
+    "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "raw": {
+      "path": "r2a-real-330-capacity-raw.private.json",
+      "bytes": 134,
+      "sha256": "583a57b8a345e8b46be3691b1a2bbd487febc417a2ebf1dfd0a388f7e35fa84c"
+    },
+    "outcome": "TRANSPORT_OK"
+  },
+  "scope": "REAL_DRAWING_CAPACITY_NOT_ENGINEERING_ROUTE_ACCEPTANCE"
+}

@@ -1,0 +1,24 @@
+{
+  "status": "PASS",
+  "scope": "OWN_UNREFERENCED_CANDIDATE2_AND3_ONLY",
+  "removed": [
+    {
+      "image": "sha256:dd7e5fb70c25ec6d09b64af594085ee177389b2a6997a070b2009b0f91306131",
+      "tag": "wfc-pathfinder-api:8fffd6b8c896-mveh511k"
+    },
+    {
+      "image": "sha256:3bf1b3ba7599e2e85b9d496d6117fc890dde8eadf166491ff41cbf739093319b",
+      "tag": "wfc-pathfinder-web:8fffd6b8c896-mveh511k"
+    },
+    {
+      "image": "sha256:f810e6a4506e0ed5779d7e5e33dab61f4a6780ddcf34a06a678489d8191eec40",
+      "tag": "wfc-pathfinder-api:8fffd6b8c896-mvehlcen"
+    },
+    {
+      "image": "sha256:20278534bb26146921bb9aee884d51039a1c13b3ebd6521ee411f0d88fcb978b",
+      "tag": "wfc-pathfinder-web:8fffd6b8c896-mvehlcen"
+    }
+  ],
+  "prune": false,
+  "deniedPathsTouched": false
+}

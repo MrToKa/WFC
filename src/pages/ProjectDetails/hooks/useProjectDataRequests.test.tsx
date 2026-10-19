@@ -6,6 +6,7 @@ import { useTraysSection } from './useTraysSection';
 import { useProjectFilesSection } from './useProjectFilesSection';
 import { useTrayData } from '../../TrayDetails/hooks/useTrayData';
 import { TRAYS_PER_PAGE } from '../../ProjectDetails.forms';
+import type { TrayDrawingResponse } from '@/api/trayDrawing';
 
 const mocks = vi.hoisted(() => ({
   project: vi.fn(),
@@ -15,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   files: vi.fn(),
   materials: vi.fn(),
   deleteTray: vi.fn(),
+  drawing: vi.fn(),
 }));
+vi.mock('@/api/trayDrawing', () => ({ fetchTrayDrawingSnapshot: mocks.drawing }));
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/client')>()),
   fetchProject: mocks.project,
@@ -208,16 +211,32 @@ describe('project data loading', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('ignores an older tray detail request after navigation', async () => {
-    const pending = deferred<{ tray: Tray }>();
-    mocks.tray.mockReturnValueOnce(pending.promise);
-    const { result, rerender } = renderHook(({ id }) => useTrayData('project-1', id), {
-      initialProps: { id: 'old' },
-    });
+  it('ignores an older consistent drawing snapshot after navigation', async () => {
+    const response = (id: string) => ({ snapshot: { projectId: 'project-1', projectTrayId: id }, data: { project: project('project-1'), tray: tray(id), reportTrays: [tray(id)], cables: [], trayCables: [] }, permissions: { canEdit: true } } as unknown as TrayDrawingResponse);
+    const pending = deferred<TrayDrawingResponse>();
+    mocks.drawing.mockReturnValueOnce(pending.promise).mockImplementation((_projectId, id) => Promise.resolve(response(id)));
+    const { result, rerender } = renderHook(({ id }) => useTrayData('project-1', id, 'login'), { initialProps: { id: 'old' } });
     rerender({ id: 'new' });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    await act(async () => pending.resolve({ tray: tray('old') }));
+    await act(async () => pending.resolve(response('old')));
     expect(result.current.tray?.id).toBe('new');
-    expect(mocks.cables).toHaveBeenCalledTimes(1);
+    expect(mocks.cables).not.toHaveBeenCalled();
+    rerender({ id: 'third' });
+    expect(result.current.tray).toBeNull();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+  });
+  it('clears shared metrics during refresh and hides them immediately when read authority changes', async () => {
+    mocks.trays.mockResolvedValue({ trays: [tray('metric')], freeSpaceByTrayId: { metric: 42 } });
+    const hook = renderHook(({ readToken }) => useTraysSection({ projectId: 'project-1', project: project('project-1'), token: null, readToken, showToast: vi.fn() }), { initialProps: { readToken: 'one' } });
+    await waitFor(() => expect(hook.result.current.freeSpaceByTrayId).toEqual({ metric: 42 }));
+    expect(mocks.trays).toHaveBeenLastCalledWith('project-1', { drawingMetrics: true, token: 'one' });
+    const failure = deferred<{ trays: Tray[] }>(); mocks.trays.mockReturnValueOnce(failure.promise);
+    let refresh!: Promise<void>; act(() => { refresh = hook.result.current.reloadTrays(); });
+    expect(hook.result.current.freeSpaceByTrayId).toEqual({});
+    await act(async () => { failure.resolve({ trays: [] }); await refresh; });
+    mocks.trays.mockResolvedValue({ trays: [tray('metric')], freeSpaceByTrayId: { metric: 45 } });
+    await act(() => hook.result.current.reloadTrays());
+    hook.rerender({ readToken: 'two' }); expect(hook.result.current.freeSpaceByTrayId).toEqual({});
+    await waitFor(() => expect(hook.result.current.freeSpaceByTrayId).toEqual({ metric: 45 }));
   });
 });

@@ -89,10 +89,18 @@ CREATE OR REPLACE FUNCTION pf_catalog_no_truncate() RETURNS trigger LANGUAGE plp
 DROP TRIGGER IF EXISTS pf_catalog_no_truncate ON trays;
 CREATE TRIGGER pf_catalog_no_truncate BEFORE TRUNCATE ON trays FOR EACH STATEMENT EXECUTE FUNCTION pf_catalog_no_truncate();
 CREATE OR REPLACE FUNCTION pf_catalog_drawing_dependency() RETURNS trigger LANGUAGE plpgsql AS $$
- DECLARE before_value jsonb;after_value jsonb;pid uuid;BEGIN
+ DECLARE before_value jsonb;after_value jsonb;pid uuid;target_file_id uuid;is_source boolean;is_generated boolean;BEGIN
  IF TG_OP<>'INSERT' THEN before_value=to_jsonb(OLD)-ARRAY['created_at','updated_at','change_log'];END IF;
  IF TG_OP<>'DELETE' THEN after_value=to_jsonb(NEW)-ARRAY['created_at','updated_at','change_log'];END IF;
  IF before_value IS NOT DISTINCT FROM after_value THEN RETURN COALESCE(NEW,OLD);END IF;
+ IF TG_TABLE_NAME IN ('project_files','project_file_versions') AND to_regclass('pf_drawing_generated_files') IS NOT NULL THEN
+  target_file_id=CASE WHEN TG_TABLE_NAME='project_files' THEN COALESCE(after_value->>'id',before_value->>'id')::uuid ELSE COALESCE(after_value->>'project_file_id',before_value->>'project_file_id')::uuid END;
+  SELECT EXISTS(SELECT 1 FROM project_tray_purpose_templates WHERE project_file_id=target_file_id) INTO is_source;
+  SELECT EXISTS(SELECT 1 FROM pf_drawing_generated_files g WHERE g.file_id=target_file_id) INTO is_generated;
+  -- Trusted export code sets this transaction-local marker only while writing its
+  -- generated output closure. Existing referenced source/template files are fenced.
+  IF NOT is_source AND (is_generated OR NULLIF(current_setting('wfc.drawing_export_id',true),'') IS NOT NULL) THEN RETURN COALESCE(NEW,OLD);END IF;
+ END IF;
  IF TG_TABLE_NAME='projects' THEN
   IF (before_value->'support_distance',before_value->'support_weight',before_value->'tray_load_safety_factor',before_value->'cable_layout_settings') IS NOT DISTINCT FROM
      (after_value->'support_distance',after_value->'support_weight',after_value->'tray_load_safety_factor',after_value->'cable_layout_settings') THEN RETURN COALESCE(NEW,OLD);END IF;

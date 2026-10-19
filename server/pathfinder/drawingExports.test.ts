@@ -1,0 +1,64 @@
+// @vitest-environment node
+import { Readable } from 'node:stream';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Pool } from 'pg';
+import { decodeDrawingExport, exportTrayDrawing } from './drawingExports.js';
+import { assertCurrentDrawingSnapshot } from './drawingSnapshots.js';
+import type { DrawingExportWrite } from '../../shared/trayDrawingSnapshot.js';
+const storage = vi.hoisted(() => ({ upload: vi.fn(), stream: vi.fn(), objects: new Map<string, Buffer>() }));
+vi.mock('../services/objectStorageService.js', () => ({ uploadObject: storage.upload, getObjectStream: storage.stream, getProjectBucket: () => 'synthetic-project-bucket' }));
+vi.mock('./drawingSnapshots.js', async () => { const { createHash } = await import('node:crypto'), { canonicalPurposeJson } = await import('../../shared/pathfinderPurposePolicy.js'); return { assertCurrentDrawingSnapshot: vi.fn(), drawingDigest: (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex') }; });
+const id = (n: number) => '66666666-6666-4666-8666-' + String(n).padStart(12, '0');
+const projectId = id(1), trayId = id(2), userId = id(3), loginId = id(4), snapshotId = id(5);
+const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+function command(): DrawingExportWrite { return { schemaVersion: 'pathfinder.tray-drawing-export.write.v1', snapshotId, expectedContentSha256: 'a'.repeat(64), idempotencyKey: id(6), files: [{ kind: 'bundles', fileName: 'synthetic-bundles.jpg', contentType: 'image/jpeg', base64: Buffer.from([255, 216, 255, 1]).toString('base64') }, { kind: 'load-curve', fileName: 'synthetic-curve.png', contentType: 'image/png', base64: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString('base64') }, { kind: 'report', fileName: 'synthetic-report.docx', contentType: docx, base64: Buffer.from([80, 75, 3, 4]).toString('base64') }] }; }
+function database(options: { admin?: boolean; role?: string; assigned?: boolean; revoked?: boolean; lostFinalCommit?: boolean; existingSource?: boolean; failAt?: string } = {}) {
+  const who = { userId, loginId, loginExpiresAt: Date.now() + 3600000 }, exports = new Map<string, any>(), files: any[] = [], versions: any[] = [], provenance: any[] = [], calls: Array<{ sql: string; values: any[] }> = [];
+  let tail = Promise.resolve(), commits = 0;
+  const pool = { connect: vi.fn(async () => {
+    let unlock: (() => void) | undefined, backup: any, committed = false;
+    const query = vi.fn(async (sql: string, values: any[] = []) => {
+      calls.push({ sql, values });
+      if (options.failAt && sql.startsWith(options.failAt)) throw Error('synthetic-private-detail');
+      if (sql === 'BEGIN') return { rows: [] };
+      if (sql.startsWith('SELECT id FROM projects')) { const waiting = tail; tail = new Promise<void>(resolve => { unlock = resolve; }); await waiting; backup = { exports: structuredClone(exports), files: structuredClone(files), versions: structuredClone(versions), provenance: structuredClone(provenance) }; return { rows: [{ id: projectId }] }; }
+      if (sql === 'COMMIT') { commits++; committed = true; unlock?.(); unlock = undefined; if (options.lostFinalCommit && commits === 2) throw Error('synthetic-private-detail'); return { rows: [] }; }
+      if (sql === 'ROLLBACK') { if (backup && !committed) { exports.clear(); for (const [key, value] of backup.exports) exports.set(key, value); files.splice(0, files.length, ...backup.files); versions.splice(0, versions.length, ...backup.versions); provenance.splice(0, provenance.length, ...backup.provenance); } unlock?.(); unlock = undefined; return { rows: [] }; }
+      if (sql.startsWith('SELECT is_admin,role')) return { rows: [{ is_admin: options.admin !== false, role: options.role ?? 'basic' }] };
+      if (sql.startsWith('INSERT INTO viewer_login_bindings')) return { rows: [] };
+      if (sql.startsWith('SELECT user_id,expires_at')) return { rows: [{ user_id: userId, expires_at: new Date(who.loginExpiresAt), revoked_at: options.revoked ? new Date() : null }] };
+      if (sql.startsWith('SELECT user_id FROM user_project_access')) return { rows: options.assigned === false ? [] : [{ user_id: userId }] };
+      if (sql.startsWith('SELECT id,request_sha256,stage,receipt')) return { rows: exports.has(values[3]) ? [exports.get(values[3])] : [] };
+      if (sql === 'LOCK TABLE project_files,project_file_versions IN SHARE ROW EXCLUSIVE MODE') return { rows: [] };
+      if (sql.startsWith('INSERT INTO pf_drawing_exports')) { exports.set(values[5], { id: values[0], request_sha256: values[6], stage: values[9], receipt: null }); return { rows: [] }; }
+      if (sql.startsWith("SELECT set_config('wfc.drawing_export_id'")) return { rows: [] };
+      if (sql.startsWith('SELECT f.id,EXISTS')) return { rows: options.existingSource ? [{ id: id(90), generated: false }] : [] };
+      if (sql.startsWith('INSERT INTO project_files(')) { files.push({ id: values[0], projectId: values[1], objectKey: values[2], fileName: values[3] }); return { rows: [] }; }
+      if (sql.startsWith('INSERT INTO pf_drawing_generated_files')) return { rows: [] };
+      if (sql.startsWith('INSERT INTO pf_drawing_export_files')) { provenance.push(values); return { rows: [] }; }
+      if (sql.startsWith('UPDATE pf_drawing_exports SET receipt=')) { const row = [...exports.values()].find(entry => entry.id === values[1]); row.receipt = values[0]; return { rows: [] }; }
+      throw Error('Unexpected synthetic query');
+    });
+    return { query, release: vi.fn(() => unlock?.()) };
+  }) } as unknown as Pool;
+  return { options, who, pool, exports, files, versions, provenance, calls, export: (input = command()) => exportTrayDrawing(pool, projectId, trayId, who, input) };
+}
+beforeEach(() => { vi.resetAllMocks(); storage.objects.clear(); storage.upload.mockImplementation(async (request: { objectKey: string; data: Buffer }) => { storage.objects.set(request.objectKey, Buffer.from(request.data)); }); storage.stream.mockImplementation(async (_bucket: string, key: string) => Readable.from([storage.objects.get(key)!])); vi.mocked(assertCurrentDrawingSnapshot).mockResolvedValue({ snapshot: { state: 'ready' } } as never); });
+describe('bounded export decoding', () => {
+  it('binds canonical bytes, types, file names and immutable request hash', () => { const first = decodeDrawingExport(command()), second = decodeDrawingExport(command()); expect(first.requestSha256).toBe(second.requestSha256); expect(first.files.map(file => file.kind)).toEqual(['bundles', 'load-curve', 'report']); expect(first.files.every(file => file.sha256.length === 64 && file.sizeBytes === file.bytes.length)).toBe(true); });
+  it('rejects noncanonical base64 and wrong declared content before storage access', () => { const value = command(); value.files[0].base64 = '/9j/AQ=='.replace('AQ==', 'AR=='); expect(() => decodeDrawingExport(value)).toThrow(); value.files[0].base64 = Buffer.from('not an image').toString('base64'); expect(() => decodeDrawingExport(value)).toThrow(); expect(storage.upload).not.toHaveBeenCalled(); });
+  it('rejects path names, duplicate kinds/names and image content disguised as a report', () => { for (const mutate of [(value: DrawingExportWrite) => { value.files[0].fileName = '../bad.jpg'; }, (value: DrawingExportWrite) => { value.files[1].kind = 'bundles'; }, (value: DrawingExportWrite) => { value.files[1].fileName = value.files[0].fileName.toUpperCase(); }, (value: DrawingExportWrite) => { value.files[2].contentType = 'image/jpeg'; value.files[2].fileName = 'report.jpg'; value.files[2].base64 = value.files[0].base64; }]) { const value = command(); mutate(value); expect(() => decodeDrawingExport(value)).toThrow(); } });
+});
+describe('journalled upload and final authority/snapshot fence', () => {
+  it('journals before upload and atomically commits three file/provenance rows with one receipt', async () => { const x = database(); storage.upload.mockImplementation(async (request: { objectKey: string; data: Buffer }) => { expect(x.exports.size).toBe(1); expect(x.files).toEqual([]); storage.objects.set(request.objectKey, Buffer.from(request.data)); }); const result = await x.export(); expect(result.duplicate).toBe(false); expect(result.files).toHaveLength(3); expect(x.files).toHaveLength(3); expect(x.provenance).toHaveLength(3); expect(assertCurrentDrawingSnapshot).toHaveBeenCalledTimes(2); expect(x.calls.filter(call => call.sql === 'COMMIT')).toHaveLength(2); expect(storage.stream).toHaveBeenCalledTimes(3); expect(x.calls.filter(call => call.sql.startsWith('INSERT INTO project_files')).every(call => call.values[1] === projectId)).toBe(true); });
+  it('an exact authorized replay returns historical receipt without repeating uploads or claiming currentness', async () => { const x = database(), first = await x.export(); storage.upload.mockClear(); vi.mocked(assertCurrentDrawingSnapshot).mockRejectedValue(Error('Current snapshot changed')); const replay = await x.export(); expect(replay).toEqual({ ...first, duplicate: true }); expect(storage.upload).not.toHaveBeenCalled(); expect(x.files).toHaveLength(3); });
+  it('same key with changed bytes conflicts before another object write', async () => { const x = database(); await x.export(); storage.upload.mockClear(); const changed = command(); changed.files[0].base64 = Buffer.from([255, 216, 255, 2]).toString('base64'); await expect(x.export(changed)).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' }); expect(storage.upload).not.toHaveBeenCalled(); });
+  it('current role or assignment revocation between upload and final commit leaves only the recoverable journal/objects', async () => { const x = database({ admin: false, role: 'engineer', assigned: true }); storage.upload.mockImplementation(async (request: { objectKey: string; data: Buffer }) => { storage.objects.set(request.objectKey, Buffer.from(request.data)); x.options.assigned = false; }); await expect(x.export()).rejects.toMatchObject({ code: 'DRAWING_ACCESS_REQUIRED', status: 403 }); expect(x.files).toEqual([]); expect(x.provenance).toEqual([]); expect(x.exports.size).toBe(1); expect([...x.exports.values()][0].receipt).toBe(null); expect(storage.objects.size).toBe(3); });
+  it('a stale snapshot at final commit cannot publish uploaded files', async () => { const x = database(); vi.mocked(assertCurrentDrawingSnapshot).mockResolvedValueOnce({} as never).mockRejectedValueOnce(Object.assign(Error('Stale'), { code: 'DRAWING_SNAPSHOT_STALE' })); await expect(x.export()).rejects.toMatchObject({ code: 'DRAWING_SNAPSHOT_STALE' }); expect(x.files).toEqual([]); expect(x.exports.size).toBe(1); expect(storage.objects.size).toBe(3); });
+  it('readback corruption stops before project file mutations and preserves uncertain objects', async () => { const x = database(); storage.stream.mockResolvedValue(Readable.from([Buffer.from('wrong')])); await expect(x.export()).rejects.toMatchObject({ code: 'DRAWING_EXPORT_OBJECT_INTEGRITY' }); expect(x.files).toEqual([]); expect(x.provenance).toEqual([]); expect(storage.upload).toHaveBeenCalledOnce(); expect(x.exports.size).toBe(1); });
+  it('refuses replacing a manual/source template file', async () => { const x = database({ existingSource: true }); await expect(x.export()).rejects.toMatchObject({ code: 'DRAWING_SOURCE_FILE_CONFLICT' }); expect(x.files).toEqual([]); expect(x.provenance).toEqual([]); expect([...x.exports.values()][0].receipt).toBe(null); });
+  it('final file failure rolls back all file/provenance writes while retaining the stage', async () => { const x = database({ failAt: 'INSERT INTO pf_drawing_export_files' }); await expect(x.export()).rejects.toThrow('synthetic-private-detail'); expect(x.files).toEqual([]); expect(x.provenance).toEqual([]); expect(x.exports.size).toBe(1); expect([...x.exports.values()][0].receipt).toBe(null); });
+  it('lost final commit acknowledgment reconciles the same receipt without another upload', async () => { const x = database({ lostFinalCommit: true }); await expect(x.export()).rejects.toThrow('synthetic-private-detail'); expect(x.files).toHaveLength(3); storage.upload.mockClear(); const replay = await x.export(); expect(replay.duplicate).toBe(true); expect(storage.upload).not.toHaveBeenCalled(); expect(x.files).toHaveLength(3); });
+  it('concurrent identical exports converge on one stage and one file set', async () => { const x = database(); const results = await Promise.all([x.export(), x.export()]); expect(results.map(result => result.duplicate).sort()).toEqual([false, true]); expect(x.exports.size).toBe(1); expect(x.files).toHaveLength(3); expect(x.provenance).toHaveLength(3); });
+  it('a revoked reader cannot replay an existing receipt', async () => { const x = database(); await x.export(); x.options.revoked = true; await expect(x.export()).rejects.toMatchObject({ code: 'LOGIN_REVOKED', status: 401 }); });
+});

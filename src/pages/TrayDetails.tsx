@@ -1,3 +1,5 @@
+import { TrayReportGeneration } from '@/utils/trayReportGeneration';
+import { LoadCurveDrawingService } from './TrayDetails/loadCurveDrawingService';
 import { TRAY_REPORT_PLACEHOLDERS } from './TrayDetails/trayReportVariables';
 import { canEditProject, canExportChangeLogs, canReadCatalogs } from '@/utils/permissions';
 import type { ChangeEvent, FormEvent } from 'react';
@@ -22,12 +24,14 @@ import {
   ApiError,
   deleteTray,
   updateTray,
-  uploadProjectFile,
   downloadProjectFile,
   fetchProjectFiles,
   downloadTemplateFile
 } from '@/api/client';
-import type { ProjectFile } from '@/api/client';
+import { fetchTrayDrawingSnapshot, saveTrayDrawingSettings, exportTrayDrawing, drawingBlobBase64, TrayDrawingApiError, type DrawingSettingsWrite } from '@/api/trayDrawing';
+import { computeTrayDrawing, replayTrayDrawing, type DrawingCanvas } from '../../shared/trayDrawing/index';
+import { makeTrayDrawingInput } from '../../shared/trayDrawingInputs';
+import { trayBundleOverrideSchema } from '../../shared/trayDrawingSnapshot';
 import type {
   CableBundleSpacing,
   ProjectCableCategorySettings,
@@ -48,10 +52,9 @@ import {
 } from '@/utils/customVariablesStorage';
 import {
   getTrayBundleOverrides,
-  setTrayBundleOverrides,
+  clearTrayBundleOverrides,
   validateBundleRanges,
   generateBundleRangeId,
-  getBundleRangeLabel,
   type TrayBundleOverride,
   type CustomBundleRange
 } from '@/utils/trayBundleOverrides';
@@ -99,12 +102,7 @@ import {
   type CableCategoryKey
 } from './ProjectDetails/hooks/cableLayoutDefaults';
 import {
-  TrayDrawingService,
-  type CableBundleMap,
-  type CategoryLayoutConfig,
   type TrayLayoutSummary,
-  determineCableDiameterGroup,
-  determineCableDiameterGroupWithCustomRanges
 } from './TrayDetails/trayDrawingService';
 import {
   canvasToBlob,
@@ -419,33 +417,6 @@ const parseBundleRangeMaxRowsInput = (value: string): number | null => {
 
   const parsed = Number(trimmed);
   return normalizeCustomBundleRangeMaxRows(parsed);
-};
-
-const buildBundleMaxRowsByKey = (
-  ranges: CustomBundleRange[] | null | undefined
-): Record<string, number> | undefined => {
-  if (!ranges || ranges.length === 0) {
-    return undefined;
-  }
-
-  const entries = ranges
-    .map((range) => {
-      const maxRows = normalizeCustomBundleRangeMaxRows(range.maxRows ?? null);
-      if (maxRows === null) {
-        return null;
-      }
-      return [getBundleRangeLabel(range), maxRows] as const;
-    })
-    .filter(
-      (entry): entry is readonly [string, number] =>
-        entry !== null
-    );
-
-  if (entries.length === 0) {
-    return undefined;
-  }
-
-  return Object.fromEntries(entries);
 };
 
 /**
@@ -783,7 +754,7 @@ export const TrayDetails = () => {
   const styles = useStyles();
   const trayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const loadCurveCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const trayDrawingServiceRef = useRef<TrayDrawingService | null>(null);
+
   const navigate = useNavigate();
   const { projectId, trayId } = useParams<{ projectId: string; trayId: string }>();
   const { user, token } = useAuth();
@@ -811,22 +782,27 @@ export const TrayDetails = () => {
     isLoading,
     error,
     setTray,
-    setTrays
-  } = useTrayData(projectId, trayId);
+    setTrays, drawingResponse, refreshDrawing, applyDrawingSnapshot
+  } = useTrayData(projectId, trayId, token);
   const canEdit = canEditProject(user, project, projectId);
   const canonicalProjectId = project?.id ?? projectId ?? null;
 
-  const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
-    useMaterialData(projectId, canReadCatalogs(user));
-
-  const { materialSupportsById, materialSupportsLoading, materialSupportsError, materialSupportsLoaded } =
-    useMaterialSupports(projectId, canReadCatalogs(user));
-
-  const { projectCableTypes, projectCableTypesLoading, projectCableTypesError } =
-    useProjectCableTypes(projectId);
-
-  // Form state
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const { materialTrays, isLoadingMaterials, materialsError, findMaterialTrayByType } =
+    useMaterialData(isEditing ? projectId : undefined, isEditing && canReadCatalogs(user));
+
+  const liveSupports = useMaterialSupports(isEditing ? projectId : undefined, isEditing && canReadCatalogs(user));
+  const liveCableTypes = useProjectCableTypes(isEditing ? projectId : undefined);
+  const materialSupportsById = useMemo(() => drawingResponse && !isEditing
+    ? Object.fromEntries(drawingResponse.data.materialSupports.map(item => [item.id, item])) as unknown as typeof liveSupports.materialSupportsById
+    : liveSupports.materialSupportsById, [drawingResponse, isEditing, liveSupports.materialSupportsById]);
+  const materialSupportsLoading = isEditing && liveSupports.materialSupportsLoading;
+  const materialSupportsError = isEditing ? liveSupports.materialSupportsError : null;
+  const materialSupportsLoaded = !isEditing ? Boolean(drawingResponse) : liveSupports.materialSupportsLoaded;
+  const projectCableTypes = drawingResponse && !isEditing ? drawingResponse.data.cableTypes as unknown as typeof liveCableTypes.projectCableTypes : liveCableTypes.projectCableTypes;
+  const projectCableTypesLoading = isEditing && liveCableTypes.projectCableTypesLoading;
+  const projectCableTypesError = isEditing ? liveCableTypes.projectCableTypesError : null;
+  // Form state
   const [formValues, setFormValues] = useState<TrayFormState>({
     name: '',
     type: '',
@@ -839,8 +815,8 @@ export const TrayDetails = () => {
   const [formErrors, setFormErrors] = useState<TrayFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
-  const [layoutSummary, setLayoutSummary] = useState<TrayLayoutSummary | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
+  const reportGeneration = useRef<TrayReportGeneration | null>(null);
   const [bundleFormUseCustom, setBundleFormUseCustom] = useState<boolean>(false);
   const [bundleFormState, setBundleFormState] = useState<BundleFormState>(() =>
     buildBundleFormState(project?.cableLayout ?? null, null)
@@ -850,6 +826,24 @@ export const TrayDetails = () => {
   );
   const [bundleOverrides, setBundleOverrides] = useState<TrayBundleOverride | null>(null);
   const [bundleSaving, setBundleSaving] = useState<boolean>(false);
+  const [legacyBundleOverride, setLegacyBundleOverride] = useState<TrayBundleOverride | null>(null);
+  const [localDrawingDraft, setLocalDrawingDraft] = useState(false);
+  const [drawingSaveError, setDrawingSaveError] = useState<string | null>(null);
+  const [drawingSaveUnknown, setDrawingSaveUnknown] = useState(false);
+  const pendingDrawingSave = useRef<DrawingSettingsWrite | null>(null);
+  const pendingDrawingExport = useRef<import('@/api/trayDrawing').DrawingExportWrite | null>(null);
+  const [drawingExportUnknown, setDrawingExportUnknown] = useState(false);
+  const drawingContext = JSON.stringify([projectId, trayId, token]);
+  const latestDrawingContext = useRef(drawingContext); latestDrawingContext.current = drawingContext;
+
+  const verifiedDrawingLayout = useMemo(() => {
+    if (!drawingResponse || drawingResponse.snapshot.state === 'blocked') return null;
+    try { return localDrawingDraft
+      ? computeTrayDrawing(makeTrayDrawingInput(drawingResponse.data, trayBundleOverrideSchema.parse(bundleOverrides), drawingResponse.snapshot.categoryModes))
+      : drawingResponse.layout;
+    } catch { return null; }
+  }, [drawingResponse, localDrawingDraft, bundleOverrides]);
+  const layoutSummary = verifiedDrawingLayout?.summary as unknown as TrayLayoutSummary | null;
 
   // Custom bundle ranges form state for tray-level configuration
   const [customBundleRangesFormState, setCustomBundleRangesFormState] =
@@ -867,7 +861,9 @@ export const TrayDetails = () => {
   }, [tray]);
 
   useEffect(() => {
-    const stored = getTrayBundleOverrides(canonicalProjectId, tray?.id ?? trayId ?? null);
+    const stored = drawingResponse?.override.value ?? null;
+    setLegacyBundleOverride(getTrayBundleOverrides(canonicalProjectId, tray?.id ?? trayId ?? null));
+    setLocalDrawingDraft(false);
     const categories = stored?.categories ?? null;
     setBundleOverrides(stored);
     setBundleFormUseCustom(Boolean(stored?.useCustom));
@@ -881,10 +877,11 @@ export const TrayDetails = () => {
       )
     );
     setCustomBundleRangesErrors(createEmptyCustomBundleRangesErrors());
-  }, [canonicalProjectId, project?.cableLayout, tray?.id, trayId]);
+  }, [canonicalProjectId, project?.cableLayout, tray?.id, trayId, drawingResponse]);
 
   // Material tray selection
   const selectedMaterialTray = useMemo(() => {
+    if (!isEditing && drawingResponse) return (drawingResponse.data.materialTrays[0] ?? null) as unknown as ReturnType<typeof findMaterialTrayByType>;
     const fromForm = findMaterialTrayByType(formValues.type);
     if (fromForm) {
       return fromForm;
@@ -893,7 +890,7 @@ export const TrayDetails = () => {
       return findMaterialTrayByType(tray.type);
     }
     return null;
-  }, [findMaterialTrayByType, formValues.type, tray?.type]);
+  }, [findMaterialTrayByType, formValues.type, tray?.type, isEditing, drawingResponse]);
 
   const materialTrayMetadata = useMemo(() => {
     if (!selectedMaterialTray) {
@@ -914,8 +911,10 @@ export const TrayDetails = () => {
   const selectedRungHeightMm = selectedMaterialTray?.rungHeightMm ?? null;
 
   const selectedLoadCurveId = selectedMaterialTray?.loadCurveId ?? null;
-  const { selectedLoadCurve, loadCurveLoadingId, loadCurveError } =
-    useLoadCurveData(selectedLoadCurveId, projectId, canReadCatalogs(user));
+  const liveLoadCurve = useLoadCurveData(isEditing ? selectedLoadCurveId : null, isEditing ? projectId : undefined, isEditing && canReadCatalogs(user));
+  const selectedLoadCurve = drawingResponse && !isEditing ? (drawingResponse.data.loadCurves[0] ?? null) as unknown as typeof liveLoadCurve.selectedLoadCurve : liveLoadCurve.selectedLoadCurve;
+  const loadCurveLoadingId = isEditing ? liveLoadCurve.loadCurveLoadingId : null;
+  const loadCurveError = isEditing ? liveLoadCurve.loadCurveError : null;
   const selectedLoadCurveName =
     selectedMaterialTray?.loadCurveName ?? selectedLoadCurve?.name ?? null;
 
@@ -1001,49 +1000,6 @@ export const TrayDetails = () => {
       }));
     }
   }, [tray, setGroundingSelectionsByTrayId]);
-
-  // Auto-select fallback grounding cable type if needed
-  useEffect(() => {
-    if (!trayId || !includeGroundingCable || groundingPreferenceSaving || trefoilClampSettingsSaving || isEditing) {
-      return;
-    }
-
-    const hasCurrentSelection =
-      selectedGroundingCableTypeId !== null &&
-      groundingCableTypes.some((type) => type.id === selectedGroundingCableTypeId);
-
-    if (hasCurrentSelection) {
-      return;
-    }
-
-    const fallbackTypeId = groundingCableTypes[0]?.id ?? null;
-    if (fallbackTypeId === null) {
-      return;
-    }
-
-    const nextPreference = {
-      include: true,
-      typeId: fallbackTypeId
-    };
-
-    setGroundingSelectionsByTrayId((previous) => ({
-      ...previous,
-      [trayId]: nextPreference
-    }));
-
-    void persistGroundingPreference(currentGroundingPreference, nextPreference);
-  }, [
-    trayId,
-    includeGroundingCable,
-    selectedGroundingCableTypeId,
-    groundingCableTypes,
-    currentGroundingPreference,
-    groundingPreferenceSaving,
-    trefoilClampSettingsSaving,
-    isEditing,
-    persistGroundingPreference,
-    setGroundingSelectionsByTrayId
-  ]);
 
   // Calculate tray weight
   const trayWeightPerMeterKg = useMemo(() => {
@@ -1245,35 +1201,6 @@ export const TrayDetails = () => {
     ]
   );
 
-  const cableBundles: CableBundleMap = useMemo(() => {
-    const bundles: CableBundleMap = {};
-
-    for (const cable of sortedTrayCables) {
-      const category = matchCableCategory(cable.purpose);
-      if (!category) {
-        continue;
-      }
-
-      // Use custom bundle ranges for this category if available
-      const categoryCustomRanges = activeCustomBundleRanges?.[category as CableCategoryKey];
-      const bundleKey = categoryCustomRanges && categoryCustomRanges.length > 0
-        ? determineCableDiameterGroupWithCustomRanges(cable.diameterMm ?? null, categoryCustomRanges)
-        : determineCableDiameterGroup(cable.diameterMm ?? null);
-
-      if (!bundles[category]) {
-        bundles[category] = {};
-      }
-
-      const bucket = bundles[category];
-      if (!bucket[bundleKey]) {
-        bucket[bundleKey] = [];
-      }
-      bucket[bundleKey].push(cable);
-    }
-
-    return bundles;
-  }, [sortedTrayCables, activeCustomBundleRanges]);
-
   const isUsingCustomBundles = Boolean(bundleOverrides?.useCustom);
 
   const activeProjectCableLayout = useMemo<ProjectCableLayout | null>(() => {
@@ -1331,39 +1258,6 @@ export const TrayDetails = () => {
     return DEFAULT_CABLE_SPACING;
   }, [activeProjectCableLayout?.cableSpacing]);
 
-  const effectiveLayoutConfig = useMemo<CategoryLayoutConfig>(() => {
-    const categories: CableCategoryKey[] = ['power', 'control', 'mv', 'vfd'];
-    return categories.reduce<CategoryLayoutConfig>((acc, category) => {
-      const defaults = DEFAULT_CATEGORY_SETTINGS[category];
-      const layout = activeProjectCableLayout?.[category] ?? null;
-      const trefoil =
-        CABLE_CATEGORY_CONFIG[category].showTrefoil
-          ? layout?.trefoil ?? defaults.trefoil
-          : false;
-      const trefoilSpacingBetweenBundles =
-        CABLE_CATEGORY_CONFIG[category].allowTrefoilSpacing
-          ? layout?.trefoilSpacingBetweenBundles ?? defaults.trefoilSpacingBetweenBundles
-          : defaults.trefoilSpacingBetweenBundles;
-      const applyPhaseRotation =
-        CABLE_CATEGORY_CONFIG[category].allowPhaseRotation
-          ? layout?.applyPhaseRotation ?? defaults.applyPhaseRotation
-          : defaults.applyPhaseRotation;
-      acc[category] = {
-        maxRows: layout?.maxRows ?? defaults.maxRows,
-        maxColumns: layout?.maxColumns ?? defaults.maxColumns,
-        bundleSpacing: layout?.bundleSpacing ?? defaults.bundleSpacing,
-        cableSpacing: projectCableSpacingMm,
-        trefoil,
-        trefoilSpacingBetweenBundles,
-        applyPhaseRotation,
-        bundleMaxRowsByKey: buildBundleMaxRowsByKey(
-          activeCustomBundleRanges?.[category] ?? null
-        )
-      };
-      return acc;
-    }, {} as CategoryLayoutConfig);
-  }, [activeProjectCableLayout, projectCableSpacingMm, activeCustomBundleRanges]);
-
   const considerBundleSpacingAsFree = Boolean(
     activeProjectCableLayout?.considerBundleSpacingAsFree
   );
@@ -1379,7 +1273,7 @@ export const TrayDetails = () => {
 
   const freeSpaceMetrics = useMemo(
     () =>
-      calculateTrayFreeSpaceMetrics({
+      !layoutSummary ? { occupiedWidthMm: null, freeWidthPercent: null, calculationAvailable: false } : calculateTrayFreeSpaceMetrics({
         tray,
         cables: sortedTrayCables,
         layout: activeProjectCableLayout ?? null,
@@ -1443,42 +1337,19 @@ export const TrayDetails = () => {
   const drawTrayVisualization = useCallback(() => {
     const canvasElement = trayCanvasRef.current;
     if (!tray || !canvasElement) {
-      setLayoutSummary(null);
       return false;
-    }
-
-    if (!trayDrawingServiceRef.current) {
-      trayDrawingServiceRef.current = new TrayDrawingService();
     }
 
     try {
-      const summary = trayDrawingServiceRef.current.drawTrayLayout(
-        canvasElement,
-        tray,
-        sortedTrayCables,
-        cableBundles,
-        6,
-        projectCableSpacingMm,
-        effectiveLayoutConfig,
-        { rungHeightMm: selectedRungHeightMm ?? undefined, useTrefoilClamps }
-      );
-      setLayoutSummary(summary ?? null);
-      return summary !== null;
+      if (!verifiedDrawingLayout) throw new Error('Refresh the shared drawing before rendering.');
+      replayTrayDrawing(canvasElement as unknown as DrawingCanvas, verifiedDrawingLayout);
+      return true;
     } catch (error) {
-      console.error('Failed to render tray visualization', error);
-      setLayoutSummary(null);
+      console.error('Failed to render shared tray drawing', error);
+      canvasElement.width = 1; canvasElement.height = 1;
       return false;
     }
-  }, [
-    tray,
-    sortedTrayCables,
-    cableBundles,
-    projectCableSpacingMm,
-    effectiveLayoutConfig,
-    selectedRungHeightMm,
-    useTrefoilClamps
-  ]);
-
+  }, [tray, verifiedDrawingLayout]);
   useEffect(() => {
     let cancelled = false;
     let attempt = 0;
@@ -1558,19 +1429,20 @@ export const TrayDetails = () => {
     return CABLE_CATEGORY_ORDER.filter((key) => categories.has(key));
   }, [trayCables]);
 
+  const reportTrays = drawingResponse?.data.reportTrays as unknown as typeof trays | undefined;
   const trayTemplatePurposeCount = useMemo(() => {
-    if (trays.length === 0) {
+    if (!reportTrays?.length) {
       return 0;
     }
     const purposes = new Set<string>();
-    for (const trayItem of trays) {
+    for (const trayItem of reportTrays) {
       const trimmed = trayItem.purpose?.trim();
       if (trimmed) {
         purposes.add(trimmed);
       }
     }
     return purposes.size;
-  }, [trays]);
+  }, [reportTrays]);
 
   const trayBundleDetails = useMemo(
     () =>
@@ -2174,44 +2046,39 @@ export const TrayDetails = () => {
     return { errors, hasError, categories };
   }, [bundleFormState]);
 
-  const persistBundleOverride = useCallback(
-    (
-      override: TrayBundleOverride,
-      options: { silent?: boolean } = {}
-    ): boolean => {
-      if (!canonicalProjectId || (!tray?.id && !trayId)) {
-        if (!options.silent) {
-          showToast({
-            intent: 'error',
-            title: 'Tray not available',
-            body: 'Load a tray before saving bundle configuration.'
-          });
-        }
-        return false;
-      }
+  useEffect(() => {
+    reportGeneration.current?.cancel(); reportGeneration.current = null; setIsGeneratingReport(false);
+    pendingDrawingSave.current = null; pendingDrawingExport.current = null; setDrawingExportUnknown(false); setDrawingSaveUnknown(false); setDrawingSaveError(null); setBundleSaving(false);
+  }, [drawingContext]);
 
-      setBundleOverrides(override);
-      setTrayBundleOverrides(canonicalProjectId, tray?.id ?? trayId ?? null, override);
-      setBundleFormErrors(createBundleFormErrors());
-
-      if (!options.silent) {
-        showToast({
-          intent: 'success',
-          title: override.useCustom
-            ? 'Custom bundle configuration saved'
-            : 'Using project bundle configuration',
-          body: override.useCustom
-            ? 'Tray-level bundle rules will be used for this tray.'
-            : 'Project bundle rules will be applied to this tray.'
-        });
-      }
-
+  const persistBundleOverride = useCallback(async (override: TrayBundleOverride | null, options: { silent?: boolean } = {}): Promise<boolean> => {
+    if (!canonicalProjectId || !tray?.id || !token || !drawingResponse || !canEdit || bundleSaving || reportGeneration.current || drawingSaveError && !pendingDrawingSave.current) return false;
+    const context = drawingContext;
+    const pending = pendingDrawingSave.current;
+    const body: DrawingSettingsWrite = pending ?? {
+      schemaVersion: 'pathfinder.tray-drawing-settings.write.v1', expectedDrawingInputRevision: drawingResponse.snapshot.drawingInputRevision,
+      expectedRevision: drawingResponse.override.revision, idempotencyKey: crypto.randomUUID(), value: override === null ? null : trayBundleOverrideSchema.parse(override),
+    };
+    pendingDrawingSave.current = body; setBundleSaving(true); setDrawingSaveUnknown(false); setDrawingSaveError(null);
+    try {
+      const fresh = await saveTrayDrawingSettings(canonicalProjectId, tray.id, token, body);
+      if (latestDrawingContext.current !== context) return false;
+      pendingDrawingSave.current = null; applyDrawingSnapshot(fresh); setLocalDrawingDraft(false);
+      clearTrayBundleOverrides(canonicalProjectId, tray.id); setLegacyBundleOverride(null);
+      if (!options.silent) showToast({ intent: 'success', title: 'Shared tray bundle settings saved' });
       return true;
-    },
-    [canonicalProjectId, showToast, tray?.id, trayId]
-  );
-
-  const handleSaveBundleConfig = useCallback(() => {
+    } catch (error) {
+      if (latestDrawingContext.current !== context) return false;
+      if (error instanceof TrayDrawingApiError && error.confirmedRejection) {
+        pendingDrawingSave.current = null;
+        setDrawingSaveError(error.status === 409 ? 'The shared drawing changed. Refresh and review the current settings before saving again.' : error.message);
+      } else {
+        setDrawingSaveUnknown(true); setDrawingSaveError('The save outcome is unknown. Retry the same save before changing settings or exporting.');
+      }
+      return false;
+    } finally { if (latestDrawingContext.current === context) setBundleSaving(false); }
+  }, [canonicalProjectId, tray?.id, token, drawingResponse, canEdit, bundleSaving, drawingContext, applyDrawingSnapshot, showToast, drawingSaveError]);
+  const handleSaveBundleConfig = useCallback(async () => {
     const { errors, hasError, categories } = buildBundleOverrideInput();
     if (hasError) {
       setBundleFormErrors(errors);
@@ -2264,7 +2131,6 @@ export const TrayDetails = () => {
       return;
     }
 
-    setBundleSaving(true);
     try {
       // Parse custom bundle ranges from form state
       const parsedCustomRanges = parseCustomBundleRangesFormState(customBundleRangesFormState);
@@ -2278,7 +2144,7 @@ export const TrayDetails = () => {
         customBundleRanges: hasCustomRanges ? parsedCustomRanges : undefined
       };
 
-      persistBundleOverride(nextOverride);
+      if (!await persistBundleOverride(nextOverride)) return;
       handleResetBundleForm(nextOverride);
       setCustomBundleRangesErrors(createEmptyCustomBundleRangesErrors());
     } catch (error) {
@@ -2302,6 +2168,7 @@ export const TrayDetails = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (pendingDrawingSave.current || pendingDrawingExport.current || reportGeneration.current) return;
 
     if (!project || !tray || !token) {
       showToast({
@@ -2323,18 +2190,6 @@ export const TrayDetails = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await updateTray(token, project.id, tray.id, input);
-      setTray(response.tray);
-      setTrays((previous) => {
-        const hasTray = previous.some((item) => item.id === response.tray.id);
-        return hasTray
-          ? previous.map((item) =>
-              item.id === response.tray.id ? response.tray : item
-            )
-          : [...previous, response.tray];
-      });
-      setFormValues(toTrayFormState(response.tray));
-
       const { errors, hasError, categories } = buildBundleOverrideInput();
       if (hasError) {
         setBundleFormErrors(errors);
@@ -2356,12 +2211,24 @@ export const TrayDetails = () => {
           customBundleRanges: undefined
         };
         if (JSON.stringify(nextOverride) !== JSON.stringify(currentOverride)) {
-          persistBundleOverride(nextOverride, { silent: true });
+          if (!await persistBundleOverride(nextOverride, { silent: true })) return;
           handleResetBundleForm(nextOverride);
         } else {
           handleResetBundleForm(currentOverride);
         }
       }
+
+      const response = await updateTray(token, project.id, tray.id, input);
+      setTray(response.tray);
+      setTrays((previous) => {
+        const hasTray = previous.some((item) => item.id === response.tray.id);
+        return hasTray
+          ? previous.map((item) =>
+              item.id === response.tray.id ? response.tray : item
+            )
+          : [...previous, response.tray];
+      });
+      setFormValues(toTrayFormState(response.tray));
 
       setIsEditing(false);
       showToast({ intent: 'success', title: 'Tray updated' });
@@ -2563,7 +2430,7 @@ export const TrayDetails = () => {
     }
     return {
       project,
-      trays,
+      trays: reportTrays ?? [],
       tray,
       trayCables,
       projectCableTypes,
@@ -2605,7 +2472,7 @@ export const TrayDetails = () => {
   }, [
     project,
     tray,
-    trays,
+    reportTrays,
     trayCables,
     projectCableTypes,
     projectCables,
@@ -2644,10 +2511,13 @@ export const TrayDetails = () => {
     currentUserDisplay
   ]);
 
-  const canGenerateReport = Boolean(canEdit && token && trayReportBaseContext);
+  const reportSourceIdentity = JSON.stringify([drawingContext, drawingResponse?.snapshot, trayReportBaseContext, chartLoadCurvePoints,
+    chartEvaluation, chartVerticalLines, chartHorizontalLines, chartSummary, isEditing, localDrawingDraft, bundleSaving, groundingPreferenceSaving, trefoilClampSettingsSaving]);
+  const latestReportSourceIdentity = useRef(reportSourceIdentity); latestReportSourceIdentity.current = reportSourceIdentity;
+  const canGenerateReport = Boolean(canEdit && token && trayReportBaseContext && drawingResponse && drawingResponse.snapshot.state !== 'blocked' && !localDrawingDraft && !isEditing && !drawingSaveUnknown && !drawingSaveError && !drawingExportUnknown && !bundleSaving && !groundingPreferenceSaving && !trefoilClampSettingsSaving && !isGeneratingReport && JSON.stringify(formValues) === JSON.stringify({ ...toTrayFormState(tray!), weightKgPerM: formatWeightValue(selectedMaterialTray?.weightKgPerM) }) && includeGroundingCable === tray?.includeGroundingCable && selectedGroundingCableTypeId === tray?.groundingCableTypeId);
 
   const handleGenerateReport = useCallback(async () => {
-    if (!project || !tray || !projectId || !token || !trayReportBaseContext) {
+    if (!project || !tray || !projectId || !token || !trayReportBaseContext || !drawingResponse || !canGenerateReport) {
       showToast({
         intent: 'error',
         title: 'Unable to generate report',
@@ -2696,127 +2566,11 @@ export const TrayDetails = () => {
       return;
     }
 
-    setIsGeneratingReport(true);
+    if (reportGeneration.current) return;
+    const generation = new TrayReportGeneration(reportSourceIdentity, () => latestReportSourceIdentity.current);
+    reportGeneration.current = generation; setIsGeneratingReport(true);
 
     try {
-      const { loadCurve, bundles, report } = buildReportFileNames(
-        project.projectNumber,
-        project.name,
-        tray.name
-      );
-
-      const projectFilesResponse = await fetchProjectFiles(projectId, token);
-      let projectFilesList = [...projectFilesResponse.files];
-
-      const normalizeFileName = (fileName: string): string =>
-        fileName.trim().toLowerCase();
-
-      const findExistingFileIdByName = (fileName: string): string | null => {
-        const normalized = normalizeFileName(fileName);
-        if (!normalized) {
-          return null;
-        }
-        const existing = projectFilesList.find(
-          (file) => normalizeFileName(file.fileName) === normalized
-        );
-        return existing?.id ?? null;
-      };
-
-      const registerProjectFile = (file: ProjectFile) => {
-        projectFilesList = (() => {
-          const index = projectFilesList.findIndex(
-            (existing) => existing.id === file.id
-          );
-          if (index === -1) {
-            return [...projectFilesList, file];
-          }
-          const next = [...projectFilesList];
-          next[index] = file;
-          return next;
-        })();
-      };
-
-      const templateDownloadPromise = downloadProjectFile(
-        token,
-        projectId,
-        templateSelection.fileId
-      );
-
-      const [loadCurveBlob, bundlesBlob] = await Promise.all([
-        canvasToBlob(loadCurveCanvasRef.current, 'image/jpeg', 0.92),
-        canvasToBlob(trayCanvasRef.current, 'image/jpeg', 0.92)
-      ]);
-
-      const rotatedBundlesBlob = await rotateImageBlob(bundlesBlob, 'ccw90');
-      const docBundlesBlob = rotatedBundlesBlob ?? bundlesBlob;
-      let trayTemplateImageBlob: Blob | null | undefined;
-
-      const getTrayTemplateImageBlob = async (): Promise<Blob | null> => {
-        if (trayTemplateImageBlob !== undefined) {
-          return trayTemplateImageBlob;
-        }
-
-        const imageMeta = trayReportBaseContext.materialTrayMetadata;
-        if (
-          !imageMeta?.imageTemplateId ||
-          !imageMeta.imageTemplateContentType ||
-          !imageMeta.imageTemplateContentType.startsWith('image/')
-        ) {
-          trayTemplateImageBlob = null;
-          return trayTemplateImageBlob;
-        }
-
-        if (!token) {
-          trayTemplateImageBlob = null;
-          return trayTemplateImageBlob;
-        }
-
-        try {
-          const { blob } = await downloadTemplateFile(
-            token,
-            imageMeta.imageTemplateId
-          );
-          trayTemplateImageBlob = blob;
-        } catch (error) {
-          console.error('Failed to download tray type image template', error);
-          trayTemplateImageBlob = null;
-        }
-
-        return trayTemplateImageBlob;
-      };
-
-      const loadCurveFile = new File([loadCurveBlob], loadCurve, {
-        type: 'image/jpeg'
-      });
-      const bundlesFile = new File([bundlesBlob], bundles, {
-        type: 'image/jpeg'
-      });
-
-      const loadCurveReplaceId = findExistingFileIdByName(loadCurve);
-      const bundlesReplaceId = findExistingFileIdByName(bundles);
-
-      const [{ file: storedLoadCurve }, { file: storedBundles }] =
-        await Promise.all([
-          uploadProjectFile(
-            token,
-            projectId,
-            loadCurveFile,
-            loadCurveReplaceId ? { replaceFileId: loadCurveReplaceId } : undefined
-          ),
-          uploadProjectFile(
-            token,
-            projectId,
-            bundlesFile,
-            bundlesReplaceId ? { replaceFileId: bundlesReplaceId } : undefined
-          )
-        ]);
-
-      registerProjectFile(storedLoadCurve);
-      registerProjectFile(storedBundles);
-
-      const { blob: templateBlob, contentType } =
-        await templateDownloadPromise;
-
     if (!canonicalProjectId) {
       showToast({
         intent: 'error',
@@ -2900,6 +2654,78 @@ export const TrayDetails = () => {
     const customVariableIds = new Set(customVariables.map((item) => item.id));
     const customPlaceholderTokens = new Set<string>();
 
+      generation.assertCurrent();
+      const frozenLoadCurveCanvas = document.createElement('canvas');
+      const frozenBundleCanvas = document.createElement('canvas');
+      const chart = structuredClone({ points: chartLoadCurvePoints, marker: chartEvaluation.marker, limit: chartEvaluation.limitHighlight,
+        vertical: chartVerticalLines, horizontal: chartHorizontalLines, summary: chartSummary });
+      if (!chart.points.length) throw new Error('The captured snapshot has no load curve to export.');
+      new LoadCurveDrawingService().drawLoadCurve(frozenLoadCurveCanvas, chart.points,
+        selectedMaterialTray?.loadCurveName ? `Load Curve: ${selectedMaterialTray.loadCurveName}` : undefined,
+        chart.marker, chart.limit, chart.vertical, chart.horizontal, chart.summary.text, chart.summary.color);
+      replayTrayDrawing(frozenBundleCanvas as unknown as DrawingCanvas, drawingResponse.layout);
+      const frozenImageBlobs = () => Promise.all([canvasToBlob(frozenLoadCurveCanvas, 'image/jpeg', 0.92), canvasToBlob(frozenBundleCanvas, 'image/jpeg', 0.92)]);
+      const currentDrawing = await generation.wait(fetchTrayDrawingSnapshot(projectId, tray.id, token));
+      if (currentDrawing.snapshot.snapshotId !== drawingResponse.snapshot.snapshotId || currentDrawing.snapshot.contentSha256 !== drawingResponse.snapshot.contentSha256)
+        throw new Error('The shared drawing changed. Refresh before generating the report.');
+      const { loadCurve, bundles, report } = buildReportFileNames(
+        project.projectNumber,
+        project.name,
+        tray.name
+      );
+
+      const projectFilesResponse = await generation.wait(fetchProjectFiles(projectId, token));
+      const projectFilesList = [...projectFilesResponse.files];
+
+      const templateDownloadPromise = downloadProjectFile(
+        token,
+        projectId,
+        templateSelection.fileId
+      );
+
+      const [loadCurveBlob, bundlesBlob] = await generation.wait(frozenImageBlobs());
+
+      const rotatedBundlesBlob = await generation.wait(rotateImageBlob(bundlesBlob, 'ccw90'));
+      const docBundlesBlob = rotatedBundlesBlob ?? bundlesBlob;
+      let trayTemplateImageBlob: Blob | null | undefined;
+
+      const getTrayTemplateImageBlob = async (): Promise<Blob | null> => {
+        if (trayTemplateImageBlob !== undefined) {
+          return trayTemplateImageBlob;
+        }
+
+        const imageMeta = trayReportBaseContext.materialTrayMetadata;
+        if (
+          !imageMeta?.imageTemplateId ||
+          !imageMeta.imageTemplateContentType ||
+          !imageMeta.imageTemplateContentType.startsWith('image/')
+        ) {
+          trayTemplateImageBlob = null;
+          return trayTemplateImageBlob;
+        }
+
+        if (!token) {
+          trayTemplateImageBlob = null;
+          return trayTemplateImageBlob;
+        }
+
+        try {
+          const { blob } = await downloadTemplateFile(
+            token,
+            imageMeta.imageTemplateId
+          );
+          trayTemplateImageBlob = blob;
+        } catch (error) {
+          console.error('Failed to download tray type image template', error);
+          trayTemplateImageBlob = null;
+        }
+
+        return trayTemplateImageBlob;
+      };
+
+      const { blob: templateBlob } =
+        await generation.wait(templateDownloadPromise);
+
     const placeholderBundle = buildTrayPlaceholderValues({
       ...trayReportBaseContext,
       projectFiles: projectFilesList,
@@ -2968,7 +2794,7 @@ export const TrayDetails = () => {
             description = 'Tray laying concept visualization';
             layout = 'full-page';
           } else if (imageSource === 'trayTemplate') {
-            const templateBlob = await getTrayTemplateImageBlob();
+            const templateBlob = await generation.wait(getTrayTemplateImageBlob());
             if (templateBlob) {
               sourceBlob = templateBlob;
               fileNameForBlob =
@@ -3006,11 +2832,9 @@ export const TrayDetails = () => {
         textReplacements[trimmedPlaceholder] = resolvedValue;
       }
 
-      const resolvedImagePlaceholders = await prepareImageDefinitions(
-        pendingImagePlaceholders
-      );
+      const resolvedImagePlaceholders = await generation.wait(prepareImageDefinitions(pendingImagePlaceholders));
 
-      const updatedDocumentBlob = await replaceDocxPlaceholders(
+      const updatedDocumentBlob = await generation.wait(replaceDocxPlaceholders(
         templateBlob,
         textReplacements,
         {
@@ -3023,28 +2847,25 @@ export const TrayDetails = () => {
               ? resolvedImagePlaceholders
               : undefined
         }
-      );
+      ));
 
-      const wordContentType =
-        contentType && contentType !== 'application/octet-stream'
-          ? contentType
-          : WORD_MIME_TYPE;
-
-      const reportFile = new File([updatedDocumentBlob], report, {
-        type: wordContentType
-      });
-
-      const reportReplaceId = findExistingFileIdByName(report);
-
-      const { file: uploadedReport } = await uploadProjectFile(
-        token,
-        projectId,
-        reportFile,
-        reportReplaceId ? { replaceFileId: reportReplaceId } : undefined
-      );
-
-      registerProjectFile(uploadedReport);
-
+      if (latestDrawingContext.current !== drawingContext) throw new Error('The selected tray or login changed. Generate a fresh report.');
+      const exportBody = {
+        schemaVersion: 'pathfinder.tray-drawing-export.write.v1' as const,
+        snapshotId: drawingResponse.snapshot.snapshotId, expectedContentSha256: drawingResponse.snapshot.contentSha256,
+        idempotencyKey: crypto.randomUUID(), files: [
+          { kind: 'load-curve' as const, fileName: loadCurve, contentType: 'image/jpeg' as const, base64: await generation.wait(drawingBlobBase64(loadCurveBlob)) },
+          { kind: 'bundles' as const, fileName: bundles, contentType: 'image/jpeg' as const, base64: await generation.wait(drawingBlobBase64(bundlesBlob)) },
+          { kind: 'report' as const, fileName: report, contentType: WORD_MIME_TYPE as 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', base64: await generation.wait(drawingBlobBase64(updatedDocumentBlob)) },
+        ],
+      };
+      if (latestDrawingContext.current !== drawingContext) return;
+      generation.assertCurrent();
+      pendingDrawingExport.current = exportBody;
+      const receipt = await generation.wait(exportTrayDrawing(projectId, trayId!, token, exportBody));
+      if (latestDrawingContext.current !== drawingContext) return;
+      pendingDrawingExport.current = null; setDrawingExportUnknown(false);
+      const uploadedReport = receipt.files.find(file => file.kind === 'report')!;
       triggerFileDownload(updatedDocumentBlob, report);
 
       showToast({
@@ -3053,6 +2874,11 @@ export const TrayDetails = () => {
         body: `Saved as "${uploadedReport.fileName}". Check your downloads to store a local copy.`
       });
     } catch (error) {
+      if (latestDrawingContext.current !== drawingContext) return;
+      if (pendingDrawingExport.current) {
+        if (error instanceof TrayDrawingApiError && error.confirmedRejection) pendingDrawingExport.current = null;
+        else setDrawingExportUnknown(true);
+      }
       console.error('Failed to generate tray report', error);
       showToast({
         intent: 'error',
@@ -3065,7 +2891,8 @@ export const TrayDetails = () => {
             : undefined
       });
     } finally {
-      setIsGeneratingReport(false);
+      generation.cancel(); if (reportGeneration.current === generation) reportGeneration.current = null;
+      if (latestDrawingContext.current === drawingContext) setIsGeneratingReport(false);
     }
   }, [
     project,
@@ -3073,8 +2900,9 @@ export const TrayDetails = () => {
     projectId,
     token,
     trayReportBaseContext,
+    drawingResponse, drawingContext, canGenerateReport, trayId,
     showToast,
-    canonicalProjectId
+    canonicalProjectId, reportSourceIdentity, chartLoadCurvePoints, chartEvaluation, chartVerticalLines, chartHorizontalLines, chartSummary, selectedMaterialTray
   ]);
 
   // Loading and error states
@@ -3090,6 +2918,7 @@ export const TrayDetails = () => {
     return (
       <section className={styles.root}>
         <Body1 className={styles.errorText}>{error ?? 'Tray not available.'}</Body1>
+        <Button onClick={() => void refreshDrawing()}>{isEditing || localDrawingDraft ? 'Discard unsaved changes and refresh drawing' : 'Refresh shared drawing'}</Button>
         <Button onClick={() => navigate(-1)}>Back</Button>
       </section>
     );
@@ -3097,12 +2926,13 @@ export const TrayDetails = () => {
 
   return (
     <section className={styles.root}>
+      <fieldset disabled={isGeneratingReport} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
       <TrayDetailsHeader
         tray={tray}
         project={project}
         previousTray={previousTray}
         nextTray={nextTray}
-        isAdmin={canEdit}
+        isAdmin={canEdit && !drawingSaveUnknown && !drawingExportUnknown && !isGeneratingReport}
         isEditing={isEditing}
         isDeleting={isDeleting}
         canGenerateReport={canGenerateReport}
@@ -3115,6 +2945,34 @@ export const TrayDetails = () => {
         styles={styles}
       />
 
+      {drawingExportUnknown ? <div role="alert"><p>The report save outcome is unknown. Retry the same report save before generating another.</p>
+        <Button disabled={isGeneratingReport} onClick={async () => {
+          if (!pendingDrawingExport.current || !token) return;
+          const context = drawingContext; setIsGeneratingReport(true);
+          try { await exportTrayDrawing(projectId, trayId, token, pendingDrawingExport.current);
+            if (latestDrawingContext.current === context) { pendingDrawingExport.current = null; setDrawingExportUnknown(false); showToast({ intent: 'success', title: 'Shared drawing report saved' }); }
+          } catch (error) { if (latestDrawingContext.current === context && error instanceof TrayDrawingApiError && error.confirmedRejection) { pendingDrawingExport.current = null; setDrawingExportUnknown(false); setDrawingSaveError(error.message); } }
+          finally { if (latestDrawingContext.current === context) setIsGeneratingReport(false); }
+        }}>Retry the same report save</Button></div> : null}
+      {drawingSaveError ? <div role="alert"><p>{drawingSaveError}</p>
+        {drawingSaveUnknown ? <Button disabled={bundleSaving} onClick={() => void persistBundleOverride(bundleOverrides)}>Retry the same save</Button>
+          : <Button onClick={() => { setDrawingSaveError(null); void refreshDrawing(); }}>Discard changes and refresh drawing</Button>}
+      </div> : null}
+      {legacyBundleOverride ? <div role="status"><p>Local bundle settings were found in this browser. They are not shared with other viewers or included in shared exports.</p>
+        {canEdit ? <Button disabled={drawingSaveUnknown || bundleSaving} onClick={() => {
+          const parsed = trayBundleOverrideSchema.safeParse(legacyBundleOverride);
+          if (!parsed.success) { setDrawingSaveError('The local bundle settings are invalid. Review or discard the local copy.'); return; }
+          setBundleOverrides(legacyBundleOverride); setBundleFormUseCustom(legacyBundleOverride.useCustom);
+          setBundleFormState(buildBundleFormState(project?.cableLayout ?? null, legacyBundleOverride.categories));
+          setCustomBundleRangesFormState(buildCustomBundleRangesFormState(project?.cableLayout?.customBundleRanges, legacyBundleOverride.customBundleRanges));
+          setLocalDrawingDraft(true); setIsEditing(true);
+        }}>Load local settings as an unsaved draft</Button> : null}
+        <Button onClick={() => { clearTrayBundleOverrides(canonicalProjectId, tray.id); setLegacyBundleOverride(null); }}>Discard local copy</Button>
+      </div> : null}
+      {localDrawingDraft || isEditing ? <p role="status">Unsaved drawing settings. Shared exports are unavailable until the changes are saved or discarded.</p> : null}
+      {drawingResponse?.snapshot.state === 'blocked' ? <p role="alert">This shared drawing is blocked. Resolve its diagnostics and refresh before rendering or exporting.</p> : null}
+      {drawingResponse?.snapshot.diagnostics.length ? <div role="alert"><ul>{drawingResponse.snapshot.diagnostics.map((item, index) => <li key={index}>{item.message}</li>)}</ul></div> : null}
+      <Button disabled={drawingSaveUnknown || bundleSaving} onClick={() => void refreshDrawing()}>{isEditing || localDrawingDraft ? 'Discard unsaved changes and refresh drawing' : 'Refresh shared drawing'}</Button>
       {/* Tray Details Section */}
       {isEditing ? (
         <TrayEditForm
@@ -3125,7 +2983,7 @@ export const TrayDetails = () => {
           canUseMaterialDropdown={canUseMaterialDropdown}
           currentTypeHasMaterial={currentTypeHasMaterial}
           isLoadingMaterials={isLoadingMaterials}
-          isSubmitting={isSubmitting}
+          isSubmitting={isSubmitting || drawingSaveUnknown || bundleSaving}
           onFieldChange={handleFieldChange}
           onTypeSelect={handleTypeSelect}
           onPurposeSelect={handlePurposeSelect}
@@ -3144,7 +3002,7 @@ export const TrayDetails = () => {
         />
       )}
 
-      <div className={styles.section}>
+      <fieldset disabled={drawingSaveUnknown || bundleSaving || Boolean(drawingSaveError)} style={{ border: 0, padding: 0 }}><div className={styles.section}>
         <Caption1>Bundle configuration for this tray</Caption1>
         <Checkbox
           label="Use custom bundle configuration for this tray"
@@ -3382,6 +3240,7 @@ export const TrayDetails = () => {
         </div>
       </div>
 
+      </fieldset>
       {/* Cables Section */}
       <CablesTableSection
         trayCables={sortedTrayCables}
@@ -3430,7 +3289,7 @@ export const TrayDetails = () => {
         <GroundingCableControls
           includeGroundingCable={includeGroundingCable}
           groundingPreferenceSaving={groundingPreferenceSaving || trefoilClampSettingsSaving || isEditing}
-          isAdmin={canEdit}
+          isAdmin={canEdit && !drawingSaveUnknown && !drawingExportUnknown && !isGeneratingReport}
           projectCableTypesLoading={projectCableTypesLoading}
           projectCableTypesError={projectCableTypesError}
           groundingCableTypes={groundingCableTypes}
@@ -3591,6 +3450,7 @@ export const TrayDetails = () => {
         tray={tray}
         canExport={canExportChangeLogs(user, token)}
       />
+      </fieldset>
     </section>
   );
 };
