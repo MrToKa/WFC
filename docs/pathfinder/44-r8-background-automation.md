@@ -1,6 +1,6 @@
 # PF-R8 — background calculation authority and managed preparation
 
-Status: **TECHNICALLY VERIFIED WITH EXPLICIT LIMITATIONS — LOCAL DELIVERY COMMIT PENDING**.
+Status: **TECHNICALLY VERIFIED WITH EXPLICIT LIMITATIONS — locally delivered**.
 
 This report records technical verification of the stated bounded scope; human
 engineering acceptance has not been performed. Fresh managed capture through
@@ -24,8 +24,10 @@ its controlled tests grant human engineering acceptance.
 - Branch: `pf-r8-background-automation-local-20261019`.
 - Inherited and live HEAD at drafting:
   `9d00ebb890202fdf993054c6769cf15f30068e76`.
-- R8 delivery changes are uncommitted. A delivery commit and final changed-file
-  inventory are **PENDING**; this report does not claim its own future commit.
+- R8 technical delivery: `21334df6cc57b2c0f141568a5733453e2cdaa1e9`, 139 files.
+  Its exact changed-file inventory is `git show --name-status 21334df`; private
+  scratch, denied paths, model/business rows and secrets are excluded. This later
+  metadata update records the already existing commit, not its own future hash.
 - Accepted entry task: [PF-R8 handoff](handoffs/PF-R8-background-automation.md).
 - Prior technical delivery: [PF-R7 report](43-r7-durable-recalculation.md).
 - Accepted remaining plan: [purpose and revision plan](32-purpose-and-revision-plan.md).
