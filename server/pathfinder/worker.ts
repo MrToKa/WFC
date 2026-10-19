@@ -4,10 +4,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createConfiguredEngineExecutor, type EngineExecutor } from './engineSession.js';
 import { collectDependencies, geometryHash, hash, verifiedDesignOnlyChange } from './dependencies.js';
 import { readSnapshot } from './storage.js';
-import type { DependencySnapshot, EngineResponse, JobPrincipal } from './jobContracts.js';
+import type { DependencySnapshot, EngineResponse } from './jobContracts.js';
 import type { PathFinderJobs } from './jobs.js';
 import { PathFinderError } from './errors.js';
-import { principalTransaction } from './auth.js';
+import { operationTransaction, isGrantPrincipal } from './operationAuthority.js';
+import { acquireGrantJobExecution, GrantJobClaimOutcomeUnknownError, type GrantJobExecution } from './grantWorkerAuthority.js';
+import { retainGrantWorkerRecovery } from './grantWorkerRecovery.js';
+import { requireCalculationGrant } from './calculationAuthority.js';
 import { collectLookupDependencies, type LookupDependencies } from './lookups.js';
 import { engineProjectSettings } from './settings.js';
 import { collectPreviewDependencies, previewEngineRequest, type PreviewDependencies } from './previews.js';
@@ -36,7 +39,6 @@ export function mergeRetainedGeometryResponse(response:EngineResponse,retained:E
     throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'The retained geometry metadata does not match the original calculation inputs.');
   return {...response,route:retained.route,effectiveCategory,prepared:retained.prepared ?? response.prepared};
 }
-function principal(job:Row):JobPrincipal {return {userId:job.requested_by,loginId:job.login_id,loginExpiresAt:new Date(job.login_expires_at).getTime()};}
 /** Compare the latest result; a geometry-key search must not skip intervening input changes. */
 export async function readRetainedDesignGeometry(client:Pick<PoolClient,'query'>,projectId:string,cableId:string,dependencies:DependencySnapshot):Promise<EngineResponse|undefined>{
   const previous=(await client.query<Row>(`SELECT result,dependencies,status FROM pf_proposals WHERE project_id=$1 AND cable_id=$2
@@ -50,15 +52,29 @@ async function fencedJob(client:PoolClient,job:Row):Promise<void> {
 }
 async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineExecutor):Promise<void> {
   const controller = new AbortController(),signal = AbortSignal.any([stopping,controller.signal]);
-  let heartbeatBusy = false;
+  let execution:GrantJobExecution;
+  try {
+    execution=await acquireGrantJobExecution(pool,job as Parameters<typeof acquireGrantJobExecution>[1],signal);
+  } catch(error) {
+    if(error instanceof GrantJobClaimOutcomeUnknownError)await retainGrantWorkerRecovery(error.privateRecovery);
+    const deferred=error instanceof PathFinderError&&['CALCULATION_GRANT_LEASE_BUSY','CALCULATION_GRANT_DATABASE_BUSY','SCHEDULER_DATABASE_BUSY','CALCULATION_GRANT_COMMIT_OUTCOME_UNKNOWN'].includes(error.code);
+    await pool.query(`UPDATE pf_jobs SET state=CASE WHEN cancel_requested THEN 'cancelled' WHEN $3 THEN 'queued' ELSE 'failed' END,
+      not_before=CASE WHEN $3 THEN clock_timestamp()+interval '5 seconds' ELSE NULL END,owner_token=NULL,lease_until=NULL,
+      failure=$4,updated_at=clock_timestamp() WHERE id=$1 AND owner_token=$2 AND state='running'`,
+      [job.id,job.owner_token,deferred,error instanceof PathFinderError?error.message:'Calculation authority could not be confirmed.']);
+    return;
+  }
+  const authorized=<T>(work:(client:PoolClient)=>Promise<T>)=>operationTransaction(pool,job.project_id,execution.principal,'calculate',work,signal);
+  let joinConfirmed=true,heartbeatBusy = false;
   const heartbeat = setInterval(() => {
     if (heartbeatBusy) return; heartbeatBusy = true;
     void pool.query(`UPDATE pf_jobs j SET lease_until=NOW()+INTERVAL '30 seconds',updated_at=NOW()
-      WHERE j.id=$1 AND j.owner_token=$2 AND j.state='running' AND j.cancel_requested=false AND j.login_expires_at>NOW()
+      WHERE j.id=$1 AND j.owner_token=$2 AND j.state='running' AND j.cancel_requested=false AND (j.login_expires_at>NOW() OR j.authority_kind='calculation-grant')
         AND EXISTS(SELECT 1 FROM users u WHERE u.id=j.requested_by AND u.is_admin=true)
         AND NOT EXISTS(SELECT 1 FROM viewer_login_bindings l WHERE l.login_id=j.login_id AND l.revoked_at IS NOT NULL)
       RETURNING j.id`,[job.id,job.owner_token]).then(async result => {
         if (!result.rows.length) {controller.abort();return;}
+        if(isGrantPrincipal(execution.principal))await requireCalculationGrant(pool,execution.principal.authority,'calculate');
         const authority=await readRecalculationJobAuthority(pool,{projectId:job.project_id,jobId:job.id});
         if(authority.enrolled&&!authority.valid)controller.abort();
       }).catch(() => controller.abort()).finally(() => {heartbeatBusy = false;});
@@ -66,7 +82,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
   try {
     if (job.kind==='lookup') {
       const dependencies=job.diagnostic_input as LookupDependencies;
-      await principalTransaction(pool,job.project_id,principal(job),async client => {
+      await authorized(async client => {
         await fencedJob(client,job);
         if (hash(await collectLookupDependencies(client,job.project_id,dependencies))!==hash(dependencies)) throw new PathFinderError('LOOKUP_STALE',409,'The active model or artifact changed before lookup.');
       });
@@ -76,7 +92,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         routeText:dependencies.routeText,reverse:dependencies.reverse,options:dependencies.options},signal);
       signal.throwIfAborted();
       await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
-      await principalTransaction(pool,job.project_id,principal(job),async client => {
+      await authorized(async client => {
         await fencedJob(client,job);let stale=false;
         try {stale=hash(await collectLookupDependencies(client,job.project_id,dependencies))!==hash(dependencies);} catch {stale=true;}
         await client.query(`INSERT INTO pf_lookup_results(project_id,job_id,dependencies,result,stale_at_completion) VALUES($1,$2,$3,$4,$5)
@@ -85,7 +101,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       });
     } else if (job.kind==='preview') {
       const dependencies=job.diagnostic_input as PreviewDependencies;
-      await principalTransaction(pool,job.project_id,principal(job),async client=>{
+      await authorized(async client=>{
         await fencedJob(client,job);
         if (hash(await collectPreviewDependencies(client,job.project_id,dependencies.input))!==hash(dependencies))
           throw new PathFinderError('PREVIEW_STALE',409,'The model, locations or Project Details changed before this preview.');
@@ -93,7 +109,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
       const response=await engine.execute(previewEngineRequest(dependencies,randomUUID(),job.timeout_ms),signal);
       signal.throwIfAborted();
-      await principalTransaction(pool,job.project_id,principal(job),async client=>{
+      await authorized(async client=>{
         await fencedJob(client,job);let stale=false;
         try {stale=hash(await collectPreviewDependencies(client,job.project_id,dependencies.input))!==hash(dependencies);} catch {stale=true;}
         await client.query(`INSERT INTO pf_lookup_results(project_id,job_id,dependencies,result,stale_at_completion) VALUES($1,$2,$3,$4,$5)
@@ -102,7 +118,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       });
     } else for (let quantum=0;quantum<1;quantum++) {
       signal.throwIfAborted();
-      const item = await principalTransaction(pool,job.project_id,principal(job),async client => {
+      const item = await authorized(async client => {
         await fencedJob(client,job);
         const value = (await client.query<Row>("SELECT * FROM pf_job_items WHERE project_id=$1 AND job_id=$2 AND state='waiting' ORDER BY cable_id FOR UPDATE LIMIT 1",[job.project_id,job.id])).rows[0];
         if (value) await client.query("UPDATE pf_job_items SET state='running',status='calculating',message='Calculating with the independent PathFinder core.' WHERE project_id=$1 AND job_id=$2 AND cable_id=$3",[job.project_id,job.id,value.cable_id]);
@@ -115,7 +131,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       try {
         requireVersionedCalculationScope(dependencies);
         const identity=await calculationEngineIdentity({force:true});
-        await principalTransaction(pool,job.project_id,principal(job),async client => {
+        await authorized(async client => {
           await fencedJob(client,job);
           const current=await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true,identity);
           if (!current.dependencies || hash(current.dependencies)!==hash(dependencies))
@@ -143,7 +159,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       }
       signal.throwIfAborted();
       const finalIdentity=await calculationEngineIdentity({force:true});
-      await principalTransaction(pool,job.project_id,principal(job),async client => {
+      await authorized(async client => {
         await fencedJob(client,job);
         const current = await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true,finalIdentity);
         const stale = !current.dependencies || hash(current.dependencies) !== hash(dependencies);
@@ -158,7 +174,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
       });
     }
-    await principalTransaction(pool,job.project_id,principal(job),async client => {
+    await authorized(async client => {
       await fencedJob(client,job);
       await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
       await finishCalculationSlice(client,job);
@@ -167,11 +183,17 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
   } catch(error) {
     // The executor wrapper has stopped the whole worker. Keep the owned job/lease
     // untouched until a later safe recovery; terminal state would claim a join.
-    if(unconfirmedEngineJoin(error)||implementationRestartRequired(error))throw error;
+    if(unconfirmedEngineJoin(error)){joinConfirmed=false;throw error;}
+    if(implementationRestartRequired(error))throw error;
+    // Reconcile from the committed item/proposal state on the next quantum.
+    // A lost COMMIT ACK is neither a failed calculation nor permission to
+    // replace an immutable proposal that may already have been published.
+    const commitUnknown=error instanceof PathFinderError&&error.code==='CALCULATION_GRANT_COMMIT_OUTCOME_UNKNOWN';
     await pool.query(`UPDATE pf_jobs SET state=CASE WHEN cancel_requested THEN 'cancelled' WHEN $3 THEN 'queued' ELSE 'failed' END,
-      owner_token=NULL,lease_until=NULL,failure=CASE WHEN cancel_requested THEN 'Cancelled after the owned engine process stopped.' WHEN $3 THEN NULL ELSE $4 END,updated_at=NOW()
-      WHERE id=$1 AND owner_token=$2 AND state='running'`,[job.id,job.owner_token,stopping.aborted,error instanceof PathFinderError ? error.message : 'Calculation stopped or worker authority was revoked.']).catch(() => undefined);
-  } finally {clearInterval(heartbeat);}
+      not_before=CASE WHEN $5 THEN clock_timestamp()+interval '5 seconds' ELSE NULL END,
+      owner_token=NULL,lease_until=NULL,failure=CASE WHEN cancel_requested THEN 'Cancelled after the owned engine process stopped.' WHEN $3 AND NOT $5 THEN NULL ELSE $4 END,updated_at=NOW()
+      WHERE id=$1 AND owner_token=$2 AND state='running'`,[job.id,job.owner_token,stopping.aborted||commitUnknown,error instanceof PathFinderError ? error.message : 'Calculation stopped or worker authority was revoked.',commitUnknown]).catch(() => undefined);
+  } finally {clearInterval(heartbeat);await execution.finish(joinConfirmed);}
 }
 
 /** One DB advisory-lock owner serializes .NET/cache access across backend processes. */

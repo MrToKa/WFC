@@ -31,6 +31,9 @@ import { createGeometryTraceRouter } from './pathfinder/geometryTraceRoutes.js';
 import { createEndpointBindingRouter } from './pathfinder/endpointBindingRoutes.js';
 import { createRevisionComparisonRouter } from './pathfinder/revisionComparisonRoutes.js';
 import { createRecalculationRouter } from './pathfinder/recalculationRoutes.js';
+import { createCalculationGrantRouter } from './pathfinder/calculationGrantRoutes.js';
+import { createProducerResourceRouter } from './pathfinder/producerResourceRoutes.js';
+import {createManagedProducerControlRouter} from './pathfinder/managedProducerControl.js';
 
 // Large PF payloads require the current project/admin/login before parsing;
 // the write transaction repeats authorization after the upload completes.
@@ -56,6 +59,9 @@ const pathFinderBodyLimit = (bytes:number):RequestHandler => (req,res,next) => {
 
 export const createApp = (): Express => {
   const app = express();
+  app.use(createProducerResourceRouter({runtime:getPathFinderRuntime().producerResources}));
+  app.use(createManagedProducerControlRouter(getPathFinderRuntime().managedControl));
+  app.use((_req,res,next)=>{if(app.get('wfcShuttingDown')===true){res.status(503).json({code:'APPLICATION_STOPPING'});return;}next();});
   app.use(createViewerSessionRouter());
 
   app.use(
@@ -67,6 +73,7 @@ export const createApp = (): Express => {
   // Policy endpoints own bounded duplicate-safe parsing and exact authorization
   // errors. Mount before generic JSON and project middleware consumes the body.
   app.use('/api/projects/:projectId/pathfinder', createPurposePolicyRouter(pool));
+  app.use('/api/projects/:projectId/pathfinder', createCalculationGrantRouter(pool,getPathFinderRuntime().calculationGrants));
   app.use('/api/projects/:projectId/pathfinder', createDrawingPurposePolicyRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createGeometryTraceRouter(pool,getPathFinderRuntime().geometryTraces));
   app.use('/api/projects/:projectId/pathfinder', createEndpointBindingRouter(pool,getPathFinderRuntime().endpointBindings));

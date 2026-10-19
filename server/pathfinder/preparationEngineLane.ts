@@ -8,17 +8,19 @@ type Ticket = {
   release: () => void;
 };
 const failure = (code: string, status = 409) => new PathFinderError(code, status);
+const hardEngineFailure = (error: unknown): boolean => error !== null && typeof error === 'object' &&
+  ['ENGINE_SESSION_REAP_FAILED', 'ENGINE_IMPLEMENTATION_RESTART_REQUIRED'].includes((error as { code?: string }).code ?? '');
 
 /** One bounded preparation request, dispatched only by the advisory-owned worker. */
 export function createPreparationEngineLane() {
-  let active = false, ticket: Ticket | undefined;
+  let active = false, fatal = false, ticket: Ticket | undefined;
   const settle = (item: Ticket, error?: unknown, value?: EngineResponse) => {
     if (ticket === item) ticket = undefined;
     item.release();
     if (error) item.reject(error); else item.resolve(value!);
   };
   return {
-    activate(): void { active = true; },
+    activate(): void { if (!fatal) active = true; },
     enqueue(request: EngineInvocation, signal: AbortSignal): Promise<EngineResponse> {
       if (!active) return Promise.reject(failure('PREPARATION_WORKER_UNAVAILABLE', 503));
       if (ticket) return Promise.reject(failure('PREPARATION_ENGINE_BUSY'));
@@ -63,8 +65,14 @@ export function createPreparationEngineLane() {
         if (response.requestId !== item.request.requestId)
           throw failure('ENGINE_RESPONSE_IDENTITY', 502);
         settle(item, undefined, response);
-      } catch (error) { settle(item, signal.aborted
-        ? signal.reason instanceof PathFinderError ? signal.reason : failure('PREPARATION_CANCELLED') : error); }
+      } catch (error) {
+        // The original cancellation can precede a failed process join. Its
+        // AbortSignal reason must not turn unknown physical ownership into an
+        // ordinary cancelled preparation or hide a changed implementation.
+        if (hardEngineFailure(error)) { fatal = true; active = false; settle(item, error); }
+        else settle(item, signal.aborted
+          ? signal.reason instanceof PathFinderError ? signal.reason : failure('PREPARATION_CANCELLED') : error);
+      }
       return true;
     },
     close(): void {

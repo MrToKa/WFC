@@ -10,6 +10,7 @@ import { PathFinderLookup } from './PathFinderLookup';
 import { PathFinderRoutes } from './PathFinderRoutes';
 import { PathFinderPreview } from './PathFinderPreview';
 import { EndpointBindingPanel } from './EndpointBindingPanel';
+import { PathFinderCalculationGrantPanel } from './PathFinderCalculationGrantPanel';
 
 const useStyles = makeStyles({
   heading: { margin: 0, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightSemibold },
@@ -120,6 +121,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={pf.zoom}>Zoom to path</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
+        <details><summary>Background model recalculation</summary><PathFinderCalculationGrantPanel
+          projectId={projectId} loadedProjectId={loadedProjectId} token={token} accountId={accountId ?? null} isAdmin={isAdmin}
+          active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId,data?.activeModel.selectionRevision,data?.activeModel.contentFingerprint])}
+          preferences={preferences} onChanged={pf.refresh} onAuthorityLost={pf.refresh}
+        /></details>
         <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, value) => changeMode(value.value as 'routes' | 'path' | 'lookup')}>
           <Tab id={`${panelId}-routes-tab`} value="routes" aria-controls={`${panelId}-routes-panel`}>Routes</Tab>
           <Tab id={`${panelId}-path-tab`} value="path" aria-controls={`${panelId}-path-panel`}>Path</Tab>

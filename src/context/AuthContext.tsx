@@ -52,7 +52,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const clearRecalculationIntent = (): void => {
-  try { window.sessionStorage.removeItem('wfc.pathfinder.recalculation.pending.v1'); } catch { /* Storage may be unavailable. */ }
+  try { window.sessionStorage.removeItem('wfc.pathfinder.recalculation.pending.v1'); window.sessionStorage.removeItem('wfc.pathfinder.calculation-grant.pending.v1'); } catch { /* Storage may be unavailable. */ }
 };
 
 const persistToken = (token: string | null): void => {
@@ -170,7 +170,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const signOut = useCallback(() => {
-    try { window.sessionStorage.removeItem('wfc.pathfinder.recalculation.pending.v1'); } catch { /* No stored intent may retain authority; server checks still apply. */ }
+    try { window.sessionStorage.removeItem('wfc.pathfinder.recalculation.pending.v1'); window.sessionStorage.removeItem('wfc.pathfinder.calculation-grant.pending.v1'); } catch { /* No stored intent may retain authority; server checks still apply. */ }
     const oldToken = currentToken.current;
     const operation = ++authOperation.current;
     invalidateViewerLogin(oldToken);
@@ -189,7 +189,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const onStorage = (event: StorageEvent) => {
       // Tabs with an independent login are not revoked by another login's logout.
       if (event.key !== TOKEN_STORAGE_KEY || !event.oldValue || event.oldValue !== currentToken.current || event.newValue === event.oldValue) return;
-      try { window.sessionStorage.removeItem('wfc.pathfinder.recalculation.pending.v1'); } catch { /* Storage may be unavailable. */ }
+      try { window.sessionStorage.removeItem('wfc.pathfinder.recalculation.pending.v1'); window.sessionStorage.removeItem('wfc.pathfinder.calculation-grant.pending.v1'); } catch { /* Storage may be unavailable. */ }
       ++authOperation.current;
       invalidateViewerLogin(currentToken.current);
       currentToken.current = null;

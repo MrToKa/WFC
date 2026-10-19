@@ -7,6 +7,7 @@ import type { PathFinderRepository } from './repository.js';
 import { defaultOptions, type createJobSchema, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
 import { principalTransaction } from './auth.js';
+import { isGrantPrincipal, grantProvenance, type OperationPrincipal } from './operationAuthority.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { collectDependencyBatchInTransaction, type DependencyBatch } from './dependencyBatch.js';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
@@ -49,11 +50,11 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
 function batchHash(batch:DependencyBatch,timeout:number):string{
   return hash({timeoutMilliseconds:timeout,items:batch.items.map(item=>({id:item.id,dependencies:item.dependencies,status:item.status,cableWriteRevision:item.cable.cable_write_revision}))});
 }
-async function insertCalculationBatch(client:PoolClient,projectId:string,who:JobPrincipal,batch:DependencyBatch,timeout:number,requestHash:string,bounds:{signal?:AbortSignal;deadline:number}):Promise<string>{
+async function insertCalculationBatch(client:PoolClient,projectId:string,who:OperationPrincipal,batch:DependencyBatch,timeout:number,requestHash:string,bounds:{signal?:AbortSignal;deadline:number}):Promise<string>{
   const check=()=>{bounds.signal?.throwIfAborted();if(Date.now()>bounds.deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);};check();
   const id=randomUUID(),blocked=batch.items.filter(item=>!item.dependencies).length;
-  await client.query(`INSERT INTO pf_jobs(id,project_id,requested_by,login_id,login_expires_at,state,total,completed,options,timeout_ms,request_hash)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[id,projectId,who.userId,who.loginId,new Date(who.loginExpiresAt),blocked===batch.items.length?'complete':'queued',batch.items.length,blocked,batch.options,timeout,requestHash]);
+  await client.query(`INSERT INTO pf_jobs(id,project_id,requested_by,login_id,login_expires_at,state,total,completed,options,timeout_ms,request_hash,authority_kind,grant_provenance)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[id,projectId,who.userId,who.loginId??null,isGrantPrincipal(who)?null:new Date(who.loginExpiresAt),blocked===batch.items.length?'complete':'queued',batch.items.length,blocked,batch.options,timeout,requestHash,isGrantPrincipal(who)?'calculation-grant':'current-login',isGrantPrincipal(who)?grantProvenance(who):null]);
   for(let offset=0;offset<batch.items.length;offset+=RECALCULATION_LIMITS.cableChunk){
     check();
     const rows=batch.items.slice(offset,offset+RECALCULATION_LIMITS.cableChunk).map(item=>({cable_id:item.id,state:item.dependencies?'waiting':'blocked',dependencies:item.dependencies,status:item.status,message:item.message}));

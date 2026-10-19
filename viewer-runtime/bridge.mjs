@@ -19,7 +19,10 @@ const messages = {
 const failure = code => Object.assign(new Error(messages[code] ?? messages.RESOURCE_FAILED), { code });
 const httpCode = status => status === 401 || status === 410 ? 'SESSION_EXPIRED' : status === 403 ? 'ACCESS_REVOKED' : status === 409 ? 'MODEL_SELECTION_CHANGED' : status === 503 ? 'MODEL_UNAVAILABLE' : 'RESOURCE_FAILED';
 
-export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = window.fetch.bind(window), onState = () => {} }) {
+export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = window.fetch.bind(window), onState = () => {}, resourceMode = 'human' }) {
+  if (!['human', 'producer'].includes(resourceMode)) throw failure('INVALID_STATE');
+  const sessionFamily = resourceMode === 'producer' ? 'producer-sessions' : 'viewer-sessions';
+  const producerCommands = new Set(['INIT', 'LOAD_MODEL', 'READ_PREPARATION_OBJECTS', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'CANCEL_REQUEST', 'DISPOSE']);
   const origin = window.location.origin;
   const requests = new Map(), usedLoads = new Set(), cleanupRequests = new Set();
   let disposed = false, phase = 'hello', current = null, handle, loadController, initController, initCommand, routeRequest, routeHasLine = false;
@@ -73,7 +76,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); } catch { throw failure('INVALID_MESSAGE'); }
   }
   async function descriptor(command, signal) {
-    const base = new URL(`/api/projects/${bootstrap.projectId}/model-versions/${command.modelVersionId}/viewer-sessions/${command.payload.sessionId}/`, origin);
+    const base = new URL(`/api/projects/${bootstrap.projectId}/model-versions/${command.modelVersionId}/${sessionFamily}/${command.payload.sessionId}/`, origin);
     const response = await fetchImpl(new URL('descriptor', base).href, { signal, credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
     if (!response.ok) {
       let code = httpCode(response.status);
@@ -117,7 +120,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   }
   async function requirePathFinder(command, signal) {
     if (!current || phase !== 'loaded' || !handle || !identityMatches(command)) throw failure('INVALID_STATE');
-    const base = new URL(`/api/projects/${bootstrap.projectId}/model-versions/${command.modelVersionId}/viewer-sessions/${current.payload.sessionId}/`, origin);
+    const base = new URL(`/api/projects/${bootstrap.projectId}/model-versions/${command.modelVersionId}/${sessionFamily}/${current.payload.sessionId}/`, origin);
     const response = await fetchImpl(new URL('pathfinder-authorization', base).href, { signal, credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
     if (!response.ok) throw failure(httpCode(response.status));
     const permission = await responseJson(response);
@@ -268,6 +271,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (disposed || event.origin !== origin || event.source !== window.parent) return;
     const command = validateEnvelope(event.data, 'parent-to-frame');
     if (!command || command.instanceId !== bootstrap.instanceId || command.projectId !== bootstrap.projectId || requests.has(command.requestId) || cleanupRequests.has(command.requestId)) return;
+    if (resourceMode === 'producer' && !producerCommands.has(command.type)) return;
     if (command.type !== 'LOAD_MODEL' && !identityMatches(command)) return;
     if (command.type === 'LOAD_MODEL' && usedLoads.has(command.loadId)) return;
     if (requests.size >= 4096) {

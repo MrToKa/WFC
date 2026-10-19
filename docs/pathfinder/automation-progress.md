@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: transitioning from `pf-r7-durable-recalculation-local-20261019` to inherited `pf-r8-background-automation-local-20261019` after the finalized handoff metadata commit (inspect live branch/HEAD).
+- Current branch: `pf-r8-background-automation-local-20261019`, inherited handoff HEAD `9d00ebb890202fdf993054c6769cf15f30068e76` (inspect live state before resuming).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -14,6 +14,295 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
 ## Current execution — PF-R0 and sequential PF-R delivery
+
+### Latest PF-R8 checkpoint — 19 October 2026, technically verified with explicit limitations / commit pending
+
+- Root remains the sole actual runtime/test executor. R8 is still UNCOMMITTED
+  on inherited9d00ebb; candidate10/profile14 remains the owned5191 source.
+  Report44 is TECHNICALLY VERIFIED WITH EXPLICIT LIMITATIONS; only local delivery
+  commit remains pending. Native parity/human engineering NOT_PERFORMED; realApply0.
+- Final lint session37566 exited0 PASS. Scoped temporary production-router plus
+  actual restored-PG revocation3 PASS14controls: grant3→4 re-enable→5 disable,
+  same capability descriptor/auth409, default producer prepare503; all historical
+  leases/sessions and six business/ReviewApply tables exact. SDK/nginx/blob/queue
+  qualification explicitlyfalse for this control, not inferred PASS.
+- Helpers1/2 FAILED before writes (generic bootstrap, then missing
+  MINIO_ACCESS_KEY); same retained command/lease IDs and strict no-effects
+  preflight reused for corrected helper3 with actualtarget import environment.
+  All three helpers joined/removed. Retirequalified5192-1 PASS: zero fixture
+  containers/volumes/networks/portclosed; source5191 and archives retained.
+- Source hostbinding8 PID7884 actually running exactconfig. Initial launch
+  transport deadline UNKNOWN was reconciled2 by actualCIM/startedreceipt/
+  configSHA/noerrorlog/noSDKhelper; NOrelaunch. Retain this live host ownership.
+- Finalsnapshot2 capture PASS122tables/201PFROOTfiles/20,116,282bytes. Actual final
+  rootcloseout1 PASS confirms final1→2 ALL122table row sets and201files exact;
+  normal current5191 HTTP grant3 enabled/producerready, profile14unchanged.
+  Sanitized evidence/background-automation/technical-receipt.json retains eleven
+  private artifact hash pins without rows/secrets. Bounded classifier analysis2 SHA
+  `07f846bb0fb96ab73fcddb3cf67fe2c097cf7e97e1e65bb777ac8c8cdc24bd3a`:
+  116→122tables/10710→10889rows,81oldtablemultisets exact,101declared default
+  extensions,12anchored oldmutable/179anchored new/0removed/anomalies; all114old
+  and200afterB1 file pins exact. Limits:35generatedrows not independently
+  recomputed/80newhistoricalfile bodies not read. No broader semantic PASS.
+- Source UI5 PASS remains separate. TargetUI6 reset NOT_CONFIRMED is retained:
+  checked unsaved draft/Saveenabled only, no grant command/tabclosed. It is a
+  known evidence limit, not a new pending command to retry on the retired target.
+- Fresh reference/GitHub observations: originalWFC clean main6a12/cached0/0,
+  external direct child of priorlocale1ef, not ours/not merged; oldPF35f4 with
+  same2trackedchanges+.vscode; canonical45c24clean. Remotes WFC6a12/PF45c24;
+  one unrelated WFCopenPR headfc81f5e/base07369ef, PFopenPR0. Zero checkruns was
+  queried for WFCmain6a12, NOT the unrelated PR head.
+  No publication or unchanged-original-reference claim.
+- Next: local R8 technical delivery commit; root records its actual hash and
+  finalizes R9 handoff entry from that revision, then
+  automatically continues on inherited R9 branch. Preserve all historical failed
+  attempts/partialUI/externalchange/deniedscratch limits. No original/5190 writes.
+
+### Historical PF-R8 checkpoint — 19 October 2026, candidate 10 / profile 14
+
+- R8 remains UNCOMMITTED on inherited HEAD `9d00ebb`; root is the sole actual
+  runtime/SQL/HTTP/browser/test executor. Report 44 remains DRAFT. This entry
+  supersedes the running-backup and candidate 9 checkpoint below while retaining
+  those historical observations and failures.
+- Owned source 5191 upgrade10 PASS/profile14: API `61dd8b62…`, image
+  `2f510aeb…`; web `575451d6…`, image `8dffd4d4…`; source inventory
+  `e248514ecead6477ec27274bfe95c87c92f00ee448dd08c4fc4adb8335779e76`.
+  Candidate10 contains the restored/revoked checkbox-draft fix. Exact previous
+  candidate9/profile12 and post-backup profile13 remain retained.
+- Qualified cold backup1 PASS: `288adb69-3e92-4e83-9437-85c28a10fd23`, eight
+  members/four images/all122tables/five models/1541resources/1,930,801,055bytes.
+  The standalone helper archive and private host companion are separate retained
+  artifacts. Source Viewer tab5 was closed and IAB empty before backup.
+- Actual fresh5192 restore1 PASS: exact ALL122source/pre-fence tables including
+  two auth groups; three qualified fencing groups, rotated grant-installation
+  epoch/JWT, unchanged unjoined lease rows, all7producer variables blank. Source
+  5191 retained; source-retirement control refused. Archive restores API9+web9;
+  explicit web10-only target overlay PASS, not an archive containing UI10.
+- Normal restored auth2 PASS: oldsource JWT401, correct oldsource hostkey401,
+  genuine fresh admin; oldgrant restore-fenced/current target unqualified.
+  Auth1 wrong-path HTML parse failure stays FAIL, not valid host-key proof.
+- Earlier source UI5 PASS: all three tools/English/enabled-ready, model counters
+  664556/438156, controlled0.75m proposal/yellow/filledGhost/Clear/restore. Target
+  UI6 loaded those model counters, initially false restored checkbox, checked
+  unsaved draft with Save enabled/screenshot. Final reset click NOT_CONFIRMED;
+  no grant command submitted and tab closed. Do not report check/uncheck PASS.
+- Temporary production-router/actual-PG revocation helper1 exited2/generic
+  bootstrap FAIL, retained. Helper2 reuses the same saved intent after strict
+  no-effects preflight with private diagnostics; root session17282 RUNNING.
+  Exact target5192 API stopped only. No SDK helper/source managed host currently;
+  target retirement NOT_RUN. Final lint root session37566 RUNNING. Join these
+  exact owned sessions; do not duplicate helpers or invent their completion.
+- External original WFC main is now clean `6a12d395…`, direct child of retained
+  original-local `e1ef202…`; fresh GitHub observation places its commit at11:26UTC.
+  EXTERNAL_REFERENCE_CHANGE, not ours/not merged into this work/not unchanged
+  preservation. All five external lifecycle changes were separately user-acknowledged;
+  baseline4 FAIL/observation2/profile5 and missing historical Nid structure remain
+  retained, with current104mount-pair structural separation PASS.
+- Next: actual revocation-control result, truthful UI limitation/closure, retire
+  ONLYfresh5192, final lint/preservation/audit/source inventory, local R8 commit
+  and finalized prepare-stage-handoff for R9. No original/5190 writes, merge,
+  push, deployment, real-data Apply or deletion of denied scratch paths.
+
+### Latest PF-R8 checkpoint — 19 October 2026, 11:44 UTC
+
+- The user explicitly acknowledged all five external lifecycle changes in the
+  reply to `call_589e4bd20e7247029cff396a23ba5604`. Baseline4/FAIL/observation2
+  remain retained. Current profile5 pins 17 exact outside lifecycles plus the
+  separately recorded original backend's autonomous restarts. Static identities
+  and configurations of all18 equal; current104mount-pair ancestor/network/5191
+  port disjointness PASS. Missing historical Nid network structure stays UNKNOWN;
+  transition is USER_ACKNOWLEDGED_EXTERNAL_CHANGE, never unchanged PASS.
+- Candidate9/profile12 is now live: API `bca67cf6…`, image `28df94a1…`; web
+  `a4e60543…`, image `6f6c05b9…`. Source inventory
+  `db29d097f1b8040c8c4cff053d833c2a3746611154dd4288b798d334418e69b2`.
+  Pin/start1 and candidate8 startup failed on optional blank/undefined handling;
+  exact failures/logs/pins retained. Runtime normalization and canonical optional
+  configuration identity corrected; qualification/producer54tests PASS, build9
+  PASS and actual startup9 PASS. Earlier candidate7 remains historical.
+- Actual B proof2 PASS: three current grant3 proposals / two shared fixture
+  endpoints, zero extra captures, six business/Review/Apply tables exact vs
+  preR8. Root issued and pinned measured helper qualification
+  `586833d42dc845430242586c1076cf3e76f8ee42a84f92b2d6ab3201b4f5066f`;
+  normal admin HTTP confirms enabled/ready with qualification override removed.
+  This remains 13-object diagnostic converted scope, not wholeplant/native/human
+  engineering acceptance or real-data Apply.
+- Current computer-use PASS: three tools, enabled checkbox/model preparation
+  ready, protected model loaded664556geometry/438156identifiers, selected exact
+  test proposal, yellow path/filledGhost, Clear and Restore. Private screenshots
+  retained. The owned Viewer tab5 was closed before backup; final tab inventory
+  was empty. No ConfirmReview or Apply action was performed.
+- Restore source now checks ALL122 source/pre-fence target table pins including
+  both auth groups and enforces all7producer env variables in compiled Compose
+  and actualAPI. Focused source37=86PASS, full types38 PASS. Source-only changes
+  do not themselves prove an actual grant restore.
+- Root checkpoint `qualified-checkpoint1.mjs` is RUNNING, exec session91022.
+  Input approved profile12; expected post-cold-checkpoint profile13. No managed
+  host/helper is running; open leases/live jobs0 before backup. New checkpoint,
+  private companion and standalone helper image remain separate from preR8 backup.
+  After completion run `qualified-restore1.mjs`: fresh own5192 only, retain5191,
+  then normal auth/resource/UI/epoch controls and retire onlynew5192 fixture.
+- R8 is still UNCOMMITTED/incomplete. R9 handoff is drafted, NOT READY pending
+  final R8 receipt/commit; R9/R10 must still execute without routine interruption.
+
+### Latest PF-R8 checkpoint — 19 October 2026, after 11:16 UTC
+
+- Still UNCOMMITTED on `9d00ebb`; current runtime is candidate7/profile9, API
+  `90431c8f…`, web `232cdfbb…`, source inventory
+  `ec6674ecb52ed760d253808bbb492b8a5b2f2d6585dfc79c19c79b5188e82ce7`.
+  Candidate5/6 were built but never deployed. Final full-source lint36 PASS,
+  workflow35 PASS; backend31 is 2035 PASS/5 optional NOT_RUN.
+- Independent actual converted A/B qualification remains PASS at 13 objects and
+  three successful queries. Producer authority is NOT_ISSUED; B proposals and
+  grant-specific fresh5192 restore remain NOT_RUN. Exactly TWO unique fixture
+  endpoints are used by the three queries; no third point is to be invented.
+- The next two normal-API controlled fixture confirmations made NO writes:
+  the pre-operation guard found new external lifecycle changes. Four Nid
+  containers stopped at 11:15:10–12 UTC; old `/wfc_app` restarted at 11:16:16 UTC.
+  Root did not operate them; actor NOT_ESTABLISHED. The earlier human response
+  acknowledged a previous old-DB lifecycle, not these new observations.
+- Keep baseline4 and failed guard immutable. Actual private observation2 retains
+  all18 raw inspections and field differences. Outside preservation is
+  UNRESOLVED_EXTERNAL_CHANGE, not unchanged PASS. Runtime writes are paused
+  while source/read-only work continues and an explicit concise user question
+  remains pending. No original/5190 action or broad guard waiver is authorized.
+- Root remains the sole runtime/test executor. Agent read-only guard and R8
+  restore reviews are active. Next: establish legitimate isolated operation
+  admission, then resume fixture-reconfirm1 with the saved exact command keys,
+  B-proposal proof, root qualification pin, backup/fresh5192restore/retire and
+  final R8 closure. R9/R10 remain required; do not call this task complete.
+
+### Latest PF-R8 observation — 19 October 2026,11:06 UTC
+
+- R8 remains UNCOMMITTED on9d00ebb; no technical completion/authority issuance.
+  Current candidate4/profile8: API4a024aa7... image4246aabc..., webbe094766...
+  imagefd1ef6f4..., source609db31a979e2797c412a8338b4577c1e1437017f9cc8d10f1252336ace669ad.
+- Managed7 actual PASS: independent13-object capture published aggregate
+  d7d5e497-425b-4bc0-a1a5-22a579210001, trace3f507e1a..., comparison4480f09a...;
+  maintenance complete, joined/revoked/released/notified=true. HostPID50592
+  cooperatively stopped and absent, helper4afbf0b1... joined/removed. Noactivelease.
+- Exact managedimagef58a7de1.../SDKinventorye9a1214e... uses4cores/320x240canvas;
+ 8GiB/15min/securitybounds retained. Exactprobe8PASS. ActualC#A/B1PASS3queries:
+  order/coords/categories/diagnosticgraph replay/publicCalculate/design exact;
+  onlycapture.evidenceSha256normalized. DifferentrawSHAs/planhash/origins retained.
+  SourceA is human-v1/non-null-login; B is grant-v2/null-login/grant3.
+  Notnative/engineeringacceptance orwholeplantproof. Qualification NOT_ISSUED.
+- ActualBproposals pending3normalhumanadmin reconfirmations of SAME controlled
+  fixed-worldfixturepoints. Do not touchrealbusinessbindings or Apply. Agent found
+  binding-onlyregistryadvances wronglyrecaptured geometry; narrowverifiedpublished
+  reuse fix now frozen/tested78PASS, servertypes29PASS. Candidate5build is next,
+  then sequential3fixturecommands with exactsavedkeys and currentcontexts.
+- ActualPGcontrols12PASS/11tablesexact/allSAVEPOINT+finalrollback;HTTP4expected401.
+  Node25whole177PASS/0FAIL/0cancel; frontend26fivefiles43PASS; control27=31PASS
+  (earlier estimated19 waswrong); fullbackend31/lint30 currentlyroot-running.
+- Interim fullafterB1 snapshot:122tables/200PFROOTfiles20,114,643bytes.
+  Agentclassification: all114originalfilesexact, nooldrowremoved; oldproposals/
+  items/Review/Apply/businessrows preserved. Addeddefaults andPFmutablehead deltas
+  stillneedexactreceipt qualification; privateanalysispending, no blanketPASS.
+- RemainingR8: candidate5+fixtureproposals+measuredqualificationrecord/pin;
+  actualgrant-specificbackup/fresh5192restore/ownedretire, finalreceipts/report/
+  localcommit; thenprepare-stage-handoffR9andexecutewithoutnewconfirmation.
+  Source5191/originals/5190mustneverberetired. Report44draft frozen. Historical
+  attempts1–6remainFAIL;6automaticcleanupPASS. Deniedscratchpathsuntouched.
+
+### Active PF-R8 checkpoint — 19 October 2026, 10:38 UTC
+
+- Branch pf-r8-background-automation-local-20261019, inherited HEAD9d00ebb;
+  R8 remains UNCOMMITTED and technically incomplete. Root is the sole actual
+  runtime/SQL/HTTP/browser/test executor. All agents source-frozen/read-only.
+- Current runtime candidate2, approved private profile6: API5576c9eb... image78fe5fc5...,
+  webfa170f62... imagea9b21b72..., same PG/MinIO/volumes/networks.
+- Host5 PID17932 cooperatively stopped and absent; helper50d7ac8a... joined/removed.
+  Attempt failed inner180s LOAD_MODEL after108,091,424 bytes/2293chunks; retain FAIL.
+  Exact positive cleanup ACK/replay reconciled original quarantined lease, with no
+  preparation checkpoint. Attempts1–5 did not establish LevelB capture qualification.
+- LevelA closed-Viewer actual PASS:3controlled proposals; projects/trays/cables/types/
+  Review/Apply tables exact vs preR8. No real engineering acceptance or real Apply.
+- Source correction avoids six full model-manifest reads per resource chunk while
+  retaining grantTransaction/current-role/model/session/lease/install/load fences.
+  Independent source review found no actionable issue; actual focused75PASS.
+  Resource chunks now64KiB within unchanged96KiB wire; focused node60PASS.
+  LOAD_MODEL300s/client450s/first control675s remain within15-minute helper wall.
+  Server types19 PASS, viewer prepare5 PASS. New exact image/probe/SDK run pending.
+- Qualification harness corrected/build2 PASS0warnings/errors; actual independent
+  A/B capture/tool execution NOT_RUN. No qualification receipt issued.
+- Candidate3 build/upgrade and a fresh owned host binding are next. Do not duplicate
+  host5, reuse a consumed scratch label, reset source, or operate original/5190.
+  Outside guard profile4 retains16strict+1user-acknowledged strict+1autonomous backend.
+
+- PF-R7 technical delivery: `5bb425204952ab63dc0d9685974b929bf8fb9847`;
+  finalized R8 prompt in `handoffs/PF-R8-background-automation.md` at9d00ebb.
+- R8 source authoring is active. Root owns all existing integration files,
+  actual runtime/SQL/HTTP/browser/tests/checkpoint operations and final evidence.
+  New grant modules: r7_acceptance_review; new isolated producer modules:
+  r8_readiness_map; new UI grant API/hook/panel: r7_preservation_classifier.
+  Writers preserve each other's work; no agent runs mutable resources.
+- Own R8 evidence directory:
+  `pathfinder-engine/.scratch/tray-catalog-cc6e2cab-9660-4888-a5e8-10cbdb8d816a`.
+  Exact R7 runtime profile6/external profile3 and last monotonic observation are
+  retained as predecessor pins. Initial setup prefix refusal happened before
+  runtime access and is retained; the new directory uses the existing private
+  ownership helper, without weakening shared guards or touching denied paths.
+- Pre-R8 read-only capture PASS:116 tables,114 PF_ROOT files/17,384,086 bytes.
+  Consistent cold checkpoint PASS:532ed35a-ba8e-4573-8de4-87058e48c19e,
+  8members/4images;5versions/1541resources/1,930,801,055bytes raw size/SHA verified.
+  Full restore remains NOT_RUN. Own approved runtime profile2 records only the
+  expected cold-checkpoint restart timestamps; original resources were not operated.
+- The user explicitly acknowledged manually starting/stopping old `/wfc_app`
+  (2f1d30dd...) and authorized continuation. New private outside baseline4 retains
+  its identical image/configuration and exact stopped state. Its changed lifecycle/
+  network endpoints are USER_ACKNOWLEDGED_EXTERNAL_CHANGE, not unchanged. The other
+  original backend still autonomously restarts; root has not operated either one.
+- R8 source now includes grant/lease authority, persistent UI checkbox, explicit
+  preparation/trace provenance variants, protected producer resources and worker
+  integration. Actual5191 app is still R7 candidate3; new schema/runtime NOT_RUN.
+  Review fixes authored: durable-before-claim private recovery, human existing
+  login checks, unknown-COMMIT bookkeeping, restore epoch fencing. New bounded
+  grant admission producer is wired; managed preparation coordinator and post-
+  preparation trace/comparison modules are being authored. Root added fixed
+  capture driver/control transport/host client+daemon; these are not deployed.
+- Actual source checks: frontend types PASS; server types failed only new fixture
+  missing schemaVersion (being corrected), earlier intermediate server types PASS.
+  UI/discovery4files34PASS; focused server6files102PASS; isolated browser modules
+  101PASS. These are bounded source/mock checks, not actual SDK capture equivalence.
+  Earlier failures remain retained. Later focused checks:authority8files156PASS;
+  worker/admission3filesPASS;workflow11PASS;managed-client13PASS;capture/control
+  44PASS/1fixture expectationFAIL, corrected but rerun pending. Operations83PASS
+  plus server operations27PASS. These selections overlap and are not a total.
+- Pinned Playwright1.64.0 base image06a9939e... and probe imagea9e1caf5...
+  built. Actual probe1 refused before start because Docker defaulted cgroupns=host;
+  its fresh unstarted containerf8e291fe... was later removed after an exact private
+  identity/configuration match and positive never-started/created/Pid0 proof.
+  Host profile now explicitly requests private cgroupns. Probe2 started with that
+  isolation, returned a sanitized browser-probe failure, joined and was removed;
+  no SDK capture or producer qualification PASS. New diagnostic probe image
+  ca4f39cd... identified Chromium's internal safe-empty-dir chroot refusal.
+  The default seccomp remains pinned; added only clone/setns/unshare/chroot
+  syscalls, with ALL container capabilities still dropped. Chromium primary
+  source confirms that internal chroot. Actual probe4 PASS with namespace+BPF+
+  TSYNC/WebGL/nonroot/read-only/network-none evidence, joined+removed.
+  New full managed image10c58bd5f595cf65e9880ada567b0babf8358b6689ec49ae4ab2bc05c105f059
+  built; actual probe5 against that EXACT image also PASS,13ownedprocesses,
+  Chromium156.0.8078.4/Playwright1.64.0, browserSHA377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025.
+  It is still an isolation/WebGL probe, not SDK/model capture qualification.
+- Actual5191 PG rollback-only schema check PASS:all3newSQLmodules applied inside
+  one transaction,6transactional new tables; historical job NULL-login without a
+  grant refused. ROLLBACK confirmed:all116table names/typed-row SHA inventories
+  exactly restored. Private r8-sql-grant-rollback receipt retained. No persistent
+  R8schema migration or application image update has occurred yet.
+- Actual managed browser/SDK capture equivalence and closed-user-browser pipeline
+  remain NOT_RUN. Enabled grant and short execution leases are distinct;
+  no human bearer/fake login is permitted. Review/Apply stays human-only.
+- Planned producer qualification: separately owned nonroot, sandbox-enabled
+  browser helper with no external network, no app volumes/socket/host ports,
+  bounded loopback resource relay. Concrete runtime qualification remains pending.
+- Next: finish managed producer+maintenance source, qualification receipt and
+  private host launch configuration; run current types/checks/builds, upgrade ONLY
+  exact5191services, actual protected capture/A-B and closed-user-browser chain,
+  UI/restore/security/preservation evidence; honestR8closeout thenprepare+executeR9.
+  Current agents:acceptance_review owns NEW grantPreparedMaintenance/tests;
+  readiness_map owns NEW managedPreparationProducer/privatejournal/tests;
+  preservation_classifier source-reviews host-worker (its3newtestfiles frozen).
+  Root owns integration, images, actual checks and all resources. Automation ACTIVE.
 
 Explicit user authorization on 19 October 2026: implement plan32, create a detailed
 self-contained next prompt after EACH technically completed stage, account for
@@ -1547,3 +1836,14 @@ Next dependent step: obtain a complete full-precision native oracle for the same
 ## Resume protocol
 
 Inspect current Git status and the stage reports before resuming. Finish the current stage, retain actual check results, review and commit locally, prepare the next durable handoff, then execute it. Never relabel historical checks as a new pass. On a real external blocker, continue independent authorized work and record the exact unresolved gate. Stop repeated unchanged attempts. Disable the automation after verified local delivery or when user input is indispensable.
+
+R8root11:11UTC: candidate5APIad712b66.../weba4911578... builtPASS/sourcef4072f5e...
+but NOTDEPLOYED. Current runtime remainscandidate4/profile8. Fullbackend31
+2035PASS/5optionalNOT_RUN. Lint30FAIL1unsafe-finally; equivalent explicit-throw
+correction+falsejoin/fatalenginecases focusedworkflow32PASS, lint33running71709.
+Candidate6build next, thenupgradeapproved8→9; do notdeploycandidate5by mistake.
+
+R8root11:13UTC: candidate6API29aaab7a.../weba111ebf5... builtPASS/sourceb3926dae...
+but NOTDEPLOYED. Lint33FAIL1throwinfinally; finalbool/cause cleanup hasnoabrupt
+finallycompletion, targetlint34/workflow35PASS. Candidate7build+fullLint36next;
+currentruntime remainscandidate4/profile8. Useupgrade-candidate7 →profile9 only.

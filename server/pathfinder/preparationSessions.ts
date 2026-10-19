@@ -4,8 +4,8 @@ import { z } from 'zod';
 import { canonicalPurposeJson, policyUuidSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { PREPARATION_LIMITS, preparationCreateSchema, preparationSessionSchema, preparationPartSchema, preparationPartReceiptSchema, preparationMutationSchema, preparationResolutionWriteSchema, preparationResolutionSchema, preparationResolutionReceiptSchema, preparationPublicationSchema, preparationAggregateSchema, preparationIndexSchema, preparationCountsSchema, preparationBlobSchema, type PreparationPlan, type PreparationSession, type PreparationPart, type PreparationAggregate } from '../../shared/pathfinderPreparation.js';
 import { snapshotSchema, type ComputationalSnapshot } from './contracts.js';
-import { principalTransaction } from './auth.js';
-import type { JobPrincipal } from './jobContracts.js';
+import { operationTransaction, isGrantPrincipal, requireHumanPrincipal, requireGrantModelScope, grantProvenance, type OperationPrincipal } from './operationAuthority.js';
+import { calculationGrantProvenanceSchema, type CalculationGrantProvenance } from '../../shared/pathfinderCalculationGrant.js';
 import { PathFinderError } from './errors.js';
 import { readPreparationContext, readPreparationState, equalPreparationScope, buildPreparationPlan, preparationDigest } from './preparationPlans.js';
 import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } from './preparationStorage.js';
@@ -13,6 +13,7 @@ import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } f
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Project preparation requires a refresh or an explicit routing decision.'); };
 const terminal = new Set(['published', 'failed', 'cancelled', 'stale']);
 const partBlob = (part: PreparationPart) => ({ payloadRef: part.payloadRef, sha256: part.payloadSha256, bytes: part.payloadBytes });
+const partReceipt = (part: PreparationPart, sessionRevision: string, duplicate: boolean) => preparationPartReceiptSchema.parse({schemaVersion: part.schemaVersion === 'wfc.pf.preparation-part.v2' ? 'wfc.pf.preparation-part-receipt.v2' : 'wfc.pf.preparation-part-receipt.v1',part,sessionRevision,duplicate});
 const MAX_REVISION = 9223372036854775807n;
 const nextRevision = (value: string) => BigInt(value) < MAX_REVISION ? (BigInt(value) + 1n).toString() : fail('PREPARATION_REVISION_LIMIT');
 /** Local bounds include admission/auth locks, not only the operation callback. */
@@ -20,7 +21,7 @@ export const PREPARATION_SQL_BOUNDS = Object.freeze({ acquisitionMilliseconds: 5
 function preparationAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new PathFinderError('PREPARATION_VALIDATION_CANCELLED', 409, 'Preparation validation stopped before publication. Inspect the retained session before retrying.');
 }
-export async function preparationTransaction<T>(pool: Pool, projectId: string, who: JobPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal): Promise<T> {
+export async function preparationTransaction<T>(pool: Pool, projectId: string, who: OperationPrincipal, operation: (client: PoolClient) => Promise<T>, signal?: AbortSignal): Promise<T> {
   preparationAborted(signal);
   let commitStarted = false;
   const boundedPool = { connect: async () => {
@@ -46,7 +47,7 @@ export async function preparationTransaction<T>(pool: Pool, projectId: string, w
     return wrapper;
   } } as Pool;
   try {
-    return await principalTransaction(boundedPool, projectId, who, async client => {
+    return await operationTransaction(boundedPool, projectId, who, 'prepare', async client => {
       preparationAborted(signal); const value = await operation(client); preparationAborted(signal); return value;
     });
   } catch (error) {
@@ -75,7 +76,7 @@ export async function initializePreparationSchema(pool: Pool) {
     for (const table of ['pf_preparation_parts', 'pf_preparation_events', 'pf_preparation_commands', 'pf_preparation_resolution_events', 'pf_preparation_aggregates']) { await c.query(`DROP TRIGGER IF EXISTS pf_preparation_immutable ON ${table}`); await c.query(`CREATE TRIGGER pf_preparation_immutable BEFORE UPDATE OR DELETE ON ${table} FOR EACH ROW EXECUTE FUNCTION pf_preparation_immutable()`); }
     await c.query('COMMIT'); } catch (error) { await c.query('ROLLBACK').catch(() => undefined); throw error; } finally { c.release(); }
 }
-type SessionRow = { id: string; project_id: string; plan: PreparationPlan; state: PreparationSession['state']; revision: string; actor_id: string; login_id: string; created_at: Date; updated_at: Date; failure: unknown; published_aggregate_id: string | null; validation_token: string | null; validation_key: string | null; validation_sha256: string | null; validation_expires_at: Date | null; validation_command: unknown; validation_actor_id: string | null; validation_login_id: string | null };
+type SessionRow = { grant_provenance: CalculationGrantProvenance | null; validation_grant_provenance: CalculationGrantProvenance | null; id: string; project_id: string; plan: PreparationPlan; state: PreparationSession['state']; revision: string; actor_id: string; login_id: string; created_at: Date; updated_at: Date; failure: unknown; published_aggregate_id: string | null; validation_token: string | null; validation_key: string | null; validation_sha256: string | null; validation_expires_at: Date | null; validation_command: unknown; validation_actor_id: string | null; validation_login_id: string | null };
 async function sessionRow(c: PoolClient, projectId: string, id: string): Promise<SessionRow> {
   policyUuidSchema.parse(id);
   const row = (await c.query<SessionRow>('SELECT *,revision::text FROM pf_preparation_sessions WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, id])).rows[0]; if (!row) return fail('PREPARATION_SESSION_NOT_FOUND', 404); return row;
@@ -83,22 +84,29 @@ async function sessionRow(c: PoolClient, projectId: string, id: string): Promise
 async function sessionView(c: PoolClient, row: SessionRow): Promise<PreparationSession> {
   const parts = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_preparation_parts WHERE project_id=$1 AND session_id=$2 ORDER BY part_index', [row.project_id, row.id])).rows.map(r => preparationPartSchema.parse(r.receipt));
   const missingPartIds = row.plan.partPlan.filter(p => !parts.some(r => r.partId === p.partId)).map(p => p.partId);
-  const recovery = row.state === 'validating' ? { command: preparationMutationSchema.parse(row.validation_command), expiresAt: new Date(row.validation_expires_at!).toISOString(), actorId: row.validation_actor_id, loginId: row.validation_login_id } : null;
+  const recovery = row.state === 'validating' ? { command: preparationMutationSchema.parse(row.validation_command), expiresAt: new Date(row.validation_expires_at!).toISOString(), actorId: row.validation_actor_id, loginId: row.validation_login_id, ...(row.grant_provenance ? {grant:calculationGrantProvenanceSchema.parse(row.validation_grant_provenance)} : {}) } : null;
   if (recovery && (preparationDigest({ id: row.id, command: recovery.command }) !== row.validation_sha256 || recovery.command.idempotencyKey !== row.validation_key)) return fail('PREPARATION_VALIDATION_INTENT_INTEGRITY');
-  return preparationSessionSchema.parse({ schemaVersion: 'wfc.pf.preparation-session.v1', id: row.id, projectId: row.project_id, state: row.state, sessionRevision: row.revision, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(), principal: { kind: 'current-login-admin', actorId: row.actor_id, loginId: row.login_id }, plan: row.plan, parts, coverage: { expectedParts: row.plan.partPlan.length, committedParts: parts.length, requestedScopeComplete: missingPartIds.length === 0 && row.plan.partPlan.length > 0 && row.plan.diagnostics.length === 0, missingPartIds }, failure: row.failure ?? null, publishedAggregateId: row.published_aggregate_id, recovery });
+  return preparationSessionSchema.parse({ schemaVersion: row.grant_provenance ? 'wfc.pf.preparation-session.v2' : 'wfc.pf.preparation-session.v1', id: row.id, projectId: row.project_id, state: row.state, sessionRevision: row.revision, createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(), principal: row.grant_provenance ? {kind:'calculation-grant',actorId:row.actor_id,grant:calculationGrantProvenanceSchema.parse(row.grant_provenance)} : { kind: 'current-login-admin', actorId: row.actor_id, loginId: row.login_id }, plan: row.plan, parts, coverage: { expectedParts: row.plan.partPlan.length, committedParts: parts.length, requestedScopeComplete: missingPartIds.length === 0 && row.plan.partPlan.length > 0 && row.plan.diagnostics.length === 0, missingPartIds }, failure: row.failure ?? null, publishedAggregateId: row.published_aggregate_id, recovery });
 }
-async function transition(c: PoolClient, row: SessionRow, who: JobPrincipal, state: PreparationSession['state'], reason: string, failure: unknown = null) {
+function requireSessionProducer(row:SessionRow,who:OperationPrincipal):void {
+  if(isGrantPrincipal(who)) {
+    requireGrantModelScope(who,row.plan);
+    if(!row.grant_provenance||canonicalPurposeJson(row.grant_provenance)!==canonicalPurposeJson(grantProvenance(who))) return fail('PREPARATION_PRODUCER_SCOPE_DENIED',403);
+  } else if(row.grant_provenance) return fail('PREPARATION_PRODUCER_AUTHORITY_REQUIRED',403);
+}
+async function transition(c: PoolClient, row: SessionRow, who: OperationPrincipal, state: PreparationSession['state'], reason: string, failure: unknown = null) {
   const revision = nextRevision(row.revision);
   await c.query('UPDATE pf_preparation_sessions SET state=$3,revision=$4,updated_at=now(),failure=$5 WHERE project_id=$1 AND id=$2 AND revision=$6', [row.project_id, row.id, state, revision, failure, row.revision]);
-  await c.query('INSERT INTO pf_preparation_events(id,project_id,session_id,actor_id,login_id,revision,before_state,after_state,reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)', [randomUUID(), row.project_id, row.id, who.userId, who.loginId, revision, row.state, state, reason]);
+  await c.query('INSERT INTO pf_preparation_events(id,project_id,session_id,actor_id,login_id,revision,before_state,after_state,reason,grant_provenance) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)', [randomUUID(), row.project_id, row.id, who.userId, who.loginId, revision, row.state, state, reason, isGrantPrincipal(who)?grantProvenance(who):null]);
   row.state = state; row.revision = revision; row.updated_at = new Date(); row.failure = failure;
 }
-async function priorCommand(c: PoolClient, projectId: string, who: JobPrincipal, key: string, kind: string, sha: string) {
+async function priorCommand(c: PoolClient, projectId: string, who: OperationPrincipal, key: string, kind: string, sha: string) {
   const row = (await c.query<{ kind: string; request_sha256: string; receipt: unknown }>('SELECT kind,request_sha256,receipt FROM pf_preparation_commands WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3', [projectId, who.userId, key])).rows[0];
   if (row && (row.kind !== kind || row.request_sha256 !== sha)) return fail('IDEMPOTENCY_CONFLICT'); return row?.receipt;
 }
-async function commandReceipt(c: PoolClient, projectId: string, who: JobPrincipal, key: string, kind: string, sha: string, receipt: unknown) { await c.query('INSERT INTO pf_preparation_commands(project_id,actor_id,idempotency_key,kind,request_sha256,receipt) VALUES($1,$2,$3,$4,$5,$6)', [projectId, who.userId, key, kind, sha, receipt]); }
-async function current(c: PoolClient, row: SessionRow, who: JobPrincipal): Promise<boolean> {
+async function commandReceipt(c: PoolClient, projectId: string, who: OperationPrincipal, key: string, kind: string, sha: string, receipt: unknown) { await c.query('INSERT INTO pf_preparation_commands(project_id,actor_id,idempotency_key,kind,request_sha256,receipt) VALUES($1,$2,$3,$4,$5,$6)', [projectId, who.userId, key, kind, sha, receipt]); }
+async function current(c: PoolClient, row: SessionRow, who: OperationPrincipal): Promise<boolean> {
+  requireSessionProducer(row,who);
   let context;
   try { context = await readPreparationContext(c, row.project_id); }
   catch (error) { if (error instanceof PathFinderError && ['MODEL_UNAVAILABLE', 'PREPARATION_REGISTRY_REQUIRED'].includes(error.code)) { if (!terminal.has(row.state)) await transition(c, row, who, 'stale', 'active-scope-unavailable'); return false; } throw error; }
@@ -112,32 +120,33 @@ export type PreparationValidation = z.infer<typeof validationSchema>;
 export type PreparationAdapters = {
   validatePart?: (plan: PreparationPlan, part: PreparationPlan['partPlan'][number], payload: ComputationalSnapshot) => ComputationalSnapshot;
   validateUnion: (plan: PreparationPlan, parts: { partId: string; payload: ComputationalSnapshot }[], signal: AbortSignal) => Promise<PreparationValidation>;
-  publish: (client: PoolClient, input: { session: PreparationSession; plan: PreparationPlan; aggregateId: string; geometryRevision: string; validation: PreparationValidation; principal: JobPrincipal }) => Promise<{ artifactId: string; registryRevision: string }>;
+  publish: (client: PoolClient, input: { session: PreparationSession; plan: PreparationPlan; aggregateId: string; geometryRevision: string; validation: PreparationValidation; principal: OperationPrincipal }) => Promise<{ artifactId: string; registryRevision: string }>;
 };
 
 export function createPreparationService(pool: Pool, adapters: PreparationAdapters) {
   const running = new Map<string, AbortController>();
-  const guarded = async <T>(projectId: string, who: JobPrincipal, id: string, operation: (c: PoolClient, row: SessionRow) => Promise<T>) => {
+  const guarded = async <T>(projectId: string, who: OperationPrincipal, id: string, operation: (c: PoolClient, row: SessionRow) => Promise<T>) => {
     const result = await preparationTransaction(pool, projectId, who, async c => { const row = await sessionRow(c, projectId, id); if (!await current(c, row, who)) return { stale: true as const }; return { value: await operation(c, row), stale: false as const }; });
     if (result.stale) return fail('PREPARATION_SCOPE_STALE'); return result.value;
   };
   return {
-    context: (projectId: string, who: JobPrincipal) => preparationTransaction(pool, projectId, who, c => readPreparationContext(c, projectId)),
-    index: (projectId: string, who: JobPrincipal) => preparationTransaction(pool, projectId, who, async c => preparationIndexSchema.parse({ schemaVersion: 'wfc.pf.preparation-index.v1', sessions: (await c.query(`SELECT s.id,s.state,s.revision::text AS "sessionRevision",s.created_at AS "createdAt",x.idempotency_key AS "idempotencyKey" FROM pf_preparation_sessions s JOIN pf_preparation_commands x ON x.project_id=s.project_id AND x.kind='create' AND x.receipt->>'sessionId'=s.id::text WHERE s.project_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 20`, [projectId])).rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) })),
-    get: (projectId: string, who: JobPrincipal, id: string) => preparationTransaction(pool, projectId, who, async c => sessionView(c, await sessionRow(c, projectId, id))),
-    async create(projectId: string, who: JobPrincipal, raw: unknown) {
+    context: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, c => readPreparationContext(c, projectId)),
+    index: (projectId: string, who: OperationPrincipal) => preparationTransaction(pool, projectId, who, async c => preparationIndexSchema.parse({ schemaVersion: 'wfc.pf.preparation-index.v1', sessions: (await c.query(`SELECT s.id,s.state,s.revision::text AS "sessionRevision",s.created_at AS "createdAt",x.idempotency_key AS "idempotencyKey" FROM pf_preparation_sessions s JOIN pf_preparation_commands x ON x.project_id=s.project_id AND x.kind='create' AND x.receipt->>'sessionId'=s.id::text WHERE s.project_id=$1 ORDER BY s.created_at DESC,s.id DESC LIMIT 20`, [projectId])).rows.map(r => ({ ...r, createdAt: new Date(r.createdAt).toISOString() })) })),
+    get: (projectId: string, who: OperationPrincipal, id: string) => preparationTransaction(pool, projectId, who, async c => sessionView(c, await sessionRow(c, projectId, id))),
+    async create(projectId: string, who: OperationPrincipal, raw: unknown) {
       const input = preparationCreateSchema.parse(raw), sha = preparationDigest(input);
       return preparationTransaction(pool, projectId, who, async c => {
         const replay = await priorCommand(c, projectId, who, input.idempotencyKey, 'create', sha) as { sessionId: string } | undefined;
         if (replay) return sessionView(c, await sessionRow(c, projectId, replay.sessionId));
         if (Number((await c.query<{ count: string }>('SELECT count(*)::text FROM pf_preparation_sessions WHERE project_id=$1', [projectId])).rows[0].count) >= 128) return fail('PREPARATION_SESSION_RETENTION_LIMIT', 413);
         const context = await readPreparationContext(c, projectId), plan = buildPreparationPlan(context, input);
-        await c.query("INSERT INTO pf_preparation_sessions(id,project_id,plan,state,actor_id,login_id) VALUES($1,$2,$3,'planned',$4,$5)", [plan.id, projectId, plan, who.userId, who.loginId]);
+        await c.query("INSERT INTO pf_preparation_sessions(id,project_id,plan,state,actor_id,login_id,grant_provenance) VALUES($1,$2,$3,'planned',$4,$5,$6)", [plan.id, projectId, plan, who.userId, who.loginId ?? null, isGrantPrincipal(who)?grantProvenance(who):null]);
         await commandReceipt(c, projectId, who, input.idempotencyKey, 'create', sha, { sessionId: plan.id });
         return sessionView(c, await sessionRow(c, projectId, plan.id));
       });
     },
-    async resolve(projectId: string, who: JobPrincipal, raw: unknown) {
+    async resolve(projectId: string, who: OperationPrincipal, raw: unknown) {
+      requireHumanPrincipal(who);
       const input = preparationResolutionWriteSchema.parse(raw), sha = preparationDigest(input);
       return preparationTransaction(pool, projectId, who, async c => {
         const replay = await priorCommand(c, projectId, who, input.idempotencyKey, 'resolve', sha); if (replay) return preparationResolutionReceiptSchema.parse({ ...replay as object, duplicate: true });
@@ -152,11 +161,11 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const receipt = preparationResolutionReceiptSchema.parse({ schemaVersion: 'wfc.pf.preparation-resolution-receipt.v1', resolutionRevision: revision, resolution, duplicate: false }); await commandReceipt(c, projectId, who, input.idempotencyKey, 'resolve', sha, receipt); return receipt;
       });
     },
-    async upload(projectId: string, who: JobPrincipal, id: string, partId: string, planSha: string, raw: unknown) {
+    async upload(projectId: string, who: OperationPrincipal, id: string, partId: string, planSha: string, raw: unknown) {
       policyUuidSchema.parse(partId);
       // Stage outside SQL; immutable orphan files remain owned and can be reconciled after uncertainty.
       const admission = await preparationTransaction(pool, projectId, who, async c => {
-        const row = await sessionRow(c, projectId, id);
+        const row = await sessionRow(c, projectId, id); requireSessionProducer(row,who);
         const part = row.plan.partPlan.find(p => p.partId === partId); if (!part || row.plan.orderedPlanSha256 !== planSha) return fail('PREPARATION_PART_SCOPE');
         const prior = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_preparation_parts WHERE session_id=$1 AND part_id=$2', [id, partId])).rows[0];
         // Historical exact replay proves only this immutable receipt, not currentness.
@@ -165,7 +174,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
           const receipt = preparationPartSchema.parse(prior.receipt), parsed = snapshotSchema.parse(raw), bytes = encodePreparationPayload(parsed);
           if (receipt.payloadBytes !== bytes.length || receipt.payloadSha256 !== preparationDigest(parsed)) return fail('PART_IDENTITY_CONFLICT');
           await readPreparationBlob(projectId, id, partBlob(receipt));
-          return { replay: preparationPartReceiptSchema.parse({ schemaVersion: 'wfc.pf.preparation-part-receipt.v1', part: receipt, sessionRevision: row.revision, duplicate: true }) };
+          return { replay: partReceipt(receipt,row.revision,true) };
         }
         if (!await current(c, row, who)) return { stale: true as const };
         if (!prior && !['planned', 'collecting'].includes(row.state)) return fail('PREPARATION_STATE_CONFLICT');
@@ -184,22 +193,22 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
       const blob = await storePreparationBlob(projectId, id, partId, admitted.payload);
       return guarded(projectId, who, id, async (c, row) => {
         const prior = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_preparation_parts WHERE session_id=$1 AND part_id=$2', [id, partId])).rows[0];
-        if (prior) { const part = preparationPartSchema.parse(prior.receipt); if (part.payloadSha256 !== blob.sha256 || part.payloadBytes !== blob.bytes) return fail('PART_IDENTITY_CONFLICT'); await readPreparationBlob(projectId, id, partBlob(part)); return preparationPartReceiptSchema.parse({ schemaVersion: 'wfc.pf.preparation-part-receipt.v1', part, sessionRevision: row.revision, duplicate: true }); }
+        if (prior) { const part = preparationPartSchema.parse(prior.receipt); if (part.payloadSha256 !== blob.sha256 || part.payloadBytes !== blob.bytes) return fail('PART_IDENTITY_CONFLICT'); await readPreparationBlob(projectId, id, partBlob(part)); return partReceipt(part,row.revision,true); }
         if (!['planned', 'collecting'].includes(row.state)) return fail('PREPARATION_STATE_CONFLICT');
         if ((await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0) + blob.bytes > PREPARATION_LIMITS.validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
         const payload = admitted.payload, counts = { objects: payload.objects.length, physicalLeaves: payload.objects.filter(o => o.geometryRole === 'routing-leaf').length, fragments: 0, vertices: 0, triangles: 0 };
         for (const object of payload.objects) for (const fragment of object.fragments) { counts.fragments++; counts.vertices += fragment.vertices.length; counts.triangles += fragment.triangleIndices.length / 3; }
-        const part = preparationPartSchema.parse({ schemaVersion: 'wfc.pf.preparation-part.v1', sessionId: id, partId, partIndex: admitted.part.partIndex, sessionPlanSha256: row.plan.orderedPlanSha256, modelVersionId: row.plan.modelVersionId, contentFingerprint: row.plan.contentFingerprint, coordinateFrameId: row.plan.coordinateFrameId, scopeSha256: admitted.part.scopeSha256, payloadEncoding: 'pathfinder.model.snapshot.v1-json-utf8', payloadRef: blob.payloadRef, payloadSha256: blob.sha256, payloadBytes: blob.bytes, counts, coverage: { partScopeComplete: true, missingObjectIds: [], ambiguousObjectIds: [] }, producer: { level: 'A', adapterVersion: payload.capture.adapterVersion, sourceKind: payload.capture.sourceKind }, completedAt: new Date().toISOString() });
+        const part = preparationPartSchema.parse({ schemaVersion: isGrantPrincipal(who)?'wfc.pf.preparation-part.v2':'wfc.pf.preparation-part.v1', sessionId: id, partId, partIndex: admitted.part.partIndex, sessionPlanSha256: row.plan.orderedPlanSha256, modelVersionId: row.plan.modelVersionId, contentFingerprint: row.plan.contentFingerprint, coordinateFrameId: row.plan.coordinateFrameId, scopeSha256: admitted.part.scopeSha256, payloadEncoding: 'pathfinder.model.snapshot.v1-json-utf8', payloadRef: blob.payloadRef, payloadSha256: blob.sha256, payloadBytes: blob.bytes, counts, coverage: { partScopeComplete: true, missingObjectIds: [], ambiguousObjectIds: [] }, producer: { level: isGrantPrincipal(who)?'B':'A', adapterVersion: payload.capture.adapterVersion, sourceKind: payload.capture.sourceKind, ...(isGrantPrincipal(who)?{grant:grantProvenance(who)}:{}) }, completedAt: new Date().toISOString() });
         await c.query('INSERT INTO pf_preparation_parts(project_id,session_id,part_id,part_index,receipt) VALUES($1,$2,$3,$4,$5)', [projectId, id, partId, part.partIndex, part]); await transition(c, row, who, 'collecting', 'part-committed');
-        return preparationPartReceiptSchema.parse({ schemaVersion: 'wfc.pf.preparation-part-receipt.v1', part, sessionRevision: row.revision, duplicate: false });
+        return partReceipt(part,row.revision,false);
       });
     },
-    async cancel(projectId: string, who: JobPrincipal, id: string, raw: unknown) {
+    async cancel(projectId: string, who: OperationPrincipal, id: string, raw: unknown) {
       const command = preparationMutationSchema.parse(raw), sha = preparationDigest({ id, command });
-      const result = await preparationTransaction(pool, projectId, who, async c => { const replay = await priorCommand(c, projectId, who, command.idempotencyKey, 'cancel', sha); if (replay) return preparationSessionSchema.parse(replay); const row = await sessionRow(c, projectId, id); if (terminal.has(row.state) || row.revision !== command.expectedSessionRevision) return fail('PREPARATION_STATE_CONFLICT'); await transition(c, row, who, 'cancelled', command.reason); await c.query('UPDATE pf_preparation_sessions SET validation_token=NULL WHERE id=$1', [id]); const receipt = await sessionView(c, row); await commandReceipt(c, projectId, who, command.idempotencyKey, 'cancel', sha, receipt); return receipt; });
+      const result = await preparationTransaction(pool, projectId, who, async c => { const replay = await priorCommand(c, projectId, who, command.idempotencyKey, 'cancel', sha); if (replay) return preparationSessionSchema.parse(replay); const row = await sessionRow(c, projectId, id); requireSessionProducer(row,who); if (terminal.has(row.state) || row.revision !== command.expectedSessionRevision) return fail('PREPARATION_STATE_CONFLICT'); await transition(c, row, who, 'cancelled', command.reason); await c.query('UPDATE pf_preparation_sessions SET validation_token=NULL WHERE id=$1', [id]); const receipt = await sessionView(c, row); await commandReceipt(c, projectId, who, command.idempotencyKey, 'cancel', sha, receipt); return receipt; });
       running.get(id)?.abort(); return result;
     },
-    async publish(projectId: string, who: JobPrincipal, id: string, raw: unknown) {
+    async publish(projectId: string, who: OperationPrincipal, id: string, raw: unknown) {
       const command = preparationMutationSchema.parse(raw), sha = preparationDigest({ id, command });
       const admitted = await preparationTransaction(pool, projectId, who, async c => {
         const replay = await priorCommand(c, projectId, who, command.idempotencyKey, 'publish', sha); if (replay) return { replay: preparationPublicationSchema.parse({ ...replay as object, duplicate: true }) };
@@ -211,8 +220,8 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         if (session.parts.reduce((sum, part) => sum + part.payloadBytes, 0) > PREPARATION_LIMITS.validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
         const token = randomUUID(); await transition(c, row, who, 'validating', retry ? 'validation-recovery' : command.reason);
         const expiresAt = new Date(Date.now() + PREPARATION_LIMITS.validationMilliseconds + 10000);
-        await c.query('UPDATE pf_preparation_sessions SET validation_token=$2,validation_key=$3,validation_sha256=$4,validation_expires_at=$5,validation_command=$6,validation_actor_id=$7,validation_login_id=$8 WHERE id=$1', [id, token, command.idempotencyKey, sha, expiresAt, command, who.userId, who.loginId]);
-        Object.assign(row, { validation_token: token, validation_key: command.idempotencyKey, validation_sha256: sha, validation_expires_at: expiresAt, validation_command: command, validation_actor_id: who.userId, validation_login_id: who.loginId });
+        await c.query('UPDATE pf_preparation_sessions SET validation_token=$2,validation_key=$3,validation_sha256=$4,validation_expires_at=$5,validation_command=$6,validation_actor_id=$7,validation_login_id=$8,validation_grant_provenance=$9 WHERE id=$1', [id, token, command.idempotencyKey, sha, expiresAt, command, who.userId, who.loginId ?? null, isGrantPrincipal(who)?grantProvenance(who):null]);
+        Object.assign(row, { validation_token: token, validation_key: command.idempotencyKey, validation_sha256: sha, validation_expires_at: expiresAt, validation_command: command, validation_actor_id: who.userId, validation_login_id: who.loginId ?? null, validation_grant_provenance: isGrantPrincipal(who)?grantProvenance(who):null });
         return { session: await sessionView(c, row), token };
       });
       if ('replay' in admitted && admitted.replay) return admitted.replay;
@@ -234,10 +243,10 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
           const state = await readPreparationState(c, projectId), geometryRevision = nextRevision(state.geometry_revision), aggregateId = randomUUID();
           const publication = await adapters.publish(c, { session: frozen, plan: frozen.plan, aggregateId, geometryRevision, validation, principal: who }); policyUuidSchema.parse(publication.artifactId); policyRevisionSchema.parse(publication.registryRevision);
           const p = frozen.plan;
-          const aggregate: PreparationAggregate = preparationAggregateSchema.parse({ modelVersionId: p.modelVersionId, contentFingerprint: p.contentFingerprint, selectionRevision: p.selectionRevision, catalogRevision: p.catalogRevision, routingContentSha256: p.routingContentSha256, routingPolicyRevision: p.routingPolicyRevision, routingPolicySha256: p.routingPolicySha256, resolutionRevision: p.resolutionRevision, schemaVersion: 'wfc.pf.geometry-aggregate.v1', id: aggregateId, projectId, sessionId: id, artifactId: publication.artifactId, geometryRevision, sourceLocationRegistryRevision: p.locationRegistryRevision, locationRegistryRevision: publication.registryRevision, coordinateFrameId: p.coordinateFrameId, orderedPlanSha256: p.orderedPlanSha256, orderedScopeSha256: p.requestedScope.scopeSha256, partReferences: frozen.parts.map(p => ({ partId: p.partId, partIndex: p.partIndex, payloadSha256: p.payloadSha256 })), projection: validation.projection, traceIndex: validation.traceIndex, counts: validation.counts, requestedScopeComplete: true, wholePlantGeometry: false, engineVersion: validation.engineVersion, rulesVersion: validation.rulesVersion, diagnostics: validation.diagnostics, engineeringAccepted: false, nativeParity: 'not-performed', publishedAt: new Date().toISOString() });
+          const aggregate: PreparationAggregate = preparationAggregateSchema.parse({ modelVersionId: p.modelVersionId, contentFingerprint: p.contentFingerprint, selectionRevision: p.selectionRevision, catalogRevision: p.catalogRevision, routingContentSha256: p.routingContentSha256, routingPolicyRevision: p.routingPolicyRevision, routingPolicySha256: p.routingPolicySha256, resolutionRevision: p.resolutionRevision, schemaVersion: isGrantPrincipal(who)?'wfc.pf.geometry-aggregate.v2':'wfc.pf.geometry-aggregate.v1', ...(isGrantPrincipal(who)?{producerGrant:grantProvenance(who)}:{}), id: aggregateId, projectId, sessionId: id, artifactId: publication.artifactId, geometryRevision, sourceLocationRegistryRevision: p.locationRegistryRevision, locationRegistryRevision: publication.registryRevision, coordinateFrameId: p.coordinateFrameId, orderedPlanSha256: p.orderedPlanSha256, orderedScopeSha256: p.requestedScope.scopeSha256, partReferences: frozen.parts.map(p => ({ partId: p.partId, partIndex: p.partIndex, payloadSha256: p.payloadSha256 })), projection: validation.projection, traceIndex: validation.traceIndex, counts: validation.counts, requestedScopeComplete: true, wholePlantGeometry: false, engineVersion: validation.engineVersion, rulesVersion: validation.rulesVersion, diagnostics: validation.diagnostics, engineeringAccepted: false, nativeParity: 'not-performed', publishedAt: new Date().toISOString() });
           await c.query('INSERT INTO pf_preparation_aggregates(id,project_id,session_id,model_version_id,geometry_revision,artifact_id,registry_revision,manifest) VALUES($1,$2,$3,$4,$5,$6,$7,$8)', [aggregateId, projectId, id, frozen.plan.modelVersionId, geometryRevision, publication.artifactId, publication.registryRevision, aggregate]);
           await c.query('UPDATE pf_project_preparations SET geometry_revision=$2,current_aggregate_id=$3,current_artifact_id=$4 WHERE project_id=$1', [projectId, geometryRevision, aggregateId, publication.artifactId]); await transition(c, row, who, 'published', 'aggregate-published'); await c.query('UPDATE pf_preparation_sessions SET published_aggregate_id=$2,validation_token=NULL WHERE id=$1', [id, aggregateId]);
-          const receipt = preparationPublicationSchema.parse({ schemaVersion: 'wfc.pf.preparation-publication.v1', sessionId: id, aggregate, duplicate: false }); await commandReceipt(c, projectId, who, command.idempotencyKey, 'publish', sha, receipt); return receipt;
+          const receipt = preparationPublicationSchema.parse({ schemaVersion: aggregate.schemaVersion==='wfc.pf.geometry-aggregate.v2'?'wfc.pf.preparation-publication.v2':'wfc.pf.preparation-publication.v1', sessionId: id, aggregate, duplicate: false }); await commandReceipt(c, projectId, who, command.idempotencyKey, 'publish', sha, receipt); return receipt;
         }, controller.signal);
       } catch (error) {
         // A failed final COMMIT acknowledgement is not evidence of rollback. Reconcile

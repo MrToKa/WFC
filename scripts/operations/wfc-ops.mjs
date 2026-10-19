@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createDocker,environment,publicContainer,dataMount,imageId,writePrivateJson } from './docker.mjs';
 import { assertCanonicalPath } from './archives.mjs';
 import { FORMAT,writeJsonNew,recordFile,completeBackup,verifyBackup,assertFreshTarget,newTargetMarker,readTarget,verifyImageArchive } from './manifest.mjs';
+import { validateRestoreFencing } from './restore-fencing.mjs';
 
 export class OperationsError extends Error {constructor(code){super(code);this.code=code;}}
 const fail=code=>{throw new OperationsError(code);};
@@ -17,7 +18,7 @@ const privateEnv=config=>[...environment(config)].map(([key,value])=>key+'='+val
 const safeJSON=value=>JSON.parse(JSON.stringify(value));
 export async function bundleOperatorModules(directory){
   const sourceRoot=path.dirname(fileURLToPath(import.meta.url)),records=[];
-  for(const name of ['wfc-ops.mjs','docker.mjs','manifest.mjs','archives.mjs']){const source=path.join(sourceRoot,name);await assertCanonicalPath(source);const before=await recordFile(sourceRoot,name,'source');await fs.copyFile(source,path.join(directory,name),1);const copied=await recordFile(directory,name,'source'),after=await recordFile(sourceRoot,name,'source');if(copied.sha256!==before.sha256||copied.bytes!==before.bytes||after.sha256!==before.sha256||after.bytes!==before.bytes)fail('OPERATOR_SOURCE_CHANGED');records.push(copied);}
+  for(const name of ['wfc-ops.mjs','docker.mjs','manifest.mjs','archives.mjs','restore-fencing.mjs']){const source=path.join(sourceRoot,name);await assertCanonicalPath(source);const before=await recordFile(sourceRoot,name,'source');await fs.copyFile(source,path.join(directory,name),1);const copied=await recordFile(directory,name,'source'),after=await recordFile(sourceRoot,name,'source');if(copied.sha256!==before.sha256||copied.bytes!==before.bytes||after.sha256!==before.sha256||after.bytes!==before.bytes)fail('OPERATOR_SOURCE_CHANGED');records.push(copied);}
   return records;
 }
 export function pathContained(parent,candidate){const normalize=value=>process.platform==='win32'?path.resolve(value).toLowerCase():path.resolve(value),relative=path.relative(normalize(parent),normalize(candidate));return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);}
@@ -184,7 +185,8 @@ export async function restore(options,{docker:provided}={}){
     if(inventory.businessSha256!==manifest.inventory.businessSha256||inventory.registrySha256!==manifest.inventory.registrySha256)fail('RESTORE_INVENTORY_MISMATCH');
     const fenced=await helper(docker,helperImage,apiPseudo,'fence-restored',{network:networkName,targetId:marker.targetId});await writeJsonNew(path.join(target,'session-fencing.json'),fenced);
     const audited=await helper(docker,helperImage,apiPseudo,'audit-models',{network:networkName,allowFailure:true});await writeJsonNew(path.join(target,'model-audit.json'),audited);if(audited.status!=='PASS')fail('RESTORE_MODEL_AUDIT_FAILED');
-    const after=await helper(docker,helperImage,apiPseudo,'inventory',{network:networkName});if(after.businessSha256!==manifest.inventory.businessSha256||after.registrySha256!==manifest.inventory.registrySha256)fail('RESTORE_IMMUTABLE_INVENTORY_CHANGED');
+    const after=await helper(docker,helperImage,apiPseudo,'inventory',{network:networkName});
+    const fencingValidation=validateRestoreFencing(inventory,after,fenced,marker.targetId);await writeJsonNew(path.join(target,'fencing-validation.json'),fencingValidation);
     await writeJsonNew(path.join(target,'inventory-after-fencing.json'),after);
     const recovery=await helper(docker,helperImage,apiPseudo,'recover',{network:networkName,mounts:[mount(volumeNames.staging,'/var/lib/wfc/model-imports',false,'volume')],targetId:marker.targetId});await writeJsonNew(path.join(target,'recovery-dry-run.json'),recovery);
     marker.state='verified-quarantine';await saveMarker();

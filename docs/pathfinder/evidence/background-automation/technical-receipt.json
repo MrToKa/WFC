@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "wfc.pf.r8-technical-receipt.v1",
+  "observedAt": "2026-10-19T12:22:12.275Z",
+  "status": "TECHNICALLY_VERIFIED_WITH_EXPLICIT_LIMITATIONS",
+  "parentRevision": "9d00ebb890202fdf993054c6769cf15f30068e76",
+  "branch": "pf-r8-background-automation-local-20261019",
+  "runtime": {
+    "sourcePort": 5191,
+    "sourceInventorySha256": "e248514ecead6477ec27274bfe95c87c92f00ee448dd08c4fc4adb8335779e76",
+    "apiImage": "sha256:2f510aebfa131cadaab3cb60f06e4e1c27fce28b7b35df5619e45e977a20fbd6",
+    "webImage": "sha256:8dffd4d40b5d95dab40706ffc8b82a4285287c2777ef72a451e202e95d7677d2",
+    "producerReady": true,
+    "managedHostBinding": 8,
+    "sourceRetained": true,
+    "restoreFixturePort": 5192,
+    "restoreFixtureRetired": true
+  },
+  "verification": {
+    "backendSource31": {
+      "passed": 2035,
+      "failed": 0,
+      "optionalNotRun": 5
+    },
+    "backgroundNode25": {
+      "passed": 177,
+      "failed": 0
+    },
+    "restoreSource37": {
+      "passed": 86,
+      "failed": 0
+    },
+    "qualificationSource39": {
+      "passed": 54,
+      "failed": 0
+    },
+    "restoredCheckboxSource40": {
+      "passed": 8,
+      "failed": 0
+    },
+    "finalLint": {
+      "status": "PASS",
+      "command": "npm run lint -- --no-cache",
+      "executionSession": 37566
+    },
+    "qualifiedBackup": {
+      "status": "PASS",
+      "tables": 122,
+      "archiveMembers": 8,
+      "images": 4,
+      "modelVersions": 5,
+      "modelResources": 1541,
+      "modelResourceBytes": 1930801055
+    },
+    "qualifiedRestore": {
+      "status": "PASS",
+      "tables": 122,
+      "authGroups": 2,
+      "qualifiedFencingTables": 3,
+      "producerEnvironmentValuesBlank": 7
+    },
+    "restoredAuth": {
+      "status": "PASS",
+      "sourceJwt": 401,
+      "sourceManagedHostKey": 401,
+      "freshAdmin": true,
+      "grantStatus": "restore-fenced"
+    },
+    "temporaryRouterActualPGRevocation": {
+      "status": "PASS",
+      "checks": 14,
+      "controlledQualificationAdapter": true,
+      "SDKHelperCreated": false,
+      "nginxBlobStreaming": false
+    },
+    "sourceFinalSnapshot": {
+      "status": "PASS",
+      "tablesExactSinceFinal1": 122,
+      "pfRootFilesExact": 201,
+      "pfRootBytes": 20116282
+    },
+    "preservation": {
+      "beforeTables": 116,
+      "afterTables": 122,
+      "beforeRows": 10710,
+      "afterRows": 10889,
+      "oldTableMultisetsExact": 81,
+      "defaultExtendedRows": 101,
+      "anchoredMutableRows": 12,
+      "anchoredNewRows": 179,
+      "removedRows": 0,
+      "structuralAnomalies": 0,
+      "businessReviewApplyTablesExact": 6
+    }
+  },
+  "limitations": [
+    "Measured producer qualification is a 13-object diagnostic converted capture and three queries, not complete-plant engineering acceptance.",
+    "No native oracle or human engineering acceptance was performed; no real-data Apply was performed.",
+    "Archived app candidate9 was fully restored; later candidate10 web-only overlay was separately verified. R10 must back up and restore the final complete delivery.",
+    "Restored UI unsaved checked draft and enabled Save were observed; final unsaved draft reset was not confirmed. No UI grant command was submitted.",
+    "35 generated rows have exact scope/hash/production-cause anchors but were not independently recomputed; 80 new historical PF_ROOT bodies were not independently read.",
+    "Original WFC reference externally advanced to 6a12d395aead8f644bd9649262168ca74f7a35fa; this was not merged. Human-acknowledged external container changes remain EXTERNAL_CHANGE, not unchanged preservation.",
+    "Initial temporary helpers failed before mutation due to absent import configuration; same retained intent was reconciled with a strict no-effects preflight before the successful control.",
+    "Host8 launch transport timed out; exact running PID/lifecycle/configuration was reconciled without relaunch."
+  ],
+  "privateArtifactPins": [
+    {
+      "privateArtifact": "r8-final-closeout1-result.private.json",
+      "bytes": 3793,
+      "sha256": "b26e05c37e3f988fdcabca91cdc9336af1158632467db7adb4577f6531ce7c1b"
+    },
+    {
+      "privateArtifact": "r8-final-preservation-analysis2.private.json",
+      "bytes": 392515,
+      "sha256": "07f846bb0fb96ab73fcddb3cf67fe2c097cf7e97e1e65bb777ac8c8cdc24bd3a"
+    },
+    {
+      "privateArtifact": "r8-qualified-checkpoint1-result.private.json",
+      "bytes": 53148,
+      "sha256": "e9a642a9a712fd167a6e0950fe220b69234df6a3538890247bae01b02f09b1ce"
+    },
+    {
+      "privateArtifact": "r8-qualified-restore1-result.private.json",
+      "bytes": 1820,
+      "sha256": "7be17ecc9f3f4c33ea3e4cc8ed1f2222fdb9863e51fa6b7dfd4efac802235b1e"
+    },
+    {
+      "privateArtifact": "r8-restore-auth2-result.private.json",
+      "bytes": 731,
+      "sha256": "a63c077556f2b174185e3b50706ca30edc3de6f313645b7438e52db7cd560e8d"
+    },
+    {
+      "privateArtifact": "r8-restore-web10-overlay1-result.private.json",
+      "bytes": 2627,
+      "sha256": "31b084790f4ab49ce851d37fae9df7b2f779e1522466e14982cd06abe600e8f0"
+    },
+    {
+      "privateArtifact": "r8-restore-resource-revocation3-result.private.json",
+      "bytes": 4074,
+      "sha256": "8216bf974ecd1f12dafee1dc12f82aab97f946fa99c0fd7b41da2da1b563e780"
+    },
+    {
+      "privateArtifact": "r8-retire-qualified5192-1-result.private.json",
+      "bytes": 330,
+      "sha256": "d66486de94273365e997c7f17f959108725828a0c9524547123f95c9084aac37"
+    },
+    {
+      "privateArtifact": "r8-host8-start-reconciliation2.private.json",
+      "bytes": 1354,
+      "sha256": "b6331159f437d607d044c0a04925fa3b8206d9bf8e66a56c8b3c3f46a45594d1"
+    },
+    {
+      "privateArtifact": "r8-closed-viewer-level-b-proof2-receipt.private.json",
+      "bytes": 9362,
+      "sha256": "91a8d4188c08045d8037760d485caf9a4fa958827e5f46d2a82ac50b355d89eb"
+    },
+    {
+      "privateArtifact": "r8-producer-qualification1-result.private.json",
+      "bytes": 268,
+      "sha256": "9190cfc6feff3e347c374801863a675dd84eb43e7e217caf432cea7439e93ed2"
+    }
+  ],
+  "originalOperationsPerformed": 0,
+  "published": false,
+  "merged": false,
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "realDataApplied": false
+}

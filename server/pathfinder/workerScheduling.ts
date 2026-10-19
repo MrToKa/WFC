@@ -21,10 +21,10 @@ export async function initializeWorkerScheduling(pool:Pool):Promise<void>{
 export async function claimCalculationSlice(pool:Pool):Promise<Row|null>{
   return transaction(pool,async c=>{
     const project=(await c.query<{project_id:string}>(`SELECT s.project_id FROM pf_engine_project_service s
-      WHERE EXISTS(SELECT 1 FROM pf_jobs j WHERE j.project_id=s.project_id AND (j.state='queued' OR j.state='running' AND j.lease_until<now()))
+      WHERE EXISTS(SELECT 1 FROM pf_jobs j WHERE j.project_id=s.project_id AND (j.state='queued' OR j.state='running' AND j.lease_until<now()) AND (j.not_before IS NULL OR j.not_before<=now()))
       ORDER BY s.last_served_at ASC NULLS FIRST,s.project_id FOR UPDATE OF s SKIP LOCKED LIMIT 1`)).rows[0];
     if(!project)return null;
-    const row=(await c.query<Row>(`SELECT * FROM pf_jobs WHERE project_id=$1 AND (state='queued' OR state='running' AND lease_until<now())
+    const row=(await c.query<Row>(`SELECT * FROM pf_jobs WHERE project_id=$1 AND (state='queued' OR state='running' AND lease_until<now()) AND (not_before IS NULL OR not_before<=now())
       ORDER BY last_served_at ASC NULLS FIRST,created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`,[project.project_id])).rows[0];
     await c.query('UPDATE pf_engine_project_service SET last_served_at=clock_timestamp() WHERE project_id=$1',[project.project_id]);
     if(!row)return null;

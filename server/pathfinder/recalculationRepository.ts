@@ -4,6 +4,8 @@ import { RECALCULATION_LIMITS, recalculationCommandSchema, recalculationContextS
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { JobPrincipal } from './jobContracts.js';
+import type { OperationPrincipal } from './operationAuthority.js';
+import { readGrantJobAuthority } from './grantJobAuthority.js';
 import { PathFinderError } from './errors.js';
 import { markRecalculationDirty } from './recalculationSchema.js';
 
@@ -73,12 +75,13 @@ async function context(c:PoolClient,projectId:string,who:JobPrincipal,s?:Row):Pr
 
 export type RecalculationClaim={projectId:string;generation:string;controlRevision:string;authorityEpoch:string;claimId:string;ownerToken:string;leaseExpiresAt:string;principal:JobPrincipal;preferences:RecalculationPreferences;timeoutMilliseconds:number};
 export type RecalculationJobAdmission={jobId:string|null;inputSha256:string;duplicate:boolean;readyCables:number;blockedCables:number;total:number;reasonCodes:string[]};
-export type RecalculationJobAdapter={createInTransaction(client:PoolClient,input:{projectId:string;principal:JobPrincipal;scope:'project';preferences:RecalculationPreferences;timeoutMilliseconds:number;signal:AbortSignal;beforeInsert():Promise<void>}):Promise<RecalculationJobAdmission>};
+export type RecalculationJobAdapter={createInTransaction(client:PoolClient,input:{projectId:string;principal:OperationPrincipal;scope:'project';preferences:RecalculationPreferences;timeoutMilliseconds:number;signal:AbortSignal;beforeInsert():Promise<void>}):Promise<RecalculationJobAdmission>};
 export type RecalculationEnrollmentResult={status:'enrolled'|'blocked'|'duplicate'|'superseded';generation:string;jobId:string|null};
 
 export type RecalculationJobAuthority={enrolled:false}|{enrolled:true;valid:boolean;code:string;generation:string;authorityEpoch:string};
 /** One bounded heartbeat read; `lock` is reserved for caller-owned dispatch/final transactions. */
 export async function readRecalculationJobAuthority(c:Pick<PoolClient,'query'>,input:{projectId:string;jobId:string;lock?:boolean}):Promise<RecalculationJobAuthority>{
+  const grantAuthority=await readGrantJobAuthority(c,input);if(grantAuthority)return grantAuthority;
   let lockedIdentity:{actor_id:string;login_id:string}|undefined,lockedAuthorityValid=true;
   if(input.lock){
     // A reviewer may be a different current administrator. Lock the ORIGINAL finite
@@ -123,6 +126,7 @@ export function createRecalculationRepository(pool:Pool,adapter:RecalculationJob
         const s=await state(c,projectId,true);
         const prior=(await c.query<Row>('SELECT request_sha256,receipt FROM pf_recalculation_commands WHERE project_id=$1 AND actor_id=$2 AND idempotency_key=$3',[projectId,who.userId,command.idempotencyKey])).rows[0];
         if(prior){if(prior.request_sha256!==requestSha256)return fail('RECALCULATION_IDEMPOTENCY_CONFLICT');return recalculationReceiptSchema.parse({...prior.receipt,duplicate:true});}
+        if(['enable','resume','retry'].includes(command.action)){const grant=(await c.query<{enabled:boolean}>(`SELECT (r.record->>'enabled')::boolean AS enabled FROM pf_calculation_grant_heads h JOIN pf_calculation_grant_revisions r ON r.project_id=h.project_id AND r.id=h.grant_id AND r.grant_revision=h.control_revision WHERE h.project_id=$1`,[projectId])).rows[0];if(grant?.enabled)return fail('CALCULATION_GRANT_DISABLE_REQUIRED');}
         if(s.control_revision!==command.expectedControlRevision)return fail('RECALCULATION_CONTROL_CONFLICT');
         const count=(await c.query<{count:string}>('SELECT count(*)::text AS count FROM pf_recalculation_commands WHERE project_id=$1',[projectId])).rows[0];if(BigInt(count.count)>=4096n)return fail('RECALCULATION_COMMAND_RETENTION_LIMIT',413);
         const live=await storedAuthority(c,s);

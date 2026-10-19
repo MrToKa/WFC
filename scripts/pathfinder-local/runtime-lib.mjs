@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { createDocker, command, jsonCommand, writePrivateJson } from '../operations/docker.mjs';
 import { assertCanonicalPath, hashFile } from '../operations/archives.mjs';
 import { verifyImageArchive } from '../operations/manifest.mjs';
+import { validateRestoreFencing, validateRestoredInventory } from '../operations/restore-fencing.mjs';
+import {createProducerProfile,assertProducerContainer} from '../pathfinder-background/container-profile.mjs';
+import { assertProducerEnvironment } from './producer-environment.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const DEFAULT_RUNTIME = path.join(ROOT, 'pathfinder-engine/.scratch/pathfinder-local');
@@ -55,6 +58,12 @@ const stateFile = state => path.join(state.runtime, 'runtime-state.json');
 export async function save(state) { validateState(state, state.runtime); await fs.writeFile(stateFile(state), JSON.stringify(state, null, 2) + '\n', { mode: 0o600 }); }
 function envText(state, settings) {
   const values = { PF_PROJECT: state.project, PF_OWNER: state.owner, PF_HTTP_PORT: state.port, PF_API_IMAGE: settings.apiImage ?? state.tags.api, PF_WEB_IMAGE: settings.webImage ?? state.tags.web, PF_POSTGRES_IMAGE: settings.postgresImage ?? 'postgres:18@sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751', PF_MINIO_IMAGE: settings.minioImage ?? 'minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e', PF_DATABASE_PASSWORD: settings.databasePassword, PF_STORAGE_PASSWORD: settings.storagePassword, PF_JWT_SECRET: settings.jwtSecret };
+  if(settings.producer){
+    const p=settings.producer;
+    if(!SHA.test(p.key??'')||p.owner!==state.owner||p.project!==state.project||!/^sha256:[a-f0-9]{64}$/.test(p.image??'')||!SHA.test(p.runtimeInventorySha256??'')||p.expectedSha256!==undefined&&!SHA.test(p.expectedSha256)||p.qualifyProject!==undefined&&!UUID.test(p.qualifyProject))fail('PF_PRODUCER_CONFIG_INVALID');
+    Object.assign(values,{PF_PRODUCER_CONTROL_KEY:p.key,PF_PRODUCER_OWNER:p.owner,PF_PRODUCER_PROJECT:p.project,PF_PRODUCER_IMAGE:p.image,PF_PRODUCER_RUNTIME_SHA256:p.runtimeInventorySha256,
+      ...(p.expectedSha256?{PF_PRODUCER_QUALIFICATION_SHA256:p.expectedSha256}:{}),...(p.qualifyProject?{PF_PRODUCER_QUALIFY_PROJECT:p.qualifyProject}:{})});
+  }
   if (Object.values(values).some(value => typeof value !== 'number' && (typeof value !== 'string' || !/^[A-Za-z0-9:/@._-]+$/.test(value)))) fail('PF_PRIVATE_CONFIG_INVALID');
   return Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n') + '\n';
 }
@@ -69,7 +78,15 @@ export async function readSettings(state) {
   const raw = await fs.readFile(path.join(state.runtime, 'runtime.env'), 'utf8'); if (digest(raw) !== state.envSha256) fail('PF_PRIVATE_ENV_CHANGED');
   const env = Object.fromEntries(raw.trim().split('\n').map(line => { const at = line.indexOf('='); return [line.slice(0, at), line.slice(at + 1)]; }));
   const settings = { databasePassword: env.PF_DATABASE_PASSWORD, storagePassword: env.PF_STORAGE_PASSWORD, jwtSecret: env.PF_JWT_SECRET, apiImage: env.PF_API_IMAGE, webImage: env.PF_WEB_IMAGE, postgresImage: env.PF_POSTGRES_IMAGE, minioImage: env.PF_MINIO_IMAGE };
+  if(env.PF_PRODUCER_CONTROL_KEY)settings.producer={key:env.PF_PRODUCER_CONTROL_KEY,owner:env.PF_PRODUCER_OWNER,project:env.PF_PRODUCER_PROJECT,image:env.PF_PRODUCER_IMAGE,runtimeInventorySha256:env.PF_PRODUCER_RUNTIME_SHA256,
+    ...(env.PF_PRODUCER_QUALIFICATION_SHA256?{expectedSha256:env.PF_PRODUCER_QUALIFICATION_SHA256}:{}),...(env.PF_PRODUCER_QUALIFY_PROJECT?{qualifyProject:env.PF_PRODUCER_QUALIFY_PROJECT}:{})};
   if (envText(state, settings) !== raw) fail('PF_PRIVATE_ENV_INVALID'); return settings;
+}
+/** Explicit local-only configuration; restores start with no host credential or qualification. */
+export async function configureManagedProducer(state,producer){
+  validateState(state,state.runtime);await configuration(state);await ownership(state);
+  const settings=await readSettings(state);await writeEnv(state,{...settings,producer:producer??undefined},{replace:true});await save(state);
+  return{configured:Boolean(producer),owner:state.owner,project:state.project};
 }
 export async function load(runtime = DEFAULT_RUNTIME) {
   const location = path.resolve(runtime); await assertCanonicalPath(location, { directory: true });
@@ -88,6 +105,7 @@ export async function init({ runtime = DEFAULT_RUNTIME, project = 'wfc-pathfinde
 }
 export const composeArgs = state => ['compose', '--env-file', path.join(state.runtime, 'runtime.env'), '--project-name', state.project, '--file', COMPOSE];
 export async function configuration(state) {
+  const settings = await readSettings(state);
   const value = JSON.parse((await command([...composeArgs(state), 'config', '--format', 'json'])).toString());
   if (value.name !== state.project || Object.keys(value.services).sort().join() !== [...ROLES].sort().join() || Object.keys(value.volumes).sort().join() !== [...VOLUMES].sort().join() || Object.keys(value.networks).sort().join() !== 'backend,front') fail('PF_COMPOSE_PROFILE_CHANGED');
   for (const [role, service] of Object.entries(value.services)) {
@@ -99,6 +117,7 @@ export async function configuration(state) {
   for (const [name, network] of Object.entries(value.networks)) if (network.external || !owned(network.labels, state) || network.name !== `${state.project}_${name}` || Boolean(network.internal) !== (name === 'backend')) fail('PF_COMPOSE_NETWORK_UNSAFE');
   for (const [name, volume] of Object.entries(value.volumes)) if (volume.external || !owned(volume.labels, state) || volume.name !== `${state.project}_${name}` || volume.driver_opts) fail('PF_COMPOSE_VOLUME_UNSAFE');
   const env = value.services.api.environment;
+  assertProducerEnvironment(env, settings.producer);
   if (!/^postgresql:\/\/pf_local:[a-f0-9]{64}@postgres:5432\/wfc_pathfinder_local$/.test(env.DATABASE_URL ?? '') || env.MINIO_ENDPOINT !== 'minio' || env.PF_ROOT !== '/var/lib/wfc/pathfinder' || env.PF_ENGINE_DLL !== '/opt/pathfinder/PathFinder.ModelRunner.dll') fail('PF_COMPOSE_ENDPOINT_UNSAFE');
   if (Number(value.services.api.mem_limit) !== 4 * 1024 ** 3 || value.services.api.pids_limit !== 256 || env.NODE_OPTIONS !== '--max-old-space-size=1536' || Number(value.services.postgres.mem_limit) !== 1024 ** 3 || Number(value.services.minio.mem_limit) !== 1024 ** 3 || Number(value.services.web.mem_limit) !== 256 * 1024 ** 2) fail('PF_RESOURCE_CEILINGS_CHANGED');
   return { status: 'PASS', project: state.project, origin: `http://127.0.0.1:${state.port}`, services: ROLES, volumes: VOLUMES, privateBackend: true, publishedPorts: [state.port] };
@@ -107,6 +126,13 @@ export async function ownership(state, { fresh = false } = {}) {
   const docker = await createDocker(), found = { containers: [], volumes: [], networks: [] }, settings = await readSettings(state);
   for (const item of await docker.containers()) {
     if (!claimsProject(item, state)) continue;
+    // A separately owned network-none helper is not a Compose service. Ignore
+    // it only after its complete immutable factory profile has been verified.
+    if(settings.producer&&item.Config?.Labels?.['wfc.pathfinder.role']==='managed-producer'&&!item.Config.Labels['com.docker.compose.project']){
+      const seccompBytes=await fs.readFile(path.join(ROOT,'docker/pathfinder-producer/seccomp-default.json')),
+        profile=createProducerProfile({owner:state.owner,project:state.project,attemptId:item.Config.Labels['wfc.pathfinder.producer.attempt'],image:settings.producer.image,mode:'run',defaultSeccompBytes:seccompBytes,defaultSeccompSha256:'6416b47770785a41ac59073cdc77d9fe98517df2799dc83ef207e622de3053f6'});
+      assertProducerContainer(profile,item);continue;
+    }
     if (!owned(item.Config.Labels, state) || !ROLES.includes(item.Config.Labels['com.docker.compose.service']) || item.Config.Labels['com.docker.compose.project'] !== state.project) fail('PF_FOREIGN_CONTAINER_REFUSED');
     const role = item.Config.Labels['com.docker.compose.service'];
     if (item.Name !== `/${state.project}-${role}-1` || found.containers.some(value => value.role === role)) fail('PF_CONTAINER_IDENTITY_REFUSED');
@@ -115,6 +141,7 @@ export async function ownership(state, { fresh = false } = {}) {
     const expectedMounts = { postgres: [['postgres', '/var/lib/postgresql']], minio: [['minio', '/data']], api: [['staging', '/var/lib/wfc/model-imports'], ['pathfinder', '/var/lib/wfc/pathfinder']], web: [], 'storage-ready': [] }[role];
     if (item.Mounts.length !== expectedMounts.length || expectedMounts.some(([name, destination]) => !item.Mounts.some(value => value.Name === state.project + '_' + name && value.Destination === destination && value.RW))) fail('PF_MOUNT_BINDING_CHANGED');
     const env = Object.fromEntries(item.Config.Env.map(value => { const at = value.indexOf('='); return [value.slice(0, at), value.slice(at + 1)]; }));
+    if (role === 'api') assertProducerEnvironment(item.Config.Env, settings.producer);
     if (role === 'api' && (env.DATABASE_URL !== `postgresql://pf_local:${settings.databasePassword}@postgres:5432/wfc_pathfinder_local` || env.MINIO_ENDPOINT !== 'minio' || env.MINIO_SECRET_KEY !== settings.storagePassword || env.PF_ROOT !== '/var/lib/wfc/pathfinder')) fail('PF_ENDPOINT_BINDING_CHANGED');
     const ports = Object.values(item.HostConfig.PortBindings ?? {}).flat();
     if (role === 'web' ? ports.length !== 1 || ports[0].HostIp !== '127.0.0.1' || Number(ports[0].HostPort) !== state.port : ports.length !== 0) fail('PF_CONTAINER_PORT_CHANGED');
@@ -184,8 +211,24 @@ export async function stop(state) {
   state.resources = await ownership(state); state.status = 'stopped'; await save(state); return { status: 'PASS', retainedVolumes: state.resources.volumes, containersStopped: state.resources.containers.every(item => !item.running) };
 }
 export async function info(state) { return { status: 'PASS', project: state.project, owner: state.owner, origin: `http://127.0.0.1:${state.port}`, runtime: state.runtime, state: state.status, resources: await ownership(state) }; }
+export function validateRuntimeRestoreFencingRecord(state, raw) {
+  validateState(state, state.runtime);
+  if (!Buffer.isBuffer(raw) || raw.length > 65 * 1024 ** 2 || !SHA.test(state.restore?.fencingRecordSha256 ?? '') || digest(raw) !== state.restore.fencingRecordSha256) fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED');
+  let record; try { record = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)); } catch { fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED'); }
+  if (record?.format !== 'WFC-PF-RESTORE-FENCING' || record.schemaVersion !== 1 || record.owner !== state.owner || record.project !== state.project || record.runtime !== state.runtime || record.port !== state.port || record.backupId !== state.restore.backupId) fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED');
+  const validation = validateRestoreFencing(record.beforeInventory, record.afterInventory, record.receipt, state.owner);
+  if (canonical(validation) !== canonical(record.validation) || canonical(validation) !== canonical(state.restore.fencingValidation)) fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED');
+  return validation;
+}
 export async function retire(state) {
-  if (state.project === 'wfc-pathfinder-local' || !state.restore?.inventoriesEqual || state.status === 'failed-quarantine') fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED');
+  if (state.project === 'wfc-pathfinder-local' || Number(state.port) === 5191 || state.status === 'failed-quarantine' || !state.restore?.inventoriesEqual && state.restore?.fencingValidated !== true) fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED');
+  if (state.restore.fencingValidated === true) {
+    try {
+      validateState(state, state.runtime); const filename = await assertCanonicalPath(path.join(state.runtime, 'restore-fencing.json'));
+      if ((await fs.stat(filename)).size > 65 * 1024 ** 2) fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED');
+      validateRuntimeRestoreFencingRecord(state, await fs.readFile(filename));
+    } catch { fail('PF_VERIFIED_RESTORE_FIXTURE_REQUIRED'); }
+  }
   await stop(state); const resources = await ownership(state), docker = await createDocker();
   if (resources.containers.some(item => item.running)) fail('PF_RETIRE_RUNNING_REFUSED');
   for (const item of resources.containers) {
@@ -329,7 +372,7 @@ export async function restore({ backup: source, privateConfig, runtime, port = 5
   const token = randomBytes(6).toString('hex'), state = await init({ runtime: runtime ?? path.join(ROOT, 'pathfinder-engine/.scratch/pathfinder-local-restore-' + token), project: 'wfc-pathfinder-local-' + token, port });
   await ownership(state, { fresh: true }); await freePort(state.port); state.images = Object.fromEntries(manifest.images.filter(item => ['api', 'web'].includes(item.role)).map(item => [item.role, item.id]));
   for (const image of manifest.images) { try { await jsonCommand(['image', 'inspect', image.id]); } catch { await command(['image', 'load', '--input', path.join(verified.directory, image.archive)]); } }
-  const settings = { ...config.settings, jwtSecret: randomBytes(64).toString('hex'), apiImage: state.images.api, webImage: state.images.web, postgresImage: manifest.images.find(item => item.role === 'postgres').id, minioImage: manifest.images.find(item => item.role === 'minio').id };
+  const settings = { ...config.settings, producer:undefined, jwtSecret: randomBytes(64).toString('hex'), apiImage: state.images.api, webImage: state.images.web, postgresImage: manifest.images.find(item => item.role === 'postgres').id, minioImage: manifest.images.find(item => item.role === 'minio').id };
   await writeEnv(state, settings, { replace: true }); state.status = 'quarantine'; await save(state); await configuration(state);
   await command([...composeArgs(state), 'create', '--no-build', '--pull', 'never', 'postgres', 'minio', 'storage-ready'], { maxBytes: 1024 ** 2 });
   // Compose creates only referenced volumes here; explicitly create the two application volumes with the same ownership labels.
@@ -343,11 +386,17 @@ export async function restore({ backup: source, privateConfig, runtime, port = 5
     await command(['exec', '-i', pg.id, 'pg_restore', '--exit-on-error', '--no-owner', '--no-acl', '-U', 'pf_local', '-d', 'wfc_pathfinder_local'], { input: path.join(verified.directory, 'database.dump') });
     await waitStorage(state); await operation(state, 'audit-models', settings);
     const inventory = await operation(state, 'inventory', settings), artifacts = await artifactAudit(state);
+    validateRestoredInventory(manifest.inventory, inventory);
     if (inventory.businessSha256 !== manifest.inventory.businessSha256 || inventory.registrySha256 !== manifest.inventory.registrySha256 || artifacts.sha256 !== manifest.artifacts.sha256) fail('PF_RESTORE_DATA_MISMATCH');
-    await operation(state, 'fence-restored', settings); const after = await operation(state, 'inventory', settings); if (after.businessSha256 !== manifest.inventory.businessSha256 || after.registrySha256 !== manifest.inventory.registrySha256) fail('PF_RESTORE_FENCING_CHANGED_BUSINESS');
+    const fenced = await operation(state, 'fence-restored', settings), after = await operation(state, 'inventory', settings);
+    const fencingValidation = validateRestoreFencing(inventory, after, fenced, state.owner);
+    const fencingRecord = JSON.stringify({ format: 'WFC-PF-RESTORE-FENCING', schemaVersion: 1, owner: state.owner, project: state.project, runtime: state.runtime, port: state.port, backupId: manifest.backupId,
+      beforeInventory: inventory, afterInventory: after, receipt: fenced, validation: fencingValidation }) + '\n';
+    await fs.writeFile(path.join(state.runtime, 'restore-fencing.json'), fencingRecord, { flag: 'wx', mode: 0o600 });
     if (config.demo) { state.demo = config.demo; await writePrivateJson(path.join(state.runtime, 'demo.private.json'), config.credentials); }
     if (config.syntheticDemo) state.syntheticDemo = config.syntheticDemo;
-    state.restore = { backupId: manifest.backupId, artifactsSha256: artifacts.sha256, jwtRotated: true, sessionsFenced: true, inventoriesEqual: true }; state.status = 'verified-quarantine'; await save(state);
+    state.restore = { backupId: manifest.backupId, artifactsSha256: artifacts.sha256, jwtRotated: true, sessionsFenced: true,
+      inventoriesEqual: inventory.businessSha256 === after.businessSha256, fencingValidated: true, fencingValidation, fencingRecordSha256: digest(fencingRecord) }; state.status = 'verified-quarantine'; await save(state);
     await start(state); return { status: 'PASS', runtime: state.runtime, project: state.project, origin: `http://127.0.0.1:${state.port}`, restore: state.restore };
   } catch (error) { state.status = 'failed-quarantine'; await save(state); throw error; }
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { calculationGrantProvenanceSchema } from './pathfinderCalculationGrant.js';
 import { canonicalPurposeJson, policyHashSchema as hash, policyUuidSchema as uuid, policyRevisionSchema as revision, routingCategoriesSchema, purposeKeySchema } from './pathfinderPurposePolicy.js';
 
 export const GEOMETRY_TRACE_DERIVATION = 'wfc.pf.geometry-trace-derivation.v1' as const;
@@ -29,7 +30,7 @@ export const fittedTraceReferenceSchema = z.object({ schemaVersion: z.literal('w
 export const geometryTraceCreateSchema = z.object({ schemaVersion: z.literal('wfc.pf.geometry-trace-create.v1'), aggregateId: uuid, expectedProjectionSha256: hash, derivationVersion: z.literal(GEOMETRY_TRACE_DERIVATION), idempotencyKey: uuid }).strict();
 const routing = z.object({ catalogRevision: revision, routingContentSha256: hash, routingPolicyRevision: revision, routingPolicySha256: hash }).strict();
 export const declaredLengthObservationSchema = z.object({ projectTrayId: uuid, valueMm: z.string().max(1024).nullable(), status: z.enum(['valid', 'missing', 'invalid']), observedAt: timestamp, sourceRevision: z.string().max(256).nullable(), source: z.literal('trays.length_mm::text') }).strict();
-export const geometryObjectRevisionSchema = z.object({
+export const geometryObjectRevisionV1Schema = z.object({
   schemaVersion: z.literal('wfc.pf.object-revision.v1'), id: uuid, traceId: uuid, projectId: uuid, modelVersionId: uuid, aggregateId: uuid,
   identity: z.object({ objectId: short, dbId: z.number().int().nonnegative().max(2147483647).nullable(), externalId: text.nullable(), logicalObjectId: z.null(), sourceDocumentId: z.null(), sourceInstancePath: z.null(), stableExportEntityId: z.null(), basis: z.literal('version-local-only') }).strict(),
   catalog: z.object({ projectTrayId: uuid.nullable(), rootObjectId: short.nullable(), rawName: text.nullable(), purposeKey: purposeKeySchema.nullable(), allowedCategories: routingCategoriesSchema, routing }).strict(),
@@ -40,6 +41,8 @@ export const geometryObjectRevisionSchema = z.object({
   provenance: z.object({ sessionId: uuid, partIds: z.array(uuid).max(4096), projectionSha256: hash, fittedTraceSha256: hash, contentFingerprint: hash, producerLevel: z.literal('A'), sourceKind: z.enum(['converted', 'synthetic']), adapterVersion: short, engine: fittedTraceEngineSchema, rulesSha256: hash, completedCaptureEvidence: z.array(blob).max(4096), missingCaptureEvidencePartIds: z.array(uuid).max(4096) }).strict(),
   audit: z.object({ declaredLength: declaredLengthObservationSchema.nullable() }).strict(), diagnostics: z.array(text).max(GEOMETRY_TRACE_LIMITS.diagnostics),
 }).strict();
+export const geometryObjectRevisionV2Schema=geometryObjectRevisionV1Schema.extend({schemaVersion:z.literal('wfc.pf.object-revision.v2'),provenance:geometryObjectRevisionV1Schema.shape.provenance.extend({producerLevel:z.literal('B'),grant:calculationGrantProvenanceSchema}).strict()}).strict();
+export const geometryObjectRevisionSchema=z.union([geometryObjectRevisionV1Schema,geometryObjectRevisionV2Schema]);
 export const geometryObjectSummarySchema = z.object({ id: uuid, objectId: short, orderIndex: count, name: text, geometryRole: role, projectTrayId: uuid.nullable(), bounds, geometricLengthMetres: z.number().finite().nonnegative().nullable(), fitStatus: z.literal('unknown').nullable(), computationalSha256: hash, recordSha256: hash }).strict();
 export const geometryTraceManifestSchema = z.object({ schemaVersion: z.literal('wfc.pf.geometry-trace-manifest.v1'), id: uuid, projectId: uuid, modelVersionId: uuid, aggregateId: uuid, geometryRevision: revision, sessionId: uuid, derivationVersion: z.literal(GEOMETRY_TRACE_DERIVATION), signaturePolicyVersion: z.literal(GEOMETRY_SIGNATURE_POLICY), projection: blob, fittedTrace: blob, objectRecords: blob, captureFrameId: uuid, qualifiedProjectFrame: z.null(), runtimeFingerprint: geometryRuntimeFingerprintSchema, counts: fittedTraceCountsSchema, objectIndexSha256: hash, computationalSha256: hash, contentSha256: hash, diagnostics: z.array(text).max(GEOMETRY_TRACE_LIMITS.manifestDiagnostics), diagnosticsTruncated: z.boolean(), fullDiagnostics: blob, createdAt: timestamp, createdBy: uuid, engineeringAccepted: z.literal(false), nativeParity: z.literal('not-performed') }).strict().refine(v => v.diagnostics.length === Math.min(v.counts.diagnostics, GEOMETRY_TRACE_LIMITS.manifestDiagnostics) && v.diagnosticsTruncated === (v.counts.diagnostics > GEOMETRY_TRACE_LIMITS.manifestDiagnostics));
 export const geometryTraceReceiptSchema = z.object({ schemaVersion: z.literal('wfc.pf.geometry-trace-receipt.v1'), trace: geometryTraceManifestSchema, duplicate: z.boolean() }).strict();

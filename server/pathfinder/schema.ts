@@ -12,6 +12,9 @@ import { initializeEndpointBindingSchema } from './endpointBindingSchema.js';
 import { initializeRevisionComparisonSchema } from './revisionComparisonSchema.js';
 import { initializeRecalculationSchema } from './recalculationSchema.js';
 import { initializeWorkerScheduling } from './workerScheduling.js';
+import { initializeCalculationGrantSchema } from './calculationGrantSchema.js';
+import { initializeGrantOperationSchema } from './grantOperationSchema.js';
+import { initializeProducerResourceSchema } from './producerResourceSchema.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -128,4 +131,7 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeRevisionComparisonSchema(pool);
   await initializeWorkerScheduling(pool);
   await initializeRecalculationSchema(pool);
+  await initializeCalculationGrantSchema(pool);
+  await initializeGrantOperationSchema(pool);
+  await initializeProducerResourceSchema(pool);
 }

@@ -26,11 +26,13 @@ function startListening(server: http.Server | https.Server, protocol: string): v
   const shutdown = () => {
     if (shuttingDown) return;
     shuttingDown = true;
-    server.close();
-    const deadline = setTimeout(() => process.exit(1), 30_000);
+    // Stop ordinary admission immediately, but keep the exact private cleanup
+    // transport reachable until the managed host confirms its physical join.
+    app.set('wfcShuttingDown', true);
+    const deadline = setTimeout(() => process.exit(1), 120_000);
     deadline.unref();
     void Promise.allSettled([stopViewerSessions(),stopModelRegistry(),stopPathFinderRuntime()])
-      .then(results => process.exit(results.some(result => result.status === 'rejected') ? 1 : 0));
+      .then(results => {server.close();process.exit(results.some(result => result.status === 'rejected') ? 1 : 0);});
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);

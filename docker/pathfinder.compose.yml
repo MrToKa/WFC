@@ -53,7 +53,7 @@ services:
     mem_limit: 4g
     pids_limit: 256
     init: true
-    stop_grace_period: 45s
+    stop_grace_period: 125s
     environment:
       NODE_ENV: production
       NODE_OPTIONS: --max-old-space-size=1536
@@ -81,6 +81,13 @@ services:
       PF_ENGINE_DLL: /opt/pathfinder/PathFinder.ModelRunner.dll
       PF_ENGINE_MODE: ${PF_ENGINE_MODE:-oneshot}
       PF_LOCAL_DEMO: "true"
+      PF_PRODUCER_CONTROL_KEY: ${PF_PRODUCER_CONTROL_KEY:-}
+      PF_PRODUCER_OWNER: ${PF_PRODUCER_OWNER:-}
+      PF_PRODUCER_PROJECT: ${PF_PRODUCER_PROJECT:-}
+      PF_PRODUCER_IMAGE: ${PF_PRODUCER_IMAGE:-}
+      PF_PRODUCER_RUNTIME_SHA256: ${PF_PRODUCER_RUNTIME_SHA256:-}
+      PF_PRODUCER_QUALIFICATION_SHA256: ${PF_PRODUCER_QUALIFICATION_SHA256:-}
+      PF_PRODUCER_QUALIFY_PROJECT: ${PF_PRODUCER_QUALIFY_PROJECT:-}
     volumes: ["staging:/var/lib/wfc/model-imports", "pathfinder:/var/lib/wfc/pathfinder"]
     depends_on:
       postgres: {condition: service_healthy}

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { canonicalPurposeJson, normalizeCatalogKey, routingCatalogDiagnostics } from '../../shared/pathfinderPurposePolicy.js';
-import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, type PreparationContext, type PreparationCreate, type PreparationPlan, type PreparationScope } from '../../shared/pathfinderPreparation.js';
+import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, preparationPlanHashInput, preparationPartScopeHashInput, type PreparationContext, type PreparationCreate, type PreparationPlan, preparationAggregateSchema, type PreparationScope } from '../../shared/pathfinderPreparation.js';
 import { readRoutingCatalog } from './catalog.js';
 import { readRoutingPolicyScope } from './purposePolicy.js';
 import { PathFinderError } from './errors.js';
@@ -50,7 +50,8 @@ export async function readPreparationContext(c: PoolClient, projectId: string): 
   const endpointNames = [...new Set(endpoints)]; if (endpointNames.length > 4096) return fail('PREPARATION_ENDPOINT_LIMIT', 413);
   const resolutions = (await c.query<{ resolution: unknown }>('SELECT resolution FROM pf_preparation_resolutions WHERE project_id=$1 ORDER BY project_tray_id', [projectId])).rows.map(r => r.resolution);
   const aggregate = state.current_aggregate_id ? (await c.query<{ manifest: unknown }>('SELECT manifest FROM pf_preparation_aggregates WHERE project_id=$1 AND id=$2', [projectId, state.current_aggregate_id])).rows[0]?.manifest ?? null : null;
-  return preparationContextSchema.parse({ schemaVersion: 'wfc.pf.preparation-context.v1', projectId, scope, trays, endpointNames, resolutions, diagnostics: catalog.diagnostics, currentAggregate: aggregate });
+  const currentAggregate=aggregate===null?null:preparationAggregateSchema.parse(aggregate);
+  return preparationContextSchema.parse({ schemaVersion: currentAggregate?.schemaVersion==='wfc.pf.geometry-aggregate.v2'?'wfc.pf.preparation-context.v2':'wfc.pf.preparation-context.v1', projectId, scope, trays, endpointNames, resolutions, diagnostics: catalog.diagnostics, currentAggregate });
 }
 
 export function buildPreparationPlan(context: PreparationContext, input: PreparationCreate, id: string = randomUUID()): PreparationPlan {

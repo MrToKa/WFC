@@ -15,6 +15,10 @@ vi.mock('./recalculationRepository.js',()=>({requireEnrollmentAuthority:seams.au
 vi.mock('./routingScope.js',()=>({requireVersionedCalculationScope:()=>undefined}));
 vi.mock('./storage.js',()=>({readSnapshot:async()=>undefined}));
 vi.mock('./auth.js',()=>({principalTransaction:async(_pool:Pool,_project:string,_principal:unknown,operation:(c:PoolClient)=>Promise<unknown>)=>operation(controlClient!)}));
+// Login/grant admission is covered by grantWorkerAuthority tests. This fixture
+// isolates engine-lane ownership and never opens a database or recovery file.
+vi.mock('./grantWorkerAuthority.js',async importOriginal=>({...await importOriginal<typeof import('./grantWorkerAuthority.js')>(),
+  acquireGrantJobExecution:async(_pool:Pool,job:Record<string,any>)=>({principal:{userId:job.requested_by,loginId:job.login_id,loginExpiresAt:new Date(job.login_expires_at).getTime()},async finish(){}})}));
 import {createPathFinderWorker} from './worker.js';
 
 let controlClient:PoolClient|undefined;
@@ -26,7 +30,7 @@ function fixture(options:{cancelled?:boolean;awaitAbort?:boolean;closeFails?:boo
   const failure=new PathFinderError('ENGINE_SESSION_REAP_FAILED',503,'Synthetic unconfirmed process-group join.');
   const dependencies={schemaVersion:'pathfinder.dependencies.v5',options:{},artifact:{id:id(4),sha256:'a'.repeat(64)},model:{id:id(5)},
     cableInputs:{mto:'Control'},from:{point:[0,0,0]},to:{point:[1,0,0]},settings:{}};
-  const row={id:id(2),project_id:id(1),requested_by:id(6),login_id:id(7),login_expires_at:new Date(Date.now()+60000),
+  const row={id:id(2),project_id:id(1),authority_kind:'current-login',grant_provenance:null,requested_by:id(6),login_id:id(7),login_expires_at:new Date(Date.now()+60000),
     owner_token:id(8),lease_until:new Date(Date.now()+30000),state:'running',kind:'calculate',cancel_requested:false,timeout_ms:10000};
   const calls:string[]=[],events:string[]=[];
   const query=vi.fn(async(sql:string)=>{

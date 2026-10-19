@@ -11,7 +11,7 @@ await assertCanonicalPath(path.dirname(directory), { directory: true });
 await fs.mkdir(directory, { recursive: true });
 await assertCanonicalPath(directory, { directory: true });
 const copied = [];
-for (const name of ['preparation-input.mjs', 'capture-evidence.mjs']) {
+for (const name of ['preparation-input.mjs', 'capture-evidence.mjs','capture-input.mjs','model-capture.mjs','protocol.mjs']) {
 const source = fileURLToPath(new URL('../viewer-runtime/' + name, import.meta.url));
 const destination = path.join(directory, name);
 await assertCanonicalPath(source);
@@ -35,4 +35,10 @@ await import(new URL('../server/dist/server/pathfinder/revisionComparisonEndpoin
 await import(new URL('../server/dist/server/pathfinder/recalculationRepository.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/recalculationProducer.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/calculationEngineIdentity.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/calculationGrantRepository.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/producerResourceService.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/grantRecalculation.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/managedPreparationProducer.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/grantPreparedMaintenance.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/producerQualification.js', import.meta.url).href);
 console.log(JSON.stringify({ module: 'pathfinder-computational-contracts', files: copied.length, modules: copied }));

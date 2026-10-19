@@ -16,21 +16,53 @@ import { createRevisionEndpointAdapters } from './revisionComparisonEndpointAdap
 import { createRecalculationRepository } from './recalculationRepository.js';
 import { createRecalculationProducer } from './recalculationProducer.js';
 import { createCalculationEngineObserver } from './calculationEngineObserver.js';
+import { createCalculationGrantRepository } from './calculationGrantRepository.js';
+import { applyCalculationGrantCommand } from './calculationGrantIntegration.js';
+import { createProducerResourceService } from './producerResourceService.js';
+import { getViewerRuntime } from '../viewerSessions/runtime.js';
+import { createGrantRecalculationProducer } from './grantRecalculationProducer.js';
+import {createManagedProducerControl,type ManagedControlConfiguration} from './managedProducerControl.js';
+import {createProducerQualification} from './producerQualification.js';
+import {createManagedPreparationProducer} from './managedPreparationProducer.js';
+import {createGrantPreparedMaintenance} from './grantPreparedMaintenance.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
   const registry = createPathFinderRepository(pool),jobs = createPathFinderJobs(pool,registry),apply = createPathFinderApply(pool),worker = createPathFinderWorker(pool,jobs);
   const recalculations=createRecalculationRepository(pool,jobs);
   const producer=createRecalculationProducer(recalculations,{beforeTick:createCalculationEngineObserver(pool,()=>worker.failureCode)});
-  return {registry,jobs,apply,worker,recalculations,producer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
-    preparations:createPreparationService(pool,createPreparationPublisher(worker.executePreparation)),
-    geometryTraces:createGeometryTraceRepository(pool,createGeometryTraceEngine(worker.executePreparation)),
-    endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters()),
-    revisionComparisons:createRevisionComparisonRepository(pool)};
+  const grantProducer=createGrantRecalculationProducer(pool,jobs);
+  const controlConfiguration=process.env.PF_PRODUCER_CONTROL_KEY?{
+    key:process.env.PF_PRODUCER_CONTROL_KEY,owner:process.env.PF_PRODUCER_OWNER,project:process.env.PF_PRODUCER_PROJECT,
+    image:process.env.PF_PRODUCER_IMAGE,runtimeInventorySha256:process.env.PF_PRODUCER_RUNTIME_SHA256,
+  } as ManagedControlConfiguration:undefined;
+  const managedControl=createManagedProducerControl(controlConfiguration);
+  const producerQualification=createProducerQualification(controlConfiguration?{
+    owner:controlConfiguration.owner,image:controlConfiguration.image,runtimeInventorySha256:controlConfiguration.runtimeInventorySha256,
+    expectedSha256:process.env.PF_PRODUCER_QUALIFICATION_SHA256||undefined,canQualifyProject:process.env.PF_PRODUCER_QUALIFY_PROJECT||undefined,
+  }:undefined);
+  const calculationGrants=createCalculationGrantRepository(pool,{afterCommand:applyCalculationGrantCommand,producerStatus:producerQualification.producerStatus});
+  const viewer=getViewerRuntime(),producerResourceService=createProducerResourceService({pool});
+  const producerResources={service:producerResourceService,storage:viewer.storage,run:viewer.run.bind(viewer),resource:viewer.resource.bind(viewer)};
+  const preparations=createPreparationService(pool,createPreparationPublisher(worker.executePreparation)),
+    geometryTraces=createGeometryTraceRepository(pool,createGeometryTraceEngine(worker.executePreparation)),
+    revisionComparisons=createRevisionComparisonRepository(pool);
+  const preparedMaintenance=createGrantPreparedMaintenance(pool,{traces:geometryTraces,comparisons:revisionComparisons});
+  const managedPreparationProducer=createManagedPreparationProducer(pool,{control:managedControl,resources:producerResourceService,preparations,traces:geometryTraces,
+    qualification:producerQualification,onPrepared:async({candidate,result},signal)=>{
+      await preparedMaintenance.onPrepared({candidate:{projectId:candidate.projectId,grant:candidate.grant,...candidate.model},result},signal);
+    }});
+  return {registry,jobs,apply,worker,recalculations,producer,grantProducer,managedControl,producerQualification,calculationGrants,producerResources,
+    preparedMaintenance,managedPreparationProducer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
+    preparations,geometryTraces,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters())};
 }
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
 export async function initializePathFinderRuntime():Promise<void> {
   if (!process.env.PF_ROOT || !process.env.PF_ENGINE_DLL) return;
-  await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();
+  await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();active.managedPreparationProducer.start();active.grantProducer.start();
 }
-export async function stopPathFinderRuntime():Promise<void> {await runtime?.producer.stop();await runtime?.worker.stop();}
+export async function stopPathFinderRuntime():Promise<void> {
+  await runtime?.managedPreparationProducer.stop();
+  runtime?.managedControl.stop();runtime?.producerResources.service.close();
+  await runtime?.producer.stop();await runtime?.grantProducer.stop();await runtime?.worker.stop();
+}

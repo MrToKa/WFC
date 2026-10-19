@@ -10,7 +10,7 @@ const clone=<T>(value:T):T=>JSON.parse(JSON.stringify(value)) as T;
 export function recalculationFixture(){
   const f=RECALCULATION_FIXTURE,who:JobPrincipal={userId:f.actorId,loginId:f.loginId,loginExpiresAt:Date.now()+3600000};
   const initial={project_id:f.projectId,control_revision:'1',desired_generation:'2',enrolled_generation:null,authority_epoch:'1',enabled:true,paused:false,actor_id:f.actorId,login_id:f.loginId,login_expires_at:new Date(who.loginExpiresAt).toISOString(),authority_expires_at:new Date(Date.now()+1200000).toISOString(),preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeout_ms:60000,status:'debouncing',reason_codes:['GEOMETRY_CHANGED'],current_job_id:null,completed:0,total:0,ready_cables:0,blocked_cables:0,updated_at:new Date().toISOString(),attempt_generation:null,attempts:0};
-  const db:{state:Row;commands:Map<string,Row>;enrollments:Map<string,Row>;claim:Row|null;jobs:Map<string,Row>;authority:boolean;projectExists:boolean;events:string[];queries:string[];rollbackFails:boolean;commitLost:boolean}={state:initial,commands:new Map(),enrollments:new Map(),claim:null,jobs:new Map(),authority:true,projectExists:true,events:[],queries:[],rollbackFails:false,commitLost:false};
+  const db:{state:Row;commands:Map<string,Row>;enrollments:Map<string,Row>;claim:Row|null;jobs:Map<string,Row>;authority:boolean;grantEnabled:boolean;projectExists:boolean;events:string[];queries:string[];rollbackFails:boolean;commitLost:boolean}={state:initial,commands:new Map(),enrollments:new Map(),claim:null,jobs:new Map(),authority:true,grantEnabled:false,projectExists:true,events:[],queries:[],rollbackFails:false,commitLost:false};
   let saved:{state:Row;commands:Array<[string,Row]>;enrollments:Array<[string,Row]>;claim:Row|null;jobs:Array<[string,Row]>}|undefined;
   const result=(rows:Row[]=[])=>({rows,rowCount:rows.length});
   const query=vi.fn(async(raw:string|{text:string},p:any[]=[])=>{
@@ -20,6 +20,7 @@ export function recalculationFixture(){
     if(sql==='COMMIT'){saved=undefined;if(db.commitLost)throw new Error('synthetic lost acknowledgement');return result();}
     if(sql==='ROLLBACK'){if(db.rollbackFails)throw new Error('synthetic rollback lost');if(saved){db.state=saved.state;db.commands=new Map(saved.commands);db.enrollments=new Map(saved.enrollments);db.claim=saved.claim;db.jobs=new Map(saved.jobs);}saved=undefined;return result();}
     if(sql.startsWith('SELECT id FROM projects'))return result(db.projectExists?[{id:f.projectId}]:[]);
+    if(sql.startsWith("SELECT (r.record->>'enabled')::boolean"))return result([{enabled:db.grantEnabled}]);
     if(sql.startsWith('SELECT is_admin FROM users'))return result([{is_admin:db.authority}]);
     if(sql.startsWith('INSERT INTO viewer_login_bindings'))return result();
     if(sql.startsWith('SELECT user_id,expires_at,revoked_at FROM viewer_login_bindings'))return result([{user_id:f.actorId,expires_at:new Date(who.loginExpiresAt),revoked_at:null}]);
