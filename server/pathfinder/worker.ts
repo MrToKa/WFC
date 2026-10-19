@@ -14,6 +14,8 @@ import { engineProjectSettings } from './settings.js';
 import { collectPreviewDependencies, previewEngineRequest, type PreviewDependencies } from './previews.js';
 import { requirePreparedRoutingScope, requireVersionedCalculationScope } from './routingScope.js';
 import { activeModel, latestArtifact } from './repository.js';
+import { createPreparationEngineLane } from './preparationEngineLane.js';
+import type { EngineInvocation } from './engineSession.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -159,6 +161,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
 /** One DB advisory-lock owner serializes .NET/cache access across backend processes. */
 export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFactory:()=>EngineExecutor=createConfiguredEngineExecutor) {
   const controller = new AbortController(); let work:Promise<void>|undefined,fatalStop:unknown;
+  const preparation = createPreparationEngineLane();
   let lastAutomatic = 0;
   let automaticAfter:string|null = null;
   async function automatic():Promise<void> {
@@ -190,6 +193,7 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFacto
   return {
     start():void {
       if (work) return;
+      preparation.activate();
       work = (async () => {
         while (!controller.signal.aborted) {
           let owner:PoolClient|undefined,releaseOwner=true,discardOwner=false;
@@ -233,7 +237,10 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFacto
             let engine:EngineExecutor|undefined;
             try {
               if (!controller.signal.aborted) engine=engineFactory();
+              let preparationLast=false;
               while (!controller.signal.aborted) {
+                if (!preparationLast && await preparation.runNext(engine!,controller.signal)) {preparationLast=true;continue;}
+                preparationLast=false;
                 const job = await claim(pool);
                 if (job) await executeJob(pool,job,controller.signal,engine!);
                 else {await automatic(); await delay(1000,undefined,{signal:controller.signal});}
@@ -250,8 +257,12 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFacto
           } catch(error) {if (!controller.signal.aborted) {console.error('PathFinder worker temporarily unavailable.'); await delay(5000,undefined,{signal:controller.signal}).catch(() => undefined);}}
           finally {await release();}
         }
-      })();
+      })().finally(() => preparation.close());
     },
-    async stop():Promise<void> {controller.abort(); await work;if(fatalStop)throw fatalStop;},
+    executePreparation(request:EngineInvocation,signal:AbortSignal):Promise<EngineResponse> {
+      if (!work || controller.signal.aborted) return Promise.reject(new PathFinderError('PREPARATION_WORKER_UNAVAILABLE',503));
+      return preparation.enqueue(request,signal);
+    },
+    async stop():Promise<void> {controller.abort();preparation.close(); await work;if(fatalStop)throw fatalStop;},
   };
 }

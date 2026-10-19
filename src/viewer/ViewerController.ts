@@ -1,6 +1,7 @@
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
+import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
 
@@ -80,7 +81,7 @@ export class ViewerController {
       if (!this.pending.delete(pending.envelope.requestId)) return;
       pending.reject?.(new Error('Viewer request timed out'));
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
-    }, ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'READ_PREPARATION_OBJECTS'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject'> = {}): string {
@@ -360,6 +361,25 @@ export class ViewerController {
     return reply.payload as unknown as ViewerModelObjectsPage;
   }
 
+  async discoverPreparationObjects(request: PreparationDiscoveryRequest, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<PreparationDiscoveryPage> {
+    if (!validatePreparationDiscoveryRequest(request)) throw new Error('Invalid project discovery scope');
+    const input:PreparationDiscoveryRequest = JSON.parse(JSON.stringify(request)), generation = this.routeGeneration, instanceId = this.instanceId, modelId = this.modelVersionId, loadId = this.loadId;
+    const current = () => { if (this.disposed || !this.loaded || options.signal?.aborted || options.isCurrent?.() === false || generation !== this.routeGeneration || instanceId !== this.instanceId || modelId !== this.modelVersionId || loadId !== this.loadId) throw new DOMException('Project discovery cancelled.','AbortError'); };
+    current(); if (!await this.checkSelection()) throw new DOMException('Project discovery cancelled.','AbortError'); current();
+    let requestId:string|undefined;
+    const abort = () => { if (requestId && this.pending.has(requestId) && !this.disposed) this.cancel(requestId); };
+    options.signal?.addEventListener('abort',abort,{once:true});
+    try {
+      current();
+      const reply = await new Promise<ViewerEvent>((resolve,reject) => { try { requestId = this.send('READ_PREPARATION_OBJECTS', input as unknown as Record<string,unknown>, 'PREPARATION_OBJECTS',{resolve,reject}); } catch(error) { reject(error); } });
+      current();
+      const page = reply.payload;
+      if (!validatePreparationDiscoveryPage(page) || page.mode !== input.mode || page.rootObjectId !== input.rootObjectId || page.cursor !== input.cursor || JSON.stringify(page.names) !== JSON.stringify(input.names) || page.objects.length > input.limit) throw new Error('Project discovery acknowledgement mismatch');
+      if (!await this.checkSelection()) throw new DOMException('Project discovery cancelled.','AbortError'); current();
+      return page;
+    } finally { options.signal?.removeEventListener('abort',abort); }
+  }
+
   async readSelection(): Promise<ViewerSelection> {
     const generation = this.routeGeneration;
     if (this.disposed || !this.loaded || !await this.checkSelection() || this.disposed || generation !== this.routeGeneration) throw new Error('Model is not ready');
@@ -378,14 +398,16 @@ export class ViewerController {
     for (const pending of [...this.pending.values()]) if (pending.envelope.type === 'PICK_POINT') this.cancel(pending.envelope.requestId);
   }
 
-  async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}): Promise<{ snapshot: unknown; summary: Record<string, unknown> }> {
+  async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<{ snapshot: unknown; summary: Record<string, unknown> }> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
-    const input = request.lookupRouteCodes ? { lookupRouteCodes: [...request.lookupRouteCodes], equipmentNames: [...request.equipmentNames] } : request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })), equipmentNames: [...request.equipmentNames] } : { routeCodes: [...request.routeCodes], allowedCategories: [...request.allowedCategories], equipmentNames: [...request.equipmentNames] };
+    const input:ModelCaptureRequest = JSON.parse(JSON.stringify(request));
     this.clear('selection'); const generation = this.routeGeneration;
     const operation = new AbortController(); this.captureInputAbort = operation;
+    const abort = () => { operation.abort(); for (const pending of [...this.pending.values()]) if (['START_MODEL_CAPTURE','READ_MODEL_CAPTURE'].includes(pending.envelope.type) && !this.disposed) this.cancel(pending.envelope.requestId); };
+    options.signal?.addEventListener('abort',abort,{once:true}); if (options.signal?.aborted) abort();
     const { instanceId, modelVersionId, loadId } = this;
     const current = () => {
-      if (this.disposed || operation.signal.aborted || generation !== this.routeGeneration || instanceId !== this.instanceId || modelVersionId !== this.modelVersionId || loadId !== this.loadId)
+      if (this.disposed || operation.signal.aborted || options.isCurrent?.() === false || generation !== this.routeGeneration || instanceId !== this.instanceId || modelVersionId !== this.modelVersionId || loadId !== this.loadId)
         throw new DOMException('Model capture cancelled.', 'AbortError');
     };
     try {
@@ -431,7 +453,7 @@ export class ViewerController {
             const scope = summary.scope as Record<string, unknown> | undefined;
             const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
             if (!scope || !frozenRequest || !equal(scope.equipmentNames, frozenRequest.equipmentNames) || !equal(scope.inputScope, inputScope) ||
-                (frozenRequest.routeRules ? !equal(scope.routeRules, frozenRequest.routeRules) : !equal(scope.routeCodes, frozenRequest.routeCodes?.map(code => '/' + code)) || !equal(scope.allowedCategories, frozenRequest.allowedCategories)))
+                (frozenRequest.preparationSlice ? !equal(scope.preparationSlice,frozenRequest.preparationSlice) : frozenRequest.routeRules ? !equal(scope.routeRules, frozenRequest.routeRules) : !equal(scope.routeCodes, frozenRequest.routeCodes?.map(code => '/' + code)) || !equal(scope.allowedCategories, frozenRequest.allowedCategories)))
               throw new Error('Completed model capture request summary mismatch');
           }
           if (!await this.checkSelection()) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
@@ -442,7 +464,7 @@ export class ViewerController {
       }
       throw new Error('Model capture exceeded its bounded event budget');
     } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw error; }
-    finally { if (this.captureInputAbort === operation) this.captureInputAbort = null; }
+    finally { options.signal?.removeEventListener('abort',abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
   }
 
   clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {

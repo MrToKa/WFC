@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { RUNTIME_FILES, validateRuntimeModuleClosure } from './module-closure.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const SOURCE = path.join(ROOT, 'viewer-runtime');
@@ -9,7 +10,6 @@ const SDK = path.join(SOURCE, 'sdk', '7.130.0');
 const DESTINATION = path.join(ROOT, 'public', 'viewer-runtime', '7.130.0');
 const MANIFEST_SHA = '747540a153fb18809c428d8ed177aa8a296cff1b5175ab85445e0a2ebdb36d75';
 const GEOMETRY_SHA = '4d10d66dca31f10b82926693a0e7438e68f448047f3f991baabb82f6ed2573fa';
-const RUNTIME_FILES = ['index.html', 'runtime.css', 'runtime.mjs', 'adapter.mjs', 'bridge.mjs', 'protocol.mjs', 'routes.mjs', 'route-geometry.mjs', 'pathfinder.mjs', 'model-capture.mjs', 'capture-input.mjs'];
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const refuse = code => { throw new Error(code); };
 const samePath = (a, b) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
@@ -106,6 +106,7 @@ async function main() {
     if (name === 'route-geometry.mjs' && sha256 !== GEOMETRY_SHA) refuse('VIEWER_RUNTIME_GEOMETRY_CHANGED');
     files.push({ path: name, bytes: bytes.length, sha256 });
   }
+  const moduleClosure = await validateRuntimeModuleClosure(RUNTIME_FILES, async name => (await checkedBytes(path.join(SOURCE, name))).toString('utf8'));
   const css = (await checkedBytes(path.join(SDK, 'style.min.css'))).toString('utf8');
   let substitutions = 0;
   const localCss = Buffer.from(css.replace(/https:\/\/fonts\.autodesk\.com\/[^)"'\s]+/g, () => {
@@ -123,6 +124,7 @@ async function main() {
   await fs.writeFile(cssTarget, localCss);
   await checkedBytes(cssTarget, derivedCss);
   const report = { schemaVersion: 1, sdkVersion: '7.130.0', vendorManifestSha256: MANIFEST_SHA, sdkFileCount: 206, sdkBytes: 82552768,
+    moduleClosure,
     stylesheet: { source: 'sdk/style.min.css', sourceSha256: digest(Buffer.from(css)), deployed: derivedCss.path, deployedSha256: derivedCss.sha256,
       substitutions, localFont: './sdk/res/fonts/arimo-v29-latin_latin-ext-regular.woff', originalModified: false },
     fileCount: publicFiles.length, totalBytes: publicFiles.reduce((sum, file) => sum + file.bytes, 0), files: publicFiles };

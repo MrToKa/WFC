@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r2a-drawing-positioning-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r3-project-preparation-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -101,8 +101,114 @@ recommended engineering choice and are recorded; no routine stage pause.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
 
-## Current PF-R3 — handoff ready; begin immediately
+## Current PF-R3 — TECHNICAL_PASS at tested scope; R4 handoff next
 
+- Final R3 closure: report39 and evidence/preparation receipts. Final candidate6
+  is healthy on5191; approved profile r3-approved-runtime6.private.json in owned
+  .scratch/tray-catalog-6089519f-d9e6-45e0-8ef6-f9d8c7792287. API6f7d04e4...
+  image65c482531c4d584444567f35069b393b0554236d4aa279357880049a3c033efe;
+  web7e59d30f... image09f71fd6039ce971e9322327ca9ca4cff73a42b8f076f99466e4cc4c09763d07.
+  Context1276files SHA f927dfb69784c7c2918d398d948ca51fe700e910a87c60c13b25709bd7b60146;
+  final1115codefiles match plus2build/test-onlyEOFnormalizations;runtimecodeunchanged.
+  Final52files893PASS/0FAIL/5optionalNOT_RUN,
+  browserclosure3PASS, both typesPASS,55TSlintPASS.19immutable refs/11Core
+  unchanged;23unchanged lockpaths plus previously reconciled R2a drawing wrapper.
+  Actualengine10/refusal5/storage4/edge8+session/fencing3/resourcepublicationPASS;
+  sampledAPIprocess-tree457793536bytes/54samples25ms isnotexactpeak/maxcapacity.
+  Computer-use14scopechecksPASS inclactualconverted6leaves/22fragments/7592vertices/
+  8036triangles→13objectaggregate1, page reload, cancel retainingaggregate,
+  filledGhost/yellow/Clear and finalreadable300pxcards. UIoldtablefailurefixed.
+  Real330trayproject still0rules/0trustedaggregate/0Apply; diagnosticdiscovery
+  pausedafter224/1527endpointnameprogress, notfullrealcapacity. Normaldemoaccount
+  restored oncopiedrealproject. Noactive root subprocess/capture/build.
+  Preservation79preexistingtablesexact plus2strictlyauditedordinaryauthchanges,
+  all1032oldlogicalobjectmetadata exact,3originalrepos statuses same,18protected
+  containersandPG/MinIO/storage-ready/volumes/networks unchanged.
+  Cleaned8unused owncandidate1–4imagetags withoutprune;current6/rollback5retained.
+  TwoownedUI/enginefixtures retained withprivateintents forR4–R10;nocablesApply.
+  Deniedhistoricalpaths untouched. No push/PR/merge/originalor5190mutation.
+  Next: localtechnicalcommit→prepare-stage-handoff detailedR4→inheritednewR4branch
+  and executeimmediately. R4mapsfrom3sourceagents delivered read-only;allidle.
+  HistoricalR3checkpointsbelowarenotcurrentprofiles/proofs.
+
+- Latest continuation checkpoint: candidate4 is healthy on5191, exact approved
+  profile r3-approved-runtime4.private.json in currentR3privatework;18protected
+  outsidecontainers/PG/MinIO/storage-ready/volumes/networks unchanged.
+  API e611abe7ce21aad05ae44351262a4547cd3e4c33564623ec705becbfb50dd8c2,
+  image sha256:a14cf3de9e567c08f17aa48da3658ed32c3e825bd3ab53f34823f8ab3be87a45;
+  web9a308feacc23fbcc7b899e5398b46971d28875ef12b63a15181401f6f144649f,
+  image sha256:bf4b5a6ff3de6dcb0332082790fcfa28644eb9b778ed10420deec3a20cbf1b3c.
+  Actual compiled C# union/control run10PASS:513physicalleaves/2parts,20.5m
+  crosspart path, atomicaggregate/currentpointer, replay/cancel/stale/auth,
+  noApply. Evidence actual-engine-controls1.json; ownedfixture58490e71...
+  retained privately. Additional actual5refusalcontrols PASS:missingparts,
+  forgedcategories,foreignscope,on-diskparttamper, MVno_path onControlnetwork.
+  Linuxfilesystem4controls PASS: deliberate link-window retry repair and
+  ambiguous/tamperedpair refusal; exactcreated scratchfiles cleaned. Notactual
+  power/processcrash. Hostnginx6prebody/12MiB/gzipchecks PASS; typed401/413/400/415.
+  UIfixture342resourcecopy completed, but first UIload failed atmodule startup:
+  preparation-input.mjs absent from explicit browserdeploymentlist. Sourcefix
+  adds it and ASTvalidatedbrowsermoduleclosure;3testsPASS. Candidate5build pending
+  localSQLtimeout/actualSQLfencing harness sourcefreeze. Rootnginxcasematchfix
+  ensuresmixed-caseExpressmount cannotfall backtoold10MiBproxycap.
+  AgentsAtransactionbounds/CboundedSQLharness active; rootsoleactualexecutor.
+  No new activecopy/seed/build/subprocess. Previouscheckpointbelowishistorical.
+
+- Active R3 branch pf-r3-project-preparation-local-20261019, HEAD881352e403367c7b1e0e4c4d1858f1acb3e1f302.
+  Three source agents active: A newstrictDTO/serverplans/sessions/storage/routes;
+  B protecteddiscovery/leafslice/merger/controller; C projectmodeAPI/hook/RoutesUI.
+  Root existingcatalog/repository/schema/app/engine/worker+ALLactualruntime/docs.
+  No R3 schema migration/deployment yet. Root pre-migration read-only baseline
+  covers81publictables/10095rows in private r3-before-all-tables2 evidence.
+  New cold backup ffb2c4d0-bdc7-41fa-823c-ba428e6adab8 PASS:8members,
+  exact archive hashes and pg_restore TOC50808bytes. Full restore NOT_RUN.
+  Initial stdin-pipe TOC attempt failed; app automatically resumed, original18
+  protectedcontainers unchanged; failure proof retained. Corrected file-mounted
+  verifier source-reviewed and actualbackup2PASS. New approved current profile
+  .scratch/tray-catalog-6089519f-d9e6-45e0-8ef6-f9d8c7792287/r3-approved-runtime.private.json.
+  Old R2a profile has stale starttimes after ownedbackup and must not be reused.
+  Root cheap routing-onlycatalog reader implemented;83catalog/policy/scope tests
+  PASS, same routinghash and identitydiagnostics withoutdrawingfactbudget coupling.
+  Publication adapter/interfaces agreed; enginevalidation mustuseexistingworker
+  advisory-ownedserializedlane, not a competing standaloneprocess.
+  Root publisher/schema/runtime/router/trustedcurrentpointer implemented;20receipt/
+  pointer tests and66engine-lane/session tests PASS. Explicit source-only broad
+  run721PASS/5optionalSKIP in39files; initial broad pathfilter accidentally selected
+  oldcompiledscratchtests, plus2oldquerymocks needed pointer-awareupdates; failure
+  kept in toolhistory, corrected explicitsourcefilelistPASS. Final run pending.
+  Effective stagedvalidationinput32MiB (hardunion256MiB retained) +1GiB/session,
+  8GiBpreparationdiskquota adopted, not measuredsuccessfulcapacity. B now owns
+  off-thread512MiBheap/120s/softwholeNode2GiBRSS unionworker; root adds preparation
+  C#oneshotsoft2GiBRSS100mssampling, distinct from exactpeak/hardcontainer4GiB.
+  A/C crossreview found endpointprefixtruncation, samekeybusyoutcome, stale replay,
+  lifecycle/modelrowfence/planworkbudgets; A authorized targetedfixes beforefreeze.
+  C owns source-only actualintegrationharness, root will execute aftercandidatebuild.
+  Candidate1 build PASS but startup FAIL beforeDBinit: missing compiled
+  viewer-runtime/preparation-input.mjs; public failure proof retained. Fixed
+  server:build with explicit owned runtime copy+compiledpublisher import smoke.
+  Candidate2 build+EXPLICITapi/webupgrade PASS; own5191 healthy, all18protected
+  outsidecontainers andPG/MinIO/storage-ready/volumes/networks unchanged.
+  API fbe9675c6f73fe4e88dc23827977f0e3e3d1659f667868308db61aecbb6184b6,
+  web f0d991bc840a15041658d816ea92edad21f074f19d630f01f8983ae2b03464e6.
+  Approved profile r3-approved-runtime2.private.json in currentR3privatework.
+  Currentnewsource differsfromcandidate2: narrow hardlink-crash retry repair,
+  exact rawtrayname OR authoritative slashroutecode discovery/validation.
+  Actual sourcecatalog BC022-2 vs SDK /BC022-2 justified exactalternatives;
+  allcandidates retained/ambiguityexplicit, no casefold/substrings/bindinginvented.
+  Finalcandidate3build/upgrade and actualC#union checks still pending.
+  Combined872pure/mockedchecks PASS/5optionalNOT_RUN in52files; later targeted
+  plans/storage48PASS andcollector7PASS cover abovepostcandidate2changes.
+  Root copied onlytemporaryownUIprojectmetadata:56eadef6-8382-49f8-a652-c8f12026602e,
+  model098a7e6f-6e39-4935-a98b-ba3b683875a5, purposeSyntheticControl, no cables.
+  Hostprivatefixtureintent durable beforeSQL; sourcebusinessmodel unchanged.
+  Root resourceCOPY process13920 COMPLETE/PASS:342ownsource→newfixture
+  resources439007803bytes, allSHA/lengths/exactinventoryverified in24objectbatches;
+  onlythatfixturehealth changed unavailable→healthy afterfinalverification.
+  Do notduplicatehelper/seed/copy. Its batchintents/receipts andfixturecredentials
+  are private in currentR3work; no businessrows/secrets inGit. Candidate3mustnot
+  restartAPI whilethisrootcopy runs (nowfinished). No engineharness executedyet.
+  Independentfinalsource-review ofcrashpairrepair/exactalternatives PASS;
+  candidate3maybuild/upgrade now. No technicalR3PASSuntilactualunion/UIchecks.
 - R2a technical commit e8f786806929efcee90b5386646c3e5566e7d4ee,81files;
   report38 and exact final runtime closure are delivered. Detailed R3 handoff
   handoffs/PF-R3-project-preparation.md is ready via prepare-stage-handoff;

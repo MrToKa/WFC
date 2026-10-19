@@ -255,6 +255,32 @@ async function resume(state, original) {
   }
   if (original.some(value => value.role === 'web' && value.running)) await waitHealth(state);
 }
+/** pg_restore --list may close stdin after its TOC; use a mounted file, never a dump pipe. */
+export async function verifyDatabaseDump(state, directory) {
+  const target = path.resolve(directory);
+  if (!contained(path.join(ROOT, 'pathfinder-engine/.scratch'), target)) fail('PF_BACKUP_DESTINATION_INVALID');
+  await assertCanonicalPath(target, { directory: true });
+  const filename = path.join(target, 'database.dump'); await assertCanonicalPath(filename);
+  const stat = await fs.stat(filename); if (!stat.isFile() || !stat.size) fail('PF_BACKUP_DATABASE_EMPTY');
+  const resources = await ownership(state), postgres = resources.containers.find(item => item.role === 'postgres');
+  if (!postgres) fail('PF_COMPLETE_STACK_REQUIRED');
+  const docker = await createDocker(); await docker.inspectImage(postgres.image);
+  const name = 'wfc-pf-dump-' + randomUUID(), purpose = 'pg-restore-mounted-file-verification';
+  const created = await docker.create(name, { Image: postgres.image, User: '0', Entrypoint: ['pg_restore'], Cmd: ['--list', '/backup/database.dump'],
+    Labels: { ...labels(state), 'wfc.operations.temporary': 'true', 'wfc.operations.purpose': purpose }, AttachStdout: true, AttachStderr: true,
+    HostConfig: { NetworkMode: 'none', ReadonlyRootfs: true, Memory: 128 * 1024 ** 2, PidsLimit: 32, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true'], Mounts: [mount(target, '/backup')] } });
+  try {
+    await docker.start(created.Id); const exited = await docker.wait(created.Id);
+    const toc = await command(['logs', created.Id], { maxBytes: 32 * 1024 ** 2 });
+    if (exited.StatusCode !== 0 || !toc.length) fail('PF_BACKUP_DATABASE_INVALID');
+    return { status: 'PASS', method: 'pg_restore-list-mounted-file', tocBytes: toc.length, tocSha256: digest(toc) };
+  } finally {
+    const current = await docker.inspect(created.Id);
+    if (current.Image !== postgres.image || current.Name !== '/' + name || !owned(current.Config.Labels, state) || current.Config.Labels['wfc.operations.purpose'] !== purpose) fail('PF_BACKUP_HELPER_OWNERSHIP_LOST');
+    if (current.State.Running) await docker.stop(created.Id, 10);
+    await docker.remove(created.Id);
+  }
+}
 export async function backup(state, directory, privateConfig) {
   const target = path.resolve(directory), privatePath = path.resolve(privateConfig); if (!contained(path.join(ROOT, 'pathfinder-engine/.scratch'), target) || contained(target, privatePath)) fail('PF_BACKUP_DESTINATION_INVALID');
   const resources = await ownership(state), docker = await createDocker(); if (resources.containers.filter(item => ['api', 'web', 'minio', 'postgres'].includes(item.role)).length !== 4 || !resources.containers.find(item => item.role === 'postgres')?.running) fail('PF_COMPLETE_STACK_REQUIRED');
@@ -269,8 +295,8 @@ export async function backup(state, directory, privateConfig) {
     const inventoryAfter = await operation(state, 'inventory'); if (inventory.businessSha256 !== inventoryAfter.businessSha256 || inventory.registrySha256 !== inventoryAfter.registrySha256) fail('PF_BACKUP_DATABASE_CHANGED');
     await boundedStop(docker, resources.containers.find(item => item.role === 'minio'));
     await command(['exec', pg.id, 'pg_dump', '--no-password', '--format=custom', '--no-owner', '--no-acl', '-U', 'pf_local', '-d', 'wfc_pathfinder_local'], { output: path.join(target, 'database.dump') });
-    await command(['exec', '-i', pg.id, 'pg_restore', '--list'], { input: path.join(target, 'database.dump'), maxBytes: 32 * 1024 ** 2 });
-    const manifest = { format: 'WFC-PF-LOCAL-BACKUP', schemaVersion: 1, profile: 'cold-pg-minio-staging-pathfinder-v1', backupId, createdAt: new Date().toISOString(), sourceProject: state.project, sourceOwner: state.owner, inventory, artifacts, modelAudit: audit, files: [], images: [] };
+    const databaseDumpVerification = await verifyDatabaseDump(state, target);
+    const manifest = { format: 'WFC-PF-LOCAL-BACKUP', schemaVersion: 1, profile: 'cold-pg-minio-staging-pathfinder-v1', backupId, createdAt: new Date().toISOString(), sourceProject: state.project, sourceOwner: state.owner, inventory, artifacts, modelAudit: audit, databaseDumpVerification, files: [], images: [] };
     for (const role of ['minio', 'staging', 'pathfinder']) {
       const captured = await helper(state, ['node', 'scripts/operations/archives.mjs', 'capture', '/source', '/backup/' + role + '.wfcops'], { mounts: [mount(state.project + '_' + role, '/source', true, 'volume'), mount(target, '/backup', false)] });
       const verified = await helper(state, ['node', 'scripts/operations/archives.mjs', 'verify', '/backup/' + role + '.wfcops', captured.sha256], { mounts: [mount(target, '/backup')] }); if (verified.status !== 'PASS') fail('PF_BACKUP_ARCHIVE_FAILED');

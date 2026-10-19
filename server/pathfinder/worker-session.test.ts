@@ -46,6 +46,19 @@ function harness(close: () => Promise<void>) {
   return { worker, owner, engine, factory, events };
 }
 describe('session lane follows durable advisory-owner lifetime', () => {
+  it('dispatches preparation only after advisory ownership and on the same engine', async () => {
+    const h = harness(async () => {}), request = { requestId: '11111111-1111-4111-8111-111111111111', operation: 'prepare', timeoutMilliseconds: 10000 };
+    const response = { schemaVersion: 'pathfinder.model.response.v1' as const, requestId: request.requestId, status: 'prepared' as const, message: '', engineeringAccepted: false as const };
+    vi.mocked(h.engine.execute).mockImplementation(async () => { h.events.push('prepare'); return response; });
+    await expect(h.worker.executePreparation(request, new AbortController().signal)).rejects.toMatchObject({ code: 'PREPARATION_WORKER_UNAVAILABLE' });
+    h.worker.start();
+    await expect(h.worker.executePreparation(request, new AbortController().signal)).resolves.toEqual(response);
+    expect(h.events.slice(0, 3)).toEqual(['lock', 'factory', 'prepare']);
+    expect(h.factory).toHaveBeenCalledOnce();
+    await h.worker.stop();
+    expect(h.events.slice(-4)).toEqual(['close', 'joined', 'unlock', 'release']);
+    await expect(h.worker.executePreparation(request, new AbortController().signal)).rejects.toMatchObject({ code: 'PREPARATION_WORKER_UNAVAILABLE' });
+  });
   it('creates only after lock and awaits engine close before unlocking and releasing', async () => {
     let finish!: () => void;
     const h = harness(

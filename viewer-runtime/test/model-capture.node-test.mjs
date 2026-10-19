@@ -44,6 +44,27 @@ async function collect(options = {}, input = request) { const value = fixture(op
 const ruleRequest = rules => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], routeRules: rules }; };
 const rule = (objectIds, allowedCategories, id = '44444444-4444-4444-8444-444444444444') => ({ id, objectIds, allowedCategories });
 const lookupRequest = (lookupRouteCodes = ['/BC001']) => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], lookupRouteCodes }; };
+const preparationRequest=(objects=[{objectId:3,rootObjectId:2,projectTrayId:'44444444-4444-4444-8444-444444444444',routeName:'/TRAY-01',shapeName:'STRAIGHT',allowedCategories:['LV']}],equipmentObjectIds=[],equipmentNames=[])=>({captureId:request.captureId,projectId:request.projectId,modelVersionId:request.modelVersionId,contentFingerprint:request.contentFingerprint,preparationSlice:{schemaVersion:'wfc.pf.viewer-slice.v1',sessionId:'55555555-5555-4555-8555-555555555555',partId:'66666666-6666-4666-8666-666666666666',planSha256:'b'.repeat(64),coordinateFrameId:'77777777-7777-4777-8777-777777777777',objects,equipmentObjectIds},equipmentNames});
+test('preparation leaf slices capture exact leaves, authoritative route/shape and only concrete endpoint candidates',async()=>{
+ const input=preparationRequest(undefined,[4],['P-001']),result=await collect({},input),leaf=result.snapshot.objects.find(object=>object.dbId===3);
+ assert.equal(leaf.routeName,'/TRAY-01');assert.equal(leaf.shapeName,'STRAIGHT');assert.equal(leaf.routeBoundaryId,undefined);assert.deepEqual(leaf.allowedCategories,['LV']);assert.ok(result.snapshot.objects.some(object=>object.dbId===4));assert.ok(!result.snapshot.objects.some(object=>object.dbId===5));assert.deepEqual(result.summary.scope.preparationSlice,input.preparationSlice);
+});
+test('preparation endpoint-only slices need no routing geometry and never invent bindings or native proof',async()=>{
+ const result=await collect({},preparationRequest([],[4],['P-001']));assert.deepEqual(result.snapshot.objects.map(object=>object.dbId).sort(),[1,4]);assert.equal(result.summary.counts.fragmentCount,0);assert.equal(result.snapshot.capture.geometryComplete,false);assert.equal(result.summary.engineeringAccepted,false);
+});
+test('preparation explicit leaf slices bound a huge root without traversing all leaves into the payload',async()=>{
+ const f=fixture(),ids=Array.from({length:5000},(_,i)=>i+3);
+ f.tree.getNodeName=id=>id===1?'Plant':id===2?'TRAY-01':'STRAIGHT '+id;f.tree.getChildCount=id=>id===1?1:id===2?ids.length:0;f.tree.getNodeParentId=id=>id===1?0:id===2?1:2;
+ f.tree.enumNodeChildren=(id,visit,recursive)=>{if(id===1){visit(2);if(recursive)ids.forEach(visit);}if(id===2)ids.forEach(visit);};f.tree.enumNodeFragments=(id,visit)=>{if(id>=3)visit(id);};
+ const assembler=createModelCaptureAssembler();for await(const event of captureSelectedModel({model:f.model},preparationRequest()))assembler.accept(event);assert.deepEqual(assembler.finish().objects.map(object=>object.dbId).sort(),[1,2,3]);assert.equal(assembler.summary().scope.indexedObjectCount,5002);
+});
+test('preparation slice rejects nonancestor roots, shared leaf ownership and nonleaf geometry',async()=>{
+ for(const objects of [[{...preparationRequest().preparationSlice.objects[0],rootObjectId:4}],[...preparationRequest().preparationSlice.objects,...preparationRequest().preparationSlice.objects],[{...preparationRequest().preparationSlice.objects[0],objectId:2}]])await assert.rejects(()=>collect({},preparationRequest(objects)),/planned project leaf|frozen project preparation/);
+});
+test('preparation ancestor closure supports a canonical zero SDK root without treating its sentinel parent as a cycle',async()=>{
+ const f=fixture(),originalName=f.tree.getNodeName;f.tree.getRootId=()=>0;f.tree.getNodeName=id=>id===0?'Plant':originalName(id);f.tree.getNodeParentId=id=>id===0||id===2?0:2;f.tree.enumNodeChildren=(id,visit,recursive)=>{if(id===0){visit(2);if(recursive)visit(3);}if(id===2)visit(3);};
+ const assembler=createModelCaptureAssembler();for await(const event of captureSelectedModel({model:f.model},preparationRequest()))assembler.accept(event);assert.deepEqual(assembler.finish().objects.map(object=>object.dbId).sort(),[0,2,3]);
+});
 async function stagedRequest(equipmentNames) {
   const source = { routeRules: [rule([2], ['LV'])], equipmentNames };
   const p = await planModelCaptureInput(source, { captureId: request.captureId, envelopeIdentity: { instanceId: '99999999-9999-4999-8999-999999999999', projectId: request.projectId, modelVersionId: request.modelVersionId, loadId: '88888888-8888-4888-8888-888888888888' } });

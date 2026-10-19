@@ -1,12 +1,13 @@
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, validateModelCaptureInputAck } from './capture-input.mjs';
+import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, validatePreparationSlice } from './preparation-input.mjs';
 
 export const CHANNEL = 'wfc-routings-viewer';
 export const PROTOCOL_VERSION = 1;
 export const SDK_VERSION = '7.130.0';
 export const MAX_MESSAGE_BYTES = 65536;
 export const FRAME_PATH = '/viewer-runtime/7.130.0/index.html';
-export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
-export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'MODEL_SELECTION', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK']);
+export const PARENT_TYPES = Object.freeze(['INIT', 'LOAD_MODEL', 'SHOW_ROUTE', 'CLEAR_ROUTE', 'ZOOM_ROUTE', 'CANCEL_REQUEST', 'DISPOSE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'PICK_POINT', 'READ_MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
+export const FRAME_TYPES = Object.freeze(['HELLO', 'RUNTIME_READY', 'MODEL_PROGRESS', 'MODEL_LOADED', 'ROUTE_RESULT', 'ROUTE_CLEARED', 'ROUTE_ZOOMED', 'REQUEST_CANCELLED', 'DISPOSED', 'WARNING', 'ERROR', 'COMPUTED_PATH_UPDATED', 'POINT_PICKED', 'MODEL_OBJECTS', 'PREPARATION_OBJECTS', 'MODEL_SELECTION', 'PATH_TRANSPARENCY_UPDATED', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK']);
 export const MAX_PATH_POINTS = 20000;
 export const MAX_PATH_CHUNK_POINTS = 128;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -28,6 +29,7 @@ const equipmentNames = value => Array.isArray(value) && value.length <= 256 && v
 function captureRequest(value) {
   if (isStagedModelCaptureStart(value)) return true;
   if (!isUuid(value?.captureId) || !equipmentNames(value?.equipmentNames)) return false;
+  if (exact(value, ['captureId', 'preparationSlice', 'equipmentNames'])) return validatePreparationSlice(value.preparationSlice);
   if (exact(value, ['captureId', 'lookupRouteCodes', 'equipmentNames'])) return value.equipmentNames.length === 0 && Array.isArray(value.lookupRouteCodes) && value.lookupRouteCodes.length > 0 && value.lookupRouteCodes.length <= 100 && value.lookupRouteCodes.every(item => text(item, 256) && /^\/[A-Z0-9][A-Z0-9_.-]*$/.test(item) && item !== '/SECONDARY');
   if (exact(value, ['captureId', 'routeCodes', 'allowedCategories', 'equipmentNames'])) return Array.isArray(value.routeCodes) && value.routeCodes.length > 0 && value.routeCodes.length <= 100 && value.routeCodes.every(item => text(item, 256) && item.trim().length > 0) && categories(value.allowedCategories);
   return exact(value, ['captureId', 'routeRules', 'equipmentNames']) && Array.isArray(value.routeRules) && value.routeRules.length > 0 && value.routeRules.length <= 100 && value.routeRules.every(rule => exact(rule, ['id', 'objectIds', 'allowedCategories']) && isUuid(rule.id) && boundedIds(rule.objectIds) && rule.objectIds.length > 0 && categories(rule.allowedCategories, true)) && new Set(value.routeRules.map(rule => rule.id)).size === value.routeRules.length && value.routeRules.reduce((count, rule) => count + rule.objectIds.length, 0) <= 512;
@@ -100,6 +102,8 @@ function routeResult(value) {
 
 function payload(type, value) {
   switch (type) {
+    case 'READ_PREPARATION_OBJECTS': return validatePreparationDiscoveryRequest(value);
+    case 'PREPARATION_OBJECTS': return validatePreparationDiscoveryPage(value);
     case 'START_MODEL_CAPTURE': return captureRequest(value);
     case 'READ_SELECTION': return exact(value, []);
     case 'MODEL_SELECTION': return exact(value, ['coordinateFrame', 'metresPerDisplayUnit', 'globalOffsetMetres', 'objects']) && payload('MODEL_OBJECTS', { cursor: 0, nextCursor: null, complete: true, query: '', ...value }) && new Set(value.objects.map(object => object.objectId)).size === value.objects.length;
@@ -145,7 +149,7 @@ export function validateEnvelope(value, direction) {
     const allowed = direction === 'parent-to-frame' ? PARENT_TYPES : direction === 'frame-to-parent' ? FRAME_TYPES : [...PARENT_TYPES, ...FRAME_TYPES];
     if (!allowed.includes(value.type) || !payload(value.type, value.payload)) return null;
     const handshake = ['HELLO', 'INIT', 'RUNTIME_READY'].includes(value.type);
-    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_SELECTION', 'MODEL_SELECTION', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK'].includes(value.type) && value.modelVersionId === null) return null;
+    if (handshake ? value.modelVersionId !== null : ['LOAD_MODEL', 'MODEL_PROGRESS', 'MODEL_LOADED', 'SHOW_ROUTE', 'ROUTE_RESULT', 'ZOOM_ROUTE', 'ROUTE_ZOOMED', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'COMPUTED_PATH_UPDATED', 'PICK_POINT', 'POINT_PICKED', 'READ_MODEL_OBJECTS', 'MODEL_OBJECTS', 'READ_PREPARATION_OBJECTS', 'PREPARATION_OBJECTS', 'READ_SELECTION', 'MODEL_SELECTION', 'SET_PATH_TRANSPARENCY', 'PATH_TRANSPARENCY_UPDATED', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'MODEL_CAPTURE_EVENT', 'MODEL_CAPTURE_PROGRESS', 'MODEL_CAPTURE_INPUT_ACK'].includes(value.type) && value.modelVersionId === null) return null;
     const serialized = JSON.stringify(value);
     if (new TextEncoder().encode(serialized).byteLength > MAX_MESSAGE_BYTES) return null;
     return JSON.parse(serialized);

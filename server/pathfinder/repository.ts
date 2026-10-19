@@ -42,6 +42,21 @@ export async function activeModel(client: PoolClient, projectId: string, expecte
 }
 export async function latestArtifact(client: PoolClient, projectId: string, modelVersionId: string | null): Promise<Row | null> {
   if (!modelVersionId) return null;
+  const pointer = (await client.query<Row>(`SELECT p.current_aggregate_id,p.current_artifact_id,
+    a.artifact_id AS aggregate_artifact_id,a.model_version_id AS aggregate_model_id,
+    a.geometry_revision::text AS aggregate_revision,p.geometry_revision::text AS pointer_revision
+    FROM pf_project_preparations p LEFT JOIN pf_preparation_aggregates a
+      ON a.project_id=p.project_id AND a.id=p.current_aggregate_id WHERE p.project_id=$1`,[projectId])).rows[0];
+  if (pointer && (pointer.current_aggregate_id !== null || pointer.current_artifact_id !== null)) {
+    if (!pointer.current_aggregate_id || !pointer.current_artifact_id
+      || pointer.aggregate_artifact_id !== pointer.current_artifact_id || pointer.aggregate_revision !== pointer.pointer_revision)
+      throw new PathFinderError('PREPARATION_CURRENT_INTEGRITY',409);
+    if (pointer.aggregate_model_id === modelVersionId) {
+      const artifact = (await client.query<Row>("SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 AND id=$3 AND purpose='planning'",[projectId,modelVersionId,pointer.current_artifact_id])).rows[0];
+      if (!artifact) throw new PathFinderError('PREPARATION_CURRENT_INTEGRITY',409);
+      return artifact;
+    }
+  }
   return (await client.query<Row>("SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 AND purpose='planning' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId,modelVersionId])).rows[0] ?? null;
 }
 async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null): Promise<LocationDto[]> {

@@ -4,10 +4,19 @@ import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 import type { CanonicalPoint, ComputedPath, PickedPoint, ViewerModelObjectsPage, ModelCaptureRequest } from '../../../../viewer-runtime/protocol.mjs';
+import type { PreparationDiscoveryRequest, PreparationDiscoveryPage } from '../../../../viewer-runtime/preparation-input.mjs';
+import type { PreparationScope } from '../../../../shared/pathfinderPreparation';
+
+export type ProjectPreparationViewer = {
+  readSelection: ViewerController['readSelection'];
+  discover: (request: PreparationDiscoveryRequest) => Promise<PreparationDiscoveryPage>;
+  capture: (request: ModelCaptureRequest) => ReturnType<ViewerController['captureModel']>;
+  assertCurrent: () => void;
+};
 
 type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null> };
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
-type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; modelVersionId: string | null; selectionRevision: string | null };
+type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number };
 const initial: View = { data: null, loading: true, busy: false, error: null, viewerPhase: 'loading', viewerMessage: 'Checking the active model…' };
 const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && error.code === 'APPEARANCE_RESTORE_FAILED' ? new PathFinderApiError(error.code, 0).message : error instanceof ViewerAccessError && error.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'No display-visible route geometry matches the lookup. Check the route names and model visibility.' : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh Path Finder and try again.';
 
@@ -18,6 +27,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   const runRef = useRef<Run | null>(null), dataRef = useRef<PathFinderState | null>(null);
   const lookupCapture = useRef<AbortController | null>(null);
   const planningCapture = useRef<AbortController | null>(null);
+  const projectPreparationCapture = useRef<AbortController | null>(null);
   const [revision, setRevision] = useState(0), [view, setView] = useState<View>(initial);
   const live = useCallback((run: Run) => !run.closed && runRef.current === run && latest.current === scope, [scope]);
   const update = useCallback((run: Run, patch: Partial<View>) => { if (live(run)) setView(previous => ({ ...previous, ...patch })); }, [live]);
@@ -37,7 +47,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     } catch (error) { if (live(run)) { accessFailure(run, error); update(run, { loading: false, error: message(error) }); } return null; }
   }, [accessFailure, isAdmin, live, projectId, token, update]);
   useEffect(() => {
-    const run: Run = { closed: false, abort: new AbortController(), viewer: null, modelVersionId: null, selectionRevision: null };
+    const run: Run = { closed: false, abort: new AbortController(), viewer: null, modelVersionId: null, selectionRevision: null, contentFingerprint:null, generation: revision };
     runRef.current = run; dataRef.current = null; renderedScope.current = scope; setView(initial);
     if (!projectId || !token || !isAdmin || projectId !== loadedProjectId || !container.current) {
       update(run, { loading: false, viewerPhase: 'error', viewerMessage: 'Current administrator project access is required.', error: 'Path Finder is available only to administrators.' });
@@ -47,7 +57,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
       try {
         const [data, models] = await Promise.all([fetchPathFinderState(projectId, token, run.abort.signal), fetchProjectModels(projectId, token, { signal: run.abort.signal })]);
         if (!live(run)) return;
-        dataRef.current = data; run.modelVersionId = data.activeModel.modelVersionId; run.selectionRevision = data.activeModel.selectionRevision;
+        dataRef.current = data; run.modelVersionId = data.activeModel.modelVersionId; run.selectionRevision = data.activeModel.selectionRevision; run.contentFingerprint=data.activeModel.contentFingerprint;
         update(run, { data, loading: false });
         const model = models.versions.find(value => value.id === run.modelVersionId);
         if (!run.modelVersionId) { update(run, { viewerPhase: 'no-model', viewerMessage: 'Select a prepared model in Project Details.' }); return; }
@@ -79,7 +89,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   }, [accessFailure, container, isAdmin, live, loadedProjectId, projectId, refresh, revision, scope, token, update]);
   const perform = useCallback(async <T,>(operation: (data: PathFinderState, run: Run) => Promise<T>): Promise<T | null> => {
     const run = runRef.current, data = dataRef.current;
-    if (!run || !data || !live(run) || !isAdmin) return null;
+    if (!run || !data || !live(run) || !isAdmin || projectPreparationCapture.current) return null;
     update(run, { busy: true, error: null });
     try { const result = await operation(data, run); if (!live(run)) return null; await refresh(run); return result; }
     catch (error) { if (live(run)) { accessFailure(run, error); update(run, { error: message(error) }); } return null; }
@@ -184,16 +194,41 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   const running = view.data?.jobs.some(job => ['queued', 'running'].includes(job.status)) ?? false;
   useEffect(() => { if (!running) return; const timer = setInterval(() => void refresh(), 2000); return () => clearInterval(timer); }, [refresh, running]);
   const viewerAction = useCallback(async <T,>(operation: (viewer: ViewerController) => Promise<T>): Promise<T | null> => {
-    const run = runRef.current; if (!run || !live(run) || !run.viewer) return null;
+    const run = runRef.current; if (!run || !live(run) || !run.viewer || projectPreparationCapture.current) return null;
     try { const result = await operation(run.viewer); return live(run) ? result : null; } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) update(run, { error: message(error) }); return null; }
   }, [live, update]);
+  const runProjectPreparation = useCallback(async <T,>(expected:Pick<PreparationScope,'modelVersionId'|'selectionRevision'|'contentFingerprint'>, operation: (viewer: ProjectPreparationViewer) => Promise<T>, signal?: AbortSignal): Promise<T> => {
+    const run = runRef.current;
+    if (!run || !live(run) || !isAdmin || !run.viewer?.getLoadSnapshot()?.ready || projectPreparationCapture.current || planningCapture.current || lookupCapture.current)
+      throw new Error('Load the active model and finish the current operation before preparing the project.');
+    const controller = new AbortController(); projectPreparationCapture.current = controller;
+    const combined = AbortSignal.any([run.abort.signal, controller.signal, ...(signal ? [signal] : [])]);
+    const model = run.modelVersionId, selection = run.selectionRevision;
+    const current = () => {
+      if (combined.aborted || !live(run) || projectPreparationCapture.current !== controller || run.modelVersionId !== model || run.selectionRevision !== selection || run.modelVersionId!==expected.modelVersionId || run.selectionRevision!==expected.selectionRevision || run.contentFingerprint!==expected.contentFingerprint || !run.viewer?.getLoadSnapshot()?.ready)
+        throw new DOMException('Project preparation paused because the model or operation changed.', 'AbortError');
+    };
+    update(run, { busy: true, error: null });
+    try {
+      current();
+      const value = await operation({ assertCurrent: current,
+        readSelection:async()=>{current();const result=await run.viewer!.readSelection();current();return result;},
+        discover: async request => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
+        capture: async request => { current(); const capture = await run.viewer!.captureModel(request, progress => update(run, { viewerMessage: `Collecting project geometry: ${progress.index + 1} data batches…` }), { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
+      });
+      current(); return value;
+    } finally {
+      if (projectPreparationCapture.current === controller) projectPreparationCapture.current = null;
+      update(run, { busy: false, viewerMessage: run.viewer?.getLoadSnapshot()?.ready ? 'The active model is ready.' : 'Reload the active model to continue preparation.' });
+    }
+  }, [isAdmin, live, update]);
   const visible = renderedScope.current === scope ? view : initial;
   const clear = useCallback(() => { try { runRef.current?.viewer?.clear(); } catch { /* A terminal viewer is already closed. */ } }, []);
-  return { ...visible, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(); }, reloadViewer: () => setRevision(value => value + 1), action, matchAll, saveLocation, uploadSnapshot, calculate, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
+  return { ...visible, preparationAccess: scope, preparationViewerGeneration: visible.viewerPhase === 'ready' ? runRef.current?.generation ?? -1 : -1, runProjectPreparation, refresh: () => { if (visible.viewerPhase === 'error') setRevision(value => value + 1); else void refresh(); }, reloadViewer: () => setRevision(value => value + 1), action, matchAll, saveLocation, uploadSnapshot, calculate, readProposal, readJob, reviewProposal, prepareModel, startLookup, readLookup, startPreview, readPreview,
     pickPoint: (): Promise<PickedPoint | null> => viewerAction(viewer => viewer.pickPoint()), cancelPicking: () => runRef.current?.viewer?.cancelPicking(),
     readObjects: (query: string, cursor = 0): Promise<ViewerModelObjectsPage | null> => viewerAction(viewer => viewer.readModelObjects(cursor, query)),
     readSelection: () => viewerAction(viewer => viewer.readSelection()),
     setPathTransparency: (percent: number) => viewerAction(viewer => viewer.setPathTransparency(percent)),
-    cancelOperation: () => { planningCapture.current?.abort(); lookupCapture.current?.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
+    cancelOperation: () => { projectPreparationCapture.current?.abort(); planningCapture.current?.abort(); lookupCapture.current?.abort(); runRef.current?.viewer?.cancelPicking(); clear(); },
     showPath: (path: ComputedPath) => viewerAction(viewer => viewer.showComputedPath(path)), clear, zoom: () => { try { runRef.current?.viewer?.zoom(); } catch { /* No committed path. */ } } };
 }

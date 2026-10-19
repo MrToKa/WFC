@@ -1,6 +1,7 @@
 // Protected-runtime capture only. Importing this module does not read SDK globals.
 // The parent application uses only the pure assembler and the bounded bridge.
 import { validateModelCaptureInputDescriptor, validateModelCaptureInputScope, modelCaptureScopeBytes, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
+import { validatePreparationSlice } from './preparation-input.mjs';
 export const MODEL_CAPTURE_LIMITS = Object.freeze({ eventBytes: 24 * 1024, totalBytes: 64 * 1024 ** 2, events: 3000, indexedObjects: 1000000, objects: 4096, fragments: 100000, vertices: 5000000, triangles: 5000000, depth: 512, properties: 1024, milliseconds: 300000 });
 const encoder = new TextEncoder();
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -60,7 +61,9 @@ function validateObject(object, lookup = false) {
 
 function requestContract(request) {
   if (!UUID.test(request?.captureId ?? '') || !UUID.test(request.projectId ?? '') || !UUID.test(request.modelVersionId ?? '') || !HASH.test(request.contentFingerprint ?? '')) refuse('Trusted capture/model identity is required.');
-  if (request.lookupRouteCodes !== undefined) {
+  if (request.preparationSlice !== undefined) {
+    if (!validatePreparationSlice(request.preparationSlice) || request.routeRules !== undefined || request.routeCodes !== undefined || request.allowedCategories !== undefined || request.lookupRouteCodes !== undefined) refuse('Invalid frozen project preparation slice.');
+  } else if (request.lookupRouteCodes !== undefined) {
     if (!lookupCodes(request.lookupRouteCodes) || request.routeRules !== undefined || request.routeCodes !== undefined || request.allowedCategories !== undefined || !Array.isArray(request.equipmentNames) || request.equipmentNames.length) refuse('Independent lookup requires only canonical planned route codes and no equipment or planning rules.');
   } else if (request.routeRules !== undefined) {
     if (request.routeCodes !== undefined || request.allowedCategories !== undefined || !Array.isArray(request.routeRules) || !request.routeRules.length || request.routeRules.length > 100 || unique(request.routeRules.map(rule => rule?.id)).length !== request.routeRules.length || request.routeRules.some(rule => !keys(rule, ['id', 'objectIds', 'allowedCategories']) || !UUID.test(rule.id ?? '') || !Array.isArray(rule.objectIds) || !rule.objectIds.length || rule.objectIds.some(id => !Number.isSafeInteger(id) || id <= 0 || id > 2147483647) || unique(rule.objectIds).length !== rule.objectIds.length || !Array.isArray(rule.allowedCategories) || rule.allowedCategories.length > 3 || unique(rule.allowedCategories).length !== rule.allowedCategories.length || rule.allowedCategories.some(value => !['MV', 'LV', 'Control'].includes(value))) || request.routeRules.reduce((count, rule) => count + rule.objectIds.length, 0) > 512) refuse('Choose 1–100 valid ordered route rules within the selected root budget.');
@@ -70,7 +73,7 @@ function requestContract(request) {
   }
   if (request.inputScope !== undefined && (!validateModelCaptureInputDescriptor(request.inputScope) || request.lookupRouteCodes !== undefined)) refuse('Invalid staged capture scope.');
   if (!Array.isArray(request.equipmentNames) || request.equipmentNames.length > (request.inputScope ? CAPTURE_INPUT_LIMITS.names : 256) || request.equipmentNames.some(value => typeof value !== 'string' || !value.trim() || value.length > 256 || /[\u0000-\u001f\u007f-\u009f]/u.test(value))) refuse('Equipment names exceed the explicit capture budget.');
-  return { ...request, ...(request.inputScope ? { inputScope: { ...request.inputScope } } : {}), ...(request.lookupRouteCodes ? { lookupRouteCodes: [...request.lookupRouteCodes] } : request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })) } : { routeCodes: unique(request.routeCodes.map(routeKey)) }), equipmentNames: unique(request.equipmentNames.map(value => value.normalize('NFC').trim())) };
+  return { ...request, ...(request.inputScope ? { inputScope: { ...request.inputScope } } : {}), ...(request.preparationSlice ? { preparationSlice: JSON.parse(serialize(request.preparationSlice)) } : request.lookupRouteCodes ? { lookupRouteCodes: [...request.lookupRouteCodes] } : request.routeRules ? { routeRules: request.routeRules.map(rule => ({ id: rule.id, objectIds: [...rule.objectIds], allowedCategories: [...rule.allowedCategories] })) } : { routeCodes: unique(request.routeCodes.map(routeKey)) }), equipmentNames: unique(request.equipmentNames.map(value => value.normalize('NFC').trim())) };
 }
 
 function* textParts(type, captureId, id, body) {
@@ -123,7 +126,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   const sourceToWorld = matrix().makeScale(scale, scale, scale), sourceUnits = text(model.getUnitString(), 64); if (!sourceUnits.length) refuse('SDK source unit label is missing.');
   const evidence = { sdkVersion: String(globalThis.LMV_VIEWER_VERSION ?? 'unknown'), matrixPrecision: 'binary64', upVector: up, metresPerDisplayUnit: scale, globalOffsetDisplayUnits: offset, globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements), modelTransform: model.getModelTransform?.() ? Array.from(model.getModelTransform().elements) : null, placementTransform: model.getPlacementTransform?.() ? Array.from(model.getPlacementTransform().elements) : null, composition: 'canonicalVertex = displayToWorldMetres * sdkFragmentWorldMatrix * decodedLocalVertex; placement/root transform is not applied twice.', sourceLinkVerified: false, nativeVisibilityKnown: false, fragments: [] };
   const lookup = request.lookupRouteCodes !== undefined;
-  const captureScope = { ...(lookup ? { lookupRouteCodes: request.lookupRouteCodes, visibility: 'current-sdk-display-only-native-unknown' } : request.routeRules ? { routeRules: request.routeRules } : { routeCodes: request.routeCodes, allowedCategories: request.allowedCategories }), equipmentNames: request.equipmentNames };
+  const captureScope = { ...(request.preparationSlice ? { preparationSlice: request.preparationSlice } : lookup ? { lookupRouteCodes: request.lookupRouteCodes, visibility: 'current-sdk-display-only-native-unknown' } : request.routeRules ? { routeRules: request.routeRules } : { routeCodes: request.routeCodes, allowedCategories: request.allowedCategories }), equipmentNames: request.equipmentNames };
   const metadataHash = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', encoder.encode(serialize({ ...evidence, scope: captureScope }))))).map(value => value.toString(16).padStart(2, '0')).join('');
   const header = { schemaVersion: 'pathfinder.model.snapshot.v1', model: { projectId: request.projectId, modelVersionId: request.modelVersionId, contentSha256: request.contentFingerprint }, capture: { adapterVersion: lookup ? 'wfc.protected-lookup-capture.v1' : 'wfc.protected-selected-capture.v1', ...(lookup ? { lookupRouteCodes: request.lookupRouteCodes } : {}), ...(request.inputScope ? { inputScope: { ...request.inputScope, propertyScan: null } } : {}), sourceKind: 'converted', inventoryComplete: false, geometryComplete: false, unitsVerified: false, transformsVerified: false, planningVisibilityKnown: false, sourceLinkVerified: false, evidenceSha256: [metadataHash] }, coordinates: { vertexFrame: 'canonical-world-metres', sourceUnits, metresPerSourceUnit: scale, sourceToWorldMetres: Array.from(sourceToWorld.elements), globalOffsetMetres: offset.map(value => value * scale), displayToWorldMetres: Array.from(displayToWorld.elements) } };
   validateHeader(header);
@@ -197,12 +200,24 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     collect(rootId); tree.enumNodeChildren(rootId, id => { collect(id); return false; }, true);
     if (!deepestMeshes) refuse('A selected route root has no deepest physical geometry descendants.');
   }
+  if (request.preparationSlice) {
+    for (const object of request.preparationSlice.objects) {
+      active();
+      if (!seen.has(object.objectId) || !seen.has(object.rootObjectId) || tree.getChildCount(object.objectId) !== 0 || !ownFragments(object.objectId).length || !lineage(object.objectId).includes(object.rootObjectId)) refuse('A planned project leaf or root no longer matches the selected model.');
+      const record = select(object.objectId, 'routing-leaf', object.routeName);
+      record.allowedCategories = [...object.allowedCategories]; record.shapeName = object.shapeName;
+    }
+    for (const id of request.preparationSlice.equipmentObjectIds) {
+      if (!seen.has(id)) refuse('A planned endpoint is not in the selected model.');
+      select(id, 'object');
+    }
+  }
   const attemptedPropertyIds = new Set(), returnedPropertyIds = new Set();
   // A bounded full property scan is required for exact NFC property matching.
   // SDK fuzzy/substring search cannot establish absence or ambiguity reliably.
   for (let index = 0; index < ids.length; index += 512) {
-    active(); const batchIds = ids.slice(index, index + 512);
-    if (equipment.size || batchIds.some(id => selected.has(id))) {
+    active(); const batchIds = ids.slice(index, index + 512).filter(id => !request.preparationSlice || selected.has(id));
+    if (batchIds.length && (equipment.size || batchIds.some(id => selected.has(id)))) {
       batchIds.forEach(id => attemptedPropertyIds.add(id));
       const rows = await sdkCall((success, failure) => model.getBulkProperties(batchIds, { ignoreHidden: false, needsExternalId: true }, success, failure));
       if (!Array.isArray(rows) || rows.length > batchIds.length) refuse('Invalid SDK property batch.');
@@ -211,7 +226,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
         if (!batchIds.includes(row.dbId) || returned.has(row.dbId)) refuse('SDK property batch identity mismatch.'); returned.add(row.dbId); returnedPropertyIds.add(row.dbId);
         const names = [tree.getNodeName(row.dbId) ?? '', ...(row.properties ?? []).filter(value => PROPERTY_NAME.test(value.displayName ?? value.attributeName ?? '')).map(value => String(value.displayValue ?? ''))];
         const matches = names.map(normal).filter(name => equipment.has(name));
-        if (matches.length) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
+        if (matches.length && (!request.preparationSlice || request.preparationSlice.equipmentObjectIds.includes(row.dbId))) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
         if (selected.has(row.dbId)) propertyMap.set(row.dbId, row);
       }
       if (batchIds.some(id => selected.has(id) && !returned.has(id))) refuse('Selected object properties are incomplete.');
@@ -223,12 +238,12 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     const chain = [], visited = new Set(); let current = id;
     while (current !== null && current !== undefined) {
       if (!Number.isSafeInteger(current) || current < 0 || visited.has(current) || chain.length >= MODEL_CAPTURE_LIMITS.depth || !seen.has(current)) refuse('Cyclic, missing or over-depth SDK hierarchy.');
-      visited.add(current); chain.push(current); const parent = tree.getNodeParentId(current); if (parent === current) refuse('Cyclic SDK parent.'); if (!parent && current === tree.getRootId()) break; current = parent;
+      visited.add(current); chain.push(current); const parent = tree.getNodeParentId(current); if (current === tree.getRootId() && (parent === null || parent === undefined || parent === 0 || parent === current)) break; if (parent === current) refuse('Cyclic SDK parent.'); current = parent;
     }
     return chain;
   }
   for (const record of [...selected.values()]) for (const parent of lineage(record.id).slice(1)) select(parent, 'hierarchy');
-  if (![...selected.values()].some(record => record.role === 'routing-leaf')) {
+  if (![...selected.values()].some(record => record.role === 'routing-leaf') && !request.preparationSlice?.equipmentObjectIds.length) {
     if (lookup) throw Object.assign(new Error('No display-visible route geometry matches the lookup. Check the route names and model visibility.'), { code: 'LOOKUP_GEOMETRY_NOT_FOUND' });
     refuse('No physical routing leaves match the explicitly selected network.');
   }
@@ -288,7 +303,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     const actualBounds = validBounds(objectBounds) ? objectBounds : record.role === 'hierarchy' ? selectedAncestorBounds.get(record.id) : sdkBounds(record.id);
     if (!validBounds(actualBounds)) refuse('Captured hierarchy has no selected descendant bounds.');
     for (const parent of chain.slice(1)) { if (!selectedAncestorBounds.has(parent)) selectedAncestorBounds.set(parent, bounds()); expand(selectedAncestorBounds.get(parent), actualBounds.minimum); expand(selectedAncestorBounds.get(parent), actualBounds.maximum); }
-    const object = { id: 'dbid:' + record.id, parentId: chain[1] !== undefined ? 'dbid:' + chain[1] : null, ...(external.length === 1 ? { externalId: external[0] } : {}), dbId: record.id, name: text(tree.getNodeName(record.id) ?? ''), geometryRole: record.role, leafToRootNames: chain.map(id => text(tree.getNodeName(id) ?? '')), properties, nativeHidden: null, planningExcluded: false, ...(!lookup && record.role === 'routing-leaf' ? record.routeBoundaryId !== undefined ? { routeBoundaryId: 'dbid:' + record.routeBoundaryId } : { routeName: [...record.routeNames][0], shapeName: text(tree.getNodeName(record.id) ?? '') } : {}), categoryAssignmentSource: record.role === 'routing-leaf' ? lookup ? 'lookup-all-categories' : 'explicit-planning' : 'unassigned', allowedCategories: record.role === 'routing-leaf' ? [...(record.allowedCategories ?? request.allowedCategories)] : [], bounds: actualBounds, fragments };
+    const object = { id: 'dbid:' + record.id, parentId: chain[1] !== undefined ? 'dbid:' + chain[1] : null, ...(external.length === 1 ? { externalId: external[0] } : {}), dbId: record.id, name: text(tree.getNodeName(record.id) ?? ''), geometryRole: record.role, leafToRootNames: chain.map(id => text(tree.getNodeName(id) ?? '')), properties, nativeHidden: null, planningExcluded: false, ...(!lookup && record.role === 'routing-leaf' ? record.routeBoundaryId !== undefined ? { routeBoundaryId: 'dbid:' + record.routeBoundaryId } : { routeName: [...record.routeNames][0], shapeName: record.shapeName ?? text(tree.getNodeName(record.id) ?? '') } : {}), categoryAssignmentSource: record.role === 'routing-leaf' ? lookup ? 'lookup-all-categories' : 'explicit-planning' : 'unassigned', allowedCategories: record.role === 'routing-leaf' ? [...(record.allowedCategories ?? request.allowedCategories)] : [], bounds: actualBounds, fragments };
     const body = serialize(object); snapshotBytes += encoder.encode(body).length; if (snapshotBytes > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Selected computational snapshot exceeds64MiB. Reduce scope.');
     for (const event of textParts('object-part', request.captureId, object.id, body)) yield emit(event);
     objectCount++; onProgress?.({ phase: 'geometry', loaded: objectCount, total: selected.size }); await pause();
@@ -296,7 +311,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   const propertyScan = { indexedObjectCount: ids.length, attemptedObjectCount: attemptedPropertyIds.size, returnedObjectCount: returnedPropertyIds.size, omittedObjectCount: attemptedPropertyIds.size - returnedPropertyIds.size, complete: equipment.size > 0 && attemptedPropertyIds.size === ids.length && returnedPropertyIds.size === ids.length };
   const equipmentMatches = [...equipment.values()].map(value => ({ name: value.name, status: value.ids.size > 1 ? 'ambiguous' : !propertyScan.complete ? 'unknown' : value.ids.size === 0 ? 'missing' : 'candidate', candidateObjectIds: [...value.ids].sort((a, b) => a - b).map(id => 'dbid:' + id) }));
   if (equipment.size && !propertyScan.complete) diagnostics.push({ code: 'incomplete_sdk_property_scan', omittedObjectCount: propertyScan.omittedObjectCount, message: 'The SDK omitted requested property rows; absence or uniqueness of endpoint candidates is not established.' });
-  const summary = { scope: { kind: lookup ? 'independent-lookup-network' : 'explicit-selected-network', ...captureScope, ...(request.inputScope ? { inputScope: { ...request.inputScope, propertyScan } } : {}), ...(request.routeRules || lookup ? {} : { routeCodes: request.routeCodes.map(code => '/' + code) }), fullHierarchyIndexed: true, indexedObjectCount: ids.length, selectedObjectsOnly: true, fullGeometryCaptured: false, fullPropertyScan: propertyScan.complete }, evidence, equipmentMatches, diagnostics, counts: { objectCount, fragmentCount, vertexCount, triangleCount }, engineeringAccepted: false, limitations: ['Selected network geometry only; full plant capture/capacity is not established.', ...(lookup ? ['Lookup scope uses current SDK display visibility; native visibility and logical ownership are not established by capture. C# resolves requested owners before fitting.'] : []), 'Exact endpoint candidates retain ambiguity and unknown native visibility; automatic engineering acceptance is not granted.', 'SDK unit/transform measurements do not establish native-converted parity or source-link proof.'] };
+  const summary = { scope: { kind: lookup ? 'independent-lookup-network' : 'explicit-selected-network', ...captureScope, ...(request.inputScope ? { inputScope: { ...request.inputScope, propertyScan } } : {}), ...(request.routeRules || lookup || request.preparationSlice ? {} : { routeCodes: request.routeCodes.map(code => '/' + code) }), fullHierarchyIndexed: true, indexedObjectCount: ids.length, selectedObjectsOnly: true, fullGeometryCaptured: false, fullPropertyScan: propertyScan.complete }, evidence, equipmentMatches, diagnostics, counts: { objectCount, fragmentCount, vertexCount, triangleCount }, engineeringAccepted: false, limitations: ['Selected network geometry only; full plant capture/capacity is not established.', ...(lookup ? ['Lookup scope uses current SDK display visibility; native visibility and logical ownership are not established by capture. C# resolves requested owners before fitting.'] : []), 'Exact endpoint candidates retain ambiguity and unknown native visibility; automatic engineering acceptance is not granted.', 'SDK unit/transform measurements do not establish native-converted parity or source-link proof.'] };
   for (const event of textParts('summary-part', request.captureId, null, serialize(summary))) yield emit(event);
   yield emit({ type: 'complete', captureId: request.captureId, objectCount, fragmentCount, vertexCount, triangleCount, engineeringAccepted: false });
 }

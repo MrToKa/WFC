@@ -6,6 +6,7 @@ import { initializeRoutingPolicySchema } from './purposePolicy.js';
 import { initializeDrawingPolicySchema } from './drawingPolicy.js';
 import { initializeDrawingSnapshotSchema } from './drawingSnapshots.js';
 import { initializeDrawingExportSchema } from './drawingExports.js';
+import { initializePreparationSchema } from './preparationSessions.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -116,4 +117,5 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeDrawingPolicySchema(pool);
   await initializeDrawingSnapshotSchema(pool);
   await initializeDrawingExportSchema(pool);
+  await initializePreparationSchema(pool);
 }

@@ -13,8 +13,9 @@ export async function pathFinderRoot(): Promise<string> {
 }
 export async function snapshotFilename(id: string): Promise<string> {
   const safe = uuid.parse(id), root = await pathFinderRoot();
-  const directory = path.join(root,'snapshots'); await fs.mkdir(directory,{recursive:true});
+  const directory = path.join(root,'snapshots'), created = await fs.mkdir(directory,{recursive:true});
   if ((await fs.lstat(directory)).isSymbolicLink() || await fs.realpath(directory) !== path.resolve(directory)) throw new PathFinderError('UNSAFE_PATHFINDER_STORAGE',503);
+  if (created) {const parent=await fs.open(root,'r');try{await parent.sync();}finally{await parent.close();}}
   return path.join(directory,`${safe}.json`);
 }
 function encodeSnapshot(value:unknown):Buffer {
@@ -34,6 +35,7 @@ export async function storeSnapshot(id: string, value: unknown): Promise<{sha256
   try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
   // Link publishes without replacing another artifact. Unique server UUIDs are the only names admitted.
   await fs.link(temporary,filename); await fs.unlink(temporary);
+  const directory=await fs.open(path.dirname(filename),'r');try{await directory.sync();}finally{await directory.close();}
   return {sha256:createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length};
 }
 export async function readSnapshot(id: string, expectedHash: string): Promise<Buffer> {

@@ -11,6 +11,8 @@ const messages = {
   EXTRACTION_FAILED: 'The requested model metadata could not be read completely.', PICK_UNAVAILABLE: 'Point picking is unavailable for this model.', PICK_TIMEOUT: 'Point picking timed out. Start picking again.',
   LOOKUP_GEOMETRY_NOT_FOUND: 'No display-visible route geometry matches the lookup. Check the route names and model visibility.',
   CAPTURE_RELOAD_REQUIRED: 'Reload the model before preparing another snapshot; this viewer has reached its bounded command budget.',
+  PREPARATION_SCOPE_INVALID: 'The requested project preparation scope is invalid for this model.',
+  PREPARATION_PAGE_TOO_LARGE: 'A model discovery record exceeds the bounded page size.',
   SELECTION_TOO_LARGE: 'Select at most 16 model objects at a time, then add another route rule.',
   APPEARANCE_RESTORE_FAILED: 'Some viewer appearance could not be restored. Press Clear again, or reload the model.',
 };
@@ -133,6 +135,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     try {
       if (capturing) { checkCapture(ownedCapture); if (ownedCapture.captureId !== command.payload.captureId) throw failure('EXTRACTION_FAILED'); }
       await requirePathFinder(command, signal);
+      if (command.type === 'READ_PREPARATION_OBJECTS' && requests.size > 4000) throw failure('CAPTURE_RELOAD_REQUIRED');
       if (capturing) checkCapture(ownedCapture);
       if (!live()) return;
       if (command.type === 'START_MODEL_CAPTURE' || command.type === 'READ_MODEL_CAPTURE') {
@@ -172,12 +175,12 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         });
         if (!live()) return;
         emit(command, 'PATH_TRANSPARENCY_UPDATED', command.payload);
-      } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_SELECTION') {
-        const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : await handle.readModelObjects(command.payload, signal);
+      } else if (command.type === 'READ_MODEL_OBJECTS' || command.type === 'READ_PREPARATION_OBJECTS' || command.type === 'READ_SELECTION') {
+        const result = command.type === 'READ_SELECTION' ? await handle.readSelection(signal) : command.type === 'READ_PREPARATION_OBJECTS' ? await handle.readPreparationObjects(command.payload, signal) : await handle.readModelObjects(command.payload, signal);
         // Metadata and picks may outlive an ACL change while the SDK worker runs.
         await requirePathFinder(command, signal);
         if (!live()) return;
-        if (!emit(command, command.type === 'READ_SELECTION' ? 'MODEL_SELECTION' : 'MODEL_OBJECTS', result)) throw failure('EXTRACTION_FAILED');
+        if (!emit(command, command.type === 'READ_SELECTION' ? 'MODEL_SELECTION' : command.type === 'READ_PREPARATION_OBJECTS' ? 'PREPARATION_OBJECTS' : 'MODEL_OBJECTS', result)) throw failure('EXTRACTION_FAILED');
       } else {
         const result = await handle.pickPoint(signal);
         await requirePathFinder(command, signal);
@@ -274,7 +277,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       else if (command.type !== 'DISPOSE') return;
     } else requests.set(command.requestId, { command, status: 'pending' });
     try { switch (command.type) {
-      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE':
+      case 'BEGIN_COMPUTED_PATH': case 'APPEND_COMPUTED_PATH': case 'COMMIT_COMPUTED_PATH': case 'PICK_POINT': case 'READ_MODEL_OBJECTS': case 'READ_PREPARATION_OBJECTS': case 'READ_SELECTION': case 'SET_PATH_TRANSPARENCY': case 'START_MODEL_CAPTURE': case 'READ_MODEL_CAPTURE':
         if (phase !== 'loaded' || !handle) { error(command, failure('INVALID_STATE')); return; }
         void pathFinder(command); break;
       case 'INIT':

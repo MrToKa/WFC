@@ -230,6 +230,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
         showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; return result; },
         readModelObjects: pathfinder.readObjects,
+        readPreparationObjects: pathfinder.readPreparationObjects,
         readSelection: pathfinder.readSelection,
         setPathTransparency: pathfinder.setTransparency,
         pickPoint: pathfinder.pickPoint,

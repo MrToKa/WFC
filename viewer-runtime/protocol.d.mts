@@ -35,9 +35,10 @@ export interface ComputedPath { pathId: string; points: CanonicalPoint[]; object
 export type RoutingCategory = 'MV' | 'LV' | 'Control';
 export interface ModelRouteRule { id: string; objectIds: number[]; allowedCategories: RoutingCategory[] }
 export type ModelCaptureRequest = { equipmentNames: string[] } & (
-  { routeCodes: string[]; allowedCategories: RoutingCategory[]; routeRules?: never; lookupRouteCodes?: never } |
-  { routeRules: ModelRouteRule[]; routeCodes?: never; allowedCategories?: never; lookupRouteCodes?: never } |
-  { lookupRouteCodes: string[]; routeCodes?: never; routeRules?: never; allowedCategories?: never }
+  { routeCodes: string[]; allowedCategories: RoutingCategory[]; routeRules?: never; lookupRouteCodes?: never; preparationSlice?: never } |
+  { routeRules: ModelRouteRule[]; routeCodes?: never; allowedCategories?: never; lookupRouteCodes?: never; preparationSlice?: never } |
+  { lookupRouteCodes: string[]; routeCodes?: never; routeRules?: never; allowedCategories?: never; preparationSlice?: never } |
+  { preparationSlice:import('./preparation-input.mjs').PreparationSlice;routeCodes?:never;routeRules?:never;lookupRouteCodes?:never;allowedCategories?:never }
 );
 export interface ModelCaptureProgress { index: number; type: string; objectCount?: number }
 export interface PickedPoint { objectId: number; point: CanonicalPoint; derivation: 'picked-surface-point' }

@@ -51,6 +51,38 @@ test('canonical coordinates preserve binary64 offset, units, round trip and reje
   assert.throws(() => coordinates.toDisplay([Infinity, 0, 0]), { code: 'COORDINATES_UNSUPPORTED' });
 });
 
+test('preparation discovery is exact case-sensitive NFC, returns all duplicate candidates and retains leading zeroes',async()=>{
+ const f=fixture();f.tree.getNodeName=id=>({1:'Plant',2:'TRAY-001',3:'TRAY-001'})[id];f.tree.getChildCount=id=>id===1?2:0;
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],rootObjectId:null,cursor:0,limit:1};
+ const first=await f.controller.readPreparationObjects(request),second=await f.controller.readPreparationObjects({...request,cursor:first.nextCursor});
+ assert.deepEqual([...first.objects,...second.objects].map(x=>x.objectId),[2,3]);assert.equal(first.complete,false);assert.equal(second.complete,true);assert.deepEqual(first.objects[0].matchedNames,['TRAY-001']);
+ for(const name of ['tray-001','TRAY-01','TRAY','RAY-001'])assert.equal((await f.controller.readPreparationObjects({...request,names:[name]})).objects.length,0);
+ f.controller.dispose();
+});
+test('preparation subtree and endpoint-ancestor modes preserve full hierarchy and distinguish physical leaves',async()=>{
+ const f=fixture();f.tree.getChildCount=id=>id===1?2:0;f.tree.enumNodeChildren=(id,fn)=>{if(id===1){fn(2);fn(3);}};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtree',names:[],rootObjectId:2,cursor:0,limit:128};
+ const subtree=await f.controller.readPreparationObjects(request),ancestors=await f.controller.readPreparationObjects({...request,mode:'ancestors'});
+ assert.deepEqual(subtree.objects.map(x=>x.objectId),[1,2]);assert.deepEqual(ancestors.objects,subtree.objects);assert.equal(subtree.objects[1].isPhysicalLeaf,true);assert.equal(subtree.objects[0].isPhysicalLeaf,false);
+ f.controller.dispose();
+});
+test('preparation property discovery retains every property-only candidate and explicit omitted-row evidence',async()=>{
+ for(const omitted of [false,true]){
+  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.filter(id=>!omitted||id!==3).map(dbId=>({dbId,properties:dbId===1?[]:[{displayName:'Equipment Tag',displayValue:'p-001'}]})));};
+  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:1},first=await f.controller.readPreparationObjects(request),second=first.complete?null:await f.controller.readPreparationObjects({...request,cursor:first.nextCursor});
+  assert.equal(calls,1);assert.equal(first.propertyScan.complete,!omitted);assert.equal(first.propertyScan.omittedObjectCount,omitted?1:0);assert.deepEqual([...first.objects,...(second?.objects??[])].map(x=>x.objectId),omitted?[2]:[2,3]);f.controller.dispose();
+ }
+});
+test('preparation cancelled discovery cannot complete',async()=>{
+ const f=fixture();f.tree.getChildCount=id=>id===1?2:0;const abort=new AbortController();abort.abort();await assert.rejects(()=>f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtree',names:[],rootObjectId:1,cursor:0,limit:128},abort.signal),{name:'AbortError'});f.controller.dispose();
+});
+test('preparation subtree pagination bounds actual UTF8 records without silent truncation',async()=>{
+ const f=fixture(),children=Array.from({length:128},(_,i)=>i+2);f.tree.getNodeName=id=>id===1?'Plant':'界'.repeat(2048);f.tree.getChildCount=id=>id===1?children.length:0;f.tree.enumNodeChildren=(id,fn)=>{if(id===1)children.forEach(fn);};
+ const seen=[],request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtree',names:[],rootObjectId:1,cursor:0,limit:128};
+ for(let pages=0;pages<100;pages++){const page=await f.controller.readPreparationObjects(request);assert.ok(Buffer.byteLength(JSON.stringify(page))<=24576);seen.push(...page.objects.map(object=>object.objectId));if(page.complete)break;assert.ok(page.nextCursor>request.cursor);request.cursor=page.nextCursor;}
+ assert.deepEqual(seen,[1,...children]);assert.equal(new Set(seen).size,129);f.controller.dispose();
+});
+
 test('exact ordered path is rendered without fitting; filled Ghost and all original fades restore', () => {
   const f = fixture(), coordinates = modelCoordinates(f.model), points = [[4, 5, 6], [5, 7, 9], [8, 9, 10]].map(point => coordinates.toCanonical(point));
   f.controller.showPath({ points, objectIds: [2] });

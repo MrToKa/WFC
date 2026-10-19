@@ -1,4 +1,5 @@
 import { isCanonicalPoint } from './protocol.mjs';
+import { PREPARATION_VIEWER_LIMITS, PREPARATION_MATCHING_POLICY, validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage } from './preparation-input.mjs';
 
 const fail = code => Object.assign(new Error('The requested PathFinder viewer operation could not be completed.'), { code });
 const abortError = () => new DOMException('Operation cancelled.', 'AbortError');
@@ -75,7 +76,7 @@ export function modelCoordinates(model) {
 
 export function createPathFinderController(viewer, { window, signal } = {}) {
   const model = viewer.model, THREE = window.THREE, sceneName = 'wfc-computed-path';
-  let disposed = false, overlays = [], geometries = [], material, ghost, bounds, pick, inventoryPromise, externalPromise;
+  let disposed = false, overlays = [], geometries = [], material, ghost, bounds, pick, inventoryPromise, externalPromise, preparationEquipment, preparationSubtree;
   let appearance, pathObjectIds = [], viewGeneration = 0, transparencyOperation = 0, materialSerial = 0, sceneActive = false, recoveryRequired = false;
   const pendingCloneCleanup = new Set();
   const active = operationSignal => { if (disposed || signal?.aborted || operationSignal?.aborted) throw abortError(); };
@@ -282,7 +283,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       const tree = await callback((yes, no) => model.getObjectTree(yes, no), operationSignal, 45000);
       const ids = [tree.getRootId()], seen = new Set(ids);
       tree.enumNodeChildren(ids[0], id => { if (!seen.has(id)) { seen.add(id); ids.push(id); } return ids.length > 1000000; }, true);
-      if (ids.length > 1000000 || !ids.every(positiveId)) throw fail('EXTRACTION_FAILED');
+      if (ids.length > 1000000 || !ids.every(id => Number.isSafeInteger(id) && id >= 0 && id <= 2147483647)) throw fail('EXTRACTION_FAILED');
       const names = [];
       for (let index = 0; index < ids.length; index++) {
         active(operationSignal);
@@ -291,7 +292,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
         names.push(name);
         if (index % 8192 === 0) await pause();
       }
-      return { tree, ids, names };
+      return { tree, ids, names, indexById:new Map(ids.map((id, index) => [id, index])) };
     })().catch(error => { inventoryPromise = undefined; throw error; });
     return inventoryPromise;
   }
@@ -306,6 +307,78 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       return result;
     }).catch(error => { externalPromise = undefined; throw error; });
     return externalPromise;
+  }
+  async function readPreparationObjects(input, operationSignal) {
+    if (!validatePreparationDiscoveryRequest(input)) throw fail('PREPARATION_SCOPE_INVALID');
+    const request = JSON.parse(JSON.stringify(input)), started = Date.now();
+    const check = () => { active(operationSignal); if (viewer.model !== model) throw fail('MODEL_SELECTION_CHANGED'); if (Date.now() - started > 300000) throw fail('EXTRACTION_FAILED'); };
+    check(); const indexed = await inventory(operationSignal), { tree, ids, names } = indexed; check();
+    if (request.cursor > ids.length) throw fail('PREPARATION_SCOPE_INVALID');
+    const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices;
+    const normalEquipment = value => String(value).normalize('NFC').trim().toUpperCase();
+    if (request.mode === 'subtree' || request.mode === 'ancestors') {
+      if (!indexById.has(request.rootObjectId)) throw fail('PREPARATION_SCOPE_INVALID');
+      if (preparationSubtree?.id !== request.rootObjectId || preparationSubtree?.mode !== request.mode) {
+        const selected = new Set([request.rootObjectId]);
+        if (request.mode === 'subtree') tree.enumNodeChildren(request.rootObjectId, id => { check(); if (!indexById.has(id)) throw fail('EXTRACTION_FAILED'); selected.add(id); return false; }, true);
+        let id = request.rootObjectId, depth = 0; const seen = new Set();
+        while (id !== ids[0]) {
+          if (++depth > PREPARATION_VIEWER_LIMITS.depth || seen.has(id)) throw fail('EXTRACTION_FAILED'); seen.add(id);
+          const parent = tree.getNodeParentId(id); if (!indexById.has(parent) || parent === id) throw fail('EXTRACTION_FAILED'); selected.add(parent); id = parent;
+        }
+        preparationSubtree = { id:request.rootObjectId, mode:request.mode, indices:[...selected].map(id => indexById.get(id)).sort((a,b) => a-b) };
+      }
+      candidateIndices = preparationSubtree.indices;
+    } else if (request.mode === 'equipment') {
+      const key = JSON.stringify(request.names);
+      if (preparationEquipment?.key !== key) {
+        const state = { key, promise:null }; preparationEquipment = state;
+        state.promise = (async () => {
+          const matches = new Map(), returnedIds = new Set(), sought = new Map();
+          for (const name of request.names) { const key = normalEquipment(name); if (!sought.has(key)) sought.set(key, []); sought.get(key).push(name); }
+          for (let start = 0; start < ids.length; start += 512) {
+            check(); const batch = ids.slice(start, start + 512), allowed = new Set(batch);
+            const rows = await callback((yes, no) => model.getBulkProperties(batch, { ignoreHidden:false, needsExternalId:false }, yes, no), operationSignal, 45000); check();
+            if (!Array.isArray(rows) || rows.length > batch.length) throw fail('EXTRACTION_FAILED');
+            for (const row of rows) {
+              if (!allowed.has(row.dbId) || returnedIds.has(row.dbId) || !Array.isArray(row.properties)) throw fail('EXTRACTION_FAILED'); returnedIds.add(row.dbId);
+              const values = [names[indexById.get(row.dbId)], ...row.properties.filter(property => /^(tag|name|equipment[ _-]?tag|equipment[ _-]?name|location)$/i.test(property.displayName ?? property.attributeName ?? '')).map(property => String(property.displayValue ?? ''))];
+              const found = [...new Set(values.flatMap(value => sought.get(normalEquipment(value)) ?? []))];
+              if (found.length) matches.set(row.dbId, request.names.filter(name => found.includes(name)));
+            }
+            await pause();
+          }
+          return { matches, indices:[...matches.keys()].map(id => indexById.get(id)).sort((a,b)=>a-b), propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedIds.size, omittedObjectCount:ids.length-returnedIds.size, complete:returnedIds.size===ids.length } };
+        })().catch(error => { if (preparationEquipment === state) preparationEquipment = undefined; throw error; });
+      }
+      const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan;
+      for (const [id, found] of data.matches) matching.set(id, found); candidateIndices = data.indices;
+    }
+    const result = { schemaVersion:'wfc.pf.viewer-discovery.v1', mode:request.mode, names:request.names, rootObjectId:request.rootObjectId, cursor:request.cursor, matchingPolicyVersion:PREPARATION_MATCHING_POLICY, indexedObjectCount:ids.length, propertyScan, objects:[], nextCursor:null, complete:true };
+    let cursor = request.cursor;
+    function* candidates() {
+      if (candidateIndices) {
+        let low = 0, high = candidateIndices.length;
+        while (low < high) { const middle = Math.floor((low+high)/2); if (candidateIndices[middle] < request.cursor) low = middle+1; else high = middle; }
+        for (let index=low;index<candidateIndices.length;index++) yield candidateIndices[index];
+      } else for (let index=request.cursor;index<ids.length;index++) yield index;
+    }
+    const iterator = candidates();
+    let finished = true;
+    for (let next=iterator.next();!next.done;next=iterator.next()) {
+      const index = next.value;
+      cursor = index; check(); const id = ids[cursor], matchedNames = ['subtree','ancestors'].includes(request.mode) ? [] : request.mode === 'equipment' ? matching.get(id) ?? [] : request.names.filter(name => names[cursor].normalize('NFC').trim() === name);
+      if (request.mode === 'names' && matchedNames.length === 0) { if (cursor % 8192 === 0) await pause(); continue; }
+      let hasGeometry = false; tree.enumNodeFragments(id, () => { hasGeometry = true; }, false);
+      const parent = id === ids[0] ? null : tree.getNodeParentId(id);
+      if (parent !== null && (!indexById.has(parent) || parent === id)) throw fail('EXTRACTION_FAILED');
+      const object = { objectId:id, parentId:parent, name:names[cursor], hasGeometry, isPhysicalLeaf:hasGeometry && tree.getChildCount(id) === 0, orderIndex:cursor, matchedNames };
+      const candidate = { ...result, objects:[...result.objects, object], nextCursor:cursor+1, complete:false };
+      if (new TextEncoder().encode(JSON.stringify(candidate)).length > PREPARATION_VIEWER_LIMITS.pageBytes) { if (!result.objects.length) throw fail('PREPARATION_PAGE_TOO_LARGE'); finished = false; break; }
+      result.objects.push(object); if (result.objects.length >= request.limit) { cursor++; finished = iterator.next().done === true; break; }
+    }
+    result.nextCursor = finished ? null : cursor; result.complete = result.nextCursor === null;
+    check(); if (!validatePreparationDiscoveryPage(result)) throw fail('EXTRACTION_FAILED'); return result;
   }
   async function readObjects({ cursor, limit, query }, operationSignal, selectedIds) {
     active(operationSignal);
@@ -392,5 +465,5 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       signal?.addEventListener('abort', abort, { once: true }); operationSignal?.addEventListener('abort', abort, { once: true });
     });
   }
-  return { showPath, fit, clear, readObjects, readSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = undefined; } } };
+  return { showPath, fit, clear, readObjects, readPreparationObjects, readSelection, setTransparency, pickPoint, dispose() { if (disposed) return; pick?.cancel(); try { clear(); } catch (error) { if (error?.code !== 'APPEARANCE_RESTORE_FAILED') throw error; /* The adapter still finishes the SDK viewer; attached materials remain owned by that SDK teardown. */ } finally { disposed = true; inventoryPromise = externalPromise = preparationEquipment = preparationSubtree = undefined; } } };
 }

@@ -30,6 +30,14 @@ beforeEach(() => {
 });
 afterEach(() => { document.body.replaceChildren(); });
 describe('PathFinder scope and shared-location orchestration', () => {
+  it('refuses attributing the loaded viewer to another model, fingerprint or selection before any protected command',async()=>{
+    const {result}=renderHook(()=>usePathFinder({projectId,loadedProjectId:projectId,token:'token',isAdmin:true,container}));
+    await waitFor(()=>expect(result.current.data).not.toBeNull());
+    const expected={modelVersionId:modelId,selectionRevision:'2',contentFingerprint:'a'.repeat(64)},operation=vi.fn(async()=>true);
+    for(const patch of [{modelVersionId:locationId},{selectionRevision:'3'},{contentFingerprint:'b'.repeat(64)}])await act(async()=>{await expect(result.current.runProjectPreparation({...expected,...patch},operation)).rejects.toThrow();});
+    expect(operation).not.toHaveBeenCalled();expect(facts.capture).not.toHaveBeenCalled();expect(facts.readSelection).not.toHaveBeenCalled();
+    await act(async()=>{await expect(result.current.runProjectPreparation(expected,operation)).resolves.toBe(true);});
+  });
   it('cancels a late planning capture before it can upload', async () => {
     let finish!: (value: { snapshot: unknown; summary: Record<string, unknown> }) => void;
     facts.capture.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));

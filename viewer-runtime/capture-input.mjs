@@ -1,4 +1,5 @@
 // Shared pure input contract. No SDK globals or asynchronous work during import.
+import { validatePreparationSlice } from './preparation-input.mjs';
 export const CAPTURE_INPUT_LIMITS = Object.freeze({ names: 4096, namesPerChunk: 256, chunks: 16, bytes: 1024 ** 2, messageBytes: 65536, responses: 3000, milliseconds: 300000 });
 const encoder = new TextEncoder(), UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/, HASH = /^[a-f0-9]{64}$/;
 const integer = (v, max = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(v) && v >= 0 && v <= max;
@@ -14,6 +15,10 @@ const serialize = value => JSON.stringify(value);
 const bytes = value => encoder.encode(serialize(value));
 
 function routeScope(request) {
+  if (request?.preparationSlice !== undefined) {
+    requireThat(request.routeCodes === undefined && request.routeRules === undefined && request.allowedCategories === undefined && request.lookupRouteCodes === undefined && validatePreparationSlice(request.preparationSlice));
+    return { preparationSlice: JSON.parse(JSON.stringify(request.preparationSlice)) };
+  }
   if (request?.routeRules !== undefined) {
     requireThat(request.routeCodes === undefined && request.allowedCategories === undefined && request.lookupRouteCodes === undefined && Array.isArray(request.routeRules) && request.routeRules.length > 0 && request.routeRules.length <= 100);
     requireThat(request.routeRules.every(rule => exact(rule, ['id', 'objectIds', 'allowedCategories']) && UUID.test(rule.id ?? '') && Array.isArray(rule.objectIds) && rule.objectIds.length > 0 && rule.objectIds.length <= 512 && rule.objectIds.every(id => integer(id, 2147483647) && id > 0) && new Set(rule.objectIds).size === rule.objectIds.length && categories(rule.allowedCategories, true)));
@@ -44,7 +49,7 @@ export function validateModelCaptureInputScope(value, { allowPending = false } =
   return exact(propertyScan, ['indexedObjectCount', 'attemptedObjectCount', 'returnedObjectCount', 'omittedObjectCount', 'complete']) && ['indexedObjectCount', 'attemptedObjectCount', 'returnedObjectCount', 'omittedObjectCount'].every(k => integer(propertyScan[k], 1000000)) && propertyScan.indexedObjectCount > 0 && propertyScan.returnedObjectCount <= propertyScan.attemptedObjectCount && propertyScan.attemptedObjectCount <= propertyScan.indexedObjectCount && propertyScan.omittedObjectCount === propertyScan.attemptedObjectCount - propertyScan.returnedObjectCount && propertyScan.complete === (value.equipmentNameCount > 0 && propertyScan.attemptedObjectCount === propertyScan.indexedObjectCount && propertyScan.omittedObjectCount === 0);
 }
 export function isStagedModelCaptureStart(value) {
-  try { if (!UUID.test(value?.captureId ?? '') || !validateModelCaptureInputDescriptor(value.input)) return false; const fields = value.routeRules !== undefined ? ['captureId', 'routeRules', 'input'] : ['captureId', 'routeCodes', 'allowedCategories', 'input']; if (!exact(value, fields)) return false; routeScope(value); return true; } catch { return false; }
+  try { if (!UUID.test(value?.captureId ?? '') || !validateModelCaptureInputDescriptor(value.input)) return false; const fields = value.preparationSlice !== undefined ? ['captureId', 'preparationSlice', 'input'] : value.routeRules !== undefined ? ['captureId', 'routeRules', 'input'] : ['captureId', 'routeCodes', 'allowedCategories', 'input']; if (!exact(value, fields)) return false; routeScope(value); return true; } catch { return false; }
 }
 export function isModelCaptureInputAppend(value) {
   return exact(value, ['captureId', 'equipmentOffset', 'equipmentNames']) && UUID.test(value.captureId ?? '') && integer(value.equipmentOffset, CAPTURE_INPUT_LIMITS.names) && Array.isArray(value.equipmentNames) && value.equipmentNames.length > 0 && value.equipmentNames.length <= CAPTURE_INPUT_LIMITS.namesPerChunk && value.equipmentNames.every(name);
@@ -71,7 +76,9 @@ export async function planModelCaptureInput(request, { captureId, envelopeIdenti
     chunks.push(payload); requireThat(chunks.length <= CAPTURE_INPUT_LIMITS.chunks); offset += length;
   }
   const descriptor = { schemaVersion: 'wfc.capture.input.v1', equipmentNameCount: input.equipmentNames.length, chunkCount: chunks.length, inputUtf8Bytes: scopeBytes.length, scopeSha256, equipmentNamesSha256 };
-  return freeze({ request: input, descriptor, chunks, startPayload: { captureId, ...routeScope(input), input: descriptor } });
+  const startPayload = { captureId, ...routeScope(input), input: descriptor };
+  requireThat(bytes({ channel:'wfc-routings-viewer', protocolVersion:1, ...envelopeIdentity, requestId:captureId, type:'START_MODEL_CAPTURE', payload:startPayload }).length <= CAPTURE_INPUT_LIMITS.messageBytes);
+  return freeze({ request: input, descriptor, chunks, startPayload });
 }
 
 /** One private staged request; no SDK scan starts before all input is verified. */

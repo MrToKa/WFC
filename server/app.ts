@@ -25,6 +25,8 @@ import { uuid } from './pathfinder/contracts.js';
 import { createPurposePolicyRouter } from './pathfinder/purposePolicyRoutes.js';
 import { createDrawingPurposePolicyRouter } from './pathfinder/drawingPolicyRoutes.js';
 import { createDrawingSnapshotRouter } from './pathfinder/drawingSnapshotRoutes.js';
+import { createPreparationRouter } from './pathfinder/preparationRoutes.js';
+import { getPathFinderRuntime } from './pathfinder/runtime.js';
 
 // Large PF payloads require the current project/admin/login before parsing;
 // the write transaction repeats authorization after the upload completes.
@@ -62,6 +64,7 @@ export const createApp = (): Express => {
   // errors. Mount before generic JSON and project middleware consumes the body.
   app.use('/api/projects/:projectId/pathfinder', createPurposePolicyRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createDrawingPurposePolicyRouter(pool));
+  app.use('/api/projects/:projectId/pathfinder/preparations', createPreparationRouter(pool,getPathFinderRuntime().preparations));
   app.use('/api/projects/:projectId/trays/:trayId', createDrawingSnapshotRouter(pool));
   // Filtered exports send IDs for every matching page, which can exceed the default 100 KB.
   app.use(/^\/api\/materials\/[^/]+\/export$/, express.json({ limit: '10mb' }));

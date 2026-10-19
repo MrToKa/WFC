@@ -23,6 +23,7 @@ function database(options:{rows?:Candidate[];manual?:boolean;admin?:boolean;revo
     if (sql.startsWith('SELECT registry_revision::text')) return {rows:[{registry_revision:options.registry??'1'}]};
     if (sql.includes('FROM project_model_selections s LEFT JOIN')) return {rows:[{active_model_version_id:options.model===undefined?modelId:options.model,selection_revision:'1',content_fingerprint:'a'.repeat(64),state:'ready',health:'healthy'}]};
     if (sql.startsWith('SELECT * FROM pf_artifacts')) return {rows:[{id:artifactId}]};
+    if (sql.startsWith('SELECT p.current_aggregate_id')) return {rows:[]};
     if (sql.startsWith('SELECT DISTINCT value AS name FROM cables')) return {rows:[]};
     if (sql.startsWith('SELECT l.id,l.name')) return {rows:[{id:locationId,name:' =a001 ',aliases:['Other alias'],revision:'1',...(options.manual?{model_version_id:modelId,binding_revision:'7',point:[9,8,7],object_id:'manual-id',source:'manual',artifact_id:artifactId}: {})}]};
     if (sql.startsWith('SELECT * FROM pf_model_objects')) return {rows:options.rows??[candidate('visible')]};

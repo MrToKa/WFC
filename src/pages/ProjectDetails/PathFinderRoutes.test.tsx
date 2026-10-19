@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PathFinderRoutes } from './PathFinderRoutes';
@@ -21,13 +21,14 @@ function fixture(nameCount = 2) {
   const pf = { data, viewerPhase: 'ready', busy: false, readSelection, prepareModel, cancelOperation } as unknown as ReturnType<typeof usePathFinder>;
   return { pf, readSelection, prepareModel, cancelOperation, onRulesDirtyChange: vi.fn() };
 }
+function renderManual(ui: Parameters<typeof render>[0]) { const view=render(ui); fireEvent.click(screen.getByRole('button',{name:'Manual diagnostic capture'})); return view; }
 async function addRule() {
   const user = userEvent.setup(); await user.click(screen.getByRole('button', { name: 'Add current selection' }));
   await screen.findByRole('checkbox', { name: 'Control for rule 1' }); return user;
 }
 describe('bounded Routes preparation and recorded provenance', () => {
   it('prepares all 1,527 synthetic endpoint spellings as one request with a live local scope guard', async () => {
-    const f = fixture(1527); render(<PathFinderRoutes {...f} active standaloneNames={[]} />); const user = await addRule();
+    const f = fixture(1527); renderManual(<PathFinderRoutes {...f} active standaloneNames={[]} />); const user = await addRule();
     await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
     const [request, isCurrent] = f.prepareModel.mock.calls[0];
     expect((request as { equipmentNames: string[] }).equipmentNames).toHaveLength(1527);
@@ -38,7 +39,7 @@ describe('bounded Routes preparation and recorded provenance', () => {
     const f = fixture(4); let finish!: (value: null) => void;
     f.prepareModel.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
     const base = { ...f, active: true, standaloneNames: ['Manual endpoint'] };
-    const view = render(<PathFinderRoutes {...base} />), user = await addRule();
+    const view = renderManual(<PathFinderRoutes {...base} />), user = await addRule();
     await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
     const guard = f.prepareModel.mock.calls[0][1]!; expect(guard()).toBe(true);
     if (change === 'standalone names') view.rerender(<PathFinderRoutes {...base} standaloneNames={['Changed endpoint']} />);
@@ -51,12 +52,12 @@ describe('bounded Routes preparation and recorded provenance', () => {
   });
   it('cancels on detachment and refuses to acknowledge a late capture as the current request', async () => {
     const f = fixture(); let finish!: (value: null) => void; f.prepareModel.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
-    const view = render(<PathFinderRoutes {...f} active standaloneNames={[]} />), user = await addRule(); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
+    const view = renderManual(<PathFinderRoutes {...f} active standaloneNames={[]} />), user = await addRule(); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
     const guard = f.prepareModel.mock.calls[0][1]!; view.unmount(); expect(f.cancelOperation).toHaveBeenCalled(); expect(guard()).toBe(false); await act(async () => finish(null));
   });
   it('retains an accepted late save as the previous endpoint scope instead of clearing the current draft warning', async () => {
     const f = fixture(); let finish!: (value: Record<string, unknown>) => void; f.prepareModel.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
-    const view = render(<PathFinderRoutes {...f} active standaloneNames={[]} />), user = await addRule(); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
+    const view = renderManual(<PathFinderRoutes {...f} active standaloneNames={[]} />), user = await addRule(); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
     view.rerender(<PathFinderRoutes {...f} active standaloneNames={['New endpoint']} />);
     await act(async () => finish({ artifactId: 'saved-before-cancel' }));
     expect(screen.getByText('The saved snapshot records a previous endpoint scope. Prepare again for the current endpoints.')).toBeVisible();
@@ -68,7 +69,7 @@ describe('bounded Routes preparation and recorded provenance', () => {
     inputScope.equipmentNameCount = equipmentNameCount;
     inputScope.chunkCount = equipmentNameCount === 1 ? 1 : 6;
     f.pf.data!.artifacts.push({ id: projectId, modelVersionId: modelId, snapshotSha256: 'c'.repeat(64), objectCount: 52, engineeringAccepted: false, readiness: 'needs_review', capture: { inputScope }, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' });
-    render(<PathFinderRoutes {...f} active standaloneNames={[]} />);
+    renderManual(<PathFinderRoutes {...f} active standaloneNames={[]} />);
     expect(screen.getByText(`Last prepared locations: ${equipmentNameCount.toLocaleString()} ${equipmentNameCount === 1 ? 'name' : 'names'}.`)).toHaveStyle({ display: 'block' });
     expect(screen.getByText(/438,154 of 438,155 checked; 1 unavailable/)).toHaveStyle({ display: 'block', marginTop: '4px' });
     expect(screen.getByText(/Location matching may be incomplete/)).toBeVisible();
@@ -77,10 +78,10 @@ describe('bounded Routes preparation and recorded provenance', () => {
   });
   it('labels historical artifacts with unavailable input scope instead of inventing zero requested names', () => {
     const f = fixture(); f.pf.data!.artifacts.push({ id: projectId, modelVersionId: modelId, snapshotSha256: 'c'.repeat(64), objectCount: 52, engineeringAccepted: false, readiness: 'needs_review', capture: {}, coordinates: {}, createdAt: '2026-10-18T00:00:00Z' });
-    render(<PathFinderRoutes {...f} active standaloneNames={[]} />); expect(screen.getByText('Recorded input scope is unavailable for this historical snapshot.')).toBeVisible(); expect(screen.queryByText(/Last prepared locations: 0/)).toBeNull();
+    renderManual(<PathFinderRoutes {...f} active standaloneNames={[]} />); expect(screen.getByText('Recorded input scope is unavailable for this historical snapshot.')).toBeVisible(); expect(screen.queryByText(/Last prepared locations: 0/)).toBeNull();
   });
   it('refuses more than4,096 names without starting preparation', async () => {
-    const f = fixture(4097); render(<PathFinderRoutes {...f} active standaloneNames={[]} />); const user = await addRule(); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
+    const f = fixture(4097); renderManual(<PathFinderRoutes {...f} active standaloneNames={[]} />); const user = await addRule(); await user.click(screen.getByRole('button', { name: 'Prepare routes from all rules' }));
     expect(f.prepareModel).not.toHaveBeenCalled(); expect(screen.getByText(/Use at most 4,096 equipment names/)).toBeVisible();
   });
 });

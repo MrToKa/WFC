@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "name": "missing-parts-refuse-without-advancing-trusted-pointer",
+      "status": "PASS",
+      "code": "PREPARATION_PARTS_INCOMPLETE"
+    },
+    {
+      "name": "forged-routing-mask-is-refused",
+      "status": "PASS",
+      "code": "PREPARATION_PART_INVALID"
+    },
+    {
+      "name": "foreign-project-payload-is-refused",
+      "status": "PASS",
+      "code": "PREPARATION_PART_INVALID"
+    },
+    {
+      "name": "on-disk-tampered-committed-part-refuses-publication",
+      "status": "PASS",
+      "code": "PREPARATION_BLOB_INTEGRITY"
+    },
+    {
+      "name": "MV-cannot-traverse-Control-only-network",
+      "status": "PASS",
+      "resultStatus": "no_path"
+    }
+  ],
+  "projectId": "58490e71-85f2-45f0-863a-434bf628b230",
+  "sessionId": "72425bb6-c690-46fa-a152-49326d068e60",
+  "applyCount": 0
+}

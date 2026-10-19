@@ -5,6 +5,7 @@ import type { ViewerModelObject, ViewerModelObjectsPage } from '../../../viewer-
 import { CAPTURE_INPUT_LIMITS, modelCaptureScopeBytes } from '../../../viewer-runtime/capture-input.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
+import { ProjectPreparationPanel } from './ProjectPreparationPanel';
 
 type Category = 'MV' | 'LV' | 'Control';
 type Rule = { id: string; objectIds: number[]; allowedCategories: Category[]; names: string[] };
@@ -12,7 +13,10 @@ type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; selectedCa
 const categories: Category[] = ['MV', 'LV', 'Control'];
 
 /** Draft rules are scoped to this active model; the protected frame expands selected roots. */
-export function PathFinderRoutes({ pf, active, selectedCable, standaloneNames, onRulesDirtyChange }: Props) {
+export function PathFinderRoutes({ pf, active: routeActive, selectedCable, standaloneNames, onRulesDirtyChange }: Props) {
+  const [preparationMode, setPreparationMode] = useState<'project' | 'manual'>('project');
+  const [projectBusy, setProjectBusy] = useState(false);
+  const active = routeActive && preparationMode === 'manual';
   const styles = useRoutingsViewerStyles(), generation = useRef(0);
   const ruleRevision = useRef(0), modelScope = `${pf.data?.activeModel.modelVersionId ?? ''}:${pf.data?.activeModel.selectionRevision ?? ''}`, currentModelScope = useRef(modelScope); currentModelScope.current = modelScope;
   const [rules, setRules] = useState<Rule[]>([]), [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
@@ -91,7 +95,14 @@ export function PathFinderRoutes({ pf, active, selectedCable, standaloneNames, o
       }
     } finally { if (generation.current === current) { capturePending.current = false; setWorking(false); } }
   };
-  return <section className={styles.result} aria-label="Route category rules">
+  return <div>
+    <div role="group" aria-label="Routes preparation mode" className={styles.actions}>
+      <Button aria-pressed={preparationMode === 'project'} disabled={pf.busy || working || projectBusy || dirty} onClick={() => setPreparationMode('project')}>Project tray purposes</Button>
+      <Button aria-pressed={preparationMode === 'manual'} disabled={pf.busy || working || projectBusy} onClick={() => setPreparationMode('manual')}>Manual diagnostic capture</Button>
+    </div>
+    <div style={{ display: preparationMode === 'project' ? 'block' : 'none' }}><ProjectPreparationPanel pf={pf} active={routeActive && preparationMode === 'project'} onBusyChange={setProjectBusy} /></div>
+    <section className={styles.result} aria-label="Route category rules" style={{ display: preparationMode === 'manual' ? 'block' : 'none' }}>
+    <p>Manual diagnostic captures are separate from project preparation. Their draft categories cannot grant project routing permissions or replace the trusted project network.</p>
     <h3>Route categories</h3>
     <Body1>Select model objects or groups, then assign the cable categories allowed on their routes.</Body1>
     {recordedInput ? <div aria-label="Recorded preparation input scope">
@@ -133,5 +144,5 @@ export function PathFinderRoutes({ pf, active, selectedCable, standaloneNames, o
     <Button appearance="primary" disabled={!active || pf.viewerPhase !== 'ready' || !rules.length || pf.busy || working} onClick={() => void prepare()}>Prepare routes from all rules</Button>
     {working ? <Button onClick={() => { capturePending.current = false; generation.current++; pf.cancelOperation(); setWorking(false); setNotice('Viewer preparation cancelled. A snapshot already being saved will be retained when its save finishes.'); }}>Cancel route preparation</Button> : null}
     <Caption1>Preparation includes the named From/To endpoints entered in Path and the project cable endpoint names. Selection rules reset when the active model version or its selection revision changes. Only the explicitly selected route network is prepared.</Caption1>
-  </section>;
+  </section></div>;
 }

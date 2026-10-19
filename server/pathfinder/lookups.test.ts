@@ -67,7 +67,7 @@ describe('independent lookup artifacts and current authority',()=>{
   });
   it('keeps planning latest selection purpose-filtered even when a newer lookup artifact exists',async()=>{
     const db=database({planningArtifact:true});expect((await latestArtifact(db.client,projectId,modelId))?.id).toBe(artifactId);
-    expect(db.query.mock.calls[0][0]).toContain("purpose='planning'");
+    expect(db.query.mock.calls.at(-1)?.[0]).toContain("purpose='planning'");
   });
   it('reuses only exact same-purpose current-conversion bytes and checks the retained file integrity before enqueueing',async()=>{
     const db=database({reuse:true});await createPathFinderLookups(db.pool).create(projectId,who,input());
