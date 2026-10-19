@@ -6,6 +6,8 @@ import type { EngineResponse,JobPrincipal } from './jobContracts.js';
 import { snapshotObject } from './contracts.js';
 import { proposalRoutingPreferences } from './jobContracts.js';
 import { createPathFinderApply } from './apply.js';
+import { syntheticEngineIdentity } from './calculationFixtures.js';
+vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:vi.fn(async()=>syntheticEngineIdentity())}));
 
 // Preview's former behaviour is retained only behind an explicitly scoped
 // producer. Actual missing/mismatched producer controls live in routingScope.test.
@@ -16,7 +18,7 @@ vi.mock('./endpointBindingRepository.js',()=>({
   readEndpointBindingScope:vi.fn(async(client:PoolClient,input:{locationId:string})=>{
     const value=(client as unknown as {endpointAliases:Array<Record<string,unknown>>}).endpointAliases.find(row=>row.id===input.locationId);
     if(!value?.point||value.artifact_id&&value.artifact_id!==artifactId)return{status:'stale',code:'ENDPOINT_BINDING_STALE'};
-    return{status:'confirmed',binding:{id:who.loginId,locationId:input.locationId,locationRevision:'2',bindingRevision:value.revision,pointProjectMetres:value.point,
+    return{status:'confirmed',binding:{id:who.loginId,artifactId,locationId:input.locationId,locationRevision:'2',bindingRevision:value.revision,pointProjectMetres:value.point,
       contentSha256:'e'.repeat(64),mode:'fixed-world',captureFrameId:who.loginId,qualifiedProjectFrameId:null,aggregateId:who.userId,projectionSha256:'b'.repeat(64),sourceObject:null,sourceDecisionId:null}};
   }),
 }));

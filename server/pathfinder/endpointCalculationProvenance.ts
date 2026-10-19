@@ -28,7 +28,7 @@ export function endpointCalculationPoint(binding: EndpointBinding): EndpointCalc
 export function hasCurrentEndpointCalculationProvenance(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const input = value as Record<string, unknown>;
-  if (!['pathfinder.dependencies.v3', 'pathfinder.dependencies.v4'].includes(String(input.schemaVersion))) return false;
+  if (!['pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5'].includes(String(input.schemaVersion))) return false;
   const prep = endpointCalculationPreparationSchema.safeParse(input.preparation);
   const from = endpointCalculationPointSchema.safeParse(input.from);
   const to = endpointCalculationPointSchema.safeParse(input.to);

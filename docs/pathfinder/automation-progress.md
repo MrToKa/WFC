@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r6-model-revisions-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r7-durable-recalculation-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -101,7 +101,188 @@ recommended engineering choice and are recorded; no routine stage pause.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
 
-## Current PF-R6 — TECHNICAL_PASS; R7 handoff ready
+## Current PF-R7 — RESUMED, final verification in progress
+
+Fresh root checkpoint at07:52UTC on19October2026 (supersedes the historical
+candidate2 below): candidate3 API3edd0b47ab7e401a3c5d17530d99fc4e0adeea2300a2ccef483b39da52872537,
+webedc60e0f89b6e36d676e46d09bdf908ccb8a5e6f746677fa426ee80d6f36c378;
+images6b182c2704f15168e42032bab390f97949f432dffe6b8e788ce94498dba2fe0b /
+6d7aa2a62bf2a41fb2749f08965392f62c630bda2d62b810e96989407afe3719,
+sourcea5f4f2bde38ca3789fd07c55c4319467b189608e95f47e5918de6084f64d24ed/1420files.
+Operator default profile6 in R7ownedworke62e3f89. User started Docker personally;
+root started only four exactly pinned stopped5191containers, later replaced only
+itsAPI/web. Outside18IDs/images retained; nine user/daemon start changes recorded.
+Original /wfc-app-backend-1 autonomously restarts. Private protected guard pins
+all18config/mount/network identities,17strict starts, records exact original-backend
+lifecycle as EXTERNAL_CHANGE; no original operations. Full configuration equality
+before first full pin NOT_ESTABLISHED. Failed overly strict/unsorted-mount pins
+retained; mounts now compared as exact entries sorted by destination.
+
+Current actual checks: backend+shared1484PASS/0FAIL/5optionalNOT_RUN; types/lintPASS;
+79focusedfatal/observer/sessionchecksPASS. NormalHTTPcurrent-role403/anonymous401,
+supersededReview409 and original-expiryReview409under another valid loginPASS;
+temporaryfixture-role/current-state-expiry controls restoredexactly. Actualnewjob
+e93747db recovery: declared expired-lease injection→productionworker/C#recovery,
+attempts2/slices4, threeimmutableproposals+allitemsexact; not an observedprocesscrash.
+ActualnormalHTTPretrygeneration13 jobed574e78: observedrunning0/3→DELETE→cancelled0/3,
+automaticpaused/nojobstorm; no Review/Apply. Durable/tmpbefore-actioncapture retained.
+UInewHTTPtab3: currentv5provenance/actualyellow/filledGhost/Clear/Restore verified;
+screenshots r7-final-proposal-ui.png/r7-final-cleared-ui.png private.
+
+Strict root-executed offline classifier PASS all116tables vs110baseline; final
+114PF_ROOTfiles17384086bytes exact. 10newjobs/27proposals/7commands reconciled;
+4UIcommands have immutable-server-record+observedUI evidence, no inventedpreaction
+intents. OneclassifierFAIL retained; corrected exact jobs.ts DTO pathPoints→points
+projection. Separate live6tables/authadjuncts exact.1547MinIOmetadataobjects exact;
+three referencecheckout branch/HEAD/status/trimmedtrackedpatchdigests exact. Initial
+untrimmed-patch hash mismatch retained and reconciled to actual R6trim convention.
+
+R7 final frontend repeat completed:7files/83PASS/0FAIL/0NOT_RUN,967.38s, root
+session92792exit0; disjointcombined94files/1567PASS/0FAIL/5NOT_RUN. No active test
+subprocess remains. Report43/publicpreservation/runtimeevidence written; cleanup
+PASS4unusedownimages+6own/tmpfiles, no container/data/prune/denied-path operation.
+Remaining R7: final localcommit and prepare-stage-handoff R8 finalization, then
+immediate inherited-branch execution. Source-only final authority/batch review
+found no actionable P1/P2 in its stated scope; no additional verification claimed.
+The first JSON-only frontend run was root-interrupted after bounded observation,
+not declared a product failure. The completed verbose serial repeat used root session92792:
+PathFinderTab uses60s PERtest and expensive FluentUI role/style queries (~25–34s
+for its first interaction cases); other six small suites follow. Do not start a
+duplicate run or weaken tests. Active agents: source-only acceptance review and
+privateclassifier done; classifier agent writes only sanitized preservation.json.
+Automation remains ACTIVE; do not pause at the technical stage boundary.
+
+Latest user instruction on19October2026: "Продължи. Включи и автоматичното
+изпълнение на всеки следващ етап." This revokes the pause below. Root read live
+branch/HEAD/status and agent inventory before resuming; only root was active.
+At07:12UTC automation `path-finder-purpose-rules-and-model-revisions` updated
+through the app tool to ACTIVE with the explicit resume/checkpoint appended;
+saved status independently read back ACTIVE. Same isolation/publication limits.
+Do not repeat successful R7 seed/captures/settings controls. Root first verifies
+current owned5191/profile4 and preserves all uncommitted work. Independent agents
+own private offline audit classifier, read-only R7 acceptance and R8 readiness.
+Root remains sole actual SQL/HTTP/runtime/browser/test executor. After technical
+R7 closure: report/localcommit → prepare-stage-handoff R8 → execute immediately.
+
+### Historical explicit pause and retained resume checkpoint
+
+Latest authority: user requested "Направи пауза" on19October2026,05:22UTC.
+Root stopped stage work and interrupted the only active source-only audit agent.
+App automation `path-finder-purpose-rules-and-model-revisions` set to PAUSED
+through automation_update and its saved status independently read back PAUSED.
+Do not resume, generate another stage or run further tests without user resume.
+The owned UI-project automatic recalculation was also paused through its normal
+browser control; visible Paused,3/3 completed,desired=enrolled generation10.
+All root subprocesses completed; no new calculation is in flight. Containers
+remain available on5191. Browser2/tab6 marked handoff, normal protected Viewer.
+
+Resume checkpoint (not technical completion):
+- Same branch `pf-r7-durable-recalculation-local-20261019`, HEAD
+  `bc6e0e1fd3188a7dfd2cc27ba228b3cbe46ef2c1`; coordinated R7 changes UNCOMMITTED.
+- Candidate2 is current: APIc96ff84f47ae6be47e7adffc2da79711defff8ce9f026fc5132d663be73f8565,
+  web0f2587f682f206e6057a95be81cffe9928cc8b03338efd93a5fdbd2a01709788.
+  Images24b258560c5b8810a2d87f5b6327e1b3a22bc699ddf6d435443ab76a477bf8bf /
+  b58829f5e9c8ba5932dfc708e1c45cc7847791563724e1d7a3b776b69f890405.
+  Full contextb1350dc7e451ed6e1f000a8257122a174de8405cd2017d7edc48fc6ff5cd04e8,
+ 1418files,approved R7profile4/operator default4.18outsidecontainers unchanged.
+- R7 actual14rollbackPG phases PASS; fourjob/twoproject production claim/finish
+  under savepoint-mapped envelope PASS; clean yield at21slices retains3attempts.
+- Normal UI first enable→3C#proposals,second-login samepreferences no-op/exact
+  replay/conflict PASS. FilledGhost/yellow/provenance screenshot retained private
+  `r7-proposal-ui.png`; already displayed to user. No Review/Apply performed.
+- Candidate1 settings replay found historical geometry-key query skipping an
+  intervening gap change. Original fixture values were restored. Historical FAIL
+  retained. Candidate2 now queries the latest proposal before verifying S/E/P-only
+  reuse;19focused mocked controls added. Actual separate `http-settings2.mjs`
+  PASS:gen8/design exactroute+diagnostics,gen9/gap fullcalculate,gen10/restored
+  fullcalculate exactoriginalroute+design. Details0/0/0/gap1 restored,6normalPATCH
+  history/settings revision increments remain intentional auditable fixture deltas.
+  Public `evidence/recalculation/actual-settings2.json`; no overwritten receipts.
+- Latest types and scopedlint PASS. Broad backend scoped1112PASS/5optionalNOT_RUN
+  precedes two narrow fixes; correction suites `r7-candidate2-scoped7.private.json`,
+  `r7-candidate2-review-tests8.private.json`, `r7-candidate2-final-tests9.private.json`
+  PASS at their recorded source scope (last54checks). Scheduling transaction32PASS.
+  No claim of final full regression/current-source preservation closure.
+- New fixture login renewed through normal existing credentials and stored ONLY
+  private `r7-fixture-login2.private.json`; no credential/role modification.
+- Final116table/PF_ROOT/storage/reference preservation classifier/capture, some
+  operational cancellation/recovery/security checks, report43/localtechnicalcommit,
+  R8 official handoff and R8–R10 implementation remain NOT_RUN/unfinished.
+  Source-only audit agent was interrupted before delivering its private classifier.
+  Its plan requires exact receipt-qualified deltas and independent UI command/
+  resource-session anchors; never accept broad project-based exceptions.
+- R8 read-only research only: official Autodesk2017 headlessChrome/Puppeteer
+  article exists; it does not qualify current7.130 extraction/runtime/distribution.
+  No managedproducer/grant modules implemented. Preserve finite LevelA/login
+  boundaries; no fabricated logins, LevelB relabeling or real bindings/acceptance.
+- Original WFC, both PathFinder refs, sources/,5190 and original working data
+  unchanged by this checkpoint; no push/PR/merge/deployment. No cleanup retries.
+
+### Historical R7 execution details before pause
+
+Detailed official handoff handoffs/PF-R7-durable-recalculation.md from
+prepare-stage-handoff committedbc6e0e1fd3188a7dfd2cc27ba228b3cbe46ef2c1,
+R6technical0c4937d0c0667c252259ebe672389f96fc1fe573. New inherited local
+branchpf-r7-durable-recalculation-local-20261019; root is actualexecutor.
+A owns ONLY newsharedrecalculation/engineidentity schemas/tests/fixtures (initial
+2filetests rootPASS), then newservercalculationEngineIdentity.test.ts and
+endpointBindingNeededHeads.test.ts. B ONLY newrecalculationSchema/Repository/
+Producer/Routes/tests/fixtures. C ONLY newAPI/hook/statuspanel/fixtures/tests,
+existingPathFinderResults.tsx and narrowoldautomaticexpectationTabtest. Root
+owns all otherexistingfiles/newbulkcollector/actualengineidentity/runtime/docs.
+Preserveothers; no agent actualruntime/SQL/HTTP/testexecution.
+Finite current-login enrollment30min (NOTR8grant), separate30scollectiondeadline,
+10kcables/20kneededlocations/32MiBdependencies andneededlocationbytes/chunks250/500,
+oneengineinvocationquantum. Fixed GET/recalculations/context and
+POST/recalculations/commands, exactstrictCAScommands enable/pause/resume/retry/
+disable; no storedbearer/automaticReview/Apply. Schedulerstate lock LAST after
+rootbulkdependencies/cablelocks, briefclaimcommittedfirst, uniquegenerationjob.
+Rootnewownedwork .scratch/tray-catalog-e62e3f89-80dd-4261-ac5b-da1f7d936b4c:
+110table/114PF_ROOTfile17384086byte baselinePASS; coldcheckpoint
+592e502e-4f1f-4942-85c4-16ac22670c6a PASS8members/4images/TOC72366bytesSHA
+6985ea99b7bbfda77905c4e7f85e610d766eed29292192e1095a67d34e1e9b44;
+all5models1541resources1930801055bytes actualrawSHAverified. Privatecompanion
+retained separately; fullrestoreNOT_RUN. ApprovedR7profile2/operator default2
+pins resumed SAMEcandidate4containers/newstarts;18outsidecontainers unchanged.
+R7candidate1 built/guarded-upgraded API+webONLY,18outsidecontainers unchanged.
+Approvedprofile3/operator default3; APIbfd96a81546514ddad2ea46386c78803ac3ab235ed2ed86611117f5bcde221a5,
+webcaccf9161d4c5f23231c285c0237aad4c75ff0db636c7838e65597453d19d754.
+Images7f02e62dae40516309bf7deaebddf263b0ad7b42220832739293e54f188aa5a1 /
+d98b0920258457cb97d1d57645ad07c9e7eb6d89ec4c49b9b44de03db01b1d3b.
+Fullbuildcontext626c8dfddcfad13e73a5b55e551ff3ee508bceacd91ed39a3621545b63d821b2,
+1416files. Onlytest/docs edits since build; no production edits since freeze.
+Rootactiveactual-controls.mjs session75384 runs14 independentrollbackPGphases;
+13PASS sofar, final cable-state-order pending. Do not duplicate it.
+Backendexactcurrent source regression1112PASS/0FAIL/5optionalNOT_RUN,
+r7-backend-regression6.private.json excludes historicalscratchcopies. Priorrun4
+wronglydiscovered oldcompiledscratchtests (4missingvendormoduleerrors), retained.
+Focusedrun3 had362PASS/2FAIL (schedulingtest positionalexpectations changedafter
+boundedSETLOCALintegration); corrected32scheduling/transactionchecksPASSrun5.
+Server+frontendtypesPASS; scopedlintPASS. Actualbrowserreload current3tools/
+protectedmodelloaded664556/438156 anddurableDisabledstatusPASS; enrollment/UI
+productionchecksNOT_RUN yet. No Review/Apply or realbusinessengineeringapproval.
+RootnewcalculationEngineIdentity.ts hashes4canonicalregularDLLs plusfixed actual
+TS/compiledprojection group (derivationSha256) withstat/before-after/cache/force
+boundaries. Newneeded-location reader500chunks/max20k/32MiB/liveproofcache added
+toexistingendpointBindingRepository. Bulk neededhead tests/controlsfixedmock
+lifecycle; actualengineidentity included in v5 immutabledependencies/provenance.
+Oldv2-v4 remainreadable/stale and cannot gainnewReview/Applyrights. Oldbrowser/
+historicalcompletejob automaticproducers removed. Finiteoriginalactor/login locks
+andfinalexpirychecks fence a differentreviewer too. Backschedulingstate last.
+CAPI/hook/panel refrozen withexactsessionrecovery/noautoretry andmountgeneration
+guard; AuthContext clearsintent onlogout/401/token/account/privilegeloss.
+Rootnewserviceclock givesoneengineinvocation perproject/jobturn; cleanqueueyield
+doesnotburnrecoveryattempts. Newbounded schedulertransactions discardunknown
+COMMIT/rollback transports. Engineobserver usesseparateshorttransactions, visible
+unavailable/recovery withoutstorm. Engineworker bindsloadedactualimplementation;
+filedrift requiresownedbackendrestart beforeanotherdispatch.
+Rootnext: bulkcoherentdependency collector +v5provenance/fingerprint/currentjob
+adapter, fairworker/disableoldautomatic integration →types/meaningfultests →new
+ownedcandidate/actualscheduler/authority/fairness/UI/preservation →report43/local
+commit →R8handoff/immediateexecution. Alloriginal/sources/5190read-only; no
+push/PR/merge/deployment, no realengineeringacceptance/Apply, deniedpaths untouched.
+
+## Previous PF-R6 — TECHNICAL_PASS; R7 handoff ready
 
 Final source6374a1493beb3dd783d1e7841d52d7f3fe70e400c8a769aff47c6da0b539b203,
 candidate4/API9cd8072c556f5c3322acd64ce41a5b58e612bb5511eb2a2bbbd18a57df115b19/

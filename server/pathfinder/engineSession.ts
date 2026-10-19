@@ -342,8 +342,9 @@ export function createSessionEngineExecutor(
         ]);
         if (lane === current) lane = undefined;
       } catch (cause) {
-        fatal = cause;
-        throw cause;
+        fatal = cause instanceof PathFinderError && cause.code==='ENGINE_SESSION_REAP_FAILED'
+          ? cause : error('ENGINE_SESSION_REAP_FAILED','The owned engine process group could not be confirmed stopped.');
+        throw fatal;
       } finally {
         ended = true;
         clearTimeout(join);

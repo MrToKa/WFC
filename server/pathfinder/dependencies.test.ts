@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PoolClient } from 'pg';
 import { collectDependencies, geometryHash } from './dependencies.js';
 import { defaultOptions } from './jobContracts.js';
+import { syntheticEngineIdentity } from './calculationFixtures.js';
+vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:async()=>syntheticEngineIdentity()}));
 const mocked=vi.hoisted(()=>({context:vi.fn(),binding:vi.fn(),active:vi.fn(),artifact:vi.fn(),routing:vi.fn(),settings:vi.fn(),comparison:vi.fn()}));
 vi.mock('./repository.js',()=>({activeModel:mocked.active,latestArtifact:mocked.artifact}));
 vi.mock('./endpointBindingRepository.js',()=>({readCurrentEndpointBindingContext:mocked.context,readEndpointBindingScope:mocked.binding}));
@@ -11,7 +13,7 @@ vi.mock('./settings.js',()=>({projectRoutingSettings:mocked.settings}));
 vi.mock('./revisionComparisonRepository.js',()=>({readComparisonDependency:mocked.comparison}));
 const id=(n:number)=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`,pid=id(1),mid=id(2),artifactId=id(3),aggregateId=id(4),frameId=id(5);
 const context=()=>({modelVersionId:mid,selectionRevision:'1',contentFingerprint:'c'.repeat(64),artifactId,aggregateId,projectionSha256:'d'.repeat(64),captureFrameId:frameId,geometryRevision:'2',traceId:null});
-const binding=(locationId:string)=>({id:id(locationId===id(6)?16:17),locationId,locationRevision:'2',bindingRevision:'3',pointProjectMetres:[1,2,3],contentSha256:'a'.repeat(64),mode:'fixed-world',captureFrameId:frameId,qualifiedProjectFrameId:null,aggregateId,projectionSha256:'d'.repeat(64),sourceObject:null,sourceDecisionId:null});
+const binding=(locationId:string)=>({id:id(locationId===id(6)?16:17),locationId,artifactId,locationRevision:'2',bindingRevision:'3',pointProjectMetres:[1,2,3],contentSha256:'a'.repeat(64),mode:'fixed-world',captureFrameId:frameId,qualifiedProjectFrameId:null,aggregateId,projectionSha256:'d'.repeat(64),sourceObject:null,sourceDecisionId:null});
 function database(from='  =a-01 ',to='=B.02',shared=false){
  const query=vi.fn(async(sql:string,args:unknown[]=[])=>{
   if(sql.includes('FROM cables WHERE'))return{rows:[{id:args[1],from_location:from,to_location:to,mto:'Instrumentation',cable_type_id:id(10),cable_write_revision:'4',routing:'/OLD',design_length:23,install_length:24}]};
@@ -45,7 +47,7 @@ describe('shared current endpoint collection',()=>{
  });
  it('normalizes exact aliases and freezes both immutable bindings without querying v1 authority',async()=>{
   const db=database(),result=await collectDependencies(db.client,pid,id(8),defaultOptions);
-  expect(result.status).toBe('ready');expect(result.dependencies?.schemaVersion).toBe('pathfinder.dependencies.v4');
+  expect(result.status).toBe('ready');expect(result.dependencies?.schemaVersion).toBe('pathfinder.dependencies.v5');
   expect(result.dependencies).toHaveProperty('comparison',null);
   expect(result.dependencies?.from).toMatchObject({locationId:id(6),bindingId:id(16),bindingRevision:'3',mode:'fixed-world'});
   expect(result.dependencies?.to).toMatchObject({locationId:id(7),bindingId:id(17)});

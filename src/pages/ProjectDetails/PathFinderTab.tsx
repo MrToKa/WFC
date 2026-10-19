@@ -21,7 +21,7 @@ const useStyles = makeStyles({
   candidate: { padding: '0.5rem', border: `1px solid ${tokens.colorNeutralStroke2}`, borderRadius: tokens.borderRadiusMedium },
   panel: { flexDirection: 'column', gap: '0.75rem', minWidth: 0 },
 });
-type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean };
+type Props = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; accountId?: string | null };
 type Draft = { locationId: string | null; name: string };
 const emptyDraft = (): Draft => ({locationId: null, name: ''});
 const normalized = (value: string) => value.normalize('NFC').trim().toUpperCase();
@@ -31,7 +31,7 @@ const cableLabel = (cable: PathFinderCable) => cable.tag || cable.cableId;
 export function PathFinderTab(props: Props) {
   return props.isAdmin ? <AdminPathFinderTab {...props} /> : <Body1>Path Finder is available only to administrators.</Body1>;
 }
-function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Props) {
+function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accountId }: Props) {
   const styles = useRoutingsViewerStyles(), extra = useStyles();
   const anchor = useRef<HTMLElement>(null), container = useRef<HTMLDivElement>(null), fileInput = useRef<HTMLInputElement>(null);
   const height = useRoutingsViewerHeight(anchor);
@@ -190,7 +190,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin }: Prop
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} selectedCableId={selectedCableId} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal')} options={routeRulesDirty ? null : preferences} />
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal')} options={routeRulesDirty ? null : preferences} />
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
           <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={restoreView} onBusyChange={setLookupBusy} />

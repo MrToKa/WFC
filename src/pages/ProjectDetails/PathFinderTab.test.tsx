@@ -199,10 +199,10 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     expect(screen.getByRole('link', { name: 'Edit cable endpoints' })).toHaveAttribute('href', `/projects/${projectId}/cables/${pf.data.cables[0].id}`);
     expect(screen.getByRole('button', { name: 'Resolve From' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Resolve To' })).toBeDisabled();
   });
-  it('keeps automatic proposals enabled and forces only explicit calculation retries', async () => {
+  it('leaves automatic production to the server and forces only explicit calculation retries', async () => {
     const user = userEvent.setup(), matched = pf.data.cables[0].fromMatch;
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], cables: [{ ...pf.data.cables[0], toMatch: matched }] } }); mount();
-    await waitFor(() => expect(pf.calculate).toHaveBeenCalledWith(undefined, false, { secondaryDistanceMeters: 2, preferVerticalApproach: true })); expect(screen.queryByRole('checkbox', { name: 'Automatically calculate ready cables' })).toBeNull();
+    expect(pf.calculate).not.toHaveBeenCalled(); expect(screen.queryByRole('checkbox', { name: 'Automatically calculate ready cables' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Calculate all cables' })); expect(pf.calculate).toHaveBeenLastCalledWith(undefined, true, { secondaryDistanceMeters: 2, preferVerticalApproach: true });
     await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Calculate selected cable' })); expect(pf.calculate).toHaveBeenLastCalledWith([pf.data.cables[0].id], true, { secondaryDistanceMeters: 2, preferVerticalApproach: true });
   });

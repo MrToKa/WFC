@@ -32,4 +32,7 @@ await import(new URL('../server/dist/server/pathfinder/geometryTraceRepository.j
 await import(new URL('../server/dist/server/pathfinder/endpointBindingRepository.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/revisionComparisonRepository.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/revisionComparisonEndpointAdapter.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/recalculationRepository.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/recalculationProducer.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/calculationEngineIdentity.js', import.meta.url).href);
 console.log(JSON.stringify({ module: 'pathfinder-computational-contracts', files: copied.length, modules: copied }));

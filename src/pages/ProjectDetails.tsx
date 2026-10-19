@@ -1359,7 +1359,7 @@ export const ProjectDetails = () => {
         <RoutingsViewerTab projectId={projectId ?? null} loadedProjectId={project.id} token={token} />
       ) : null}
       {selectedTab === 'pathfinder' && user?.isAdmin ? (
-        <PathFinderTab key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} />
+        <PathFinderTab key={projectId} projectId={projectId ?? null} loadedProjectId={project.id} token={token} isAdmin={Boolean(user.isAdmin)} accountId={user.id} />
       ) : null}
 
       {selectedTab === 'details' ? (

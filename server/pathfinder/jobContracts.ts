@@ -3,6 +3,7 @@ import { revision, uuid, snapshotSchema } from './contracts.js';
 import type { RoutingScope } from './routingScope.js';
 import type { EndpointCalculationPoint, EndpointCalculationPreparation } from './endpointCalculationProvenance.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
+import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -34,11 +35,14 @@ export type EndpointDependencySnapshot = Omit<HistoricalDependencySnapshot, 'sch
   schemaVersion: 'pathfinder.dependencies.v3'; preparation: EndpointCalculationPreparation;
   from: EndpointCalculationPoint; to: EndpointCalculationPoint;
 };
-export type CurrentDependencySnapshot = Omit<EndpointDependencySnapshot, 'schemaVersion'> & {
+export type ComparisonDependencySnapshot = Omit<EndpointDependencySnapshot, 'schemaVersion'> & {
   schemaVersion: 'pathfinder.dependencies.v4'; comparison: ComparisonCalculationScope;
 };
-/** v2/v3 remain readable historical evidence; new dispatch/Review/Apply require v4. */
-export type DependencySnapshot = HistoricalDependencySnapshot | EndpointDependencySnapshot | CurrentDependencySnapshot;
+export type CurrentDependencySnapshot = Omit<ComparisonDependencySnapshot, 'schemaVersion'> & {
+  schemaVersion: 'pathfinder.dependencies.v5'; engineIdentity: EngineIdentity;
+};
+/** v2/v3/v4 remain historical; current dispatch/Review/Apply require actual implementation provenance. */
+export type DependencySnapshot = HistoricalDependencySnapshot | EndpointDependencySnapshot | ComparisonDependencySnapshot | CurrentDependencySnapshot;
 const enginePoint = z.object({x:z.number().finite(),y:z.number().finite(),z:z.number().finite()}).strict();
 export const routeSchema = z.object({success:z.boolean(),message:z.string().max(32768),routeText:z.string().max(1_000_000),
   routeCodes:z.array(z.string().max(2048)).max(200_000),segmentIds:z.array(z.string().max(256)).max(200_000),

@@ -4,11 +4,12 @@ import type { PathFinderJob, PathFinderProposal } from '@/api/pathfinder';
 import { MAX_PATH_POINTS } from '../../../viewer-runtime/protocol.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
+import { PathFinderRecalculationPanel } from './PathFinderRecalculationPanel';
 
-type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null };
+type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
-export function PathFinderResults({ pf, selectedCableId, active = true, displayOwned = true, claimViewer, options }: Props) {
-  const styles = useRoutingsViewerStyles(), lastAutomatic = useRef<string | null>(null);
+export function PathFinderResults({ pf, selectedCableId, accountId, active = true, displayOwned = true, claimViewer, options }: Props) {
+  const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null), [applyKey, setApplyKey] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -22,12 +23,6 @@ export function PathFinderResults({ pf, selectedCableId, active = true, displayO
   const selectedRevision = data?.cables.find(cable => cable.id === proposal?.cableId)?.cableWriteRevision;
   const settingsKey = JSON.stringify(data?.settings);
   useEffect(() => { setReviewId(null); setApplyKey(null); setApplied(false); setNotice(null); }, [data?.registryRevision, data?.activeModel.selectionRevision, settingsKey, selectedRevision]);
-  const automaticKey = data ? JSON.stringify([data.registryRevision, data.activeModel, data.settings, options, data.artifacts.map(value => value.id), data.cables.map(value => [value.id, value.cableWriteRevision])]) : null;
-  const hasReadyCable = data?.cables.some(cable => cable.fromMatch.status === 'matched' && cable.toMatch.status === 'matched' && ['MV', 'LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '')) ?? false;
-  useEffect(() => {
-    if (!automaticKey || options === null || lastAutomatic.current === automaticKey || !data?.artifacts.length || !hasReadyCable || pf.busy || !data.cables.length || data.cables.length > 10000) return;
-    lastAutomatic.current = automaticKey; if (options) void pf.calculate(undefined, false, options); else void pf.calculate();
-  }, [automaticKey, data, hasReadyCable, options, pf.busy, pf.calculate]);
   const openProposal = async (id: string) => {
     if (!active) return;
     const currentDisplay = claimViewer?.() ?? (() => true);
@@ -64,7 +59,10 @@ export function PathFinderResults({ pf, selectedCableId, active = true, displayO
   const proposals = (data?.proposals ?? []).filter(value => !selectedCableId || value.cableId === selectedCableId);
   return <section className={styles.result} aria-label="Path Finder calculations">
     <h3>Calculate and review</h3>
-    <Body1>Ready cables are calculated automatically as proposals.</Body1>
+    <Body1>Calculate proposals manually or explicitly enable automatic recalculation.</Body1>
+    {pf.preparationAccess ? <PathFinderRecalculationPanel {...pf.preparationAccess} accountId={accountId ?? null} active={active} preferences={options}
+      contextKey={JSON.stringify([data?.activeModel, pf.preparationViewerGeneration, options])}
+      onChanged={pf.refresh} onAuthorityLost={pf.cancelOperation} /> : null}
     <Caption1>Calculations use the active model, shared locations, connection gap and allowances from Project Details. Instrumentation follows Control.</Caption1>
     <div className={styles.actions}>
       <Button disabled={options === null || !data?.artifacts.length || pf.busy || !data.cables.length || data.cables.length > 10000} onClick={() => void (options ? pf.calculate(undefined, true, options) : pf.calculate(undefined, true))}>Calculate all cables</Button>
@@ -97,6 +95,13 @@ export function PathFinderResults({ pf, selectedCableId, active = true, displayO
       {proposal.routingPreferences ? <Caption1>Calculated with SECONDARY trigger {proposal.routingPreferences.secondaryDistanceMeters} m; vertical approach {proposal.routingPreferences.preferVerticalApproach ? 'preferred' : 'not preferred'}.</Caption1> : <Caption1>The original routing preferences are unavailable.</Caption1>}
       {options !== null && !preferencesMatch ? <Body1 role="alert">This proposal uses different routing preferences. Calculate a new proposal with the current Path values before reviewing or applying.</Body1> : null}
       {proposal.compatibilityIssue ? <Body1 role="alert">{proposal.compatibilityIssue}</Body1> : null}
+      <Caption1>Calculation mode: {proposal.calculationMode === 'design' ? 'Design length only; verified route reused' : proposal.calculationMode === 'calculate' ? 'Full route calculation' : 'Unavailable for this historical result'}.</Caption1>
+      {proposal.provenance ? <details style={{ minWidth: 0, overflowWrap: 'anywhere' }}><summary>Calculation provenance</summary>
+        <Caption1>Dependency version: {proposal.provenance.dependencyVersion}; digest: {proposal.provenance.dependencyHash}.</Caption1>
+        <Caption1>Recorded engine digest: {proposal.provenance.engineIdentity?.contentSha256 ?? 'Unavailable for this historical result'}.</Caption1>
+        {proposal.provenance.automatic ? <Caption1>Automatic generation: {proposal.provenance.automatic.generation}; authority epoch: {proposal.provenance.automatic.authorityEpoch}; {proposal.provenance.automatic.current ? 'current' : 'no longer current'}{proposal.provenance.automatic.reasonCode ? ` — ${proposal.provenance.automatic.reasonCode.toLowerCase().replaceAll('_', ' ')}` : ''}.</Caption1> : <Caption1>No durable automatic enrollment recorded.</Caption1>}
+        <Caption1>These recorded facts do not replace human review or grant Apply authority.</Caption1>
+      </details> : <Caption1>Calculation provenance is unavailable for this historical result.</Caption1>}
       {proposal.route ? <><Body1>Geometric length: {proposal.route.lengthMeters} m</Body1><Caption1>From approach: {proposal.route.fromDistanceMeters} m{proposal.route.fromRequiresSecondary ? ' (SECONDARY)' : ''}; To approach: {proposal.route.toDistanceMeters} m{proposal.route.toRequiresSecondary ? ' (SECONDARY)' : ''}</Caption1><Caption1>Connection gaps: {proposal.route.connectionGapCount}; total gap length: {proposal.route.connectionGapLengthMeters} m</Caption1><details><summary>Exact route text</summary><p style={{ overflowWrap: 'anywhere' }}>{proposal.route.routeText}</p></details></> : null}
       {proposal.design ? <><Body1>Before percentage: {proposal.design.lengthBeforePercentageMeters} m</Body1><Caption1>Before rounding: {proposal.design.unroundedLengthMeters} m</Caption1><Body1>Design length: {proposal.design.designLengthMeters} m</Body1></> : null}
       <Caption1>Installed length is not changed by Apply.</Caption1>

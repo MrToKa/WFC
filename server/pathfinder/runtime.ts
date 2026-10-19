@@ -13,11 +13,16 @@ import { createGeometryTraceEngine } from './geometryTraceEngine.js';
 import { createEndpointBindingRepository } from './endpointBindingRepository.js';
 import { createRevisionComparisonRepository } from './revisionComparisonRepository.js';
 import { createRevisionEndpointAdapters } from './revisionComparisonEndpointAdapter.js';
+import { createRecalculationRepository } from './recalculationRepository.js';
+import { createRecalculationProducer } from './recalculationProducer.js';
+import { createCalculationEngineObserver } from './calculationEngineObserver.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
   const registry = createPathFinderRepository(pool),jobs = createPathFinderJobs(pool,registry),apply = createPathFinderApply(pool),worker = createPathFinderWorker(pool,jobs);
-  return {registry,jobs,apply,worker,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
+  const recalculations=createRecalculationRepository(pool,jobs);
+  const producer=createRecalculationProducer(recalculations,{beforeTick:createCalculationEngineObserver(pool,()=>worker.failureCode)});
+  return {registry,jobs,apply,worker,recalculations,producer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
     preparations:createPreparationService(pool,createPreparationPublisher(worker.executePreparation)),
     geometryTraces:createGeometryTraceRepository(pool,createGeometryTraceEngine(worker.executePreparation)),
     endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters()),
@@ -26,6 +31,6 @@ function createRuntime() {
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
 export async function initializePathFinderRuntime():Promise<void> {
   if (!process.env.PF_ROOT || !process.env.PF_ENGINE_DLL) return;
-  await pathFinderRoot(); getPathFinderRuntime().worker.start();
+  await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();
 }
-export async function stopPathFinderRuntime():Promise<void> {await runtime?.worker.stop();}
+export async function stopPathFinderRuntime():Promise<void> {await runtime?.producer.stop();await runtime?.worker.stop();}

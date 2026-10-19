@@ -12,6 +12,7 @@ import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { deriveEquipmentBottomAnchor, evaluateEndpointMigration } from '../../shared/pathfinderEndpointAttachment.js';
 import { createConfirmedRevisionBindingValidator, readConfirmedRevisionBindingValidity } from './revisionComparisonEvidenceReader.js';
+import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The endpoint binding is unavailable or changed. Refresh its context; retain an uncertain save command for reconciliation.'); };
 export const endpointBindingHash = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
@@ -89,6 +90,42 @@ export async function readEndpointBindingHeads(c: PoolClient, projectId: string,
   return result;
 }
 
+/** Needed locations only; one shared live-proof cache and no whole-project head truncation. */
+export async function readNeededEndpointBindingHeads(c: PoolClient, input: {
+  projectId: string; current: EndpointBindingContext['current']; locationIds: string[];
+  signal?: AbortSignal; deadline: number; initialBytes?: number;
+}): Promise<Map<string, { binding: EndpointBinding; ready: boolean }>> {
+  policyUuidSchema.parse(input.projectId);
+  const ids = [...new Set(input.locationIds)].sort();
+  if (ids.length > RECALCULATION_LIMITS.neededLocations) return fail('ENDPOINT_NEEDED_LOCATION_LIMIT', 413);
+  for (const id of ids) policyUuidSchema.parse(id);
+  const result = new Map<string, { binding: EndpointBinding; ready: boolean }>();
+  const validateMigration = createConfirmedRevisionBindingValidator(c);
+  let bytes = input.initialBytes ?? 0;
+  if(!Number.isSafeInteger(bytes)||bytes<0||bytes>RECALCULATION_LIMITS.neededLocationBytes)return fail('ENDPOINT_NEEDED_LOCATION_BYTES',413);
+  for (let offset = 0; offset < ids.length; offset += RECALCULATION_LIMITS.headChunk) {
+    input.signal?.throwIfAborted();
+    if (Date.now() > input.deadline) return fail('RECALCULATION_COLLECTION_DEADLINE', 503);
+    const selected = ids.slice(offset, offset + RECALCULATION_LIMITS.headChunk);
+    const rows = (await c.query<{ location_id: string; location_revision: string; binding_id: string; binding_revision: string; record_sha256: string; record: unknown }>(
+      'SELECT h.location_id,l.revision::text AS location_revision,h.binding_id,h.binding_revision::text,r.record_sha256,r.record FROM pf_endpoint_binding_heads h JOIN pf_locations l ON l.project_id=h.project_id AND l.id=h.location_id JOIN pf_endpoint_binding_revisions r ON r.project_id=h.project_id AND r.location_id=h.location_id AND r.id=h.binding_id WHERE h.project_id=$1 AND h.location_id=ANY($2::uuid[]) ORDER BY h.location_id FOR SHARE OF h,r,l',
+      [input.projectId, selected])).rows;
+    if (rows.length > selected.length) return fail('ENDPOINT_HEAD_INTEGRITY');
+    for (const row of rows) {
+      bytes += Buffer.byteLength(canonicalPurposeJson(row));
+      if (bytes > RECALCULATION_LIMITS.neededLocationBytes) return fail('ENDPOINT_NEEDED_LOCATION_BYTES', 413);
+      const binding = record(row.record);
+      if (!selected.includes(row.location_id) || result.has(row.location_id) || binding.projectId !== input.projectId
+        || binding.locationId !== row.location_id || binding.id !== row.binding_id || binding.bindingRevision !== row.binding_revision
+        || binding.contentSha256 !== row.record_sha256) return fail('ENDPOINT_HEAD_INTEGRITY');
+      result.set(row.location_id, { binding, ready: (await liveReadiness(binding, input.current, row.location_revision, validateMigration)).calculationReady });
+    }
+  }
+  input.signal?.throwIfAborted();
+  if (Date.now() > input.deadline) return fail('RECALCULATION_COLLECTION_DEADLINE', 503);
+  return result;
+}
+
 type CableEndpoint = { id: string; from_location: string | null; to_location: string | null };
 async function cableEndpoints(c: PoolClient, projectId: string): Promise<CableEndpoint[]> { const rows = (await c.query<CableEndpoint>('SELECT id,from_location,to_location FROM cables WHERE project_id=$1 ORDER BY id LIMIT 100001', [projectId])).rows; if (rows.length > 100000) return fail('ENDPOINT_PROJECT_CABLE_LIMIT', 413); return rows; }
 function usageIndex(cables: CableEndpoint[]) {
@@ -105,7 +142,7 @@ function readiness(binding: EndpointBinding | null, current: EndpointBindingCont
   if (!current) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_PREPARATION_REQUIRED'] };
   if (!binding) return { status: 'missing', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_REQUIRED'] };
   if (binding.locationRevision !== locationRevision) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_LOCATION_CHANGED'] };
-  if (binding.modelVersionId !== current.modelVersionId || binding.aggregateId !== current.aggregateId || binding.projectionSha256 !== current.projectionSha256 || binding.captureFrameId !== current.captureFrameId) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
+  if (binding.modelVersionId !== current.modelVersionId || binding.aggregateId !== current.aggregateId || binding.artifactId !== current.artifactId || binding.projectionSha256 !== current.projectionSha256 || binding.captureFrameId !== current.captureFrameId) return { status: 'stale', calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_STALE'] };
   if (binding.mode === 'object-attached') return { status: 'unsupported-attachment', calculationReady: false, reasonCodes: ['ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE'] };
   return binding.status === 'confirmed' ? { status: 'confirmed', calculationReady: true, reasonCodes: [] } : { status: binding.status, calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_UNCONFIRMED'] };
 }

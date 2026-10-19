@@ -5,6 +5,7 @@ import type { Pool } from 'pg';
 import type { EngineExecutor } from './engineSession.js';
 import type { PathFinderJobs } from './jobs.js';
 import { createPathFinderWorker } from './worker.js';
+import { syntheticEngineIdentity } from './calculationFixtures.js';
 
 function harness(close: () => Promise<void>) {
   const events: string[] = [],
@@ -42,7 +43,7 @@ function harness(close: () => Promise<void>) {
       events.push('factory');
       return engine;
     });
-  const worker = createPathFinderWorker(pool, {} as PathFinderJobs, factory);
+  const worker = createPathFinderWorker(pool, {} as PathFinderJobs, factory,async()=>syntheticEngineIdentity());
   return { worker, owner, engine, factory, events };
 }
 describe('session lane follows durable advisory-owner lifetime', () => {

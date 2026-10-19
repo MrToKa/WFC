@@ -433,6 +433,23 @@ describe('private bounded session transport', () => {
     });
     expect(children).toHaveLength(1);
   });
+  it.each(['kill','groupGone'] as const)('normalizes an unknown %s join failure before any replacement can start', async phase => {
+    const h=setup({reply:(child,input,ordinal)=>{
+      if(phase==='groupGone'){
+        const response=answer(input,ordinal);response.session.retireAfterResponse=true;
+        child.stdout.write(frame(response));child.dead=true;child.emit('close',0,null);
+      }
+    }});
+    if(phase==='kill')h.dependencies.kill=async()=>{throw new Error('Private process transport failure.');};
+    else h.dependencies.groupGone=async()=>{throw new Error('Private process transport failure.');};
+    const abort=new AbortController(),outcome=h.client.execute(request(),abort.signal).catch(error=>error);
+    await vi.waitFor(()=>expect(h.children).toHaveLength(1));
+    if(phase==='kill')abort.abort();
+    expect(await outcome).toMatchObject({code:'ENGINE_SESSION_REAP_FAILED'});
+    await expect(h.client.execute(request(),new AbortController().signal)).rejects.toMatchObject({code:'ENGINE_SESSION_REAP_FAILED'});
+    await expect(h.client.close()).rejects.toMatchObject({code:'ENGINE_SESSION_REAP_FAILED'});
+    expect(h.children).toHaveLength(1);
+  });
   it('waits for the entire group before returning a retiring response', async () => {
     vi.useFakeTimers();
     let gone = false;

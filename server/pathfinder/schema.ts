@@ -10,6 +10,8 @@ import { initializePreparationSchema } from './preparationSessions.js';
 import { initializeGeometryTraceSchema } from './geometryTraceSchema.js';
 import { initializeEndpointBindingSchema } from './endpointBindingSchema.js';
 import { initializeRevisionComparisonSchema } from './revisionComparisonSchema.js';
+import { initializeRecalculationSchema } from './recalculationSchema.js';
+import { initializeWorkerScheduling } from './workerScheduling.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -124,4 +126,6 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeGeometryTraceSchema(pool);
   await initializeEndpointBindingSchema(pool);
   await initializeRevisionComparisonSchema(pool);
+  await initializeWorkerScheduling(pool);
+  await initializeRecalculationSchema(pool);
 }

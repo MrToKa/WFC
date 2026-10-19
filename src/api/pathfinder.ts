@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { getApiBaseUrl } from './http';
 import type { CanonicalPoint } from '../../viewer-runtime/protocol.mjs';
 import { validateModelCaptureInputScope, type ModelCaptureInputScope } from '../../viewer-runtime/capture-input.mjs';
+import { engineIdentitySchema } from '../../shared/pathfinderEngineIdentity';
+import { policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy';
 
 const uuid = z.string().uuid(), revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/);
 const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
@@ -16,9 +18,16 @@ const connectionGapSchema = z.string().max(64).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-
 const projectSettingsSchema = z.object({ revision, connectionGap: connectionGapSchema, secondaryTrayLength: z.string().nullable(), endConnectionLength: z.string().nullable(), additionalBendingPercent: z.string().nullable() });
 const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
 const routingPreferencesSchema = z.object({ secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000), preferVerticalApproach: z.boolean() });
-const proposalSummarySchema = z.object({ id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
+const proposalProvenanceSchema = z.object({
+  dependencyVersion: z.enum(['pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5']),
+  dependencyHash: policyHashSchema, engineIdentity: engineIdentitySchema.nullable(),
+  automatic: z.object({ generation: policyRevisionSchema, authorityEpoch: policyRevisionSchema, current: z.boolean(), reasonCode: z.string().min(1).max(96).nullable() }).strict().nullable(),
+}).strict().superRefine((value, context) => {
+  if ((value.dependencyVersion === 'pathfinder.dependencies.v5') !== (value.engineIdentity !== null)) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
+});
+const proposalSummarySchema = z.object({ schemaVersion: z.literal('wfc.pf.proposal.v2').optional(), provenance: proposalProvenanceSchema.optional(), id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
   stale: z.boolean(), synthetic: z.boolean(), engineeringAccepted: z.boolean(), acceptanceScope: z.string(), canApply: z.boolean(), compatibilityIssue: z.string().nullable(), message: z.string(), engineeringMessage: z.string(),
-  design: designSchema.nullable(), route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.string().optional() });
+  design: designSchema.nullable(), route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.enum(['calculate', 'design']).optional() });
 const computedRouteSchema = z.object({ success: z.boolean(), message: z.string(), routeText: z.string(), routeCodes: z.array(z.string()), segmentIds: z.array(z.string()),
   points: z.array(point).max(200000), objectIds: z.array(z.string()).max(200000), lengthMeters: z.number().finite(), fromDistanceMeters: z.number().finite(), toDistanceMeters: z.number().finite(), fromRequiresSecondary: z.boolean(), toRequiresSecondary: z.boolean(), connectionGapCount: z.number().int().nonnegative(), connectionGapLengthMeters: z.number().finite() });
 const proposalSchema = proposalSummarySchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional() });

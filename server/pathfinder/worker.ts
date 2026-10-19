@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Client, Pool, PoolClient } from 'pg';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createConfiguredEngineExecutor, type EngineExecutor } from './engineSession.js';
-import { collectDependencies, geometryHash, hash } from './dependencies.js';
-import { transaction } from './transactions.js';
+import { collectDependencies, geometryHash, hash, verifiedDesignOnlyChange } from './dependencies.js';
 import { readSnapshot } from './storage.js';
 import type { DependencySnapshot, EngineResponse, JobPrincipal } from './jobContracts.js';
 import type { PathFinderJobs } from './jobs.js';
@@ -12,13 +11,23 @@ import { principalTransaction } from './auth.js';
 import { collectLookupDependencies, type LookupDependencies } from './lookups.js';
 import { engineProjectSettings } from './settings.js';
 import { collectPreviewDependencies, previewEngineRequest, type PreviewDependencies } from './previews.js';
-import { requirePreparedRoutingScope, requireVersionedCalculationScope } from './routingScope.js';
-import { activeModel, latestArtifact } from './repository.js';
+import { requireVersionedCalculationScope } from './routingScope.js';
+import { readRecalculationJobAuthority, requireEnrollmentAuthority } from './recalculationRepository.js';
+import { calculationEngineIdentity } from './calculationEngineIdentity.js';
+import { claimCalculationSlice, finishCalculationSlice } from './workerScheduling.js';
 import { createPreparationEngineLane } from './preparationEngineLane.js';
 import type { EngineInvocation } from './engineSession.js';
+import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
+/** A failed join is an ownership failure, never a normal per-cable engine result. */
+function unconfirmedEngineJoin(error:unknown):boolean {
+  return error!==null&&typeof error==='object'&&(error as {code?:unknown}).code==='ENGINE_SESSION_REAP_FAILED';
+}
+function implementationRestartRequired(error:unknown):boolean {
+  return error!==null&&typeof error==='object'&&(error as {code?:unknown}).code==='ENGINE_IMPLEMENTATION_RESTART_REQUIRED';
+}
 /** Reused geometry keeps its original diagnostics; category comes from the immutable calculation inputs. */
 export function mergeRetainedGeometryResponse(response:EngineResponse,retained:EngineResponse,frozenCategory:string|null):EngineResponse {
   const effectiveCategory=frozenCategory==='Instrumentation' ? 'Control' : frozenCategory;
@@ -28,20 +37,12 @@ export function mergeRetainedGeometryResponse(response:EngineResponse,retained:E
   return {...response,route:retained.route,effectiveCategory,prepared:retained.prepared ?? response.prepared};
 }
 function principal(job:Row):JobPrincipal {return {userId:job.requested_by,loginId:job.login_id,loginExpiresAt:new Date(job.login_expires_at).getTime()};}
-async function claim(pool:Pool):Promise<Row|null> {
-  return transaction(pool,async client => {
-    const row = (await client.query<Row>(`SELECT * FROM pf_jobs WHERE state='queued' OR state='running' AND lease_until<NOW()
-      ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`)).rows[0];
-    if (!row) return null;
-    if (row.cancel_requested || row.attempts >= 3) {
-      await client.query('UPDATE pf_jobs SET state=$2,failure=$3,updated_at=NOW() WHERE id=$1',[row.id,row.cancel_requested ? 'cancelled' : 'failed',row.cancel_requested ? 'Cancelled.' : 'Interrupted job exceeded its recovery attempts.']);
-      return null;
-    }
-    const claimed = (await client.query<Row>(`UPDATE pf_jobs SET state='running',owner_token=$2,lease_until=NOW()+INTERVAL '30 seconds',attempts=attempts+1,updated_at=NOW()
-      WHERE id=$1 RETURNING *`,[row.id,randomUUID()])).rows[0];
-    await client.query("UPDATE pf_job_items SET state='waiting' WHERE project_id=$1 AND job_id=$2 AND state='running'",[row.project_id,row.id]);
-    return claimed;
-  });
+/** Compare the latest result; a geometry-key search must not skip intervening input changes. */
+export async function readRetainedDesignGeometry(client:Pick<PoolClient,'query'>,projectId:string,cableId:string,dependencies:DependencySnapshot):Promise<EngineResponse|undefined>{
+  const previous=(await client.query<Row>(`SELECT result,dependencies,status FROM pf_proposals WHERE project_id=$1 AND cable_id=$2
+    ORDER BY created_at DESC,id DESC LIMIT 1`,[projectId,cableId])).rows[0];
+  return previous?.status==='calculated'&&previous.result?.route?.success===true&&verifiedDesignOnlyChange(dependencies,previous.dependencies)
+    ? previous.result as EngineResponse : undefined;
 }
 async function fencedJob(client:PoolClient,job:Row):Promise<void> {
   const current = (await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 AND id=$2 FOR UPDATE',[job.project_id,job.id])).rows[0];
@@ -56,7 +57,11 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       WHERE j.id=$1 AND j.owner_token=$2 AND j.state='running' AND j.cancel_requested=false AND j.login_expires_at>NOW()
         AND EXISTS(SELECT 1 FROM users u WHERE u.id=j.requested_by AND u.is_admin=true)
         AND NOT EXISTS(SELECT 1 FROM viewer_login_bindings l WHERE l.login_id=j.login_id AND l.revoked_at IS NOT NULL)
-      RETURNING j.id`,[job.id,job.owner_token]).then(result => {if (!result.rows.length) controller.abort();}).catch(() => controller.abort()).finally(() => {heartbeatBusy = false;});
+      RETURNING j.id`,[job.id,job.owner_token]).then(async result => {
+        if (!result.rows.length) {controller.abort();return;}
+        const authority=await readRecalculationJobAuthority(pool,{projectId:job.project_id,jobId:job.id});
+        if(authority.enrolled&&!authority.valid)controller.abort();
+      }).catch(() => controller.abort()).finally(() => {heartbeatBusy = false;});
   },1000); heartbeat.unref();
   try {
     if (job.kind==='lookup') {
@@ -95,7 +100,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
           ON CONFLICT(project_id,job_id) DO NOTHING`,[job.project_id,job.id,dependencies,response,stale]);
         await client.query('UPDATE pf_jobs SET completed=1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
       });
-    } else for (;;) {
+    } else for (let quantum=0;quantum<1;quantum++) {
       signal.throwIfAborted();
       const item = await principalTransaction(pool,job.project_id,principal(job),async client => {
         await fencedJob(client,job);
@@ -109,16 +114,16 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       const requestId = randomUUID();
       try {
         requireVersionedCalculationScope(dependencies);
+        const identity=await calculationEngineIdentity({force:true});
         await principalTransaction(pool,job.project_id,principal(job),async client => {
           await fencedJob(client,job);
-          const current=await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true);
+          const current=await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true,identity);
           if (!current.dependencies || hash(current.dependencies)!==hash(dependencies))
             throw new PathFinderError('PROPOSAL_STALE',409,'The tray catalog, routing permissions or another calculation input changed. Calculate a fresh proposal.');
+          await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
         });
         await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
-        const previous = await pool.query<Row>(`SELECT result FROM pf_proposals WHERE project_id=$1 AND cable_id=$2 AND geometry_hash=$3
-          AND result->'route'->>'success'='true' ORDER BY created_at DESC,id DESC LIMIT 1`,[job.project_id,item.cable_id,geometryHash(dependencies)]);
-        retainedResult = previous.rows[0]?.result as EngineResponse|undefined;
+        retainedResult = await readRetainedDesignGeometry(pool,job.project_id,item.cable_id,dependencies);
         retained = retainedResult?.route;
         calculationMode = retained ? 'design' : 'calculate';
         response = await engine.execute({schemaVersion:'pathfinder.model.runner.v1',requestId,operation:calculationMode,projectId:job.project_id,
@@ -129,15 +134,20 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
             to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),projectSettings:engineProjectSettings(dependencies.settings)},signal);
         if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,dependencies.cableInputs.mto);
       } catch(error) {
+        // Preserve this failure even when cancellation already aborted the signal.
+        // A cancelled signal cannot certify that the owned process group joined.
+        if(unconfirmedEngineJoin(error)||implementationRestartRequired(error))throw error;
         signal.throwIfAborted();
         const safe = error instanceof PathFinderError ? error.message : 'The private calculation engine failed.';
         response = {schemaVersion:'pathfinder.model.response.v1',requestId,status:error instanceof PathFinderError && error.code === 'ENGINE_DEADLINE' ? 'deadline_exceeded' : 'invalid_request',message:safe,engineeringAccepted:false};
       }
       signal.throwIfAborted();
+      const finalIdentity=await calculationEngineIdentity({force:true});
       await principalTransaction(pool,job.project_id,principal(job),async client => {
         await fencedJob(client,job);
-        const current = await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true);
+        const current = await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true,finalIdentity);
         const stale = !current.dependencies || hash(current.dependencies) !== hash(dependencies);
+        await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
         const status = stale ? 'stale' : response.status, result = {...response,calculationMode};
         const proposalHash = hash({dependencies,result});
         await client.query(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
@@ -145,13 +155,19 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         const completed = await client.query(`UPDATE pf_job_items SET state='complete',status=$4,message=$5 WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND state='running' RETURNING cable_id`,
         [job.project_id,job.id,item.cable_id,status,stale ? 'Dependencies changed during calculation. Calculate a fresh proposal.' : response.message]);
         if (completed.rows.length) await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
+        await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
       });
     }
     await principalTransaction(pool,job.project_id,principal(job),async client => {
       await fencedJob(client,job);
-      await client.query("UPDATE pf_jobs SET state='complete',completed=total,owner_token=NULL,lease_until=NULL,updated_at=NOW() WHERE id=$1 AND owner_token=$2",[job.id,job.owner_token]);
+      await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
+      await finishCalculationSlice(client,job);
+      await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
     });
   } catch(error) {
+    // The executor wrapper has stopped the whole worker. Keep the owned job/lease
+    // untouched until a later safe recovery; terminal state would claim a join.
+    if(unconfirmedEngineJoin(error)||implementationRestartRequired(error))throw error;
     await pool.query(`UPDATE pf_jobs SET state=CASE WHEN cancel_requested THEN 'cancelled' WHEN $3 THEN 'queued' ELSE 'failed' END,
       owner_token=NULL,lease_until=NULL,failure=CASE WHEN cancel_requested THEN 'Cancelled after the owned engine process stopped.' WHEN $3 THEN NULL ELSE $4 END,updated_at=NOW()
       WHERE id=$1 AND owner_token=$2 AND state='running'`,[job.id,job.owner_token,stopping.aborted,error instanceof PathFinderError ? error.message : 'Calculation stopped or worker authority was revoked.']).catch(() => undefined);
@@ -159,37 +175,10 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
 }
 
 /** One DB advisory-lock owner serializes .NET/cache access across backend processes. */
-export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFactory:()=>EngineExecutor=createConfiguredEngineExecutor) {
-  const controller = new AbortController(); let work:Promise<void>|undefined,fatalStop:unknown;
+export function createPathFinderWorker(pool:Pool,_jobs:PathFinderJobs,engineFactory:()=>EngineExecutor=createConfiguredEngineExecutor,
+  identityReader:typeof calculationEngineIdentity=calculationEngineIdentity) {
+  const controller = new AbortController(); let work:Promise<void>|undefined,fatalStop:unknown,unavailableCode:string|undefined;
   const preparation = createPreparationEngineLane();
-  let lastAutomatic = 0;
-  let automaticAfter:string|null = null;
-  async function automatic():Promise<void> {
-    if (Date.now()-lastAutomatic < 15000) return; lastAutomatic = Date.now();
-    const projects = await pool.query<Row>(`SELECT * FROM (
-      SELECT DISTINCT ON(project_id) * FROM pf_jobs WHERE kind='calculate' ORDER BY project_id,created_at DESC,id DESC
-    ) latest WHERE state='complete' AND cancel_requested=false AND login_expires_at>NOW()
-      AND ($1::uuid IS NULL OR project_id>$1::uuid) ORDER BY project_id LIMIT 5`,[automaticAfter]);
-    automaticAfter=nextAutomaticCursor(projects.rows as Array<{project_id:string}>);
-    for (const previous of projects.rows) {
-      if (controller.signal.aborted) return;
-      try {
-        // Historical complete jobs must not seed repeated blocked replacements
-        // or rematch a registry before a catalog-scoped producer exists.
-        await principalTransaction(pool,previous.project_id,principal(previous),async client => {
-          const model=await activeModel(client,previous.project_id);
-          if (!model.active_model_version_id || model.state!=='ready' || model.health!=='healthy')
-            throw new PathFinderError('ROUTING_PREPARATION_REQUIRED',409);
-          const artifact=await latestArtifact(client,previous.project_id,model.active_model_version_id);
-          if (!artifact || artifact.content_fingerprint!==model.content_fingerprint)
-            throw new PathFinderError('ROUTING_PREPARATION_REQUIRED',409);
-          await requirePreparedRoutingScope(client,previous.project_id,artifact.id);
-        });
-        const registry = (await pool.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1',[previous.project_id])).rows[0];
-        if (registry) await jobs.create(previous.project_id,principal(previous),{expectedRegistryRevision:registry.registry_revision,options:previous.options,timeoutMilliseconds:previous.timeout_ms});
-      } catch {/* Missing/revoked/stale dependencies remain visible; retries are bounded by this cadence. */}
-    }
-  }
   return {
     start():void {
       if (work) return;
@@ -197,7 +186,7 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFacto
       work = (async () => {
         while (!controller.signal.aborted) {
           let owner:PoolClient|undefined,releaseOwner=true,discardOwner=false;
-          const lost = ():void => {discardOwner=true;controller.abort();};
+          const lost = ():void => {discardOwner=true;unavailableCode??='WORKER_OWNER_CONNECTION_LOST';controller.abort();};
           async function release():Promise<void> {
             if (!owner || !releaseOwner) return;
             if (discardOwner) {
@@ -236,21 +225,41 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFacto
             if (!locked.rows[0]?.locked) {await release(); await delay(5000,undefined,{signal:controller.signal}); continue;}
             let engine:EngineExecutor|undefined;
             try {
-              if (!controller.signal.aborted) engine=engineFactory();
+              if (!controller.signal.aborted) {
+                const loadedIdentity:EngineIdentity=await identityReader({force:true});
+                if(!controller.signal.aborted){
+                  const owned=engineFactory();
+                  engine={close:()=>owned.close(),execute:async(request,signal)=>{
+                    const current=await identityReader({force:true});
+                    if(current.contentSha256!==loadedIdentity.contentSha256){
+                      unavailableCode='ENGINE_IMPLEMENTATION_RESTART_REQUIRED';
+                      const error=new PathFinderError(unavailableCode,503,'The loaded calculation implementation changed. Restart the owned backend before calculating.');
+                      controller.abort(error);throw error;
+                    }
+                    try{return await owned.execute(request,signal);}
+                    catch(error){
+                      if(unconfirmedEngineJoin(error)){
+                        fatalStop??=error;controller.abort(error);
+                      }
+                      throw error;
+                    }
+                  }};
+                }
+              }
               let preparationLast=false;
               while (!controller.signal.aborted) {
                 if (!preparationLast && await preparation.runNext(engine!,controller.signal)) {preparationLast=true;continue;}
                 preparationLast=false;
-                const job = await claim(pool);
+                const job = await claimCalculationSlice(pool);
                 if (job) await executeJob(pool,job,controller.signal,engine!);
-                else {await automatic(); await delay(1000,undefined,{signal:controller.signal});}
+                else {await delay(1000,undefined,{signal:controller.signal});}
               }
             } finally {
               try {await engine?.close();}
               catch(error) {
                 // An unreaped lane must not start another owner or return its locked
                 // connection to the pool. Quarantine until the backend terminates.
-                controller.abort();releaseOwner=false;fatalStop=error;
+                controller.abort();releaseOwner=false;fatalStop??=error;
               }
               if(releaseOwner&&!discardOwner)await owner.query("SELECT pg_advisory_unlock(hashtext('wfc-pathfinder-engine-worker-v1'))").catch(() => {discardOwner=true;});
             }
@@ -262,6 +271,11 @@ export function createPathFinderWorker(pool:Pool,jobs:PathFinderJobs,engineFacto
     executePreparation(request:EngineInvocation,signal:AbortSignal):Promise<EngineResponse> {
       if (!work || controller.signal.aborted) return Promise.reject(new PathFinderError('PREPARATION_WORKER_UNAVAILABLE',503));
       return preparation.enqueue(request,signal);
+    },
+    get failureCode():string|null {
+      if(!fatalStop)return unavailableCode??null;
+      const code=(fatalStop as {code?:unknown}).code;
+      return typeof code==='string'&&/^[A-Z][A-Z0-9_]{0,95}$/.test(code)?code:'WORKER_FATAL';
     },
     async stop():Promise<void> {controller.abort();preparation.close(); await work;if(fatalStop)throw fatalStop;},
   };

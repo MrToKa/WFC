@@ -4,16 +4,21 @@ import { hasCurrentEndpointCalculationProvenance, type EndpointCalculationPoint 
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { geometryHash } from './dependencies.js';
 import { defaultOptions, type CurrentDependencySnapshot } from './jobContracts.js';
+import { syntheticEngineIdentity } from './calculationFixtures.js';
 const id = (n: number) => `${String(n).padStart(8, '0')}-1111-4111-8111-111111111111`;
 const endpoint = (n: number): EndpointCalculationPoint => ({locationId:id(n),locationRevision:'2',bindingRevision:'3',point:[n,2,3],bindingId:id(n+10),
   bindingContentSha256:'a'.repeat(64),mode:'fixed-world',captureFrameId:id(20),qualifiedProjectFrameId:null,aggregateId:id(21),projectionSha256:'b'.repeat(64),sourceObjectRevisionId:null,migrationDecisionId:null});
-const value = (): CurrentDependencySnapshot => ({schemaVersion:'pathfinder.dependencies.v4',comparison:null,projectId:id(1),cableId:id(2),cableWriteRevision:'1',registryRevision:'4',
+const value = (): CurrentDependencySnapshot => ({schemaVersion:'pathfinder.dependencies.v5',engineIdentity:syntheticEngineIdentity(),comparison:null,projectId:id(1),cableId:id(2),cableWriteRevision:'1',registryRevision:'4',
   model:{id:id(3),selectionRevision:'2',contentFingerprint:'c'.repeat(64)},artifact:{id:id(4),sha256:'b'.repeat(64)},
   cableInputs:{fromLocation:'=A-01',toLocation:'=B-02',mto:'Instrumentation',cableTypeId:id(5)},
   settings:{revision:'1',connectionGap:'1',secondaryTrayLength:'7',endConnectionLength:'5',additionalBendingPercent:'10'},options:{...defaultOptions},
   routing:{catalogRevision:'1',routingContentSha256:'c'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'d'.repeat(64)},
   preparation:{aggregateId:id(21),geometryRevision:'2',captureFrameId:id(20),projectionSha256:'b'.repeat(64)},from:endpoint(6),to:endpoint(7),engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'});
 describe('versioned endpoint authority in cable calculations', () => {
+  it('keeps v4 comparison evidence historical instead of inventing executable implementation identity',()=>{
+    const {engineIdentity:_identity,...old}=value();
+    expect(()=>requireVersionedCalculationScope({...old,schemaVersion:'pathfinder.dependencies.v4'})).toThrow(/actual calculation implementation provenance/);
+  });
   it('retains historical v3 endpoint evidence for inspection but refuses it for fresh Review/Apply',()=>{
     const historical={...value(),schemaVersion:'pathfinder.dependencies.v3'};
     expect(hasCurrentEndpointCalculationProvenance(historical)).toBe(true);
