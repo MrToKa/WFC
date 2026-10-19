@@ -476,6 +476,7 @@ are:
 | Operator identity | Recorded value |
 | --- | --- |
 | Local branch | `pf-r10-final-delivery-local-20261019` |
+| Technical delivery commit | `7b36306fb19d304d6c926b5fd6958a5bc3ac63fc`; subsequent closeout changes only documentation/evidence |
 | Inherited handoff commit | `05429d1f03163332505a328b56d5659eff875644`; this is not a final R10 delivery commit |
 | Candidate source context | 1560 files, SHA256 `a603cdab2540f3c21861dbcffc7f38112750d0c74c9e21a2c3366c61b4a9737e` |
 | API image | `sha256:abac7d3e41f3b6888ac0d1d69c8fdfe9b9f9bcf3ba51256fa8f67893b0e672d1` |

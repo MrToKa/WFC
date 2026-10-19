@@ -15,6 +15,49 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current execution — PF-R0 and sequential PF-R delivery
 
+### FINAL closeout — PF-R0–R10 and R2a, 19 October 2026
+
+- TECHNICALLY_VERIFIED_WITH_EXPLICIT_LIMITATIONS. Technical commit
+  `7b36306fb19d304d6c926b5fd6958a5bc3ac63fc` on
+  `pf-r10-final-delivery-local-20261019`;12files (7source/test,5docs/evidence).
+  Following metadata-only commit records these actual pins. No push/PR/merge/
+  original installation update. Historical .pf0-work/.pf2-work remain untracked.
+- Current5191 source binding4/profile18 retained, candidateR10-1 images unchanged.
+  Full current archive `r10-final2` PASS, backup3daea574-2d70-4f06-b714-3a8890c28798.
+  Fresh5192coldrestore126tables/authfencing PASS; normal28HTTP history/protected
+  resource PASS; owned-web-egress route2 actualUI+2fullsynthetic calculations PASS.
+  Exactroutes/config/endpoints restored. ONLYnew5192 retired:0containers/volumes/
+  networks/TCPclosed. All source/reference7audits PASS with CRLF/blob distinction.
+- Qualified SOURCE host resumed once in new binding10/PID14196. Initial launcher
+  UNKNOWN positively reconciled with exactCIM/config/startedreceipt and normal
+  producerready/existinggrant3. No secondlaunch or newgrant. Spent ownwrapper47036
+  removed afterguardpost+reconciliation; managedhost14196 retained. First attempted
+  shellcleanup refused its own scope assertion beforemutation because shell had
+  already exited; no foreign process stopped. All root test/maintenance sessions
+  closed; only useful5191application/managedhost retained. Agents completed.
+- Finalsource normalCUALookup35.30345579516123m/Ghost/yellow PASS, source screenshot
+  `r10-ui-source-final1.png` retained privately; browser marked deliverable.
+  Final14DOCXpages PASS, typecheck/lint and scoped runtime26/drawing162+41+63 PASS
+  (overlapping scopes, not summed); inheritedCore105/43golden/215+ledger35 apply
+  only at recorded revisions, current frozen source bytes independently preserved.
+- Public sanitized evidence: `evidence/final-delivery/technical-receipt.json`,
+  20private PASS receipt hashes; report47/guide46 and self-contained next prompt
+  `handoffs/PF-R-human-engineering-review.md`. No secret/business rows in Git.
+- Remaining human engineering work: configure realpurpose permissions, qualify
+  full330traynetwork, resolve remaining1527sharednames after automaticmatching,
+  review17realrevisionchanges/commonframe, inspect actual cable lengths then
+  explicitReview→Apply. Fullplantcapacity/nativeparity/humanacceptance NOT_RUN;
+  realengineeringApply0. Do not invent or silently accept these inputs.
+- Stage automation `path-finder-purpose-rules-and-model-revisions` PAUSED via
+  application tool and saved status verified. No automatic implementation stage
+  remains; resume only for explicit user feedback/engineering decisions.
+- Newrendererchild+allhistoricallydeniedscratchchildren/parents remain untouched,
+  no retry/bypass/prune. Automatic approval denied renderer cleanup with
+  `blocked by policy` beforeprocessstart; usernotified, limitation retained.
+
+The checkpoints below are chronological history and are superseded by this final
+closeout; their pending states must not restart completed work.
+
 ### PF-R10 current checkpoint — 19 October 2026
 
 - Root16:20UTC: route-only offline hold2 actual PASS and recovery PASS, with

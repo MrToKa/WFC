@@ -13,8 +13,11 @@ Keep technical verification distinct from engineering acceptance.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
 - Branch: `pf-r10-final-delivery-local-20261019`.
+- Final R10 technical delivery: `7b36306fb19d304d6c926b5fd6958a5bc3ac63fc`.
+  Stage automation was paused through the app after this delivery; the next
+  metadata-only commit records the actual pin. No implementation stage is queued.
 - R10 checked working-tree parent: `05429d1f03163332505a328b56d5659eff875644`.
-  The following closeout metadata records the actual technical delivery commit;
+  The closeout metadata records the actual technical delivery commit;
   inspect live HEAD/status before starting. Never reset or discard changes.
 - Read [report47](../47-r10-final-delivery.md), [guide46](../46-purpose-revision-user-guide.md),
   [technical receipt](../evidence/final-delivery/technical-receipt.json) and

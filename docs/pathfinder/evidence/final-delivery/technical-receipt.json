@@ -4,7 +4,7 @@
   "status": "TECHNICALLY_VERIFIED_WITH_EXPLICIT_LIMITATIONS",
   "branch": "pf-r10-final-delivery-local-20261019",
   "workingTreeParent": "05429d1f03163332505a328b56d5659eff875644",
-  "finalTechnicalCommit": "Recorded in subsequent closeout metadata; source hashes below identify this checked working tree.",
+  "finalTechnicalCommit": "7b36306fb19d304d6c926b5fd6958a5bc3ac63fc",
   "sourceFiles": [
     {
       "file": "scripts/pathfinder-local/runtime-lib.mjs",
@@ -368,5 +368,11 @@
       "status": "PASS"
     }
   ],
-  "privateValuesOrBusinessRowsIncluded": false
+  "privateValuesOrBusinessRowsIncluded": false,
+  "automation": {
+    "id": "path-finder-purpose-rules-and-model-revisions",
+    "status": "PAUSED",
+    "updatedThroughApplicationTool": true,
+    "reason": "Technical stages complete; next stage requires human engineering decisions."
+  }
 }
