@@ -1,3 +1,4 @@
+import { generateId } from '@/utils/generateId';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ViewerController, type ViewerEvent } from './ViewerController';
 import { invalidateViewerLogin } from './loginLifecycle';
@@ -5,15 +6,19 @@ import { invalidateViewerLogin } from './loginLifecycle';
 const projectId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
 let controllers: ViewerController[];
-beforeEach(() => { controllers = []; vi.useFakeTimers(); });
-afterEach(() => { controllers.forEach(c => c.dispose()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); document.body.replaceChildren(); });
+beforeEach(() => {
+  controllers = []; vi.useFakeTimers();
+  // Exercise the entire lifecycle without the secure-context-only randomUUID API.
+  vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+});
+afterEach(() => { controllers.forEach(c => c.dispose()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); document.body.replaceChildren(); });
 function setup(token = 'login-a') {
   const container = document.createElement('div'); document.body.append(container);
   const events: ViewerEvent[] = [];
   const c = new ViewerController({ container, projectId, token, onEvent: e => events.push(e) });
   controllers.push(c);
   const send = vi.spyOn(c.iframe.contentWindow!, 'postMessage');
-  const message = (type: string, payload: Record<string, unknown>, requestId: string = crypto.randomUUID(), extra: Record<string, unknown> = {}, source: MessageEventSource | null = c.iframe.contentWindow, origin = location.origin) => {
+  const message = (type: string, payload: Record<string, unknown>, requestId: string = generateId(), extra: Record<string, unknown> = {}, source: MessageEventSource | null = c.iframe.contentWindow, origin = location.origin) => {
     window.dispatchEvent(new MessageEvent('message', { origin, source, data: {
       channel: 'wfc-routings-viewer', protocolVersion: 1, instanceId: c.instanceId, projectId,
       modelVersionId: null, loadId: null, requestId, type, payload, ...extra,
@@ -32,7 +37,7 @@ describe('Viewer parent identity and lifecycle', () => {
   function realSessionResponses(activeVersion = versionId) {
     return vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
       if (options?.method === 'DELETE') return new Response(null, { status: 204 });
-      if (options?.method === 'POST') return new Response(JSON.stringify({ sessionId: crypto.randomUUID(), projectId, modelVersionId: activeVersion,
+      if (options?.method === 'POST') return new Response(JSON.stringify({ sessionId: generateId(), projectId, modelVersionId: activeVersion,
         loadId: JSON.parse(String(options.body)).loadId, expiresAt: new Date(Date.now() + 300_000).toISOString(), absoluteExpiresAt: new Date(Date.now() + 1_800_000).toISOString() }));
       return new Response(JSON.stringify({ selection: { activeModelVersionId: activeVersion, selectionRevision: 1 } }));
     });
@@ -65,7 +70,7 @@ describe('Viewer parent identity and lifecycle', () => {
     const s = setup(); s.ready();
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
       if (options?.method === 'DELETE') return new Response(null, { status: 204 });
-      if (options?.method === 'POST') return Response.json({ sessionId: crypto.randomUUID(), projectId, modelVersionId: versionId,
+      if (options?.method === 'POST') return Response.json({ sessionId: generateId(), projectId, modelVersionId: versionId,
         loadId: JSON.parse(String(options.body)).loadId, expiresAt: new Date(Date.now() + 190_000).toISOString(), absoluteExpiresAt: new Date(Date.now() + 190_000).toISOString() });
       return Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 1 } });
     });
@@ -152,9 +157,9 @@ describe('Viewer parent identity and lifecycle', () => {
   it('rejects foreign origins, sibling sources, extra fields and repeated handshake', () => {
     const { c, message, send, hello } = setup();
     const payload = { supportedProtocolVersions: [1], sdkVersion: '7.130.0' };
-    message('HELLO', payload, crypto.randomUUID(), {}, c.iframe.contentWindow, 'https://forged.example');
-    message('HELLO', payload, crypto.randomUUID(), {}, window);
-    message('HELLO', payload, crypto.randomUUID(), { url: '/arbitrary' });
+    message('HELLO', payload, generateId(), {}, c.iframe.contentWindow, 'https://forged.example');
+    message('HELLO', payload, generateId(), {}, window);
+    message('HELLO', payload, generateId(), { url: '/arbitrary' });
     expect(send).not.toHaveBeenCalled();
     hello(); hello();
     expect(send).toHaveBeenCalledTimes(1);

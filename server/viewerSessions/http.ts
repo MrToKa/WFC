@@ -1,16 +1,34 @@
 import type { Request } from 'express';
+import { isIP } from 'node:net';
 import { ViewerSessionError } from './errors.js';
 
-export interface ViewerHttpPolicy { origins: readonly string[]; allowHttpLoopback: boolean; trustProxy: boolean }
+export interface ViewerHttpPolicy {
+  origins: readonly string[];
+  allowHttpLoopback: boolean;
+  /** Explicit exception for exact RFC 1918 IPv4 origins; traffic is unencrypted. */
+  allowInsecureLanHttp?: boolean;
+  trustProxy: boolean;
+}
 const loopback = (hostname: string): boolean => ['localhost','127.0.0.1','[::1]'].includes(hostname);
+function privateIpv4(hostname: string): boolean {
+  if (isIP(hostname) !== 4) return false;
+  const [first, second] = hostname.split('.').map(Number);
+  return first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+}
+function httpAllowed(hostname: string, policy: ViewerHttpPolicy): boolean {
+  return loopback(hostname) ? policy.allowHttpLoopback
+    : policy.allowInsecureLanHttp === true && privateIpv4(hostname);
+}
 export function viewerHttpPolicy(env: Record<string,string | undefined> = process.env): ViewerHttpPolicy {
   const origins = (env.WFC_VIEWER_ALLOWED_ORIGINS ?? '').split(',').map(value => value.trim()).filter(Boolean);
-  const policy = { origins,allowHttpLoopback: env.WFC_VIEWER_ALLOW_HTTP_LOOPBACK === 'true',trustProxy: env.WFC_VIEWER_TRUST_PROXY === 'true' };
+  const policy = { origins,allowHttpLoopback: env.WFC_VIEWER_ALLOW_HTTP_LOOPBACK === 'true',
+    allowInsecureLanHttp: env.WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP === 'true',
+    trustProxy: env.WFC_VIEWER_TRUST_PROXY === 'true' };
   for (const origin of origins) {
     let parsed: URL;
     try { parsed = new URL(origin); } catch { throw new Error('Invalid WFC viewer origin configuration'); }
     if (parsed.origin !== origin || !['https:','http:'].includes(parsed.protocol) ||
-      parsed.protocol === 'http:' && (!policy.allowHttpLoopback || !loopback(parsed.hostname))) throw new Error('Invalid WFC viewer origin configuration');
+      parsed.protocol === 'http:' && !httpAllowed(parsed.hostname,policy)) throw new Error('Invalid WFC viewer origin configuration');
   }
   return policy;
 }
@@ -27,7 +45,7 @@ export function requireViewerOrigin(req: Request,policy: ViewerHttpPolicy,mutati
   const origin = `${scheme}://${host}`;
   if (!policy.origins.includes(origin)) throw new ViewerSessionError('VIEWER_ORIGIN_DENIED',403);
   const parsed = new URL(origin);
-  if (scheme === 'http' && (!policy.allowHttpLoopback || !loopback(parsed.hostname))) throw new ViewerSessionError('VIEWER_ORIGIN_DENIED',403);
+  if (scheme === 'http' && !httpAllowed(parsed.hostname,policy)) throw new ViewerSessionError('VIEWER_ORIGIN_DENIED',403);
   if ((mutation || req.header('origin') !== undefined) && req.header('origin') !== origin) throw new ViewerSessionError('VIEWER_ORIGIN_DENIED',403);
   const site = req.header('sec-fetch-site');
   if (site !== undefined && site !== 'same-origin') throw new ViewerSessionError('VIEWER_ORIGIN_DENIED',403);

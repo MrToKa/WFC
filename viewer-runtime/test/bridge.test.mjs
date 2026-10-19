@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { createRuntimeBridge } from '../bridge.mjs';
 import { CHANNEL, parseRouting } from '../protocol.mjs';
 
@@ -11,7 +12,8 @@ function fixture(options = {}) {
   const sent = [], fetches = [], loads = [], listeners = new Set(), states = [];
   let next = 20, identity = { modelVersionId: null, loadId: null };
   const bootstrap = { instanceId: uuid(1), projectId: uuid(2) };
-  const window = { location: { origin: 'http://localhost:18085' }, crypto: { randomUUID: () => uuid(next++) },
+  // Model LAN HTTP: getRandomValues exists but randomUUID is unavailable.
+  const window = { location: { origin: 'http://localhost:18085' }, crypto: { getRandomValues: webcrypto.getRandomValues.bind(webcrypto) },
     parent: { postMessage(value, origin) { sent.push({ value, origin }); } },
     addEventListener(type, fn) { if (type === 'message') listeners.add(fn); }, removeEventListener(type, fn) { if (type === 'message') listeners.delete(fn); } };
   const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [] };
@@ -39,7 +41,9 @@ function fixture(options = {}) {
 
 test('HELLO uses exact target origin, forged origin/source/identity/direction/replays have no side effects', async () => {
   const f = fixture();
+  assert.equal(f.window.crypto.randomUUID, undefined);
   assert.equal(f.messages('HELLO').length, 1); assert.equal(f.sent[0].origin, f.window.location.origin);
+  assert.match(f.messages('HELLO')[0].requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   f.send('INIT', { locale: 'bg', expectedSdkVersion: '7.130.0' }, {}, { origin: 'https://foreign.invalid' });
   f.send('INIT', { locale: 'bg', expectedSdkVersion: '7.130.0' }, {}, { source: {} });
   f.send('INIT', { locale: 'bg', expectedSdkVersion: '7.130.0' }, { instanceId: uuid(99) });

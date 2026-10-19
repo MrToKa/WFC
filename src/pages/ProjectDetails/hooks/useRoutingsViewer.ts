@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { fetchProjectModels, ProjectModelApiError, type ProjectModelVersion } from '@/api/projectModels';
 import { fetchRoutingTrays, RoutingTrayApiError, type RoutingTray } from '@/api/routingTrays';
 import { ViewerController, type ViewerEvent } from '@/viewer/ViewerController';
+import { generateId } from '@/utils/generateId';
 import { isUuid } from '../../../../viewer-runtime/protocol.mjs';
 import {
   aggregateRouteCheck, buildProjectRouteCheck, createLocalRouteCheck, parseRouteInput,
@@ -80,7 +81,7 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
   useEffect(() => {
     const run: Run = { scope, closed: false, metadata: new AbortController(), controller: null, attempt: null };
     // Public information UI lifecycle only; it carries no controller/session/private frame state.
-    runRef.current = run; update(run, { ...initial(scope), lifecycleKey: crypto.randomUUID() });
+    runRef.current = run; update(run, { ...initial(scope), lifecycleKey: generateId() });
     const start = async () => {
       if (!scope.projectId || !scope.token || scope.projectId !== scope.loadedProjectId || !container.current) {
         update(run, { phase: 'access-denied', message: 'Project access must be refreshed before opening the viewer.' }); return;
@@ -101,7 +102,7 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
           } else if (event.type === 'MODEL_LOADING') {
             // The controller has already invalidated the old load and its pending commands.
             cancelAttempt(run, false);
-            update(run, { lifecycleKey: crypto.randomUUID(), phase: 'loading', message: 'Loading the model, identifiers and properties…', checking: false, result: null, operationId: null, currentRoute: null });
+            update(run, { lifecycleKey: generateId(), phase: 'loading', message: 'Loading the model, identifiers and properties…', checking: false, result: null, operationId: null, currentRoute: null });
           } else if (event.type === 'MODEL_LOADED') {
             const loaded = run.controller?.getLoadSnapshot();
             if (!loaded?.ready || loaded.modelVersionId !== model.id || loaded.projectId !== scope.projectId || !identityMatches(event, loaded)) return;
@@ -147,7 +148,7 @@ export function useRoutingsViewer({ projectId, loadedProjectId, token, container
     if (!run || run.scope !== scope || !current(run) || !loaded?.ready || loaded.projectId !== scope.projectId || !scope.projectId || !scope.token) return;
     cancelAttempt(run);
     const frozenInput = Object.freeze({ ...input });
-    const attempt: Attempt = { operationId: crypto.randomUUID(), load: loaded, input: frozenInput, originalCableRouting, requestId: null, abort: new AbortController(), earlyReplies: new Map(), databaseDone: false };
+    const attempt: Attempt = { operationId: generateId(), load: loaded, input: frozenInput, originalCableRouting, requestId: null, abort: new AbortController(), earlyReplies: new Map(), databaseDone: false };
     const currentRoute: CurrentRoute = Object.freeze({ ...frozenInput, operationId: attempt.operationId });
     run.attempt = attempt; update(run, { checking: true, result: null, operationId: null, currentRoute });
     const parsed = parseRouteInput(frozenInput.rawRouting);

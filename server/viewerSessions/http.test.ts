@@ -27,6 +27,33 @@ describe('viewer origin, cookie and raw resource boundary',() => {
     expect(() => viewerHttpPolicy({WFC_VIEWER_ALLOWED_ORIGINS:'http://192.0.2.1',WFC_VIEWER_ALLOW_HTTP_LOOPBACK:'true'})).toThrow();
     expect(() => viewerHttpPolicy({WFC_VIEWER_ALLOWED_ORIGINS:'https://wfc.internal/path'})).toThrow();
   });
+  it.each(['10.0.0.1','10.255.255.254','172.16.0.1','172.31.255.254','192.168.0.1','192.168.255.254'])('allows the exact private IPv4 origin %s only with explicit LAN HTTP opt-in',hostname => {
+    const origin=`http://${hostname}:5173`;
+    expect(() => viewerHttpPolicy({WFC_VIEWER_ALLOWED_ORIGINS:origin})).toThrow();
+    const lan=viewerHttpPolicy({WFC_VIEWER_ALLOWED_ORIGINS:origin,WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP:'true'});
+    // Fetch Metadata headers can be absent on ordinary HTTP LAN origins.
+    expect(requireViewerOrigin(request({host:`${hostname}:5173`,origin}),lan,true)).toEqual({secure:false});
+    expect(requireViewerOrigin(request({host:`${hostname}:5173`}),lan,false)).toEqual({secure:false});
+    expect(() => requireViewerOrigin(request({host:`${hostname}:5173`,origin}),{...lan,allowInsecureLanHttp:false},true)).toThrow();
+    expect(() => requireViewerOrigin(request({host:`${hostname}:5174`,origin}),lan,true)).toThrow();
+    expect(() => requireViewerOrigin(request({host:`${hostname}:5173`}),lan,true)).toThrow();
+    expect(() => requireViewerOrigin(request({host:`${hostname}:5173`,origin:'http://192.168.1.2:5173'}),lan,true)).toThrow();
+    expect(() => requireViewerOrigin(request({host:`${hostname}:5173`,origin,'sec-fetch-site':'cross-site'}),lan,false)).toThrow();
+  });
+  it.each(['172.15.255.255','172.32.0.1','192.169.0.1','8.8.8.8','100.64.0.1','169.254.1.1','0.0.0.0','[::]','[fd00::1]','wfc.internal','192.168.1.2.evil.invalid'])('refuses LAN HTTP opt-in for non-RFC1918 literal %s',hostname => {
+    const origin=`http://${hostname}:5173`;
+    expect(() => viewerHttpPolicy({WFC_VIEWER_ALLOWED_ORIGINS:origin,WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP:'true'})).toThrow();
+    expect(() => requireViewerOrigin(request({host:`${hostname}:5173`,origin}),{...policy,origins:[origin],allowInsecureLanHttp:true},true)).toThrow();
+  });
+  it('keeps loopback opt-in separate and refuses wildcard, aliased and non-origin LAN configuration',() => {
+    for(const origin of ['http://localhost:5173','http://127.0.0.1:5173','http://192.168.1.1:5173/','http://user@192.168.1.1:5173','http://192.168.1.1:5173/path','http://192.168.*:5173','http://0xc0a80101:5173']) {
+      expect(() => viewerHttpPolicy({WFC_VIEWER_ALLOWED_ORIGINS:origin,WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP:'true'})).toThrow();
+    }
+    expect(viewerHttpPolicy({}).allowInsecureLanHttp).toBe(false);
+    expect(() => viewerHttpPolicy({WFC_VIEWER_ALLOWED_ORIGINS:'http://192.168.1.1:5173',WFC_VIEWER_ALLOW_INSECURE_LAN_HTTP:'TRUE'})).toThrow();
+    const lan={...policy,origins:['http://192.168.1.1:5173'],allowInsecureLanHttp:true,trustProxy:true};
+    expect(() => requireViewerOrigin(request({host:'192.168.1.1:5173',origin:'http://192.168.1.1:5173','x-forwarded-proto':'https'}),lan,true)).toThrow();
+  });
   it('accepts one exact cookie secret without treating an ID, Bearer, duplicate or encoded cookie as a credential',() => {
     const secret='A'.repeat(43);
     expect(viewerCookieSecret(`other=x; wfc_viewer_session=${secret}`)).toBe(secret);

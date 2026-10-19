@@ -1,4 +1,5 @@
 import { CHANNEL, PROTOCOL_VERSION, SDK_VERSION, validateEnvelope, validateDescriptor, parseRouting } from './protocol.mjs';
+import { generateId } from './generate-id.mjs';
 
 const messages = {
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
@@ -20,7 +21,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (disposed && type !== 'DISPOSED') return;
     const value = validateEnvelope({ channel: CHANNEL, protocolVersion: PROTOCOL_VERSION, instanceId: bootstrap.instanceId,
       projectId: bootstrap.projectId, modelVersionId: command?.modelVersionId ?? null, loadId: command?.loadId ?? null,
-      requestId: command?.requestId ?? window.crypto.randomUUID(), type, payload }, 'frame-to-parent');
+      requestId: command?.requestId ?? generateId(window.crypto), type, payload }, 'frame-to-parent');
     if (value) window.parent.postMessage(value, origin);
     return Boolean(value);
   }

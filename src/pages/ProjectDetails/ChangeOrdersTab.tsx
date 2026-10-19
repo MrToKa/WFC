@@ -1,5 +1,6 @@
 import { ChangeLogTable } from '@/components/ChangeLogTable';
 import { canEditProject, canExportChangeLogs } from '@/utils/permissions';
+import { generateId } from '@/utils/generateId';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AddRegular,
@@ -198,15 +199,6 @@ const formatMoney = (amount: number): string =>
   new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
     amount,
   );
-
-const createMaterialOperationId = (): string => {
-  // getRandomValues also works when the app is opened over HTTP on the local network.
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
 
 type Props = {
   project: Project;
@@ -562,7 +554,7 @@ export const ChangeOrdersTab = ({
     try {
       const updated = await stageMaterialOperation({
         type: 'add',
-        id: createMaterialOperationId(),
+        id: generateId(),
         sourceCatalog: choice.category,
         sourceMaterialId: choice.id,
       });
@@ -624,7 +616,7 @@ export const ChangeOrdersTab = ({
     try {
       const updated = await stageMaterialOperation({
         type: 'duplicate',
-        id: createMaterialOperationId(),
+        id: generateId(),
         itemId: item.id,
       });
       const added = updated.items.find(
