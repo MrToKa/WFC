@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { BigIntStats, Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createCalculationEngineIdentityReader } from './calculationEngineIdentity.js';
+import { calculationProjectionFiles, createCalculationEngineIdentityReader } from './calculationEngineIdentity.js';
 import { verifyEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 
 vi.mock('node:fs/promises', () => ({ default: { lstat: vi.fn(), realpath: vi.fn(), readFile: vi.fn() } }));
@@ -37,6 +37,17 @@ function fixture() {
 afterEach(() => vi.clearAllMocks());
 
 describe('calculation engine identity against synthetic filesystem facts, not actual DLL execution', () => {
+  it.each(['./lengthLedger.js','../../shared/pathfinderLengthLedger.js'])('pins the actual %s validator and changes identity for its sole replacement', async name=>{
+    expect(calculationProjectionFiles().map(file=>file.name)).toContain(name);
+    const f=fixture(),filename=path.join(f.root,'ledger-validator.js');
+    f.files.set(filename,{bytes:Buffer.from('ledger-validator-original'),size:25n,ino:50n,mtimeNs:10n,ctimeNs:20n,nlink:1n,symlink:false});
+    const entry=f.files.get(filename)!;entry.size=BigInt(entry.bytes.length);
+    f.setProjections([{name,filename}]);const before=await f.reader.read();
+    entry.bytes=Buffer.from('ledger-validator-replaced');entry.size=BigInt(entry.bytes.length);entry.ino++;
+    const after=await f.reader.read({force:true});
+    expect(after.derivationSha256).not.toBe(before.derivationSha256);expect(after.contentSha256).not.toBe(before.contentSha256);
+    expect(after.runnerSha256).toBe(before.runnerSha256);expect(after.coreModuleSha256).toBe(before.coreModuleSha256);
+  });
   it('hashes exactly four module byte sequences and the named projection group', async () => {
     const f = fixture(), value = await f.reader.read();
     expect(value.runnerSha256).toBe(sha(f.files.get(path.join(f.root, f.names[0]))!.bytes));

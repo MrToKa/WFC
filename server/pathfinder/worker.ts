@@ -21,6 +21,8 @@ import { claimCalculationSlice, finishCalculationSlice } from './workerSchedulin
 import { createPreparationEngineLane } from './preparationEngineLane.js';
 import type { EngineInvocation } from './engineSession.js';
 import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { requireCalculationLengthLedger } from './lengthLedger.js';
+import { readRevisionBaseline, sealRevisionResult, verifyRevisionResultForProposal } from './revisionResultRepository.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -143,12 +145,13 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         retained = retainedResult?.route;
         calculationMode = retained ? 'design' : 'calculate';
         response = await engine.execute({schemaVersion:'pathfinder.model.runner.v1',requestId,operation:calculationMode,projectId:job.project_id,
-          modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds:job.timeout_ms,
+          modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds:job.timeout_ms,includeLengthLedger:true,
           ...(retained ? {route:{success:true,lengthMeters:retained.lengthMeters,fromDistanceMeters:retained.fromDistanceMeters,toDistanceMeters:retained.toDistanceMeters,
             fromRequiresSecondary:retained.fromRequiresSecondary,toRequiresSecondary:retained.toRequiresSecondary}} : {
             category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
             to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),projectSettings:engineProjectSettings(dependencies.settings)},signal);
         if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,dependencies.cableInputs.mto);
+        requireCalculationLengthLedger(response,dependencies.settings);
       } catch(error) {
         // Preserve this failure even when cancellation already aborted the signal.
         // A cancelled signal cannot certify that the owned process group joined.
@@ -165,9 +168,19 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         const stale = !current.dependencies || hash(current.dependencies) !== hash(dependencies);
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
         const status = stale ? 'stale' : response.status, result = {...response,calculationMode};
-        const proposalHash = hash({dependencies,result});
-        await client.query(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(project_id,job_id,cable_id) DO NOTHING`,[randomUUID(),job.project_id,job.id,item.cable_id,status,dependencies,hash(dependencies),geometryHash(dependencies),result,proposalHash]);
+        const baseline=await readRevisionBaseline(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
+        if(!baseline)throw new PathFinderError('REVISION_BASELINE_REQUIRED',409,'Recalculate this historical job to record a current immutable cable baseline.');
+        const proposalHash = hash({dependencies,result,baselineHash:baseline.baselineHash});
+        const inserted=await client.query<{id:string}>(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(project_id,job_id,cable_id) DO NOTHING RETURNING id`,[randomUUID(),job.project_id,job.id,item.cable_id,status,dependencies,hash(dependencies),geometryHash(dependencies),result,proposalHash]);
+        if(inserted.rows[0])await sealRevisionResult(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,proposalId:inserted.rows[0].id,dependencyHash:hash(dependencies),result,dependencies});
+        else{
+          // A lost ACK may have committed the original immutable output. Verify
+          // that exact output and seal; never attach fresh metadata to a replay.
+          const existing=(await client.query<Row>('SELECT id,result,dependencies,proposal_hash FROM pf_proposals WHERE project_id=$1 AND job_id=$2 AND cable_id=$3',[job.project_id,job.id,item.cable_id])).rows[0];
+          const sealed=existing&&await verifyRevisionResultForProposal(client,{projectId:job.project_id,proposalId:existing.id,result:existing.result,dependencies:existing.dependencies,proposalHash:existing.proposal_hash});
+          if(!sealed||sealed.baselineHash!==baseline.baselineHash)throw new PathFinderError('REVISION_RESULT_CONFLICT',409,'The existing immutable calculation cannot be reconciled with its admission.');
+        }
         const completed = await client.query(`UPDATE pf_job_items SET state='complete',status=$4,message=$5 WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND state='running' RETURNING cable_id`,
         [job.project_id,job.id,item.cable_id,status,stale ? 'Dependencies changed during calculation. Calculate a fresh proposal.' : response.message]);
         if (completed.rows.length) await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
@@ -188,7 +201,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
     // Reconcile from the committed item/proposal state on the next quantum.
     // A lost COMMIT ACK is neither a failed calculation nor permission to
     // replace an immutable proposal that may already have been published.
-    const commitUnknown=error instanceof PathFinderError&&error.code==='CALCULATION_GRANT_COMMIT_OUTCOME_UNKNOWN';
+    const commitUnknown=error instanceof PathFinderError&&['CALCULATION_GRANT_COMMIT_OUTCOME_UNKNOWN','PATHFINDER_COMMIT_OUTCOME_UNKNOWN'].includes(error.code);
     await pool.query(`UPDATE pf_jobs SET state=CASE WHEN cancel_requested THEN 'cancelled' WHEN $3 THEN 'queued' ELSE 'failed' END,
       not_before=CASE WHEN $5 THEN clock_timestamp()+interval '5 seconds' ELSE NULL END,
       owner_token=NULL,lease_until=NULL,failure=CASE WHEN cancel_requested THEN 'Cancelled after the owned engine process stopped.' WHEN $3 AND NOT $5 THEN NULL ELSE $4 END,updated_at=NOW()

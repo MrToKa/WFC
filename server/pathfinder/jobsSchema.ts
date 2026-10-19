@@ -69,8 +69,18 @@ export async function initializePathFinderJobs(pool: Pool): Promise<void> {
         applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),UNIQUE(project_id,actor_id,idempotency_key),
         FOREIGN KEY(project_id,proposal_id) REFERENCES pf_proposals(project_id,id) ON DELETE CASCADE,FOREIGN KEY(project_id,cable_id) REFERENCES cables(project_id,id) ON DELETE CASCADE
       );
+      -- A deleted live cable is a missing-current state, not permission to erase
+      -- its engineering audit. Job/project ownership and proposal receipt FKs
+      -- remain; project deletion can still cascade the complete project scope.
+      ALTER TABLE pf_proposals DROP CONSTRAINT IF EXISTS pf_proposals_project_id_cable_id_fkey;
+      ALTER TABLE pf_apply_receipts DROP CONSTRAINT IF EXISTS pf_apply_receipts_project_id_cable_id_fkey;
       ALTER TABLE pf_reviews ADD COLUMN IF NOT EXISTS validation_method TEXT NOT NULL DEFAULT 'legacy-unclassified'
         CHECK(validation_method IN ('legacy-unclassified','synthetic-fixture','manual-review'));
+      ALTER TABLE pf_reviews ADD COLUMN IF NOT EXISTS revision_result_sha256 TEXT
+        CHECK(revision_result_sha256 ~ '^[a-f0-9]{64}$');
+      ALTER TABLE pf_reviews ADD COLUMN IF NOT EXISTS review_login_id UUID;
+      ALTER TABLE pf_reviews ADD COLUMN IF NOT EXISTS review_dependency_sha256 TEXT
+        CHECK(review_dependency_sha256 ~ '^[a-f0-9]{64}$');
       CREATE OR REPLACE FUNCTION protect_pf_immutable_record() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
         RAISE EXCEPTION 'PathFinder immutable record cannot be updated'; END $$;
       DROP TRIGGER IF EXISTS pf_artifact_immutable ON pf_artifacts;

@@ -35,8 +35,11 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
     const values=(await client.query<Record<string,any>>(`SELECT id,
       CASE WHEN octet_length(from_location)>4096 THEN NULL ELSE from_location END AS from_location,
       CASE WHEN octet_length(to_location)>4096 THEN NULL ELSE to_location END AS to_location,
-      mto,cable_type_id,cable_write_revision::text,
-      (COALESCE(octet_length(from_location),0)>4096 OR COALESCE(octet_length(to_location),0)>4096) AS input_oversize
+      CASE WHEN octet_length(tag)>4096 THEN NULL ELSE tag END AS tag,
+      CASE WHEN char_length(routing)>8000 OR octet_length(routing)>32000 THEN NULL ELSE routing END AS routing,
+      design_length::text,install_length::text,mto,cable_type_id,cable_write_revision::text,
+      (COALESCE(octet_length(from_location),0)>4096 OR COALESCE(octet_length(to_location),0)>4096
+        OR COALESCE(octet_length(tag),0)>4096 OR COALESCE(char_length(routing),0)>8000 OR COALESCE(octet_length(routing),0)>32000) AS input_oversize
       FROM cables WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id`,[projectId,ids])).rows;
     if(values.length!==ids.length||values.some((row,n)=>row.id!==ids[n]))refused('RECALCULATION_CABLE_INTEGRITY',409);
     for(const row of values){if(row.input_oversize)refused('RECALCULATION_INPUT_BYTES');inputBytes+=Buffer.byteLength(canonicalJson(row));if(inputBytes>RECALCULATION_LIMITS.dependencyBytes)refused('RECALCULATION_INPUT_BYTES');cables.push(row);}

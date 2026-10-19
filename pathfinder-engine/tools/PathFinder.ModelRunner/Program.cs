@@ -70,6 +70,13 @@ internal static partial class Program
             if (settings is null) throw new ArgumentException("Project Details settings are required.");
             if ((route.FromRequiresSecondary || route.ToRequiresSecondary) && settings.SecondaryTrayLength is null)
                 return Failure(request, "settings_required", "Project Details SECONDARY length is required.");
+            if (request.IncludeLengthLedger)
+            {
+                var observed = LengthLedgerObserver.CalculateRetained(route.LengthMeters, route.FromDistanceMeters,
+                    route.ToDistanceMeters, route.FromRequiresSecondary, route.ToRequiresSecondary, settings, token);
+                return new { schemaVersion = "pathfinder.model.response.v1", request.RequestId, status = "calculated", message = "Design allowances recalculated from retained geometry.",
+                    design = observed.Design, lengthLedger = observed.Ledger, engineeringAccepted = false };
+            }
             var design = SavedRouteDesign.Calculate(route.LengthMeters, route.FromDistanceMeters,
                 route.ToDistanceMeters, route.FromRequiresSecondary, route.ToRequiresSecondary,
                 settings.EndConnectionLength, settings.SecondaryTrayLength ?? 0m, settings.AdditionalBendingPercent);
@@ -153,15 +160,30 @@ internal static partial class Program
         token.ThrowIfCancellationRequested();
         if (request.Reverse) routeResult = routeResult.Reverse();
         CableDesignLength? resultDesign = null;
+        LengthLedger? lengthLedger = null;
         var status = routeResult.Success ? "calculated" : IsCoreResourceLimit(routeResult.Message) ? "resource_limit" : "no_path";
         if (routeResult.Success && request.Operation == "calculate")
         {
             if (settings is null) throw new ArgumentException("Project Details settings are required.");
             if ((routeResult.FromRequiresSecondary || routeResult.ToRequiresSecondary) && settings.SecondaryTrayLength is null)
                 status = "settings_required";
+            else if (request.IncludeLengthLedger)
+            {
+                var observed = LengthLedgerObserver.Calculate(routeResult, settings, token);
+                resultDesign = observed.Design; lengthLedger = observed.Ledger;
+            }
             else resultDesign = CableDesignLength.Calculate(routeResult, settings.EndConnectionLength,
                 settings.SecondaryTrayLength ?? 0m, settings.AdditionalBendingPercent);
         }
+        if (lengthLedger is not null) return new
+        {
+            schemaVersion = "pathfinder.model.response.v1", request.RequestId, status,
+            message = routeResult.Message,
+            snapshot.Model, prepared = summary, effectiveCategory = category.ToString(),
+            route = routeResult, design = resultDesign, projectSettings = settings,
+            engineeringAccepted = false, lookupScope,
+            usedConnectionGapMeters = (double?)null, lengthLedger
+        };
         return new
         {
             schemaVersion = "pathfinder.model.response.v1", request.RequestId, status,
@@ -180,6 +202,8 @@ internal static partial class Program
             !Guid.TryParseExact(r.ProjectId, "D", out _) || !Guid.TryParseExact(r.ModelVersionId, "D", out _) ||
             r.Operation is not ("prepare" or "calculate" or "design" or "lookup" or "lookup-plan") || r.TimeoutMilliseconds is < 1 or > 120000)
             throw new ArgumentException("Unknown schema, operation, identity, hash or deadline.");
+        if (r.IncludeLengthLedger && r.Operation is not ("calculate" or "design"))
+            throw new ArgumentException("Length-component ledgers apply only to calculate and design operations.");
         if (r.Operation == "lookup-plan")
         {
             if (r.SnapshotId is not null || r.SnapshotSha256 is not null || r.Options is not null || r.ProjectSettings is not null
@@ -314,6 +338,8 @@ internal sealed record Request
     public RetainedRoute? Route { get; init; }
     public string? RouteText { get; init; }
     public bool Reverse { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool IncludeLengthLedger { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FittedTraceExportRequest? FittedTraceExport { get; init; }
 }

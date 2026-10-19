@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r8-background-automation-local-20261019`, inherited handoff HEAD `9d00ebb890202fdf993054c6769cf15f30068e76` (inspect live state before resuming).
+- Current branch: `pf-r9-revision-review-local-20261019`, inherited handoff HEAD `17c1cfc34ab856feb3785079e82e0d3473a8604d` (inspect live state before resuming).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -14,6 +14,154 @@ The user explicitly authorized automatic implementation of the remaining stages 
 - No push, PR, merge, deployment or updating the existing installation is authorized.
 
 ## Current execution — PF-R0 and sequential PF-R delivery
+
+### PF-R9 technical closeout — 19 October 2026, 14:08 UTC
+
+- R9 technically verified with explicit limits, report45 and sanitized
+  evidence/revision-results/technical-receipt.json; local commit next. Candidate5
+  currentAPI44d381d0/webd6ed5fda are installed ONLY5191. Sourceprofile
+  r9-source-runtime1 (R9work), compatible r8-approved-runtime15 (R8work).
+- Fresh5192 fixture retired:0containers/volumes/networks/closedport. Candidate5UI
+  oldv1reader+deletedhistory PASS; synthetic2 normalUICalculateReviewApply18m,
+  install44preserved; total2newsyntheticv2receipts,0realdata. TemporaryAPIstop/start
+  command completed afterresumption, not forcedfailure/UIcloseproof. Separate
+  actualclose/lateApplyHTTP6groups8requests andPG3refusals PASS.
+- Source5191 host8 joined; freshhost9 PID6900 running, bound ownwork
+  tray-catalog-fa0ade50-01c9-4f35-8213-1f553916d76a. Initiallauncher UNKNOWN
+  reconciledactualuniquePID/config/startreceipt; no relaunch. Producerready/
+  enabledgrant3 actualHTTP PASS; copied2140cables/Details7/5/10/gap1retained.
+- Upgrade snapshot SQLtext122→126tables:117oldtableexact,6legacyreviewvalues
+  exact+3nullcolumns;4operationaltablesordinarygrant/session/engine-dirtyevents.
+  201priorPFfilesexact+5newrecoveryjournalfiles/0deleted. SixbusinessReviewApply
+  valuesets preserved; sourceApply0. Narrowoutsideguard PASSwithackexternalstates.
+- ReferenceWFC externallyadvanced96e63f13fdc2b1d30b8f8ff658dd662f25fac104 cleanmain,
+  connectorconfirmslive; rootdidnotmerge/push/fetch/updateoriginal. Sourcecopyguard
+  remains e1efpinned/refuseschangedmain. OldPFmodificationspreserved.
+- Final42tests4filesPASS,typecheck/APIlint61926PASS. PureCore105,43goldens215,
+  ledger35,PF1656,frontend101 are overlapping recordedscopes, notaddedtotal.
+- Next immediate prepare-stage-handoff PF-R10 andexecute: completecurrentbackup/
+  freshrestore+fencing/exactSQLtext, rightpooling+actualDOCXvisualQA, offline/demo/
+  finalmatrix/userguide/ownedcleanup. ExistingR8archive NOTR9restoreproof. All
+  agentsfrozen; rootsoleexecutor. Preserve5191/archives/privatecompanions/deniedpaths.
+
+### PF-R9 earlier checkpoint — 19 October 2026, 14:01 UTC
+
+- Still UNCOMMITTED on17c1cfc, same R9 branch. Source5191/profile14/host8 is
+  unchanged. Candidate5 built1558files SHA80bee9bce6d7f7eaa7c22962ad01ae1b6c9e9fbb5e13c1ef81cc9466a905b5f3,
+  API44d381d077c618d4f8a2128268fab095b51554a2226b9aee20d34e9eba70a0a5,
+  webd6ed5fdaf733c29a4e374612160d02712453fd2717e9b15f87c352056aa5ebbb.
+- Actual recoveryHTTP PASS6groups/8requests,126tables; exactsixbusiness/ReviewApply
+  tables,1immutabletombstone,0newApply. PG3 expectedrefusals/outerrollback PASS.
+  DeletedhistoryHTTP PASS5groups/6requests; onlysynthetic1deletedon5192,
+  exactsealedhistory/state/receiptretained. New42tests/4filesPASS; types+APIlintPASS.
+- Browser exposed historicalv1proposal parser incompatibility; narrowreadfix
+  keeps engineidentity/currentApply requirements. Candidate5UI nowloads oldhistory,
+  readyprotectedmodel,exactledger/deletedhistorymissingstate. Synthetic2 calculated
+  and reviewed throughnormalUI; root temporarily stoppedONLY5192API toexercise
+  pendingApplyfailure. Startresumption session65575 ongoing; finishitbeforeother
+  targetoperations. Next binding r9-target-runtime5 afterstart; operator currently4.
+- All editingagents frozen. ActualUIpendingclosure→candidate5realdemoghost/restore,
+  retireONLYown5192, source5191guardedupgrade/preservation, R9commit/handoffR10
+  remain. No realdataApply, nooriginaloperations. R10finalarchive/drawingDOCXQA
+  still required. Privatework/operators and refusals remain retained.
+
+### PF-R9 earlier checkpoint — 19 October 2026, 13:40 UTC
+
+- R9 is still UNCOMMITTED on17c1cfc / pf-r9-revision-review-local-20261019.
+  Source5191/profile14/hostbinding8 PID7884 remains unchanged. Fresh5192 is
+  r9-restore5192-1 in ownR9scratch, candidate3/profile r9-target-runtime2.
+  Private operator.mjs pins both source and target; root is sole executor.
+- Candidate3 actualPG19controls/rollback/equality PASS; controlled3-cable HTTP
+  full ledger/read/paging/denial PASS12; all2140 blocked/nojob22pages PASS, six
+  business/ReviewApply tables exact and automatic enablement disabled.
+- Existing seeded syntheticproject54cfad40 was upgraded ONLY in5192 through
+  retained8-phase normalcatalog/policy/R3/fixed-world/proof flow. Exact NEW2obj
+  synthetic10mgeometry, nofakeSDK/native data. synthetic-http1 PASS7groups/51req:
+  full18m / Details E6→7 design-only19m, different-login Review rejection,
+  simultaneoussamekey1receipt/1syntheticApply, accepted delta−1 afterErestore,
+  installLength retained. Real-data Apply0. Synthetic settings restored.
+- current-role4 PASS6HTTP403/sameoldJWTthenrestored200. Attempts1–3 asserted
+  wrong error-body shapes, not permission successes; all temporary role changes
+  restored. Source5191 before snapshot:122tables/201PF_ROOTfiles20,116,282B in
+  R8work r8-r9-source-before1-raw.private.json. No source runtime mutation yet.
+- .NET current105regression PASS,43goldens/215parity PASS,35ledger PASS. Pure11
+  files matchcanonical physicalbytes/provenance; Gitblob EOLnormalizedmatch.
+  PFfinal11994 PASS101files/1656tests,optional1file/5NOT_RUN. Newpendingfrontend
+  39PASS/newrecoverybackend22PASS. Types19564PASS, lint11615PASS; prior lint
+  failed on a PRIVATE AsyncFunctionbody carrier renamed .body.txt, bytes intact.
+- Final review foundlostApplyACK/keyreset P2; implemented durable bounded
+  sameoriginpendingintent/no bearer, explicitexactretry, explicitclose with
+  immutable server pf_apply_abandonments tombstone preventinglateApply. This
+  fourthR9table/currentrole closure is SOURCE-TESTED, runtime NOT_RUN until
+  candidate4. UIagent files frozen; Tabfixture agent files frozen. Rootfrontend
+ 93061 completed PASS4files/101tests (Tab53,hook34,Results5,API9); Tab took159.8s,
+  no hang/failure. All agents frozen. Types19564PASS, lint11615PASS. Build4next;
+  do not edit inventoried sources/documents until builder finishes.
+- Next: finish frontend, build4 withfrozen source, overlayONLYfresh5192, actual
+  close/lateApply/deletehistory/UI checks; guardedsource5191upgrade+preservation,
+  R9localcommit, prepare-stage-handoff R10+execute. Keepfresh5192 forcurrent
+  controls untilretirement. New46userguide authored, finalqualificationpending.
+
+### PF-R9 earlier checkpoint — 19 October 2026, 13:12 UTC
+
+- R9 remains UNCOMMITTED; source5191/profile14/hostbinding8 is unchanged.
+  Fresh owned5192 restored all122 tables from qualified-backup1, rotated JWT/
+  installation epoch, blanked7producer settings; normal oldJWT/hostkey401 and
+  freshadmin200 PASS. R9 migration gives125tables. Only owned5192 API/web changed.
+- Candidate3 source inventory1551files SHA2383b9d21675bd82d8bb5e77268dd6318b59c33ad212054f4632413d29582f8f;
+  API f7fc76776f6ea9c3e606b23044df3a6387a9db1195af9efaafb48b57acd62347,
+  web ed0ec0ef0c16f426e7d0314d7554d9fd09e0dddb70d2d7dc51ca62223cbd0b6a.
+  Build1/2 retained; candidate3 includes deleted-cable read fix and actualPG
+  observed_events JSON-array wire fix. No metadata/source drift during each build.
+- ActualPG constraint2 PASS19checks, one outerROLLBACK/19tablemultisets exact;
+  helper1 FAIL23514 observed_events format, rollback/equality confirmed before
+  corrected retry. No committed SQL-control writes/engineering Apply.
+- Actual normalHTTP controljob1696daf8-238e-45e7-863c-a82beb31ad62 completed3
+  controlled cables; immutable admissions/ledgers match exact proposals. HTTP2
+  PASS12requests, two bounded pages, crossproject404/unreviewedApply409.
+- Current-source PF regression83100 PASS99files/1634tests, optional1file/5tests
+  NOT_RUN. Current typecheck/focusedlint60976 PASS. Newwire/deletedread27PASS.
+  Computer-use tab7/5192 shows exact ledger8m, protectedyellowpath/filledGhost;
+  noReview/Apply performed. Screenshots private r9-ui-route1/ledger1.png.
+- Agents: readiness_map authoring ONLY private synthetic-current-preparation
+  control helper for existing seeded syntheticproject54cfad40; acceptance_review
+  owns NEW docs/pathfinder/46-purpose-revision-user-guide.md. Root sole executor.
+- Next: legitimate current synthetic preparation/HTTP ReviewApply controls;
+  actual2140blocked admission+paging/security and UIrestore, source5191 guarded
+  upgrade/preservation, localR9commit, selfcontainedR10handoff+execute. Retain
+  fresh5192 until all dependent controls finish, then retire ONLY this fixture.
+
+### PF-R9 earlier checkpoint — 19 October 2026, 12:51 UTC
+
+- R8 technical21334df and finalized handoff metadata17c1cfc are committed locally.
+  New inherited branch pf-r9-revision-review-local-20261019; no publication/merge.
+- Root owns existing dependencyBatch/jobs/worker/schema/routes/Review/Apply and
+  shared/pathfinderLengthLedger.ts plus final integration/runtime/tests.
+- Agent r8_readiness_map owns new Adapter LengthLedger.cs, ModelRunner Program.cs
+  and new LengthLedger.Tests only. Agent r7_preservation_classifier owns NEW
+  revisionResult* server files and shared/pathfinderRevisionResults.ts/tests.
+  Agent r7_acceptance_review owns NEW revision-results API/hook/component/tests.
+  Agents do no runtime/tests/Git; preserve concurrent changes and shared DTOs.
+- Current source work is UNCOMMITTED, not verified R9. Admission baseline uses
+  exact SQL decimal text and nullable accepted history; all-blocked automatic
+  generations keep no job and get durable admissions. Opt-in C# ledger preserves
+  original11pure files and old absent/false transport output. Page max100.
+- Root actual checks: .NET ledger-build1 PASS0warnings/errors;35direct/oneshot/
+  sessionchecks PASS; firstshared/server30PASS; newfrontend28PASS/4files; source
+  PF99files run46013=1622PASS/2obsoleteassertionFAIL/5optionalNOT_RUN, corrected
+  affected110PASS/6files (transactions/recovery/result/identity). Types/lint10823
+  PASS. Earliermixedscratchrun/failures andfixedUIfixture remainexplicit; do not
+  count oldcompiledscratchtests as current-source checks. Root added one narrow
+  existingproposalconflict seal-verification branch afterthesechecks.
+- All agents' source edits are frozen. No R9 runtime image/build/SQLmigration/
+  Apply has occurred. Source5191 still
+  R8candidate10/profile14, hostbinding8 PID7884; R8fresh5192 already retired.
+  NewprivateR9work tray-catalog-5f489050-d469-4ae0-9972-868b33a4d8e3 ownsall
+  new.NETartifacts/fixtures. No original/5190/source5191runtime changes.
+- Next: run narrowfinalworkercheck, build candidate via new privatebuild-state
+  clone (source5191env/state unchanged), freshowned5192restore and R9qualification,
+  then owner-guarded5191 upgrade and actualsecurity/paging/Apply/computer-use.
+  Keep public scope/limits and no real-data engineering acceptance explicit.
 
 ### PF-R8 technical delivery / PF-R9 ready — 19 October 2026, 12:25 UTC
 

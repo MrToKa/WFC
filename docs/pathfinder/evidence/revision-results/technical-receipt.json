@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "wfc.pf.r9-technical-receipt.v1",
+  "observedAt": "2026-10-19T14:05:00Z",
+  "status": "TECHNICALLY_VERIFIED_WITH_EXPLICIT_LIMITATIONS",
+  "parentRevision": "17c1cfc34ab856feb3785079e82e0d3473a8604d",
+  "branch": "pf-r9-revision-review-local-20261019",
+  "candidate": {
+    "number": 5,
+    "sourceFiles": 1558,
+    "sourceSha256": "80bee9bce6d7f7eaa7c22962ad01ae1b6c9e9fbb5e13c1ef81cc9466a905b5f3",
+    "apiImage": "sha256:44d381d077c618d4f8a2128268fab095b51554a2226b9aee20d34e9eba70a0a5",
+    "webImage": "sha256:d6ed5fdaf733c29a4e374612160d02712453fd2717e9b15f87c352056aa5ebbb"
+  },
+  "verification": {
+    "coreRegression": {"passed":105,"nativeParity":false},
+    "frozenParity": {"cases":43,"checksPassed":215,"expectedRegenerated":false},
+    "lengthLedger": {"passed":35},
+    "pfSource11994": {"files":101,"passed":1656,"optionalNotRun":5},
+    "frontend93061": {"files":4,"passed":101},
+    "finalFocusedApiRecoveryDeleted": {"files":4,"passed":42},
+    "types61926":"PASS",
+    "apiLint61926":"PASS",
+    "actualPgConstraints2": {"passed":19,"rolledBack":true},
+    "blockedScope": {"cables":2140,"pages":22,"ready":0,"blocked":2140,"job":null},
+    "syntheticHttp": {"groups":7,"requests":51},
+    "recoveryHttp": {"groups":6,"requests":8,"newApplyCount":0,"closedKeyLateApplyStatus":409},
+    "recoveryPg": {"refusals":3,"rolledBack":true},
+    "deletedHistoryHttp": {"groups":5,"requests":6,"syntheticCableOnly":true,"source5191Retained":true},
+    "currentRole": {"denied403":6,"unchangedJwtClaim":true,"actorRestored":true},
+    "syntheticV2ApplyReceipts":2,
+    "newRealDataV2ApplyReceipts":0,
+    "source5191ApplyCount":0,
+    "computerUse": {
+      "candidate5HistoricalV1Reader":"PASS",
+      "syntheticCalculateReviewApply":"PASS",
+      "installedLengthPreserved":"PASS",
+      "realConvertedDiagnosticPathGhostRestoreClear":"PASS",
+      "forcedLostResponse":"NOT_PROVEN-original-command-completed-after-API-resumption",
+      "explicitCloseThroughUi":"NOT_RUN-separate-source-and-actual-HTTP-proof-retained"
+    },
+    "countsOverlap":true
+  },
+  "sourcePreservationAtUpgrade": {
+    "oldTables":122,"resultingTables":126,"exactOldTables":117,
+    "existingReviewValuesExact":true,"newNullableReviewColumns":3,
+    "ordinaryOperationalTablesChanged":4,"sixBusinessReviewApplyValueSetsPreserved":true,
+    "priorPfRootFilesExact":201,"newRecoveryJournalFiles":5,"deletedFiles":0
+  },
+  "runtime": {
+    "sourcePort":5191,"onlyApiWebReplaced":true,"databaseStorageVolumesNetworksRetained":true,
+    "producerReady":true,"grantRevision":"3","hostBinding":9,"hostPid":6900,
+    "hostLaunchInitialDisposition":"UNKNOWN-reconciled-without-relaunch",
+    "freshRestorePort":5192,"freshRestoreRetired":true,"fixtureResourcesRemaining":0,
+    "originalResources":"USER_ACKNOWLEDGED_EXTERNAL_CHANGE-protected-by-existing-narrow-guard"
+  },
+  "limitations": [
+    "No native parity or human engineering acceptance.",
+    "13-object converted diagnostic network is not wholeplant coverage.",
+    "Real copied project has unresolved endpoints and unconfigured routing purposes.",
+    "Current complete-delivery backup/restore, drawing DOCX visual QA and final offline evidence remain PF-R10 work.",
+    "All model/business rows, tokens, screenshots and private runtime provenance remain outside Git."
+  ]
+}

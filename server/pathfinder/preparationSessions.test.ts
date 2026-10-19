@@ -80,7 +80,7 @@ describe('bounded preparation SQL with real authority transaction and mocked pg 
   it('never relabels a missing final COMMIT acknowledgement as definite refusal', async () => {
     const t = transport('COMMIT', '57014');
     await expect(preparationTransaction(t.pool, id(1), who, async () => 'written')).rejects.toMatchObject({ code: 'PREPARATION_COMMIT_OUTCOME_UNKNOWN', status: 503 });
-    expect(t.sql.slice(-2)).toEqual(['COMMIT', 'ROLLBACK']); expect(t.release).toHaveBeenCalledTimes(1);
+    expect(t.sql.at(-1)).toBe('COMMIT'); expect(t.sql).not.toContain('ROLLBACK'); expect(t.release).toHaveBeenCalledExactlyOnceWith(true);
   });
   it('stops an aborted final publication before issuing COMMIT and retains normal authority refusals', async () => {
     const t = transport(), controller = new AbortController();

@@ -10,6 +10,9 @@ import { assertLoginNotExpired, principalTransaction } from './auth.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import { requireEnrollmentAuthority } from './recalculationRepository.js';
+import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
+import { requireCalculationLengthLedger } from './lengthLedger.js';
+import { readApplyAbandonment } from './applyRecovery.js';
 
 type Row = Record<string,any>;
 function receiptDto(row:Row) {
@@ -25,6 +28,8 @@ export function createPathFinderApply(pool:Pool) {
       assertLoginNotExpired(who);
       return {receipt:receiptDto(previous),duplicate:true};
     }
+    if (await readApplyAbandonment(client,{projectId,actorId:who.userId,idempotencyKey:input.idempotencyKey,payloadHash}))
+      throw new PathFinderError('APPLY_REQUEST_CLOSED',409,'This exact pending Apply request was closed without applying. Review a current proposal before creating a new Apply request.');
     const proposal = (await client.query<Row>(`SELECT p.*,j.state AS job_state,j.cancel_requested FROM pf_proposals p
       JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id WHERE p.project_id=$1 AND p.id=$2 FOR SHARE OF p,j`,[projectId,proposalId])).rows[0];
     if (!proposal) throw new PathFinderError('PROPOSAL_NOT_FOUND',404);
@@ -34,6 +39,10 @@ export function createPathFinderApply(pool:Pool) {
     if (!proposalRoutingPreferences(dependencies.options)) throw new PathFinderError('PROPOSAL_PREFERENCES_REQUIRED',409,'The original calculation preferences are unavailable. Calculate and review a fresh proposal.');
     requireVersionedCalculationScope(dependencies);
     if (proposal.status !== 'calculated' || !result.route?.success || !result.design || proposal.job_state !== 'complete' || proposal.cancel_requested) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409);
+    const revisionResult=await verifyRevisionResultForProposal(client,{projectId,proposalId,result,dependencies,proposalHash:proposal.proposal_hash});
+    if(!revisionResult||!revisionResult.ledgerHash||review.revision_result_sha256!==revisionResult.revisionResultSha256
+      ||review.review_dependency_sha256!==proposal.dependency_hash||review.review_login_id!==who.loginId)throw new PathFinderError('REVISION_RESULT_REVIEW_REQUIRED',409,'Calculate and review a fresh result with its exact cable baseline and length components in the current login.');
+    requireCalculationLengthLedger(result,dependencies.settings);
     const synthetic=await hasSyntheticProof(client,dependencies);
     if (!synthetic && review.validation_method!=='manual-review') throw new PathFinderError('MANUAL_REVIEW_REQUIRED',409,'Confirm manual review of this exact proposal before applying it. Historical reviews do not grant manual acceptance.');
     await calculationEngineIdentity({force:true});
@@ -48,16 +57,21 @@ export function createPathFinderApply(pool:Pool) {
     const compatibilityIssue = routeCompatibilityIssue(route);
     if (compatibilityIssue) throw new PathFinderError('ROUTING_OUTSIDE_WFC_LIMIT',409,compatibilityIssue);
     assertLoginNotExpired(who);
-    const before = (await client.query<Row>('SELECT to_jsonb(c) AS value FROM cables c WHERE c.project_id=$1 AND c.id=$2',[projectId,proposal.cable_id])).rows[0].value;
+    const before = (await client.query<Row>(`SELECT to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value FROM cables c WHERE c.project_id=$1 AND c.id=$2`,[projectId,proposal.cable_id])).rows[0].value;
     await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id});
     await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
     const after = (await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW()
-      WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c) AS value`,[projectId,proposal.cable_id,route,Number(length),input.expectedCableWriteRevision])).rows[0]?.value;
+      WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,[projectId,proposal.cable_id,route,length,input.expectedCableWriteRevision])).rows[0]?.value;
     if (!after) throw new PathFinderError('CABLE_WRITE_CONFLICT',409);
-    const provenance = {schemaVersion:'pathfinder.apply.v1',proposalId,proposalHash:proposal.proposal_hash,reviewId:input.reviewId,dependencies,
+    const provenance = {schemaVersion:'pathfinder.apply.v2',proposalId,proposalHash:proposal.proposal_hash,reviewId:input.reviewId,dependencies,
+      revisionResult:{admissionId:revisionResult.admissionId,revisionResultSha256:revisionResult.revisionResultSha256,baselineHash:revisionResult.baselineHash,
+        engineResultSha256:revisionResult.engineResultSha256,ledgerHash:revisionResult.ledgerHash,dependencyHash:revisionResult.dependencyHash,
+        oldModel:revisionResult.oldModel,newModel:revisionResult.summary.newModel,comparisonRef:revisionResult.comparisonRef,reasons:revisionResult.summary.reasonCodes,
+        observedEvents:revisionResult.observedEvents,physicalChangeProven:revisionResult.physicalChangeProven},
       engineVersion:dependencies.engineVersion,calculationMode:result.calculationMode,synthetic,acceptanceScope:synthetic?'local-synthetic-fixture':'manual-review',
       validationMethod:synthetic?'synthetic-fixture':'manual-review',nativeParity:'not-performed',
-      review:{id:review.id,actorId:review.actor_id,reviewedAt:review.reviewed_at,validationMethod:review.validation_method},
+      review:{id:review.id,actorId:review.actor_id,loginId:review.review_login_id,reviewedAt:review.reviewed_at,validationMethod:review.validation_method,
+        dependencyHash:review.review_dependency_sha256,revisionResultSha256:review.revision_result_sha256},
       engineeringAcceptanceMessage:synthetic?'This is the explicitly seeded synthetic fixture; it is not acceptance of the real converted model.':'An administrator confirmed manual review of this exact proposal. Native engineering parity has not been performed; broader user acceptance remains pending.'};
     await client.query(`INSERT INTO cable_versions(id,cable_id,version_number,change_type,change_source,cable_number,revision,mto,tag,cable_type_id,cable_type_name,
       from_location,to_location,routing,delivery,design_length,install_length,pull_date,connected_from,connected_to,tested,changed_by,changed_by_snapshot)

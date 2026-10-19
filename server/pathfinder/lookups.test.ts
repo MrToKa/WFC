@@ -111,8 +111,15 @@ describe('independent lookup artifacts and current authority',()=>{
     await expect(createPathFinderLookups(db.pool).plan(projectId,who,{routeText:'/BC001',expectedSelectionRevision:'3'})).rejects.toMatchObject({code:'MODEL_SELECTION_CONFLICT'});
   });
   it('discards only a newly unpublished snapshot after rollback and preserves an acknowledged-unknown published snapshot',async()=>{
-    await expect(createPathFinderLookups(database({failJob:true}).pool).create(projectId,who,input())).rejects.toThrow('Job insert failed');expect(mocks.discard).toHaveBeenCalledTimes(1);
-    mocks.discard.mockClear();await expect(createPathFinderLookups(database({commitUnknown:true}).pool).create(projectId,who,input())).rejects.toThrow('Lost acknowledgement');expect(mocks.discard).not.toHaveBeenCalled();
+    const rolledBack=database({failJob:true});
+    await expect(createPathFinderLookups(rolledBack.pool).create(projectId,who,input())).rejects.toThrow('Job insert failed');expect(mocks.discard).toHaveBeenCalledTimes(1);
+    expect(rolledBack.query.mock.calls.some(([sql])=>sql==='ROLLBACK')).toBe(true);expect(rolledBack.client.release).toHaveBeenCalledExactlyOnceWith(undefined);
+    mocks.discard.mockClear();const unknown=database({commitUnknown:true});
+    await expect(createPathFinderLookups(unknown.pool).create(projectId,who,input())).rejects.toMatchObject({code:'PATHFINDER_COMMIT_OUTCOME_UNKNOWN',status:503});
+    expect(mocks.discard).not.toHaveBeenCalled();expect(unknown.query.mock.calls.filter(([sql])=>sql==='COMMIT')).toHaveLength(1);
+    expect(unknown.query.mock.calls.some(([sql])=>sql==='ROLLBACK')).toBe(false);expect(unknown.client.release).toHaveBeenCalledExactlyOnceWith(true);
+    const ownedSnapshotId=mocks.store.mock.calls.at(-1)?.[0];expect(typeof ownedSnapshotId).toBe('string');
+    expect(unknown.query.mock.calls.find(([sql])=>sql==='SELECT id FROM pf_artifacts WHERE project_id=$1 AND id=$2')?.[1]).toEqual([projectId,ownedSnapshotId]);
   });
   it('reports actual distinct used leaves and nullable unavailable legacy fallback diagnostics',()=>{
     expect(lookupDiagnostics({route:{segmentIds:['1','1','2']},prepared:{counts:{fallbackBends:2,fallbackStraights:0,fallbackClearances:4}}})).toEqual({geometryLeavesUsed:2,fallbackBends:2,fallbackStraights:0,fallbackClearances:4});

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest } from './pathfinder';
+import { createHash } from 'node:crypto';
+import { ENGINE_IDENTITY_POLICY_VERSIONS, ENGINE_IDENTITY_VERSION, engineIdentityCanonicalBody } from '../../shared/pathfinderEngineIdentity';
 
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', cableId = '33333333-3333-4333-8333-333333333333';
 afterEach(() => vi.restoreAllMocks());
@@ -7,6 +9,19 @@ function state() { return { schemaVersion: 1, projectId, registryRevision: '3', 
   settings: { revision: '1', connectionGap: '1', secondaryTrayLength: null, endConnectionLength: '2', additionalBendingPercent: '5' },
   cables: [{ id: cableId, cableId: 17, tag: '=CABLE-17', fromLocation: 'EQ-001', toLocation: 'EQ-002', mto: 'Instrumentation', routing: null, designLength: '42', installLength: '37', cableWriteRevision: '9007199254740993', fromMatch: { status: 'missing', locationId: null, candidates: [] }, toMatch: { status: 'missing', locationId: null, candidates: [] } }],
   locations: [], artifacts: [], jobs: [], proposals: [] }; }
+function recordedProposal(dependencyVersion: string) {
+  const body = { schemaVersion: 'wfc.pf.engine-identity.v1' as const, version: ENGINE_IDENTITY_VERSION,
+    runnerSha256: '1'.repeat(64), modelModuleSha256: '2'.repeat(64), coreModuleSha256: '3'.repeat(64),
+    adapterModuleSha256: '4'.repeat(64), derivationSha256: '5'.repeat(64), policyVersions: { ...ENGINE_IDENTITY_POLICY_VERSIONS } };
+  return { schemaVersion: 'wfc.pf.proposal.v2', id: '44444444-4444-4444-8444-444444444444', projectId, jobId: modelId, cableId,
+    status: 'stale', proposalHash: 'f'.repeat(64), cableWriteRevision: '2', stale: true, synthetic: false,
+    engineeringAccepted: false, acceptanceScope: 'unaccepted-model', canApply: false, compatibilityIssue: null,
+    message: 'Recorded historical proposal.', engineeringMessage: 'Calculate and review a current result.', route: null, design: null,
+    routingPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, createdAt: '2026-10-18T00:00:00Z',
+    provenance: { dependencyVersion, dependencyHash: 'a'.repeat(64), automatic: null,
+      engineIdentity: dependencyVersion === 'pathfinder.dependencies.v5'
+        ? { ...body, contentSha256: createHash('sha256').update(engineIdentityCanonicalBody(body)).digest('hex') } : null } };
+}
 describe('PathFinder API contract', () => {
   it('retains validated recorded input provenance after reload without granting completeness', async () => {
     const inputScope = { schemaVersion: 'wfc.capture.input.v1', equipmentNameCount: 1527, chunkCount: 6, inputUtf8Bytes: 70438,
@@ -24,6 +39,34 @@ describe('PathFinder API contract', () => {
     const result = await fetchPathFinderState(projectId, 'test-token');
     expect(result.cables[0].cableId).toBe(17); expect(result.cables[0].cableWriteRevision).toBe('9007199254740993'); expect(result.settings.connectionGap).toBe('1'); expect(result.settings.secondaryTrayLength).toBeNull();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining(`/api/projects/${projectId}/pathfinder/state`), expect.objectContaining({ credentials: 'same-origin', cache: 'no-store', redirect: 'error', headers: { Authorization: 'Bearer test-token' } }));
+  });
+  it('reads mixed retained v1 and current v5 provenance without dropping historical proposals or granting Apply', async () => {
+    const historical = recordedProposal('pathfinder.dependencies.v1'), current = { ...recordedProposal('pathfinder.dependencies.v5'), id: modelId };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), proposals: [historical, current] }))
+      .mockResolvedValueOnce(Response.json(historical));
+    const result = await fetchPathFinderState(projectId, 'test-token');
+    expect(result.proposals).toHaveLength(2);
+    expect(result.proposals[0].provenance).toEqual(historical.provenance);
+    expect(result.proposals[1].provenance?.engineIdentity).toEqual(current.provenance.engineIdentity);
+    expect(result.proposals.map(value => value.canApply)).toEqual([false, false]);
+    const detail = await fetchPathFinderProposal(projectId, 'test-token', historical.id);
+    expect(detail.provenance?.dependencyVersion).toBe('pathfinder.dependencies.v1');
+    expect(detail.provenance?.engineIdentity).toBeNull(); expect(detail.engineeringAccepted).toBe(false);
+  });
+  it('refuses unknown future dependency versions instead of treating them as historical provenance', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), proposals: [recordedProposal('pathfinder.dependencies.v6')] }));
+    await expect(fetchPathFinderState(projectId, 'test-token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+  it('keeps the exact engine-identity boundary for historical and current provenance', async () => {
+    const historical = recordedProposal('pathfinder.dependencies.v1'), current = recordedProposal('pathfinder.dependencies.v5');
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    for (const invalid of [
+      { ...historical, provenance: { ...historical.provenance, engineIdentity: current.provenance.engineIdentity } },
+      { ...current, provenance: { ...current.provenance, engineIdentity: null } },
+    ]) {
+      fetch.mockResolvedValueOnce(Response.json({ ...state(), proposals: [invalid] }));
+      await expect(fetchPathFinderState(projectId, 'test-token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
   });
   it('rejects changed project identity, malformed numeric IDs and arbitrary endpoint URLs', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), projectId: modelId })).mockResolvedValueOnce(Response.json({ ...state(), cables: [{ ...state().cables[0], cableId: '17' }] }));
