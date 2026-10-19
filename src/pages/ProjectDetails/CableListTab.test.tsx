@@ -38,6 +38,7 @@ const cable: Cable = {
 };
 const draftChange = vi.fn();
 const exportList = vi.fn();
+const textFieldBlur = vi.fn();
 
 const Harness = ({
   editable = false,
@@ -78,7 +79,7 @@ const Harness = ({
       items={[cable]}
       drafts={{ [cable.id]: toCableFormState(cable) }}
       onDraftChange={draftChange}
-      onTextFieldBlur={vi.fn()}
+      onTextFieldBlur={textFieldBlur}
       onInlineMtoChange={vi.fn()}
       onInlineCableTypeChange={vi.fn()}
       onOpenVersions={vi.fn()}
@@ -129,6 +130,7 @@ beforeEach(() => {
   pendingSave = null;
   draftChange.mockReset();
   exportList.mockReset();
+  textFieldBlur.mockReset();
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, options: RequestInit) => {
@@ -172,6 +174,42 @@ const headers = () =>
     .map((cell) => cell.textContent);
 
 describe('personal cable list columns', () => {
+  it('adds diameter, weight and delivery to a saved selection and exports that selection', async () => {
+    stored.set('user-a', ['tag']);
+    render(view(false, true));
+    const dialog = await openColumns();
+    for (const name of ['Diameter [mm]', 'Weight [kg/m]', 'Delivery']) {
+      expect(dialog.getByRole('checkbox', { name })).not.toBeChecked();
+      fireEvent.click(dialog.getByRole('checkbox', { name }));
+    }
+    await saveColumns();
+    expect(headers()).toEqual(['Tag', 'Diameter [mm]', 'Weight [kg/m]', 'Delivery']);
+    expect(within(screen.getByRole('table')).getAllByRole('cell').map((cell) => cell.textContent))
+      .toEqual(['CABLE-42', '-', '-', '-']);
+    fireEvent.click(screen.getByRole('button', { name: 'Export to Excel' }));
+    expect(exportList).toHaveBeenCalledWith(['tag', 'diameterMm', 'weightKgPerM', 'delivery']);
+  });
+
+  it('shows cable type dimensions and saves delivery through inline editing', async () => {
+    stored.set('user-a', ['diameterMm', 'weightKgPerM', 'delivery']);
+    const dimensions = { diameterMm: cable.diameterMm, weightKgPerM: cable.weightKgPerM };
+    cable.diameterMm = 12.5;
+    cable.weightKgPerM = 0;
+    try {
+      render(view(true));
+      await screen.findByRole('table');
+      expect(screen.getByRole('cell', { name: '12.5' })).toBeInTheDocument();
+      expect(screen.getByRole('cell', { name: '0' })).toBeInTheDocument();
+      const delivery = screen.getByRole('textbox', { name: 'Delivery' });
+      fireEvent.change(delivery, { target: { value: 'Batch 2' } });
+      fireEvent.blur(delivery);
+      expect(draftChange).toHaveBeenCalledWith(cable.id, 'delivery', 'Batch 2');
+      expect(textFieldBlur).toHaveBeenCalledWith(cable, 'delivery');
+    } finally {
+      Object.assign(cable, dimensions);
+    }
+  });
+
   it('exports the currently applied selection after changing columns', async () => {
     stored.set('user-a', ['tag', 'routing', 'actions']);
     render(view(false, true));
@@ -184,20 +222,20 @@ describe('personal cable list columns', () => {
   it('lets a read-only user hide matching headers and cells, with choices isolated by account and restored after remount', async () => {
     const page = render(view());
     const dialog = await openColumns();
-    expect(headers()).toHaveLength(10);
+    expect(headers()).toHaveLength(13);
     fireEvent.click(dialog.getByRole('checkbox', { name: 'Routing' }));
     fireEvent.click(dialog.getByRole('checkbox', { name: 'Actions' }));
     await saveColumns();
     expect(headers()).not.toContain('Routing');
     expect(headers()).not.toContain('Actions');
     expect(screen.queryByText('TRAY-01')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getAllByRole('cell')).toHaveLength(8);
+    expect(within(screen.getByRole('table')).getAllByRole('cell')).toHaveLength(11);
     expect(requests.find(({ method }) => method === 'PUT')?.token).toBe('user-a');
 
     auth.token = 'user-b';
     page.rerender(view());
     await screen.findByRole('table');
-    expect(headers()).toHaveLength(10);
+    expect(headers()).toHaveLength(13);
     expect(screen.getByText('TRAY-01')).toBeInTheDocument();
 
     auth.token = 'user-a';
@@ -223,7 +261,7 @@ describe('personal cable list columns', () => {
     expect(dialog.getByRole('checkbox', { name: 'Tag' })).toBeChecked();
     fireEvent.click(dialog.getByRole('button', { name: 'Show all columns' }));
     await saveColumns();
-    expect(headers()).toHaveLength(10);
+    expect(headers()).toHaveLength(13);
     expect(stored.get('user-a')).toEqual(DEFAULT_CABLE_LIST_COLUMNS);
   });
 
@@ -249,7 +287,7 @@ describe('personal cable list columns', () => {
     stored.set('user-a', ['tag']);
     render(view());
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load');
-    expect(headers()).toHaveLength(10);
+    expect(headers()).toHaveLength(13);
     expect(screen.getByRole('button', { name: 'Columns' })).toBeDisabled();
     failLoad = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry column settings' }));

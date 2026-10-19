@@ -139,6 +139,43 @@ it('exports only selected data columns in table order, with matching numeric val
   expect(sheet.getColumn(3).numFmt).toBe('#,##0');
 });
 
+it('exports diameter, weight and delivery in cable list order with numeric measurement cells', async () => {
+  const sheet = await readSheet(
+    await runExport({
+      view: 'list',
+      columns: 'delivery,weightKgPerM,routing,diameterMm,typeName',
+    }),
+  );
+  expect(sheet.getRow(1).values).toEqual([
+    undefined, 'Type', 'Diameter [mm]', 'Weight [kg/m]', 'Routing', 'Delivery',
+  ]);
+  expect(sheet.getRow(2).values).toEqual([
+    undefined, 'Type A', 12, 0.5, 'TRAY-01', 'Delivered',
+  ]);
+  expect(sheet.getColumn(2).numFmt).toBe('#,##0.00');
+  expect(sheet.getColumn(3).numFmt).toBe('#,##0.000');
+});
+
+it('keeps absent diameter, weight and delivery blank while preserving zero measurements', async () => {
+  database.query.mockResolvedValue({
+    rows: [
+      { cable_id: 1, type_diameter_mm: null, type_weight_kg_per_m: null, delivery: null },
+      { cable_id: 2, type_diameter_mm: '0', type_weight_kg_per_m: '0', delivery: '' },
+    ],
+  });
+  const sheet = await readSheet(
+    await runExport({ view: 'list', columns: 'diameterMm,weightKgPerM,delivery' }),
+  );
+  expect(sheet.getRow(1).values).toEqual([
+    undefined, 'Diameter [mm]', 'Weight [kg/m]', 'Delivery',
+  ]);
+  for (const cell of ['A2', 'B2', 'C2', 'C3']) {
+    expect(sheet.getCell(cell).value ?? '').toBe('');
+  }
+  expect(sheet.getCell('A3').value).toBe(0);
+  expect(sheet.getCell('B3').value).toBe(0);
+});
+
 it.each(['routing', 'all'])(
   'preserves the existing %s filter, type and MTO while sorting by ascending ID',
   async (criteria) => {

@@ -68,7 +68,7 @@ type CableListTabProps = {
   onDraftChange: (cableId: string, field: keyof CableFormState, value: string) => void;
   onTextFieldBlur: (
     cable: Cable,
-    field: 'revision' | 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'designLength',
+    field: 'revision' | 'tag' | 'fromLocation' | 'toLocation' | 'routing' | 'delivery' | 'designLength',
   ) => void;
   onInlineMtoChange: (cable: Cable, nextMto: string) => void;
   onInlineCableTypeChange: (cable: Cable, nextCableTypeId: string) => void;
@@ -284,7 +284,7 @@ export const CableListTab = ({
                   <th
                     key={id}
                     className={
-                      id === 'designLength'
+                      id === 'designLength' || id === 'diameterMm' || id === 'weightKgPerM'
                         ? `${styles.tableHeadCell} ${styles.numericCell}`
                         : styles.tableHeadCell
                     }
@@ -396,6 +396,16 @@ export const CableListTab = ({
                         )}
                       </td>
                     ) : null}
+                    {visibleColumns.has('diameterMm') ? (
+                      <td className={`${styles.tableCell} ${styles.numericCell}`}>
+                        {cable.diameterMm ?? '-'}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('weightKgPerM') ? (
+                      <td className={`${styles.tableCell} ${styles.numericCell}`}>
+                        {cable.weightKgPerM ?? '-'}
+                      </td>
+                    ) : null}
                     {visibleColumns.has('fromLocation') ? (
                       <td className={styles.tableCell}>
                         {isInlineEditable && draft ? (
@@ -445,6 +455,22 @@ export const CableListTab = ({
                           />
                         ) : (
                           (cable.routing ?? '-')
+                        )}
+                      </td>
+                    ) : null}
+                    {visibleColumns.has('delivery') ? (
+                      <td className={styles.tableCell}>
+                        {isInlineEditable && draft ? (
+                          <Input
+                            size="small"
+                            value={draft.delivery}
+                            onChange={(_, data) => onDraftChange(cable.id, 'delivery', data.value)}
+                            onBlur={() => onTextFieldBlur(cable, 'delivery')}
+                            disabled={isRowUpdating}
+                            aria-label="Delivery"
+                          />
+                        ) : (
+                          (cable.delivery ?? '-')
                         )}
                       </td>
                     ) : null}

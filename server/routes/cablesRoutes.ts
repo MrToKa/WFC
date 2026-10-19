@@ -38,6 +38,7 @@ import {
 } from '../models/cableTypeDefaultMaterial.js';
 import type { MaterialCableInstallationMaterialRow } from '../models/materialCableInstallationMaterial.js';
 import type { CableTypeRow } from '../models/cableType.js';
+import { CABLE_LIST_COLUMN_IDS } from '../models/cableListColumns.js';
 import { mapMaterialCableTypeRow, type MaterialCableTypeRow } from '../models/materialCableType.js';
 import { authenticate } from '../middleware.js';
 import { ensureProjectExists } from '../services/projectService.js';
@@ -4496,7 +4497,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         views: [{ state: 'frozen', ySplit: 1 }],
       });
 
-      let selectedColumns: Set<string> | null = null;
+      let columnIndexes = CABLE_LIST_EXPORT_COLUMNS.map((_, index) => index);
       if (req.query.columns !== undefined) {
         const parsed = cableListColumnsSchema.safeParse({
           columns: typeof req.query.columns === 'string' ? req.query.columns.split(',') : null,
@@ -4505,11 +4506,20 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
           res.status(400).json({ error: parsed.error.flatten() });
           return;
         }
-        selectedColumns = new Set(parsed.data.columns.map((id) => id === 'typeName' ? 'type' : id));
+        const selectedColumns = new Set<string>(parsed.data.columns);
+        const exportKeys: Record<string, string> = {
+          typeName: 'type',
+          diameterMm: 'diameter',
+          weightKgPerM: 'weight',
+        };
+        columnIndexes = CABLE_LIST_COLUMN_IDS.flatMap((id) => {
+          if (!selectedColumns.has(id)) return [];
+          const index = CABLE_LIST_EXPORT_COLUMNS.findIndex(
+            (column) => column.key === (exportKeys[id] ?? id),
+          );
+          return index === -1 ? [] : [index];
+        });
       }
-      const columnIndexes = CABLE_LIST_EXPORT_COLUMNS.flatMap((column, index) =>
-        selectedColumns === null || selectedColumns.has(column.key) ? [index] : [],
-      );
       const columns = columnIndexes.map((index) => CABLE_LIST_EXPORT_COLUMNS[index]);
       const hasIdColumn = columns.some((column) => column.key === 'cableId');
       const rows = [...result.rows].sort((a, b) => a.cable_id - b.cable_id).map((row) => {

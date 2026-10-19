@@ -97,6 +97,25 @@ describe('personal cable list columns', () => {
     expect(reloaded.json).toHaveBeenCalledWith({ columns: ['cableId', 'tag', 'actions'] });
   });
 
+  it('accepts the dimension and delivery columns and stores them in table order', async () => {
+    mocks.query.mockResolvedValue({
+      rows: [{ cable_list_columns: ['diameterMm', 'weightKgPerM', 'delivery'] }],
+    });
+    const response = responseStub();
+    await handlerFor(userRouter, 'put', path)(
+      requestWith({ columns: ['delivery', 'weightKgPerM', 'diameterMm'] }),
+      response,
+    );
+    expect(response.status).not.toHaveBeenCalled();
+    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE users'), [
+      ['diameterMm', 'weightKgPerM', 'delivery'],
+      'actor-id',
+    ]);
+    expect(response.json).toHaveBeenCalledWith({
+      columns: ['diameterMm', 'weightKgPerM', 'delivery'],
+    });
+  });
+
   it.each([
     {},
     { columns: [] },

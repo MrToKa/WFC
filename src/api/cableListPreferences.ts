@@ -6,9 +6,12 @@ export const CABLE_LIST_COLUMNS = [
   { id: 'mto', label: 'MTO' },
   { id: 'tag', label: 'Tag' },
   { id: 'typeName', label: 'Type' },
+  { id: 'diameterMm', label: 'Diameter [mm]' },
+  { id: 'weightKgPerM', label: 'Weight [kg/m]' },
   { id: 'fromLocation', label: 'From location' },
   { id: 'toLocation', label: 'To location' },
   { id: 'routing', label: 'Routing' },
+  { id: 'delivery', label: 'Delivery' },
   { id: 'designLength', label: 'Design length [m]' },
   { id: 'actions', label: 'Actions' },
 ] as const;
