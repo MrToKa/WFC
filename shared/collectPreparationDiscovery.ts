@@ -12,6 +12,7 @@ import type {
   PreparationDiscoveryPage,
   PreparationDiscoveryRequest,
 } from '../viewer-runtime/preparation-input.mjs';
+import { PREPARATION_MATCHING_POLICY } from '../viewer-runtime/preparation-input.mjs';
 export type PreparationDiscoveryReader = { discover(request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage>; assertCurrent(): void };
 
 /** Exact complete pagination; no candidate, scope or policy is inferred from a first match. */
@@ -73,7 +74,7 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
         page.rootObjectId !== rootObjectId ||
         page.cursor !== cursor ||
         JSON.stringify(page.names) !== JSON.stringify(names) ||
-        page.matchingPolicyVersion !== 'wfc.pf.project-exact-candidates.v1' ||
+        page.matchingPolicyVersion !== PREPARATION_MATCHING_POLICY ||
         page.complete !== (page.nextCursor === null) ||
         (page.nextCursor !== null && page.nextCursor <= cursor)
       )
@@ -184,7 +185,7 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
     modelVersionId: context.scope.modelVersionId,
     contentFingerprint: context.scope.contentFingerprint,
     selectionRevision: context.scope.selectionRevision,
-    matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1',
+    matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
     complete: proof === null || proof.complete,
     propertyScan: proof,
     objects: ordered.map(({ matchedNames: _names, ...object }) => ({

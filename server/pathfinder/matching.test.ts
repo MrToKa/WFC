@@ -37,6 +37,16 @@ describe('PathFinder project location matching',() => {
   it('recognizes only explicit property labels',() => {
     expect(objectMatchNames(object({properties:[{category:'x',name:'Tag',value:'=B01'},{category:'x',name:'Description',value:'=C01'}]}))).toEqual(['=A01','=B01']);
   });
+  it('indexes a single leading slash on model evidence while preserving strict project alias identity',() => {
+    expect(objectMatchNames(object({name:' /=a001 ',properties:[{category:'x',name:'Tag',value:'/cafe\u0301'}]}))).toEqual(['/=A001','=A001','/CAF\u00c9','CAF\u00c9']);
+    expect(normalizeLocation('/=A001')).toBe('/=A001');
+    expect(matchLocation('/=A01',[location()],true).status).toBe('missing');
+  });
+  it('does not remove repeated/trailing/internal slashes, numeric zeroes or engineering punctuation',() => {
+    expect(objectMatchNames(object({name:'//=A001',properties:[{category:'x',name:'Location',value:'=A001/'},{category:'x',name:'Tag',value:'=A001/PART'}]}))).toEqual(['//=A001','=A001/','=A001/PART']);
+    expect(objectMatchNames(object({name:'/=A001'}))).not.toContain('A001');
+    expect(objectMatchNames(object({name:'/=A001'}))).not.toContain('=A1');
+  });
 });
 describe('PathFinder artifact validation and hierarchy',() => {
   it('uses inherited native visibility, preserving unknown evidence',() => {

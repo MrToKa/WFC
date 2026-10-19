@@ -1,6 +1,8 @@
 // Pure protected-bridge preparation contracts; no SDK or network access on import.
 export const PREPARATION_VIEWER_LIMITS = Object.freeze({ names: 32, pageObjects: 128, pageBytes: 24576, selectedObjects: 512, indexedObjects: 1000000, depth: 512 });
-export const PREPARATION_MATCHING_POLICY = 'wfc.pf.project-exact-candidates.v1';
+// v2 preserves exact tray names and accommodates one model-only leading slash
+// for equipment identifiers. Historical v1 plan evidence remains immutable.
+export const PREPARATION_MATCHING_POLICY = 'wfc.pf.project-exact-candidates.v2';
 const uuid = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.exec(value)?.[0] === value;
 const hash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.exec(value)?.[0] === value;
 const integer = (value, max = 2147483647) => Number.isSafeInteger(value) && value >= 0 && value <= max;

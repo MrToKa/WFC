@@ -55,7 +55,7 @@ function viewer(
         names: request.names,
         rootObjectId: request.rootObjectId,
         cursor: request.cursor,
-        matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1',
+        matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2',
         indexedObjectCount: 10,
         propertyScan:
           request.mode === 'equipment'
@@ -132,7 +132,7 @@ describe('complete exact preparation discovery', () => {
           names: request.names,
           rootObjectId: request.rootObjectId,
           cursor: request.cursor,
-          matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1',
+          matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2',
           indexedObjectCount: records.length,
           propertyScan: null,
           objects: records
@@ -222,7 +222,7 @@ describe('complete exact preparation discovery', () => {
       names: request.names,
       rootObjectId: null,
       cursor: 0,
-      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1',
+      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2',
       indexedObjectCount: 10,
       propertyScan: null,
       objects: [],

@@ -7,7 +7,8 @@ import type { DependencySnapshot, EngineOptions, CurrentDependencySnapshot } fro
 import { projectRoutingSettings } from './settings.js';
 import { requirePreparedRoutingScope } from './routingScope.js';
 import { readCurrentEndpointBindingContext, readEndpointBindingScope } from './endpointBindingRepository.js';
-import { endpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { endpointCalculationPoint, isAutomaticEndpointCalculationPoint, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
 import { readComparisonDependency } from './revisionComparisonRepository.js';
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import type { EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
@@ -26,8 +27,8 @@ export function geometryHash(dependencies: DependencySnapshot): string {
   const {schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,routing} = dependencies;
   return hash({schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,
     ...(dependencies.schemaVersion !== 'pathfinder.dependencies.v2' ? {preparation: dependencies.preparation} : {}),
-    ...(['pathfinder.dependencies.v4','pathfinder.dependencies.v5'].includes(dependencies.schemaVersion) ? {comparison: (dependencies as CurrentDependencySnapshot).comparison} : {}),
-    ...(dependencies.schemaVersion === 'pathfinder.dependencies.v5' ? {engineIdentity: dependencies.engineIdentity} : {}),
+    ...(['pathfinder.dependencies.v4','pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(dependencies.schemaVersion) ? {comparison: (dependencies as CurrentDependencySnapshot).comparison} : {}),
+    ...(['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(dependencies.schemaVersion) ? {engineIdentity: (dependencies as CurrentDependencySnapshot).engineIdentity} : {}),
     routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
       routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
 }
@@ -82,12 +83,16 @@ export async function collectCommonCalculationInputs(client: PoolClient, project
 }
 
 export function freezeCableDependencies(common:CommonCalculationInputs,cable:Row,
-  from:CurrentDependencySnapshot['from']|null,to:CurrentDependencySnapshot['to']|null):CollectedDependencies {
+  from:CurrentEndpointCalculationPoint|null,to:CurrentEndpointCalculationPoint|null):CollectedDependencies {
   const blocked=(status:string,message:string):CollectedDependencies=>({dependencies:null,status,message,cable});
   if(!['MV','LV','Control','Instrumentation'].includes(cable.mto))return blocked('category_required','Resolve the cable category before calculation.');
   if(!from||!to)return blocked('locations_required',`Resolve ${!from&&!to?'From and To':!from?'From':'To'} locations. Missing, ambiguous or stale locations cannot be calculated.`);
-  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{...common,schemaVersion:'pathfinder.dependencies.v5',cableId:cable.id,cableWriteRevision:cable.cable_write_revision,
-    cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id},from,to}};
+  const base = {...common,cableId:cable.id,cableWriteRevision:cable.cable_write_revision,
+    cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id}};
+  if (isAutomaticEndpointCalculationPoint(from) || isAutomaticEndpointCalculationPoint(to))
+    return {status:'ready',message:'Ready for proposal calculation using approximate automatic equipment anchors. Manual review remains required.',cable,
+      dependencies:{...base,schemaVersion:'pathfinder.dependencies.v6',from,to}};
+  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{...base,schemaVersion:'pathfinder.dependencies.v5',from,to}};
 }
 
 export async function collectDependencies(client: PoolClient, projectId: string, cableId: string, options: EngineOptions, lockCable = false,
@@ -98,7 +103,8 @@ export async function collectDependencies(client: PoolClient, projectId: string,
   const common=await collectCommonCalculationInputs(client,projectId,options,lockCable,identity);
   if(common.inputs===null)return {dependencies:null,status:common.status,message:common.message,cable};
   const {bindingContext}=common;
-  const endpoint = async (name:string|null):Promise<CurrentDependencySnapshot['from']|null> => {
+  const automatic = new Map<string, Promise<CurrentEndpointCalculationPoint|null>>();
+  const endpoint = async (name:string|null):Promise<CurrentEndpointCalculationPoint|null> => {
     if (!name || !normalizeLocation(name)) return null;
     const result = await client.query<Row>(`SELECT l.id FROM pf_location_aliases a JOIN pf_locations l ON l.project_id=a.project_id AND l.id=a.location_id
       WHERE a.project_id=$1 AND a.normalized_alias=$2 FOR SHARE OF l,a`,[projectId,normalizeLocation(name)]);
@@ -107,8 +113,13 @@ export async function collectDependencies(client: PoolClient, projectId: string,
     const scope = await readEndpointBindingScope(client, {projectId, locationId: value.id,
       modelVersionId: bindingContext.modelVersionId, aggregateId: bindingContext.aggregateId,
       projectionSha256: bindingContext.projectionSha256, captureFrameId: bindingContext.captureFrameId});
-    if (scope.status !== 'confirmed' || scope.binding.artifactId !== common.inputs!.artifact.id) return null;
-    return endpointCalculationPoint(scope.binding);
+    if (scope.status === 'confirmed') return scope.binding.artifactId === common.inputs!.artifact.id ? endpointCalculationPoint(scope.binding) : null;
+    // Existing stale/unsupported saved points require explicit resolution. A
+    // model candidate may fill only an otherwise unbound shared location.
+    if (scope.status !== 'missing') return null;
+    if (!automatic.has(value.id)) automatic.set(value.id, readAutomaticEndpointCandidates(client,
+      {projectId,current:bindingContext,locationIds:[value.id]}).then(values => values.get(value.id)?.point ?? null));
+    return automatic.get(value.id)!;
   };
   const from = await endpoint(cable.from_location),to = await endpoint(cable.to_location);
   return freezeCableDependencies(common.inputs,cable,from,to);
@@ -116,7 +127,7 @@ export async function collectDependencies(client: PoolClient, projectId: string,
 
 /** Route reuse is narrower than matching geometry: only changed S/E/P with every other frozen authority equal. */
 export function verifiedDesignOnlyChange(current:DependencySnapshot,previous:DependencySnapshot):boolean {
-  if(current.schemaVersion!=='pathfinder.dependencies.v5'||previous.schemaVersion!=='pathfinder.dependencies.v5')return false;
+  if(!['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(current.schemaVersion)||current.schemaVersion!==previous.schemaVersion)return false;
   const {settings:a,...left}=current,{settings:b,...right}=previous;
   return hash(left)===hash(right)&&a.connectionGap===b.connectionGap
     && [a.secondaryTrayLength,a.endConnectionLength,a.additionalBendingPercent].some((value,n)=>value!==[b.secondaryTrayLength,b.endConnectionLength,b.additionalBendingPercent][n]);

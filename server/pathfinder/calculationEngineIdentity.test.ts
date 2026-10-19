@@ -37,7 +37,7 @@ function fixture() {
 afterEach(() => vi.clearAllMocks());
 
 describe('calculation engine identity against synthetic filesystem facts, not actual DLL execution', () => {
-  it.each(['./lengthLedger.js','../../shared/pathfinderLengthLedger.js'])('pins the actual %s validator and changes identity for its sole replacement', async name=>{
+  it.each(['./lengthLedger.js','../../shared/pathfinderLengthLedger.js','./automaticEndpointCandidates.js','./matching.js','../../shared/pathfinderPurposePolicy.js','../../shared/pathfinderPreparation.js','../../shared/pathfinderGeometryTrace.js','../../shared/pathfinderEndpointBindings.js','../../viewer-runtime/equipment-names.mjs'])('pins the actual %s validator and changes identity for its sole replacement', async name=>{
     expect(calculationProjectionFiles().map(file=>file.name)).toContain(name);
     const f=fixture(),filename=path.join(f.root,'ledger-validator.js');
     f.files.set(filename,{bytes:Buffer.from('ledger-validator-original'),size:25n,ino:50n,mtimeNs:10n,ctimeNs:20n,nlink:1n,symlink:false});

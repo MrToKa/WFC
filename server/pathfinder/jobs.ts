@@ -14,6 +14,7 @@ import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { pauseRecalculationForJob, readRecalculationJobAuthority, requireEnrollmentAuthority, type RecalculationJobAdapter } from './recalculationRepository.js';
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import { persistRevisionAdmission, verifyRevisionResultForProposal } from './revisionResultRepository.js';
+import { isAutomaticEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 
 type Row = Record<string,any>;
 export function jobDto(row:Row) {
@@ -49,12 +50,18 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
     acceptanceScope:synthetic ? 'local-synthetic-fixture' : 'manual-review',canApply:!stale && !compatibilityIssue && !row.cancel_requested && row.status === 'calculated' && route?.success===true && result.design != null && row.job_state === 'complete',
     compatibilityIssue,routingPreferences,
     message:current===null ? 'The cable no longer exists. This historical result remains available for inspection and cannot be applied.' : stale ? 'Dependencies changed. Calculate a fresh proposal.' : result.message,
-    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : 'Manual review and explicit Apply are required for this exact proposal. Native engineering parity has not been performed.',
+    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : dependencies.schemaVersion === 'pathfinder.dependencies.v6'
+      ? 'Automatic model endpoint candidates use approximate bounding-box anchors. Review their positions, route and length before explicit Apply. These endpoints have not been manually confirmed. Native engineering parity has not been performed.'
+      : 'Manual review and explicit Apply are required for this exact proposal. Native engineering parity has not been performed.',
     design:result.design ?? null,lengthLedger:result.lengthLedger??null,revisionResultHash:revisionResult?.revisionResultSha256??null,revisionBaselineHash:revisionResult?.baselineHash??null,
     ...(detail?{revisionResult}:{}),route:route ? {...route,pathPoints:undefined,...(detail ? {points:route.pathPoints.map((point:Row) => [point.x,point.y,point.z]),objectIds:[...new Set(route.segmentIds as string[])]} : {})} : null,
     calculationMode:result.calculationMode,
     provenance:{dependencyVersion:dependencies.schemaVersion,dependencyHash:row.dependency_hash,
-      engineIdentity:dependencies.schemaVersion==='pathfinder.dependencies.v5'?dependencies.engineIdentity:null,
+      engineIdentity:dependencies.schemaVersion==='pathfinder.dependencies.v5'||dependencies.schemaVersion==='pathfinder.dependencies.v6'?dependencies.engineIdentity:null,
+      ...(dependencies.schemaVersion==='pathfinder.dependencies.v6'?{endpointSources:{
+        from:isAutomaticEndpointCalculationPoint(dependencies.from)?'automatic-model-candidate':'confirmed-shared-location',
+        to:isAutomaticEndpointCalculationPoint(dependencies.to)?'automatic-model-candidate':'confirmed-shared-location',
+      }}:{}),
       automatic:enrollment.enrolled?{generation:enrollment.generation,authorityEpoch:enrollment.authorityEpoch,current:enrollment.valid,reasonCode:enrollment.code}:null},
     ...(detail ? {dependencies,prepared:result.prepared ?? null,effectiveCategory:result.effectiveCategory ?? null} : {}),createdAt:row.created_at};
 }

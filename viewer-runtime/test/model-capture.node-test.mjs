@@ -52,6 +52,31 @@ test('preparation leaf slices capture exact leaves, authoritative route/shape an
 test('preparation endpoint-only slices need no routing geometry and never invent bindings or native proof',async()=>{
  const result=await collect({},preparationRequest([],[4],['P-001']));assert.deepEqual(result.snapshot.objects.map(object=>object.dbId).sort(),[1,4]);assert.equal(result.summary.counts.fragmentCount,0);assert.equal(result.snapshot.capture.geometryComplete,false);assert.equal(result.summary.engineeringAccepted,false);
 });
+test('capture model equipment accepts one leading slash and retains exact/alternative ambiguity with raw names intact',async()=>{
+ const f=fixture(),original=f.tree.getNodeName;f.tree.getNodeName=id=>id===4?'/=A001':id===5?'=A001':original(id);f.properties.clear();
+ const input={...request,equipmentNames:['=A001','/=A001','A001','=A1','=A001/']},assembler=createModelCaptureAssembler();
+ for await(const event of captureSelectedModel({model:f.model},input))assembler.accept(event);
+ const summary=assembler.summary(),snapshot=assembler.finish();
+ assert.deepEqual(summary.equipmentMatches.find(value=>value.name==='=A001'),{name:'=A001',status:'ambiguous',candidateObjectIds:['dbid:4','dbid:5']});
+ assert.deepEqual(summary.equipmentMatches.find(value=>value.name==='/=A001'),{name:'/=A001',status:'candidate',candidateObjectIds:['dbid:4']});
+ for(const name of ['A001','=A1','=A001/'])assert.equal(summary.equipmentMatches.find(value=>value.name===name).status,'missing');
+ assert.equal(snapshot.objects.find(object=>object.dbId===4).name,'/=A001');assert.equal(snapshot.objects.find(object=>object.dbId===5).name,'=A001');
+});
+test('capture equipment property slash adapter applies only to explicit labels, never repeated slash or punctuation removal',async()=>{
+ const f=fixture();f.properties.set(4,[{displayName:'Equipment Tag',displayValue:'/=A001'},{displayName:'Description',displayValue:'/=IGNORED'}]);f.properties.set(5,[{displayName:'Tag',displayValue:'//=A001'}]);f.properties.set(6,[]);
+ const input={...request,equipmentNames:['=A001','=IGNORED','A001']},assembler=createModelCaptureAssembler();
+ for await(const event of captureSelectedModel({model:f.model},input))assembler.accept(event);
+ const summary=assembler.summary();assert.deepEqual(summary.equipmentMatches.find(value=>value.name==='=A001').candidateObjectIds,['dbid:4']);
+ for(const name of ['=IGNORED','A001'])assert.equal(summary.equipmentMatches.find(value=>value.name===name).status,'missing');
+ assert.ok(!assembler.finish().objects.some(object=>object.dbId===5));
+});
+test('planned equipment slice captures only its explicit candidate even when the same model name matches another part',async()=>{
+ const f=fixture(),original=f.tree.getNodeName;f.tree.getNodeName=id=>id===4||id===5?'/=A001':original(id);f.properties.clear();
+ const input=preparationRequest([],[4],['=A001']),assembler=createModelCaptureAssembler();
+ for await(const event of captureSelectedModel({model:f.model},input))assembler.accept(event);
+ assert.deepEqual(assembler.finish().objects.map(object=>object.dbId).sort(),[1,4]);
+ assert.deepEqual(assembler.summary().equipmentMatches.find(value=>value.name==='=A001').candidateObjectIds,['dbid:4']);
+});
 test('preparation explicit leaf slices bound a huge root without traversing all leaves into the payload',async()=>{
  const f=fixture(),ids=Array.from({length:5000},(_,i)=>i+3);
  f.tree.getNodeName=id=>id===1?'Plant':id===2?'TRAY-01':'STRAIGHT '+id;f.tree.getChildCount=id=>id===1?1:id===2?ids.length:0;f.tree.getNodeParentId=id=>id===1?0:id===2?1:2;

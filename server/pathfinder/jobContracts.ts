@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { revision, uuid, snapshotSchema } from './contracts.js';
 import type { RoutingScope } from './routingScope.js';
-import type { EndpointCalculationPoint, EndpointCalculationPreparation } from './endpointCalculationProvenance.js';
+import type { EndpointCalculationPoint, EndpointCalculationPreparation, CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
 import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
@@ -42,8 +42,12 @@ export type ComparisonDependencySnapshot = Omit<EndpointDependencySnapshot, 'sch
 export type CurrentDependencySnapshot = Omit<ComparisonDependencySnapshot, 'schemaVersion'> & {
   schemaVersion: 'pathfinder.dependencies.v5'; engineIdentity: EngineIdentity;
 };
+export type AutomaticDependencySnapshot = Omit<CurrentDependencySnapshot, 'schemaVersion' | 'from' | 'to'> & {
+  schemaVersion: 'pathfinder.dependencies.v6'; from: CurrentEndpointCalculationPoint; to: CurrentEndpointCalculationPoint;
+};
+export type CurrentCalculationDependencySnapshot = CurrentDependencySnapshot | AutomaticDependencySnapshot;
 /** v2/v3/v4 remain historical; current dispatch/Review/Apply require actual implementation provenance. */
-export type DependencySnapshot = HistoricalDependencySnapshot | EndpointDependencySnapshot | ComparisonDependencySnapshot | CurrentDependencySnapshot;
+export type DependencySnapshot = HistoricalDependencySnapshot | EndpointDependencySnapshot | ComparisonDependencySnapshot | CurrentCalculationDependencySnapshot;
 const enginePoint = z.object({x:z.number().finite(),y:z.number().finite(),z:z.number().finite()}).strict();
 export const routeSchema = z.object({success:z.boolean(),message:z.string().max(32768),routeText:z.string().max(1_000_000),
   routeCodes:z.array(z.string().max(2048)).max(200_000),segmentIds:z.array(z.string().max(256)).max(200_000),

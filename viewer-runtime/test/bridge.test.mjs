@@ -21,7 +21,7 @@ function fixture(options = {}) {
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
-    readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v1',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
+    readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
     readSelection: options.readSelection ?? (async () => ({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
@@ -52,7 +52,7 @@ test('preparation exact discovery is current-admin authorized before and after S
  for(const cancel of [false,true]){
   const waiting=deferred(),f=fixture({readPreparationObjects:()=>waiting.promise});await f.loaded();const command=f.send('READ_PREPARATION_OBJECTS',request);await turn();
   if(cancel)f.send('CANCEL_REQUEST',{targetRequestId:command.requestId});
-  waiting.resolve({schemaVersion:request.schemaVersion,mode:'names',names:request.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v1',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true});await turn();
+  waiting.resolve({schemaVersion:request.schemaVersion,mode:'names',names:request.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true});await turn();
   assert.equal(f.messages('PREPARATION_OBJECTS').length,cancel?0:1);const auth=f.fetches.filter(value=>value.url.endsWith('/pathfinder-authorization'));assert.equal(auth.length,2);if(cancel)assert.equal(auth.at(-1).init.signal.aborted,true);f.bridge.dispose();
  }
 });

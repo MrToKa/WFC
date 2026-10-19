@@ -5,7 +5,8 @@ import { collectDependencies, geometryHash } from './dependencies.js';
 import { defaultOptions } from './jobContracts.js';
 import { syntheticEngineIdentity } from './calculationFixtures.js';
 vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:async()=>syntheticEngineIdentity()}));
-const mocked=vi.hoisted(()=>({context:vi.fn(),binding:vi.fn(),active:vi.fn(),artifact:vi.fn(),routing:vi.fn(),settings:vi.fn(),comparison:vi.fn()}));
+const mocked=vi.hoisted(()=>({context:vi.fn(),binding:vi.fn(),active:vi.fn(),artifact:vi.fn(),routing:vi.fn(),settings:vi.fn(),comparison:vi.fn(),automatic:vi.fn()}));
+vi.mock('./automaticEndpointCandidates.js',()=>({readAutomaticEndpointCandidates:mocked.automatic}));
 vi.mock('./repository.js',()=>({activeModel:mocked.active,latestArtifact:mocked.artifact}));
 vi.mock('./endpointBindingRepository.js',()=>({readCurrentEndpointBindingContext:mocked.context,readEndpointBindingScope:mocked.binding}));
 vi.mock('./routingScope.js',()=>({requirePreparedRoutingScope:mocked.routing}));
@@ -29,6 +30,7 @@ beforeEach(()=>{
  mocked.settings.mockResolvedValue({settings:{revision:'1',connectionGap:'1',secondaryTrayLength:'7',endConnectionLength:'5',additionalBendingPercent:'10'},options:{...defaultOptions,connectionToleranceMeters:1}});
  mocked.binding.mockImplementation(async(_c:unknown,input:{locationId:string})=>({status:'confirmed',binding:binding(input.locationId)}));
  mocked.comparison.mockResolvedValue({applicability:'not-required',readiness:'not-required',scope:null,reasonCodes:[],reviewStatus:'not-applicable'});
+ mocked.automatic.mockResolvedValue(new Map());
 });
 describe('shared current endpoint collection',()=>{
  it('blocks an admitted pending comparison before resolving endpoints and does not erase it to null',async()=>{
@@ -51,6 +53,7 @@ describe('shared current endpoint collection',()=>{
   expect(result.dependencies).toHaveProperty('comparison',null);
   expect(result.dependencies?.from).toMatchObject({locationId:id(6),bindingId:id(16),bindingRevision:'3',mode:'fixed-world'});
   expect(result.dependencies?.to).toMatchObject({locationId:id(7),bindingId:id(17)});
+  expect(mocked.automatic).not.toHaveBeenCalled();
   expect(db.query.mock.calls.filter(x=>x[0].includes('pf_location_aliases')).map(x=>x[1]?.[1])).toEqual(['=A-01','=B.02']);
   expect(db.query.mock.calls.some(x=>x[0].includes('pf_location_bindings'))).toBe(false);
  });
@@ -74,5 +77,21 @@ describe('shared current endpoint collection',()=>{
  it('keeps blank endpoints missing and never substitutes zero coordinates',async()=>{
   const result=await collectDependencies(database('','  ').client,pid,id(8),defaultOptions);
   expect(result.dependencies).toBeNull();expect(result.status).toBe('locations_required');expect(mocked.binding).not.toHaveBeenCalled();
+ });
+ it('freezes automatic-only ends as v6 proposal inputs and reuses one shared location across aliases',async()=>{
+  const point={kind:'automatic-equipment-anchor',locationId:id(6),locationRevision:'2',point:[1,2,3],approximate:true,engineeringAccepted:false};
+  mocked.binding.mockResolvedValue({status:'missing',code:'ENDPOINT_BINDING_REQUIRED'});
+  mocked.automatic.mockResolvedValue(new Map([[id(6),{status:'automatic-ready',candidateObjectIds:['dbid:42'],point}]]));
+  const result=await collectDependencies(database('=A-01','=A-ALIAS',true).client,pid,id(8),defaultOptions);
+  expect(result.status).toBe('ready');expect(result.dependencies?.schemaVersion).toBe('pathfinder.dependencies.v6');
+  expect(result.dependencies?.from).toEqual(point);expect(result.dependencies?.to).toEqual(point);
+  expect(result.message).toMatch(/approximate automatic equipment anchors/);expect(mocked.automatic).toHaveBeenCalledTimes(1);
+  expect(result.cable).toMatchObject({routing:'/OLD',design_length:23,install_length:24,cable_write_revision:'4'});
+  expect(result.dependencies?.from).not.toHaveProperty('confirmedBy');
+ });
+ it.each(['stale','unsupported'])('never replaces an existing %s saved point with an automatic anchor',async status=>{
+  mocked.binding.mockResolvedValue({status,code:'ENDPOINT_BINDING_STALE'});
+  const result=await collectDependencies(database().client,pid,id(8),defaultOptions);
+  expect(result.status).toBe('locations_required');expect(mocked.automatic).not.toHaveBeenCalled();
  });
 });

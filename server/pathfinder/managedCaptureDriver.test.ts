@@ -48,7 +48,7 @@ function fixture() {
   };
   const exchange = vi.fn(async (envelope: BridgeEnvelope) => {
     if (envelope.type === 'READ_PREPARATION_OBJECTS') return reply(envelope, 'PREPARATION_OBJECTS', { schemaVersion: envelope.payload.schemaVersion, mode: envelope.payload.mode, names: envelope.payload.names,
-      rootObjectId: envelope.payload.rootObjectId, cursor: envelope.payload.cursor, matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1', indexedObjectCount: 1, propertyScan: null, objects: [], nextCursor: null, complete: true });
+      rootObjectId: envelope.payload.rootObjectId, cursor: envelope.payload.cursor, matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2', indexedObjectCount: 1, propertyScan: null, objects: [], nextCursor: null, complete: true });
     if (envelope.type === 'START_MODEL_CAPTURE') {
       if (!isStagedModelCaptureStart(envelope.payload) || !('preparationSlice' in envelope.payload)) throw new Error('Synthetic preparation fixture requires a valid staged preparation start');
       start = envelope.payload; names = [];

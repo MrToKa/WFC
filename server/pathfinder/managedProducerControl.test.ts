@@ -19,7 +19,7 @@ function fixture() {
   const command = (requestId = id(7)) => ({ channel: 'wfc-routings-viewer', protocolVersion: 1, ...binding, requestId, type: 'READ_PREPARATION_OBJECTS',
     payload: { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'names', names: ['/B001'], rootObjectId: null, cursor: 0, limit: 128 } }) as BridgeEnvelope;
   const response = (envelope = command()) => ({ ...envelope, type: 'PREPARATION_OBJECTS', payload: { schemaVersion: 'wfc.pf.viewer-discovery.v1', mode: 'names', names: ['/B001'], rootObjectId: null,
-    cursor: 0, matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1', indexedObjectCount: 1, propertyScan: null, objects: [], nextCursor: null, complete: true } }) as BridgeEnvelope;
+    cursor: 0, matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2', indexedObjectCount: 1, propertyScan: null, objects: [], nextCursor: null, complete: true } }) as BridgeEnvelope;
   const proof = { joined: true as const, removed: true as const, containerId: 'e'.repeat(64) };
   return { control, configuration, identity, resources, live, authorize, input, command, response, proof };
 }

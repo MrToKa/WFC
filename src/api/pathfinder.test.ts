@@ -19,8 +19,9 @@ function recordedProposal(dependencyVersion: string) {
     message: 'Recorded historical proposal.', engineeringMessage: 'Calculate and review a current result.', route: null, design: null,
     routingPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, createdAt: '2026-10-18T00:00:00Z',
     provenance: { dependencyVersion, dependencyHash: 'a'.repeat(64), automatic: null,
-      engineIdentity: dependencyVersion === 'pathfinder.dependencies.v5'
-        ? { ...body, contentSha256: createHash('sha256').update(engineIdentityCanonicalBody(body)).digest('hex') } : null } };
+      engineIdentity: ['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(dependencyVersion)
+        ? { ...body, contentSha256: createHash('sha256').update(engineIdentityCanonicalBody(body)).digest('hex') } : null,
+      ...(dependencyVersion==='pathfinder.dependencies.v6'?{endpointSources:{from:'automatic-model-candidate',to:'confirmed-shared-location'}}:{}) } };
 }
 describe('PathFinder API contract', () => {
   it('retains validated recorded input provenance after reload without granting completeness', async () => {
@@ -54,7 +55,7 @@ describe('PathFinder API contract', () => {
     expect(detail.provenance?.engineIdentity).toBeNull(); expect(detail.engineeringAccepted).toBe(false);
   });
   it('refuses unknown future dependency versions instead of treating them as historical provenance', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), proposals: [recordedProposal('pathfinder.dependencies.v6')] }));
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), proposals: [recordedProposal('pathfinder.dependencies.v7')] }));
     await expect(fetchPathFinderState(projectId, 'test-token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
   });
   it('keeps the exact engine-identity boundary for historical and current provenance', async () => {
@@ -67,6 +68,19 @@ describe('PathFinder API contract', () => {
       fetch.mockResolvedValueOnce(Response.json({ ...state(), proposals: [invalid] }));
       await expect(fetchPathFinderState(projectId, 'test-token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
     }
+  });
+  it('keeps automatic model endpoints distinct from confirmed shared locations and requires their provenance',async()=>{
+    const automatic=recordedProposal('pathfinder.dependencies.v6');
+    const fetch=vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(Response.json({...state(),proposals:[automatic]}));
+    const result=await fetchPathFinderState(projectId,'test-token');
+    expect(result.proposals[0].provenance?.endpointSources).toEqual({from:'automatic-model-candidate',to:'confirmed-shared-location'});
+    expect(result.proposals[0].engineeringAccepted).toBe(false);
+    for(const provenance of [
+      {...automatic.provenance,engineIdentity:null},
+      {...automatic.provenance,endpointSources:undefined},
+      {...automatic.provenance,endpointSources:{from:'confirmed-shared-location',to:'confirmed-shared-location'}},
+      {...automatic.provenance,dependencyVersion:'pathfinder.dependencies.v5'},
+    ]){fetch.mockResolvedValueOnce(Response.json({...state(),proposals:[{...automatic,provenance}]}));await expect(fetchPathFinderState(projectId,'test-token')).rejects.toMatchObject({code:'INVALID_RESPONSE'});}
   });
   it('rejects changed project identity, malformed numeric IDs and arbitrary endpoint URLs', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), projectId: modelId })).mockResolvedValueOnce(Response.json({ ...state(), cables: [{ ...state().cables[0], cableId: '17' }] }));

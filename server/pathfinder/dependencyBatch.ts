@@ -5,7 +5,8 @@ import { optionsSchema, type EngineOptions, type CurrentDependencySnapshot } fro
 import { collectCommonCalculationInputs, freezeCableDependencies, canonicalJson, type CollectedDependencies } from './dependencies.js';
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import { readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
-import { endpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { endpointCalculationPoint, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
 import { normalizeLocation } from './matching.js';
 import { PathFinderError } from './errors.js';
 
@@ -65,7 +66,13 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   }
   const locationIds=[...new Set([...aliases.values()].flat())].sort();
   const heads=await readNeededEndpointBindingHeads(client,{projectId,current:common.bindingContext,locationIds,deadline,signal:input.signal,initialBytes:locationBytes});
-  const endpoint=(name:string|null):CurrentDependencySnapshot['from']|null=>{if(!name)return null;const ids=aliases.get(normalizeLocation(name));if(ids?.length!==1)return null;const head=heads.get(ids[0]);return head?.ready?endpointCalculationPoint(head.binding):null;};
+  const unbound = locationIds.filter(id => !heads.has(id));
+  const automatic = unbound.length && common.bindingContext.traceId ? await readAutomaticEndpointCandidates(client,
+    {projectId,current:common.bindingContext,locationIds:unbound,deadline,signal:input.signal}) : new Map();
+  const endpoint=(name:string|null):CurrentEndpointCalculationPoint|null=>{
+    if(!name)return null;const ids=aliases.get(normalizeLocation(name));if(ids?.length!==1)return null;
+    const head=heads.get(ids[0]);return head ? head.ready?endpointCalculationPoint(head.binding):null : automatic.get(ids[0])?.point ?? null;
+  };
   for(const cable of cables){check();append(freezeCableDependencies(common.inputs,cable,endpoint(cable.from_location),endpoint(cable.to_location)));}
   check();return{items,registryRevision:registry,options:common.inputs.options,bytes};
 }

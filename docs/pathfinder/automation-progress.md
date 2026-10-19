@@ -15,6 +15,47 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current execution — PF-R0 and sequential PF-R delivery
 
+### Active user diagnostic — 20 October 2026
+
+- Repair TECHNICALLY_VERIFIED_WITH_EXPLICIT_DATA_GATES on branch
+  `pf-aalborg-auto-diagnostics-local-20261020`, inherited HEAD
+  `3cb40404738a1857b83a335f37ec9b62157c5408`. Report48 and sanitized
+  `evidence/aalborg-diagnostics/technical-receipt.json` pin exact source hashes.
+- Current5191 binding: own scratch owner1043d23c
+  `diag2-source-runtime.private.json`; API cfa0961a5dca / web ad01f9473205.
+  Only own API/web replaced; fresh 5,735,288-byte PG backup retained. Other own
+  containers/volumes/networks preserved; original app/5190 untouched.
+- Actual normal UI discovery PASS: 438155/438155 SDK property rows, zero unavailable;
+  2957 retained inventory objects. New session963b21d6, frozen plan adb6b34e32a640ab,
+  v2 model-only single-leading-slash policy: 328/330 trays, 1161 physical leaves,
+  five parts; endpoints437unique/48ambiguous/1042missing. User root decisions and
+  purpose policy unchanged; exact2140 cable response bytes preserved.
+- Fixed real intermediate discovery failure: 7698 SDK properties/mostly child
+  links wrongly counted against4096eligible-property cap. Official SDK replay4
+  reproduces failure; final replay6 PASS across1527names/48pages with one856batch
+  scan, network0. Retained138943323accountedbytes/437918keys/507511postings.
+- Calculation-only unique model candidates now have v6 immutable approximate
+  provenance, no invented confirmation/binding. Existing manual/stale/legacy points
+  block auto fallback. SQL5 PASS on nine actual-definition TEMP clones with
+  synthetic trace; forced rollback/public row hashes exact. This does not prove
+  FK publication flow, real connected paths or length acceptance.
+- Typecheck/focusedlint PASS; runtime111 then finalguard/helper36; prep/controller/
+  matching160; panel/hook31; v6/identity/client/comparison79; worker/auth/Apply127.
+  Groups overlap. Seven current HTTP/asset checks PASS, actual frozen plan verified
+  via HTTP, UI error logs0; screenshot and raw evidence remain private in owner1043d.
+- Two actual absent catalog tray roots remain BLOCKED; pending user answer about
+  temporary scope exclusions is still unanswered. No silent exclusions, parts,
+  aggregate publication, real calculation or Apply. Endpoint candidate eligibility
+  is230/2140 both unique,651oneunique,1259neither; never call it calculated cables.
+- All source agents finished/frozen; no active managed producer process observed.
+  Existing historical automation remains paused; new implementation identity needs
+  separate producer requalification. Root is sole runtime/SQL/HTTP/UI executor.
+- Next: commit technical repair, prepare self-contained scope-resolution handoff.
+  Execute only independent readiness work while waiting for actual tray scope /
+  missing or ambiguous endpoint mappings. Never bypass the two blocking diagnostics
+  or use the legacy13object artifact as a complete network. Keep5191/backups/evidence;
+  owned transient helpers removed, historical denied paths untouched, no prune.
+
 ### FINAL closeout — PF-R0–R10 and R2a, 19 October 2026
 
 - TECHNICALLY_VERIFIED_WITH_EXPLICIT_LIMITATIONS. Technical commit

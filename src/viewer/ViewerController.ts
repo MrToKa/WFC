@@ -82,7 +82,9 @@ export class ViewerController {
       if (!this.pending.delete(pending.envelope.requestId)) return;
       pending.reject?.(new Error('Viewer request timed out'));
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
-    }, ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE', 'READ_PREPARATION_OBJECTS'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    // A discovery page may build the bounded model-wide property index (300s
+    // inside the frame). Allow its terminal reply to arrive before failing load.
+    }, pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject'> = {}): string {

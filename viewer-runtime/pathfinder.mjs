@@ -1,5 +1,6 @@
 import { isCanonicalPoint } from './protocol.mjs';
 import { PREPARATION_VIEWER_LIMITS, PREPARATION_MATCHING_POLICY, validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage } from './preparation-input.mjs';
+import { modelEquipmentMatchKeys } from './equipment-names.mjs';
 
 const fail = code => Object.assign(new Error('The requested PathFinder viewer operation could not be completed.'), { code });
 const abortError = () => new DOMException('Operation cancelled.', 'AbortError');
@@ -8,6 +9,10 @@ const pause = () => new Promise(resolve => setTimeout(resolve, 0));
 const displayPoint = value => Array.isArray(value) && value.length === 3 && value.every(item => Number.isFinite(item) && Math.abs(item) <= 1e12);
 const TUBE_SIDES = 8, SEGMENTS_PER_MESH = 2000, TUBE_VERTICES = TUBE_SIDES * 2 + 2;
 const APPEARANCE_LIMITS = Object.freeze({ fragments: 1000000, materials: 4096, foregroundFragments: 8192 });
+// Per active model, including a conservative charge for Map/array entries and
+// UTF-16 strings. The SDK's complete-property proof is retained even when no
+// requested name matches; a refused/aborted build is never a reusable index.
+const EQUIPMENT_INDEX_LIMITS = Object.freeze({ bytes: 256 * 1024 ** 2, keys: 1000000, postings: 4000000, rawPropertiesPerRow: 1000000, scannedProperties: 32000000, eligiblePropertiesPerRow: 4096, valueCharacters: 65536 });
 
 /** Visual thickness only: each cylinder axis is exactly one supplied segment. */
 export function createExactPathBatches(points, radius) {
@@ -311,7 +316,7 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
   async function readPreparationObjects(input, operationSignal) {
     if (!validatePreparationDiscoveryRequest(input)) throw fail('PREPARATION_SCOPE_INVALID');
     const request = JSON.parse(JSON.stringify(input)), started = Date.now();
-    const check = () => { active(operationSignal); if (viewer.model !== model) throw fail('MODEL_SELECTION_CHANGED'); if (Date.now() - started > 300000) throw fail('EXTRACTION_FAILED'); };
+    const check = () => { active(operationSignal); if (viewer.model !== model) { preparationEquipment = undefined; throw fail('MODEL_SELECTION_CHANGED'); } if (Date.now() - started > 300000) throw fail('EXTRACTION_FAILED'); };
     check(); const indexed = await inventory(operationSignal), { tree, ids, names } = indexed; check();
     if (request.cursor > ids.length) throw fail('PREPARATION_SCOPE_INVALID');
     const indexById = indexed.indexById, matching = new Map(); let propertyScan = null, candidateIndices;
@@ -330,29 +335,58 @@ export function createPathFinderController(viewer, { window, signal } = {}) {
       }
       candidateIndices = preparationSubtree.indices;
     } else if (request.mode === 'equipment') {
-      const key = JSON.stringify(request.names);
-      if (preparationEquipment?.key !== key) {
-        const state = { key, promise:null }; preparationEquipment = state;
+      if (!preparationEquipment) {
+        const state = { promise:null }; preparationEquipment = state;
         state.promise = (async () => {
-          const matches = new Map(), returnedIds = new Set(), sought = new Map();
-          for (const name of request.names) { const key = normalEquipment(name); if (!sought.has(key)) sought.set(key, []); sought.get(key).push(name); }
+          const values = new Map(), returned = new Uint8Array(ids.length);
+          let returnedCount = 0, accountedBytes = returned.byteLength, postings = 0, scannedProperties = 0;
+          const charge = bytes => { accountedBytes += bytes; if (accountedBytes > EQUIPMENT_INDEX_LIMITS.bytes) throw fail('EXTRACTION_FAILED'); };
+          const indexValue = (raw, id, seen) => {
+            const text = String(raw ?? '');
+            if (text.length > EQUIPMENT_INDEX_LIMITS.valueCharacters) throw fail('EXTRACTION_FAILED');
+            for (const key of modelEquipmentMatchKeys(text)) {
+              if (seen.has(key)) continue;
+              seen.add(key);
+              let matches = values.get(key);
+              if (!matches) {
+                if (values.size >= EQUIPMENT_INDEX_LIMITS.keys) throw fail('EXTRACTION_FAILED');
+                charge(192 + key.length * 2); matches = []; values.set(key, matches);
+              }
+              if (++postings > EQUIPMENT_INDEX_LIMITS.postings) throw fail('EXTRACTION_FAILED');
+              charge(16); matches.push(id);
+            }
+          };
           for (let start = 0; start < ids.length; start += 512) {
             check(); const batch = ids.slice(start, start + 512), allowed = new Set(batch);
             const rows = await callback((yes, no) => model.getBulkProperties(batch, { ignoreHidden:false, needsExternalId:false }, yes, no), operationSignal, 45000); check();
             if (!Array.isArray(rows) || rows.length > batch.length) throw fail('EXTRACTION_FAILED');
             for (const row of rows) {
-              if (!allowed.has(row.dbId) || returnedIds.has(row.dbId) || !Array.isArray(row.properties)) throw fail('EXTRACTION_FAILED'); returnedIds.add(row.dbId);
-              const values = [names[indexById.get(row.dbId)], ...row.properties.filter(property => /^(tag|name|equipment[ _-]?tag|equipment[ _-]?name|location)$/i.test(property.displayName ?? property.attributeName ?? '')).map(property => String(property.displayValue ?? ''))];
-              const found = [...new Set(values.flatMap(value => sought.get(normalEquipment(value)) ?? []))];
-              if (found.length) matches.set(row.dbId, request.names.filter(name => found.includes(name)));
+              if (!row || !allowed.has(row.dbId) || returned[indexById.get(row.dbId)] || !Array.isArray(row.properties) || row.properties.length > EQUIPMENT_INDEX_LIMITS.rawPropertiesPerRow) throw fail('EXTRACTION_FAILED');
+              scannedProperties += row.properties.length;
+              if (scannedProperties > EQUIPMENT_INDEX_LIMITS.scannedProperties) throw fail('EXTRACTION_FAILED');
+              returned[indexById.get(row.dbId)] = 1; returnedCount++;
+              const seen = new Set(); let eligibleProperties = 0; indexValue(names[indexById.get(row.dbId)], row.dbId, seen);
+              for (const property of row.properties) {
+                if (!property || typeof property !== 'object') throw fail('EXTRACTION_FAILED');
+                // Hidden SDK structural metadata (including thousands of child
+                // links) is scanned once but never retained as an endpoint key.
+                if (/^(tag|name|equipment[ _-]?tag|equipment[ _-]?name|location)$/i.test(property.displayName ?? property.attributeName ?? '')) {
+                  if (++eligibleProperties > EQUIPMENT_INDEX_LIMITS.eligiblePropertiesPerRow) throw fail('EXTRACTION_FAILED');
+                  indexValue(property.displayValue, row.dbId, seen);
+                }
+              }
             }
             await pause();
           }
-          return { matches, indices:[...matches.keys()].map(id => indexById.get(id)).sort((a,b)=>a-b), propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedIds.size, omittedObjectCount:ids.length-returnedIds.size, complete:returnedIds.size===ids.length } };
+          check();
+          return { values, propertyScan:{ attemptedObjectCount:ids.length, returnedObjectCount:returnedCount, omittedObjectCount:ids.length-returnedCount, complete:returnedCount===ids.length } };
         })().catch(error => { if (preparationEquipment === state) preparationEquipment = undefined; throw error; });
       }
       const data = await preparationEquipment.promise; check(); propertyScan = data.propertyScan;
-      for (const [id, found] of data.matches) matching.set(id, found); candidateIndices = data.indices;
+      for (const name of request.names) for (const id of data.values.get(normalEquipment(name)) ?? []) {
+        const matched = matching.get(id) ?? []; matched.push(name); matching.set(id, matched);
+      }
+      candidateIndices = [...matching.keys()].map(id => indexById.get(id)).sort((a,b)=>a-b);
     }
     const result = { schemaVersion:'wfc.pf.viewer-discovery.v1', mode:request.mode, names:request.names, rootObjectId:request.rootObjectId, cursor:request.cursor, matchingPolicyVersion:PREPARATION_MATCHING_POLICY, indexedObjectCount:ids.length, propertyScan, objects:[], nextCursor:null, complete:true };
     let cursor = request.cursor;

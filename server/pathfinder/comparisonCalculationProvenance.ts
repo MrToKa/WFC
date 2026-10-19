@@ -6,7 +6,7 @@ export type ComparisonCalculationScope = RevisionComparisonScope | null;
 export function hasCurrentComparisonCalculationProvenance(value:unknown):boolean {
   if(!value||typeof value!=='object')return false;
   const input=value as Record<string,unknown>;
-  if(!['pathfinder.dependencies.v4','pathfinder.dependencies.v5'].includes(String(input.schemaVersion))||!Object.prototype.hasOwnProperty.call(input,'comparison'))return false;
+  if(!['pathfinder.dependencies.v4','pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(String(input.schemaVersion))||!Object.prototype.hasOwnProperty.call(input,'comparison'))return false;
   const preparation=endpointCalculationPreparationSchema.safeParse(input.preparation);
   if(!preparation.success)return false;
   if(input.comparison===null)return true;

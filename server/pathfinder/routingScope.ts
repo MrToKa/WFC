@@ -54,13 +54,13 @@ export async function requirePreparedRoutingScope(client: PoolClient, projectId:
 /** Historical v1 job inputs never acquire current permissions through a cast or replay. */
 export function requireVersionedCalculationScope(value: unknown): void {
   const input = value as {schemaVersion?: unknown; routing?: unknown} | null;
-  if (!input || !['pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5'].includes(String(input.schemaVersion)) || !routingScopeSchema.safeParse(input.routing).success)
+  if (!input || !['pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6'].includes(String(input.schemaVersion)) || !routingScopeSchema.safeParse(input.routing).success)
     throw new PathFinderError('ROUTING_PREPARATION_REQUIRED', 409, 'This calculation predates catalog routing permissions. Prepare and calculate a fresh proposal.');
   if (!hasCurrentEndpointCalculationProvenance(value))
     throw new PathFinderError('ENDPOINT_BINDING_UPGRADE_REQUIRED', 409, 'Confirm current shared endpoint bindings, then calculate and review a fresh proposal. Historical endpoint values do not authorize new calculations.');
   if (!hasCurrentComparisonCalculationProvenance(value))
     throw new PathFinderError('COMPARISON_UPGRADE_REQUIRED', 409, 'This proposal predates revision comparison provenance. Calculate and review a fresh proposal against the current prepared model and comparison decisions.');
-  if(input.schemaVersion!=='pathfinder.dependencies.v5'||!verifyEngineIdentity((value as {engineIdentity?:unknown}).engineIdentity,
+  if(!['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(String(input.schemaVersion))||!verifyEngineIdentity((value as {engineIdentity?:unknown}).engineIdentity,
     text=>createHash('sha256').update(text).digest('hex')))
     throw new PathFinderError('ENGINE_IDENTITY_UPGRADE_REQUIRED',409,'This proposal predates actual calculation implementation provenance. Calculate and review a fresh proposal with the current engine.');
 }

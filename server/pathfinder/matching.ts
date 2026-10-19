@@ -1,5 +1,6 @@
 import type { ComputationalSnapshot, LocationDto, LocationMatch, SnapshotObject } from './contracts.js';
 import { PathFinderError } from './errors.js';
+import { modelEquipmentMatchKeys } from '../../viewer-runtime/equipment-names.mjs';
 
 /** Exact project identity; preserve punctuation, leading zeroes and display spelling. */
 export function normalizeLocation(value: string): string {
@@ -16,7 +17,7 @@ export function matchLocation(value: string | null, locations: LocationDto[], ha
 }
 export function objectMatchNames(object: SnapshotObject): string[] {
   return [...new Set([object.name, ...object.properties.filter(property => /^(tag|name|equipment[ _-]?tag|equipment[ _-]?name|location)$/i.test(property.name)).map(property => property.value)]
-    .map(normalizeLocation).filter(Boolean))];
+    .flatMap(modelEquipmentMatchKeys))];
 }
 export function validateSnapshotStructure(snapshot: ComputationalSnapshot): Map<string, 'visible' | 'hidden' | 'unknown'> {
   const objects = new Map<string, SnapshotObject>(), dbIds = new Set<number>(), fragments = new Set<string>();

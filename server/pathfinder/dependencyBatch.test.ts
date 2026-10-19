@@ -8,7 +8,8 @@ import { collectDependencyBatchInTransaction } from './dependencyBatch.js';
 import { canonicalJson, collectDependencies, hash } from './dependencies.js';
 import { defaultOptions } from './jobContracts.js';
 
-const mocked = vi.hoisted(() => ({ active: vi.fn(), artifact: vi.fn(), context: vi.fn(), routing: vi.fn(), comparison: vi.fn(), identity: vi.fn(), needed: vi.fn() }));
+const mocked = vi.hoisted(() => ({ active: vi.fn(), artifact: vi.fn(), context: vi.fn(), routing: vi.fn(), comparison: vi.fn(), identity: vi.fn(), needed: vi.fn(), automatic: vi.fn() }));
+vi.mock('./automaticEndpointCandidates.js', () => ({ readAutomaticEndpointCandidates: mocked.automatic }));
 vi.mock('./repository.js', () => ({ activeModel: mocked.active, latestArtifact: mocked.artifact }));
 vi.mock('./routingScope.js', () => ({ requirePreparedRoutingScope: mocked.routing }));
 vi.mock('./revisionComparisonRepository.js', () => ({ readComparisonDependency: mocked.comparison }));
@@ -75,6 +76,7 @@ beforeEach(async () => {
   mocked.artifact.mockResolvedValue({ id: artifactId, content_fingerprint: 'c'.repeat(64), snapshot_sha256: 'd'.repeat(64) }); mocked.context.mockResolvedValue(context());
   mocked.routing.mockResolvedValue({ catalogRevision: '1', routingContentSha256: 'e'.repeat(64), routingPolicyRevision: '1', routingPolicySha256: 'f'.repeat(64) });
   mocked.comparison.mockResolvedValue({ applicability: 'not-required', readiness: 'not-required', scope: null, reasonCodes: [], reviewStatus: 'not-applicable' }); mocked.identity.mockResolvedValue(identity());
+  mocked.automatic.mockResolvedValue(new Map());
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -152,5 +154,32 @@ describe('bulk dependency collection, mocked SQL protocol with real freeze/head/
     await expect(collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions, deadline: NOW + 1 })).rejects.toMatchObject({ code: 'RECALCULATION_COLLECTION_DEADLINE' }); expect(mocked.active).not.toHaveBeenCalled();
     vi.mocked(Date.now).mockReturnValue(NOW); const controller = new AbortController(), aborted = fixture(251); aborted.state.onQuery = sql => { if (sql.includes('CASE WHEN octet_length')) controller.abort(); };
     await expect(collectDependencyBatchInTransaction(aborted.client, { projectId, options: defaultOptions, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' }); expect(aborted.query.mock.calls.every(call => call[0].startsWith('SELECT'))).toBe(true);
+  });
+  it('collects automatic proposal anchors once for the needed unbound locations across the whole cable batch', async () => {
+    const db = fixture(3); db.state.heads = []; mocked.context.mockResolvedValue({ ...context(), traceId: id(30) });
+    const automatic = (locationId: string) => ({ kind: 'automatic-equipment-anchor', locationId, locationRevision: '1',
+      point: [1, 2, 3], approximate: true, engineeringAccepted: false });
+    mocked.automatic.mockResolvedValue(new Map([locationA, locationB].map(locationId => [locationId,
+      { status: 'automatic-ready', candidateObjectIds: ['dbid:42'], point: automatic(locationId) }])));
+    const batch = await collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions });
+    expect(mocked.automatic).toHaveBeenCalledTimes(1);
+    expect(mocked.automatic).toHaveBeenCalledWith(db.client, expect.objectContaining({ projectId,
+      locationIds: [locationA, locationB], current: expect.objectContaining({ traceId: id(30) }) }));
+    expect(batch.items.every(item => item.dependencies?.schemaVersion === 'pathfinder.dependencies.v6' &&
+      item.dependencies.from === batch.items[0].dependencies?.from)).toBe(true);
+    expect(batch.items[0].dependencies?.settings.connectionGap).toBe('1');
+    expect(db.query.mock.calls.every(([sql]) => sql.startsWith('SELECT'))).toBe(true);
+  });
+  it('keeps confirmed manual heads first without asking automatic model candidates to replace them', async () => {
+    const db = fixture(); mocked.context.mockResolvedValue({ ...context(), traceId: id(30) });
+    const batch = await collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions });
+    expect(batch.items[0].dependencies?.schemaVersion).toBe('pathfinder.dependencies.v5');
+    expect(mocked.automatic).not.toHaveBeenCalled();
+  });
+  it('leaves stale saved heads unresolved instead of silently falling back to an equipment match', async () => {
+    const db = fixture(); db.state.heads[0].location_revision = '2'; mocked.context.mockResolvedValue({ ...context(), traceId: id(30) });
+    const batch = await collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions });
+    expect(batch.items[0]).toMatchObject({ status: 'locations_required', dependencies: null });
+    expect(mocked.automatic).not.toHaveBeenCalled();
   });
 });

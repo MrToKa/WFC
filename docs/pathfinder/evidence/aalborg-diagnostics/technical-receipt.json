@@ -1,0 +1,347 @@
+{
+  "schemaVersion": "wfc.pf.aalborg-diagnostic-repair.v1",
+  "recordedAtUtc": "2026-10-19T21:46:45.252Z",
+  "status": "TECHNICALLY_VERIFIED_WITH_EXPLICIT_DATA_GATES",
+  "branch": "pf-aalborg-auto-diagnostics-local-20261020",
+  "inheritedCommit": "3cb40404738a1857b83a335f37ec9b62157c5408",
+  "checkedSourceFiles": [
+    {
+      "path": "scripts/copy-pathfinder-contracts.mjs",
+      "sha256": "d354a7418b9f494bedc4772260fc50a1aff65dd0aa0a80c0c64e96683203922b"
+    },
+    {
+      "path": "scripts/viewer-runtime/module-closure.mjs",
+      "sha256": "d780937f8cb7976dfb070a6ddce0ac472421a8af0ba9af517be28427025e5a95"
+    },
+    {
+      "path": "server/pathfinder/automaticEndpointCandidates.test.ts",
+      "sha256": "2f538093133876f1fa73acbc39a152c16ec8ba46752dd06d107772d7af8c6873"
+    },
+    {
+      "path": "server/pathfinder/automaticEndpointCandidates.ts",
+      "sha256": "d8cc9cade58191f5ecfd1ece6e414058b72593ff29783bb764c01c6e3668c6d3"
+    },
+    {
+      "path": "server/pathfinder/calculationEngineIdentity.test.ts",
+      "sha256": "69887d931c9a8eff6a5775eb0f1e50b9e5967f6b4734a104cb534cdedfa56f35"
+    },
+    {
+      "path": "server/pathfinder/calculationEngineIdentity.ts",
+      "sha256": "e4ae3d6afbd343b58b5f735b5e811da82b581a01dcbd66ba8f728fc10296b22a"
+    },
+    {
+      "path": "server/pathfinder/comparisonCalculationProvenance.test.ts",
+      "sha256": "6fa74dbd54b88fe64b98de793e4bf897534c7ff428a9f437249af9fe0ea92250"
+    },
+    {
+      "path": "server/pathfinder/comparisonCalculationProvenance.ts",
+      "sha256": "33962fa5ec8ba76c9faea8ab132b440699ea9945274185789f1975239248ea42"
+    },
+    {
+      "path": "server/pathfinder/dependencies.test.ts",
+      "sha256": "73c68ddfbf1e37013f92d27d82262031b379afd7099222546a754f78d456897a"
+    },
+    {
+      "path": "server/pathfinder/dependencies.ts",
+      "sha256": "90a5df4d82471dfbc9a569527496988a7e9e821b0b1d3083c6d65b6f9f0f6557"
+    },
+    {
+      "path": "server/pathfinder/dependencyBatch.test.ts",
+      "sha256": "347501bb74c95520b2576a6adc4c86bacad9ba7e671e4dc03a7a7276bf5748c8"
+    },
+    {
+      "path": "server/pathfinder/dependencyBatch.ts",
+      "sha256": "a7e14f9547dd4bbe5a058ca14c6f99db703052c88826abbb46a644838fbafd11"
+    },
+    {
+      "path": "server/pathfinder/endpointCalculationProvenance.test.ts",
+      "sha256": "1ca8754b2adb0aaea291b01e19d7798eca1d4ad4530af1c030a5356b4d13e115"
+    },
+    {
+      "path": "server/pathfinder/endpointCalculationProvenance.ts",
+      "sha256": "2477753cd16776ae0cb8cff7e6722a0dc720370eea2f41505cb890e6ff0fe768"
+    },
+    {
+      "path": "server/pathfinder/jobContracts.ts",
+      "sha256": "9de54d1661ac7fb14da52597db2bd08ee14016aef7cb60b24b3703a98a907733"
+    },
+    {
+      "path": "server/pathfinder/jobs.ts",
+      "sha256": "8bb072300273fb9d3edf4b36b2e89bf6bc777854d4249e9e1cbe0daf154e66e2"
+    },
+    {
+      "path": "server/pathfinder/managedCaptureDriver.test.ts",
+      "sha256": "00aae8e962ad8815e17323597c157b94c718151a3c431c5d87e075285e6f0478"
+    },
+    {
+      "path": "server/pathfinder/managedPreparationWorkflow.test.ts",
+      "sha256": "fb28126587ac656e21236e0029b54160853967f755587563b9877812334f1847"
+    },
+    {
+      "path": "server/pathfinder/managedProducerControl.test.ts",
+      "sha256": "a91022e2d548994dd903f3afe2c020d3646aa9f30201c9f1ed6734d41bbf9cc3"
+    },
+    {
+      "path": "server/pathfinder/matching.test.ts",
+      "sha256": "14e300de4be79f2b7326d9cc0e6ca3c2217a459b76c7da827f7e1cd3e17e24f2"
+    },
+    {
+      "path": "server/pathfinder/matching.ts",
+      "sha256": "181f0b03ecc40352685b2f458c18be5538a0708a8816513080ffc8ca41058c28"
+    },
+    {
+      "path": "server/pathfinder/preparationPlans.test.ts",
+      "sha256": "3c8bf41d0ba8b0c08380818310ce176f0099735628d4943487570e5c77d0b583"
+    },
+    {
+      "path": "server/pathfinder/preparationPlans.ts",
+      "sha256": "e5a5a926748e273fb89ca989408ae544357a5d084a88295d6fc7478b8649e546"
+    },
+    {
+      "path": "server/pathfinder/routingScope.ts",
+      "sha256": "b9f4bf6e087745a4155023436a2daf525115011c15f458c0ec822fc45879c722"
+    },
+    {
+      "path": "shared/collectPreparationDiscovery.ts",
+      "sha256": "d588924245bd87227dad22d3bc8bdc072489a032ff9017161c3b7d11aabbca17"
+    },
+    {
+      "path": "shared/pathfinderPreparation.ts",
+      "sha256": "5cf201c87b74b8aa483f2696acf555c2caa7ab40c142ccad79451d5adfd12961"
+    },
+    {
+      "path": "src/api/pathfinder.test.ts",
+      "sha256": "23cf295d7aa7a3d9dd8fc9d9466ac6beb8005b3bc1672edca4eef20b17022e16"
+    },
+    {
+      "path": "src/api/pathfinder.ts",
+      "sha256": "7f7da60421b74d8a47bfc187728c58750e4ee410ecb23f3f3192ffc1866b58e3"
+    },
+    {
+      "path": "src/pages/ProjectDetails/ProjectPreparationPanel.test.tsx",
+      "sha256": "afcad9afddf311842b4961eec7186ffe2b8c9013893230459b20ee4f53363a0d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/ProjectPreparationPanel.tsx",
+      "sha256": "83b814bc40396b9c679990be2c8af019ea66d5ee4560d66478cf3f268ad30e14"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/collectPreparationDiscovery.test.ts",
+      "sha256": "83845b16fb9b71cd059b4c96bf467407e2ea0f38cd6840cb149e671ec8479dc8"
+    },
+    {
+      "path": "src/viewer/ViewerController.test.ts",
+      "sha256": "864ba2f6c5ea9de58424d883787fb075d7aab33ac9a0749cb6e3be5a0306459d"
+    },
+    {
+      "path": "src/viewer/ViewerController.ts",
+      "sha256": "6f526abc622621027ee69a3c85515467250d82be13f5882e9d42262bd9e81726"
+    },
+    {
+      "path": "viewer-runtime/equipment-names.d.mts",
+      "sha256": "ad784c58d3ef1fe0e1b47a8965fb34b2739d37088336d63c7a350fcdb8846626"
+    },
+    {
+      "path": "viewer-runtime/equipment-names.mjs",
+      "sha256": "654cee0c629d7ff47545fd37a098f96f1a9363957c457205e44288878bb15c7f"
+    },
+    {
+      "path": "viewer-runtime/model-capture.mjs",
+      "sha256": "c6c8f112932b01bca7299c99ef740f70013692b0f13fbad8c44d83dcc25e82b5"
+    },
+    {
+      "path": "viewer-runtime/pathfinder.mjs",
+      "sha256": "dd8f81eb0c50da04fc9800302a0f84f38712cebeb5c30bd7fb47056edb077ae2"
+    },
+    {
+      "path": "viewer-runtime/preparation-input.d.mts",
+      "sha256": "e28011803bb2bcd8fd876aacc0748b9c8d04dfcc088cecb5f035c989348968d0"
+    },
+    {
+      "path": "viewer-runtime/preparation-input.mjs",
+      "sha256": "5899dcf8e57436a856871caaa0d07ce09ae956c550339b7aae7b762169d0d0ee"
+    },
+    {
+      "path": "viewer-runtime/test/bridge.test.mjs",
+      "sha256": "ac461594c33559447edc0191443d59c5e3bcc06df49db0b4590e55423f19e08c"
+    },
+    {
+      "path": "viewer-runtime/test/equipment-names.test.mjs",
+      "sha256": "576bdd199795c7d57c0ae675abc12a27d53e4cdad9ddb821956aba146ceb20a0"
+    },
+    {
+      "path": "viewer-runtime/test/model-capture.node-test.mjs",
+      "sha256": "966441568d796c1e4dc5b63ab5a0346d3dbf29e627008ffa5aefcc25a04fc695"
+    },
+    {
+      "path": "viewer-runtime/test/pathfinder.test.mjs",
+      "sha256": "73df9383df5b2a2599df0a279bb79c75b065c7c588b33070827b9ea599f6d5e1"
+    }
+  ],
+  "runtime": {
+    "port": 5191,
+    "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+    "project": "wfc-pathfinder-local-0cba87606e9b",
+    "images": {
+      "api": "sha256:cfa0961a5dca8b81b1237cde79cff3a48cd3dd75553175e7091117b7898363eb",
+      "web": "sha256:ad01f947320500cfd08c789c4de9aebd51664abc2234cded7780e56f350e990a"
+    },
+    "apiWebOnly": true
+  },
+  "discovery": {
+    "propertyRows": 438155,
+    "unavailable": 0,
+    "inventoryRecords": 2957,
+    "trays": {
+      "catalog": 330,
+      "selected": 328,
+      "missing": 2,
+      "excluded": 0
+    },
+    "endpoints": {
+      "missing": 1042,
+      "ambiguous": 48,
+      "unique_candidate": 437
+    },
+    "frozenPlanSha256": "adb6b34e32a640abd65917c769a5a38a810a151e41d22f20b78c786db676e67f",
+    "parts": 5,
+    "physicalLeaves": 1161,
+    "matchingPolicy": "wfc.pf.project-exact-candidates.v2"
+  },
+  "sdkReplay": {
+    "scope": "offline official SDK PropertyDatabase with retained real PDB; geometry is not simulated or qualified",
+    "networkCalls": 0,
+    "controllerSha256": "dd8f81eb0c50da04fc9800302a0f84f38712cebeb5c30bd7fb47056edb077ae2",
+    "sdkSha256": "9637ed11308c549b6dbd290d6270e53587122ebb5ffd7f87987ea9a8f897f46a",
+    "batches": 856,
+    "rows": 438155,
+    "accountedBytes": 138943323,
+    "keys": 437918,
+    "postings": 507511,
+    "oldGuardFailureReproduced": true
+  },
+  "eligibilityOnly": {
+    "scope": "ENDPOINT-CANDIDATE-ELIGIBILITY_ONLY",
+    "total": 2140,
+    "bothUnique": 230,
+    "exactlyOneUnique": 651,
+    "neitherUnique": 1259
+  },
+  "sqlControl": {
+    "scope": "Production resolver SQL on temporary clones of actual PostgreSQL table definitions with synthetic geometry fixtures; real current-admin transaction checked; FK publication flow and real cable calculations not tested",
+    "tableClones": 9,
+    "manualHeadProtected": true,
+    "legacyPointProtected": true,
+    "rollbackConfirmed": true,
+    "publicTablesExact": true
+  },
+  "tests": {
+    "typecheck": "PASS",
+    "focusedLint": "PASS",
+    "runtimeCaptureBridgeClosure": {
+      "cases": 111,
+      "status": "PASS",
+      "note": "Before final raw-vs-eligible property guard correction; affected final guard/helper tests separately passed."
+    },
+    "finalGuardHelper": {
+      "cases": 36,
+      "status": "PASS"
+    },
+    "preparationControllerMatching": {
+      "cases": 160,
+      "status": "PASS"
+    },
+    "panelHook": {
+      "cases": 31,
+      "status": "PASS"
+    },
+    "v6IdentityClientComparison": {
+      "cases": 79,
+      "status": "PASS"
+    },
+    "workerAuthApply": {
+      "cases": 127,
+      "status": "PASS"
+    },
+    "groupsOverlap": true
+  },
+  "actualRuntime": {
+    "httpAndAssetChecks": 7,
+    "normalUiDiscovery": "PASS",
+    "frozenPlanPersistence": "PASS",
+    "capturedErrorLogs": 0,
+    "cableRowsExact": true,
+    "purposeAndRootDecisionsExact": true,
+    "otherOwnResourcesPreserved": true,
+    "realPartsCommitted": 0,
+    "realNetworkPublished": false,
+    "realCalculations": 0,
+    "realApply": 0,
+    "engineeringAcceptance": "NOT_RUN"
+  },
+  "blocking": {
+    "requestedMissingTrayRoots": 2,
+    "scopeExclusionAnswer": "PENDING",
+    "completeNetwork": "BLOCKED",
+    "realCableCalculation": "BLOCKED",
+    "backgroundRequalification": "NOT_RUN"
+  },
+  "privateWorkRelative": "pathfinder-engine/.scratch/tray-catalog-1043d23c-de96-4fda-8c25-bcb2f795a505",
+  "privateChecks": [
+    {
+      "name": "offline-audit1-summary.private.json",
+      "bytes": 2566,
+      "sha256": "427f9da5ec0f4fc8f2abbc5f6ed3b17223af913efd3a80500717fc8a459281ac"
+    },
+    {
+      "name": "offline-audit1-details.private.json",
+      "bytes": 1603798,
+      "sha256": "86a5f47dc7ebc228b13fcad0584bf0de266973c36f76d959cbbf7a7f6a0dfc99"
+    },
+    {
+      "name": "equipment-index-replay-result4.private.json",
+      "bytes": 1174,
+      "sha256": "396dca4c70b311b4664cb3a84166bd77c293684f867631f859cf2e49a296dbd7"
+    },
+    {
+      "name": "equipment-index-replay-result6.private.json",
+      "bytes": 1025,
+      "sha256": "c4f1ba09a1bf951fc0dae4524f9cf197b394874ad8a1fdf19f9cd26997ec7158"
+    },
+    {
+      "name": "automatic-sql5-result.private.json",
+      "bytes": 498,
+      "sha256": "3e43e4ef6620898070592159ec61ef1ff313c6f5065a839c089f844b39be9976"
+    },
+    {
+      "name": "diag2-upgrade-result.private.json",
+      "bytes": 2908,
+      "sha256": "dfdbdc4a720143351c2152cd591279d23f574f30571dec56a715e0058fd1b6bf"
+    },
+    {
+      "name": "diag2-post-verification.private.json",
+      "bytes": 2258,
+      "sha256": "565e132bd803d495af7dd518b566ce33e3a663791a9d5896fc8fe0f9928a8c9f"
+    },
+    {
+      "name": "current-plan3-result.private.json",
+      "bytes": 543,
+      "sha256": "93a551d6f2540a49023e661c16a3ed9e1abe08b875614ecc35fc8bdad744b99c"
+    },
+    {
+      "name": "ui-diagnostic2-frozen.ax.txt",
+      "bytes": 112758,
+      "sha256": "af6518267355f8517bd533d6cd1aed54714db24ab80762449a0008a85076ee5b"
+    },
+    {
+      "name": "ui-diagnostic2-summary.png",
+      "bytes": 55740,
+      "sha256": "a8577115a13eac9c007de407d413177fb94da7a2b3da386597e05723bae3ccb1"
+    },
+    {
+      "name": "ui-diagnostic2-errors.private.json",
+      "bytes": 2,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  ]
+}

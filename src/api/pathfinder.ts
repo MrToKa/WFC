@@ -21,11 +21,15 @@ const projectSettingsSchema = z.object({ revision, connectionGap: connectionGapS
 const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
 const routingPreferencesSchema = z.object({ secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000), preferVerticalApproach: z.boolean() });
 const proposalProvenanceSchema = z.object({
-  dependencyVersion: z.enum(['pathfinder.dependencies.v1', 'pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5']),
+  dependencyVersion: z.enum(['pathfinder.dependencies.v1', 'pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6']),
   dependencyHash: policyHashSchema, engineIdentity: engineIdentitySchema.nullable(),
   automatic: z.object({ generation: policyRevisionSchema, authorityEpoch: policyRevisionSchema, current: z.boolean(), reasonCode: z.string().min(1).max(96).nullable() }).strict().nullable(),
+  endpointSources: z.object({from:z.enum(['automatic-model-candidate','confirmed-shared-location']),to:z.enum(['automatic-model-candidate','confirmed-shared-location'])}).strict().optional(),
 }).strict().superRefine((value, context) => {
-  if ((value.dependencyVersion === 'pathfinder.dependencies.v5') !== (value.engineIdentity !== null)) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
+  if (['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(value.dependencyVersion) !== (value.engineIdentity !== null)) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
+  if (value.dependencyVersion==='pathfinder.dependencies.v6'
+    ? !value.endpointSources || !Object.values(value.endpointSources).includes('automatic-model-candidate')
+    : value.endpointSources!==undefined) context.addIssue({code:'custom',message:'Automatic endpoint provenance must agree with the dependency version.'});
 });
 const proposalSummarySchema = z.object({ schemaVersion: z.literal('wfc.pf.proposal.v2').optional(), provenance: proposalProvenanceSchema.optional(), id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
   stale: z.boolean(), synthetic: z.boolean(), engineeringAccepted: z.boolean(), acceptanceScope: z.string(), canApply: z.boolean(), compatibilityIssue: z.string().nullable(), message: z.string(), engineeringMessage: z.string(),

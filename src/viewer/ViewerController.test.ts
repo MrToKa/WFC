@@ -31,12 +31,17 @@ function setup(token = 'login-a') {
 }
 
 describe('PathFinder protected Viewer capabilities', () => {
-  async function loaded() {
+  async function loaded(sessionDuration = 300_000) {
     const s = setup(); s.ready();
+    let session: Record<string, unknown>;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
       if (options?.method === 'DELETE') return new Response(null, { status: 204 });
-      if (options?.method === 'POST') return Response.json({ sessionId: crypto.randomUUID(), projectId, modelVersionId: versionId,
-        loadId: JSON.parse(String(options.body)).loadId, expiresAt: new Date(Date.now() + 300_000).toISOString(), absoluteExpiresAt: new Date(Date.now() + 1_800_000).toISOString() });
+      if (options?.method === 'POST') {
+        if (String(_url).endsWith('/renew')) return Response.json({ ...session, expiresAt: new Date(Date.now() + sessionDuration).toISOString() });
+        session = { sessionId: crypto.randomUUID(), projectId, modelVersionId: versionId,
+          loadId: JSON.parse(String(options.body)).loadId, expiresAt: new Date(Date.now() + sessionDuration).toISOString(), absoluteExpiresAt: new Date(Date.now() + 1_800_000).toISOString() };
+        return Response.json(session);
+      }
       return Response.json({ selection: { activeModelVersionId: versionId, selectionRevision: 1 } });
     });
     await s.c.load(versionId);
@@ -47,15 +52,24 @@ describe('PathFinder protected Viewer capabilities', () => {
   }
   it('preparation discovery freezes exact scope, validates echoed scope and rechecks the current model',async()=>{
     const s=await loaded(),request={schemaVersion:'wfc.pf.viewer-discovery.v1' as const,mode:'names' as const,names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128};
-    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:value.payload.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v1',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
+    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:value.payload.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
     const reading=s.c.discoverPreparationObjects(request);request.names[0]='CHANGED';expect((await reading).names).toEqual(['TRAY-001']);
-    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:['WRONG'],rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v1',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
+    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:['WRONG'],rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
     await expect(s.c.discoverPreparationObjects(request)).rejects.toThrow('acknowledgement mismatch');
   });
   it('preparation discovery and capture abort pending bridge work without returning late model data',async()=>{
     const s=await loaded(),abort=new AbortController(),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128},{signal:abort.signal});
     const rejected=expect(reading).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));abort.abort();await rejected;expect(s.send.mock.calls.some(call=>call[0].type==='CANCEL_REQUEST')).toBe(true);
     const captureAbort=new AbortController(),capturing=s.c.captureModel({routeCodes:['BC001'],allowedCategories:['Control'],equipmentNames:[]},()=>{},{signal:captureAbort.signal});const captureRejected=expect(capturing).rejects.toMatchObject({name:'AbortError'});await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='START_MODEL_CAPTURE')).toBe(true));captureAbort.abort();await captureRejected;
+  });
+  it('allows the frame discovery budget and still terminates a stalled discovery',async()=>{
+    const s=await loaded(600_000),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TAG-001'],rootObjectId:null,cursor:0,limit:128});
+    const rejected=expect(reading).rejects.toThrow('Viewer request timed out');
+    await vi.waitFor(()=>expect(s.send.mock.calls.some(call=>call[0].type==='READ_PREPARATION_OBJECTS')).toBe(true));
+    await vi.advanceTimersByTimeAsync(300_001);
+    expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);await rejected;
+    expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(true);
   });
   it('freezes independent lookup capture codes without importing planning categories or roots', async () => {
     const s = await loaded(), codes = ['/BC001', '/BC002'];

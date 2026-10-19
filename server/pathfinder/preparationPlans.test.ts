@@ -11,6 +11,17 @@ export function preparationFixture() {
   return { context, input };
 }
 describe('server-owned routing preparation plan', () => {
+  it('retains historical exact-name policy evidence and hashes the explicit adapter policy separately', () => {
+    const { context, input } = preparationFixture();
+    const legacy = buildPreparationPlan(context, input, id(50));
+    input.discovery.matchingPolicyVersion = 'wfc.pf.project-exact-candidates.v2';
+    const current = buildPreparationPlan(context, input, id(50));
+    expect(legacy.matchingPolicyVersion).toBe('wfc.pf.project-exact-candidates.v1');
+    expect(current.matchingPolicyVersion).toBe('wfc.pf.project-exact-candidates.v2');
+    expect(current.orderedPlanSha256).not.toBe(legacy.orderedPlanSha256);
+    expect(preparationPlanSchema.parse(legacy)).toEqual(legacy);
+    expect(preparationPlanSchema.safeParse({ ...current, matchingPolicyVersion: 'unknown' }).success).toBe(false);
+  });
   it('freezes exact scope, server category masks, ancestry and a verifiable plan hash', () => {
     const { context, input } = preparationFixture(), plan = buildPreparationPlan(context, input, id(4));
     expect(preparationPlanSchema.parse(plan)).toEqual(plan);

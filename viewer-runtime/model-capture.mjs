@@ -3,6 +3,7 @@
 import { validateModelCaptureInputDescriptor, validateModelCaptureInputScope, modelCaptureScopeBytes, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { validatePreparationSlice } from './preparation-input.mjs';
 import { createCompletedCaptureEvidence, validateCompletedCaptureEvidence, CAPTURE_EVIDENCE_LIMITS } from './capture-evidence.mjs';
+import { modelEquipmentMatchKeys } from './equipment-names.mjs';
 export const MODEL_CAPTURE_LIMITS = Object.freeze({ eventBytes: 24 * 1024, totalBytes: 64 * 1024 ** 2, events: 3000, indexedObjects: 1000000, objects: 4096, fragments: 100000, vertices: 5000000, triangles: 5000000, depth: 512, properties: 1024, milliseconds: 300000 });
 const encoder = new TextEncoder();
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -140,7 +141,8 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   for (let index = 0; index < ids.length; index++) {
     active(); const id = ids[index], name = tree.getNodeName(id) ?? '', key = routeKey(name);
     if (routes.has(key)) routes.get(key).push(id);
-    if (equipment.has(normal(name))) equipment.get(normal(name)).ids.add(id);
+    if (!request.preparationSlice || request.preparationSlice.equipmentObjectIds.includes(id))
+      for (const key of modelEquipmentMatchKeys(name)) if (equipment.has(key)) equipment.get(key).ids.add(id);
     if (index % 8192 === 0) { onProgress?.({ phase: 'index', loaded: index, total: ids.length }); await pause(); }
   }
   const selected = new Map(), diagnostics = [], propertyMap = new Map();
@@ -227,7 +229,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
       for (const row of rows) {
         if (!batchIds.includes(row.dbId) || returned.has(row.dbId)) refuse('SDK property batch identity mismatch.'); returned.add(row.dbId); returnedPropertyIds.add(row.dbId);
         const names = [tree.getNodeName(row.dbId) ?? '', ...(row.properties ?? []).filter(value => PROPERTY_NAME.test(value.displayName ?? value.attributeName ?? '')).map(value => String(value.displayValue ?? ''))];
-        const matches = names.map(normal).filter(name => equipment.has(name));
+        const matches = unique(names.flatMap(modelEquipmentMatchKeys).filter(name => equipment.has(name)));
         if (matches.length && (!request.preparationSlice || request.preparationSlice.equipmentObjectIds.includes(row.dbId))) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
         if (selected.has(row.dbId)) propertyMap.set(row.dbId, row);
       }

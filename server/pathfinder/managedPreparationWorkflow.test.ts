@@ -46,7 +46,7 @@ function fixture() {
     assertCurrent: vi.fn(() => { if (flags.closed) throw Error('driver is closed'); }),
     discover: vi.fn(async (request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage> => ({ schemaVersion: 'wfc.pf.viewer-discovery.v1',
       mode: request.mode, names: request.names, rootObjectId: request.rootObjectId, cursor: request.cursor,
-      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1', indexedObjectCount: flags.ambiguous ? 2 : 1, propertyScan: null,
+      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2', indexedObjectCount: flags.ambiguous ? 2 : 1, propertyScan: null,
       objects: (flags.ambiguous ? [3, 4] : [3]).map((objectId, orderIndex) => ({ objectId, parentId: null, name: '/B001', hasGeometry: true, isPhysicalLeaf: true,
         orderIndex, matchedNames: request.mode === 'names' ? [...request.names] : [] })), nextCursor: null, complete: true })),
     capture: vi.fn(async (request: ModelCaptureRequest) => {

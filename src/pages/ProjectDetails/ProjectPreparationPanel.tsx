@@ -3,7 +3,7 @@ import { Body1, Button, Caption1, Field, Spinner, Textarea } from '@fluentui/rea
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { routingPurposeDisplayLabels } from '@/components/RoutingPurposePolicyCard';
-import { PREPARATION_LIMITS } from '../../../shared/pathfinderPreparation';
+import { PREPARATION_LIMITS, type PreparationScope } from '../../../shared/pathfinderPreparation';
 import {GeometryTracePanel} from './GeometryTracePanel';
 import { ModelRevisionChangesPanel } from './ModelRevisionChangesPanel';
 
@@ -11,6 +11,32 @@ type Props = {
   pf: ReturnType<typeof usePathFinder>;
   active: boolean;
   onBusyChange?: (busy: boolean) => void;
+};
+const sameScope = (left: PreparationScope, right: PreparationScope, ignoreResolution = false) =>
+  (Object.keys(right) as Array<keyof PreparationScope>).every(
+    (key) => (ignoreResolution && key === 'resolutionRevision') || left[key] === right[key],
+  );
+const diagnosticAction = (code: string) => {
+  switch (code) {
+    case 'TRAY_ROOT_MISSING':
+      return 'No exact tray root was found in this model. Verify the active model and revision, select and explicitly confirm the correct physical root, or explicitly exclude this tray from this preparation scope. Then discover again and freeze a replacement plan.';
+    case 'TRAY_ROOT_AMBIGUOUS':
+      return 'Multiple model roots match this tray. Select and explicitly confirm the intended physical roots, then discover again and freeze a replacement plan.';
+    case 'TRAY_GEOMETRY_MISSING':
+      return 'The selected roots contain no supported physical routing leaves. Inspect the model hierarchy and choose the correct physical roots or model revision before preparing again.';
+    case 'NON_LEAF_ROUTING_GEOMETRY':
+      return 'Routing geometry is attached above the physical leaves. Inspect its hierarchy and resolve physical ownership before preparing again.';
+    case 'PURPOSE_UNCONFIGURED':
+      return 'Save the routing permissions for this tray purpose in Project Details, then discover again and freeze a replacement plan.';
+    case 'TRAY_POLICY_INVALID':
+      return 'Resolve the tray catalog or routing permission diagnostics in Project Details before preparing this tray.';
+    case 'ENDPOINT_DISCOVERY_INCOMPLETE':
+      return 'The endpoint property search was incomplete. Reload the protected model and discover again; missing or unique matches cannot be inferred from incomplete coverage.';
+    case 'NO_AUTHORIZED_ROUTING_GEOMETRY':
+      return 'No physical tray geometry is permitted by this plan. Review the project routing permissions and tray root selections before preparing again.';
+    default:
+      return 'Resolve this preparation issue, then discover again and freeze a replacement plan. This diagnostic blocks collection.';
+  }
 };
 export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
   const state = useProjectPreparation(pf, active);
@@ -39,6 +65,34 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
     session = state.session,
     canChange = state.canMutate && active;
   const variants = routingPurposeDisplayLabels(context?.trays.map((tray) => tray.purposeKey) ?? []);
+  const discovery = context && state.discovery &&
+    state.discovery.modelVersionId === context.scope.modelVersionId &&
+    state.discovery.contentFingerprint === context.scope.contentFingerprint &&
+    state.discovery.selectionRevision === context.scope.selectionRevision
+    ? state.discovery : null;
+  const plan = session?.plan;
+  const planForCurrentModel = context && plan &&
+    plan.projectId === context.projectId &&
+    plan.modelVersionId === context.scope.modelVersionId &&
+    plan.contentFingerprint === context.scope.contentFingerprint &&
+    plan.selectionRevision === context.scope.selectionRevision
+    ? plan : null;
+  const currentPlanScope = Boolean(context && planForCurrentModel && sameScope(planForCurrentModel, context.scope));
+  const publishedPlan = Boolean(context?.currentAggregate && planForCurrentModel &&
+    context.currentAggregate.sessionId === session?.id &&
+    context.currentAggregate.orderedPlanSha256 === planForCurrentModel.orderedPlanSha256);
+  const trayTotal = context && plan && plan.projectId === context.projectId &&
+    plan.catalogRevision === context.scope.catalogRevision &&
+    plan.routingContentSha256 === context.scope.routingContentSha256
+    ? context.trays.length : null;
+  const endpointCounts = plan?.requestedScope.endpointEvidence.reduce(
+    (counts, item) => ({ ...counts, [item.status]: counts[item.status] + 1 }),
+    { unique_candidate: 0, missing: 0, ambiguous: 0 },
+  );
+  // Only an explicit parentless node in current-model evidence identifies the
+  // model root. A low dbId or a tray-like name does not establish that identity.
+  const modelRootIds = new Set((discovery?.objects ?? planForCurrentModel?.objectManifest ?? [])
+    .filter((object) => object.parentId === null).map((object) => object.objectId));
   const partsReady = Boolean(
     session &&
       session.coverage.requestedScopeComplete &&
@@ -81,6 +135,52 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
         Published preparation covers the requested project scope; it does not claim whole-plant or
         native engineering acceptance.
       </Caption1>
+      {plan ? (
+        <section aria-label="Preparation readiness summary" style={{ marginTop: 12 }}>
+          <h4 style={{ margin: '0 0 8px' }}>
+            {publishedPlan ? 'Published plan coverage' : currentPlanScope ? 'Current frozen plan coverage' : 'Saved plan coverage'}
+          </h4>
+          <p>
+            Tray network coverage: {plan.requestedScope.trays.length}
+            {trayTotal === null ? ' project trays' : ` of ${trayTotal} project trays`} have selected roots;{' '}
+            {plan.requestedScope.excludedProjectTrayIds.length} explicitly excluded;{' '}
+            {plan.diagnostics.length} blocking diagnostics.
+          </p>
+          <p>
+            Endpoint candidates: {endpointCounts!.unique_candidate} unique;{' '}
+            {endpointCounts!.missing} missing; {endpointCounts!.ambiguous} ambiguous.
+            {' '}These are saved candidate counts, not confirmed shared locations or calculated cables.
+          </p>
+          <p>
+            {plan.matchingPolicyVersion === 'wfc.pf.project-exact-candidates.v2'
+              ? 'Matching policy v2: equipment identifiers allow one leading slash present only in the model. Tray names retain exact matching; all other equipment identifier characters remain significant.'
+              : 'Historical matching policy v1: discover again and freeze a new plan to use model-only leading-slash matching. Opening this saved plan does not rerun discovery.'}
+          </p>
+          {plan.diagnostics.length ? (
+            <div role="alert">
+              <p>
+                Collection is blocked by {plan.diagnostics.length} preparation diagnostics.
+                Missing trays are not excluded automatically. Resolve the issues below before collecting the complete network.
+              </p>
+              <ul aria-label="Frozen plan diagnostics">
+                {plan.diagnostics.map((item, index) => {
+                  const trayNames = item.projectTrayIds.map((id) =>
+                    context?.trays.find((tray) => tray.projectTrayId === id)?.rawName ??
+                    plan.requestedScope.trays.find((tray) => tray.projectTrayId === id)?.rawName ?? id,
+                  );
+                  return <li key={index}>
+                    <strong>{item.code}</strong>
+                    {trayNames.length ? <p>Affected trays: {trayNames.join(', ')}.</p> : null}
+                    {item.objectIds.length ? <p>Model objects: {item.objectIds.join(', ')}.</p> : null}
+                    <p>{diagnosticAction(item.code)}</p>
+                    <Caption1>{item.message}</Caption1>
+                  </li>;
+                })}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
         <Button disabled={state.busy} onClick={() => void state.refresh()}>
           Refresh preparation status
@@ -161,7 +261,8 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
           ) : null}
           {state.discovery ? (
             <p role="status">
-              Discovery: {state.discovery.objects.length} inventory records. Candidate pagination{' '}
+              {discovery ? 'Discovery' : 'Historical discovery for a previous model selection'}:{' '}
+              {state.discovery.objects.length} inventory records. Candidate pagination{' '}
               {state.discovery.complete ? 'complete' : 'incomplete'}.{' '}
               {state.discovery.propertyScan
                 ? `Endpoint properties: ${state.discovery.propertyScan.returnedObjectCount} of ${state.discovery.propertyScan.attemptedObjectCount} returned; ${state.discovery.propertyScan.omittedObjectCount} unavailable.`
@@ -173,12 +274,20 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
             style={{ display: 'grid', gap: 12, minWidth: 0 }}
           >
             {context.trays.slice(page * 25, (page + 1) * 25).map((tray) => {
-              const matches = state.discovery?.trays.find(
+              const matches = discovery?.trays.find(
                 (value) => value.projectTrayId === tray.projectTrayId,
               )?.candidateRootObjectIds;
               const resolution = context.resolutions.find(
                 (value) => value.projectTrayId === tray.projectTrayId,
               );
+              const currentResolution = Boolean(resolution && sameScope(resolution.scope, context.scope, true));
+              const frozenTray = plan?.requestedScope.trays.find(
+                (value) => value.projectTrayId === tray.projectTrayId,
+              );
+              const frozenExcluded = plan?.requestedScope.excludedProjectTrayIds.includes(tray.projectTrayId);
+              const knownModelRoot = [...(matches ?? []), ...(resolution?.rootObjectIds ?? []),
+                ...(planForCurrentModel ? frozenTray?.orderedRootObjectIds ?? [] : []),
+                ...(chosen[tray.projectTrayId] ?? [])].some((id) => modelRootIds.has(id));
               const selected = chosen[tray.projectTrayId] ?? [];
               const reason = reasons[tray.projectTrayId] ?? '';
               const purpose = tray.purposeKey ?? 'Missing purpose',
@@ -234,7 +343,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
                       </dt>
                       <dd style={{ margin: 0, minWidth: 0, display: 'grid', gap: 8 }}>
                         {matches === undefined
-                          ? 'Not yet discovered'
+                          ? 'Discovery results are not loaded. Discover project tray candidates to verify exact matches.'
                           : matches.length === 0
                             ? 'Missing exact candidate'
                             : matches.length === 1
@@ -258,20 +367,45 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
                                     }))
                                   }
                                 />
-                                {state.discovery?.objects.find((value) => value.objectId === id)
+                                {discovery?.objects.find((value) => value.objectId === id)
                                   ?.name ?? 'Model object'}{' '}
                                 · {id}
                               </label>
                             </li>
                           ))}
                         </ul>
+                        {frozenTray || frozenExcluded ? (
+                          <div>
+                            {publishedPlan ? 'Published saved plan' : currentPlanScope ? 'Current frozen plan' : 'Historical frozen plan'}:{' '}
+                            {frozenExcluded ? 'tray excluded from that scope' : `${frozenTray!.orderedRootObjectIds.length} selected roots`}
+                            {frozenTray ? ` · ${frozenTray.orderedRootObjectIds.join(', ')}` : ''}.
+                            {' '}Selected roots are saved coverage evidence, not a new exact-candidate search.
+                          </div>
+                        ) : !discovery && context.currentAggregate ? (
+                          <div>
+                            A published network is retained, but its per-tray roots are not loaded.
+                            Open its saved preparation or discover again to verify this tray.
+                          </div>
+                        ) : null}
+                        {knownModelRoot ? (
+                          <p role="alert">
+                            Current model evidence identifies a selected or candidate object as the global model root.
+                            Review its physical ownership before using it as a tray root.
+                          </p>
+                        ) : null}
                         {resolution ? (
                           <div>
+                            <p>
+                              {currentResolution
+                                ? 'Saved resolution matches the current project scope.'
+                                : 'Stale saved resolution: its model, catalog, routing permissions or location registry no longer matches. Reconfirm or reset it before preparing the current scope.'}
+                            </p>
                             Saved{' '}
                             {resolution.mode === 'exclude'
                               ? 'exclusion'
                               : `${resolution.rootObjectIds.length} confirmed roots`}
                             : {resolution.reason}
+                            {resolution.mode === 'roots' ? ` · ${resolution.rootObjectIds.join(', ')}` : ''}
                             <br />
                             Saved {resolution.createdAt} by administrator {resolution.actorId}
                           </div>
@@ -449,13 +583,6 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
             partial captures never become the current network.
           </Caption1>
           {session.failure ? <p role="alert">{session.failure.message}</p> : null}
-          {session.plan.diagnostics.length ? (
-            <ul aria-label="Frozen plan diagnostics">
-              {session.plan.diagnostics.map((item, index) => (
-                <li key={index}>{item.message}</li>
-              ))}
-            </ul>
-          ) : null}
           <Field label="Preparation command reason">
             <Textarea
               aria-label="Preparation command reason"
