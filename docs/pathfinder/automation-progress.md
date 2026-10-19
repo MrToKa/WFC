@@ -101,10 +101,13 @@ recommended engineering choice and are recorded; no routine stage pause.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
 
-## Current PF-R2a — technically complete; continue immediately to R3
+## Current PF-R3 — handoff ready; begin immediately
 
-- Branch pf-r2a-drawing-positioning-local-20261019; baseline HEAD4832f95.
-  Report38 + following local technical commit contain the complete delivery.
+- R2a technical commit e8f786806929efcee90b5386646c3e5566e7d4ee,81files;
+  report38 and exact final runtime closure are delivered. Detailed R3 handoff
+  handoffs/PF-R3-project-preparation.md is ready via prepare-stage-handoff;
+  fresh remote/source map reconciled. After metadata commit create inherited
+  pf-r3-project-preparation-local-20261019 and execute immediately.
   R2technicala96e45a/R1d997dca/R009f0e1d retained. No publication/merge.
 - Source refrozen after independent report consistency/security review. Final
   combined **622/622 in31files PASS**, frontend/server typecheck PASS,56-file lint
