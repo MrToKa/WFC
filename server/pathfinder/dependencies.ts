@@ -3,9 +3,11 @@ import type { PoolClient } from 'pg';
 import { PathFinderError } from './errors.js';
 import { normalizeLocation } from './matching.js';
 import { activeModel, latestArtifact } from './repository.js';
-import type { DependencySnapshot, EngineOptions } from './jobContracts.js';
+import type { DependencySnapshot, EngineOptions, CurrentDependencySnapshot } from './jobContracts.js';
 import { projectRoutingSettings } from './settings.js';
 import { requirePreparedRoutingScope } from './routingScope.js';
+import { readCurrentEndpointBindingContext, readEndpointBindingScope } from './endpointBindingRepository.js';
+import { endpointCalculationPoint } from './endpointCalculationProvenance.js';
 export {requireCurrentLogin} from './auth.js';
 
 export function canonicalJson(value: unknown): string {
@@ -20,6 +22,7 @@ export function geometryHash(dependencies: DependencySnapshot): string {
   // evidence and drawing revisions must never become transitive PF dependencies.
   const {schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,routing} = dependencies;
   return hash({schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,
+    ...(dependencies.schemaVersion === 'pathfinder.dependencies.v3' ? {preparation: dependencies.preparation} : {}),
     routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
       routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
 }
@@ -50,21 +53,31 @@ export async function collectDependencies(client: PoolClient, projectId: string,
     throw error;
   }
   if (!['MV','LV','Control','Instrumentation'].includes(cable.mto)) return blocked('category_required','Resolve the cable category before calculation.');
+  const bindingContext = await readCurrentEndpointBindingContext(client, projectId);
+  if (!bindingContext || bindingContext.modelVersionId !== model.active_model_version_id ||
+      bindingContext.selectionRevision !== model.selection_revision || bindingContext.artifactId !== artifact.id ||
+      bindingContext.projectionSha256 !== artifact.snapshot_sha256)
+    return blocked('endpoint_preparation_required', 'Publish the current project preparation before confirming shared endpoint bindings.');
   const currentSettings=await projectRoutingSettings(client,projectId,options);
   if (!currentSettings.settings.endConnectionLength || !currentSettings.settings.additionalBendingPercent) return blocked('settings_required','Set the project allowances in Project Details.');
   const registry = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0];
-  const endpoint = async (name:string|null):Promise<DependencySnapshot['from']|null> => {
+  const endpoint = async (name:string|null):Promise<CurrentDependencySnapshot['from']|null> => {
     if (!name || !normalizeLocation(name)) return null;
-    const result = await client.query<Row>(`SELECT l.id,b.revision::text,b.point,b.artifact_id FROM pf_location_aliases a JOIN pf_locations l ON l.project_id=a.project_id AND l.id=a.location_id
-      JOIN pf_location_bindings b ON b.project_id=l.project_id AND b.location_id=l.id AND b.model_version_id=$3
-      WHERE a.project_id=$1 AND a.normalized_alias=$2 FOR SHARE OF l,b`,[projectId,normalizeLocation(name),model.active_model_version_id]);
+    const result = await client.query<Row>(`SELECT l.id FROM pf_location_aliases a JOIN pf_locations l ON l.project_id=a.project_id AND l.id=a.location_id
+      WHERE a.project_id=$1 AND a.normalized_alias=$2 FOR SHARE OF l,a`,[projectId,normalizeLocation(name)]);
     const value = result.rows[0];
-    if (result.rows.length !== 1 || value.artifact_id && value.artifact_id !== artifact.id) return null;
-    return {locationId:value.id,bindingRevision:value.revision,point:value.point};
+    if (result.rows.length !== 1) return null;
+    const scope = await readEndpointBindingScope(client, {projectId, locationId: value.id,
+      modelVersionId: bindingContext.modelVersionId, aggregateId: bindingContext.aggregateId,
+      projectionSha256: bindingContext.projectionSha256, captureFrameId: bindingContext.captureFrameId});
+    if (scope.status !== 'confirmed') return null;
+    return endpointCalculationPoint(scope.binding);
   };
   const from = await endpoint(cable.from_location),to = await endpoint(cable.to_location);
   if (!from || !to) return blocked('locations_required',`Resolve ${!from && !to ? 'From and To' : !from ? 'From' : 'To'} locations. Missing, ambiguous or stale locations cannot be calculated.`);
-  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{schemaVersion:'pathfinder.dependencies.v2',routing,projectId,cableId,cableWriteRevision:cable.cable_write_revision,
+  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{schemaVersion:'pathfinder.dependencies.v3',routing,projectId,cableId,cableWriteRevision:cable.cable_write_revision,
+    preparation:{aggregateId: bindingContext.aggregateId, geometryRevision: bindingContext.geometryRevision,
+      captureFrameId: bindingContext.captureFrameId, projectionSha256: bindingContext.projectionSha256},
     cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id},registryRevision:registry.registry_revision,
     model:{id:model.active_model_version_id,selectionRevision:model.selection_revision,contentFingerprint:model.content_fingerprint},artifact:{id:artifact.id,sha256:artifact.snapshot_sha256},
     settings:currentSettings.settings,

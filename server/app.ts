@@ -28,6 +28,7 @@ import { createDrawingSnapshotRouter } from './pathfinder/drawingSnapshotRoutes.
 import { createPreparationRouter } from './pathfinder/preparationRoutes.js';
 import { getPathFinderRuntime } from './pathfinder/runtime.js';
 import { createGeometryTraceRouter } from './pathfinder/geometryTraceRoutes.js';
+import { createEndpointBindingRouter } from './pathfinder/endpointBindingRoutes.js';
 
 // Large PF payloads require the current project/admin/login before parsing;
 // the write transaction repeats authorization after the upload completes.
@@ -66,6 +67,7 @@ export const createApp = (): Express => {
   app.use('/api/projects/:projectId/pathfinder', createPurposePolicyRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createDrawingPurposePolicyRouter(pool));
   app.use('/api/projects/:projectId/pathfinder', createGeometryTraceRouter(pool,getPathFinderRuntime().geometryTraces));
+  app.use('/api/projects/:projectId/pathfinder', createEndpointBindingRouter(pool,getPathFinderRuntime().endpointBindings));
   app.use('/api/projects/:projectId/pathfinder/preparations', createPreparationRouter(pool,getPathFinderRuntime().preparations));
   app.use('/api/projects/:projectId/trays/:trayId', createDrawingSnapshotRouter(pool));
   // Filtered exports send IDs for every matching page, which can exceed the default 100 KB.

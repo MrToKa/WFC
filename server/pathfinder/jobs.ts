@@ -8,6 +8,7 @@ import { defaultOptions, type createJobSchema, type DependencySnapshot, type Job
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
 import { principalTransaction } from './auth.js';
 import { projectRoutingSettings } from './settings.js';
+import { requireVersionedCalculationScope } from './routingScope.js';
 
 type Row = Record<string,any>;
 export function jobDto(row:Row) {
@@ -21,7 +22,10 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
   const synthetic = await hasSyntheticProof(client,dependencies);
   const result = row.result, route = result.route;
   const routingPreferences=proposalRoutingPreferences(dependencies.options);
-  const compatibilityIssue = (route ? routeCompatibilityIssue(route.routeText) : null)
+  let endpointIssue: string | null = null;
+  try { requireVersionedCalculationScope(dependencies); }
+  catch { endpointIssue = 'Confirm current shared endpoint bindings, then calculate and review a fresh proposal.'; }
+  const compatibilityIssue = endpointIssue ?? (route ? routeCompatibilityIssue(route.routeText) : null)
     ?? (result.design != null ? designLengthCompatibilityIssue(result.design.designLengthMeters) : null)
     ?? (routingPreferences ? null : 'The original calculation preferences are unavailable. Calculate and review a fresh proposal.');
   return {id:row.id,projectId:row.project_id,jobId:row.job_id,cableId:row.cable_id,status:row.status,

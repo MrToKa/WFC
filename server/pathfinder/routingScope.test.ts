@@ -37,7 +37,7 @@ describe('catalog-scoped calculation gate', () => {
       {schemaVersion:'pathfinder.dependencies.v2',routing:{...scope,catalogRevision:'9223372036854775808'}},
       {schemaVersion:'pathfinder.dependencies.v2',routing:{...scope,drawingInputRevision:'1'}}])
       expect(()=>requireVersionedCalculationScope(value)).toThrow();
-    expect(()=>requireVersionedCalculationScope({schemaVersion:'pathfinder.dependencies.v2',routing:scope})).not.toThrow();
+    expect(()=>requireVersionedCalculationScope({schemaVersion:'pathfinder.dependencies.v2',routing:scope})).toThrow(/Confirm current shared endpoint bindings/);
     expect(routingScopeSchema.safeParse({...scope,routingPolicyRevision:3}).success).toBe(false);
   });
   it('separates routing tokens from drawing/full-source evidence and geometry design allowances', () => {

@@ -1,0 +1,49 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T03:19:27.201Z",
+  "scope": "Actual normal signed-in admin UI, protected model and exact synthetic shared endpoint confirmations on5191. The primary copied business project is untouched.",
+  "checks": [
+    "three English tools retained",
+    "shared A alias reused for3cables/2From/2To",
+    "unsupported Follow/equipment anchor modes explicitly unavailable",
+    "protected surface picking and persisted picked-surface-point",
+    "manual coordinate edits clear object provenance",
+    "saved history retains both points/actor/reason/same-frame displacement",
+    "legacy equal-valued points show physical displacement unavailable, not zero",
+    "normal From/To shared-location preview freezes v3 binding IDs/hashes",
+    "Instrumentation follows Control, actual successful core route",
+    "original tray colours/yellow exact path/filled Ghost",
+    "Clear removes path and restores opaque model"
+  ],
+  "standalonePreview": {
+    "geometricLength": 7.478969923197742,
+    "designLength": "8",
+    "scope": "synthetic endpoint names; converted diagnostic network, no engineering acceptance",
+    "canApply": false
+  },
+  "pickedObjectEvidencePersisted": false,
+  "screenshots": [
+    {
+      "privateFile": "r5-ui-picking.png",
+      "sha256": "05be75d0a5750bb3f4d0d132bc46cc8951b28f1dcd31c2be56743af05cfb739e"
+    },
+    {
+      "privateFile": "r5-ui-confirmed-history.png",
+      "sha256": "e642ba4781a6bd61814a76b224b5cf6a2cae664cf74f1c0bef8ebf0352ef3eb4"
+    },
+    {
+      "privateFile": "r5-ui-legacy-unknown-displacement.png",
+      "sha256": "581433d0618e70dc4f80b3e78b02159836e66a51f824f3b3fc3cdf98a0220936"
+    },
+    {
+      "privateFile": "r5-ui-shared-path-filled-ghost.png",
+      "sha256": "861c605496b14ddeda2c5a37d8e0629dd41402e0871d1d808802fd5ecb82cbe1"
+    },
+    {
+      "privateFile": "r5-ui-clear-opaque.png",
+      "sha256": "cf861b831d2d345f92827e2c340b9a7b5726110274c59993e1cdd066fe37ed64"
+    }
+  ],
+  "engineeringAcceptance": false,
+  "cableApply": "NOT_PERFORMED"
+}

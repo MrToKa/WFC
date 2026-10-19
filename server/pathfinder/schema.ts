@@ -8,6 +8,7 @@ import { initializeDrawingSnapshotSchema } from './drawingSnapshots.js';
 import { initializeDrawingExportSchema } from './drawingExports.js';
 import { initializePreparationSchema } from './preparationSessions.js';
 import { initializeGeometryTraceSchema } from './geometryTraceSchema.js';
+import { initializeEndpointBindingSchema } from './endpointBindingSchema.js';
 
 export async function initializePathFinder(pool: Pool): Promise<void> {
   const client = await pool.connect();
@@ -120,4 +121,5 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeDrawingExportSchema(pool);
   await initializePreparationSchema(pool);
   await initializeGeometryTraceSchema(pool);
+  await initializeEndpointBindingSchema(pool);
 }

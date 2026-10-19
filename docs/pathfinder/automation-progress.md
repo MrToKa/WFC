@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r4-geometry-trace-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r5-endpoint-attachments-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -101,7 +101,97 @@ recommended engineering choice and are recorded; no routine stage pause.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
 
-## Current PF-R4 — TECHNICAL_PASS at recorded diagnostic scope
+## Current PF-R5 — TECHNICAL_PASS at recorded scope; local commit next
+
+- Inherited R5handoffc7adcab176058331c75c352eaf1f39e51b6e10d9/R4technical
+  403504d4763efb97fabc1f4cc2f137ae0e3be370; new local inherited branch
+  pf-r5-endpoint-attachments-local-20261019. Detailed assignment
+  handoffs/PF-R5-endpoint-attachments.md is being executed immediately.
+- A owns only new shared endpoint contracts/pure attachment evaluator/tests;
+  B new endpoint schema/repository/routes/tests; C new API/hook/editor/history/
+  tests. Root owns existing source integration/v3 dependencies/legacy fences,
+  docs and all actual runtime/SQL/HTTP/browser. Preserve concurrent changes.
+- Agreed atomic shared location/name/aliases+binding confirmation with exact
+  command/replay and expected revisions, one head per location. Current R4
+  capture-frame confirmation is separate from qualified cross-revision Follow.
+  Real Follow remains unavailable without qualified server-owned evidence.
+- New private root owner/work45f60132-cc3f-4710-aaed-4aa7e988bf89 under
+  engine/.scratch/tray-catalog-…; reviewed initial r5-approved-runtime.private.json
+  matched R4candidate1/5191. Fresh95table/PF_ROOT63files13834192bytes baseline PASS;
+  cold checkpointa5a2afa6-8333-4b09-a7dd-b1625d0040108members/4images/TOC59193bytes
+  PASS, all4models1368resources1756031212bytes rawSHAverified; privatecompanion
+  separate. No fullrestore. Current reviewed r5-approved-runtime2.private.json
+  binds resumed exact5191roles; firstprofile stale. No original/5190 restart.
+- Root v3 endpoint dependency collection/strict dispatch+Review+Apply guard,
+  geometryhash/provenance, namedpreviewhead requirement, legacyvisibility/fences
+  and new atomicpanel wiring implemented. Scoped provenance/routing23PASS,
+  collector7PASS, adaptedpreview25PASS. Earlier preview15FAIL represented old
+  mocks missing new context; current fixture projection updated without changing
+  frozen mathematical expected data. C3tools51PASS, A78purePASS, Btestsongoing.
+  Counts are scoped/overlapping, no combined or runtime R5 PASS yet.
+- Roottypes31614running; serverfirstpassPASS, prior front Ctest-only errors
+  beingfixed byC. No R5 build/upgrade/migration/actualfeature checks yet.
+- Latest source checkpoint: both roottypes PASS. A78pure controls/source frozen;
+  B57mockcontrols and independent SQL/source review PASS (exacttrace/objectFK
+  strengthened), rootintegrationsource review no remainingmaterialfinding;
+  C14new +51existingintegration +1targetedunknownsave controls PASS. Parent
+  locks Savedlocation/Resolve while mutationoutcome unknown; body/key preserved.
+  Rootprovenance23+collector7+preview25 scopePASS; no combined/runtimeR5PASS.
+- Root seeded only explicit synthetic R5control inputs in retained UIproject:
+  1type/3cables/1legacyv1location+binding, durable exactUUID/marker/actorintent and
+  COMMITconfirmed private receipt. Existing Details/model/aggregate/traces unchanged.
+  Points selected from retained fitted trace for controlled names PF-R5-A/B;
+  legacycontrolledpoint[0,0,0.5] explicit, not fallback. No modelseed/import/Apply.
+  Source allconverted roleobject count0 in existingpartialindexes; actual equipment
+  object-derived positive remains NOT_RUN, pure/mockmechanics separate. Do not
+  invent actual equipment or qualify routing/hierarchy as equipment.
+- Bauthoring bounded root-invokable actual phase harness; ROOTONLY executes after
+  build. No root subprocess currentlyactive. FreshR5 runtimebuild still pending.
+- R5 accuracy review correction: raw coordinate displacement now requires the
+  identical capture frame; unknown legacy/different frames retain prior points
+  with NULL distance and explicit unverified basis. Qualified pure migration
+  compares the source normalized into the target frame. A81/B73/C16 scoped
+  controls PASS and independent harness safety review closed; sources frozen.
+- First combined75file run:1224PASS/7FAIL/5optionalNOT_RUN. All7 failures are
+  legacy repository-match mocks missing the new project-preparation query;
+  B owns only that test adaptation plus candidate-only authority regression.
+  Root bothTypeScriptchecks and40filelint PASS. Root scripts prepared for
+  normalHTTP,16boundedSQL controls,10transport controls and final95table audit;
+  none of those actual R5 feature checks has run. No R5upgrade yet.
+- Corrected repository mock/regression16PASS; secondcombined75files1234PASS/
+  0FAIL/5optionalNOT_RUN. Candidatebuild1 PASS,1338contextfiles SHA
+  ab3a4e732c8703da09513ac27cefe36f0bdb64696ac838c1ce0a4a8619460b2b.
+  Explicit api/web-only5191 upgrade PASS;18outsidecontainers unchanged,
+  PG/MinIO/volumes/networks exact. Current approvedprofile3 binds API
+  9d41a53a3b759f0819ea9f13cde326376542e03a19bd717fdd6a3abe34ae5c81
+  andweb3928914e878f7721595c3a2f93aa3a80c9c335eec5b0ed210b26ee388f214371.
+  Root normalHTTP confirmation script is running (one-shot; do not duplicate).
+- Final normalHTTP and16actualPostgreSQL controls PASS;2simultaneousHTTP
+  replay/CAS pairs PASS;10host transport checks PASS. Actual3synthetic cables
+  calculated successfully withv3 endpoints/currentaggregate; one shared point
+  update stalesall3 and all3Review callsrefuse,0Apply/cablewrites.11normalUI
+  observations PASS incl protectedpicking/save/manualrestore/history/legacyunknown
+  displacement/sharednamedpreview/Instrumentation→Control/filledGhost/yellow/Clear.
+- Final95table audit:80exact,13strict seed/PF deltas+2ordinaryauth,5new tables
+  exactly3ownedlocations. First classifierFAIL retained; independently reconciled
+  4seed drawingevents/state1→5 and4normalUI automaticjobprincipals. There were
+  1explicitrootcalc+4normalUIautocalc+1normalUIpreview, exactIDs/inputs/principals;
+  all3controlcablefullrows equalpostseed.63PF_ROOTfiles13834192bytes exact,
+  1374storageobjects exactmetadata,1175non-docbuildfiles exact;18outsidecontainers
+  and3originalrepositoryrecordedstates preserved. Report41/evidence endpoint-bindings.
+- Actualequipmentpositive andrealqualifiedFollow NOT_RUN: no equipment/localframe/
+  commonframe evidence in13objectcapture. PurequalifiedmechanicsPASS is separate;
+  noidentity/engineeringacceptance fabricated. Nooriginal/5190writes orpublication.
+  Noactive root subprocess; agentsfrozen. Keep5191demo/checkpoint/evidence;
+  noR5testcontainerscreated, nohistoricaldeniedpath cleanupattempted.
+- Next: localtechnicalcommit, prepare-stage-handoff detailedR6prompt, inheritnew
+  localbranch andexecute immediately. Automation ACTIVE; no routinepause.
+- Next: coordinated shared contracts → parallel modules/root v3+legacy/UI wiring
+  → isolated tests/checkpoint → frozen candidate build → actual SQL/HTTP/UI and
+  preservation → local commit, detailed R6handoff, execute immediately.
+  Automation ACTIVE; no original/5190 changes, publication or engineering Apply.
+
+## Previous PF-R4 — TECHNICAL_PASS at recorded diagnostic scope
 
 - Branchpf-r4-geometry-trace-local-20261019 inherits R4handoff3d78bc245e15957c1607c4ebc2dd95a31a44f8b4
   and R3technical8c65ee1ccf9cb4b07c80bba99a475942fc6538e3. Report40 and

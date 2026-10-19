@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T03:08:17.806Z",
+  "port": 5191,
+  "owner": "8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46",
+  "project": "wfc-pathfinder-local-0cba87606e9b",
+  "images": {
+    "api": "sha256:2b0b42dbef7002e4b40396a44a394d2093d8bb07cbd4745d7dc56d1425969fc7",
+    "web": "sha256:08722057996e4a2479af51c88c787a16ba9f23c2592ba0d7447c6424e40530d2"
+  },
+  "sourceContextSha256": "ab3a4e732c8703da09513ac27cefe36f0bdb64696ac838c1ce0a4a8619460b2b",
+  "sourceFiles": 1338,
+  "changedRoles": [
+    "api",
+    "web"
+  ],
+  "protectedContainersUnchanged": 18,
+  "databaseStorageVolumesNetworks": "UNCHANGED",
+  "publication": "NOT_PERFORMED"
+}

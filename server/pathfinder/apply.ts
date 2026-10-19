@@ -7,6 +7,7 @@ import { readSnapshot } from './storage.js';
 import type { applySchema, DependencySnapshot, JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
 import { assertLoginNotExpired, principalTransaction } from './auth.js';
+import { requireVersionedCalculationScope } from './routingScope.js';
 
 type Row = Record<string,any>;
 function receiptDto(row:Row) {
@@ -29,6 +30,7 @@ export function createPathFinderApply(pool:Pool) {
     if (!review || review.actor_id !== who.userId || review.proposal_id !== proposalId || review.proposal_hash !== proposal.proposal_hash) throw new PathFinderError('REVIEW_REQUIRED',409,'Review this exact proposal before applying it.');
     const dependencies = proposal.dependencies as DependencySnapshot,result = proposal.result;
     if (!proposalRoutingPreferences(dependencies.options)) throw new PathFinderError('PROPOSAL_PREFERENCES_REQUIRED',409,'The original calculation preferences are unavailable. Calculate and review a fresh proposal.');
+    requireVersionedCalculationScope(dependencies);
     if (proposal.status !== 'calculated' || !result.route?.success || !result.design || proposal.job_state !== 'complete' || proposal.cancel_requested) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409);
     const synthetic=await hasSyntheticProof(client,dependencies);
     if (!synthetic && review.validation_method!=='manual-review') throw new PathFinderError('MANUAL_REVIEW_REQUIRED',409,'Confirm manual review of this exact proposal before applying it. Historical reviews do not grant manual acceptance.');

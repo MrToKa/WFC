@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.endpoint-control-receipt.v1",
+  "phase": "no-op",
+  "phaseIntentId": "08125f5f-d1df-46f2-b625-04063a55a19c",
+  "recordedAtUtc": "2026-10-19T03:10:54.604Z",
+  "status": "PASS",
+  "elapsedMilliseconds": 57.04174199999999,
+  "checks": [
+    {
+      "name": "New-key equal semantics keep one binding and registry revision",
+      "status": "PASS",
+      "scope": "actual PostgreSQL; only its exact command receipt may be added"
+    }
+  ],
+  "preservationSha256": "262209c85922ae83a1b9b3c252f66c9e7a8153d84e2e85cfc05da33a36c1292a",
+  "cableApply": "NOT_PERFORMED",
+  "nativeParity": "NOT_PERFORMED",
+  "engineeringAcceptance": false
+}

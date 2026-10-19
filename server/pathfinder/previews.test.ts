@@ -9,7 +9,17 @@ import { createPathFinderApply } from './apply.js';
 
 // Preview's former behaviour is retained only behind an explicitly scoped
 // producer. Actual missing/mismatched producer controls live in routingScope.test.
-vi.mock('./routingScope.js',()=>({requirePreparedRoutingScope:vi.fn(async()=>({catalogRevision:'1',routingContentSha256:'c'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'d'.repeat(64)}))}));
+vi.mock('./routingScope.js',async importOriginal=>({...await importOriginal<typeof import('./routingScope.js')>(),requirePreparedRoutingScope:vi.fn(async()=>({catalogRevision:'1',routingContentSha256:'c'.repeat(64),routingPolicyRevision:'1',routingPolicySha256:'d'.repeat(64)}))}));
+vi.mock('./endpointBindingRepository.js',()=>({
+  readCurrentEndpointBindingContext:vi.fn(async()=>({modelVersionId:modelId,selectionRevision:'3',contentFingerprint:'a'.repeat(64),artifactId,
+    aggregateId:who.userId,projectionSha256:'b'.repeat(64),captureFrameId:who.loginId,geometryRevision:'2',traceId:null})),
+  readEndpointBindingScope:vi.fn(async(client:PoolClient,input:{locationId:string})=>{
+    const value=(client as unknown as {endpointAliases:Array<Record<string,unknown>>}).endpointAliases.find(row=>row.id===input.locationId);
+    if(!value?.point||value.artifact_id&&value.artifact_id!==artifactId)return{status:'stale',code:'ENDPOINT_BINDING_STALE'};
+    return{status:'confirmed',binding:{id:who.loginId,locationId:input.locationId,locationRevision:'2',bindingRevision:value.revision,pointProjectMetres:value.point,
+      contentSha256:'e'.repeat(64),mode:'fixed-world',captureFrameId:who.loginId,qualifiedProjectFrameId:null,aggregateId:who.userId,projectionSha256:'b'.repeat(64),sourceObject:null,sourceDecisionId:null}};
+  }),
+}));
 
 const projectId='11111111-1111-4111-8111-111111111111',modelId='22222222-2222-4222-8222-222222222222',artifactId='33333333-3333-4333-8333-333333333333';
 const who:JobPrincipal={userId:'44444444-4444-4444-8444-444444444444',loginId:'55555555-5555-4555-8555-555555555555',loginExpiresAt:Date.now()+3_600_000};
@@ -37,7 +47,7 @@ function database(options:{admin?:boolean;settings?:typeof settings;registry?:st
     if (sql.startsWith('SELECT * FROM pf_reviews')) return {rows:options.review ? [options.review] : []};
     return {rows:[]};
   });
-  const client={query,release:vi.fn()};return {query,client:client as unknown as PoolClient,pool:{connect:vi.fn(async()=>client)} as unknown as Pool};
+  const client={query,release:vi.fn(),endpointAliases:options.aliases??[]};return {query,client:client as unknown as PoolClient,pool:{connect:vi.fn(async()=>client)} as unknown as Pool};
 }
 const response:EngineResponse={schemaVersion:'pathfinder.model.response.v1',requestId:projectId,status:'calculated',message:'Path found.',engineeringAccepted:false,effectiveCategory:'Control',
   design:{lengthBeforePercentageMeters:'16',unroundedLengthMeters:'17.6',designLengthMeters:'18'},route:{success:true,message:'Path found.',routeText:'/BC1',routeCodes:['BC1'],segmentIds:['dbid:12','dbid:12'],

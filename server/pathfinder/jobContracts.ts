@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { revision, uuid, snapshotSchema } from './contracts.js';
 import type { RoutingScope } from './routingScope.js';
+import type { EndpointCalculationPoint, EndpointCalculationPreparation } from './endpointCalculationProvenance.js';
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -19,7 +20,7 @@ export const createJobSchema = z.object({cableIds:z.array(uuid).min(1).max(10_00
   options:optionsSchema.optional(),timeoutMilliseconds:z.number().int().min(100).max(120_000).optional(),force:z.boolean().optional()}).strict();
 export type EngineOptions = z.infer<typeof optionsSchema>;
 export type ProjectSettings = {revision:string;connectionGap:string;secondaryTrayLength:string|null;endConnectionLength:string;additionalBendingPercent:string};
-export type DependencySnapshot = {
+export type HistoricalDependencySnapshot = {
   schemaVersion:'pathfinder.dependencies.v2';projectId:string;cableId:string;cableWriteRevision:string;
   routing:RoutingScope;
   cableInputs:{fromLocation:string|null;toLocation:string|null;mto:string|null;cableTypeId:string};
@@ -28,6 +29,12 @@ export type DependencySnapshot = {
   from:{locationId:string;bindingRevision:string;point:[number,number,number]};to:{locationId:string;bindingRevision:string;point:[number,number,number]};
   engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1';
 };
+export type CurrentDependencySnapshot = Omit<HistoricalDependencySnapshot, 'schemaVersion' | 'from' | 'to'> & {
+  schemaVersion: 'pathfinder.dependencies.v3'; preparation: EndpointCalculationPreparation;
+  from: EndpointCalculationPoint; to: EndpointCalculationPoint;
+};
+/** v2 is retained solely to inspect historical proposals; new dispatch/Review/Apply require v3. */
+export type DependencySnapshot = HistoricalDependencySnapshot | CurrentDependencySnapshot;
 const enginePoint = z.object({x:z.number().finite(),y:z.number().finite(),z:z.number().finite()}).strict();
 export const routeSchema = z.object({success:z.boolean(),message:z.string().max(32768),routeText:z.string().max(1_000_000),
   routeCodes:z.array(z.string().max(2048)).max(200_000),segmentIds:z.array(z.string().max(256)).max(200_000),

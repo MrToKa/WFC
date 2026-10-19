@@ -9,6 +9,7 @@ import type { JobPrincipal } from './jobContracts.js';
 import { principalTransaction } from './auth.js';
 export { transaction } from './transactions.js';
 import { bindingAuditState, locationAuditState, recordLocationEvent } from './audit.js';
+import { readCurrentEndpointBindingContext, readEndpointBindingHeads } from './endpointBindingRepository.js';
 
 type Row = Record<string, any>;
 export async function requireTransactionalAdmin(client: PoolClient, actorId: string): Promise<void> {
@@ -60,6 +61,8 @@ export async function latestArtifact(client: PoolClient, projectId: string, mode
   return (await client.query<Row>("SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 AND purpose='planning' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId,modelVersionId])).rows[0] ?? null;
 }
 async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null): Promise<LocationDto[]> {
+  const context = await readCurrentEndpointBindingContext(client, projectId);
+  const heads = await readEndpointBindingHeads(client, projectId, context);
   const rows = await client.query<Row>(`SELECT l.id,l.name,l.revision::text,
     COALESCE((SELECT jsonb_agg(a.display_alias ORDER BY a.normalized_alias) FROM pf_location_aliases a WHERE a.project_id=l.project_id AND a.location_id=l.id),'[]'::jsonb) AS aliases,
     b.model_version_id,b.revision::text AS binding_revision,b.point,b.object_id,b.external_id,b.source,b.artifact_id,b.derivation,b.coordinate_frame,
@@ -68,11 +71,20 @@ async function locations(client: PoolClient, projectId: string, modelId: string 
       ORDER BY (b.model_version_id=$2) DESC,b.confirmed_at DESC LIMIT 1) b ON TRUE
     LEFT JOIN pf_location_matches m ON m.project_id=l.project_id AND m.location_id=l.id AND m.model_version_id=$2
     WHERE l.project_id=$1 ORDER BY l.name,l.id`,[projectId,modelId]);
-  return rows.rows.map(row => ({id:row.id,name:row.name,aliases:row.aliases,revision:row.revision,
-    ...(row.matching_status ? {matching:{status:row.matching_status,candidateObjectIds:row.candidate_object_ids}} : {}),binding:row.model_version_id ? {
-    modelVersionId:row.model_version_id,revision:row.binding_revision,point:row.point,objectId:row.object_id,externalId:row.external_id,source:row.source,derivation:row.derivation,coordinateFrame:row.coordinate_frame,
-    status:row.model_version_id === modelId && (!row.artifact_id || row.artifact_id === artifactId) ? 'confirmed' : 'stale',
-  } : null}));
+  return rows.rows.map(row => {
+    const head = heads.get(row.id);
+    const binding: LocationDto['binding'] = head ? {
+      modelVersionId: head.binding.modelVersionId, revision: head.binding.bindingRevision,
+      point: head.binding.pointProjectMetres, objectId: null, externalId: null, source: 'manual',
+      derivation: head.binding.mode === 'object-derived' ? 'equipment-bottom-aabb' : head.binding.derivation === 'picked-surface-point' ? 'picked-surface-point' : 'manual-world-point',
+      coordinateFrame: 'canonical-world-metres', status: head.ready ? 'confirmed' : 'stale',
+    } : row.model_version_id ? {
+      modelVersionId:row.model_version_id,revision:row.binding_revision,point:row.point,objectId:row.object_id,externalId:row.external_id,source:row.source,derivation:row.derivation,coordinateFrame:row.coordinate_frame,
+      // Historical values remain visible; current R5 confirmation is required.
+      status:'stale',
+    } : null;
+    return {id:row.id,name:row.name,aliases:row.aliases,revision:row.revision,
+    ...(row.matching_status ? {matching:{status:row.matching_status,candidateObjectIds:row.candidate_object_ids}} : {}),binding}; });
 }
 export function createPathFinderRepository(pool: Pool) {
   return {
@@ -113,6 +125,9 @@ export function createPathFinderRepository(pool: Pool) {
     async bindLocation(projectId: string, who: JobPrincipal, locationId: string, input: z.infer<typeof bindLocationSchema>) {
       const actorId = who.userId;
       return registryTransaction(pool,projectId,who,async client => {
+        const prepared = (await client.query<Row>('SELECT current_aggregate_id FROM pf_project_preparations WHERE project_id=$1 FOR SHARE', [projectId])).rows[0];
+        if (prepared?.current_aggregate_id)
+          throw new PathFinderError('ENDPOINT_BINDING_UPGRADE_REQUIRED',409,'Use the shared endpoint binding editor to confirm this location against the current preparation.');
         await stateRevision(client,projectId,input.expectedRegistryRevision);
         await activeModel(client,projectId,input.modelVersionId,input.expectedSelectionRevision);
         if (!(await client.query('SELECT id FROM pf_locations WHERE project_id=$1 AND id=$2 FOR UPDATE',[projectId,locationId])).rows.length) throw new PathFinderError('LOCATION_NOT_FOUND',404);
@@ -180,6 +195,8 @@ export function createPathFinderRepository(pool: Pool) {
       return registryTransaction(pool,projectId,who,async client => {
         await stateRevision(client,projectId,expectedRegistryRevision);
         const model = await activeModel(client,projectId), artifact = await latestArtifact(client,projectId,model.active_model_version_id);
+        const projectPreparation = (await client.query<Row>('SELECT current_aggregate_id FROM pf_project_preparations WHERE project_id=$1 FOR SHARE', [projectId])).rows[0];
+        const suggestionsOnly = Boolean(projectPreparation?.current_aggregate_id);
         const endpoints = (await client.query<{name:string}>(`SELECT DISTINCT value AS name FROM cables c CROSS JOIN LATERAL (VALUES(c.from_location),(c.to_location)) e(value)
           WHERE c.project_id=$1 AND value IS NOT NULL AND btrim(value)<>'' LIMIT 100001`,[projectId])).rows;
         if (endpoints.length > 100000) throw new PathFinderError('PROJECT_CABLE_BUDGET',413);
@@ -201,7 +218,7 @@ export function createPathFinderRepository(pool: Pool) {
             const names = [...new Set([location.name,...location.aliases].map(normalizeLocation))];
             const candidates = await client.query<Row>(`SELECT * FROM pf_model_objects WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object'
               AND visibility<>'hidden' AND match_names ?| $3::text[] ORDER BY object_id LIMIT 3`,[projectId,artifact.id,names]);
-            if (candidates.rows.length !== 1 || candidates.rows[0].visibility !== 'visible') {
+            if (suggestionsOnly || candidates.rows.length !== 1 || candidates.rows[0].visibility !== 'visible') {
               await client.query(`INSERT INTO pf_location_matches(project_id,location_id,model_version_id,status,candidate_object_ids) VALUES($1,$2,$3,$4,$5)
                 ON CONFLICT(project_id,location_id,model_version_id) DO UPDATE SET status=EXCLUDED.status,candidate_object_ids=EXCLUDED.candidate_object_ids`,
               [projectId,location.id,model.active_model_version_id,candidates.rows.length > 1 ? 'ambiguous' : candidates.rows.length ? 'unverified' : 'missing',JSON.stringify(candidates.rows.map(row => row.object_id))]);

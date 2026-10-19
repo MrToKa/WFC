@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { PathFinderError } from './errors.js';
 import { readRoutingPolicyScope } from './purposePolicy.js';
+import { hasCurrentEndpointCalculationProvenance } from './endpointCalculationProvenance.js';
 
 /** This projection deliberately cannot carry drawing or private full-source facts. */
 export const routingScopeSchema = z.object({
@@ -50,6 +51,8 @@ export async function requirePreparedRoutingScope(client: PoolClient, projectId:
 /** Historical v1 job inputs never acquire current permissions through a cast or replay. */
 export function requireVersionedCalculationScope(value: unknown): void {
   const input = value as {schemaVersion?: unknown; routing?: unknown} | null;
-  if (!input || input.schemaVersion !== 'pathfinder.dependencies.v2' || !routingScopeSchema.safeParse(input.routing).success)
+  if (!input || !['pathfinder.dependencies.v2', 'pathfinder.dependencies.v3'].includes(String(input.schemaVersion)) || !routingScopeSchema.safeParse(input.routing).success)
     throw new PathFinderError('ROUTING_PREPARATION_REQUIRED', 409, 'This calculation predates catalog routing permissions. Prepare and calculate a fresh proposal.');
+  if (!hasCurrentEndpointCalculationProvenance(value))
+    throw new PathFinderError('ENDPOINT_BINDING_UPGRADE_REQUIRED', 409, 'Confirm current shared endpoint bindings, then calculate and review a fresh proposal. Historical endpoint values do not authorize new calculations.');
 }

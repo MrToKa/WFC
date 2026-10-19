@@ -5,6 +5,9 @@ import { PathFinderTab } from './PathFinderTab';
 import { usePathFinder } from './hooks/usePathFinder';
 import type { PathFinderLookup, PathFinderProposal, PathFinderPreview, PathFinderState } from '@/api/pathfinder';
 import type { ViewerModelObject } from '../../../viewer-runtime/protocol.mjs';
+import { fetchEndpointBinding, fetchEndpointBindingHistory, saveEndpointBinding } from '@/api/pathfinderEndpointBindings';
+import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
+vi.mock('@/api/pathfinderEndpointBindings', async original => ({ ...await original<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn(), fetchEndpointBindingHistory: vi.fn(), saveEndpointBinding: vi.fn() }));
 
 vi.mock('./hooks/usePathFinder', () => ({ usePathFinder: vi.fn() }));
 vi.mock('./hooks/useRoutingsViewerHeight', () => ({ useRoutingsViewerHeight: () => 720 }));
@@ -22,7 +25,14 @@ function model() {
 }
 function viewerObject(objectId: number, name: string): ViewerModelObject { return { objectId, name, parentId: null, externalId: null, bounds: { minimum: [1, 2, 3], maximum: [3, 4, 5] }, bottomCentre: [2, 3, 3], derivation: 'display-aabb-bottom-centre', nativeVisibility: 'unknown', properties: [], propertiesTruncated: false }; }
 let pf: ReturnType<typeof model>;
-beforeEach(() => { vi.clearAllMocks(); pf = model(); vi.mocked(usePathFinder).mockReturnValue(pf); });
+beforeEach(() => { vi.clearAllMocks(); pf = model(); vi.mocked(usePathFinder).mockReturnValue(pf);
+  vi.mocked(fetchEndpointBinding).mockImplementation(async (_project, _token, selectedId) => {
+    const f = endpointBindingFixture(), existing = selectedId === locationId;
+    return { ...f.context, projectId, locationId: selectedId, current: { ...f.context.current!, modelVersionId: modelId, traceId: null }, location: existing ? { id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1' } : null, head: existing ? { ...f.binding, projectId, locationId, modelVersionId: modelId, pointProjectMetres: [1, 2, 3] } : null, usage: { fromOccurrences: 1, toOccurrences: 1, distinctCables: 2 } };
+  });
+  vi.mocked(fetchEndpointBindingHistory).mockResolvedValue({ schemaVersion: 'wfc.pf.endpoint-binding-history.v1', projectId, locationId, bindings: [], nextBeforeRevision: null });
+  vi.mocked(saveEndpointBinding).mockImplementation(async (_project, _token, selectedId) => { const f = endpointBindingFixture(); return { ...f.receipt, projectId, locationId: selectedId, binding: { ...f.binding, projectId, locationId: selectedId } }; });
+});
 const mount = (isAdmin = true) => { const view = render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" isAdmin={isAdmin} />); if (isAdmin) fireEvent.click(screen.getByRole('button', {name:'Manual diagnostic capture',hidden:true})); return view; };
 function proposal(synthetic: boolean): PathFinderProposal { return {
   id: '66666666-6666-4666-8666-666666666666', projectId, jobId: '77777777-7777-4777-8777-777777777777', cableId: pf.data.cables[0].id,
@@ -41,6 +51,19 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('retains an unknown atomic endpoint command across tool changes and locks shared location selection until reconciliation', async () => {
+    const user = userEvent.setup(); vi.mocked(saveEndpointBinding).mockRejectedValueOnce(new TypeError('Lost save acknowledgement')); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve From' }));
+    await waitFor(() => expect(screen.getByLabelText('Reason for confirmation')).toBeEnabled());
+    await user.type(screen.getByLabelText('Reason for confirmation'), 'Reviewed shared point'); await user.click(screen.getByRole('button', { name: 'Confirm shared endpoint' }));
+    await screen.findByRole('button', { name: 'Reconcile same save' });
+    expect(screen.getByRole('combobox', { name: 'Saved location' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Resolve From' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Resolve To' })).toBeDisabled();
+    const command = vi.mocked(saveEndpointBinding).mock.calls[0][3];
+    await user.click(screen.getByRole('tab', { name: 'Routes' })); await user.click(screen.getByRole('tab', { name: 'Path' }));
+    await user.click(screen.getByRole('button', { name: 'Reconcile same save' }));
+    expect(saveEndpointBinding).toHaveBeenCalledTimes(2); expect(vi.mocked(saveEndpointBinding).mock.calls[1][3]).toBe(command);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Saved location' })).toBeEnabled()); expect(pf.saveLocation).not.toHaveBeenCalled();
+  });
   it('does not mount any hook or protected frame when administrator access is absent', () => {
     mount(false); expect(screen.getByText('Path Finder is available only to administrators.')).toBeVisible();
     expect(usePathFinder).not.toHaveBeenCalled(); expect(screen.queryByTestId('pathfinder-model-host')).toBeNull();
@@ -49,38 +72,40 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     const user = userEvent.setup();
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, locations: pf.data.locations.map(location => ({ ...location, binding: { ...location.binding, status: 'stale' as const, derivation: 'equipment-bottom-aabb' as const } })) } }); mount();
     await user.click(screen.getByRole('button', { name: /=CABLE-2/ })); await user.click(screen.getByRole('button', { name: 'Resolve To' }));
-    expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('EQ-001'); expect(screen.getByRole('textbox', { name: 'Location X in metres' })).toHaveValue('1');
-    expect(screen.getByText('Stale binding: confirm against the active model')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Save shared location' }));
-    expect(pf.saveLocation).toHaveBeenCalledWith({ locationId, name: 'EQ-001', aliases: ['Equipment A'], point: [1, 2, 3], objectId: 'dbid:23', externalId: 'ext-23', derivation: 'equipment-bottom-aabb' });
-    expect(await screen.findByText('Shared location saved. 2 cables can reuse this location at either endpoint.')).toBeVisible();
-    expect(screen.getByText('Binding confirmed against the active model.')).toBeVisible(); expect(screen.queryByText('Stale binding: confirm against the active model')).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Location X in metres' })).toHaveValue('1'); expect(screen.getByRole('combobox', { name: 'Saved location' })).toHaveValue(locationId);
+    expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('EQ-001'); await waitFor(() => expect(screen.getByRole('textbox', { name: 'Endpoint X in metres' })).toHaveValue('1'));
+    await user.type(screen.getByLabelText('Reason for confirmation'), 'Shared current-frame confirmation');
+    await user.click(screen.getByRole('button', { name: 'Confirm shared endpoint' }));
+    expect(saveEndpointBinding).toHaveBeenCalledWith(projectId, 'isolated-test-token', locationId, expect.objectContaining({ mode: 'fixed-world', location: { name: 'EQ-001', aliases: ['Equipment A'] }, pointProjectMetres: [1, 2, 3] }), expect.any(AbortSignal));
+    expect(pf.refresh).toHaveBeenCalled(); expect(pf.saveLocation).not.toHaveBeenCalled();
+    expect(screen.getByRole('combobox', { name: 'Saved location' })).toHaveValue(locationId);
     expect(pf.data.cables[0].installLength).toBe(123);
   });
   it('requires explicit finite coordinates for a missing endpoint and keeps a pick uncommitted until Save', async () => {
     const user = userEvent.setup(); mount();
     await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve To' }));
-    expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('EQ-002'); expect(screen.getByRole('button', { name: 'Save shared location' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: 'Pick point in model' }));
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Location X in metres' })).toHaveValue('4.5'));
+    expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('EQ-002'); expect(screen.getByRole('button', { name: 'Confirm shared endpoint' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Pick surface point in 3D' })).toBeEnabled());
+    await user.click(screen.getByRole('button', { name: 'Pick surface point in 3D' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Endpoint X in metres' })).toHaveValue('4.5'));
     expect(pf.saveLocation).not.toHaveBeenCalled();
-    await user.click(screen.getByRole('button', { name: 'Save shared location' }));
-    expect(pf.saveLocation).toHaveBeenCalledWith({ locationId: null, name: 'EQ-002', aliases: [], point: [4.5, -6, 7], objectId: 'dbid:44', externalId: null, derivation: 'picked-surface-point' });
+    await user.type(screen.getByLabelText('Reason for confirmation'), 'Reviewed picked point');
+    await user.click(screen.getByRole('button', { name: 'Confirm shared endpoint' }));
+    expect(saveEndpointBinding).toHaveBeenCalledWith(projectId, 'isolated-test-token', expect.any(String), expect.objectContaining({ expectedLocationRevision: null, mode: 'fixed-world', pointProjectMetres: [4.5, -6, 7], provenanceObject: null, derivation: 'picked-surface-point', location: { name: 'EQ-002', aliases: [] } }), expect.any(AbortSignal));
   });
   it('manual point edits remove picked object evidence and invalid numbers cannot be saved', async () => {
     const user = userEvent.setup(); mount();
     await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve From' }));
-    const x = screen.getByRole('textbox', { name: 'Location X in metres' }); await user.clear(x); await user.type(x, 'Infinity');
-    expect(screen.getByRole('button', { name: 'Save shared location' })).toBeDisabled(); await user.clear(x); await user.type(x, '1.25');
-    await user.click(screen.getByRole('button', { name: 'Save shared location' })); expect(pf.saveLocation).toHaveBeenCalledWith(expect.objectContaining({ point: [1.25, 2, 3], objectId: null, externalId: null }));
+    const x = screen.getByRole('textbox', { name: 'Endpoint X in metres' }); await waitFor(() => expect(x).toBeEnabled()); await user.clear(x); await user.type(x, 'Infinity');
+    expect(screen.getByRole('button', { name: 'Confirm shared endpoint' })).toBeDisabled(); await user.clear(x); await user.type(x, '1.25');
+    await user.type(screen.getByLabelText('Reason for confirmation'), 'Manual coordinate correction');
+    await user.click(screen.getByRole('button', { name: 'Confirm shared endpoint' })); expect(saveEndpointBinding).toHaveBeenCalledWith(projectId, 'isolated-test-token', locationId, expect.objectContaining({ pointProjectMetres: [1.25, 2, 3], provenanceObject: null, derivation: 'manual-world-point' }), expect.any(AbortSignal));
   });
   it('can save a picked point explicitly as coordinates when its object is outside the prepared snapshot', async () => {
     const user = userEvent.setup(); mount();
     await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve To' }));
-    await user.click(screen.getByRole('button', { name: 'Pick point in model' })); await screen.findByRole('button', { name: 'Use as manual coordinates' });
-    await user.click(screen.getByRole('button', { name: 'Use as manual coordinates' })); await user.click(screen.getByRole('button', { name: 'Save shared location' }));
-    expect(pf.saveLocation).toHaveBeenCalledWith(expect.objectContaining({ point: [4.5, -6, 7], objectId: null, externalId: null, derivation: 'picked-surface-point' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Pick surface point in 3D' })).toBeEnabled()); await user.click(screen.getByRole('button', { name: 'Pick surface point in 3D' }));
+    await user.type(screen.getByLabelText('Reason for confirmation'), 'Fixed picked point without object evidence'); await user.click(screen.getByRole('button', { name: 'Confirm shared endpoint' }));
+    expect(saveEndpointBinding).toHaveBeenCalledWith(projectId, 'isolated-test-token', expect.any(String), expect.objectContaining({ mode: 'fixed-world', pointProjectMetres: [4.5, -6, 7], provenanceObject: null, derivation: 'picked-surface-point' }), expect.any(AbortSignal));
   });
   it('prepares selected protected geometry only after explicit category selection and retains endpoint names', async () => {
     const user = userEvent.setup(); mount();
@@ -202,12 +227,12 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   it('offers three keyboard-accessible tools while retaining one protected model host and local drafts', async () => {
     const user = userEvent.setup(); mount(); const host = screen.getByTestId('pathfinder-model-host');
     expect(screen.getByRole('tab', { name: 'Path' })).toHaveAttribute('aria-selected', 'true');
-    await user.type(screen.getByRole('textbox', { name: 'Location name' }), 'Draft location');
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Location name' })).toBeEnabled()); await user.type(screen.getByRole('textbox', { name: 'Location name' }), 'Draft location');
     await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'Equipment draft');
     await user.click(screen.getByRole('tab', { name: 'Routes' }));
     expect(screen.getByRole('tabpanel', { name: 'Routes' })).toBeVisible(); expect(screen.queryByRole('textbox', { name: 'Path From location' })).toBeNull();
     screen.getByRole('tab', { name: 'Path' }).focus(); await user.keyboard('{Enter}'); expect(screen.getByRole('tab', { name: 'Path' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('Draft location'); expect(screen.getByRole('textbox', { name: 'Path From location' })).toHaveValue('Equipment draft');
+    expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue(''); expect(screen.getByRole('textbox', { name: 'Path From location' })).toHaveValue('Equipment draft');
     screen.getByRole('tab', { name: 'Path lookup' }).focus(); await user.keyboard('{Enter}');
     expect(screen.getByRole('tabpanel', { name: 'Path lookup' })).toBeVisible();
     await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/DRAFT'); await user.click(screen.getByRole('checkbox', { name: 'Reverse route order' }));
@@ -369,8 +394,8 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   it('cancels point picking and ignores a picked point delivered after switching tools', async () => {
     const user = userEvent.setup(); let finish!: (point: { objectId: number; point: [number, number, number]; derivation: 'picked-surface-point' }) => void;
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, pickPoint: vi.fn(() => new Promise<{ objectId: number; point: [number, number, number]; derivation: 'picked-surface-point' }>(resolve => { finish = resolve; })) }); mount();
-    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve To' })); await user.click(screen.getByRole('button', { name: 'Pick point in model' })); await user.click(screen.getByRole('tab', { name: 'Routes' }));
-    await act(async () => finish({ objectId: 44, point: [9, 8, 7], derivation: 'picked-surface-point' })); await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('textbox', { name: 'Location X in metres' })).toHaveValue(''); expect(pf.cancelPicking).toHaveBeenCalled(); expect(pf.saveLocation).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve To' })); await waitFor(() => expect(screen.getByRole('button', { name: 'Pick surface point in 3D' })).toBeEnabled()); await user.click(screen.getByRole('button', { name: 'Pick surface point in 3D' })); await user.click(screen.getByRole('tab', { name: 'Routes' }));
+    await act(async () => finish({ objectId: 44, point: [9, 8, 7], derivation: 'picked-surface-point' })); await user.click(screen.getByRole('tab', { name: 'Path' })); expect(screen.getByRole('textbox', { name: 'Endpoint X in metres' })).toHaveValue(''); expect(pf.cancelPicking).toHaveBeenCalled(); expect(pf.saveLocation).not.toHaveBeenCalled();
   });
   it('reconciles the prepared rule baseline when an artifact save succeeds after viewer cancellation', async () => {
     const user = userEvent.setup(); let finish!: (value: { captureSummary: Record<string, unknown> }) => void;

@@ -5,6 +5,7 @@ import type { JobPrincipal } from './jobContracts.js';
 import { createPathFinderRepository } from './repository.js';
 import { validateSnapshotStructure } from './matching.js';
 import { syntheticStraightSnapshot } from './syntheticFixture.js';
+import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { runCandidateEligibilityIntegration } from './candidateEligibilityIntegration.js';
 import { EventEmitter } from 'node:events';
 
@@ -12,7 +13,8 @@ const projectId='11111111-1111-4111-8111-111111111111',modelId='22222222-2222-42
 const who:JobPrincipal={userId:'55555555-5555-4555-8555-555555555555',loginId:'66666666-6666-4666-8666-666666666666',loginExpiresAt:Date.now()+3600000};
 type Candidate={object_id:string;visibility:'visible'|'hidden'|'unknown';anchor:number[];external_id:null};
 const candidate=(id:string,visibility:Candidate['visibility']='visible'):Candidate=>({object_id:id,visibility,anchor:[1,2,3],external_id:null});
-function database(options:{rows?:Candidate[];manual?:boolean;admin?:boolean;revoked?:boolean;registry?:string;model?:string|null}={}) {
+function database(options:{rows?:Candidate[];manual?:boolean;legacyAutomatic?:boolean;projectMode?:boolean;admin?:boolean;revoked?:boolean;registry?:string;model?:string|null}={}) {
+  const aggregate=options.projectMode?{...geometryTraceFixture().aggregate,projectId,modelVersionId:modelId,artifactId}:null;
   const writes:{kind:'binding'|'match';values:unknown[]}[]=[],release=vi.fn();
   const query=vi.fn(async(sql:string,values:unknown[]=[])=>{
     if (['BEGIN','COMMIT','ROLLBACK'].includes(sql)) return {rows:[]};
@@ -22,10 +24,17 @@ function database(options:{rows?:Candidate[];manual?:boolean;admin?:boolean;revo
     if (sql.startsWith('SELECT user_id,expires_at')) return {rows:[{user_id:who.userId,expires_at:new Date(who.loginExpiresAt),revoked_at:options.revoked?new Date():null}]};
     if (sql.startsWith('SELECT registry_revision::text')) return {rows:[{registry_revision:options.registry??'1'}]};
     if (sql.includes('FROM project_model_selections s LEFT JOIN')) return {rows:[{active_model_version_id:options.model===undefined?modelId:options.model,selection_revision:'1',content_fingerprint:'a'.repeat(64),state:'ready',health:'healthy'}]};
+    if (sql.startsWith('SELECT current_aggregate_id FROM pf_project_preparations')) return {rows:aggregate?[{current_aggregate_id:aggregate.id}]:[]};
+    if (sql.startsWith('SELECT active_model_version_id,selection_revision::text')) return {rows:[{active_model_version_id:options.model===undefined?modelId:options.model,selection_revision:'1'}]};
+    if (sql.startsWith('SELECT state,health,content_fingerprint')) return {rows:[{state:'ready',health:'healthy',content_fingerprint:'a'.repeat(64)}]};
     if (sql.startsWith('SELECT * FROM pf_artifacts')) return {rows:[{id:artifactId}]};
-    if (sql.startsWith('SELECT p.current_aggregate_id')) return {rows:[]};
+    if (sql.startsWith('SELECT p.current_aggregate_id')) return {rows:aggregate?[{current_aggregate_id:aggregate.id,current_artifact_id:artifactId,aggregate_artifact_id:artifactId,aggregate_model_id:modelId,aggregate_revision:aggregate.geometryRevision,pointer_revision:aggregate.geometryRevision,geometry_revision:aggregate.geometryRevision,manifest:aggregate,snapshot_sha256:aggregate.projection.sha256}]:[]};
+    if (sql.startsWith('SELECT id FROM pf_preparation_aggregates')||sql.startsWith('SELECT id FROM pf_artifacts')) return {rows:[{id:values[1]}]};
+    if (sql.startsWith('SELECT id,manifest FROM pf_geometry_trace_sets')||sql.startsWith('SELECT h.location_id')) return {rows:[]};
+    if (sql.startsWith('SELECT pf_settings_revision::text')) return {rows:[{pf_settings_revision:'1',connection_gap:'1',secondary_tray_length:'7',end_connection_length:'5',additional_bending_percent:'10'}]};
+    if (sql.startsWith('SELECT id,cable_id,tag,from_location')) return {rows:[]};
     if (sql.startsWith('SELECT DISTINCT value AS name FROM cables')) return {rows:[]};
-    if (sql.startsWith('SELECT l.id,l.name')) return {rows:[{id:locationId,name:' =a001 ',aliases:['Other alias'],revision:'1',...(options.manual?{model_version_id:modelId,binding_revision:'7',point:[9,8,7],object_id:'manual-id',source:'manual',artifact_id:artifactId}: {})}]};
+    if (sql.startsWith('SELECT l.id,l.name')) return {rows:[{id:locationId,name:' =a001 ',aliases:['Other alias'],revision:'1',...(options.manual||options.legacyAutomatic?{model_version_id:modelId,binding_revision:'7',point:[9,8,7],object_id:'legacy-id',source:options.manual?'manual':'automatic',artifact_id:artifactId,derivation:'equipment-bottom-aabb',coordinate_frame:'canonical-world-metres'}: {})}]};
     if (sql.startsWith('SELECT * FROM pf_model_objects')) return {rows:options.rows??[candidate('visible')]};
     if (sql.startsWith('SELECT model_version_id,revision::text,point')) return {rows:[]};
     if (sql.startsWith('INSERT INTO pf_location_bindings')) {writes.push({kind:'binding',values});return {rows:[]};}
@@ -35,7 +44,8 @@ function database(options:{rows?:Candidate[];manual?:boolean;admin?:boolean;revo
     throw Error('Unexpected test query: '+sql);
   });
   const pool={connect:vi.fn(async()=>({query,release}))} as unknown as Pool;
-  return {query,writes,pool,release,match:()=>createPathFinderRepository(pool).match(projectId,who,'1')};
+  const repo=createPathFinderRepository(pool);
+  return {query,writes,pool,release,repo,match:()=>repo.match(projectId,who,'1')};
 }
 
 describe('automatic candidate eligibility and ambiguity',()=>{
@@ -55,6 +65,28 @@ describe('automatic candidate eligibility and ambiguity',()=>{
   });
   it('does not replace an existing current-model manual binding or query model candidates for it',async()=>{
     const db=database({manual:true,rows:[candidate('replacement')]});expect((await db.match()).matchedLocations).toBe(0);expect(db.writes).toEqual([]);expect(db.query.mock.calls.some(([sql])=>sql.includes('FROM pf_model_objects'))).toBe(false);
+  });
+  it('records a sole visible project-mode candidate as unverified without creating binding authority or bumping the registry',async()=>{
+    const db=database({projectMode:true,rows:[candidate('visible')]});
+    expect(await db.match()).toEqual({createdLocations:0,matchedLocations:0,registryRevision:'1'});
+    expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,'unverified',JSON.stringify(['visible'])]}]);
+    expect(db.query.mock.calls.find(([sql])=>sql.startsWith('SELECT current_aggregate_id FROM pf_project_preparations'))?.[1]).toEqual([projectId]);
+    expect(db.query.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO pf_location_bindings')||sql.startsWith('INSERT INTO pf_endpoint_binding_')||sql.startsWith('INSERT INTO pf_location_events')||sql.startsWith('UPDATE pf_project_state'))).toBe(false);
+  });
+  it('keeps an old automatic binding stale in project state and never promotes it during candidate matching',async()=>{
+    const db=database({projectMode:true,legacyAutomatic:true,rows:[candidate('replacement')]});
+    expect((await db.repo.state(projectId,who)).locations[0].binding).toMatchObject({source:'automatic',revision:'7',point:[9,8,7],status:'stale'});
+    expect((await db.match()).matchedLocations).toBe(0);
+    expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,'unverified',JSON.stringify(['replacement'])]}]);
+    expect((await db.repo.state(projectId,who)).locations[0].binding).toMatchObject({source:'automatic',revision:'7',point:[9,8,7],status:'stale'});
+    expect(db.query.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO pf_location_bindings')||sql.startsWith('INSERT INTO pf_endpoint_binding_'))).toBe(false);
+  });
+  it('refuses the legacy binding method in project mode before any legacy point or audit write',async()=>{
+    const db=database({projectMode:true,manual:true});
+    await expect(db.repo.bindLocation(projectId,who,locationId,{modelVersionId:modelId,expectedSelectionRevision:'1',expectedRegistryRevision:'1',point:[4,5,6],objectId:null,externalId:null})).rejects.toMatchObject({code:'ENDPOINT_BINDING_UPGRADE_REQUIRED',status:409});
+    expect(db.writes).toEqual([]);
+    expect(db.query.mock.calls.some(([sql])=>sql.includes('FROM pf_locations')||sql.includes('FROM pf_location_bindings')||sql.startsWith('INSERT INTO pf_location_events'))).toBe(false);
+    expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
   it.each([{label:'current administrator loss',options:{admin:false},code:'ADMIN_REQUIRED'},{label:'revoked login',options:{revoked:true},code:'LOGIN_REVOKED'},{label:'stale registry',options:{registry:'2'},code:'REGISTRY_CONFLICT'}])('rejects $label before candidate queries or writes',async({options,code})=>{
     const db=database(options);await expect(db.match()).rejects.toMatchObject({code});expect(db.writes).toEqual([]);expect(db.query.mock.calls.some(([sql])=>sql.includes('FROM pf_model_objects'))).toBe(false);expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');expect(db.release).toHaveBeenCalledOnce();

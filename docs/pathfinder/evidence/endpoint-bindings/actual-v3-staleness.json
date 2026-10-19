@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "scope": "Three explicitly synthetic fixture cables, actual normal API→production worker→unchanged C# core. One shared endpoint update invalidates all three proposals.",
+  "jobStatus": "complete",
+  "proposals": 3,
+  "calculated": 3,
+  "effectiveCategory": "Control",
+  "instrumentationMapsToControl": true,
+  "routeSuccesses": 3,
+  "immutableV3EndpointPreparationDependencies": true,
+  "allThreeStaleAfterOneSharedUpdate": true,
+  "reviewRefusals": 3,
+  "cableApply": "NOT_PERFORMED",
+  "unchangedInstallLength": true,
+  "unchangedCableWriteRevision": true,
+  "hostAssertionCorrection": "Actual frozen post-seed write revision was0, not assumed1. Reconciled exact retained reads; no commands repeated.",
+  "engineeringAcceptance": false
+}
