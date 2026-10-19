@@ -101,7 +101,7 @@ recommended engineering choice and are recorded; no routine stage pause.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
 
-## Current PF-R6 — TECHNICAL_PASS at recorded scope; local commit next
+## Current PF-R6 — TECHNICAL_PASS; R7 handoff ready
 
 Final source6374a1493beb3dd783d1e7841d52d7f3fe70e400c8a769aff47c6da0b539b203,
 candidate4/API9cd8072c556f5c3322acd64ce41a5b58e612bb5511eb2a2bbbd18a57df115b19/
@@ -122,8 +122,11 @@ PASS. Raw3cachemanifest adjunct proves6cachefiles.1374oldstorageobjects exact,
 unchanged. Sixexactunusedcandidateimages removed;0newtestcontainers.
 Current approved5191demo/backup469c37ef/privatecompanion/evidence/deniedpaths
 retained. No active root subprocess; agentA classifierfrozen, B/Cdrafts complete.
-Next: local technicalcommit →officialR7handoff using skill/fresh remote/local
-state →newinheritedR7branch and immediateimplementation. R7–R10 notdone.
+R6technicalcommit 0c4937d0c0667c252259ebe672389f96fc1fe573. Detailed official nextprompt
+handoffs/PF-R7-durable-recalculation.md is ready through prepare-stage-handoff,
+freshconfiguredremoteGET2026-10-19T04:39:03.669Z and inspectedlocalstate.
+Next: committhismetadata →newinheritedpf-r7-durable-recalculation-local-20261019
+branch and IMMEDIATELYexecute. R7–R10 notdone.
 No original/sources/5190changes, no push/PR/merge/deployment. Automation ACTIVE.
 
 ## Previous PF-R5 — TECHNICAL_PASS at recorded scope
