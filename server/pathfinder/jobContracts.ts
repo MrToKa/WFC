@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { revision, uuid, snapshotSchema } from './contracts.js';
 import type { RoutingScope } from './routingScope.js';
 import type { EndpointCalculationPoint, EndpointCalculationPreparation } from './endpointCalculationProvenance.js';
+import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -29,12 +30,15 @@ export type HistoricalDependencySnapshot = {
   from:{locationId:string;bindingRevision:string;point:[number,number,number]};to:{locationId:string;bindingRevision:string;point:[number,number,number]};
   engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1';
 };
-export type CurrentDependencySnapshot = Omit<HistoricalDependencySnapshot, 'schemaVersion' | 'from' | 'to'> & {
+export type EndpointDependencySnapshot = Omit<HistoricalDependencySnapshot, 'schemaVersion' | 'from' | 'to'> & {
   schemaVersion: 'pathfinder.dependencies.v3'; preparation: EndpointCalculationPreparation;
   from: EndpointCalculationPoint; to: EndpointCalculationPoint;
 };
-/** v2 is retained solely to inspect historical proposals; new dispatch/Review/Apply require v3. */
-export type DependencySnapshot = HistoricalDependencySnapshot | CurrentDependencySnapshot;
+export type CurrentDependencySnapshot = Omit<EndpointDependencySnapshot, 'schemaVersion'> & {
+  schemaVersion: 'pathfinder.dependencies.v4'; comparison: ComparisonCalculationScope;
+};
+/** v2/v3 remain readable historical evidence; new dispatch/Review/Apply require v4. */
+export type DependencySnapshot = HistoricalDependencySnapshot | EndpointDependencySnapshot | CurrentDependencySnapshot;
 const enginePoint = z.object({x:z.number().finite(),y:z.number().finite(),z:z.number().finite()}).strict();
 export const routeSchema = z.object({success:z.boolean(),message:z.string().max(32768),routeText:z.string().max(1_000_000),
   routeCodes:z.array(z.string().max(2048)).max(200_000),segmentIds:z.array(z.string().max(256)).max(200_000),

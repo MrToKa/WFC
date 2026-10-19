@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "commit-unknown",
+  "phaseIntentId": "3067499e-977a-4457-a2fe-4cb89e664c76",
+  "checks": [
+    {
+      "name": "Lost read-only COMMIT acknowledgement remains unknown and discards its connection",
+      "status": "PASS",
+      "scope": "fault-injected transport after actual PostgreSQL COMMIT; not a full comparison publication failure/recovery claim"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 57,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

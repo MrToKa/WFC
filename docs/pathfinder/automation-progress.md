@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r5-endpoint-attachments-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r6-model-revisions-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -101,7 +101,32 @@ recommended engineering choice and are recorded; no routine stage pause.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
 
-## Current PF-R5 — TECHNICAL_PASS at recorded scope; local commit next
+## Current PF-R6 — TECHNICAL_PASS at recorded scope; local commit next
+
+Final source6374a1493beb3dd783d1e7841d52d7f3fe70e400c8a769aff47c6da0b539b203,
+candidate4/API9cd8072c556f5c3322acd64ce41a5b58e612bb5511eb2a2bbbd18a57df115b19/
+Web81df32517a4d50efc04700696039ef2d308b9879d9256e95275fbf207648d100.
+Rootoperator default profile6 in ownedwork28d3491f-e33c-46cb-95c9-d72688340ba5.
+Report42/source-final4/final-preservation contain exact source/scopes/results.
+Combined93files1439PASS/0FAIL/5optionalNOT_RUN; final recovery/no-op correction
+62scopedPASS/types/lint, latest-overall-intent semantics. Actual15PGphases/11HTTP
+edges, normal old/current8→9object pair/17unresolved/11candidateedges/0matches,
+normalreplay, original13-objectgeom5/BC022-2/3exacttestpoints restored.
+Actualv4controls9proposals/6stale/6Review409/3finalroutes; UIpreview7.478969923197742m
+yellow/filledGhost/opaque/Clear/finalreloadPASS. NoApply/realbinding/frameacceptance.
+All110tables reconciled: 64oldexact/36exactreceipt deltas plus10newtables;
+63oldPF_ROOTfiles13834192bytes exact/all51newfiles referenced,114total17384086B.
+Initial two safeclassifierFAILs retained; final232c868a-c577-4ef0-9568-c0d05e9926fe
+PASS. Raw3cachemanifest adjunct proves6cachefiles.1374oldstorageobjects exact,
+173newresources rawSHAverified/1547total.3referencecheckouts/18outsidecontainers
+unchanged. Sixexactunusedcandidateimages removed;0newtestcontainers.
+Current approved5191demo/backup469c37ef/privatecompanion/evidence/deniedpaths
+retained. No active root subprocess; agentA classifierfrozen, B/Cdrafts complete.
+Next: local technicalcommit →officialR7handoff using skill/fresh remote/local
+state →newinheritedR7branch and immediateimplementation. R7–R10 notdone.
+No original/sources/5190changes, no push/PR/merge/deployment. Automation ACTIVE.
+
+## Previous PF-R5 — TECHNICAL_PASS at recorded scope
 
 - Inherited R5handoffc7adcab176058331c75c352eaf1f39e51b6e10d9/R4technical
   403504d4763efb97fabc1f4cc2f137ae0e3be370; new local inherited branch

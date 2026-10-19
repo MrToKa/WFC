@@ -14,6 +14,8 @@ import { requirePreparedRoutingScope, type RoutingScope } from './routingScope.j
 import { readCurrentEndpointBindingContext, readEndpointBindingScope } from './endpointBindingRepository.js';
 import { endpointCalculationPoint, type EndpointCalculationPoint, type EndpointCalculationPreparation } from './endpointCalculationProvenance.js';
 import type { EndpointCurrentScope } from '../../shared/pathfinderEndpointBindings.js';
+import { readComparisonDependency } from './revisionComparisonRepository.js';
+import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
 
 const name = z.string().trim().max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
 export const previewEndpointSchema = z.object({ name, point: point.optional() }).strict().refine(value=>Boolean(value.name || value.point),'Enter an endpoint name or choose an explicit point.');
@@ -25,7 +27,7 @@ export const previewSchema = z.object({
 export type PreviewInput = z.infer<typeof previewSchema>;
 type Endpoint = {name:string;point:[number,number,number];source:'manual-world-point'|'shared-location'|'equipment-bottom-aabb';objectId:string|null;locationId:string|null;bindingRevision:string|null; binding: EndpointCalculationPoint | null};
 export type PreviewDependencies = {
-  schemaVersion:'pathfinder.preview.dependencies.v3';preparation:EndpointCalculationPreparation;routing:RoutingScope;projectId:string;modelVersionId:string;selectionRevision:string;contentFingerprint:string;
+  schemaVersion:'pathfinder.preview.dependencies.v4';comparison:ComparisonCalculationScope;preparation:EndpointCalculationPreparation;routing:RoutingScope;projectId:string;modelVersionId:string;selectionRevision:string;contentFingerprint:string;
   artifactId:string;snapshotSha256:string;registryRevision:string;settings:ProjectSettings;options:EngineOptions;
   input:PreviewInput;from:Endpoint;to:Endpoint;engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1';
 };
@@ -64,13 +66,15 @@ export async function collectPreviewDependencies(client:PoolClient,projectId:str
   if (!bindingContext || bindingContext.modelVersionId !== model.modelVersionId || bindingContext.selectionRevision !== model.selectionRevision ||
     bindingContext.artifactId !== model.artifactId || bindingContext.projectionSha256 !== model.snapshotSha256)
     throw new PathFinderError('ENDPOINT_PREPARATION_REQUIRED',409,'Publish the current project preparation before calculating.');
+  const comparison=await readComparisonDependency(client,{projectId,currentAggregateId:bindingContext.aggregateId,currentModelVersionId:bindingContext.modelVersionId});
+  if(comparison.readiness==='pending') throw new PathFinderError('REVISION_COMPARISON_PENDING',409,'Complete the requested revision comparison before calculating against this prepared model.');
   const registry=(await client.query<{registry_revision:string}>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0];
   if (!registry || registry.registry_revision!==input.expectedRegistryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409,'The shared location registry changed. Refresh before calculating.');
   const current=await projectRoutingSettings(client,projectId,requested);
   if (current.settings.revision!==input.expectedSettingsRevision) throw new PathFinderError('PROJECT_SETTINGS_CONFLICT',409,'Project Details changed. Refresh before calculating.');
   const from=await resolveEndpoint(client,projectId,bindingContext,input.from);
   const to=await resolveEndpoint(client,projectId,bindingContext,input.to);
-  return {schemaVersion:'pathfinder.preview.dependencies.v3',preparation:{aggregateId:bindingContext.aggregateId,geometryRevision:bindingContext.geometryRevision,
+  return {schemaVersion:'pathfinder.preview.dependencies.v4',comparison:comparison.scope,preparation:{aggregateId:bindingContext.aggregateId,geometryRevision:bindingContext.geometryRevision,
     captureFrameId:bindingContext.captureFrameId,projectionSha256:bindingContext.projectionSha256},routing,projectId,modelVersionId:model.modelVersionId,selectionRevision:model.selectionRevision,
     contentFingerprint:model.contentFingerprint,artifactId:model.artifactId,snapshotSha256:model.snapshotSha256,registryRevision:registry.registry_revision,
     settings:current.settings,options:current.options,input,from,to,engineVersion:'pathfinder-45c24bf5-pf1-modelrunner-v1'};

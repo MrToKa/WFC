@@ -19,12 +19,10 @@ import {
   type EndpointBinding,
   endpointMigrationWriteSchema,
   endpointMigrationConfirmSchema,
-  endpointMigrationDecisionSchema,
-  endpointMigrationContentHashInput,
   type EndpointMigrationWrite,
   type EndpointMigrationConfirm,
-  type EndpointMigrationDecision,
 } from '../../shared/pathfinderEndpointBindings';
+import { endpointMigrationDecisionSchema, endpointMigrationContentHashInput, type EndpointMigrationDecision } from '../../shared/pathfinderEndpointMigration';
 
 export type {
   EndpointBindingContext,

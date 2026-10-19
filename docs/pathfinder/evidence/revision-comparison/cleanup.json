@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:30:22.676Z",
+  "scope": "Exactly six owner-verified unused superseded R6 API/web images; allcontainers/volumes/networks/currentdemo/checkpoint/privateevidence/deniedpaths untouched.",
+  "removedImages": [
+    {
+      "id": "sha256:bbb636534605681c0485b5f65100b22be25cb4a57e5d7aa1c92821ef2de119cf",
+      "logicalBytes": 184886334
+    },
+    {
+      "id": "sha256:1134dc45f29f844e4976dd8682c0d880c7fe439f6f993a2c8f90d837cb0200b7",
+      "logicalBytes": 55204189
+    },
+    {
+      "id": "sha256:8ee3d3e4d6349c8f50a55c057b0358bba707dcc5131da2931f7c50d0e973360c",
+      "logicalBytes": 184886636
+    },
+    {
+      "id": "sha256:62d87428f1fc4d99c7e7eedca77e2a7c3d90c96f188817302700ff972f65c88f",
+      "logicalBytes": 55204189
+    },
+    {
+      "id": "sha256:061cd908509e4ab2f403a46cdc89d63fe0200d8f40fad3ec8c62245a425830d7",
+      "logicalBytes": 184886636
+    },
+    {
+      "id": "sha256:36e1effe095370c19c404d6d5403f866e1cf137844bb2fb7bde06ae76995b95a",
+      "logicalBytes": 55204239
+    }
+  ],
+  "physicalBytesReclaimed": "NOT_MEASURED",
+  "testContainersCreated": 0,
+  "testContainersRemoved": 0,
+  "deniedHistoricalPaths": "UNTOUCHED",
+  "retainedCurrentImages": {
+    "api": "sha256:cae50e6368f5d26a7959ce7e265025b60b2ca1c7db29cff63efedaffafddd1b9",
+    "web": "sha256:39225998e73df4d2226ef5808d5f323f1417ec12b072e50bbc0559f1527f47ee"
+  }
+}

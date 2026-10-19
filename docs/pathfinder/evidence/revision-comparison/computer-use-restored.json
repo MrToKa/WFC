@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:29:27.215Z",
+  "scope": "Normal admin computer-use Path after original13-object preparation and exact existing synthetic point restoration; post-candidate4 normal reload ready. Preview executed on candidate3; candidate4 differs only in comparison recovery/no-op and tests, no Viewer/calculation/UI logic changed.",
+  "projectId": "56eadef6-8382-49f8-a652-c8f12026602e",
+  "previewJobId": "5f3af6e3-5d1d-4fab-9683-429c81beadfa",
+  "actorId": "ac288aa9-eb51-4dd6-872b-ec52dfeecbc9",
+  "dependencyVersion": "pathfinder.preview.dependencies.v4",
+  "comparisonRevision": "3",
+  "checks": [
+    "Three existing test From/To locations confirmed and cable endpoints matched",
+    "Instrumentation follows Control in standalone path",
+    "Exact C# route displayed with yellow line and filled Ghost background",
+    "Opaque background visibly restores original solid model colours",
+    "Clear removes route and restores original whole-model view",
+    "Fresh final candidate4 normal reload shows active13-object snapshot, all3PathFinder tools and loaded664556geometry/438156identifiers"
+  ],
+  "screenshots": [
+    {
+      "privateFile": "r6-standalone-v4.png",
+      "bytes": 120575,
+      "sha256": "86fe5badd447cccf11d4172863b982660d4993ddc967b3d52982659db3e7327b"
+    },
+    {
+      "privateFile": "r6-opaque-v4.png",
+      "bytes": 96390,
+      "sha256": "e48c1298e56c0c949a5fc61b090c56880ddbbfb2811d1249223416a6c9907b17"
+    },
+    {
+      "privateFile": "r6-clear-v4.png",
+      "bytes": 79336,
+      "sha256": "f66bcf9f88148606b90ed659bedeb73e4502913ae00b02acc4b83740b44955bb"
+    }
+  ],
+  "geometricLengthMetres": 7.478969923197742,
+  "cableApply": "NOT_PERFORMED",
+  "engineeringAccepted": false
+}

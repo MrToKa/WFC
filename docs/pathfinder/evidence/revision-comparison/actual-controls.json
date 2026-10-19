@@ -1,0 +1,85 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:05:38.883Z",
+  "scope": "Actual PostgreSQL production transaction/dependency/schema mechanics on exact owned UI fixture; SQL mutation controls are rollback-only. Fencing/commit faults do not prove a paused full comparison HTTP write.",
+  "phases": [
+    {
+      "phase": "read-ready",
+      "status": "PASS",
+      "elapsedMilliseconds": 50
+    },
+    {
+      "phase": "pending",
+      "status": "PASS",
+      "elapsedMilliseconds": 42
+    },
+    {
+      "phase": "decision-integrity",
+      "status": "PASS",
+      "elapsedMilliseconds": 52
+    },
+    {
+      "phase": "other-target",
+      "status": "PASS",
+      "elapsedMilliseconds": 46
+    },
+    {
+      "phase": "immutable",
+      "status": "PASS",
+      "elapsedMilliseconds": 49
+    },
+    {
+      "phase": "foreign-key",
+      "status": "PASS",
+      "elapsedMilliseconds": 46
+    },
+    {
+      "phase": "auth-admin",
+      "status": "PASS",
+      "elapsedMilliseconds": 41
+    },
+    {
+      "phase": "auth-login",
+      "status": "PASS",
+      "elapsedMilliseconds": 41
+    },
+    {
+      "phase": "auth-expiry",
+      "status": "PASS",
+      "elapsedMilliseconds": 36
+    },
+    {
+      "phase": "abort",
+      "status": "PASS",
+      "elapsedMilliseconds": 45
+    },
+    {
+      "phase": "commit-unknown",
+      "status": "PASS",
+      "elapsedMilliseconds": 57
+    },
+    {
+      "phase": "fencing-role",
+      "status": "PASS",
+      "elapsedMilliseconds": 61
+    },
+    {
+      "phase": "fencing-login",
+      "status": "PASS",
+      "elapsedMilliseconds": 57
+    },
+    {
+      "phase": "fencing-target",
+      "status": "PASS",
+      "elapsedMilliseconds": 62
+    },
+    {
+      "phase": "fencing-timeout",
+      "status": "PASS",
+      "elapsedMilliseconds": 3059
+    }
+  ],
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTestedByHarness": false,
+  "automaticApplyPerformed": false
+}

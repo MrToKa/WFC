@@ -348,3 +348,24 @@ Branchpf-3-copied-project-local-20261018, handoff272b3a0,
 | PF3-COPY-PRESERVE |InitialSQLfieldfidelity plus lossless old/newcore comparison and exactaddedIDs | PASS8initial/13finalofflinechecks;23existingregistry/PFtables exact,684oldobjectmetadata exact/342newscopedkeys |
 | PF3-COPY-ISOLATE |Sameproductimages/7servedchecks, original/5190preservation | PASS12widerchecks/all18baseline unchanged; no originalDBquery/restart/newtestcontainers/images,7deniedchildren untouched |
 | PF8-COPY-NEXT |Currentrealcopiedproject combinedbackup/restore/privatehostprovenance/authfencing | NOT_RUN; nextlocalrecoveryhandoff, separate from humanmapping/engineeringacceptance |
+
+## PF-R6 model revision comparison — 19 October 2026
+
+Candidate4 source6374a1493beb3dd783d1e7841d52d7f3fe70e400c8a769aff47c6da0b539b203;
+see [report42](42-r6-model-revision-comparison.md) and evidence/revision-comparison/.
+The frozen R0 matrix remains its planning baseline; these are scoped later results.
+
+| ID | Observed outcome | Status |
+|---|---|---|
+| R6-DIFF-PURE | Qualified identity/change flags, unavailable signatures, split/merge/ambiguity, bounded candidate/page contracts | PASS in combined93files1439checks;5optional lookup-worker NOT_RUN; final recovery correction separately62PASS, counts overlap |
+| R6-DB-FENCE | Actual pending/integrity/unrelated-target/immutable/FK/current-role/login/expiry/lock/abort/COMMIT-ACK controls | PASS15rollback-only PostgreSQL phases; no full paused HTTP publication race claim |
+| R6-TRANSPORT | Typed401/413 beforebody; malformed/oversize/case/method/duplicate/nonfinite/UTF8/compression/approval-field refusals | PASS11actual host checks after scoped nginx fix; initial HTML/unknown-status FAIL retained |
+| R6-REAL-PAIR | Older/current protected BC001 captures, same comparable requested scope, normal UI comparison/API replay | PASS8old/9current/17unresolved/11candidateedges/0qualifiedmatches; frameunverified/engineeringfalse, not whole plant/native equivalence |
+| R6-CALC-FENCE | Restored13-object scope and3existing synthetic points; current v4/null-or-exact-comparison dependencies | PASS9proposals/6stale/6Review409refusals/3final routes, no point mutation or Apply |
+| R6-MIGRATION | Relevant confirmed migration proof superseded vs independent source-binding qualification | PASS pure/repository/live-reader controls; real qualified object-local Follow NOT_ESTABLISHED |
+| R6-UI | Historical records/bbox, comparison/readiness, three tools/yellow/filledGhost/opaque/Clear/final reload | PASS11comparison+6restored observations; preview on unchanged candidate3 Viewer logic, candidate4 reload ready |
+| R6-RECOVERY | Latest overall target intent permits fresh-key no-op after recovery and preserves exact replay | PASS production-repository fixture regression within62scopedchecks; actual injected DB recovery sequence NOT_RUN |
+| R6-STORAGE | Existing1374metadata exact,173newresources actualrawSHA,1547total | PASS; project/template buckets exact; ETag not treated as SHA256 |
+| R6-PRESERVATION | Exact100old+10newtable/PF_ROOT closure | PASS all110full-rowmultisets;64oldtables exact/36receipt-classified; old63files exact/all51newfiles closed by references/hashes. Two safeFAILs retained/reconciled; business/Review/Apply full rows exact |
+| R6-ISOLATION |3reference repos/18outsidecontainers; only owned5191API/web replaced;6unusedownimages removed | PASS source/runtime guards;0new testcontainers; all denied paths untouched; no publication |
+| R7-DURABLE-NEXT | Coalesced events/enrollment/fair bounded jobs/actual engine fingerprint | NOT_RUN; next inherited local stage, no automatic Review/Apply or R8 grant implied |

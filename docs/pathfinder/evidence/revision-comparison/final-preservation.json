@@ -1,0 +1,1159 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:38:37.590Z",
+  "scope": "Independent offline full-row multisets across all100old+10newtables, exact old63PF_ROOT path/byte/SHA preservation and receipt-rooted closure of all51newfiles. Unknown differences fail; no project-wide PF or actor-only auth allowance.",
+  "baselineTables": 100,
+  "currentTables": 110,
+  "unchangedOriginalTables": 64,
+  "classifiedChangedOriginalTables": 36,
+  "newTables": 10,
+  "baselinePfRootFiles": 63,
+  "currentPfRootFiles": 114,
+  "baselinePfRootBytes": 13834192,
+  "currentPfRootBytes": 17384086,
+  "privateReport": {
+    "filename": "audit-r6-private-232c868a-c577-4ef0-9568-c0d05e9926fe.private.json",
+    "sha256": "d9c9cf75364b696798aee0650ba7554bfbbd81021fdbcabfac0f461e1409e0c1"
+  },
+  "classifierSha256": "7cf60eff5b23e47299d31828af4446e78b6f3e58e6a999ad3fc4fdaef45abf35",
+  "priorFailures": [
+    {
+      "filename": "audit-r6-private-14d84070-f3ad-46fc-8075-2a636bf49ad9.private.json",
+      "status": "FAIL",
+      "reason": "Conservative initial classifier refused binding command wrapper plus unbound normal UI jobs/auth/catalog/cache additions."
+    },
+    {
+      "filename": "audit-r6-private-aa08049a-4c58-4f6f-9f5e-0fdb8639e9e7.private.json",
+      "status": "FAIL",
+      "reason": "Final sole mismatch was catalog timing assumption: actual new snapshots are baselineCR1/DR5 refresh and temporaryCR2/DR6, not finalCR3/DR7 materialization."
+    }
+  ],
+  "qualifiedDeltas": [
+    "One exact older model import; original model rows preserved",
+    "Two exact temporary/restoration tray audit events; final nameBC022-2",
+    "Three normal protected preparation/trace chains and immutable comparison scopes",
+    "Three existing synthetic point confirmations preserving names/aliases/coordinates",
+    "Exactly five new jobs with pinned actors/logins/inputs; four new calculate jobs individually paused through normal DELETE",
+    "Three comparison manifests/intents and exact commands/targets; all decision/qualification families empty",
+    "Exactly five existing session selection revocations and seven individually pinned normal UI sessions; login table exact",
+    "Two exact lazy full catalog snapshots verified against all21fact groups and routing/fullhashes",
+    "Forty-five referenced new blobs/pages plus three hash-bound cache manifest/payload pairs"
+  ],
+  "protectedFullRows": [
+    "cables including routing/design_length/install_length/cable_write_revision",
+    "cable_types",
+    "projects including Details",
+    "pf_reviews",
+    "pf_apply_receipts",
+    "pf_endpoint_migration_decisions",
+    "pf_location_aliases",
+    "drawing policies/material/file/business tables not explicitly classified"
+  ],
+  "tables": [
+    {
+      "table": "cable_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "cable_type_default_materials",
+      "status": "PASS",
+      "beforeRows": 9,
+      "afterRows": 9,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "d3815a4e45a9b2aaa67effbf2c31e2d4b7b2724b926727932e85246da4ec448a",
+      "afterSha256": "d3815a4e45a9b2aaa67effbf2c31e2d4b7b2724b926727932e85246da4ec448a"
+    },
+    {
+      "table": "cable_types",
+      "status": "PASS",
+      "beforeRows": 54,
+      "afterRows": 54,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "1cf29e262012176876211d5ee26c3043e2bd85e3d180448393c9dd27eb77b230",
+      "afterSha256": "1cf29e262012176876211d5ee26c3043e2bd85e3d180448393c9dd27eb77b230"
+    },
+    {
+      "table": "cable_versions",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "75ea3c47bf8e168276f47b3a2e7931c03f2f96d34a32e03ee1baa4c9ed491677",
+      "afterSha256": "75ea3c47bf8e168276f47b3a2e7931c03f2f96d34a32e03ee1baa4c9ed491677"
+    },
+    {
+      "table": "cables",
+      "status": "PASS",
+      "beforeRows": 2146,
+      "afterRows": 2146,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "fbcf07a705e6fffee54bcea39b70dc58dc82d005df7a2ad3857250d8064cc344",
+      "afterSha256": "fbcf07a705e6fffee54bcea39b70dc58dc82d005df7a2ad3857250d8064cc344"
+    },
+    {
+      "table": "material_cable_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_type_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_cable_types",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "6d5e1e53be024992fce38b11c28dea9479b6ad233d4a5675ca6ec468751fc121",
+      "afterSha256": "6d5e1e53be024992fce38b11c28dea9479b6ad233d4a5675ca6ec468751fc121"
+    },
+    {
+      "table": "material_change_logs",
+      "status": "PASS",
+      "beforeRows": 24,
+      "afterRows": 24,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "8000392798a6aaa17fd9f2457effe78ee6c350836d03219c5d8e0b4014bfecbb",
+      "afterSha256": "8000392798a6aaa17fd9f2457effe78ee6c350836d03219c5d8e0b4014bfecbb"
+    },
+    {
+      "table": "material_instrument_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instrument_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_instruments",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_load_curve_points",
+      "status": "PASS",
+      "beforeRows": 803,
+      "afterRows": 803,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "afbfef79fe67dceafd4e8946126627a6ebdc38546a5a21c11bbde83c1d934e4f",
+      "afterSha256": "afbfef79fe67dceafd4e8946126627a6ebdc38546a5a21c11bbde83c1d934e4f"
+    },
+    {
+      "table": "material_load_curves",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "c448d8ef66de2d1b98a40aee368da50ba769b1bb5596b4722bcb71e482e9799e",
+      "afterSha256": "c448d8ef66de2d1b98a40aee368da50ba769b1bb5596b4722bcb71e482e9799e"
+    },
+    {
+      "table": "material_product_identities",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_support_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_supports",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "dc4b926fa6d677655f77477042f901e915fac1bd01462fdae80c15f58f25055c",
+      "afterSha256": "dc4b926fa6d677655f77477042f901e915fac1bd01462fdae80c15f58f25055c"
+    },
+    {
+      "table": "material_tray_installation_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_installation_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_tray_standard_materials",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "material_trays",
+      "status": "PASS",
+      "beforeRows": 15,
+      "afterRows": 15,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "d11028a3ab29dc81b23c0ce50357e991e51c65b8c529b33a05497bd8e9e3d759",
+      "afterSha256": "d11028a3ab29dc81b23c0ce50357e991e51c65b8c529b33a05497bd8e9e3d759"
+    },
+    {
+      "table": "model_content_reservations",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "model_import_jobs",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "c4f69c6e32458d4f68cb2efe1ae3a3d371d8745a70721be9032365abd0c13c12",
+      "afterSha256": "e74bad8e580c18e8f22041e5c8b0c88ba0e5999afae9cfb620190699aab64d64"
+    },
+    {
+      "table": "model_package_aliases",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "40034db4633e05830eb1e0d65817545593a320323ce4352bac6d2def194a313e",
+      "afterSha256": "4f9523700eef133fe5612109b21fb705b1934678a250e9563a9a84f471fff850"
+    },
+    {
+      "table": "model_package_identities",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "8d4871d0940e6d3baed4eb681cc9259d5a14f5c6627b1b13f218b4f4e78990d4",
+      "afterSha256": "8fcac69e93f59120a0ff5fdb1ceb0daf330f869368b78cb753ef5749ca8a4d68"
+    },
+    {
+      "table": "model_storage_ownership",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "a682798f1a01469c6a34a6290de7e31abfb6f5c700a0ff5600c8d47d37f97d1c",
+      "afterSha256": "5002e3bfff335ac97c53208a8012e8f2dbf3a6ecdaa437f713e1dca6c751325a"
+    },
+    {
+      "table": "model_validation_reports",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "06bbf22e8f8d3529ca0a6bd4faf5ea0ba3a20b09824c9cc96665bb00abcfd404",
+      "afterSha256": "fe39d4c8258005c6c856a5b57f095543e1929d9e3287dda0203c354919d03b22"
+    },
+    {
+      "table": "model_versions",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "e59857ec4bd70f460ff7c21e04fa5666046d1260123687aff8910e3b4c8b6db8",
+      "afterSha256": "3e88078352f513012f50b5c8b4744291bedf8c3140849be5b59953b7e6ca172d"
+    },
+    {
+      "table": "pf_apply_receipts",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "d0daac4c4144be2069652098e6cb8df6ebafe08b6ec52f3908dcfaa4f6df121b",
+      "afterSha256": "d0daac4c4144be2069652098e6cb8df6ebafe08b6ec52f3908dcfaa4f6df121b"
+    },
+    {
+      "table": "pf_artifact_routing_scopes",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "873e5dbbaf75a57e1afbf54adb1d3260b826d8d858e7eb646864b857975e97c0",
+      "afterSha256": "50ee15d0103ecd8330cf045a3356cbc19e22c6530cd05c7a5d31e1547097b187"
+    },
+    {
+      "table": "pf_artifacts",
+      "status": "PASS",
+      "beforeRows": 10,
+      "afterRows": 13,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "c2512e159315729310c5e64c8b0245da11b59200ac6d0b32d0da258acf261edc",
+      "afterSha256": "38006b8413bbf89da8b3118e13815d286b2377d899c1db36b544cc1bede51fec"
+    },
+    {
+      "table": "pf_capture_evidence",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "4e685e1be7fd7f91f1fc62e83c6e1d51274f8d634902beb951bcddc6aa0e935f",
+      "afterSha256": "1696aae3793a48d810d0a8687905f67bffbd212bc87e1933a28cf4657ac95227"
+    },
+    {
+      "table": "pf_catalog_events",
+      "status": "PASS",
+      "beforeRows": 5,
+      "afterRows": 7,
+      "removedRows": 0,
+      "addedRows": 2,
+      "beforeSha256": "8ffb9e076a50f25d9046b1a9a54a43ec17e4b4987a9182d6b1628be6ad467658",
+      "afterSha256": "df1ad2dd9d91839e9704af319ef0e76004a2d04381e7bfe62b21643399d60520"
+    },
+    {
+      "table": "pf_catalog_purpose_incarnations",
+      "status": "PASS",
+      "beforeRows": 7,
+      "afterRows": 7,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "52ad491c6a9a381c578a5e8d2601618b16bc4abb593234c3e7524be2974cffd8",
+      "afterSha256": "52ad491c6a9a381c578a5e8d2601618b16bc4abb593234c3e7524be2974cffd8"
+    },
+    {
+      "table": "pf_catalog_snapshots",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 2,
+      "beforeSha256": "06e93014930faca55a3fb6db4157e2c15592b41063a174683161103683cde213",
+      "afterSha256": "efb238d24bbb47b815904075e6d47695cbbc6b70ba16d0d448fb1beee40351bc"
+    },
+    {
+      "table": "pf_drawing_export_files",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_exports",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_generated_files",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_history",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_policy_receipts",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_drawing_purpose_rules",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_endpoint_binding_commands",
+      "status": "PASS",
+      "beforeRows": 11,
+      "afterRows": 14,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "7f8b0584f4b03dbe19521e99400a84f03a82d5bc9426e8e87b5300b050ddf6f7",
+      "afterSha256": "15e153a029991c1b7e987b05318dd9668f1b25d30efeddc4d39de76e01fc66b7"
+    },
+    {
+      "table": "pf_endpoint_binding_heads",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 3,
+      "addedRows": 3,
+      "beforeSha256": "7a22b56e424d2f2edeb496bed0f0f139d73192e7b901c57aa71078ff31758a0b",
+      "afterSha256": "598ee00238050c245ed546688cc8480e8fe1ecfdf16ee5e91f6e9ffeb0ad0087"
+    },
+    {
+      "table": "pf_endpoint_binding_revisions",
+      "status": "PASS",
+      "beforeRows": 9,
+      "afterRows": 12,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "7884483b236a6256c24bf4d9dc34c5fa5903164e6f7f6fe0a355bd03e181fab1",
+      "afterSha256": "b76d07e288436767bbbe297d7bcddf5a63d6a6e91e5395f1035b1c2512ed1d58"
+    },
+    {
+      "table": "pf_endpoint_legacy_observations",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "2025e239c848b54ff7c29933acb5d9cdda34715029fef430620383b3a2af09bb",
+      "afterSha256": "2025e239c848b54ff7c29933acb5d9cdda34715029fef430620383b3a2af09bb"
+    },
+    {
+      "table": "pf_endpoint_migration_decisions",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "51f1c6267e1bf2f0643e757729772e6fe775cafbf1253f2dc66bd2782991d419",
+      "afterSha256": "51f1c6267e1bf2f0643e757729772e6fe775cafbf1253f2dc66bd2782991d419"
+    },
+    {
+      "table": "pf_geometry_object_revisions",
+      "status": "PASS",
+      "beforeRows": 26,
+      "afterRows": 56,
+      "removedRows": 0,
+      "addedRows": 30,
+      "beforeSha256": "70f93fba352ac6c91d2e30d5344687c0db165276867b5bb2fc826b12a2ec7eb1",
+      "afterSha256": "7ea5f47461d5ba833af598e43aab320719d2fc938570a54fcc94075369074c46"
+    },
+    {
+      "table": "pf_geometry_trace_diagnostics",
+      "status": "PASS",
+      "beforeRows": 26,
+      "afterRows": 55,
+      "removedRows": 0,
+      "addedRows": 29,
+      "beforeSha256": "48d58649c34a4b87bec842db2b6c799df8041b423e60e7834d9ff76f11e9819b",
+      "afterSha256": "1d13bfad2c6790ac60c1758317ebcf1a239148994ab8648ccbfca0a14f6fd6f7"
+    },
+    {
+      "table": "pf_geometry_trace_intents",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "1f7a6408872f886f4ccde276206a0614bb23635150913469cbc5023df36db3a2",
+      "afterSha256": "ea4531bda98a597669f4824276243bd31a25c9143c6d0ab2b03f2e67a5b9ad10"
+    },
+    {
+      "table": "pf_geometry_trace_receipts",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "d55d84d55418e6bd350d7208a88efeed4d51bcfb878b0cb7e40ab741ecb9dc0d",
+      "afterSha256": "1ffa19b53bf0cd85cfa3c531c7f853d70c56e4026abfcb8d22c72ef5fed746e7"
+    },
+    {
+      "table": "pf_geometry_trace_sets",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "0851791f8937bffd6ec4364958ed3798779d19dc2f9adcb302456e487969ed6d",
+      "afterSha256": "8cea300c2b4e5186cdfb52147a616ad767c44f81f1b65aefcf8893b3c9a2d5e1"
+    },
+    {
+      "table": "pf_job_items",
+      "status": "PASS",
+      "beforeRows": 67,
+      "afterRows": 79,
+      "removedRows": 0,
+      "addedRows": 12,
+      "beforeSha256": "3a3830e2e4a9ef315e0364fc700a635b680354cf1e04d7b7eefedb75506bd669",
+      "afterSha256": "b1a6ac1d1b71af603bd35462a328d95e16d4cabda76e9f702ebf161f04d3a7c2"
+    },
+    {
+      "table": "pf_jobs",
+      "status": "PASS",
+      "beforeRows": 52,
+      "afterRows": 57,
+      "removedRows": 0,
+      "addedRows": 5,
+      "beforeSha256": "11ff98dbfaed47ea3c2c508d8ae3452f1f5088a073d3e1da40714570d8251382",
+      "afterSha256": "63304548da6c2e3e104325ad3b24b02e770801f55a7896d044c97130b237366c"
+    },
+    {
+      "table": "pf_location_aliases",
+      "status": "PASS",
+      "beforeRows": 1538,
+      "afterRows": 1538,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "1827cb633d605610bd821aab87afdf52c132a3c6a677df32ea845b8bf382ae93",
+      "afterSha256": "1827cb633d605610bd821aab87afdf52c132a3c6a677df32ea845b8bf382ae93"
+    },
+    {
+      "table": "pf_location_bindings",
+      "status": "PASS",
+      "beforeRows": 7,
+      "afterRows": 7,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "0781b00fbbc201f4089fa114582be3297b3465a9fee5a409d5e412c5fb9f97db",
+      "afterSha256": "0781b00fbbc201f4089fa114582be3297b3465a9fee5a409d5e412c5fb9f97db"
+    },
+    {
+      "table": "pf_location_events",
+      "status": "PASS",
+      "beforeRows": 1636,
+      "afterRows": 1636,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "6a687fdda267129149fc06049d84a36e73e04ede46ef5040f21819b2f0fc974f",
+      "afterSha256": "6a687fdda267129149fc06049d84a36e73e04ede46ef5040f21819b2f0fc974f"
+    },
+    {
+      "table": "pf_location_matches",
+      "status": "PASS",
+      "beforeRows": 1528,
+      "afterRows": 1528,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "f9ed70eb6023a792b337a8b060e8d7d1ac1ca781bc151e4b4290079bb1b84f37",
+      "afterSha256": "f9ed70eb6023a792b337a8b060e8d7d1ac1ca781bc151e4b4290079bb1b84f37"
+    },
+    {
+      "table": "pf_locations",
+      "status": "PASS",
+      "beforeRows": 1536,
+      "afterRows": 1536,
+      "removedRows": 3,
+      "addedRows": 3,
+      "beforeSha256": "890d51a3ece690cc8d2295eff1bf7981660516df7ace9d6d31924d6d4ef377a5",
+      "afterSha256": "05bc18924c1559a25f0fc6ab2a260a44605a9dd43a15e37d2025a4f2496c73b4"
+    },
+    {
+      "table": "pf_lookup_results",
+      "status": "PASS",
+      "beforeRows": 17,
+      "afterRows": 18,
+      "removedRows": 0,
+      "addedRows": 1,
+      "beforeSha256": "a05f2b0a25cfe6885f1f647124e373a334f5694d387b9abd3e159d1b050fa126",
+      "afterSha256": "145ec97160e5a18770119ba87fa7b563f7de5305e0947bb8146eed5965e0977d"
+    },
+    {
+      "table": "pf_model_objects",
+      "status": "PASS",
+      "beforeRows": 172,
+      "afterRows": 202,
+      "removedRows": 0,
+      "addedRows": 30,
+      "beforeSha256": "9841347567cc067057ce8d475e8a601626f5ba1b6703699a59640fc904dcd5fa",
+      "afterSha256": "5d542d21601351d7b314ffe3e3d3fe75251c39b65c0162ddcbec9ad558400ae6"
+    },
+    {
+      "table": "pf_preparation_aggregates",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "fc43540e4925933768da070120521b55556a111fef8fe6a27dbcc16238cdb098",
+      "afterSha256": "af1636e079105d9c0780832b1e2e0cdd99aae77ad03580cd3ee6b571f345c38e"
+    },
+    {
+      "table": "pf_preparation_commands",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 12,
+      "removedRows": 0,
+      "addedRows": 6,
+      "beforeSha256": "b7ad81a191bf47e5fdc651fb482fae6a977c86f8f6a77b595d6de8c115ebf00a",
+      "afterSha256": "15c257e4f0034079f1efc308a5a0691a107f31ec1af020cf2f3086f10a94deb8"
+    },
+    {
+      "table": "pf_preparation_events",
+      "status": "PASS",
+      "beforeRows": 7,
+      "afterRows": 16,
+      "removedRows": 0,
+      "addedRows": 9,
+      "beforeSha256": "f81c5f655c8d6619e45cfe0ca42455e2b189e07ee7cc5beb826d48d0078088fd",
+      "afterSha256": "caf111d0eb797983f42495f8f5906181599beb3b3e0ada2a046dd46ef1171f52"
+    },
+    {
+      "table": "pf_preparation_parts",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 5,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "43aab6e40640b00dbf297ceb0a59a847e8c5783299e0d1f6c9b8082cc8a6ab81",
+      "afterSha256": "7a935816c3b0c025a9c3aec1ca0910175aadafe3db73e3bbd12b6ca34d069feb"
+    },
+    {
+      "table": "pf_preparation_resolution_events",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_preparation_resolutions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_preparation_sessions",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 6,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "f22407f71ec6b9b2d240aea4200e41943ca07c989b524bb14ae4eab45bbdf139",
+      "afterSha256": "91c35245d6c8cc9a8819486c9d4cabe9006ea64e451d99285c2758e9ef04f255"
+    },
+    {
+      "table": "pf_project_preparations",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 1,
+      "addedRows": 1,
+      "beforeSha256": "f1661ab7bd33da3e7802a6fe71e8f490998183f5786b0434cb74a658aad1b24e",
+      "afterSha256": "a0b14ea4aadfabda23a91abe8e7cacfd5125aa8ee524224cb4281f81a5067860"
+    },
+    {
+      "table": "pf_project_state",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 1,
+      "addedRows": 1,
+      "beforeSha256": "9221ea3e4a6931f540115e787cdaa066f4c7b5aff7ac793b9f57b1c8d9a001d7",
+      "afterSha256": "8af46762d76f9222f86d48ac8795800184d431ac82fe98b266bf323c63eb069f"
+    },
+    {
+      "table": "pf_proposals",
+      "status": "PASS",
+      "beforeRows": 62,
+      "afterRows": 74,
+      "removedRows": 0,
+      "addedRows": 12,
+      "beforeSha256": "b36a6934d1ed967f3db0e8f0079c2a6011b5834a417cfa9bec63477774862074",
+      "afterSha256": "855249f6ff5fe712473036c15c9a0612f79ec9a8803e1810d779ae6e806333ee"
+    },
+    {
+      "table": "pf_purpose_project_state",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 1,
+      "addedRows": 1,
+      "beforeSha256": "dbfb08b12d34b299d72ddbcfdb3bea1537f27803b48424f1f5cd6ad832edea5a",
+      "afterSha256": "91bf5d631deb42fe695086911510ff577f74cbd0e162448dcf1d7b39191b158a"
+    },
+    {
+      "table": "pf_reviews",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "ae12992d81f09df90d6b2c644b8d7841fdf763fa31326bd06c8fb3108a38e2e8",
+      "afterSha256": "ae12992d81f09df90d6b2c644b8d7841fdf763fa31326bd06c8fb3108a38e2e8"
+    },
+    {
+      "table": "pf_revision_binding_frame_qualifications",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_changes",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 69,
+      "removedRows": 0,
+      "addedRows": 69,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "1e883a146e302cd110a76358de4e5ba4d62c1d02fce659e4bb0debea79250479"
+    },
+    {
+      "table": "pf_revision_comparison_commands",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 4,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "0dc1d636ccf57405c5c0a2016da846011797e1bd45b43f1d05299b3a0c1123ac"
+    },
+    {
+      "table": "pf_revision_comparison_decision_heads",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_decision_objects",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_decisions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_revision_comparison_intents",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "ce4351c9e84223c23fb4b97e5edce3768f933de05f286bec29de625f6921379b"
+    },
+    {
+      "table": "pf_revision_comparison_sets",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 3,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "e448a420983ac59e3ecffffa381a83c1322ed3c69c32ea8f301212381e0b6ef1"
+    },
+    {
+      "table": "pf_revision_comparison_state",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 4,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "e5b80ab164a2d40534752c4f80f23c92e3fa3f2b90fe553193504c0cf868bde8"
+    },
+    {
+      "table": "pf_revision_comparison_targets",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 2,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "086ce6f590687cece3361a6cc2bac4f396985083b904a60b7123d6692a2aea97"
+    },
+    {
+      "table": "pf_routing_policy_history",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "74f59a5acb3c8a70f0569edc7d54d825b47bcdac2eb2c446255bb4d6f8254119",
+      "afterSha256": "74f59a5acb3c8a70f0569edc7d54d825b47bcdac2eb2c446255bb4d6f8254119"
+    },
+    {
+      "table": "pf_routing_policy_receipts",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "542ed29de9a6ce7993b6644dda93ba45fe37d7acb49559fff52ab1d1332daefd",
+      "afterSha256": "542ed29de9a6ce7993b6644dda93ba45fe37d7acb49559fff52ab1d1332daefd"
+    },
+    {
+      "table": "pf_routing_purpose_rules",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "9d66247ad2dbd5294be37cf0198f3ddcc887a6419f22daff56c29ede33de6762",
+      "afterSha256": "9d66247ad2dbd5294be37cf0198f3ddcc887a6419f22daff56c29ede33de6762"
+    },
+    {
+      "table": "pf_synthetic_projects",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "2310f89a1814f9023d83573348a1726048698d829ce15be6015387f016998c40",
+      "afterSha256": "2310f89a1814f9023d83573348a1726048698d829ce15be6015387f016998c40"
+    },
+    {
+      "table": "pf_synthetic_proofs",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "1595ccd12715b0763124c09626d2a48fa83fc3ec699f0b1391511ad8c80d913a",
+      "afterSha256": "1595ccd12715b0763124c09626d2a48fa83fc3ec699f0b1391511ad8c80d913a"
+    },
+    {
+      "table": "pf_tray_drawing_settings",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_settings_history",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "pf_tray_drawing_snapshots",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "e944e683a9852c5ccb5eaaeab5a06c080371f9544e7e73322e113be49a56eb38",
+      "afterSha256": "e944e683a9852c5ccb5eaaeab5a06c080371f9544e7e73322e113be49a56eb38"
+    },
+    {
+      "table": "project_change_order_items",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_order_revisions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_change_orders",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_file_versions",
+      "status": "PASS",
+      "beforeRows": 1,
+      "afterRows": 1,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "359dd6506ba53ceeeb23b44b80cd538e8f4e24365ceed33b03889fe008a91f7f",
+      "afterSha256": "359dd6506ba53ceeeb23b44b80cd538e8f4e24365ceed33b03889fe008a91f7f"
+    },
+    {
+      "table": "project_files",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "045f8b3aff24d1a76fd28b8da2e1a98bb36efaec543511d6f4c0ef69a2756d7d",
+      "afterSha256": "045f8b3aff24d1a76fd28b8da2e1a98bb36efaec543511d6f4c0ef69a2756d7d"
+    },
+    {
+      "table": "project_model_selections",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 1,
+      "addedRows": 1,
+      "beforeSha256": "c1de60cebe832843361a2b849bb53c0cd59d8106e5667853732208a36dbc4c11",
+      "afterSha256": "44746e16e8614509ab2057b533a1e458247be168b08582cbc9f8239d553022a7"
+    },
+    {
+      "table": "project_roxtec_entries",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "project_support_distances",
+      "status": "PASS",
+      "beforeRows": 14,
+      "afterRows": 14,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "ecb4120d823abee1b05128ec41b48835a9fb550491a2549491c5ac1aac40da99",
+      "afterSha256": "ecb4120d823abee1b05128ec41b48835a9fb550491a2549491c5ac1aac40da99"
+    },
+    {
+      "table": "project_tray_purpose_templates",
+      "status": "PASS",
+      "beforeRows": 6,
+      "afterRows": 6,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "8284f8e88d4dbc3c0a1f406257c6630938729cbf957958c47a659931af0371fa",
+      "afterSha256": "8284f8e88d4dbc3c0a1f406257c6630938729cbf957958c47a659931af0371fa"
+    },
+    {
+      "table": "projects",
+      "status": "PASS",
+      "beforeRows": 4,
+      "afterRows": 4,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "54395336515f01f18f7c5f30f9d5b3ee7f0f6c9ce05fe0179a95fe08963a3cf2",
+      "afterSha256": "54395336515f01f18f7c5f30f9d5b3ee7f0f6c9ce05fe0179a95fe08963a3cf2"
+    },
+    {
+      "table": "standard_material_references",
+      "status": "PASS",
+      "beforeRows": 21,
+      "afterRows": 21,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "7991adbac147a924a548ecfd10672636706fb066d969343db4f39d3ce613253a",
+      "afterSha256": "7991adbac147a924a548ecfd10672636706fb066d969343db4f39d3ce613253a"
+    },
+    {
+      "table": "template_file_versions",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "template_files",
+      "status": "PASS",
+      "beforeRows": 3,
+      "afterRows": 3,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "9eb0381b3f115ab180989001802b433dfc07b6f11479b2c071f588317fd31eb0",
+      "afterSha256": "9eb0381b3f115ab180989001802b433dfc07b6f11479b2c071f588317fd31eb0"
+    },
+    {
+      "table": "trays",
+      "status": "PASS",
+      "beforeRows": 331,
+      "afterRows": 331,
+      "removedRows": 1,
+      "addedRows": 1,
+      "beforeSha256": "43c233d72070658f1cfd4928fdbd16b7817a29298a723d6c91b50b8fdd997ed0",
+      "afterSha256": "395e7170e046dfaa89bed588c2b62fdf4fd8a693c07ba2b044f4f0dda052c9ba"
+    },
+    {
+      "table": "user_project_access",
+      "status": "PASS",
+      "beforeRows": 0,
+      "afterRows": 0,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "afterSha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "table": "users",
+      "status": "PASS",
+      "beforeRows": 2,
+      "afterRows": 2,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "86bde4476272e813e8482c65c9708ea9783d04544d7cd1eee0ba88b7e6b3252b",
+      "afterSha256": "86bde4476272e813e8482c65c9708ea9783d04544d7cd1eee0ba88b7e6b3252b"
+    },
+    {
+      "table": "viewer_login_bindings",
+      "status": "PASS",
+      "beforeRows": 28,
+      "afterRows": 28,
+      "removedRows": 0,
+      "addedRows": 0,
+      "beforeSha256": "b259a1ee745c9b4544bdc21f4f0134e20eea29ef78e64c01ed9750844cc45a76",
+      "afterSha256": "b259a1ee745c9b4544bdc21f4f0134e20eea29ef78e64c01ed9750844cc45a76"
+    },
+    {
+      "table": "viewer_resource_sessions",
+      "status": "PASS",
+      "beforeRows": 54,
+      "afterRows": 61,
+      "removedRows": 5,
+      "addedRows": 12,
+      "beforeSha256": "ca6e77e29763cf6ad2a4b6e581f45db2ebe2055bbf122effdd4c402fb2a7434d",
+      "afterSha256": "d79f605b8f0be51b8acdbdd330d08fe282053526e80a411486b1ebc41923b583"
+    }
+  ],
+  "limitations": [
+    "Point-in-time quiescent SQL/PF_ROOT capture; not a continuously enforced invariant.",
+    "MinIO/reference/container/source checks have separate receipts.",
+    "No whole-plant/native/physical correspondence or human engineering acceptance is implied."
+  ]
+}

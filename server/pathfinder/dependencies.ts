@@ -8,6 +8,7 @@ import { projectRoutingSettings } from './settings.js';
 import { requirePreparedRoutingScope } from './routingScope.js';
 import { readCurrentEndpointBindingContext, readEndpointBindingScope } from './endpointBindingRepository.js';
 import { endpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { readComparisonDependency } from './revisionComparisonRepository.js';
 export {requireCurrentLogin} from './auth.js';
 
 export function canonicalJson(value: unknown): string {
@@ -22,7 +23,8 @@ export function geometryHash(dependencies: DependencySnapshot): string {
   // evidence and drawing revisions must never become transitive PF dependencies.
   const {schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,routing} = dependencies;
   return hash({schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,
-    ...(dependencies.schemaVersion === 'pathfinder.dependencies.v3' ? {preparation: dependencies.preparation} : {}),
+    ...(dependencies.schemaVersion !== 'pathfinder.dependencies.v2' ? {preparation: dependencies.preparation} : {}),
+    ...(dependencies.schemaVersion === 'pathfinder.dependencies.v4' ? {comparison: dependencies.comparison} : {}),
     routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
       routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
 }
@@ -58,6 +60,9 @@ export async function collectDependencies(client: PoolClient, projectId: string,
       bindingContext.selectionRevision !== model.selection_revision || bindingContext.artifactId !== artifact.id ||
       bindingContext.projectionSha256 !== artifact.snapshot_sha256)
     return blocked('endpoint_preparation_required', 'Publish the current project preparation before confirming shared endpoint bindings.');
+  const comparison = await readComparisonDependency(client, {projectId, currentAggregateId: bindingContext.aggregateId,
+    currentModelVersionId: bindingContext.modelVersionId});
+  if (comparison.readiness === 'pending') return blocked('comparison_required', 'Complete the requested revision comparison before calculating against this prepared model.');
   const currentSettings=await projectRoutingSettings(client,projectId,options);
   if (!currentSettings.settings.endConnectionLength || !currentSettings.settings.additionalBendingPercent) return blocked('settings_required','Set the project allowances in Project Details.');
   const registry = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0];
@@ -75,7 +80,7 @@ export async function collectDependencies(client: PoolClient, projectId: string,
   };
   const from = await endpoint(cable.from_location),to = await endpoint(cable.to_location);
   if (!from || !to) return blocked('locations_required',`Resolve ${!from && !to ? 'From and To' : !from ? 'From' : 'To'} locations. Missing, ambiguous or stale locations cannot be calculated.`);
-  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{schemaVersion:'pathfinder.dependencies.v3',routing,projectId,cableId,cableWriteRevision:cable.cable_write_revision,
+  return {status:'ready',message:'Ready for calculation.',cable,dependencies:{schemaVersion:'pathfinder.dependencies.v4',comparison:comparison.scope,routing,projectId,cableId,cableWriteRevision:cable.cable_write_revision,
     preparation:{aggregateId: bindingContext.aggregateId, geometryRevision: bindingContext.geometryRevision,
       captureFrameId: bindingContext.captureFrameId, projectionSha256: bindingContext.projectionSha256},
     cableInputs:{fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,cableTypeId:cable.cable_type_id},registryRevision:registry.registry_revision,

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "foreign-key",
+  "phaseIntentId": "b9fe7a94-4104-492c-ad54-2edac7d1b0dc",
+  "checks": [
+    {
+      "name": "Exact trace/aggregate, trace/object and decision/subject composite references reject forged pairs",
+      "status": "PASS",
+      "scope": "actual rollback-only PostgreSQL foreign-key probes; no new object relation retained"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 46,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

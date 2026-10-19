@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "recordedAt": "2026-10-19T04:28:30.156Z",
+  "scope": "Exact old storage keys/bytes/ETag/lastModified preserved; exactly173 newly imported older-model resources additionally streamed and checked against server-owned manifest bytes/SHA256. Metadata ETag is not treated as SHA256.",
+  "preservedObjects": 1374,
+  "addedResources": 173,
+  "verifiedRawResourceSha256": 173,
+  "totalObjects": 1547,
+  "manifestSha256": "69216deb2174d7ce972d4da0613d2424b6a37e6ecc7c4013f257140befaab151",
+  "projectAndTemplateBucketsExact": true
+}

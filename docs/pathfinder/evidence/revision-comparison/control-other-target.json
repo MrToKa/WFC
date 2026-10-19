@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "wfc.pf.revision-comparison-control-receipt.v1",
+  "status": "PASS",
+  "phase": "other-target",
+  "phaseIntentId": "e535f9a8-8c30-4d99-b599-e60cbbbc2339",
+  "checks": [
+    {
+      "name": "An unrelated historical target/global author token does not stale this target scope",
+      "status": "PASS",
+      "scope": "actual rollback-only unrelated target mechanics; all original heads preserved"
+    }
+  ],
+  "beforeSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "afterSha256": "f7d2ac0a03595c1a906e18ac1fa291864ed25f362fd797082d313a37ee0541b8",
+  "elapsedMilliseconds": 46,
+  "engineeringAccepted": false,
+  "productionComparisonPublicationTested": false,
+  "automaticApplyPerformed": false
+}

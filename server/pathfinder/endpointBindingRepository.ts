@@ -2,7 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import { canonicalPurposeJson, policyUuidSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy.js';
-import { ENDPOINT_BINDING_LIMITS, ENDPOINT_ANCHOR_RULE, endpointBindingSchema, endpointBindingWriteSchema, endpointBindingContextSchema, endpointLocationSchema, endpointBindingPageSchema, endpointBindingSummarySchema, endpointBindingReceiptSchema, endpointBindingHistorySchema, endpointMigrationWriteSchema, endpointMigrationDecisionSchema, endpointMigrationConfirmSchema, endpointMigrationEvaluationSchema, endpointCurrentScopeSchema, type EndpointBinding, type EndpointBindingWrite, type EndpointBindingContext, type EndpointCurrentScope, type EndpointObjectRef, type EndpointMigrationEvaluation } from '../../shared/pathfinderEndpointBindings.js';
+import { ENDPOINT_BINDING_LIMITS, ENDPOINT_ANCHOR_RULE, endpointBindingSchema, endpointBindingWriteSchema, endpointBindingContextSchema, endpointLocationSchema, endpointBindingPageSchema, endpointBindingSummarySchema, endpointBindingReceiptSchema, endpointBindingHistorySchema, endpointMigrationWriteSchema, endpointMigrationConfirmSchema, endpointCurrentScopeSchema, type EndpointBinding, type EndpointBindingWrite, type EndpointBindingContext, type EndpointCurrentScope, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings.js';
+import { endpointMigrationDecisionSchema, endpointMigrationEvaluationSchema, type EndpointMigrationEvaluation } from '../../shared/pathfinderEndpointMigration.js';
 import { preparationAggregateSchema } from '../../shared/pathfinderPreparation.js';
 import { geometryObjectRevisionSchema, geometryTraceManifestSchema, type GeometryObjectRevision } from '../../shared/pathfinderGeometryTrace.js';
 import { normalizeLocation } from './matching.js';
@@ -10,6 +11,7 @@ import { assertLoginNotExpired, requireCurrentLogin } from './auth.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
 import { deriveEquipmentBottomAnchor, evaluateEndpointMigration } from '../../shared/pathfinderEndpointAttachment.js';
+import { createConfirmedRevisionBindingValidator, readConfirmedRevisionBindingValidity } from './revisionComparisonEvidenceReader.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The endpoint binding is unavailable or changed. Refresh its context; retain an uncertain save command for reconciliation.'); };
 export const endpointBindingHash = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
@@ -74,6 +76,7 @@ export async function readEndpointBindingScope(c: PoolClient, input: { projectId
   if (value.status !== 'confirmed') return { status: value.status === 'unsupported-attachment' ? 'unsupported' : 'stale', code: 'ENDPOINT_BINDING_UNCONFIRMED' };
   if (value.modelVersionId !== input.modelVersionId || value.aggregateId !== input.aggregateId || value.projectionSha256 !== input.projectionSha256 || value.captureFrameId !== input.captureFrameId) return { status: 'stale', code: 'ENDPOINT_BINDING_STALE' };
   if (value.mode === 'object-attached') return { status: 'unsupported', code: 'ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE' };
+  if (value.sourceDecisionId !== null) { const proof = await readConfirmedRevisionBindingValidity(c, value); if (!proof.valid) return { status: 'stale', code: proof.code }; }
   return { status: 'confirmed', binding: value };
 }
 /** A single bounded join for the legacy state projection; never promotes a v1 row. */
@@ -81,7 +84,8 @@ export async function readEndpointBindingHeads(c: PoolClient, projectId: string,
   policyUuidSchema.parse(projectId); const selected = current === undefined ? await readCurrentEndpointBindingContext(c, projectId) : current;
   const rows = (await c.query<{ location_id: string; location_revision: string; binding_id: string; binding_revision: string; record_sha256: string; record: unknown }>('SELECT h.location_id,l.revision::text AS location_revision,h.binding_id,h.binding_revision::text,r.record_sha256,r.record FROM pf_endpoint_binding_heads h JOIN pf_locations l ON l.project_id=h.project_id AND l.id=h.location_id JOIN pf_endpoint_binding_revisions r ON r.project_id=h.project_id AND r.location_id=h.location_id AND r.id=h.binding_id WHERE h.project_id=$1 ORDER BY h.location_id LIMIT 10001 FOR SHARE OF h,r,l', [projectId])).rows;
   if (rows.length > 10000) return fail('ENDPOINT_HEAD_LIMIT', 413); const result = new Map<string, { binding: EndpointBinding; ready: boolean }>();
-  for (const row of rows) { const binding = record(row.record); if (binding.projectId !== projectId || binding.locationId !== row.location_id || binding.id !== row.binding_id || binding.bindingRevision !== row.binding_revision || binding.contentSha256 !== row.record_sha256 || result.has(row.location_id)) return fail('ENDPOINT_HEAD_INTEGRITY'); result.set(row.location_id, { binding, ready: readiness(binding, selected, row.location_revision).calculationReady }); }
+  const validateMigration = createConfirmedRevisionBindingValidator(c);
+  for (const row of rows) { const binding = record(row.record); if (binding.projectId !== projectId || binding.locationId !== row.location_id || binding.id !== row.binding_id || binding.bindingRevision !== row.binding_revision || binding.contentSha256 !== row.record_sha256 || result.has(row.location_id)) return fail('ENDPOINT_HEAD_INTEGRITY'); result.set(row.location_id, { binding, ready: (await liveReadiness(binding, selected, row.location_revision, validateMigration)).calculationReady }); }
   return result;
 }
 
@@ -106,6 +110,13 @@ function readiness(binding: EndpointBinding | null, current: EndpointBindingCont
   return binding.status === 'confirmed' ? { status: 'confirmed', calculationReady: true, reasonCodes: [] } : { status: binding.status, calculationReady: false, reasonCodes: ['ENDPOINT_BINDING_UNCONFIRMED'] };
 }
 const summary = (b: EndpointBinding) => endpointBindingSummarySchema.parse({ id: b.id, bindingRevision: b.bindingRevision, status: b.status, mode: b.mode, pointProjectMetres: b.pointProjectMetres, modelVersionId: b.modelVersionId, aggregateId: b.aggregateId, captureFrameId: b.captureFrameId, sourceObjectRevisionId: b.sourceObject?.objectRevisionId ?? null, confirmedBy: b.confirmedBy, confirmedAt: b.confirmedAt, contentSha256: b.contentSha256 });
+async function liveReadiness(binding: EndpointBinding | null, current: EndpointBindingContext['current'], locationRevision: string | null,
+  validate: ReturnType<typeof createConfirmedRevisionBindingValidator>): Promise<EndpointBindingContext['readiness']> {
+  const initial = readiness(binding, current, locationRevision);
+  if (!initial.calculationReady || !binding?.sourceDecisionId) return initial;
+  const proof = await validate(binding);
+  return proof.valid ? initial : { status: 'stale', calculationReady: false, reasonCodes: [proof.code] };
+}
 async function objectEvidence(c: PoolClient, projectId: string, current: EndpointCurrentScope, ref: EndpointObjectRef): Promise<GeometryObjectRevision> {
   const row = (await c.query<{ record: unknown; record_sha256: string; manifest: unknown }>("SELECT o.record,o.summary->>'recordSha256' AS record_sha256,t.manifest FROM pf_geometry_object_revisions o JOIN pf_geometry_trace_sets t ON t.project_id=o.project_id AND t.id=o.trace_id WHERE o.project_id=$1 AND o.trace_id=$2 AND o.id=$3 FOR SHARE OF o,t", [projectId, ref.traceId, ref.objectRevisionId])).rows[0]; if (!row) return fail('ENDPOINT_OBJECT_NOT_FOUND', 404);
   const value = geometryObjectRevisionSchema.parse(row.record), trace = validHash(geometryTraceManifestSchema.parse(row.manifest));
@@ -157,14 +168,17 @@ async function commitBinding(c: PoolClient, pid: string, who: JobPrincipal, loca
   return endpointBindingReceiptSchema.parse({ schemaVersion: 'wfc.pf.endpoint-binding-receipt.v1', projectId: pid, locationId, registryRevision: nextRegistry, locationRevision, binding, duplicate: false });
 }
 
-export interface EndpointBindingAdapters { evaluateMigration?: (client: PoolClient, source: EndpointBinding, target: EndpointCurrentScope, command: z.infer<typeof endpointMigrationWriteSchema>) => Promise<EndpointMigrationEvaluation>; }
+export interface EndpointBindingAdapters {
+  evaluateMigration?: (client: PoolClient, source: EndpointBinding, target: EndpointCurrentScope, command: z.infer<typeof endpointMigrationWriteSchema>) => Promise<EndpointMigrationEvaluation>;
+  validateMigrationDecision?: (client: PoolClient, decision: z.infer<typeof endpointMigrationDecisionSchema>, signal?: AbortSignal) => Promise<void>;
+}
 export function createEndpointBindingRepository(pool: Pool, adapters: EndpointBindingAdapters = {}) {
   const tx = <T>(pid: string, who: JobPrincipal, operation: (c: PoolClient) => Promise<T>, signal?: AbortSignal) => endpointBindingTransaction(pool, pid, who, operation, signal);
   const authorize = (pid: string, who: JobPrincipal) => tx(pid, who, async () => undefined);
   async function context(pid: string, who: JobPrincipal, locationId: string) { policyUuidSchema.parse(locationId); return tx(pid, who, async c => {
     const revision = await registry(c, pid), selected = await readCurrentEndpointBindingContext(c, pid), value = await location(c, pid, locationId), binding = value ? await head(c, pid, locationId) : null;
     const hasEquipment = !!selected?.traceId && (await c.query("SELECT id FROM pf_geometry_object_revisions WHERE project_id=$1 AND trace_id=$2 AND record#>>'{geometry,role}'='object' AND record#>'{geometry,equipmentAnchor}' IS NOT NULL AND record#>'{geometry,equipmentAnchor}'<>'null'::jsonb LIMIT 1", [pid, selected.traceId])).rows.length === 1;
-    return budget(endpointBindingContextSchema.parse({ schemaVersion: 'wfc.pf.endpoint-binding-context.v1', projectId: pid, locationId, registryRevision: revision, location: value, current: selected, head: binding, legacy: value ? await legacy(c, pid, locationId, selected?.modelVersionId ?? null) : null, capabilities: [{ mode: 'fixed-world', supported: selected !== null, reasonCodes: selected ? [] : ['ENDPOINT_PREPARATION_REQUIRED'] }, { mode: 'object-derived', supported: hasEquipment, reasonCodes: hasEquipment ? [] : ['ENDPOINT_EQUIPMENT_ANCHOR_REQUIRED'] }, { mode: 'object-attached', supported: false, reasonCodes: ['ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE'] }], readiness: readiness(binding, selected, value?.revision ?? null), usage: usageIndex(await cableEndpoints(c, pid))(value) }));
+    return budget(endpointBindingContextSchema.parse({ schemaVersion: 'wfc.pf.endpoint-binding-context.v1', projectId: pid, locationId, registryRevision: revision, location: value, current: selected, head: binding, legacy: value ? await legacy(c, pid, locationId, selected?.modelVersionId ?? null) : null, capabilities: [{ mode: 'fixed-world', supported: selected !== null, reasonCodes: selected ? [] : ['ENDPOINT_PREPARATION_REQUIRED'] }, { mode: 'object-derived', supported: hasEquipment, reasonCodes: hasEquipment ? [] : ['ENDPOINT_EQUIPMENT_ANCHOR_REQUIRED'] }, { mode: 'object-attached', supported: false, reasonCodes: ['ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE'] }], readiness: await liveReadiness(binding, selected, value?.revision ?? null, createConfirmedRevisionBindingValidator(c)), usage: usageIndex(await cableEndpoints(c, pid))(value) }));
   }); }
   async function confirm(pid: string, who: JobPrincipal, locationId: string, raw: unknown, signal?: AbortSignal) {
     await authorize(pid, who); policyUuidSchema.parse(locationId); const input = endpointBindingWriteSchema.parse(raw), command = { locationId, input };
@@ -182,7 +196,8 @@ export function createEndpointBindingRepository(pool: Pool, adapters: EndpointBi
     const { offset, limit } = z.object({ offset: z.number().int().nonnegative().max(1_000_000).default(0), limit: z.number().int().min(1).max(100).default(25) }).strict().parse(raw), revision = await registry(c, pid), selected = await readCurrentEndpointBindingContext(c, pid), usage = usageIndex(await cableEndpoints(c, pid));
     const total = Number((await c.query<{ count: string }>('SELECT count(*)::text AS count FROM pf_locations WHERE project_id=$1', [pid])).rows[0].count); if (!Number.isSafeInteger(total) || total > 1_000_000) return fail('ENDPOINT_LOCATION_LIMIT', 413);
     const rows = (await c.query<{ id: string }>('SELECT id FROM pf_locations WHERE project_id=$1 ORDER BY name,id LIMIT $2 OFFSET $3', [pid, limit, offset])).rows, locations = [];
-    for (const row of rows) { assertLoginNotExpired(who); const value = await location(c, pid, row.id); if (!value) return fail('ENDPOINT_LOCATION_CHANGED'); const binding = await head(c, pid, row.id); locations.push({ location: value, head: binding ? summary(binding) : null, readiness: readiness(binding, selected, value.revision), usage: usage(value) }); }
+    const validateMigration = createConfirmedRevisionBindingValidator(c);
+    for (const row of rows) { assertLoginNotExpired(who); const value = await location(c, pid, row.id); if (!value) return fail('ENDPOINT_LOCATION_CHANGED'); const binding = await head(c, pid, row.id); locations.push({ location: value, head: binding ? summary(binding) : null, readiness: await liveReadiness(binding, selected, value.revision, validateMigration), usage: usage(value) }); }
     return budget(endpointBindingPageSchema.parse({ schemaVersion: 'wfc.pf.endpoint-binding-page.v1', projectId: pid, registryRevision: revision, offset, limit, total, nextOffset: offset + rows.length < total ? offset + rows.length : null, locations }));
   }); }
   async function history(pid: string, who: JobPrincipal, locationId: string, raw: { beforeRevision?: string; limit?: number } = {}) { policyUuidSchema.parse(locationId); return tx(pid, who, async c => {
@@ -204,13 +219,14 @@ export function createEndpointBindingRepository(pool: Pool, adapters: EndpointBi
       const target = await readCurrentEndpointBindingContext(c, pid); assertScope(target, { modelVersionId: input.targetModelVersionId, aggregateId: input.targetAggregateId, projectionSha256: input.targetProjectionSha256, captureFrameId: input.targetCaptureFrameId, expectedSelectionRevision: input.expectedSelectionRevision });
       if (!adapters.evaluateMigration && (input.objectDecisionId !== null || input.frameDecisionId !== null)) return fail('ENDPOINT_MIGRATION_EVIDENCE_UNAVAILABLE');
       const evaluation = endpointMigrationEvaluationSchema.parse(adapters.evaluateMigration ? await adapters.evaluateMigration(c, source, target, input) : evaluateEndpointMigration({ sourceBinding: source, targetAggregate: target, objectMapping: null, frameMapping: null, sourceObject: null, targetObject: null, validationPolicy: null }));
-      if (evaluation.sourceBindingId !== source.id || canonicalPurposeJson(evaluation.sourcePointProjectMetres) !== canonicalPurposeJson(source.pointProjectMetres)) return fail('ENDPOINT_MIGRATION_INTEGRITY');
+      if (evaluation.sourceBindingId !== source.id || canonicalPurposeJson(evaluation.sourcePointProjectMetres) !== canonicalPurposeJson(source.pointProjectMetres) ||
+          evaluation.schemaVersion === 'wfc.pf.endpoint-migration-evaluation.v2' && evaluation.sourceBindingSha256 !== source.contentSha256) return fail('ENDPOINT_MIGRATION_INTEGRITY');
       const { idempotencyKey: _key, ...identity } = input, inputSha = endpointBindingHash({ input: identity, sourceSha256: source.contentSha256, target, evaluation });
       const existing = (await c.query<{ record: unknown; record_sha256: string }>('SELECT record,record_sha256 FROM pf_endpoint_migration_decisions WHERE project_id=$1 AND input_sha256=$2', [pid, inputSha])).rows[0];
       let decision;
       if (existing) { decision = validHash(endpointMigrationDecisionSchema.parse(existing.record)); if (decision.contentSha256 !== existing.record_sha256) return fail('ENDPOINT_MIGRATION_INTEGRITY'); }
       else {
-        const draft = endpointMigrationDecisionSchema.parse({ schemaVersion: 'wfc.pf.endpoint-migration-decision.v1', id: randomUUID(), projectId: pid, locationId: source.locationId, sourceBindingId: source.id, sourceHeadId: input.expectedHeadId, expectedLocationRevision: input.expectedLocationRevision, expectedRegistryRevision: input.expectedRegistryRevision, target, evaluation, createdBy: who.userId, createdAt: new Date().toISOString(), reason: input.reason, contentSha256: '0'.repeat(64) }); const { contentSha256: _sha, ...body } = draft;
+        const draft = endpointMigrationDecisionSchema.parse({ schemaVersion: evaluation.schemaVersion === 'wfc.pf.endpoint-migration-evaluation.v2' ? 'wfc.pf.endpoint-migration-decision.v2' : 'wfc.pf.endpoint-migration-decision.v1', id: randomUUID(), projectId: pid, locationId: source.locationId, sourceBindingId: source.id, sourceHeadId: input.expectedHeadId, expectedLocationRevision: input.expectedLocationRevision, expectedRegistryRevision: input.expectedRegistryRevision, target, evaluation, createdBy: who.userId, createdAt: new Date().toISOString(), reason: input.reason, contentSha256: '0'.repeat(64) }); const { contentSha256: _sha, ...body } = draft;
         decision = endpointMigrationDecisionSchema.parse({ ...draft, contentSha256: endpointBindingHash(body) });
         await c.query('INSERT INTO pf_endpoint_migration_decisions(id,project_id,location_id,source_binding_id,target_aggregate_id,input_sha256,record_sha256,record,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)', [decision.id, pid, source.locationId, source.id, target.aggregateId, inputSha, decision.contentSha256, decision, who.userId]);
       }
@@ -225,6 +241,9 @@ export function createEndpointBindingRepository(pool: Pool, adapters: EndpointBi
       const decision = validHash(endpointMigrationDecisionSchema.parse(row.record)); if (decision.projectId !== pid || decision.id !== decisionId || row.record_sha256 !== decision.contentSha256 || input.expectedDecisionSha256 !== decision.contentSha256) return fail('ENDPOINT_MIGRATION_INTEGRITY');
       const before = await checkLocation(c, pid, decision.locationId, input.expectedLocationRevision, input.expectedHeadId); if (!before.value || before.previous?.id !== decision.sourceHeadId || input.expectedHeadId !== decision.sourceHeadId || input.expectedLocationRevision !== decision.expectedLocationRevision || input.expectedRegistryRevision !== decision.expectedRegistryRevision) return fail('ENDPOINT_MIGRATION_STALE');
       const current = await readCurrentEndpointBindingContext(c, pid); if (!current || current.selectionRevision !== input.expectedSelectionRevision || canonicalPurposeJson(current) !== canonicalPurposeJson(decision.target)) return fail('ENDPOINT_CONTEXT_CHANGED');
+      signal?.throwIfAborted();
+      await adapters.validateMigrationDecision?.(c, decision, signal);
+      signal?.throwIfAborted();
       const { proposal, targetPointProjectMetres } = decision.evaluation;
       if (!proposal || !targetPointProjectMetres || !['carried-fixed', 'carried-rigid', 'rederived'].includes(decision.evaluation.disposition) || decision.evaluation.reasonCodes.length || decision.evaluation.status !== 'suggested') return fail('ENDPOINT_MIGRATION_REQUIRES_RESOLUTION');
       if (proposal.mode === 'object-attached') return fail('ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE');

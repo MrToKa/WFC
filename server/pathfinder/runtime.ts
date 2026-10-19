@@ -11,6 +11,8 @@ import { createPreparationPublisher } from './preparationPublisher.js';
 import { createGeometryTraceRepository } from './geometryTraceRepository.js';
 import { createGeometryTraceEngine } from './geometryTraceEngine.js';
 import { createEndpointBindingRepository } from './endpointBindingRepository.js';
+import { createRevisionComparisonRepository } from './revisionComparisonRepository.js';
+import { createRevisionEndpointAdapters } from './revisionComparisonEndpointAdapter.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
@@ -18,7 +20,8 @@ function createRuntime() {
   return {registry,jobs,apply,worker,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
     preparations:createPreparationService(pool,createPreparationPublisher(worker.executePreparation)),
     geometryTraces:createGeometryTraceRepository(pool,createGeometryTraceEngine(worker.executePreparation)),
-    endpointBindings:createEndpointBindingRepository(pool)};
+    endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters()),
+    revisionComparisons:createRevisionComparisonRepository(pool)};
 }
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
 export async function initializePathFinderRuntime():Promise<void> {

@@ -24,7 +24,7 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
   const routingPreferences=proposalRoutingPreferences(dependencies.options);
   let endpointIssue: string | null = null;
   try { requireVersionedCalculationScope(dependencies); }
-  catch { endpointIssue = 'Confirm current shared endpoint bindings, then calculate and review a fresh proposal.'; }
+  catch (error) { endpointIssue = error instanceof PathFinderError ? error.message : 'Calculate and review a fresh proposal against current dependencies.'; }
   const compatibilityIssue = endpointIssue ?? (route ? routeCompatibilityIssue(route.routeText) : null)
     ?? (result.design != null ? designLengthCompatibilityIssue(result.design.designLengthMeters) : null)
     ?? (routingPreferences ? null : 'The original calculation preferences are unavailable. Calculate and review a fresh proposal.');

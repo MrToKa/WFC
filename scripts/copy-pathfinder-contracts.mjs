@@ -30,4 +30,6 @@ copied.push({ name, sha256: expected });
 await import(new URL('../server/dist/server/pathfinder/preparationPublisher.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/geometryTraceRepository.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/endpointBindingRepository.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/revisionComparisonRepository.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/revisionComparisonEndpointAdapter.js', import.meta.url).href);
 console.log(JSON.stringify({ module: 'pathfinder-computational-contracts', files: copied.length, modules: copied }));

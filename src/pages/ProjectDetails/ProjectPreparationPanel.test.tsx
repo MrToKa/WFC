@@ -4,6 +4,12 @@ import { ProjectPreparationPanel } from './ProjectPreparationPanel';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { preparationFixture } from '@/test/preparationFixtures';
 import type { usePathFinder } from './hooks/usePathFinder';
+import { ModelRevisionChangesPanel } from './ModelRevisionChangesPanel';
+vi.mock('./ModelRevisionChangesPanel', () => ({
+  ModelRevisionChangesPanel: vi.fn((props: { isAdmin: boolean }) =>
+    props.isAdmin ? <section aria-label="Model revision changes integration" /> : null,
+  ),
+}));
 vi.mock('./hooks/useProjectPreparation', () => ({ useProjectPreparation: vi.fn() }));
 const fixture = preparationFixture();
 function setup() {
@@ -42,6 +48,31 @@ function setup() {
 }
 beforeEach(() => vi.clearAllMocks());
 describe('project preparation review', () => {
+  it('places comparison beside traceability using strict admin access and current generation without a model-selection callback', () => {
+    const { state, pf } = setup();
+    pf.preparationAccess = {
+      projectId: fixture.context.projectId,
+      loadedProjectId: fixture.context.projectId,
+      token: 'token',
+      isAdmin: true,
+    };
+    vi.mocked(useProjectPreparation).mockReturnValue(
+      state as unknown as ReturnType<typeof useProjectPreparation>,
+    );
+    render(<ProjectPreparationPanel pf={pf} active />);
+    expect(
+      screen.getByRole('region', { name: 'Model revision changes integration' }),
+    ).toBeInTheDocument();
+    const props = vi.mocked(ModelRevisionChangesPanel).mock.calls[0][0];
+    expect(props).toMatchObject({
+      projectId: fixture.context.projectId,
+      loadedProjectId: fixture.context.projectId,
+      isAdmin: true,
+      active: true,
+    });
+    expect(props).not.toHaveProperty('setProjectActiveModel');
+    expect(props).not.toHaveProperty('showPath');
+  });
   it('uses stacked coverage cards at narrow widths while retaining exact identities and resolution controls', () => {
     const { state, pf } = setup(),
       tray = {

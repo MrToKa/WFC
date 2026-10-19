@@ -5,6 +5,7 @@ import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { routingPurposeDisplayLabels } from '@/components/RoutingPurposePolicyCard';
 import { PREPARATION_LIMITS } from '../../../shared/pathfinderPreparation';
 import {GeometryTracePanel} from './GeometryTracePanel';
+import { ModelRevisionChangesPanel } from './ModelRevisionChangesPanel';
 
 type Props = {
   pf: ReturnType<typeof usePathFinder>;
@@ -18,6 +19,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
     [commandReason, setCommandReason] = useState('');
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null),
     [page, setPage] = useState(0);
+  const [comparisonPending, setComparisonPending] = useState(false);
   const scopeKey = JSON.stringify([pf.preparationAccess, state.context?.scope]);
   const latestScope = useRef(scopeKey);
   latestScope.current = scopeKey;
@@ -28,9 +30,9 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
     setPage(0);
   }, [scopeKey]);
   useEffect(() => {
-    onBusyChange?.(state.busy);
+    onBusyChange?.(state.busy || comparisonPending);
     return () => onBusyChange?.(false);
-  }, [state.busy, onBusyChange]);
+  }, [state.busy, comparisonPending, onBusyChange]);
   if (!state.enabled)
     return <Body1>Current administrator project access is required for project preparation.</Body1>;
   const context = state.context,
@@ -128,6 +130,13 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
       {state.busy ? <Button onClick={state.pause}>Pause local collection</Button> : null}
       {selectionNotice ? <p role="status">{selectionNotice}</p> : null}
       <details><summary>Traceability</summary><GeometryTracePanel pf={pf} active={active} aggregate={context?.currentAggregate??null}/></details>
+      <details><summary>Model revision changes</summary><ModelRevisionChangesPanel
+        projectId={pf.preparationAccess?.projectId ?? null} loadedProjectId={pf.preparationAccess?.loadedProjectId ?? null}
+        token={pf.preparationAccess?.token ?? null} isAdmin={Boolean(pf.preparationAccess?.isAdmin)} active={active}
+        contextKey={JSON.stringify([pf.data?.activeModel, context?.currentAggregate?.id, pf.preparationViewerGeneration])}
+        onDecisionSaved={() => pf.refresh()} onAuthorityLost={() => { pf.cancelOperation(); pf.refresh(); }}
+        onRecoveryPendingChange={setComparisonPending}
+      /></details>
       {context ? (
         <>
           <p>

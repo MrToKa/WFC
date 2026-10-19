@@ -1,0 +1,9 @@
+{
+  "status": "FAIL",
+  "scope": "Initial actual host5191 unauthenticated header-only100MiB transport probe before final nginx route fix.",
+  "observed": "HTML response reached JSON parser and caused Unexpected token <. Exact HTTP status was not persisted.",
+  "httpStatus": "UNKNOWN",
+  "sourceFinding": "revision-comparisons was missing from the existing current-admin prebody streaming location; generic nginx limit could preempt typed API refusal.",
+  "fix": "Added only revision-comparisons to the existing scoped streaming location.",
+  "verification": "actual-http-edges.json separately records final11PASS including typed401 and413 before body."
+}
