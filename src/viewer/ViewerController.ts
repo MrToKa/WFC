@@ -1,5 +1,6 @@
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
+import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
 import { planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
 import { watchViewerLogin } from './loginLifecycle';
@@ -398,7 +399,7 @@ export class ViewerController {
     for (const pending of [...this.pending.values()]) if (pending.envelope.type === 'PICK_POINT') this.cancel(pending.envelope.requestId);
   }
 
-  async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<{ snapshot: unknown; summary: Record<string, unknown> }> {
+  async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<{ snapshot: unknown; summary: CompletedModelCaptureSummary }> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
     const input:ModelCaptureRequest = JSON.parse(JSON.stringify(request));
     this.clear('selection'); const generation = this.routeGeneration;
@@ -457,6 +458,12 @@ export class ViewerController {
               throw new Error('Completed model capture request summary mismatch');
           }
           if (!await this.checkSelection()) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
+          if(summary.completedEvidence){
+            const evidence=summary.completedEvidence;
+            if(!await verifyCompletedCaptureEvidence(evidence)||evidence.binding.loadId!==loadId||evidence.binding.captureId!==captureId||evidence.binding.projectId!==this.options.projectId||evidence.binding.modelVersionId!==modelVersionId)throw new Error('Completed capture evidence binding mismatch');
+            const slice=input.preparationSlice;if(slice&&(evidence.binding.sessionId!==slice.sessionId||evidence.binding.partId!==slice.partId||evidence.binding.planSha256!==slice.planSha256||evidence.binding.coordinateFrameId!==slice.coordinateFrameId))throw new Error('Completed preparation evidence binding mismatch');
+            summary.completedEvidence=await bindCompletedCaptureEvidence(evidence,{selectionRevision:String(this.selectionRevision),partPayloadSha256:null});current();
+          }else if(input.preparationSlice)throw new Error('Completed preparation capture evidence is missing');
           return { snapshot, summary };
         }
         if (eventRecord.type === 'complete') throw new Error('Model capture completion mismatch');

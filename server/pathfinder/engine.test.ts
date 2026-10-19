@@ -22,7 +22,7 @@ beforeAll(async () => {
   const gapBytes=Buffer.from(JSON.stringify(syntheticGapSnapshot(projectId,modelVersionId,'a'.repeat(64))));
   gapSha256=createHash('sha256').update(gapBytes).digest('hex');
   await fs.writeFile(path.join(root,'snapshots',gapSnapshotId+'.json'),gapBytes,{flag:'wx'});
-  process.env.PF_ROOT = root; process.env.PF_ENGINE_DLL = path.resolve('pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll');
+  process.env.PF_ROOT = root; process.env.PF_ENGINE_DLL = process.env.PF_MODEL_RUNNER_DLL ?? path.resolve('pathfinder-engine/tools/PathFinder.ModelRunner/bin/Release/net9.0/PathFinder.ModelRunner.dll');
 });
 afterAll(() => {
   if (saved.root === undefined) delete process.env.PF_ROOT; else process.env.PF_ROOT = saved.root;

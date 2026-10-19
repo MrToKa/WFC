@@ -24,12 +24,15 @@ import type {
 import { preparationCaptureRequest } from '../../../../shared/preparationMerge';
 import { collectPreparationDiscovery } from './collectPreparationDiscovery';
 import type { usePathFinder } from './usePathFinder';
+import {saveCaptureEvidence,GeometryTraceApiError} from '@/api/pathfinderGeometryTrace';
+import {bindCompletedCaptureEvidence,type CompletedCaptureEvidence} from '../../../../viewer-runtime/capture-evidence.mjs';
 
 type PF = ReturnType<typeof usePathFinder>;
 type Pending =
   | { kind: 'create'; body: PreparationCreate }
   | { kind: 'resolution'; body: PreparationResolutionWrite }
-  | { kind: 'part'; sessionId: string; partId: string; body: PreparationPartUpload }
+  | { kind: 'part'; sessionId: string; partId: string; body: PreparationPartUpload;completedEvidence?:CompletedCaptureEvidence }
+  | {kind:'evidence';sessionId:string;partId:string;body:{sessionPlanSha256:string;payloadSha256:string;evidence:CompletedCaptureEvidence}}
   | { kind: 'publish' | 'cancel'; sessionId: string; body: PreparationMutation };
 type State = {
   identity: string;
@@ -166,14 +169,14 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         await operation(abort.signal);
       } catch (error) {
         if (latest.current !== identity || !mounted.current) return;
-        if (error instanceof PreparationApiError && [401, 403].includes(error.status ?? 0)) {
+        if ((error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && [401, 403].includes(error.status ?? 0)) {
           pending.current = null;
           latestPf.current.cancelOperation();
           latestPf.current.refresh();
           update(() => ({ ...initial(identity), error: error.message, conflict: true }));
         } else if (
           pending.current &&
-          (!(error instanceof PreparationApiError) || error.outcome === 'unknown')
+          (!((error instanceof PreparationApiError||error instanceof GeometryTraceApiError)) || error.outcome === 'unknown')
         )
           update((value) => ({
             ...value,
@@ -182,12 +185,12 @@ export function useProjectPreparation(pf: PF, active: boolean) {
               'The command outcome is unknown. Retry the same command before making further changes.',
           }));
         else {
-          if (error instanceof PreparationApiError && error.outcome === 'refused')
+          if ((error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && error.outcome === 'refused')
             pending.current = null;
           update((value) => ({
             ...value,
             unknown: false,
-            conflict: error instanceof PreparationApiError && error.status === 409,
+            conflict: (error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && error.status === 409,
             error:
               error instanceof DOMException && error.name === 'AbortError'
                 ? null
@@ -234,8 +237,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         case 'resolution':
           await savePreparationResolution(access.projectId!, access.token!, command.body, signal);
           break;
-        case 'part':
-          await uploadPreparationPart(
+        case 'part':{
+          const receipt=await uploadPreparationPart(
             access.projectId!,
             access.token!,
             command.sessionId,
@@ -243,8 +246,15 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             command.body,
             signal,
           );
+          if(command.completedEvidence){
+            const evidence=await bindCompletedCaptureEvidence(command.completedEvidence,{selectionRevision:command.completedEvidence.binding.selectionRevision,partPayloadSha256:receipt.part.payloadSha256});
+            pending.current={kind:'evidence',sessionId:command.sessionId,partId:command.partId,body:{sessionPlanSha256:command.body.sessionPlanSha256,payloadSha256:receipt.part.payloadSha256,evidence}};
+            await saveCaptureEvidence(access.projectId!,access.token!,command.sessionId,command.partId,command.body.sessionPlanSha256,receipt.part.payloadSha256,evidence,signal);
+          }
           sessionId = command.sessionId;
-          break;
+          break;}
+        case 'evidence':
+          await saveCaptureEvidence(access.projectId!,access.token!,command.sessionId,command.partId,command.body.sessionPlanSha256,command.body.payloadSha256,command.body.evidence,signal);sessionId=command.sessionId;break;
         case 'publish':
         case 'cancel':
           await mutatePreparation(
@@ -434,6 +444,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
                       kind: 'part',
                       sessionId: session!.id,
                       partId: part.partId,
+                      completedEvidence:capture.summary.completedEvidence,
                       body: {
                         schemaVersion: 'wfc.pf.preparation-part.upload.v1',
                         sessionPlanSha256: session!.plan.orderedPlanSha256,
@@ -579,7 +590,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
         }));
       } catch (error) {
         if (latest.current !== identity || !mounted.current) return;
-        if (error instanceof PreparationApiError && [401, 403].includes(error.status ?? 0)) {
+        if ((error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && [401, 403].includes(error.status ?? 0)) {
           pending.current = null;
           cancelPending.current = null;
           currentAbort.current?.abort();
@@ -588,7 +599,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           update(() => ({ ...initial(identity), error: error.message, conflict: true }));
           return;
         }
-        if (error instanceof PreparationApiError && error.outcome === 'refused')
+        if ((error instanceof PreparationApiError||error instanceof GeometryTraceApiError) && error.outcome === 'refused')
           cancelPending.current = null;
         update((value) => ({
           ...value,

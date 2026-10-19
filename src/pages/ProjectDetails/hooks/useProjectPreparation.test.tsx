@@ -4,6 +4,9 @@ import * as api from '@/api/pathfinderPreparation';
 import { preparationFixture, preparationIds as ids } from '@/test/preparationFixtures';
 import { useProjectPreparation } from './useProjectPreparation';
 import type { usePathFinder } from './usePathFinder';
+import {completedEvidenceFixture} from '@/test/geometryTraceFixtures';
+import {saveCaptureEvidence} from '@/api/pathfinderGeometryTrace';
+vi.mock('@/api/pathfinderGeometryTrace',async original=>({...await original<typeof import('@/api/pathfinderGeometryTrace')>(),saveCaptureEvidence:vi.fn()}));
 vi.mock('@/api/pathfinderPreparation', async (original) => ({
   ...(await original<typeof api>()),
   fetchPreparationContext: vi.fn(),
@@ -45,7 +48,7 @@ function setup() {
     runProjectPreparation: vi.fn(async (_expected, operation) =>
       operation({
         assertCurrent: () => {},
-        capture: vi.fn().mockResolvedValue({ snapshot: { synthetic: true } }),
+        capture: vi.fn().mockResolvedValue({ snapshot: { synthetic: true },summary:{} }),
       }),
     ),
   } as unknown as ReturnType<typeof usePathFinder>;
@@ -53,6 +56,15 @@ function setup() {
 }
 beforeEach(() => vi.clearAllMocks());
 describe('project preparation lifecycle', () => {
+  it('retains completed evidence after a committed part and retries only its exact unknown evidence upload',async()=>{
+    const {pf,session,committed}=setup(),evidence=await completedEvidenceFixture();
+    vi.mocked(pf.runProjectPreparation).mockImplementation(async(_scope,operation)=>operation({assertCurrent:()=>{},readSelection:vi.fn(),discover:vi.fn(),capture:vi.fn().mockResolvedValue({snapshot:{synthetic:true},summary:{completedEvidence:evidence}})}));
+    vi.mocked(api.uploadPreparationPart).mockImplementation(async()=>{vi.mocked(api.fetchPreparationSession).mockResolvedValue({...session,state:'collecting',parts:[committed],coverage:{expectedParts:1,committedParts:1,requestedScopeComplete:true,missingPartIds:[]}});return {schemaVersion:'wfc.pf.preparation-part-receipt.v1',part:committed,sessionRevision:'2',duplicate:false};});
+    vi.mocked(saveCaptureEvidence).mockRejectedValueOnce(new TypeError('Lost evidence receipt')).mockResolvedValueOnce({} as never);
+    const {result}=renderHook(()=>useProjectPreparation(pf,true));await waitFor(()=>expect(result.current.session).not.toBeNull());await act(()=>result.current.collect());expect(result.current.unknown).toBe(true);
+    const first=vi.mocked(saveCaptureEvidence).mock.calls[0];expect(first[6].binding.partPayloadSha256).toBe(committed.payloadSha256);
+    await act(()=>result.current.retry());expect(api.uploadPreparationPart).toHaveBeenCalledOnce();expect(vi.mocked(saveCaptureEvidence).mock.calls[1][6]).toBe(first[6]);expect(result.current.unknown).toBe(false);
+  });
   it('recovers the durable exact publish command after browser restart', async () => {
     const { pf, session } = setup();
     const command = {

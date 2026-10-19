@@ -4,6 +4,7 @@ import type { usePathFinder } from './hooks/usePathFinder';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { routingPurposeDisplayLabels } from '@/components/RoutingPurposePolicyCard';
 import { PREPARATION_LIMITS } from '../../../shared/pathfinderPreparation';
+import {GeometryTracePanel} from './GeometryTracePanel';
 
 type Props = {
   pf: ReturnType<typeof usePathFinder>;
@@ -126,6 +127,7 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
       ) : null}
       {state.busy ? <Button onClick={state.pause}>Pause local collection</Button> : null}
       {selectionNotice ? <p role="status">{selectionNotice}</p> : null}
+      <details><summary>Traceability</summary><GeometryTracePanel pf={pf} active={active} aggregate={context?.currentAggregate??null}/></details>
       {context ? (
         <>
           <p>

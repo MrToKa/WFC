@@ -2,6 +2,7 @@
 // The parent application uses only the pure assembler and the bounded bridge.
 import { validateModelCaptureInputDescriptor, validateModelCaptureInputScope, modelCaptureScopeBytes, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { validatePreparationSlice } from './preparation-input.mjs';
+import { createCompletedCaptureEvidence, validateCompletedCaptureEvidence, CAPTURE_EVIDENCE_LIMITS } from './capture-evidence.mjs';
 export const MODEL_CAPTURE_LIMITS = Object.freeze({ eventBytes: 24 * 1024, totalBytes: 64 * 1024 ** 2, events: 3000, indexedObjects: 1000000, objects: 4096, fragments: 100000, vertices: 5000000, triangles: 5000000, depth: 512, properties: 1024, milliseconds: 300000 });
 const encoder = new TextEncoder();
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -120,7 +121,8 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   const tree = await sdkCall((success, failure) => model.getObjectTree(success, failure));
   const fragmentList = model.getFragmentList(), scale = model.getUnitScale(), up = point(model.getUpVector());
   if (!(scale > 0) || !Number.isFinite(scale) || scale > 1e9 || Math.abs(up[0]) > 1e-12 || Math.abs(up[1]) > 1e-12 || Math.abs(up[2] - 1) > 1e-12) refuse('This model needs an explicit supported unit/up adapter.');
-  const offset = point(model.getGlobalOffset?.() ?? model.getData().globalOffset ?? { x: 0, y: 0, z: 0 });
+  const observedOffset=model.getGlobalOffset?.()??model.getData().globalOffset;
+  const offset = point(observedOffset ?? { x: 0, y: 0, z: 0 });
   const displayToWorld = matrix().makeScale(scale, scale, scale);
   for (let axis = 0; axis < 3; axis++) displayToWorld.elements[12 + axis] = offset[axis] * scale;
   const sourceToWorld = matrix().makeScale(scale, scale, scale), sourceUnits = text(model.getUnitString(), 64); if (!sourceUnits.length) refuse('SDK source unit label is missing.');
@@ -292,6 +294,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
       if (vertices.length < 3 || !triangleIndices.length) refuse('Selected mesh is incomplete; no AABB mesh is fabricated.');
       for (let index = 0; index < vertices.length; index++) if (!vertices[index]) refuse('Selected mesh contains an unfilled vertex index.');
       fragments.push({ id: 'fragment:' + fragmentId, vertices, triangleIndices, fragmentToWorldMetres: Array.from(canonicalMatrix.elements), transformAlreadyApplied: true });
+      if(evidence.fragments.length>=CAPTURE_EVIDENCE_LIMITS.fragments)refuse('Completed capture evidence exceeds its fragment budget.');
       evidence.fragments.push({ objectId: 'dbid:' + record.id, fragmentId, original: Array.from(original.elements), display: Array.from(world.elements), canonical: Array.from(canonicalMatrix.elements) });
     }
     if (record.role === 'routing-leaf' && !fragments.length) refuse('A selected routing leaf has no triangle geometry.');
@@ -312,6 +315,10 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   const equipmentMatches = [...equipment.values()].map(value => ({ name: value.name, status: value.ids.size > 1 ? 'ambiguous' : !propertyScan.complete ? 'unknown' : value.ids.size === 0 ? 'missing' : 'candidate', candidateObjectIds: [...value.ids].sort((a, b) => a - b).map(id => 'dbid:' + id) }));
   if (equipment.size && !propertyScan.complete) diagnostics.push({ code: 'incomplete_sdk_property_scan', omittedObjectCount: propertyScan.omittedObjectCount, message: 'The SDK omitted requested property rows; absence or uniqueness of endpoint candidates is not established.' });
   const summary = { scope: { kind: lookup ? 'independent-lookup-network' : 'explicit-selected-network', ...captureScope, ...(request.inputScope ? { inputScope: { ...request.inputScope, propertyScan } } : {}), ...(request.routeRules || lookup || request.preparationSlice ? {} : { routeCodes: request.routeCodes.map(code => '/' + code) }), fullHierarchyIndexed: true, indexedObjectCount: ids.length, selectedObjectsOnly: true, fullGeometryCaptured: false, fullPropertyScan: propertyScan.complete }, evidence, equipmentMatches, diagnostics, counts: { objectCount, fragmentCount, vertexCount, triangleCount }, engineeringAccepted: false, limitations: ['Selected network geometry only; full plant capture/capacity is not established.', ...(lookup ? ['Lookup scope uses current SDK display visibility; native visibility and logical ownership are not established by capture. C# resolves requested owners before fitting.'] : []), 'Exact endpoint candidates retain ambiguity and unknown native visibility; automatic engineering acceptance is not granted.', 'SDK unit/transform measurements do not establish native-converted parity or source-link proof.'] };
+  const observation=(status,value,api,reason=null)=>({status,value,api,reason});
+  const slice=request.preparationSlice;
+  summary.completedEvidence=await createCompletedCaptureEvidence({schemaVersion:'wfc.pf.completed-capture-evidence.v1',binding:{projectId:request.projectId,modelVersionId:request.modelVersionId,contentFingerprint:request.contentFingerprint,selectionRevision:null,loadId:input.loadId??null,captureId:request.captureId,sessionId:slice?.sessionId??null,partId:slice?.partId??null,planSha256:slice?.planSha256??null,coordinateFrameId:slice?.coordinateFrameId??null,partPayloadSha256:null},observations:{sdkVersion:evidence.sdkVersion,matrixPrecision:'binary64',sourceUnitLabel:observation('observed',sourceUnits,'model.getUnitString'),metresPerDisplayUnit:observation('observed',scale,'model.getUnitScale'),upVector:observation('observed',up,'model.getUpVector'),globalOffsetDisplayUnits:observedOffset==null?observation('unavailable',null,'model.getGlobalOffset/model.getData.globalOffset','SDK_OFFSET_UNAVAILABLE'):observation('observed',offset,'model.getGlobalOffset/model.getData.globalOffset'),globalOffsetMetres:observedOffset==null?observation('unavailable',null,'offset * model.getUnitScale','SDK_OFFSET_UNAVAILABLE'):observation('derived',evidence.globalOffsetMetres,'offset * model.getUnitScale'),displayToWorldMetres:observation('derived',evidence.displayToWorldMetres,'scale plus global offset',observedOffset==null?'MISSING_OFFSET_DEFAULT_ZERO_NOT_VERIFIED':null),legacySourceToWorldMetres:observation('derived',Array.from(sourceToWorld.elements),'scale-only legacy sourceToWorldMetres','SOURCE_PLACEMENT_NOT_ESTABLISHED'),modelTransform:evidence.modelTransform?observation('observed',evidence.modelTransform,'model.getModelTransform'):observation('unavailable',null,'model.getModelTransform','SDK_MODEL_TRANSFORM_UNAVAILABLE'),placementTransform:evidence.placementTransform?observation('observed',evidence.placementTransform,'model.getPlacementTransform'):observation('unavailable',null,'model.getPlacementTransform','SDK_PLACEMENT_TRANSFORM_UNAVAILABLE'),objectLocalFrame:null,sourceDocumentId:null,sourceInstancePath:null,stableExportEntityId:null},fragments:evidence.fragments.map(fragment=>({objectId:fragment.objectId,fragmentId:'fragment:'+fragment.fragmentId,originalWorldMatrix:observation('observed',fragment.original,'fragmentList.getOriginalWorldMatrix'),displayWorldMatrix:observation('observed',fragment.display,'fragmentList.getWorldMatrix'),canonicalMatrix:observation('derived',fragment.canonical,'displayToWorldMetres * sdkFragmentWorldMatrix'),transformAlreadyApplied:true})),diagnostics:['SOURCE_PLACEMENT_NOT_ESTABLISHED','OBJECT_LOCAL_FRAME_UNAVAILABLE','SOURCE_DOCUMENT_ID_UNAVAILABLE','SOURCE_INSTANCE_PATH_UNAVAILABLE','STABLE_EXPORT_ENTITY_ID_UNAVAILABLE',...(observedOffset==null?['SDK_OFFSET_UNAVAILABLE']:[])]});
+  active();
   for (const event of textParts('summary-part', request.captureId, null, serialize(summary))) yield emit(event);
   yield emit({ type: 'complete', captureId: request.captureId, objectCount, fragmentCount, vertexCount, triangleCount, engineeringAccepted: false });
 }
@@ -356,6 +363,12 @@ export function createModelCaptureAssembler({ eventLimit = MODEL_CAPTURE_LIMITS.
         }
         if (counts.fragmentCount > MODEL_CAPTURE_LIMITS.fragments || counts.vertexCount > MODEL_CAPTURE_LIMITS.vertices || counts.triangleCount > MODEL_CAPTURE_LIMITS.triangles) refuse('Captured geometry total budget exceeded.');
         for (const key of Object.keys(counts)) if (counts[key] !== event[key] || counts[key] !== summary.counts[key]) refuse('Capture count closure differs.');
+        if(summary.completedEvidence!==undefined){
+          const evidence=summary.completedEvidence,b=evidence?.binding;
+          if(!validateCompletedCaptureEvidence(evidence)||b.captureId!==captureId||b.projectId!==header.model.projectId||b.modelVersionId!==header.model.modelVersionId||b.contentFingerprint!==header.model.contentSha256||evidence.fragments.length!==counts.fragmentCount)refuse('Completed capture evidence identity or counts differ.');
+          const rows=new Map(evidence.fragments.map(row=>[row.fragmentId,row]));
+          for(const object of objects)for(const fragment of object.fragments){const row=rows.get(fragment.id);if(!row||row.objectId!==object.id||serialize(row.canonicalMatrix.value)!==serialize(fragment.fragmentToWorldMetres))refuse('Completed capture evidence matrices differ.');}
+        }
         if (header.capture.inputScope) {
           const scope = summary?.scope?.inputScope, { propertyScan: _pending, ...expected } = header.capture.inputScope;
           if (!validateModelCaptureInputScope(scope) || serialize({ ...scope, propertyScan: null }) !== serialize({ ...expected, propertyScan: null }) || !Array.isArray(summary.scope.equipmentNames) || summary.scope.equipmentNames.length !== expected.equipmentNameCount || summary.scope.indexedObjectCount !== scope.propertyScan.indexedObjectCount || summary.scope.fullPropertyScan !== scope.propertyScan.complete) refuse('Capture input or property scan scope closure differs.');

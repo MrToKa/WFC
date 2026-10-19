@@ -100,8 +100,17 @@ async function quota(dir: string, additional: number): Promise<void> {
   if (additional > PREPARATION_LIMITS.sessionDiskBytes || additional > PREPARATION_LIMITS.totalDiskBytes) throw new PathFinderError('PREPARATION_STORAGE_QUOTA', 413);
 }
 async function storeBlob(projectId: string, sessionId: string, blobId: string, value: unknown, limit: number): Promise<PreparationBlob> {
+  return storeBytes(projectId, sessionId, blobId, encodePreparationPayload(value, limit), limit);
+}
+/** Preserve exact server-produced UTF-8 output bytes; the caller separately validates its strict DTO. */
+export async function storePreparationBytes(projectId: string, sessionId: string, blobId: string, value: Buffer, limit = PREPARATION_LIMITS.partBytes): Promise<PreparationBlob> {
+  if (!Buffer.isBuffer(value) || !Number.isSafeInteger(limit) || limit <= 0 || limit > PREPARATION_LIMITS.unionBytes || value.length === 0 || value.length > limit) throw new PathFinderError('PREPARATION_BLOB_LIMIT', 413);
+  const bytes = Buffer.from(value);
+  return serialize(() => storeBytes(projectId, sessionId, blobId, bytes, limit));
+}
+async function storeBytes(projectId: string, sessionId: string, blobId: string, bytes: Buffer, limit: number): Promise<PreparationBlob> {
   policyUuidSchema.parse(blobId);
-  const bytes = encodePreparationPayload(value, limit), expected = { payloadRef: blobId, sha256: digest(bytes), bytes: bytes.length };
+  const expected = { payloadRef: blobId, sha256: digest(bytes), bytes: bytes.length };
   const dir = await directory(projectId, sessionId), filename = path.join(dir, blobId + '.json'), temporary = path.join(dir, randomUUID() + '.tmp');
   try { await readFile(filename, expected, limit); return expected; } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   await quota(dir, bytes.length);

@@ -195,7 +195,7 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
       function captureIterator(state, request, eventLimit = CAPTURE_INPUT_LIMITS.responses) {
-        return captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint }, { signal: AbortSignal.any([signal, state.controller.signal].filter(Boolean)), startedAt: state.startedAt, eventLimit, onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
+        return captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint,loadId:descriptor.loadId }, { signal: AbortSignal.any([signal, state.controller.signal].filter(Boolean)), startedAt: state.startedAt, eventLimit, onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
       }
       async function inputAck(state, request, operationSignal) {
         if (capture !== state || state.reading || state.iterator) throw safeError('EXTRACTION_FAILED');

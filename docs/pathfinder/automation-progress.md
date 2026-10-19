@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r3-project-preparation-local-20261019` (inspect live branch/HEAD before each continuation).
+- Current branch: `pf-r4-geometry-trace-local-20261019` (inspect live branch/HEAD before each continuation).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -101,7 +101,51 @@ recommended engineering choice and are recorded; no routine stage pause.
   Root owns existing server schema/app/router/dependencies and actual runtime checks.
   R1 historical note; see live R2 checkpoint below for current runtime changes.
 
-## Current PF-R3 — TECHNICAL_PASS at tested scope; R4 handoff next
+## Current PF-R4 — TECHNICAL_PASS at recorded diagnostic scope
+
+- Branchpf-r4-geometry-trace-local-20261019 inherits R4handoff3d78bc245e15957c1607c4ebc2dd95a31a44f8b4
+  and R3technical8c65ee1ccf9cb4b07c80bba99a475942fc6538e3. Report40 and
+  evidence/geometry-trace/ record current proof; local technical commit next.
+- Root actual executor; A C#export/tests, B bounded immutable geometry pipeline,
+  C protected evidence/UI finished and frozen. No active runtime subprocess.
+- Final63files1039PASS/0FAIL/5optionalNOT_RUN;11protected suites178PASS;
+  actualC#39PASS now durable raw receipt; types/lint/19immutable/11Core pins PASS.
+  Tests overlap. Normal Linux fsync exercised; Windows native sync NOT_RUN.
+- Actual first13object/6segment/23point/10port trace, replay/history PASS;
+  11repository phases and11hosttransport controls PASS. Separate actual
+  post-admission owned-actor demotion causes original request403,0proof writes,
+  prior proof unchanged and actor restored. Same command after natural150s lease
+  recovers same intent/trace0dd84cd9-b64d-48fc-8e3d-81fbfc5a25c3, exact replay PASS.
+- Normal protected UI capture/publish produces geometry2 aggregate7ca536d8-29a0-4fbc-ad4e-e31bd2fd747c,
+  sessiondbe5af1c-29f3-4e50-9378-ea3883c7d148. Completed22fragment evidence17041bytes
+  SHA6e0b80be4ea41d31d636f45990a247692d55f77dc6cc2b38e0d128d42e19e945;
+  actualGET/exactPUTreplay/badhash400/foreignpart404 PASS. Both trace histories,
+  object measurements/observations/unknownframes and filledGhost/yellow/Clear
+  confirmed by computer-use. Screenshots private and hashed. No real Apply.
+- Candidate1 healthy only5191. API0e48aa23e742624302ec7045dc3c213b4d2c0ee06fc913b0edcbe7dd4d0be886,
+  webc89c9c5171f4852cf49343b737d2898859f757fd388e3e74ca80f4f03139db76;
+  context1310filesSHAa228ff597d03de3dece853414deb8125eddbc71e906aac6a99cf3387e3317f10.
+  1149non-doc files match. Current explicit profile3 in own private work
+  .scratch/tray-catalog-80f5e81a-7f8b-40c3-b41e-f6f57a2e771e;1/2stale.
+- Final89table audit75exact/12ownedfixture prep+lookup deltas/2strict ordinary
+  auth tables;6newtrace tables all owned fixture. All1374oldobjects metadata exact.
+  All business/model/routing/design/install/write revisions/drawing preserved;
+  original3repo states and18outside containers unchanged. No5190 mutation.
+- Before migration exact metadata-only enginefixture retirement1608rows/13files
+  and independent89table audit PASS. FullUIfixture retained; no reseed/import.
+  Backuped1b2fa8-f832-45df-b5de-8eec4fe693ff8members/4images/TOC55175bytes PASS;
+  all4ready models1368resources/1756031212bytes fully rawSHAverified. Fullrestore
+  NOT_RUN. Private companion separate. Keep necessary demo/checkpoints/evidence.
+- Failed root-only assertions/formatters are retained: geometry revision string,
+  null observation, provenance at object level, bounded ordinary Viewer renewal.
+  Same retained raw successes reconciled; no product fix/repeated preparation.
+- Full330tray capacity/commonframe/native parity/human engineering acceptance
+  remain NOT_RUN; real copied project still0rules/0trustedprojectnetwork/0bindings/
+  0Apply. Unknown identity/localframe not invented. Denied historical paths untouched.
+- Next: localtechnicalcommit → finish detailed handoffs/PF-R5-endpoint-attachments.md
+  through prepare-stage-handoff → metadata commit/new inherited R5branch → execute
+  immediately. Automation stays ACTIVE; no routine pause or publication.
+## Previous PF-R3 — TECHNICAL_PASS at tested scope
 
 - R3 technical commit **8c65ee1ccf9cb4b07c80bba99a475942fc6538e3**,97files.
   Prepared detailed next assignment handoffs/PF-R4-geometry-trace.md through

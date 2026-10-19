@@ -106,12 +106,30 @@ internal static partial class Program
             diagnostics = prepared.Diagnostics.Take(2048).ToArray(), diagnosticsTruncated = prepared.Diagnostics.Count > 2048,
             engineeringAccepted = false
         };
-        if (request.Operation == "prepare") return new
+        if (request.Operation == "prepare")
         {
-            schemaVersion = "pathfinder.model.response.v1", request.RequestId, status = "prepared",
-            message = "Fitted computational artifact prepared; engineering acceptance is a separate gate.",
-            snapshot.Model, prepared = summary, engineeringAccepted = false
-        };
+            if (request.FittedTraceExport is { } exportRequest)
+            {
+                var trace = FittedTraceExporter.Export(root, prepared, exportRequest, token);
+                return new
+                {
+                    schemaVersion = "pathfinder.model.response.v1", request.RequestId, status = "prepared",
+                    message = "Fitted computational artifact prepared; engineering acceptance is a separate gate.",
+                    snapshot.Model,
+                    prepared = new { prepared.Key, prepared.Readiness, prepared.Counts, prepared.CacheScope, prepared.LoadedFromDisk,
+                        objectCount = prepared.Objects.Count, segmentCount = prepared.Segments.Count,
+                        diagnosticCount = prepared.Diagnostics.Count, diagnostics = prepared.Diagnostics.Take(2048).ToArray(),
+                        diagnosticsTruncated = prepared.Diagnostics.Count > 2048, engineeringAccepted = false, traceExport = trace },
+                    engineeringAccepted = false
+                };
+            }
+            return new
+            {
+                schemaVersion = "pathfinder.model.response.v1", request.RequestId, status = "prepared",
+                message = "Fitted computational artifact prepared; engineering acceptance is a separate gate.",
+                snapshot.Model, prepared = summary, engineeringAccepted = false
+            };
+        }
         var category = request.Category switch
         {
             "MV" => CableCategory.MV, "LV" => CableCategory.LV,
@@ -171,6 +189,11 @@ internal static partial class Program
         else if (!Guid.TryParseExact(r.SnapshotId, "D", out _) || r.SnapshotSha256 is null || !Regex.IsMatch(r.SnapshotSha256, "^[a-f0-9]{64}$"))
             throw new ArgumentException("Immutable snapshot identity and hash are required.");
         if (r.Reverse && r.Operation is not ("calculate" or "lookup")) throw new ArgumentException("Reverse applies only to calculated paths or ordered lookup.");
+        if (r.FittedTraceExport is { } export)
+        {
+            if (r.Operation != "prepare") throw new ArgumentException("Fitted trace export only applies to preparation.");
+            FittedTraceExporter.Validate(export);
+        }
         if (r.Operation == "lookup-plan") _ = LookupScopeResolver.Plan(r.RouteText!);
         else if (r.Operation == "lookup")
         {
@@ -291,6 +314,8 @@ internal sealed record Request
     public RetainedRoute? Route { get; init; }
     public string? RouteText { get; init; }
     public bool Reverse { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public FittedTraceExportRequest? FittedTraceExport { get; init; }
 }
 internal sealed record RetainedRoute
 {
