@@ -324,7 +324,30 @@ export async function verifyDatabaseDump(state, directory) {
     await docker.remove(created.Id);
   }
 }
-export async function backup(state, directory, privateConfig) {
+/** @typedef {'backup-before-dump'|'restore-before-fence'|'restore-after-fence'} ColdObservationPhase */
+/** @typedef {Readonly<{schemaVersion:'wfc.pf.cold-observation.v1',phase:ColdObservationPhase,backupId:string,runtime:string,owner:string,project:string,port:number,apiImage:string}>} ColdObservation */
+/** @typedef {(observation:ColdObservation)=>void|Promise<void>} ColdObserver */
+function requireColdObserver(observer) {
+  if (observer !== undefined && typeof observer !== 'function') fail('PF_COLD_OBSERVER_INVALID');
+}
+/** Trusted local observation only: no mutable state, credentials or callback
+ * return value enters an archive or authorizes restore/fencing. Exported for
+ * pure contract tests; the command-line interface does not accept callbacks.
+ * @param {ColdObserver|undefined} observer
+ * @param {ColdObservationPhase} phase
+ */
+export async function observeColdRuntime(observer, phase, state, backupId) {
+  requireColdObserver(observer); if (observer === undefined) return;
+  if (!['backup-before-dump', 'restore-before-fence', 'restore-after-fence'].includes(phase) || !UUID.test(backupId ?? '') || typeof state?.runtime !== 'string') fail('PF_COLD_OBSERVATION_INVALID');
+  validateState(state, state.runtime);
+  if (!/^sha256:[a-f0-9]{64}$(?![\s\S])/.test(state.images?.api ?? '')) fail('PF_COLD_OBSERVATION_IMAGE_INVALID');
+  const observation = Object.freeze({ schemaVersion: 'wfc.pf.cold-observation.v1', phase, backupId, runtime: state.runtime,
+    owner: state.owner, project: state.project, port: Number(state.port), apiImage: state.images.api });
+  await observer(observation);
+}
+/** @param {{observeCold?:ColdObserver}} [options] */
+export async function backup(state, directory, privateConfig, { observeCold } = {}) {
+  requireColdObserver(observeCold);
   const target = path.resolve(directory), privatePath = path.resolve(privateConfig); if (!contained(path.join(ROOT, 'pathfinder-engine/.scratch'), target) || contained(target, privatePath)) fail('PF_BACKUP_DESTINATION_INVALID');
   const resources = await ownership(state), docker = await createDocker(); if (resources.containers.filter(item => ['api', 'web', 'minio', 'postgres'].includes(item.role)).length !== 4 || !resources.containers.find(item => item.role === 'postgres')?.running) fail('PF_COMPLETE_STACK_REQUIRED');
   await safeNew(target); await assertCanonicalPath(path.dirname(privatePath), { directory: true }); const settings = await readSettings(state), backupId = randomUUID();
@@ -337,6 +360,7 @@ export async function backup(state, directory, privateConfig) {
     const inventory = await operation(state, 'inventory'), audit = await operation(state, 'audit-models'), artifacts = await artifactAudit(state);
     const inventoryAfter = await operation(state, 'inventory'); if (inventory.businessSha256 !== inventoryAfter.businessSha256 || inventory.registrySha256 !== inventoryAfter.registrySha256) fail('PF_BACKUP_DATABASE_CHANGED');
     await boundedStop(docker, resources.containers.find(item => item.role === 'minio'));
+    await observeColdRuntime(observeCold, 'backup-before-dump', state, backupId);
     await command(['exec', pg.id, 'pg_dump', '--no-password', '--format=custom', '--no-owner', '--no-acl', '-U', 'pf_local', '-d', 'wfc_pathfinder_local'], { output: path.join(target, 'database.dump') });
     const databaseDumpVerification = await verifyDatabaseDump(state, target);
     const manifest = { format: 'WFC-PF-LOCAL-BACKUP', schemaVersion: 1, profile: 'cold-pg-minio-staging-pathfinder-v1', backupId, createdAt: new Date().toISOString(), sourceProject: state.project, sourceOwner: state.owner, inventory, artifacts, modelAudit: audit, databaseDumpVerification, files: [], images: [] };
@@ -366,7 +390,9 @@ export async function verifyBackup(directory) {
   for (const image of manifest.images) { if (!['api', 'web', 'postgres', 'minio'].includes(image.role) || image.archive !== image.role + '-image.tar') fail('PF_BACKUP_IMAGE_INVALID'); await verifyImageArchive(path.join(target, image.archive), image); }
   return { status: 'PASS', directory: target, manifest };
 }
-export async function restore({ backup: source, privateConfig, runtime, port = 5191 } = {}) {
+/** @param {{backup?:string,privateConfig?:string,runtime?:string,port?:number|string,observeCold?:ColdObserver}} [options] */
+export async function restore({ backup: source, privateConfig, runtime, port = 5191, observeCold } = {}) {
+  requireColdObserver(observeCold);
   const verified = await verifyBackup(source), manifest = verified.manifest; await assertCanonicalPath(privateConfig); const privateBytes = await fs.readFile(privateConfig); if (privateBytes.length > 1024 ** 2) fail('PF_PRIVATE_CONFIG_LIMIT'); const config = JSON.parse(privateBytes);
   if (config.format !== 'WFC-PF-LOCAL-PRIVATE' || config.schemaVersion !== 1 || config.backupId !== manifest.backupId) fail('PF_PRIVATE_CONFIG_INVALID');
   const token = randomBytes(6).toString('hex'), state = await init({ runtime: runtime ?? path.join(ROOT, 'pathfinder-engine/.scratch/pathfinder-local-restore-' + token), project: 'wfc-pathfinder-local-' + token, port });
@@ -388,6 +414,7 @@ export async function restore({ backup: source, privateConfig, runtime, port = 5
     const inventory = await operation(state, 'inventory', settings), artifacts = await artifactAudit(state);
     validateRestoredInventory(manifest.inventory, inventory);
     if (inventory.businessSha256 !== manifest.inventory.businessSha256 || inventory.registrySha256 !== manifest.inventory.registrySha256 || artifacts.sha256 !== manifest.artifacts.sha256) fail('PF_RESTORE_DATA_MISMATCH');
+    await observeColdRuntime(observeCold, 'restore-before-fence', state, manifest.backupId);
     const fenced = await operation(state, 'fence-restored', settings), after = await operation(state, 'inventory', settings);
     const fencingValidation = validateRestoreFencing(inventory, after, fenced, state.owner);
     const fencingRecord = JSON.stringify({ format: 'WFC-PF-RESTORE-FENCING', schemaVersion: 1, owner: state.owner, project: state.project, runtime: state.runtime, port: state.port, backupId: manifest.backupId,
@@ -397,6 +424,7 @@ export async function restore({ backup: source, privateConfig, runtime, port = 5
     if (config.syntheticDemo) state.syntheticDemo = config.syntheticDemo;
     state.restore = { backupId: manifest.backupId, artifactsSha256: artifacts.sha256, jwtRotated: true, sessionsFenced: true,
       inventoriesEqual: inventory.businessSha256 === after.businessSha256, fencingValidated: true, fencingValidation, fencingRecordSha256: digest(fencingRecord) }; state.status = 'verified-quarantine'; await save(state);
+    await observeColdRuntime(observeCold, 'restore-after-fence', state, manifest.backupId);
     await start(state); return { status: 'PASS', runtime: state.runtime, project: state.project, origin: `http://127.0.0.1:${state.port}`, restore: state.restore };
   } catch (error) { state.status = 'failed-quarantine'; await save(state); throw error; }
 }

@@ -108,7 +108,9 @@ import {
   canvasToBlob,
   buildTrayPlaceholderValues,
   replaceDocxPlaceholders,
+  resolveTrayReportImageFallbacks,
   type TrayPlaceholderContext,
+  type PlaceholderImageSource,
   type WordTableDefinition,
   type DocxImageDefinition,
   MISSING_VALUE_PLACEHOLDER
@@ -219,19 +221,10 @@ const computeImageSizeEmu = async (
   const maxWidth = isFullPage
     ? FULL_PAGE_IMAGE_WIDTH_EMU
     : MAX_IMAGE_WIDTH_EMU;
-  const fallbackMaxHeight = options?.maxHeightEmu ?? MAX_IMAGE_HEIGHT_EMU;
-  const fallbackHeight = Math.min(
-    Math.round(maxWidth * 0.6),
-    fallbackMaxHeight
-  );
-
   try {
     const { width, height } = await readImageDimensions(blob);
     if (!width || !height) {
-      return {
-        widthEmu: maxWidth,
-        heightEmu: fallbackHeight
-      };
+      throw new Error('The report image has no readable dimensions.');
     }
 
     const rawWidthEmu = width * EMUS_PER_PIXEL;
@@ -261,10 +254,7 @@ const computeImageSizeEmu = async (
       heightEmu: Math.round(rawHeightEmu * scale)
     };
   } catch {
-    return {
-      widthEmu: maxWidth,
-      heightEmu: fallbackHeight
-    };
+    throw new Error('Failed to read the report image dimensions.');
   }
 };
 
@@ -2738,6 +2728,7 @@ export const TrayDetails = () => {
         string,
         PendingImagePlaceholder
       > = {};
+      const imagePlaceholderSources: Record<string, PlaceholderImageSource> = {};
 
       for (const variable of customVariables) {
         const placeholderToken = storedPlaceholders[variable.id];
@@ -2776,6 +2767,7 @@ export const TrayDetails = () => {
 
         const imageSource = placeholderBundle.images[rowId];
         if (imageSource) {
+          imagePlaceholderSources[trimmedPlaceholder] = imageSource;
           let sourceBlob: Blob | null = null;
           let fileNameForBlob = loadCurve;
           let description = '';
@@ -2833,10 +2825,15 @@ export const TrayDetails = () => {
       }
 
       const resolvedImagePlaceholders = await generation.wait(prepareImageDefinitions(pendingImagePlaceholders));
+      const resolvedTextReplacements = resolveTrayReportImageFallbacks(
+        textReplacements,
+        imagePlaceholderSources,
+        resolvedImagePlaceholders
+      );
 
       const updatedDocumentBlob = await generation.wait(replaceDocxPlaceholders(
         templateBlob,
-        textReplacements,
+        resolvedTextReplacements,
         {
           tables:
             Object.keys(tableReplacements).length > 0

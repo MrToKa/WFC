@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { ROOT, contained, validProject, validateState, load, configuration, claimsProject, start, retire } from './runtime-lib.mjs';
+import { ROOT, contained, validProject, validateState, load, configuration, claimsProject, start, retire, backup, restore, observeColdRuntime } from './runtime-lib.mjs';
 import { artifactInventory } from './container-ops.mjs';
 import { assertBackupRetirementIdentity, planBackupPayloadRetirement } from './cleanup-obsolete.mjs';
 import { validatePreviewRecoveryTarget, assertPreviewNoWorkflowWrites } from './preview-recovery.mjs';
@@ -39,6 +39,50 @@ test('failed quarantine and retired targets cannot be exposed by start', async (
 });
 test('retirement refuses the primary demonstration before changing Docker state', async () => {
   await assert.rejects(() => retire(state), /PF_VERIFIED_RESTORE_FIXTURE_REQUIRED/);
+});
+
+const coldState = () => ({ ...state, images: { api: 'sha256:' + 'a'.repeat(64), web: 'sha256:' + 'b'.repeat(64) },
+  settings: { databasePassword: 'synthetic-secret', jwtSecret: 'synthetic-secret' }, credentials: { password: 'synthetic-secret' } });
+for (const phase of ['backup-before-dump', 'restore-before-fence', 'restore-after-fence']) {
+  test(`cold observation ${phase} awaits one frozen identity-only descriptor and discards callback output`, async () => {
+    const candidate = coldState(), backupId = randomUUID(), calls = [];
+    let completed = false;
+    const result = await observeColdRuntime(async observation => {
+      await Promise.resolve(); calls.push(observation); completed = true;
+      assert.ok(Object.isFrozen(observation));
+      assert.deepEqual(Object.keys(observation).sort(), ['schemaVersion', 'phase', 'backupId', 'runtime', 'owner', 'project', 'port', 'apiImage'].sort());
+      assert.throws(() => { observation.owner = randomUUID(); }, TypeError);
+      return { credentials: 'synthetic-secret-that-must-not-be-returned' };
+    }, phase, candidate, backupId);
+    assert.equal(result, undefined); assert.equal(completed, true); assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], { schemaVersion: 'wfc.pf.cold-observation.v1', phase, backupId, runtime: candidate.runtime,
+      owner: candidate.owner, project: candidate.project, port: candidate.port, apiImage: candidate.images.api });
+    assert.equal(JSON.stringify(calls[0]).includes('synthetic-secret'), false);
+  });
+}
+test('an omitted cold observer preserves prior callers without reading any supplied state', async () => {
+  assert.equal(await observeColdRuntime(undefined, 'backup-before-dump', null, null), undefined);
+});
+test('backup and restore reject malformed cold callbacks before any resource or path operation', async () => {
+  for (const observer of [null, false, 1, {}, 'not-a-function']) {
+    await assert.rejects(() => backup(null, null, null, { observeCold: observer }), /PF_COLD_OBSERVER_INVALID/);
+    await assert.rejects(() => restore({ observeCold: observer }), /PF_COLD_OBSERVER_INVALID/);
+    await assert.rejects(() => observeColdRuntime(observer, 'backup-before-dump', null, null), /PF_COLD_OBSERVER_INVALID/);
+  }
+});
+test('cold observation refuses a forged phase, archive identity, runtime scope or image before invoking code', async () => {
+  const observer = () => { throw Error('Must not invoke an invalid observation'); }, backupId = randomUUID(), candidate = coldState();
+  for (const phase of ['after-start', 'restore', '', null])
+    await assert.rejects(() => observeColdRuntime(observer, phase, candidate, backupId), /PF_COLD_OBSERVATION_INVALID/);
+  await assert.rejects(() => observeColdRuntime(observer, 'backup-before-dump', candidate, 'not-an-id'), /PF_COLD_OBSERVATION_INVALID/);
+  await assert.rejects(() => observeColdRuntime(observer, 'backup-before-dump', { ...candidate, owner: 'not-an-id' }, backupId), /PF_OWNED_RUNTIME_REQUIRED/);
+  for (const image of ['wfc/backend:local', 'a'.repeat(64), 'sha256:' + 'A'.repeat(64), 'sha256:' + 'a'.repeat(64) + '\n'])
+    await assert.rejects(() => observeColdRuntime(observer, 'backup-before-dump', { ...candidate, images: { api: image } }, backupId), /PF_COLD_OBSERVATION_IMAGE_INVALID/);
+});
+test('cold observer synchronous and asynchronous refusals propagate unchanged without a success value', async () => {
+  const refusal = Object.assign(Error('Explicit observation refusal'), { code: 'OWNED_COLD_OBSERVATION_REFUSED' });
+  for (const observer of [() => { throw refusal; }, async () => { await Promise.resolve(); throw refusal; }])
+    await assert.rejects(() => observeColdRuntime(observer, 'restore-before-fence', coldState(), randomUUID()), error => error === refusal);
 });
 
 test('preview process interruption refuses primary, unverified, invalid and source-origin targets before runtime access', () => {

@@ -1,0 +1,372 @@
+{
+  "schemaVersion": "wfc.pf.r10-technical-receipt.v1",
+  "observedAt": "2026-10-19T16:27:21.041Z",
+  "status": "TECHNICALLY_VERIFIED_WITH_EXPLICIT_LIMITATIONS",
+  "branch": "pf-r10-final-delivery-local-20261019",
+  "workingTreeParent": "05429d1f03163332505a328b56d5659eff875644",
+  "finalTechnicalCommit": "Recorded in subsequent closeout metadata; source hashes below identify this checked working tree.",
+  "sourceFiles": [
+    {
+      "file": "scripts/pathfinder-local/runtime-lib.mjs",
+      "bytes": 50831,
+      "sha256": "44edf6a16ff9e0a9b619413eae2c79c1f2dd99f4ac970a584c8ab6be52f705c6"
+    },
+    {
+      "file": "scripts/pathfinder-local/runtime.test.mjs",
+      "bytes": 15332,
+      "sha256": "6d5f1baa762b260bf20140f085001346b7593777e447965ed6e7be3de704d71f"
+    },
+    {
+      "file": "shared/trayDrawing/service.ts",
+      "bytes": 98880,
+      "sha256": "e24913ff9e915ac5fd3c0aba6f5d8ace751703392e0f4a6a72fb9c268fa1c9de"
+    },
+    {
+      "file": "shared/trayDrawing/index.test.ts",
+      "bytes": 14537,
+      "sha256": "412b5410489336d6cfb183c8a3f566b58b5c3d935975afd4a396d1bc7623e8af"
+    },
+    {
+      "file": "src/pages/TrayDetails.tsx",
+      "bytes": 123570,
+      "sha256": "dc64171991e146f5e082d5041fc848f9ef1ede919e1074bbaa05b346f9fba137"
+    },
+    {
+      "file": "src/pages/TrayDetails/trayReportUtils.ts",
+      "bytes": 51014,
+      "sha256": "ab5a56998bc1649ec36742976dfb6f981d33f9413620216298037cc11be2c93e"
+    },
+    {
+      "file": "src/pages/TrayDetails/trayReportUtils.test.ts",
+      "bytes": 26133,
+      "sha256": "d7e155c4e38422ffdb092344ef44f606f89c18bdf26441383d81e0d2984e01d6"
+    }
+  ],
+  "sourceFilesSha256": "b79bdac25910ad898e0485cf5290bb8f9d19f89054bb165dd4be9d1befb945d9",
+  "candidate": {
+    "sourceFiles": 1560,
+    "sourceSha256": "a603cdab2540f3c21861dbcffc7f38112750d0c74c9e21a2c3366c61b4a9737e",
+    "apiImage": "sha256:abac7d3e41f3b6888ac0d1d69c8fdfe9b9f9bcf3ba51256fa8f67893b0e672d1",
+    "webImage": "sha256:b6f6b3a1a5183c7855d06862d53b3303f7f26c22b61a848944a2eea1a3ea4d1b",
+    "buildScope": "Build-time context; later documentation/evidence are not claimed inside these images."
+  },
+  "verification": {
+    "currentChecks": {
+      "runtime": {
+        "passed": 26,
+        "newCases": 7
+      },
+      "reportAndDrawingService": {
+        "passed": 162,
+        "files": 2,
+        "newReportCases": 5
+      },
+      "sharedDrawing": {
+        "passed": 41,
+        "files": 1,
+        "newClampCases": 3
+      },
+      "snapshotExportAndInputs": {
+        "passed": 63,
+        "files": 3
+      },
+      "typecheck": "PASS",
+      "focusedLint": "PASS",
+      "countsOverlap": true
+    },
+    "inheritedCoreEvidence": {
+      "receipt": "../revision-results/technical-receipt.json",
+      "coreRegressionPassed": 105,
+      "frozenCases": 43,
+      "frozenParityChecks": 215,
+      "lengthLedgerPassed": 35,
+      "rerunForThisReceipt": false,
+      "currentCoreWorkingIndexCanonicalWorktreePins": "PASS",
+      "canonicalCommitQualification": "Only explicit byte-level CRLF-to-LF difference; raw hashes retained privately.",
+      "expectedRegenerated": false,
+      "nativeParity": false
+    },
+    "actualDocuments": {
+      "finalPages": 14,
+      "allPagesVisuallyInspected": true,
+      "initialSevenPageFailureRetained": true,
+      "lvAndMvNormalThreeFileExport": true
+    },
+    "sameProjectDrawingIndependence": {
+      "requests": 19,
+      "exactPathAndDesignPreserved": true,
+      "originalModesRestored": true
+    },
+    "ordinaryDrawingReader": {
+      "normalRegistrationAssignmentAndCleanup": true,
+      "readOnlyLvMvComputerUse": true,
+      "adminBasicSnapshotEqual": true,
+      "pfSettingsExportUnassignedDenied": true,
+      "disposableAccountRemoved": true
+    },
+    "restoredHttp": {
+      "requests": 28,
+      "oldUnexpiredJwtStatus": 401,
+      "oldSourceHostKeyStatus": 401,
+      "protectedEntrypointStatus": 206,
+      "closedSessionStatus": 410,
+      "oldSourceCookieReplay": "NOT_RUN",
+      "existingReceiptAndClosedKeyExact": true,
+      "newApplyCount": 0
+    },
+    "offline": {
+      "status": "PASS",
+      "method": "owned-web-default-route-v1",
+      "scope": "Owned target web default route removed, other app services on internal backend; external HTTP refused while localhost/internal API worked.",
+      "hostInternetDisabled": false,
+      "browserInternetDisabled": false,
+      "virginBrowserProfile": false,
+      "newTabAndHardReloadRequested": true,
+      "freshProtectedModelSessionLoaded": true,
+      "fragments": 664556,
+      "identifiers": 438156,
+      "orderedLookupMeters": 35.30345579516123,
+      "gapCount": 4,
+      "gapMeters": 0.9840583861033791,
+      "filledGhostYellowClearRestore": true,
+      "newFullRouteSyntheticCalculations": 2,
+      "geometricMeters": 10,
+      "designMeters": 18,
+      "details": {
+        "secondary": 5,
+        "endConnection": 6,
+        "bendingPercent": 10
+      },
+      "cableRowsUnchanged": true,
+      "newApplyCount": 0,
+      "routeConfigurationAndEndpointsRestored": true
+    },
+    "referencePreservation": {
+      "checksPassed": 7,
+      "coreFiles": 11,
+      "originalRegressionFiles": 8,
+      "nativeOracleSourceCopies": 14,
+      "frozenPf0": true,
+      "originalCheckoutsAndDirtyFiles": true,
+      "outsideStaticIdentities": 18,
+      "externalLifecycleClassification": "Acknowledged external changes; not historical unchanged-container claim."
+    }
+  },
+  "backup": {
+    "backupId": "3daea574-2d70-4f06-b714-3a8890c28798",
+    "archive": "r10-final2",
+    "members": 8,
+    "applicationImages": 4,
+    "tables": 126,
+    "manifestSha256": "419752d56fbc1c42b008e7e3966cee42dd6cb054c6b4c6d37640d313e017a3a3",
+    "privateRuntimeCompanionRetained": true,
+    "separateQualifiedProducerImageAndHostCompanionRetained": true,
+    "sourceOriginalRunningStatesRestored": true
+  },
+  "restore": {
+    "freshPort": 5192,
+    "tablesExactBeforeFence": 126,
+    "qualifiedFieldSetsAfterFence": 3,
+    "authenticationGroups": 2,
+    "leaseRowsExact": true,
+    "jwtRotated": true,
+    "producerVariablesBlank": 7,
+    "grantsRestoreFenced": true,
+    "sourcePrePostTablesExact": 126,
+    "sourceRetireInvoked": false
+  },
+  "cleanup": {
+    "new5192ContainersRemaining": 0,
+    "new5192VolumesRemaining": 0,
+    "new5192NetworksRemaining": 0,
+    "port5192Closed": true,
+    "source5191Retained": true,
+    "usefulSyntheticDrawingDemoRetained": true,
+    "temporaryBasicAccountRemoved": true,
+    "spentHostLauncherWrapperRemoved": true,
+    "rendererChildRemoval": "BLOCKED_BY_AUTOMATIC_APPROVAL_REVIEW; retained without retry/bypass",
+    "historicalDeniedPathsAndParentsUntouched": true,
+    "generalPrunePerformed": false
+  },
+  "sourceRuntime": {
+    "port": 5191,
+    "sourceBinding": 4,
+    "sourceProfile": 18,
+    "producerHostBinding": 10,
+    "managedHostPid": 14196,
+    "producerReady": true,
+    "existingDiagnosticGrantRevision": "3",
+    "hostLaunchUnknownReconciledWithoutRelaunch": true,
+    "restoredTargetProducerEnabled": false
+  },
+  "limits": {
+    "realCopiedProject": {
+      "cables": 2140,
+      "trays": 330,
+      "purposes": 6,
+      "unresolvedLocationNames": 1527,
+      "confirmedLocations": 0,
+      "retainedDiagnosticObjects": 13,
+      "routingPolicyRevision": "0",
+      "fullProjectNetworkPublished": false
+    },
+    "realConvertedComparison": {
+      "oldObjects": 8,
+      "newObjects": 9,
+      "unresolvedChanges": 17,
+      "qualifiedMatches": 0,
+      "frameVerified": false,
+      "automaticCarry": false
+    },
+    "wholePlantCalculatedCapacity": "NOT_RUN",
+    "nativeParity": "NOT_PERFORMED",
+    "humanEngineeringAcceptance": "NOT_PERFORMED",
+    "newRealEngineeringApplyCount": 0,
+    "mergePushPrDeployment": "NOT_PERFORMED"
+  },
+  "retainedFailures": [
+    {
+      "check": "initial LV document",
+      "status": "FAIL",
+      "followup": "Corrected image collision/missing-image fallback; final14pages PASS."
+    },
+    {
+      "check": "front-network disconnect offline topology",
+      "status": "UNSUITABLE",
+      "followup": "Reconnected in finally; independent route-only method PASS."
+    },
+    {
+      "check": "first extra raw canonical blob audit",
+      "status": "FAIL",
+      "followup": "Explicit CRLF worktree/LF blob distinction proven without text changes."
+    },
+    {
+      "check": "auth1 actor assumption",
+      "status": "FAIL_BEFORE_HTTP",
+      "followup": "Actual retained historical actor signed in normally for existing receipt/closure reads."
+    }
+  ],
+  "privateEvidence": [
+    {
+      "privateFile": "r10-final2-result.private.json",
+      "bytes": 61206,
+      "sha256": "e3470654b5a53b84ea764efdb8ed5aa54bf4f4cb1c9ad0e7f866cfd506338132",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-restore5192-final1-result.private.json",
+      "bytes": 5920,
+      "sha256": "7a1ee3ee320d3aa203f935b33bd2f3b604ddbc5e54d51d80b85400f1f6fb80f7",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-restored-auth2-result.private.json",
+      "bytes": 15372,
+      "sha256": "91612ea2a38a930a62f44a52a1611656ef153e79f101442066889c9da7beff33",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-restore5192-final1-offline-route-hold2-final.private.json",
+      "bytes": 14998,
+      "sha256": "f7c4d547179fe7b978e439f02f2a0dd89af86ef13af6a63b41b4e8838cd51404",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-restored-ui1-result.private.json",
+      "bytes": 4369,
+      "sha256": "acd25611b18eb5ddffdded29c08f34aede3ba1785116576d7f0e1d4895b433ba",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-offline-math-read1-result.private.json",
+      "bytes": 2167,
+      "sha256": "72af7fe047606181f14c792e2d105ae4c8080f7f3934d0ea36c79874b5185665",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-retire-final2-result.private.json",
+      "bytes": 1107,
+      "sha256": "7dfb72491c04fe35f05e69e574c0223464fd69a769ebf024b19ea66ab710bda5",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-reference-preservation2-result.private.json",
+      "bytes": 129665,
+      "sha256": "7677cb24c513d6d4b9e0ce8dcb7f2622db17458b5503464bb27564761eb004ca",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-host10-process-reconciled1.private.json",
+      "bytes": 1538,
+      "sha256": "acfb444b054b18977338228875a8ce233da19801c63b9e07503ad446fdea7f8e",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-source-final-ui1-result.private.json",
+      "bytes": 1211,
+      "sha256": "66689b47f049063148b61a7f7e6adfe9a3aaaff523bd939454c8655df4987d3b",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-docx-qa1-result.private.json",
+      "bytes": 5765,
+      "sha256": "b6580a8ae055a233874d755d727f9668395e0b0911b3fba2192c0a344b2bcfa8",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-clamp-block1-result.private.json",
+      "bytes": 805,
+      "sha256": "72c1f7879c7897d3172ac276b7dea58cb3dc30856d87cd57460b31b957a53ac9",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-same-project2-result.private.json",
+      "bytes": 1928,
+      "sha256": "fd71d1e9dd9dcde4b7d4b6f10ea1387a2469d94dc3bb162181052e15a77ab046",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-br1-create-result.private.json",
+      "bytes": 6167,
+      "sha256": "12a49fa6bc9b81c2558eb976c1cf5ef125897485346758bd55a5d25a5412c10d",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-br1-check-result.private.json",
+      "bytes": 7159,
+      "sha256": "5de4227439de5c489928593a71c00223ead4daa3d8e08e583f29ecd2ab9cf5b9",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-br1-cleanup-result.private.json",
+      "bytes": 5597,
+      "sha256": "9682b9dc553aff8eaf2df12eadfab3ff9a907f7fd77201a6c476782b0a97d9dc",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-candidate-build1-result.private.json",
+      "bytes": 300140,
+      "sha256": "9c00508400164c6fde5001a2df241844be34b7dc02e890ed66d2131891f1eca2",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-upgrade-source1-result.private.json",
+      "bytes": 2771,
+      "sha256": "053e9daf861df8cc82e0ec433eb577d20f2e6fc476e4f04c4e8527a71b50d905",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-upgrade-delta-proof1-result.private.json",
+      "bytes": 1768,
+      "sha256": "97071a5535ebace6f10fa572344243c4f28ad7561a84b2cc8c125bf7e69825e2",
+      "status": "PASS"
+    },
+    {
+      "privateFile": "r10-real-pair1-result.private.json",
+      "bytes": 3964,
+      "sha256": "c30de7cb2e9d6620484494b1b61b4491b711eccdba3c7e15957c499f9bee2055",
+      "status": "PASS"
+    }
+  ],
+  "privateValuesOrBusinessRowsIncluded": false
+}

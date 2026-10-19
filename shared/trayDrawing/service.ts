@@ -2546,7 +2546,9 @@ export class TrayDrawingService {
     if (overflow > 1e-7) data.diagnostics.push({ code: 'DRAWING_OVERFLOW', cableIds: data.placements.map(p => p.cableId), message: 'Cable or clamp envelopes exceed the available tray width or overlap between sides.' });
     const top = data.originY;
     if (data.placements.some(p => p.yPx - p.radiusPx < top - 1e-7)) data.diagnostics.push({ code: 'DRAWING_HEIGHT_OVERFLOW', cableIds: data.placements.filter(p => p.yPx - p.radiusPx < top - 1e-7).map(p => p.cableId), message: 'Cable envelopes exceed the useful tray height.' });
-    const tallClamps = data.trefoilClamps.filter(group => group.clamp && group.clamp.heightMm > data.usableTrayHeightMm);
+    const tallClamps = data.useTrefoilClamps
+      ? data.trefoilClamps.filter(group => group.clamp && group.clamp.heightMm > data.usableTrayHeightMm)
+      : [];
     if (tallClamps.length) data.diagnostics.push({ code: 'CLAMP_HEIGHT_OVERFLOW', cableIds: tallClamps.flatMap(group => group.cables.map(cable => cable.id)), message: 'Trefoil clamp envelopes exceed the useful tray height; the drawing canvas includes them for review.' });
     return { spacingMm: Math.max(0, spacingMm), totalCableWidthMm: segments.reduce((sum, segment) => sum + segment.rightPx - segment.leftPx, 0) / scale,
       occupiedWidthWithBundleSpacingMm: occupied / scale, occupiedWidthWithoutBundleSpacingMm: capped / scale,

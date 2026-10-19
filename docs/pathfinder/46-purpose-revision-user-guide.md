@@ -1,18 +1,23 @@
 # Path Finder: purposes, cable locations and model revisions
 
-This guide describes the implemented local interface and its operating boundaries.
-It accompanies [the accepted plan](32-purpose-and-revision-plan.md). At the time
-of writing, PF-R9 has bounded technical verification recorded in report45;
-PF-R10 final delivery checks are still pending. Instructions below do not declare
-that those final checks passed or that the real engineering model has been accepted.
-Use the final stage reports and their receipts for the verified revision and scope.
+This guide explains the separate local demonstration at **127.0.0.1:5191**.
+It accompanies [the accepted plan](32-purpose-and-revision-plan.md) and
+[the R10 delivery record](47-r10-final-delivery.md). The complete current cold
+backup, fresh isolated restore, authentication checks and bounded offline
+demonstration have recorded technical passes. The disposable target has been
+retired, and the source preparation service was resumed and confirmed ready.
+The local delivery commit is identified in the closeout record. These checks do
+not accept the real engineering model. Use report47
+and its receipts for the final verified revision and remaining limits.
 
-The candidate5 interface has loaded retained historical-v1 proposals and completed
-a normal Calculate → Review → Apply flow on a controlled synthetic cable: an
-18-metre design result, with installed length 44 metres unchanged. Real-data Apply remains
-zero. Pending-request closing has source-test and actual HTTP evidence; a direct
-browser demonstration of that close action is not claimed. These bounded checks
-do not establish wholeplant routing coverage or human engineering acceptance.
+The current R10 candidate1 includes the corrected Word report images and honest
+descriptions where an optional catalog image is unavailable. Normal application
+exports of the controlled LV and MV examples have each produced a seven-page
+report; all fourteen rendered pages were inspected. A separate controlled
+mathematical example has calculation, exact length components, explicit
+Review → Apply, idempotent replay and request-closing evidence. These examples
+demonstrate the features; they do not establish complete routing for Aalborg.
+No real project routing or design length has been applied for the user.
 
 ## 1. Open the isolated demonstration
 
@@ -23,6 +28,20 @@ Use a current administrator account at:
 This is the separate copied-project demonstration. Changes here do not update the
 original application. Its engineering data still needs human review; successful
 controlled test cases do not establish that every project cable can be routed.
+
+Sign in through the normal application login. Use your copied account if it has
+current administrator access in this installation, or the retained local demo
+administrator account. Its credentials are stored only in the protected local
+`demo.private.json` beside the saved runtime descriptor; passwords and tokens
+are not included in this guide or Git. The temporary ordinary-reader QA account
+was removed after its checks and is not a demonstration login.
+
+The copied project contains **2140 cables, 330 trays, six tray purposes and 1527
+location names**. Its real routing permissions are unconfigured and its retained
+prepared model scope is a **13-object diagnostic network**. It is not yet a
+complete network for those 330 trays. Configure real permissions, resolve model
+ownership and shared locations, then prepare and review the intended network
+before accepting real cable results. Complete-network capacity is unverified.
 
 The retained installation is identified by these saved descriptors:
 
@@ -44,6 +63,35 @@ Only administrators can author these settings or use **Path Finder**, including
 direct links and server operations. Ordinary authorized drawing readers can view
 the resulting tray drawings without receiving Path Finder or model access.
 
+### Try the retained drawing and report examples
+
+The separate project **PF-R10-DRAWING-8609c3e8-e73** contains clearly labelled
+synthetic drawing inputs. It is retained as a useful demonstration, not as real
+cable engineering data or an example of a prepared 3D routing network.
+
+| Example | Open |
+| --- | --- |
+| Project settings and separate drawing-purpose rules | [Synthetic drawing project Details](http://127.0.0.1:5191/projects/c6613d65-7170-451d-9530-08999b31ebb2?tab=details) |
+| **BC001 — LV**: compatible Power and Control bundles | [LV tray drawing](http://127.0.0.1:5191/projects/c6613d65-7170-451d-9530-08999b31ebb2/trays/8b295c09-6de4-4b0e-9a4f-0f7a99f70423) |
+| **BC002 — MV**: trefoil arrangement and clamp diagnostics | [MV tray drawing](http://127.0.0.1:5191/projects/c6613d65-7170-451d-9530-08999b31ebb2/trays/f1bb86bc-f984-47f2-990e-7a31fff863d8) |
+
+In this synthetic project's **Cable positioning** card, assign Power and Control
+to the same side to inspect compatible pooling, then opposite sides to inspect
+the automatic divider. **Use default layout** returns each category to its
+established default side. Save the settings and refresh the tray drawing.
+
+On either ready tray page, **Generate report** saves the load-curve image,
+bundle image and Word report, then downloads the report. The retained project
+also contains its generated files. The Word bundle picture is intentionally
+rotated onto a portrait page; its separate bundle image remains horizontal.
+Missing optional catalog images or unavailable engineering facts are described
+as missing rather than supplied with guessed values.
+
+The MV example is retained with clamps **off**. Enabling a clamp that does not
+fit makes the drawing visibly blocked and prevents exporting a valid report.
+Do not treat a recommended clamp as an installed clamp. Restore the example's
+clamps-off setting after inspecting that diagnostic.
+
 ## 2. Set the project inputs in Details
 
 First check **Project → Details** and its active model version. Path Finder uses
@@ -62,6 +110,11 @@ save them; the application does not invent missing allowances. The displayed
 length calculation** card also describes the separate established calculation in
 the cable application; do not use that legacy formula in place of the Path Finder
 component ledger.
+
+The copied Aalborg demonstration currently uses **Secondary tray length 7 m**,
+**For end connection 5 m**, **Additional % for bending 10%** and **Connection gap
+1 m**. These are this project's retained values, not settings to copy blindly
+into another project. Each proposal records the actual Details inputs it used.
 
 For a successful Path Finder calculation, the final length is:
 
@@ -153,6 +206,11 @@ Publication is atomic for the requested scope. A missing part, changed input,
 exceeded limit or lost authorization must be resolved before that scope can be
 published. A small diagnostic network is not a complete project network.
 
+For the real copied project, review coverage against the actual project tray
+catalog. Confirm units, transforms and the engineering coordinate frame before
+using fitted geometry or entered endpoint coordinates as length evidence. An
+imported and visible model is not, by itself, a prepared routing network.
+
 **Manual diagnostic capture** and the advanced canonical snapshot import are
 separate diagnostic options. They do not configure the persistent Details
 permissions or prove full project coverage. Do not rerun seed or model import to
@@ -175,6 +233,10 @@ In **Path**, expand **Project cables and shared locations**:
 
 The registry is shared across both cable ends and all cables in the project.
 Confirmed aliases reuse the same binding; they are not independent copied points.
+Once a physical location is confirmed, the same saved location can satisfy other
+cables' From and To names. Review ambiguous aliases instead of creating a second
+location or choosing the first candidate automatically. The demonstration has
+not invented bindings for the 1527 real location names.
 
 - A **fixed-world** point is an explicit X/Y/Z point in metres in the current
   capture frame. Enter coordinates or use **Pick surface point in 3D**. A surface
@@ -336,6 +398,16 @@ checkbox does not qualify an unavailable producer. An unqualified, blocked or
 stopped producer leaves geometry pending. Read the displayed reason and use
 **Refresh background status** after the condition has actually been resolved.
 
+Closing the page does not stop an already authorized background calculation.
+The local application and its separately managed preparation service must still
+be running. The service is deliberately stopped and joined for a cold backup;
+the checkbox does not start it again. At R10 closeout the source service was
+resumed in a fresh private work directory, binding10/PID14196, and normal status
+reported **ready**. The launcher timeout was reconciled against that exact
+process and its start receipt, without launching a second worker. Existing
+diagnostic grant revision3 was preserved; no real-project grant was enabled.
+Future computer/Docker shutdowns still require the qualified recovery workflow.
+
 To stop future automatic work, uncheck the setting and save. Expired operation
 leases, revoked administrator authority, changed grant or installation identity,
 or an unconfirmed engine shutdown can block work. Unknown outcomes retain exact
@@ -367,14 +439,104 @@ node scripts/pathfinder-local/runtime.mjs info --runtime 'C:\Users\todor.chankov
 
 Its `verify-backup --backup` operation verifies an existing archive's completion
 marker, hashes and image members. Supply the **actual retained archive directory**
-from the matching delivery receipt. Final R9/R10 archive paths and image/source
-hashes are pending; this guide does not supply an invented final archive path.
+from the matching delivery receipt. The older R8 archive is historical recovery
+evidence; it is not a backup of the current R10 application and new history.
+The complete current archive **r10-final2** is verified, with backup ID
+`3daea574-2d70-4f06-b714-3a8890c28798`. It contains eight payload members:
+the database dump, MinIO files, staging files, Path Finder files and four pinned
+application/service image archives. Its cold SQL-text inventory covers all
+**126 tables**, including nonempty proposal, review, Apply and closed-request
+history from the explicitly synthetic calculation example.
+
+Keep these matched local items together. The three companion files are outside
+the archive directory by design; do not copy them into Git or expose their
+contents:
+
+| Retained item | Absolute local path |
+| --- | --- |
+| Verified archive directory | `C:/Users/todor.chankov/source/WFC-pathfinder-local/pathfinder-engine/.scratch/tray-catalog-5f489050-d469-4ae0-9972-868b33a4d8e3/r10-final2` |
+| Private runtime settings | `C:/Users/todor.chankov/source/WFC-pathfinder-local/pathfinder-engine/.scratch/tray-catalog-5f489050-d469-4ae0-9972-868b33a4d8e3/r10-final2-runtime.private.json` |
+| Private producer/host provenance companion | `C:/Users/todor.chankov/source/WFC-pathfinder-local/pathfinder-engine/.scratch/tray-catalog-5f489050-d469-4ae0-9972-868b33a4d8e3/r10-final2-host-companion.private.json` |
+| Separate qualified producer image | `C:/Users/todor.chankov/source/WFC-pathfinder-local/pathfinder-engine/.scratch/tray-catalog-5f489050-d469-4ae0-9972-868b33a4d8e3/r10-final2-producer-image.tar` |
+
+After changing to the working-copy directory as above, verify this exact retained
+archive with the read-only operation:
+
+```powershell
+node scripts/pathfinder-local/runtime.mjs verify-backup --backup 'C:\Users\todor.chankov\source\WFC-pathfinder-local\pathfinder-engine\.scratch\tray-catalog-5f489050-d469-4ae0-9972-868b33a4d8e3\r10-final2'
+```
+
+The private backup receipt is `r10-final2-result.private.json` in the same parent
+directory. It identifies the matched archive, companions, images and cold
+inventory. Verification does not itself restore or reactivate background work.
+
+The current candidate1 application pins, recorded before the final cold archive,
+are:
+
+| Operator identity | Recorded value |
+| --- | --- |
+| Local branch | `pf-r10-final-delivery-local-20261019` |
+| Inherited handoff commit | `05429d1f03163332505a328b56d5659eff875644`; this is not a final R10 delivery commit |
+| Candidate source context | 1560 files, SHA256 `a603cdab2540f3c21861dbcffc7f38112750d0c74c9e21a2c3366c61b4a9737e` |
+| API image | `sha256:abac7d3e41f3b6888ac0d1d69c8fdfe9b9f9bcf3ba51256fa8f67893b0e672d1` |
+| Web image | `sha256:b6f6b3a1a5183c7855d06862d53b3303f7f26c22b61a848944a2eea1a3ea4d1b` |
+| Post-backup source resource record | `r9-source-runtime4.private.json`, matched profile18; the same source container identities resumed after the cold backup |
+
+These pins identify the recorded local build. The final source commit is recorded
+in report47 and the human-review handoff. Always check current resources before
+maintenance; these records do not authorize replacing the original app.
+
+### What the fresh restore proved
+
+A new, separately owned **5192 verification installation** was restored from
+this archive. It is a disposable recovery check, not the retained demonstration
+address. The original 5191 data and resources were preserved during the drill.
+
+| Check | Recorded result |
+| --- | --- |
+| Complete database before restore fencing | All126 table inventories equal the cold source using exact PostgreSQL row text and column metadata. |
+| After fencing | Only the three qualified field sets for resource-session revocation, login-binding revocation and installation epoch/timestamp differ; the two authentication groups are revoked. Operational lease rows remain exact. |
+| Restored authority | JWT secret rotated; all seven producer configuration variables blank; copied grants remain audit history subject to the restore fence. |
+| Normal authentication and history |28 HTTP checks passed, including fresh administrator access, exact retained synthetic history, old unexpired source JWT401 and old source control-key401. |
+| Protected model resource lifecycle | Normal protected resource returned206; access after closing its session returned410. An old source resource cookie by itself was not separately exercised, so that narrower check remains NOT_RUN. |
+
+These checks are retained in `r10-restore5192-final1-result.private.json` and
+`r10-restored-auth2-result.private.json` beside the backup receipt. They establish
+the stated recovery and authentication boundaries. They do not automatically
+qualify a restored preparation service, enable a grant or accept real cable data.
+
+### What the bounded offline demonstration proved
+
+Only the owned verification stack's web-container default route was removed;
+its internal service network stayed connected. Through normal browser actions,
+the protected model loaded **664556 fragments and438156 identifiers**. An ordered
+real diagnostic lookup produced **35.30345579516123 m**, including four gaps
+totalling **0.9840583861033791 m**. The yellow path, filled Ghost background and
+Clear/restore behavior were checked. This is visualization/lookup evidence, not
+an accepted cable design length or a complete routing network.
+
+In the same bounded state, two new synthetic calculation results were produced
+through the normal UI: **10 m geometric length →18 m design length**, using that synthetic
+project's Details values S5/E6/P10. No Apply was performed, and the cable rows
+remained unchanged. These synthetic settings differ intentionally from the copied
+Aalborg project's S7/E5/P10; each project uses its own Details values.
+
+The check used a new browser tab and requested a hard reload, but did not create
+a virgin browser profile or disconnect the host's Internet connection
+(`hostInternetDisabled:false`). It proves operation under the recorded owned-stack
+egress restriction; it is not an air-gapped-host or empty-browser-cache claim.
+The private `r10-restored-ui1-result.private.json` and
+`r10-offline-math-read1-result.private.json` record that exact scope. Final
+verification-target retirement passed with zero owned containers, volumes or
+networks and closed port5192. The source5191 service is retained and ready;
+report47 records the separate exact lifecycle evidence.
 
 Backup/restore are operator maintenance, not routine browser actions:
 
 1. Check exact runtime ownership, paths, ports and image identities, including the
-   separately managed producer host. Close Viewer activity and establish that
-   writers and owned engine processes have joined before capturing cold state.
+   separately managed producer host. Close model/drawing activity in the browser
+   and establish that writers and owned engine processes have joined before
+   capturing cold state. Closing a browser tab alone is not that proof.
 2. Use the existing matched archive/private-companion workflow. The generic runtime
    backup stops and resumes its own application services, but does not itself
    manage the separate producer host or produce its companion evidence.
@@ -396,6 +558,13 @@ general Docker prune, or manual database changes to bypass a refusal. The generi
 Final source/target lifecycle commands belong in the qualified stage runbook,
 with its exact descriptors and host cleanup receipts.
 
+Maintenance acts only on the separately identified local stack. Do not restart
+or update the original WFC application to make this demonstration reflect a
+change. If the local page is unavailable during the cold-maintenance window,
+wait for that operation's recorded completion and reopen the 5191 address.
+Restoring an archive never authorizes automatic producer/grant reactivation or
+automatic application of real cable results.
+
 ## 13. When something is blocked
 
 | What you see | Next action |
@@ -416,5 +585,14 @@ The two actual converted Aalborg revisions provide recorded comparison inputs.
 Their existence does not establish a verified common engineering frame, a complete
 equipment mapping or native Navisworks parity. No Navisworks licence is assumed;
 the agreed acceptance route is converted-model evidence plus your manual
-engineering review. Final PF-R10 checks will state exactly what was verified and
-what remains unresolved.
+engineering review. The current saved real comparison covers eight old and nine
+new diagnostic objects, with seventeen unresolved changes and no automatically
+accepted correspondence. It is not a comparison of every tray or consumer.
+
+For the real project, the next engineering sequence is: save the intended purpose
+permissions; review and prepare the required tray network; confirm shared From/To
+locations in the correct frame; inspect the old/new model correspondence; then
+calculate, review the exact paths and length components, and explicitly apply
+only accepted proposals. Installed length remains unchanged by Apply. Final
+PF-R10 checks will state the exact technical scope; human engineering acceptance
+and any merge or deployment remain separate user decisions.

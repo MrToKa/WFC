@@ -5,7 +5,7 @@
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
 
 - Working copy: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-- Current branch: `pf-r9-revision-review-local-20261019`, inherited handoff HEAD `17c1cfc34ab856feb3785079e82e0d3473a8604d` (inspect live state before resuming).
+- Current branch: `pf-r10-final-delivery-local-20261019`, inherited handoff HEAD `05429d1f03163332505a328b56d5659eff875644`; R9 technical commit `a3233c2b2a6f4afea04d590e0cf210e58f00e71d` (inspect live state before resuming).
 - Historical integrated implementation commit: `51cc8324b40bd0ce2ed7d0b03decbdc06385b54a`; integration evidence/handoff commit: `03db8f7b557c1afcf05c18b81e704119db459503`. Later delivery commits are recorded below. Read live HEAD/status rather than inferring a self-referential hash or pending-change state from this historical line.
 - Verified local operational delivery commit: `bf9dfdf8b075259880b58cc7a31202844a902f87`; the following metadata-only commit records the actual automation pause. Current live HEAD is authoritative.
 - Starting commit: `23741d1f485248ddb519f9e04e0b7856cc0e3def` (PF-0).
@@ -15,7 +15,167 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current execution — PF-R0 and sequential PF-R delivery
 
-### PF-R9 technical closeout — 19 October 2026, 14:08 UTC
+### PF-R10 current checkpoint — 19 October 2026
+
+- Root16:20UTC: route-only offline hold2 actual PASS and recovery PASS, with
+  original routes/configuration/endpoint IDs restored. Owned target web external
+  HTTP control0→refused; private backend/internal API/localhost retained. Fresh
+  protected Viewer session/hard-reload request loaded664556fragments; actual
+  ordered lookup35.30345579516123m/4gaps0.9840583861033791m; filledGhost/yellow/
+  Clear+Restore visually PASS. Routes catalog330/unconfigured shown honestly.
+  Normal UI calculated2new synthetic full-route results while held:10m geometry,
+  Details5/6/10 →18m design; exact cable rows unchanged, newApply0. UIreceipt
+  hash-binds exact held interval; target browser tabs closed before stop.
+  Fresh5192retirement running root session47263; never rerun after unknown.
+- Reference-preservation1 retained FAIL: extra canonical raw Git blob check
+  encountered CRLF(worktree/frozen) versus LF(blob), not C# text changes. New2
+  explicitly requires exact worktree/index/canonical-worktree bytes and permits
+  ONLY byte-level CRLF→LF comparison to canonical commit; running96722.
+  Original/checkouts/dirty files and frozenPF0 already passed in1.
+- Remaining: reconcile96722/47263, safely resume SOURCE-only qualified host in
+  new binding10 (root authored, NOT_RUN), normal source context/Viewer final,
+  sanitized receipt/report/guide/human-review handoff/local commits, then pause
+  stage automation. Source binding4/profile18 and all original boundaries retained.
+
+- Root16:07UTC: restored auth2 actual28HTTP PASS: unexpired source JWT401,
+  old producer key401, fresh current-admin200,2140cables/330trays/Details7/5/10/1,
+  exact two proposals/ledger/path and prior receipt/closed-key duplicates;
+  protected descriptor200/entrypoint206/no-cookie/cross-project401/close204→410.
+  Source HTTP0; target producer remains restore-fenced/unqualified. Auth1 failed
+  before intent/HTTP because demo admin was incorrectly assumed to be the historic
+  reviewer; auth2 separately signs in the actual retained historical actor.
+- Offline hold1 actual UNSUITABLE: external positive control PASS, but removing
+  target web front endpoint also removed localhost publishing. Finally rejoined
+  exact original network/config/aliases/IPAM; endpoint ID changed, IP unchanged,
+  source retained. No READY/UI/calculation offline PASS. New independent narrow
+  route-only hold2 is being authored; root inspected exact target web routes:
+  single IPv4 default/two connected networks/IPv6 empty. No source/host network
+  operations. Fresh target retained for this next qualified test; retire pending.
+
+- Root cold backup `r10-final2` PASS, backup ID
+  `3daea574-2d70-4f06-b714-3a8890c28798`: current four app images, database,
+  model/file/PF storage, separate private config and producer/host companion.
+  Source resumed same container identities; current source binding4/profile18.
+  First `r10-final1` attempt stopped before backup mutation because PowerShell
+  emitted first-use progress; fixed probe, retained failure, new archive name.
+- Fresh owned `r10-restore5192-final1` PASS: 126 cold SQL-text table inventories
+  exact before fencing; 126 equal under only three qualified field sets after
+  fencing, two authentication groups revoked, lease rows exact, seven producer
+  variables blank. Source5191 unchanged; source retire never invoked.
+  Current work: normal restored auth/history/protected-resource checks, bounded
+  owned-target egress/UI/calculation drill, reconnect and retire ONLY new5192,
+  final evidence/guide/report/local commit. No engineering acceptance claimed.
+
+- Root15:46UTC: newbasicQAuser cleanupCOMPLETE/currentdemoADMINrestored;
+  all14actualLV/MVDOCXpages visuallyPASS; exactblockedclampvalidexport409/no
+  fileschanged andclampsOFFrestorePASS. Alltests/processsessionsclosed.
+  Drawingtabclosed viaCUA beforecoldconsistency window. Decision: retain small
+  explicitlynamedSyntheticdrawingQAprojectc661...+3synthetictypes asuseful
+  LV/MV/LeftRight/report demonstration data inown5191, notengineeringinputs.
+- NEWautomaticapprovalREFUSAL: removing exactown
+  pathfinder-engine/.scratch/tray-catalog-5f489050-d469-4ae0-9972-868b33a4d8e3/r10-renderer1
+  rejected BEFOREprocessstart with blocked by policy. No cleanupreceipt/write/
+  deletionran. DoNOTretry/bydifferenttool/parentdelete thischildoritsparents.
+  It containsownofficialrendererMSI/adminimage/probe; final14pageartifacts live
+  OUTSIDEchild andretained. Usernotifiedofreason. ThisdoesNOTblockbackup.
+- NEXTroot coldbackupdriver r10-backup1.mjs --source-bindingr9-source-runtime3
+  --source-profiler8-approved-runtime17 --next-source-bindingr9-source-runtime4
+  --next-source-profiler8-approved-runtime18 --archive-namer10-final1
+  --private-namer10-final1-runtime.private.json --host-bindingr9-host-launch-binding9
+  (include.private.json suffixesforbinding/profileargs). Neverrerunsamearchive
+  afterunknownoutcome; reconcileactualnewarchive/checkpointfirst. Backupincludes
+  completecurrentdelivery+SQLtextcoldhook/nonemptyR9history+privatehostadjunct;
+  subsequentfresh5192restore, offline/demo/targetretirement/finalreportcommit
+  stillTODO. Host9stopped/resolved, nohostrelaunchbeforebackup.
+
+- Root15:43UTC supersedes earlier pins: candidateR10-1 built1560files SHA
+  a603cdab2540f3c21861dbcffc7f38112750d0c74c9e21a2c3366c61b4a9737e;
+  deployed ONLY5191 APIabac7d3e41f3b6888ac0d1d69c8fdfe9b9f9bcf3ba51256fa8f67893b0e672d1/
+  webb6f6b3a1a5183c7855d06862d53b3303f7f26c22b61a848944a2eea1a3ea4d1b.
+  CurrentSOURCE bindingr9-source-runtime3/R8profile17; r10-operatorupdated.
+  Database/MinIO/storage-ready/volumes/networks unchanged. Producerconfigretained,
+  hostnotrestarted. InitialDOCX7pagevisualFAIL exposedlong-media-namecollision
+  andrawmissingTRAYPICTURE; fixes+5regressions implemented. ActualMVfalseclamp
+  overflow exposedrecommended/installedguard; fixed+3cases, realcableheightguard
+  preserved. Roottests162/2files +41/1 +63/3 +runtime26PASS; typecheck+focusedlint
+  PASS(scopesoverlap). Product7filesplusdocsUNCOMMITTED; no originaloperations.
+- ActualfinalLV7pages +MV7pages renderedwithbundledPython/packagedrenderer;
+  ALL14pagesvisuallyinspectedPASS(noimagecollision/rawtokens/clipping; honest
+  missingengineeringfacts preserved). DownloadednormalUIgenerated3files/report.
+  MVtrefoilclampsOFFready; ONblockedUI +valid3fileexport409/nochangedfilesPASS;
+  restoredOFFready. PrivatePDFs/PNGs/downloadsretained R9work. Rendererownimage1
+  temporary~1.4GiB+373MBMSIstillneededuntilfinalartifactsdone, cleanupTODO.
+- SamePROJECTmathdrawinginvariance actual19HTTPPASS: exactfullstate/generation/
+  routingpolicy +2currentproposaldetails unchanged, originalmodesrestored.
+  Realpaircurrent3GETPASS exactR6hash/8old9new17unresolved/0automaticcarry.
+  Upgrade125retainedtablehashesexact +1newdrawingprojectcomparisonstate/rev0;
+  delta-proof1 actualPASS confirmsold4rowhash/current5hash,0targetrows; no
+  currentwholedatabaseequalityclaimafterlegitimatefollowingUI/authwrites.
+- Freshordinarybasicaccount normalregister/assignONLYownQAproject, HTTPchecks
+  identicaladmin/basic/admin snapshot+layout, PF/settings/export/unassigned403
+  PASS; actualCUALV/MVreadonlydrawing/noedit/reportPASS. BasicusercleanupPASS
+  exactownuserDELETE204/assignment404/retainedtoken401/fixtureunchanged; normal
+  demoADMINbrowserrestored. DoNOTrecreateorcleanhistoricalusers.
+- Rootremaining: recordprivateQA hashes/sanitizedreceipt; cleanupONLYnewdrawing
+  projectc661...+3newglobaltypes(ownedIDsretained), coldcurrentbackup/new5192
+  restore/fencing, boundedruntimeoffline+protectedUI/demo, targetretirement,
+  ownrenderercleanup, report47/guide46/finalmatrix/localcommit/automationpause.
+  ThreeNEWprivatecoldscripts agent-authored/frozen androotreviewed; NOT_RUN.
+  Use explicit source3/profile17 thenfreshpostbackupsource4/profile18. No old
+  qualified/R9restore scripts; no source-retireprobe. Allagentsfrozen/completed.
+
+- Current root continuation15:24UTC: source5191/profileR9source2/R8profile16,
+  outsideguard6 after explicit user Docker-start acknowledgement call70e6517.
+  Same4 owned container IDs/images/config/volumes/networks restarted;18outside
+  static resources exact,6external lifecycle/endpoint changes classified external.
+  No original container managed. Host9PID6900 gone; physical helper joined0 and
+  removed, actual serverjournal d270...revision15 released/joined/revoked/released/
+  notified; ALL29leases released,0livejobs. No reaping/relaunch/false quarantine.
+- Mathematical54cfad40 current8phase R3setup COMPLETE; history2 normalHTTP11PASS,
+  1syntheticv2Apply+idempotentreplay+immutableclosure/late409, install/settings
+  unchanged. DO NOT redo setup/job/Apply. Nonempty R9history now onSOURCE5191.
+- NEW owned drawing projectc6613d65-7170-451d-9530-08999b31ebb2 setup8609c3e8
+  all14phasesPASS. BC001tray8b295...4syntheticPower/Control20mm cables,
+  retainedKL400x100/material+curve, ownLVtemplate clone. RIGHT/LEFT normalHTTP
+  controlsPASS incl latest30proposal invariance on separatemathproject; actual
+  right+left2jointcolumns/no divider browserPASS. SAMEproject invariance stillTODO.
+  Mixedphase running55922; neverrerun samephase intents withoutreconciliation.
+  Generate report UI saved3files normaldownloadPASS; LVrender7pagesPASS render,
+  pagevisualinspection stillTODO. Private artifacts/PNGs underR9work; nobusinessGit.
+- R10 host-only optionalcoldhooks runtime-lib.mjs+runtime.test.mjs authored;
+  actualroot26/26pure runtimecontrolsPASS incl7newhookcontracts. API/web remain
+  unchangedR9candidate5; coldsource/prefence/postfence all126SQLtextactualTODO.
+  Agentpreservation filesfrozen; MVagent authoringONLYprivateMVfixturehelper;
+  finalauditreadonly. Rootsoleactualexecutor. Newdrawing276PASS priorverified.
+- Remaining: LV7pagevisualQA/MVtrefoil+truthfulclampoverflow/sameprojectinvariance,
+  ordinaryreader/currentrealpairGET, finalcurrentcoldbackup+NEW5192restore/fencing,
+  boundedownruntimeoffline/demo, retireONLYnew5192/tempownedrenderer+fixture,
+  report47/guide46/receipt/localcommit/automationpause. R10stillIN_PROGRESS.
+
+Earlier checkpoint below is historical and superseded by the current entry above.
+
+- R9a3233c2 technically committed52files. prepare-stage-handoff completed selfcontained
+  PF-R10-final-delivery.md, metadata05429d1; inherited R10branch created. No publication.
+- R10handoff currentbaseline source5191/profileR9source1/R8profile15/host9PID6900;
+  no5192resources. Report47newIN_PROGRESS, guide46retained. Rootsoleexecutor.
+- Rootusingnew r10-operator.mjs guardedsourceprofile15, NOTretiredR9targetoperator.
+  Normal8-phase currentR3preparation onKNOWN seededmathematicalproject54cfad40
+  initiated session4454 (init/inspect/execute0); context2cables/3locations/0trays/
+  1legacyartifact confirmed. Newprivate adaptedbody preservesallsyntheticguards,
+  pinsactualsourceepoch69f3bee1 separateowner8ff, sourceorigin5191 andproduceridentity.
+  Goal nonemptyR9historyfinalarchive, nofakeSDK/native/realengineeringApply.
+- Agentpreservation ownsONLYnewprivateR10SQLtextinventorybody (hashes/norows);
+  readiness ownsONLYnewprivateHTTPdrawingcontrolauthoring; acceptance wroteONLY
+  report47initialmatrix/frozen. Noagentactualexecution. ReportfixturehistoricalR2a
+  cleaned; retainedsyntheticprojectsdonothavereadyreportfacts. Rootwillcreate
+  clearlysyntheticownfixtureusingnormalAPIs/retainedtemplates asneeded.
+- Nextfinishsynthetic8phases+explicitknownmathReviewApply/Close; rightpooling/
+  realDOCXQA; currentrealpairreadback; consistentcurrent126tablebackup+freshown5192
+  fullSQLtext/fencing; offlinecurrentdelivery/demo; retirementonlyownfixture,
+  finaltechnicalreport/localcommit/automationpause. Preserveoriginal/5190/data,
+  archives/privatecompanions/deniedpaths. R10IN_PROGRESS, nofinalacceptanceclaimed.
+
+### PF-R9 technical closeout — 19 October 2026, 14:04 UTC
 
 - R9 technically verified with explicit limits, report45 and sanitized
   evidence/revision-results/technical-receipt.json; local commit next. Candidate5

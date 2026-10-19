@@ -101,6 +101,31 @@ describe('shared pure tray placement', () => {
     expect(dividers(result)).toHaveLength(0);
     expect(result.summary?.overflowMm).toBeGreaterThan(0);
   });
+  it.each([false, true])('checks the selected clamp height only when clamps are installed: %s', useTrefoilClamps => {
+    const layoutConfig = defaultCategoryLayoutConfig(1);
+    layoutConfig.mv.trefoil = true;
+    const result = computeTrayDrawing(input([cable(1, 'MV'), cable(2, 'MV'), cable(3, 'MV')], modes(), {
+      tray: { name: 'MV tray', widthMm: 400, heightMm: 100 }, layoutConfig,
+      options: { categoryModes: modes(), rungHeightMm: 15, useTrefoilClamps },
+    }));
+    // Catalogue recommendations remain available for both settings; only an installed
+    // clamp adds its 92 mm envelope to the tray's 85 mm useful-height checks.
+    expect(result.summary?.trefoilClamps).toHaveLength(1);
+    expect(result.summary?.trefoilClamps?.[0].clamp).toMatchObject({ model: 'VRT+00', heightMm: 92 });
+    expect(result.placements).toHaveLength(3);
+    expect(result.diagnostics.some(d => d.code === 'CLAMP_HEIGHT_OVERFLOW')).toBe(useTrefoilClamps);
+    expect(result.diagnostics.map(d => d.code)).not.toContain('DRAWING_HEIGHT_OVERFLOW');
+  });
+  it('still checks actual trefoil cable height when clamps are disabled', () => {
+    const layoutConfig = defaultCategoryLayoutConfig(1);
+    layoutConfig.mv.trefoil = true;
+    const result = computeTrayDrawing(input([cable(1, 'MV'), cable(2, 'MV'), cable(3, 'MV')], modes(), {
+      tray: { name: 'Shallow MV tray', widthMm: 400, heightMm: 30 }, layoutConfig,
+      options: { categoryModes: modes(), rungHeightMm: 15, useTrefoilClamps: false },
+    }));
+    expect(result.diagnostics.map(d => d.code)).toContain('DRAWING_HEIGHT_OVERFLOW');
+    expect(result.diagnostics.map(d => d.code)).not.toContain('CLAMP_HEIGHT_OVERFLOW');
+  });
   it('keeps custom inclusive bounds distinct from rounded legacy labels', () => {
     const cables = [cable(1, 'Power', 8.05), cable(2, 'Control', 8.05)];
     const source = input(cables, modes({ control: 'left' }));
