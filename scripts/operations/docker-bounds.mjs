@@ -232,11 +232,17 @@ async function rawRequest(socketPath, method, route, body, { timeoutMs, signal, 
 function archiveCapabilities(state, config) {
   if (state.policy.archiveOwnership !== 'preserve-posix') return [];
   const cmd = config.Cmd;
-  if (!Array.isArray(cmd) || cmd[0] !== 'node' || cmd[1] !== 'scripts/operations/archives.mjs') return [];
+  const archiveScript = Array.isArray(cmd) && cmd[0] === 'node' && cmd[1] === 'scripts/operations/archives.mjs';
+  const inventoryScript = Array.isArray(cmd) && cmd[0] === 'node' && cmd[1] === 'scripts/pathfinder-local/container-ops.mjs';
+  if (!archiveScript && !inventoryScript) return [];
   const h = config.HostConfig ?? {}, mounts = h.Mounts;
   const roleFile = value => typeof value === 'string' && /^\/backup\/(?:minio|staging|pathfinder)\.wfcops$(?![\s\S])/.test(value);
   const exactMounts = wanted => Array.isArray(mounts) && mounts.length === wanted.length && wanted.every(([target, type, readOnly]) => mounts.filter(mount => mount.Target === target && mount.Type === type && mount.ReadOnly === readOnly && typeof mount.Source === 'string' && mount.Source.length > 0).length === 1);
   if (!['0', '0:0'].includes(config.User) || config.Entrypoint !== undefined && (!Array.isArray(config.Entrypoint) || config.Entrypoint.length) || h.NetworkMode !== 'none' || h.Binds?.length || h.VolumesFrom?.length || h.Devices?.length || h.DeviceRequests?.length) throw error('DOCKER_ARCHIVE_CAPABILITY_SCOPE');
+  if (inventoryScript) {
+    if (cmd.length === 4 && cmd[2] === 'inventory' && cmd[3] === '/source' && exactMounts([['/source', 'volume', true]])) return ['DAC_OVERRIDE'];
+    throw error('DOCKER_ARCHIVE_CAPABILITY_SCOPE');
+  }
   if (cmd[2] === 'capture' && cmd.length === 5 && cmd[3] === '/source' && roleFile(cmd[4]) && exactMounts([['/source', 'volume', true], ['/backup', 'bind', false]])) return ['DAC_OVERRIDE'];
   if (cmd[2] === 'restore' && cmd.length === 6 && roleFile(cmd[3]) && cmd[4] === '/target' && /^[a-f0-9]{64}$(?![\s\S])/.test(cmd[5]) && exactMounts([['/backup', 'bind', true], ['/target', 'volume', false]])) return ['CHOWN', 'FOWNER', 'DAC_OVERRIDE'];
   if (cmd[2] === 'measure' && cmd.length === 4 && cmd[3] === '/source' && exactMounts([['/source', 'volume', true]])) return ['DAC_OVERRIDE'];

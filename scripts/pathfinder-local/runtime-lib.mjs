@@ -294,7 +294,16 @@ export async function importModel(state, zip) {
 export async function helper(state, cmd, { mounts = [], network, env = [] } = {}) { return await (await createDocker()).run(state.images.api, { cmd, mounts, network, env, labels: labels(state) }); }
 function apiEnv(state, settings) { return [`DATABASE_URL=postgresql://pf_local:${settings.databasePassword}@postgres:5432/wfc_pathfinder_local`, `JWT_SECRET=${settings.jwtSecret}`, 'MINIO_ENDPOINT=minio', 'MINIO_PORT=9000', 'MINIO_USE_SSL=false', 'MINIO_ACCESS_KEY=pf_local_storage', `MINIO_SECRET_KEY=${settings.storagePassword}`, 'MINIO_BUCKET_PROJECTS=pf-local-project-files', 'MINIO_BUCKET_TEMPLATES=pf-local-template-files', 'WFC_MODEL_BUCKET=pf-local-models', 'WFC_MODEL_IMPORT_ROOT=/var/lib/wfc/model-imports']; }
 async function operation(state, name, settings = undefined) { const result = await helper(state, ['node', 'server/dist/server/operations/cli.js', name], { network: state.project + '_backend', env: [...apiEnv(state, settings ?? await readSettings(state)), ...(name === 'fence-restored' ? ['WFC_OPS_QUARANTINE=true', 'WFC_OPS_TARGET_ID=' + state.owner] : [])] }); if (result.status !== 'PASS') fail('PF_OPERATION_FAILED'); return result; }
-async function artifactAudit(state) { return await helper(state, ['node', 'scripts/pathfinder-local/container-ops.mjs', 'inventory', '/source'], { mounts: [mount(state.project + '_pathfinder', '/source', true, 'volume')] }); }
+/** Private PF artifacts can retain mixed ownership. The explicitly bounded
+ * operator profile grants only this exact read-only inventory DAC_OVERRIDE;
+ * a failed audit is never archived. */
+export async function artifactAudit(state, { docker: suppliedDocker } = {}) {
+  const docker = suppliedDocker ?? await createDocker();
+  const result = await docker.run(state.images.api, { cmd: ['node', 'scripts/pathfinder-local/container-ops.mjs', 'inventory', '/source'],
+    mounts: [mount(state.project + '_pathfinder', '/source', true, 'volume')], user: '0', labels: labels(state) });
+  if (result?.status !== 'PASS') fail('PF_ARTIFACT_AUDIT_FAILED');
+  return result;
+}
 async function boundedStop(docker, item) { if (!item.running) return; await docker.stop(item.id, 45); const after = await docker.inspect(item.id); if (after.State.Running || after.State.ExitCode !== 0 || after.State.OOMKilled) fail('PF_UNCLEAN_STOP'); }
 async function waitStorage(state) {
   await helper(state, ['node', '--input-type=module', '-e', "for(let i=0;i<120;i++){try{const r=await fetch('http://minio:9000/minio/health/ready',{signal:AbortSignal.timeout(1500)});if(r.ok){console.log(JSON.stringify({status:'PASS'}));process.exit(0);}}catch{}await new Promise(r=>setTimeout(r,500));}console.log(JSON.stringify({status:'FAIL'}));process.exit(1);"], { network: state.project + '_backend' });
@@ -311,6 +320,35 @@ async function resume(state, original) {
   }
   if (original.some(value => value.role === 'web' && value.running)) await waitHealth(state);
 }
+const POSTGRES_IMAGE_VOLUME_PATHS = new Set(['/var/lib/postgresql', '/var/lib/postgresql/data']);
+/** Pure local-operator construction seam. Shadow every declared PostgreSQL
+ * image volume so a read-only TOC helper cannot allocate an anonymous volume. */
+export function databaseDumpHelperConfiguration(state, postgres, directory, image) {
+  const volumes = image?.Config?.Volumes;
+  if (image?.Id !== postgres.image || image.Os !== 'linux' || !volumes || typeof volumes !== 'object' || Array.isArray(volumes)) fail('PF_BACKUP_POSTGRES_IMAGE_VOLUMES');
+  const targets = Object.keys(volumes).sort();
+  if (targets.length < 1 || targets.length > 2 || targets.some(target => !POSTGRES_IMAGE_VOLUME_PATHS.has(target) || !volumes[target] || typeof volumes[target] !== 'object' || Array.isArray(volumes[target]) || Object.keys(volumes[target]).length)) fail('PF_BACKUP_POSTGRES_IMAGE_VOLUMES');
+  return { config: { Image: postgres.image, User: '0', Entrypoint: ['pg_restore'], Cmd: ['--list', '/backup/database.dump'],
+    Labels: { ...labels(state), 'wfc.operations.temporary': 'true', 'wfc.operations.purpose': 'pg-restore-mounted-file-verification' }, AttachStdout: true, AttachStderr: true,
+    HostConfig: { NetworkMode: 'none', ReadonlyRootfs: true, Memory: 128 * 1024 ** 2, PidsLimit: 32, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true'],
+      Mounts: [mount(directory, '/backup'), ...targets.map(Target => ({ Type: 'tmpfs', Target, ReadOnly: true, TmpfsOptions: { SizeBytes: 1024 ** 2, Mode: 0o755 } }))] } }, targets };
+}
+function exactDockerBindSource(actual, requested) {
+  if (actual === requested) return true;
+  if (typeof actual !== 'string' || typeof requested !== 'string' || !/^[a-z]:[\\/]/i.test(requested)) return false;
+  const components = requested.slice(3).split(/[\\/]/);
+  return components.every(part => part && part !== '.' && part !== '..') && actual === '/run/desktop/mnt/host/' + requested[0].toLowerCase() + '/' + components.join('/');
+}
+export function assertDatabaseDumpHelperMounts(actual, directory, targets) {
+  if (!Array.isArray(targets) || targets.length < 1 || targets.length > 2 || new Set(targets).size !== targets.length || targets.some(target => !POSTGRES_IMAGE_VOLUME_PATHS.has(target)) || !Array.isArray(actual?.Mounts) || actual.Mounts.length !== targets.length + 1) fail('PF_BACKUP_DUMP_HELPER_MOUNTS');
+  const backup = actual.Mounts.filter(item => item.Destination === '/backup');
+  if (backup.length !== 1 || backup[0].Type !== 'bind' || backup[0].RW !== false || !exactDockerBindSource(backup[0].Source, directory)) fail('PF_BACKUP_DUMP_HELPER_MOUNTS');
+  for (const target of targets) {
+    const effective = actual.Mounts.filter(item => item.Destination === target);
+    const configured = actual.HostConfig?.Mounts?.filter(item => item.Target === target);
+    if (effective.length !== 1 || effective[0].Type !== 'tmpfs' || effective[0].RW !== false || effective[0].Source || effective[0].Name || configured?.length !== 1 || configured[0].Type !== 'tmpfs' || configured[0].ReadOnly !== true || configured[0].TmpfsOptions?.SizeBytes !== 1024 ** 2 || configured[0].TmpfsOptions?.Mode !== 0o755) fail('PF_BACKUP_DUMP_HELPER_MOUNTS');
+  }
+}
 /** pg_restore --list may close stdin after its TOC; use a mounted file, never a dump pipe. */
 export async function verifyDatabaseDump(state, directory) {
   const target = path.resolve(directory);
@@ -320,12 +358,12 @@ export async function verifyDatabaseDump(state, directory) {
   const stat = await fs.stat(filename); if (!stat.isFile() || !stat.size) fail('PF_BACKUP_DATABASE_EMPTY');
   const resources = await ownership(state), postgres = resources.containers.find(item => item.role === 'postgres');
   if (!postgres) fail('PF_COMPLETE_STACK_REQUIRED');
-  const docker = await createDocker(); await docker.inspectImage(postgres.image);
+  const docker = await createDocker(), image = await docker.inspectImage(postgres.image);
   const name = 'wfc-pf-dump-' + randomUUID(), purpose = 'pg-restore-mounted-file-verification';
-  const created = await docker.create(name, { Image: postgres.image, User: '0', Entrypoint: ['pg_restore'], Cmd: ['--list', '/backup/database.dump'],
-    Labels: { ...labels(state), 'wfc.operations.temporary': 'true', 'wfc.operations.purpose': purpose }, AttachStdout: true, AttachStderr: true,
-    HostConfig: { NetworkMode: 'none', ReadonlyRootfs: true, Memory: 128 * 1024 ** 2, PidsLimit: 32, CapDrop: ['ALL'], SecurityOpt: ['no-new-privileges:true'], Mounts: [mount(target, '/backup')] } });
+  const spec = databaseDumpHelperConfiguration(state, postgres, target, image);
+  const created = await docker.create(name, spec.config);
   try {
+    assertDatabaseDumpHelperMounts(await docker.inspect(created.Id), target, spec.targets);
     await docker.start(created.Id); const exited = await docker.wait(created.Id);
     const toc = await command(['logs', created.Id], { maxBytes: 32 * 1024 ** 2 });
     if (exited.StatusCode !== 0 || !toc.length) fail('PF_BACKUP_DATABASE_INVALID');

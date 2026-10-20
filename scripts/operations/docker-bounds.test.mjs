@@ -250,3 +250,30 @@ test('archive ownership refuses wrong writable mount direction before daemon cre
   await assert.rejects(withBoundedDockerExecution(policy({ archiveOwnership: 'preserve-posix' }), () => boundedDockerRequest(SOCKET, 'POST', '/containers/create?name=synthetic-wrong', { Image: IMAGE, User: '0', Cmd: ['node', 'scripts/operations/archives.mjs', 'restore', '/backup/minio.wfcops', '/target', 'a'.repeat(64)], HostConfig: { NetworkMode: 'none', Mounts: [bind('/own-backup', '/backup', false), volume('own-target', '/target', false)] } }, {}, daemon)), code('DOCKER_ARCHIVE_CAPABILITY_SCOPE'));
   assert.equal(daemon.data.body, null);
 });
+const inventoryConfig=()=>({Image:IMAGE,User:'0',Cmd:['node','scripts/pathfinder-local/container-ops.mjs','inventory','/source'],HostConfig:{NetworkMode:'none',Mounts:[volume('synthetic-owned-pf','/source',true)],CapAdd:['SYS_ADMIN']}});
+test('explicit ownership profile grants only DAC_OVERRIDE to the exact isolated read-only artifact inventory',async()=>{
+  const daemon=daemonFixture();
+  await withBoundedDockerExecution(policy({archiveOwnership:'preserve-posix'}),()=>boundedDockerRequest(SOCKET,'POST','/containers/create?name=synthetic-inventory',inventoryConfig(),{},daemon));
+  assert.deepEqual(daemon.data.body.HostConfig.CapAdd,['DAC_OVERRIDE']);assert.deepEqual(daemon.data.body.HostConfig.CapDrop,['ALL']);assert.equal(daemon.data.body.HostConfig.ReadonlyRootfs,true);assert.equal(daemon.data.body.HostConfig.NetworkMode,'none');assert.equal(daemon.data.containers.size,0);
+});
+test('artifact inventory receives no added capability without the explicit ownership profile',async()=>{
+  const daemon=daemonFixture();
+  await withBoundedDockerExecution(policy(),()=>boundedDockerRequest(SOCKET,'POST','/containers/create?name=synthetic-inventory-default',inventoryConfig(),{},daemon));
+  assert.deepEqual(daemon.data.body.HostConfig.CapAdd,[]);
+});
+for(const[title,alter]of [
+  ['wrong operation',c=>{c.Cmd[2]='recover';}],
+  ['extra command argument',c=>{c.Cmd.push('--apply');}],
+  ['alternate source path',c=>{c.Cmd[3]='/other';}],
+  ['writable source',c=>{c.HostConfig.Mounts[0].ReadOnly=false;}],
+  ['host bind source',c=>{c.HostConfig.Mounts[0]=bind('/host-private','/source',true);}],
+  ['extra mount',c=>{c.HostConfig.Mounts.push(volume('other','/other',true));}],
+  ['network access',c=>{c.HostConfig.NetworkMode='bridge';}],
+  ['alternate entrypoint',c=>{c.Entrypoint=['sh'];}],
+  ['device access',c=>{c.HostConfig.Devices=[{PathOnHost:'/dev/synthetic'}];}],
+  ['different user',c=>{c.User='1000:1000';}],
+])test('artifact inventory capability refuses '+title+' before daemon create',async()=>{
+  const daemon=daemonFixture(),config=inventoryConfig();alter(config);
+  await assert.rejects(withBoundedDockerExecution(policy({archiveOwnership:'preserve-posix'}),()=>boundedDockerRequest(SOCKET,'POST','/containers/create?name=synthetic-inventory-refused',config,{},daemon)),code('DOCKER_ARCHIVE_CAPABILITY_SCOPE'));
+  assert.equal(daemon.data.body,null);
+});

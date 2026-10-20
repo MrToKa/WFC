@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-source.v1",
+  "status": "PASS_SOURCE_ACTUAL_RECOVERY_NOT_RUN",
+  "at": "2026-10-20T10:50:48.496Z",
+  "sourceCommit": "6e37e7a13d7ffa71690696c693c8ea5ce8960963",
+  "files": [
+    {
+      "path": "scripts/operations/docker.mjs",
+      "bytes": 8896,
+      "sha256": "b55d226f139e6f148e25972962ecd32fe180efd90140f14b853f4e77ef18ce14"
+    },
+    {
+      "path": "scripts/operations/docker-bounds.mjs",
+      "bytes": 31699,
+      "sha256": "db7f5ae71e5a6a874ae011d72ebf9e11082f25db97584ffea836bd572cab0a02"
+    },
+    {
+      "path": "scripts/operations/docker-bounds.test.mjs",
+      "bytes": 27217,
+      "sha256": "d0bcbc021955dbc09792930f9332337850ff2a4f99b4361831daa388959a107d"
+    },
+    {
+      "path": "scripts/operations/wfc-ops.mjs",
+      "bytes": 37366,
+      "sha256": "770a54ccdc1c20e2c3ea072f2e3f050c47df7ac6a0770002f521b7387fd5c746"
+    },
+    {
+      "path": "scripts/operations/test/operations.node-test.mjs",
+      "bytes": 25250,
+      "sha256": "980a33c255c5441ee34a3b6fb4f4e89a124cdeea84639cd53e0413506a512425"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42/full-recovery1-observer.mjs",
+      "bytes": 20295,
+      "sha256": "a1dbaccb9ee6c3e2b0e4ab236c97c29b73814796fd8acffaa58f616befb66f47"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42/full-recovery1-backup.mjs",
+      "bytes": 8276,
+      "sha256": "abfede8e87af8a7f2641c92407fd0746567f9bdfaf9a4283d7097b32c68c6e7e"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42/full-recovery1-restore.mjs",
+      "bytes": 8180,
+      "sha256": "4bc519940070ec4fcd7ee2711deb4aa6321a4b82fa3d20a0b17763124ef6b7fc"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42/full-recovery1-retire.mjs",
+      "bytes": 8983,
+      "sha256": "dc0c5800fd452407f45391d4407d3046721abdee7e8460e7bb026663d64b3c76"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42/full-recovery1-sql-text.body.txt",
+      "bytes": 12747,
+      "sha256": "371e2826c52c4135750b9bb14ed56da9acbe0e6c5d0f36ae6181b8e65639a92c"
+    },
+    {
+      "path": "pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42/full-recovery1-outside-guard.mjs",
+      "bytes": 4346,
+      "sha256": "44ec9eb607d41e224d809195405c68ad2abed4252a581d3b75f18aeca9d00cad"
+    }
+  ],
+  "checks": {
+    "nodeTests": 182,
+    "newBoundsControls": 57,
+    "existingOperationsFencingRuntimeControls": 125,
+    "failed": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "scopedLint": "PASS",
+    "syntaxChecks": 9,
+    "independentReview": "PASS",
+    "actualBackup": "NOT_RUN",
+    "actualRestore": "NOT_RUN"
+  },
+  "tap": {
+    "bytes": 37377,
+    "sha256": "c1489950de8f439ad1214fe35ca9f769f11d29f15783b9021d9bdb80108fa497"
+  },
+  "profileCreator": "Root read-only qualification authoring changed after test pin to include a normal authenticated API health read; excluded from this source test pin, fresh syntax/runtime qualification required.",
+  "priorAttempt": "source-attempt1.json FAIL retained; no pre-fix exact file hashes captured",
+  "scope": "Mocked Docker transports and temporary filesystem contract tests; no actual Docker backup or restore.",
+  "realApply": false
+}

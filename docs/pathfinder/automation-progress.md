@@ -2,14 +2,68 @@
 
 ## Current live checkpoint — 2026-10-20T10:34:33Z
 
-CURRENT STAGE: current-full-network recovery evidence, NOT_RUN actualbackup/restore.
-Branchpf-aalborg-current-full-recovery-local-20261020 inherits handoffa15721d and
+CURRENT STAGE: current-full-network recovery evidence, backup1/2FAIL retained;
+restoreNOT_RUN. Narrow source3 controls PASS232/232 plus actual read controlsPASS.
+Branchpf-aalborg-current-full-recovery-local-20261020 nowHEAD
+6e37e7a13d7ffa71690696c693c8ea5ce8960963, inherits handoffa15721d and
 verifiedtraceeventdeliverya625234. ExecutePF-Aalborg-current-full-recovery.md.
 Do not duplicateactivework. Capacityagentownsoperationsdocker/bounds/tests plus
 narrowportablebundlelist/tests; preparationagentownsprivatefull-recovery1 observer/
 backup/restore/retire+copiedSQLbody; matchingagentindependentreview; rootowns
-profiles/preflights/docs/allactualexecution. AuthorsNOTfrozenyet, no actualtests
-ofnewboundsorbackup/restore/helperstarted. Rootactualreadonlydiscovery1PASS same
+profiles/preflights/docs/allactualexecution. AllauthorsFROZEN afterreviewfixes.
+Source-firsttests1actualFAIL180/179pass/1aggregatefilefail from4latefakeHTTPerrors;
+54individualnew+125existingcasespassed. No precisesourcehasheswerecapturedfor
+failedworkingdraft; report55/publicsource-attempt1recordlimitation/failureTAPSHA.
+Narrowfixonce-onlydestroy+idempotentfake; furtherreviewguardsallocatedrequestend
+close/stderrjoin/one-shothelperstart. No blanketsuppression/guardreduction.
+Exact12filepins+commit6e37e7a recordedBEFOREtests2. Root4-filesuite2PASS
+182/182 (57new bounds +125existing controls), zero failures/cancelled/skipped;
+session59330 joined exit0. Final scopedlint/9syntaxPASS, source2receipt retained.
+Profile creator subsequently gained a normal authenticated read; excluded from
+source2 pin and freshly syntax-checked, actual qualification still NOT_RUN.
+Actualprobe3PASS six bounded synthetic helpers, two nonce-only volumes, exact
+binary/Unicode UID/GID/mode/nanosecond/content round trip; all helpers and both
+volumes positively removed. Source writes0, outside18containers/27volumes/14networks
+unchanged. Probe1/2 failed before first/capture helper starts on daemon omittedfalse/
+Windows bind normalization; both cleanupPASS and immutable failure receipts kept.
+Probe-only closed canonical normalization fixes; production6e37 unchanged.
+Profile1 actualPASS126tables, host90,463,178,752Bfree/17,056,527,232Brequired;
+Linuxvolume969,618,956,288Bfree/7,690,345,850Brequired (separate overlapping views).
+Backup1 actualFAIL PF_OPERATION_FAILED at model audit, before cold observation;
+positive scope cleanupPASS/all helpers removed, exactsource recoveryPASS/healthy,
+PG unchanged/outside18/27/14 preserved. Diagnosis1 wrapper missing JWT config
+failed before usable JSON; kept, helper removed/outside preserved. Separate
+diagnosis2 actual same233,991,168Bresource:128MiBtmp STORAGE_EXHAUSTED,512MiBtmp
+PASS. Full512MiBauditPASS5versions/1541resources/1,930,801,055B/allhealthy.
+Observer nowSHAa5cb1d8... uses512MiBtmp (same2GiBmemory/1CPU/120s), accepts only
+the exact positively reconciled source-resumed1 binding pinned to failure/intent.
+Independent reviewPASS; tracked6e37 source unchanged. Profile3freshPASS,
+Backup2 actualFAIL finalPF_BACKUP_INVALID despite8payloadmembers/complete marker:
+manifest.artifacts isFAIL/PF_ARTIFACT_AUDIT_FAILED; never label archive verified.
+All3scopeclosuresPASS/helpersremoved/noUnknown. Core already resumed source5191;
+root reconcile1 health200/allcore rolesrunning/PGStartedAtunchanged. Wrapper's
+recoveryUNCONFIRMED ERR_ASSERTION retained; currentstaticdiagnosis allpinsmatch,
+8readonly API inspections show7rawmatch/1exactreverse, Config/HostConfig allsame.
+Docker's Mounts array order is observably unstable. Future pins must retain all
+mount fields and canonicalize ordering, never relabel old failure/recovery.
+Outsideguard2FAIL one newly added anonymousvolume5a66c738...; existingoutside
+containers/networks/volumes unchanged. PGTOC image declares /var/lib/postgresql;
+unshadowed image VOLUME likely caused it. Eventhistory lookup returned0; retain
+unknownvolume until positive ownership qualification, no prune/delete guessing.
+Artifact direct-root and1000 actualcontrols bothEACCES; allhelpersremoved and
+sourceunchanged. Capacityagent owns narrowruntime-lib/TOC/read-onlyartifactcaps/
+bounds tests fixes (not yet verified), preparationagent reviewed recoverypins.
+Source3 exact8filepins before5suiteexecution:232/232PASS/zero failures/cancelled/
+skipped; scoped4filelintPASS, independentreviewPASS. Actualcontrols3PASS:
+root exactreadonly inventory+DAC reads372files/736,625,033B SHA
+c054b1995af3ea2e7b6fd3bef1bb98110db971436428391de61fa9d72a3fcac1;
+readonly1MiB PGtmpfs TOCPASS84,447B/no newanonymousvolume. Allhelpersremoved,
+sourceunchanged/outsidefreshbaseline18/28/14 unchanged. Existing1Bunqualified
+anonymousvolume remainsretained. Rootpositive source-reconciled2/currentadmin200/
+5fullstaticpins/PGunchanged available; privateobserverfuturecanonicalpins and
+exactresumed2guard preparationagentauthoring. Rootowns profiles/proofs/actualexec.
+No restore has run.
+Rootactualreadonlydiscovery1PASS same
 reviewedSQLbody371e2826:126tables/44,395rows/124,663,397textbytes, rollback+close
 confirmed, existingownedAPIonly/nohelper. Inputs/transportrawprivate. Rootprofile
 creatorauthoredNOT_RUN; mustfreshqualifyrealheadroom/disk/port5192/journal/host/
@@ -19,9 +73,15 @@ BoundsinterfacewithBoundedDockerExecution/getBoundedDockerCleanup: harddeadlines
 nonceownednewtemporaryhelpers/positivejoin/cleanup, streamedarchivecap, failclosed
 remoteexecunknown. Trackedhelperwaitusesmetadata pollingwithinunchangedhelper
 120sdeadline; no4hwait. TerminalwitnessproposalfornarrowfixedPostgresremoteexec
-mustbesource-reviewed/tested beforeactualexecution; no localexit-only inference.
-Next: authorsfreeze→independentreview→rootappropriatecontroltests/syntax→source
-checkpoint→freshrootprofile→explicitown5191coldbackup→new5192restore/readback/UI/
+nowbyte-exactforfixedPostgreSQLonly; no localexit-only inference. Closedarchive
+ownershipmodepreservesmetadatausingonlynecessaryexactarchivecmd/mountcaps;
+ReadonlyRootfs/CapDropALL/no-newprivilege/defaultnoaddedcapsretained. Observer
+refrozenSHAa1dbaccb9ee6c3e2b0e4ab236c97c29b73814796fd8acffaa58f616befb66f47.
+Rootmake-profile/outsideguard authored+syntaxPASS, actualprofileNOT_RUN.
+Capacity agent is authoring a separate nonce-owned actual archive/capability
+probe; root will execute only after review and retain positive cleanup evidence.
+Next: actual small probe→freshrootprofile→explicitown5191
+coldbackup→new5192restore/readback/UI/
 qualifiedretireONLYtarget. Neverdefault5190. KeepMVskip/policyPAUSED/noApply.
 
 LATEST USER: **Skip MV cables.** Selected normal job
