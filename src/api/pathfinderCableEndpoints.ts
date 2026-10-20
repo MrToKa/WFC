@@ -98,6 +98,8 @@ async function verifyReceipt(value: unknown, projectId: string, cableId: string,
       : result.initialFillMandate !== undefined) return invalid();
     return result;
 }
+// Pair receipts retain the identical strict per-endpoint proof.
+export { verifyReceipt as verifyCableEndpointReceipt };
 export function saveCableEndpoint(projectId: string, token: string, cableId: string, end: CableEndpointEnd, input: CableEndpointCommand, accountId: string, signal?: AbortSignal): Promise<CableEndpointReceipt> {
   const parsed = cableEndpointCommandSchema.safeParse(input);
   if (!parsed.success || !policyUuidSchema.safeParse(accountId).success) return Promise.reject(new CableEndpointApiError('INVALID_REQUEST', 400, 'Review the exact endpoint command before saving.', 'refused'));

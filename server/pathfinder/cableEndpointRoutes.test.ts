@@ -7,8 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCableEndpointRouter, sendCableEndpointError } from './cableEndpointRoutes.js';
 import type { CableEndpointCommands } from './cableEndpointCommands.js';
 import { CABLE_ENDPOINT_LIMITS } from '../../shared/pathfinderCableEndpoints.js';
+import { CABLE_ENDPOINT_PAIR_LIMITS } from '../../shared/pathfinderCableEndpointPair.js';
 import { PathFinderError } from './errors.js';
-const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), context: vi.fn(), selection: vi.fn(), save: vi.fn(), close: vi.fn() }));
+const mocks = vi.hoisted(() => ({ verify: vi.fn(), authorize: vi.fn(), context: vi.fn(), selection: vi.fn(), save: vi.fn(), close: vi.fn(), savePair: vi.fn(), closePair: vi.fn() }));
 vi.mock('../auth.js', () => ({ verifyAccessToken: mocks.verify }));
 const id = (n: number) => `f2000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const command = () => ({ schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idempotencyKey: id(8), expectedContextSha256: 'a'.repeat(64), expectedCableWriteRevision: '7',
@@ -17,7 +18,7 @@ const command = () => ({ schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idem
     captureFrameId: id(6), geometryRevision: '2', traceId: id(7) }, reason: 'Explicit synthetic endpoint selection',
   selection: { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: null } });
 beforeEach(() => { vi.resetAllMocks(); mocks.verify.mockReturnValue({ sub: id(1), jti: id(2), exp: Math.floor(Date.now() / 1000) + 3600 });
-  for (const key of ['authorize', 'context', 'selection', 'save', 'close'] as const) mocks[key].mockResolvedValue({ synthetic: key }); });
+  for (const key of ['authorize', 'context', 'selection', 'save', 'close', 'savePair', 'closePair'] as const) mocks[key].mockResolvedValue({ synthetic: key }); });
 afterEach(() => vi.useRealTimers());
 function request({ url = `/cable-endpoints/${id(9)}/from`, method = 'GET', token = 'Bearer synthetic', length, type = 'application/json', encoding, body, query = {}, stall = false }:
   { url?: string; method?: string; token?: string | null; length?: string; type?: string; encoding?: string; body?: string; query?: Record<string, string>; stall?: boolean } = {}) {
@@ -90,5 +91,29 @@ describe('cable endpoint router via in-memory Express; no HTTP listener', () => 
     expect(r.res.statusCode).toBe(503); expect(r.res.json.mock.calls[0][0].code).toBe('CABLE_ENDPOINT_DEADLINE_EXCEEDED');
     expect(mocks.save).not.toHaveBeenCalled(); expect(mocks.authorize.mock.calls[0][2].aborted).toBe(true);
     r.stream!.push(Buffer.from(input)); r.stream!.push(null); await vi.advanceTimersByTimeAsync(1); expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it('dispatches one exact pair save and its explicit same-body recovery through current authority', async () => {
+    const child = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: { mode: 'when-both-empty' } };
+    const input = { schemaVersion: 'wfc.pf.cable-endpoint-pair-command.v1', idempotencyKey: id(30), expectedContexts: { from: child.expectedContextSha256, to: 'b'.repeat(64) }, endpoints: [{ end: 'from', command: child }] };
+    const save = request({ url: `/cable-endpoint-pairs/${id(9)}`, method: 'PUT', body: JSON.stringify(input) }); await save.run();
+    expect(mocks.savePair).toHaveBeenCalledExactlyOnceWith(id(1), expect.any(Object), id(9), input, expect.any(AbortSignal)); expect(mocks.save).not.toHaveBeenCalled();
+    const close = request({ url: `/cable-endpoint-pairs/${id(9)}/close-pending`, method: 'POST', body: JSON.stringify(input) }); await close.run();
+    expect(mocks.closePair).toHaveBeenCalledExactlyOnceWith(id(1), expect.any(Object), id(9), input, expect.any(AbortSignal));
+  });
+  it('keeps pair byte limits isolated and authorizes before disclosing them', async () => {
+    const denied = request({ url: `/cable-endpoint-pairs/${id(9)}`, method: 'PUT', length: String(CABLE_ENDPOINT_PAIR_LIMITS.controlBytes + 1) });
+    mocks.authorize.mockRejectedValueOnce(new PathFinderError('ADMIN_REQUIRED', 403)); await denied.run(); expect(denied.res.statusCode).toBe(403);
+    const large = request({ url: `/cable-endpoint-pairs/${id(9)}`, method: 'PUT', length: String(CABLE_ENDPOINT_PAIR_LIMITS.controlBytes + 1) }); await large.run();
+    expect(large.res.statusCode).toBe(413); expect(mocks.savePair).not.toHaveBeenCalled();
+  });
+  it('rejects malformed pair bodies, duplicate keys, queries and unsupported case variants without old-command fallthrough', async () => {
+    const child = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: null };
+    const input = { schemaVersion: 'wfc.pf.cable-endpoint-pair-command.v1', idempotencyKey: id(30), expectedContexts: { from: child.expectedContextSha256, to: 'b'.repeat(64) }, endpoints: [{ end: 'from', command: child }] };
+    for (const body of [JSON.stringify({ ...input, actorId: id(99) }), JSON.stringify(input).replace('{', '{"idempotencyKey":"duplicate",')]) {
+      const r = request({ url: `/cable-endpoint-pairs/${id(9)}`, method: 'PUT', body }); await r.run(); expect(r.res.statusCode).toBe(400);
+    }
+    const query = request({ url: `/cable-endpoint-pairs/${id(9)}`, method: 'PUT', body: JSON.stringify(input), query: { unsafe: 'true' } }); await query.run(); expect(query.res.statusCode).toBe(400);
+    const casing = request({ url: `/Cable-Endpoint-Pairs/${id(9)}`, method: 'PUT', body: JSON.stringify(input) }); await casing.run(); expect(casing.res.statusCode).toBe(405);
+    expect(mocks.savePair).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
   });
 });

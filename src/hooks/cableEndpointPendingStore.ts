@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { parsePurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
 import { cableEndpointCommandSchema, cableEndpointEndSchema, type CableEndpointCommand } from '../../shared/pathfinderCableEndpoints';
+import { LEGACY_CABLE_ENDPOINT_PENDING_PREFIX, CABLE_ENDPOINT_PAIR_PENDING_PREFIX } from './cableEndpointPendingKeys';
 
-export const CABLE_ENDPOINT_PENDING_PREFIX = 'wfc.pathfinder.cable-endpoint.pending.v1:';
+export const CABLE_ENDPOINT_PENDING_PREFIX = LEGACY_CABLE_ENDPOINT_PENDING_PREFIX;
 const MAX_BYTES = 128 * 1024, LOCK_MILLISECONDS = 5000;
 const ownerSchema = z.object({ accountId: policyUuidSchema, projectId: policyUuidSchema }).strict();
 const pendingSchema = ownerSchema.extend({ schemaVersion: z.literal('wfc.pf.pending-cable-endpoint.v1'), cableId: policyUuidSchema,
@@ -33,6 +34,8 @@ function writePending(owner: CableEndpointPendingOwner, value: PendingCableEndpo
 /** Must complete before PUT. A second tab cannot replace an unresolved command. */
 export function retainPendingCableEndpoint(owner: CableEndpointPendingOwner, cableId: string, end: 'from' | 'to', command: CableEndpointCommand): Promise<PendingCableEndpoint> {
   return locked(owner, () => {
+    if (localStorage.getItem(`${CABLE_ENDPOINT_PAIR_PENDING_PREFIX}${owner.accountId}:${owner.projectId}`) !== null)
+      throw new CableEndpointStorageError('A cable endpoint Save is pending. Reconcile it before another assignment.');
     if (readPendingCableEndpoint(owner)) throw new CableEndpointStorageError('A shared endpoint save is already pending for this account and project. Reconcile it first.');
     const intent = pendingSchema.parse({ ...ownerSchema.parse(owner), schemaVersion: 'wfc.pf.pending-cable-endpoint.v1', cableId, end,
       createdAt: new Date().toISOString(), command: cableEndpointCommandSchema.parse(command) });

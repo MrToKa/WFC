@@ -8,6 +8,7 @@ import { requestPrincipal } from './auth.js';
 import { PathFinderError } from './errors.js';
 import { parsePolicyJson } from './policyJson.js';
 import { createCableEndpointCommands, type CableEndpointCommands } from './cableEndpointCommands.js';
+import { CABLE_ENDPOINT_PAIR_LIMITS, cableEndpointPairCommandSchema } from '../../shared/pathfinderCableEndpointPair.js';
 
 export function sendCableEndpointError(res: Response, error: unknown): void {
   const status = (error as { status?: number } | null)?.status;
@@ -40,7 +41,7 @@ export function createCableEndpointRouter(pool: Pool, repository: CableEndpointC
   const project = (req: Request) => policyUuidSchema.parse(req.params.projectId), cable = (req: Request) => policyUuidSchema.parse(req.params.cableId);
   const end = (req: Request) => cableEndpointEndSchema.parse(req.params.end);
   router.use(async (req, res, next) => {
-    if (!/^\/cable-endpoints(?:\/|$)/i.test(req.path)) { next('router'); return; }
+    if (!/^\/(?:cable-endpoints|cable-endpoint-pairs)(?:\/|$)/i.test(req.path)) { next('router'); return; }
     res.setHeader('Cache-Control', 'private, no-store');
     const bearer = /^Bearer\s+(\S+)$/i.exec((req.header('authorization') ?? '').trim())?.[1];
     if (!bearer) { sendCableEndpointError(res, new PathFinderError('AUTHENTICATION_REQUIRED', 401)); return; }
@@ -51,8 +52,9 @@ export function createCableEndpointRouter(pool: Pool, repository: CableEndpointC
     try {
       await repository.authorize(project(req), requestPrincipal(req), scope.controller.signal); scope.controller.signal.throwIfAborted();
       if (['PUT', 'POST'].includes(req.method)) {
+        const maximum = /^\/cable-endpoint-pairs(?:\/|$)/i.test(req.path) ? CABLE_ENDPOINT_PAIR_LIMITS.controlBytes : CABLE_ENDPOINT_LIMITS.controlBytes;
         const declared = req.header('content-length');
-        if (declared !== undefined && (!/^(?:0|[1-9][0-9]*)$(?![\s\S])/.test(declared) || BigInt(declared) > BigInt(CABLE_ENDPOINT_LIMITS.controlBytes))) {
+        if (declared !== undefined && (!/^(?:0|[1-9][0-9]*)$(?![\s\S])/.test(declared) || BigInt(declared) > BigInt(maximum))) {
           res.setHeader('Connection', 'close'); throw new PathFinderError('CABLE_ENDPOINT_BODY_LIMIT', 413);
         }
         if (!/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(req.header('content-type') ?? '')) throw new PathFinderError('CABLE_ENDPOINT_CONTENT_TYPE_REQUIRED', 415);
@@ -65,6 +67,9 @@ export function createCableEndpointRouter(pool: Pool, repository: CableEndpointC
   const raw = express.raw({ type: () => true, limit: CABLE_ENDPOINT_LIMITS.controlBytes, inflate: false });
   const body = (req: Request) => { if (!Buffer.isBuffer(req.body)) throw new PathFinderError('INVALID_CABLE_ENDPOINT_REQUEST', 400);
     return cableEndpointCommandSchema.parse(parsePolicyJson(req.body, { maxBytes: CABLE_ENDPOINT_LIMITS.controlBytes })); };
+  const pairRaw = express.raw({ type: () => true, limit: CABLE_ENDPOINT_PAIR_LIMITS.controlBytes, inflate: false });
+  const pairBody = (req: Request) => { if (!Buffer.isBuffer(req.body)) throw new PathFinderError('INVALID_CABLE_ENDPOINT_REQUEST', 400);
+    return cableEndpointPairCommandSchema.parse(parsePolicyJson(req.body, { maxBytes: CABLE_ENDPOINT_PAIR_LIMITS.controlBytes })); };
   const handle = (operation: (req: Request, signal: AbortSignal) => Promise<unknown>) => async (req: Request, res: Response) => {
     const scope = requests.get(req)!;
     try { if (res.writableEnded || res.destroyed) return; scope.controller.signal.throwIfAborted();
@@ -80,6 +85,9 @@ export function createCableEndpointRouter(pool: Pool, repository: CableEndpointC
   }));
   router.put(base, raw, handle((req, signal) => { empty(req); return repository.save(project(req), requestPrincipal(req), cable(req), end(req), body(req), signal); }));
   router.post(`${base}/close-pending`, raw, handle((req, signal) => { empty(req); return repository.close(project(req), requestPrincipal(req), cable(req), end(req), body(req), signal); }));
+  const pairBase = '/cable-endpoint-pairs/:cableId';
+  router.put(pairBase, pairRaw, handle((req, signal) => { empty(req); return repository.savePair(project(req), requestPrincipal(req), cable(req), pairBody(req), signal); }));
+  router.post(`${pairBase}/close-pending`, pairRaw, handle((req, signal) => { empty(req); return repository.closePair(project(req), requestPrincipal(req), cable(req), pairBody(req), signal); }));
   router.use((req, res) => { requests.get(req)?.cleanup(); if (!res.writableEnded && !res.destroyed) sendCableEndpointError(res, new PathFinderError('CABLE_ENDPOINT_METHOD_UNSUPPORTED', 405)); });
   router.use((error: unknown, req: Request, res: Response, _next: NextFunction) => { requests.get(req)?.cleanup(); if (!res.writableEnded && !res.destroyed) sendCableEndpointError(res, error); }); return router;
 }

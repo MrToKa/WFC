@@ -441,8 +441,12 @@ export async function verifyBackup(directory) {
   for (const image of manifest.images) { if (!['api', 'web', 'postgres', 'minio'].includes(image.role) || image.archive !== image.role + '-image.tar') fail('PF_BACKUP_IMAGE_INVALID'); await verifyImageArchive(path.join(target, image.archive), image); }
   return { status: 'PASS', directory: target, manifest };
 }
-/** @param {{backup?:string,privateConfig?:string,runtime?:string,port?:number|string,observeCold?:ColdObserver}} [options] */
-export async function restore({ backup: source, privateConfig, runtime, port = 5191, observeCold } = {}) {
+/** activate:false retains a successfully verified, fenced target in quarantine;
+ * PostgreSQL/storage may run, but this restore never starts API/web. This is an
+ * operator foundation only, not proof of U8 delivery or browser acceptance.
+ * @param {{backup?:string,privateConfig?:string,runtime?:string,port?:number|string,observeCold?:ColdObserver,activate?:boolean}} [options] */
+export async function restore({ backup: source, privateConfig, runtime, port = 5191, observeCold, activate = true } = {}) {
+  if (typeof activate !== 'boolean') fail('PF_RESTORE_ACTIVATION_INVALID');
   requireColdObserver(observeCold);
   const verified = await verifyBackup(source), manifest = verified.manifest; await assertCanonicalPath(privateConfig); const privateBytes = await fs.readFile(privateConfig); if (privateBytes.length > 1024 ** 2) fail('PF_PRIVATE_CONFIG_LIMIT'); const config = JSON.parse(privateBytes);
   if (config.format !== 'WFC-PF-LOCAL-PRIVATE' || config.schemaVersion !== 1 || config.backupId !== manifest.backupId) fail('PF_PRIVATE_CONFIG_INVALID');
@@ -476,6 +480,8 @@ export async function restore({ backup: source, privateConfig, runtime, port = 5
     state.restore = { backupId: manifest.backupId, artifactsSha256: artifacts.sha256, jwtRotated: true, sessionsFenced: true,
       inventoriesEqual: inventory.businessSha256 === after.businessSha256, fencingValidated: true, fencingValidation, fencingRecordSha256: digest(fencingRecord) }; state.status = 'verified-quarantine'; await save(state);
     await observeColdRuntime(observeCold, 'restore-after-fence', state, manifest.backupId);
-    await start(state); return { status: 'PASS', runtime: state.runtime, project: state.project, origin: `http://127.0.0.1:${state.port}`, restore: state.restore };
+    if (activate) await start(state);
+    return { status: 'PASS', runtime: state.runtime, project: state.project, origin: `http://127.0.0.1:${state.port}`,
+      ...(activate ? {} : { activated: false }), restore: state.restore };
   } catch (error) { state.status = 'failed-quarantine'; await save(state); throw error; }
 }

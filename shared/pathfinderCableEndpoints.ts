@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { policyHashSchema, policyUuidSchema, policyRevisionSchema } from './pathfinderPurposePolicy.js';
+import { canonicalPurposeJson, policyHashSchema, policyUuidSchema, policyRevisionSchema } from './pathfinderPurposePolicy.js';
 import { endpointBindingSchema, endpointBindingReceiptSchema, endpointCurrentScopeSchema, endpointLocationSchema,
   endpointLocationNameSchema, endpointObjectRefSchema, endpointPointSchema } from './pathfinderEndpointBindings.js';
 import { geometryObjectSummarySchema } from './pathfinderGeometryTrace.js';
@@ -12,11 +12,19 @@ export const cableEndpointEndSchema = z.enum(['from', 'to']);
 export const cableEndpointSdkObjectIdSchema = z.number().int().min(1).max(2147483647);
 const reasonCodes = z.array(recalculationReasonSchema).max(CABLE_ENDPOINT_LIMITS.reasonCodes).refine(values => new Set(values).size === values.length);
 const logicalName = z.string().max(4096).nullable();
+export const cableEndpointAutomaticSelectionSchema = z.object({ source: z.literal('automatic-unconfirmed'),
+  sdkObjectId: cableEndpointSdkObjectIdSchema, name: z.string().max(2048), object: endpointObjectRefSchema,
+  pointProjectMetres: endpointPointSchema, approximate: z.literal(true), confirmed: z.literal(false) }).strict();
+export const cableEndpointConfirmedSelectionSchema = cableEndpointAutomaticSelectionSchema.omit({ source: true, confirmed: true }).extend({
+  source: z.literal('confirmed'), confirmed: z.literal(true),
+}).strict();
 export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-context.v1'),
   projectId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, cableWriteRevision: policyRevisionSchema,
   logicalName, logicalKey: logicalName, mto: z.string().max(96).nullable(), canBind: z.boolean(), reasonCodes,
   registryRevision: policyRevisionSchema, location: endpointLocationSchema.nullable(), head: endpointBindingSchema.nullable(),
-  current: endpointCurrentScopeSchema.nullable(), contextSha256: policyHashSchema }).strict().superRefine((value, context) => {
+  current: endpointCurrentScopeSchema.nullable(), automaticSelection: cableEndpointAutomaticSelectionSchema.nullable().optional(),
+  confirmedSelection: cableEndpointConfirmedSelectionSchema.nullable().optional(),
+  contextSha256: policyHashSchema }).strict().superRefine((value, context) => {
   if (value.logicalName !== null && value.logicalName !== value.logicalName.normalize('NFC').trim()
     || value.logicalKey !== (value.logicalName?.normalize('NFC').trim().toUpperCase() || null))
     context.addIssue({ code: 'custom', message: 'The logical endpoint retains its normalized cable name.' });
@@ -24,6 +32,15 @@ export const cableEndpointContextSchema = z.object({ schemaVersion: z.literal('w
     context.addIssue({ code: 'custom', message: 'Shared endpoint evidence must belong to this project/location.' });
   if (value.canBind && (!endpointLocationNameSchema.safeParse(value.logicalName).success || !value.current || value.reasonCodes.length !== 0 || !['LV', 'Control', 'Instrumentation'].includes(value.mto ?? '')))
     context.addIssue({ code: 'custom', message: 'Bindable display context requires a named eligible cable and current preparation.' });
+  if (value.automaticSelection && (!value.canBind || value.head !== null || !value.current?.traceId || value.automaticSelection.object.traceId !== value.current.traceId))
+    context.addIssue({ code: 'custom', message: 'An unconfirmed automatic candidate never replaces a saved head or a different model scope.' });
+  if (value.confirmedSelection && (!value.canBind || !value.head || value.head.status !== 'confirmed' || value.head.mode !== 'object-derived'
+    || value.head.modelVersionId !== value.current?.modelVersionId || value.head.aggregateId !== value.current?.aggregateId
+    || value.head.artifactId !== value.current?.artifactId || value.head.projectionSha256 !== value.current?.projectionSha256
+    || value.head.captureFrameId !== value.current?.captureFrameId || value.confirmedSelection.object.traceId !== value.current?.traceId
+    || canonicalPurposeJson(value.confirmedSelection.object) !== canonicalPurposeJson(value.head.sourceObject)
+    || canonicalPurposeJson(value.confirmedSelection.pointProjectMetres) !== canonicalPurposeJson(value.head.pointProjectMetres)))
+    context.addIssue({ code: 'custom', message: 'Confirmed model display belongs to the exact current object-derived head.' });
 });
 export type CableEndpointContext = z.infer<typeof cableEndpointContextSchema>;
 export function cableEndpointContextHashInput(value: CableEndpointContext) {

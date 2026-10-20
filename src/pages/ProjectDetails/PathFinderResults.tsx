@@ -18,7 +18,10 @@ import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/p
 import { revisionResultEnvelopeSchema } from '../../../shared/pathfinderRevisionResults';
 import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
 
-type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void };
+export type PathFinderWorkflowDisplayRequest = { cableId: string; requestId: number; action: 'show' | 'hide' };
+export type PathFinderWorkflowDisplay = { cableId: string | null; visible: boolean; routing: string | null; designLength: string | null };
+type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void;
+  workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
 function hasExactItemApplicability(proposal: PathFinderProposal | null, projectId: string | null | undefined) {
   const proof = sealedCableItemApplicabilitySchema.safeParse(proposal?.itemApplicability);
@@ -26,11 +29,18 @@ function hasExactItemApplicability(proposal: PathFinderProposal | null, projectI
     && proposal.projectId === projectId && proof.data.projectId === projectId && proof.data.jobId === proposal.jobId
     && proof.data.cableId === proposal.cableId && proof.data.proposalId === proposal.id && proof.data.dependencyHash === proposal.provenance.dependencyHash);
 }
-export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, onBatchBusyChange, onCableValuesChanged }: Props) {
+export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, onBatchBusyChange, onCableValuesChanged,
+  workflowDisplayRequest, onWorkflowDisplayChange }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const displayRequestLatest = useRef({ pf, selectedCableId, active, displayOwned });
+  displayRequestLatest.current = { pf, selectedCableId, active, displayOwned };
+  const proposalCableId = proposal?.cableId ?? null, proposalRouting = proposal?.route?.routeText ?? null;
+  const proposalDesignLength = proposal?.design?.designLengthMeters === undefined ? null : String(proposal.design.designLengthMeters);
+  useEffect(() => { onWorkflowDisplayChange?.({ cableId: proposalCableId, visible: active && displayOwned && pathDisplayed,
+    routing: proposalRouting, designLength: proposalDesignLength }); }, [onWorkflowDisplayChange, proposalCableId, proposalRouting, proposalDesignLength, active, displayOwned, pathDisplayed]);
   const [scopeReadiness, setScopeReadiness] = useState<PathFinderCalculationScope>({ admissionId: null, jobId: null, ready: false, message: 'Choose a completed calculation in Cable revision results below.' });
   const scope = useRef(scopeReadiness);
   const historyScope = useRef(scopeReadiness), workflowScope = useRef<string | null>(null);
@@ -168,6 +178,13 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   const workflowTarget = workflowRow.success && workflowRow.data.projectId === pf.preparationAccess?.projectId && workflowRow.data.cable.id === selectedCableId
     && workflowRow.data.calculation.outcome === 'calculated' && workflowRow.data.calculation.proposalId && workflowRow.data.calculation.proposalHash && workflowRow.data.calculation.jobId
     ? workflowRow.data : null;
+  // Hide belongs to the selected cable context, not a particular proposal. A
+  // later completed job or cable write must not reopen a deliberately hidden
+  // path. Selecting another cable/model/settings context starts a fresh intent.
+  const workflowDisplayContext = JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey]);
+  const workflowHidden = useRef({ context: workflowDisplayContext, hidden: false });
+  if (workflowHidden.current.context !== workflowDisplayContext) workflowHidden.current = { context: workflowDisplayContext, hidden: false };
+  const handledDisplayRequest = useRef(-1);
   // The hint identifies one selected result. Replacing list rows or updating
   // their progress must never silently retarget the selected proposal.
   const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, workflowAttempt,
@@ -180,7 +197,19 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
   workflowLatest.current = { key: workflowKey, target: workflowTarget, pf, options, claimViewer,
     comparisonBase: [ownershipKey, active, displayOwned, selectedCableId, data?.activeModel, settingsKey, optionsKey] };
   useEffect(() => {
+    const latest = displayRequestLatest.current;
+    if (!workflowDisplayRequest || !latest.active || workflowDisplayRequest.cableId !== latest.selectedCableId
+      || !Number.isSafeInteger(workflowDisplayRequest.requestId) || workflowDisplayRequest.requestId <= handledDisplayRequest.current) return;
+    handledDisplayRequest.current = workflowDisplayRequest.requestId;
+    if (workflowDisplayRequest.action === 'show') { workflowHidden.current.hidden = false; suppressedWorkflow.current = null; setWorkflowAttempt(value => value + 1); return; }
+    workflowHidden.current.hidden = true;
+    endpointRead.current?.abort(); operation.current++; suppressedWorkflow.current = workflowIdentity.current;
+    if (latest.displayOwned) latest.pf.clear();
+    setPathDisplayed(false); setPreviewLoading(false);
+  }, [workflowDisplayRequest]);
+  useEffect(() => {
     const initial = workflowLatest.current, access = initial.pf.preparationAccess, target = initial.target;
+    if (workflowHidden.current.context === workflowDisplayContext && workflowHidden.current.hidden) return;
     if (workflowIdentity.current !== null && suppressedWorkflow.current === workflowIdentity.current) return;
     if (!workflowKey || !target || !active || !accountId || !initial.pf.data || !access?.isAdmin || !access.projectId || access.projectId !== access.loadedProjectId || !access.token) {
       if (workflowScope.current) selectHistory(); return;
@@ -253,7 +282,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       } finally { if (endpointRead.current === controller) endpointRead.current = null; if (operation.current === atOperation) setPreviewLoading(false); }
     })();
     return () => { controller.abort(); operation.current++; };
-  }, [workflowKey, active, accountId, adoptScope, selectHistory]);
+  }, [workflowKey, workflowDisplayContext, active, accountId, adoptScope, selectHistory]);
   const confirmReview = async () => {
     if (!active || !displayOwned || !proposal || !pathDisplayed || !effectiveCanApply || stale || pf.busy || !pendingApply.canStart) return;
     const current = operation.current, context = reviewContext.current, target = proposal;

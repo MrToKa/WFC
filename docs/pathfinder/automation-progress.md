@@ -1,5 +1,32 @@
 # PathFinder local implementation progress
 
+## PF-U7 — independent delivery verified / PF-U8 next — 2026-10-21
+
+Branch pf-u7-integrated-workflow-local-20261020 inherits handoff b5a12e5 /
+U6a 3b4f722 + qualification 34c9783. Current owning chat Routings Build (2)
+ACTIVE; do not duplicate. Latest UI clarification implemented: Assign From/To
+read-only drafts, prefilled automatic objects, one atomic Save, selected-only
+Calculate routing, protected persistent Show/Hide. Legacy recovery remains
+available. Final498 source/mock controls PASS; frontend types, backend/web builds,
+scoped lint/diff PASS. Report69/u7-independent-actual.json bind sources/scope.
+Root sole actual executor. Own disposable PG fixtures ce473847-dd7c-4f58-b70e-
+ed5e7c3c3d81 and 601db0c5-64e2-4395-9a77-11bc22bef7e6 RETIRED; credentials
+removed, evidence retained. Failed first bootstrap also retired.
+First catalog capture FAIL42601 retained; corrected parenthesis and fresh actual
+138-table lossless SQL qualification PASS6/6; resource-auth second group NOT_RUN
+(no genuinely imported model in fixture). Actual pair SQL slice PASS11/11,
+including rollback/MVCC/replay/currentauth/fanout; explicitly simulated geometry
+read context, NOT full engine/import/initial-fill E2E. Public tables conserved.
+Agents: backend/pair SQL frozen; inventory/Results frozen; comparator/UI tests
+frozen; cold restore activate:false+53mockcontrols frozen. Root pair recovery
+hook/panel types+321combinedchecks verified. preview_diagnosis owns NEW U8
+owned-update.mjs; exclude from U7 delivery until reviewed. No execution yet.
+Actual Aalborg reread/UI remains BLOCKED saved-origin permission; no alternate
+browser/CDP/indirect reread. No5191 upgrade/writes/restart yet. Preparer PAUSED;
+heartbeat ACTIVE/otherchat idle. Next finalize independent U7 source/SQL delivery,
+prepare U8 handoff and execute guarded backup/restore/update of owned5191 only.
+Genuine import→engine→initial-fill chain and real UI acceptance remain NOT_RUN.
+
 ## PF-U6a qualification / U7 next — 2026-10-20
 
 Read-only baseline reconciliation found heartbeat delivery3b4f722 while this

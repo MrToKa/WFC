@@ -5,11 +5,13 @@ import { endpointBindingFixture, endpointFixtureId as id } from './endpointBindi
 import { createCableEndpointCommands } from './cableEndpointCommands.js';
 import { endpointBindingHash, confirmEndpointBindingChangeInTransaction, endpointBindingTransaction } from './endpointBindingRepository.js';
 import { cableEndpointContextHashInput, type CableEndpointContext, type CableEndpointCommand } from '../../shared/pathfinderCableEndpoints.js';
-const mocks = vi.hoisted(() => ({ selection: vi.fn(), append: vi.fn(), mandate: vi.fn() }));
+import { cableEndpointPairCommandSchema, type CableEndpointPairCommand } from '../../shared/pathfinderCableEndpointPair.js';
+const mocks = vi.hoisted(() => ({ selection: vi.fn(), automatic: vi.fn(), append: vi.fn(), mandate: vi.fn() }));
 vi.mock('./cableEndpointSelection.js', () => ({ readCableEndpointSelection: mocks.selection }));
 vi.mock('./locationImpactRepository.js', () => ({ appendLocationImpactInTransaction: mocks.append }));
 vi.mock('./initialFillMandates.js', () => ({ appendInitialFillMandateInTransaction: mocks.mandate }));
-beforeEach(() => vi.resetAllMocks());
+vi.mock('./automaticEndpointCandidates.js', () => ({ readAutomaticNamedEndpointCandidate: mocks.automatic }));
+beforeEach(() => { vi.resetAllMocks(); mocks.automatic.mockResolvedValue({ status: 'missing', candidateObjectIds: [], point: null, objectId: null }); });
 /** Extends the existing mock SQL protocol; all binding mutations still exercise the real transaction/helper. */
 function fixture() {
   const f = endpointBindingFixture(), settings = { cableRevision: '7', mto: 'LV' as string | null, oversized: false, budget: false, missing: false, impactBytes: '1024' };
@@ -25,7 +27,8 @@ function fixture() {
       if (sql.startsWith('/* cable-endpoint:aliases */')) return { rows: [...f.state.aliases.values()].filter(a => a.location_id === p[1]).map(a => ({ ...a, oversized: false })) };
       if (sql.startsWith('/* cable-endpoint:head */')) { const b = f.state.bindings.get(f.state.heads.get(p[1]) ?? ''); return { rows: b ? [{ binding_id: b.id, binding_revision: b.bindingRevision, record_sha256: b.contentSha256, record: b }] : [] }; }
       if (sql.startsWith('/* cable-endpoint:impact */')) return { rows: f.state.cables.map(c => ({ ...c, oversized: false, total_text_bytes: settings.impactBytes })) };
-      if (sql.startsWith('/* cable-endpoint:command */')) { const c = f.state.commands.get(p[1] + ':' + p[2]); return { rows: c ? [c] : [] }; }
+      if (sql.startsWith('/* cable-endpoint:command */') || sql.startsWith('/* cable-endpoint:pair-command */')) { const c = f.state.commands.get(p[1] + ':' + p[2]); return { rows: c ? [c] : [] }; }
+      if (sql.startsWith('/* cable-endpoint:automatic-name */')) { const record = f.built.records.find(item => item.id === p[2]); return { rows: record ? [{ name: record.historicalModel.name, sdk_object_id: record.identity.dbId }] : [] }; }
     }
     return original(sql, args);
   });
@@ -223,5 +226,143 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
     mocks.append.mockResolvedValue({ id: id(900), status: 'blocked', eligibleCables: 2, excludedMvCables: 0, blockedCategoryCables: 0 }); mocks.mandate.mockRejectedValue(Error('synthetic mandate failure'));
     await expect(f.save(command)).rejects.toThrow('synthetic mandate failure'); expect(f.state.locations.size).toBe(0); expect(f.state.bindings.size).toBe(0); expect(f.state.commands.size).toBe(0);
     await f.close(command); await expect(f.save(command)).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_COMMAND_CLOSED' }); expect(mocks.mandate).toHaveBeenCalledTimes(1);
+  });
+});
+
+async function pairFixture(ends: ('from' | 'to')[] = ['from', 'to']) {
+  const f = fixture(), originals = { from: await f.read(f.cableId, 'from'), to: await f.read(f.cableId, 'to') };
+  const command = cableEndpointPairCommandSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-pair-command.v1', idempotencyKey: id(800),
+    expectedContexts: { from: originals.from.contextSha256, to: originals.to.contextSha256 }, endpoints: ends.map(end => ({ end,
+      command: { ...f.command(originals[end]), schemaVersion: 'wfc.pf.cable-endpoint-command.v3',
+        calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 }, initialFill: { mode: 'when-both-empty' } },
+    })) });
+  let impactId = 900, mandateId = 950;
+  mocks.append.mockImplementation(async (_client, input, check) => { check(); return { id: id(impactId++), status: input.calculation ? 'pending' : 'blocked', eligibleCables: input.affectedCableIds.length, excludedMvCables: 0, blockedCategoryCables: 0 }; });
+  mocks.mandate.mockImplementation(async (_client, input, check) => { check(); return { id: id(mandateId++), impactId: input.impactId, contentSha256: 'a'.repeat(64), mode: 'when-both-empty' }; });
+  return { ...f, originals, pair: command,
+    savePair: (input: CableEndpointPairCommand = command, signal?: AbortSignal) => f.repo.savePair(f.projectId, f.who, f.cableId, input, signal),
+    closePair: (input: CableEndpointPairCommand = command) => f.repo.closePair(f.projectId, f.who, f.cableId, input) };
+}
+describe('atomic cable endpoint pair saves using synthetic SQL', () => {
+  it('commits both heads before either impact/mandate and stores the original pair and child receipts atomically', async () => {
+    const f = await pairFixture(); f.queries.length = 0;
+    mocks.append.mockImplementation(async (_client, input) => { expect(f.state.heads.size).toBe(2); return { id: input.idempotencyKey, status: 'pending', eligibleCables: 2, excludedMvCables: 0, blockedCategoryCables: 0 }; });
+    const result = await f.savePair(); expect(result.receipts.map(receipt => receipt.end)).toEqual(['from', 'to']); expect(result.finalRegistryRevision).toBe('6');
+    expect(result.commandSha256).toBe(endpointBindingHash(f.pair)); expect(result.expectedContexts).toEqual(f.pair.expectedContexts);
+    expect(f.queries.filter(sql => sql === 'BEGIN')).toHaveLength(1); expect(f.queries.filter(sql => sql === 'COMMIT')).toHaveLength(1);
+    expect(f.state.bindings.size).toBe(2); expect(f.state.commands.size).toBe(3); expect(mocks.append).toHaveBeenCalledTimes(2); expect(mocks.mandate).toHaveBeenCalledTimes(2);
+    expect(f.queries.join('\n')).not.toMatch(/UPDATE cables|INSERT INTO pf_jobs/);
+  });
+  it('freezes the untouched opposite endpoint even when saving only From', async () => {
+    const f = await pairFixture(['from']); f.state.cables[0].to_location = 'Changed outside the editor';
+    await expect(f.savePair()).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_CONTEXT_CHANGED' }); expect(f.state.bindings.size).toBe(0); expect(mocks.append).not.toHaveBeenCalled();
+  });
+  it('checks second endpoint evidence before writing the first head', async () => {
+    const f = await pairFixture(); f.pair.endpoints[1].command.selection = { mode: 'object-derived', sdkObjectId: 345, object: f.ref };
+    mocks.selection.mockResolvedValue({ status: 'unavailable', object: null });
+    await expect(f.savePair()).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_SELECTION_CHANGED' }); expect(f.state.locations.size).toBe(0); expect(f.state.registry).toBe('4');
+  });
+  it('rolls the first head back when the second binding fails; the same body remains safe to retry', async () => {
+    const f = await pairFixture(), original = f.query.getMockImplementation()!; let writes = 0;
+    f.query.mockImplementation(async (sql, args = []) => { if (sql.startsWith('INSERT INTO pf_endpoint_binding_revisions') && ++writes === 2) throw Error('synthetic second head failure'); return original(sql, args); });
+    await expect(f.savePair()).rejects.toThrow('synthetic second head failure'); expect(f.state.locations.size).toBe(0); expect(f.state.bindings.size).toBe(0); expect(f.state.commands.size).toBe(0); expect(f.state.registry).toBe('4');
+    expect(mocks.append).not.toHaveBeenCalled(); expect((await f.savePair()).duplicate).toBe(false);
+  });
+  it('rolls both heads and child receipts back when the second mandate fails', async () => {
+    const f = await pairFixture(); mocks.mandate.mockResolvedValueOnce({ id: id(990), impactId: id(900), contentSha256: 'a'.repeat(64), mode: 'when-both-empty' }).mockRejectedValueOnce(Error('synthetic second mandate failure'));
+    await expect(f.savePair()).rejects.toThrow('synthetic second mandate failure'); expect(f.state.bindings.size).toBe(0); expect(f.state.locations.size).toBe(0); expect(f.state.commands.size).toBe(0); expect(f.state.registry).toBe('4');
+  });
+  it('replays the whole immutable pair before model/cable/current context checks without new impacts', async () => {
+    const f = await pairFixture(), result = await f.savePair(); f.state.prepared = false; f.settings.cableRevision = '20'; f.state.cables[0].from_location = 'Moved';
+    expect(await f.savePair()).toEqual({ ...result, duplicate: true }); expect((await f.closePair()).status).toBe('saved');
+    expect(mocks.append).toHaveBeenCalledTimes(2); expect(f.state.bindings.size).toBe(2);
+    const changed = structuredClone(f.pair); changed.endpoints[1].command.reason = 'A different body'; await expect(f.savePair(changed)).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_IDEMPOTENCY_CONFLICT' });
+  });
+  it('reserves child keys so independent later legacy retries can only recover already committed pair results', async () => {
+    const f = await pairFixture(), result = await f.savePair(), child = f.pair.endpoints[0];
+    expect(await f.save(child.command, f.cableId, child.end)).toEqual({ ...result.receipts[0], duplicate: true }); expect(f.state.bindings.size).toBe(2); expect(mocks.append).toHaveBeenCalledTimes(2);
+  });
+  it('refuses to adopt a child already saved independently as an atomic pair', async () => {
+    const f = await pairFixture(), child = f.pair.endpoints[0]; await f.save(child.command, f.cableId, child.end);
+    await expect(f.savePair()).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_PAIR_CHILD_ALREADY_USED' }); expect(f.state.bindings.size).toBe(1); expect(f.state.commands.size).toBe(1);
+  });
+  it('closes pair and child keys together after stale context, and all delayed PUTs remain refused', async () => {
+    const f = await pairFixture(); f.state.prepared = false; f.state.cables[0].from_location = 'Changed';
+    const closed = await f.closePair(); expect(closed.status).toBe('closed'); expect(await f.closePair()).toEqual(closed);
+    await expect(f.savePair()).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_COMMAND_CLOSED' });
+    for (const child of f.pair.endpoints) await expect(f.save(child.command, f.cableId, child.end)).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_COMMAND_CLOSED' });
+    expect(f.state.commands.size).toBe(3); expect(f.state.bindings.size).toBe(0); expect(mocks.append).not.toHaveBeenCalled();
+  });
+  it.each(['admin', 'login', 'expiry', 'abort'] as const)('does not save either head when current %s authority is lost', async kind => {
+    const f = await pairFixture(), abort = new AbortController(); if (kind === 'admin') f.state.admin = false; if (kind === 'login') f.state.revoked = true;
+    if (kind === 'expiry') f.who.loginExpiresAt = Date.now() - 1; if (kind === 'abort') abort.abort();
+    await expect(f.savePair(f.pair, abort.signal)).rejects.toBeDefined(); expect(f.state.bindings.size).toBe(0); expect(f.state.commands.size).toBe(0);
+  });
+  it('deduplicates identical drafts for the same shared logical location while binding each exact child mandate', async () => {
+    const f = await pairFixture(); f.state.cables[0].to_location = 'equipment';
+    const to = await f.read(f.cableId, 'to'); f.pair.expectedContexts.to = to.contextSha256;
+    f.pair.endpoints[1].command = { ...f.pair.endpoints[1].command, expectedLogicalName: to.logicalName!, expectedContextSha256: to.contextSha256 };
+    const result = await f.savePair(); expect(f.state.bindings.size).toBe(1); expect(f.state.registry).toBe('5');
+    expect(result.receipts[0].binding.binding.id).toBe(result.receipts[1].binding.binding.id); expect(mocks.mandate).toHaveBeenCalledTimes(2);
+    expect(mocks.mandate.mock.calls.map(call => call[1].commandSha256)).toEqual(f.pair.endpoints.map(child => endpointBindingHash(child.command)));
+  });
+  it('refuses different drafts for the same shared location instead of silently choosing one side', async () => {
+    const f = await pairFixture(); f.state.cables[0].to_location = 'equipment'; const to = await f.read(f.cableId, 'to');
+    f.pair.expectedContexts.to = to.contextSha256; f.pair.endpoints[1].command = { ...f.pair.endpoints[1].command, expectedLogicalName: to.logicalName!, expectedContextSha256: to.contextSha256,
+      selection: { mode: 'fixed-world', pointProjectMetres: [9, 8, 7], derivation: 'manual-world-point', displaySdkObjectId: null } };
+    await expect(f.savePair()).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_PAIR_LOCATION_CONFLICT' }); expect(f.state.bindings.size).toBe(0);
+  });
+  it('keeps a UUID-shaped new logical name distinct from an existing location id and handles a historical no-op first binding', async () => {
+    const f = await pairFixture(), numericLocationId = '10000000-0000-4000-8000-000000000001';
+    await endpointBindingTransaction(f.pool, f.projectId, f.who, client => confirmEndpointBindingChangeInTransaction(client, f.projectId, f.who, numericLocationId, f.legacyCommand()));
+    f.state.cables[0].to_location = numericLocationId;
+    const from = await f.read(), to = await f.read(f.cableId, 'to');
+    f.pair.expectedContexts = { from: from.contextSha256, to: to.contextSha256 };
+    f.pair.endpoints = ([['from', from], ['to', to]] as const).map(([end, c]) => ({ end, command: { ...f.command(c), schemaVersion: 'wfc.pf.cable-endpoint-command.v3',
+      calculation: f.pair.endpoints[0].command.calculation, initialFill: f.pair.endpoints[0].command.initialFill,
+      selection: { mode: 'fixed-world', pointProjectMetres: end === 'from' ? [2, 3, 4] : [9, 8, 7], derivation: 'manual-world-point', displaySdkObjectId: null } } }));
+    const receipt = await f.savePair(); expect(receipt.receipts[0].locationId).toBe(numericLocationId); expect(receipt.receipts[1].locationId).not.toBe(numericLocationId);
+    expect(receipt.receipts[0].binding.duplicate).toBe(true); expect(receipt.finalRegistryRevision).toBe('6'); expect(f.state.locations.size).toBe(2); expect(f.state.bindings.size).toBe(2);
+  });
+  it('deduplicates different From/To aliases of one existing location without renaming or rewriting its historical no-op head', async () => {
+    const f = await pairFixture();
+    await endpointBindingTransaction(f.pool, f.projectId, f.who, client => confirmEndpointBindingChangeInTransaction(client, f.projectId, f.who, f.locationId, f.legacyCommand()));
+    const from = await f.read(), to = await f.read(f.cableId, 'to'); f.pair.expectedContexts = { from: from.contextSha256, to: to.contextSha256 };
+    f.pair.endpoints = ([['from', from], ['to', to]] as const).map(([end, c]) => ({ end, command: { ...f.command(c), schemaVersion: 'wfc.pf.cable-endpoint-command.v3',
+      calculation: f.pair.endpoints[0].command.calculation, initialFill: f.pair.endpoints[0].command.initialFill } }));
+    const receipt = await f.savePair(); expect(receipt.receipts.map(item => item.logicalName)).toEqual(['EQUIPMENT', 'Alias']);
+    expect(receipt.receipts.every(item => item.locationId === f.locationId && item.binding.duplicate)).toBe(true);
+    expect(f.state.locations.get(f.locationId)?.name).toBe('Equipment'); expect(f.state.registry).toBe('5'); expect(f.state.bindings.size).toBe(1);
+  });
+  it('retains conclusive committed pair evidence through a lost acknowledgement', async () => {
+    const f = await pairFixture(), original = f.query.getMockImplementation()!; let once = true;
+    f.query.mockImplementation(async (sql, args = []) => { const result = await original(sql, args); if (sql === 'COMMIT' && once) { once = false; throw Error('synthetic lost commit reply'); } return result; });
+    await expect(f.savePair()).rejects.toMatchObject({ code: 'ENDPOINT_COMMIT_OUTCOME_UNKNOWN' }); expect(f.state.bindings.size).toBe(2);
+    expect((await f.savePair()).duplicate).toBe(true); expect(mocks.append).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('automatic endpoint context is a verified unconfirmed suggestion', () => {
+  it('offers only a unique v3-visible retained object without creating a location/head or write authority', async () => {
+    const f = fixture(), objectId = f.object.identity.objectId;
+    mocks.automatic.mockResolvedValue({ status: 'automatic-ready', candidateObjectIds: [objectId], objectId, point: f.object.geometry.equipmentAnchor!.pointMetres });
+    const c = await f.read(); expect(c.automaticSelection).toEqual({ source: 'automatic-unconfirmed', sdkObjectId: Number(objectId.slice(5)), name: f.object.historicalModel.name,
+      object: f.ref, pointProjectMetres: f.object.geometry.equipmentAnchor!.pointMetres, approximate: true, confirmed: false });
+    expect(c.contextSha256).toBe(endpointBindingHash(cableEndpointContextHashInput(c))); expect(f.state.bindings.size).toBe(0); expect(f.state.locations.size).toBe(0);
+  });
+  it.each(['missing', 'ambiguous', 'object-unverified', 'preparation-required'])('does not manufacture an automatic draft for %s', async status => {
+    const f = fixture(); mocks.automatic.mockResolvedValue({ status, candidateObjectIds: [], objectId: null, point: null }); expect((await f.read()).automaticSelection).toBe(null);
+  });
+  it('keeps a confirmed shared head instead of replacing it with an automatic candidate', async () => {
+    const f = fixture(); await f.save(f.command(await f.read())); mocks.automatic.mockClear();
+    expect((await f.read()).head?.status).toBe('confirmed'); expect((await f.read()).automaticSelection).toBe(null); expect(mocks.automatic).not.toHaveBeenCalled();
+  });
+  it('retains the verified model name and exact source after a confirmed object-derived save and reload', async () => {
+    const f = fixture(), input = f.command(await f.read()); input.selection = { mode: 'object-derived', sdkObjectId: 345, object: f.ref };
+    await f.save(input); const c = await f.read();
+    expect(c.automaticSelection).toBe(null); expect(c.confirmedSelection).toEqual({ source: 'confirmed', confirmed: true, approximate: true,
+      sdkObjectId: f.object.identity.dbId, name: f.object.historicalModel.name, object: f.ref, pointProjectMetres: f.object.geometry.equipmentAnchor!.pointMetres });
+    expect(f.state.bindings.size).toBe(1); expect(c.contextSha256).toBe(endpointBindingHash(cableEndpointContextHashInput(c)));
+    f.state.prepared = false; expect((await f.read()).confirmedSelection).toBe(null);
   });
 });

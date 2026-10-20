@@ -14,6 +14,7 @@ import { PathFinderCalculationGrantPanel } from './PathFinderCalculationGrantPan
 import { notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 import { PathFinderCableWorkspace } from '@/components/pathfinder/PathFinderCableWorkspace';
 import type { CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
+import type { PathFinderWorkflowDisplay, PathFinderWorkflowDisplayRequest } from './PathFinderResults';
 
 const useStyles = makeStyles({
   heading: { margin: 0, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightSemibold },
@@ -73,6 +74,10 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [draft, setDraft] = useState<Draft>(emptyDraft), [notice, setNotice] = useState<string | null>(null), [localError, setLocalError] = useState<string | null>(null);
   const [endpointPending, setEndpointPending] = useState(false);
   const [workflowSelection, setWorkflowSelection] = useState<CableWorkflowRow | null>(null);
+  const [workflowDisplay, setWorkflowDisplay] = useState<PathFinderWorkflowDisplay>({ cableId: null, visible: false, routing: null, designLength: null });
+  const [workflowDisplayRequest, setWorkflowDisplayRequest] = useState<PathFinderWorkflowDisplayRequest | null>(null);
+  const workflowDisplayChanged = useCallback((value: PathFinderWorkflowDisplay) => setWorkflowDisplay(previous => previous.cableId === value.cableId
+    && previous.visible === value.visible && previous.routing === value.routing && previous.designLength === value.designLength ? previous : value), []);
   const [cableWriteRefresh, setCableWriteRefresh] = useState(0);
   const cableValuesChanged = useCallback(() => setCableWriteRefresh(value => value + 1), []);
   const [captureRoutes, setCaptureRoutes] = useState(''), [captureCategories, setCaptureCategories] = useState<('MV' | 'LV' | 'Control')[]>([]), [preparing, setPreparing] = useState(false);
@@ -181,7 +186,10 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         {!preferences ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
-          pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences} onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row); }} />
+          pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences}
+          display={workflowDisplay} onTogglePath={cableId => setWorkflowDisplayRequest(previous => ({ cableId, requestId: (previous?.requestId ?? 0) + 1,
+            action: workflowDisplay.cableId === cableId && workflowDisplay.visible ? 'hide' : 'show' }))}
+          onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row); }} />
         <details><summary>Advanced standalone path</summary><PathFinderPreview pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={routeRulesDirty ? null : preferences} onInputChange={restoreView} onEndpointNamesChange={updateStandaloneNames} /></details>
         <details><summary>Advanced project cables and shared locations</summary>
         <div className={styles.actions}>
@@ -225,7 +233,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} onCableValuesChanged={cableValuesChanged} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} onBatchBusyChange={setBatchBusy} />
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} onCableValuesChanged={cableValuesChanged} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} onBatchBusyChange={setBatchBusy}
+          workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} />
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
           <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={restoreView} onBusyChange={setLookupBusy} />

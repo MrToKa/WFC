@@ -10,12 +10,14 @@ import type { EndpointCurrentScope } from '../../../shared/pathfinderEndpointBin
 import type { LocationImpactCalculation } from '../../../shared/pathfinderLocationImpacts';
 import { classifyCableWorkflow } from '../../../shared/pathfinderCableWorkflow';
 import type { usePathFinder } from '@/pages/ProjectDetails/hooks/usePathFinder';
+import type { PathFinderWorkflowDisplay } from '@/pages/ProjectDetails/PathFinderResults';
 import { PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
 import { PathFinderCableRoutingPanel } from './PathFinderCableRoutingPanel';
 
 type Access = { projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null; isAdmin: boolean };
 export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof usePathFinder>; active: boolean;
-  preferences: PathFinderPreferences | null; selectedCableId?: string | null; refreshKey?: number; onSelect: (row: CableWorkflowRow) => void };
+  preferences: PathFinderPreferences | null; selectedCableId?: string | null; refreshKey?: number; onSelect: (row: CableWorkflowRow) => void;
+  display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void };
 type Impact = { id: string; current: EndpointCurrentScope; calculation: LocationImpactCalculation | null; originCableId: string | null };
 
 /** One account/model/preferences owns this workspace. No action here uses full-state polling. */
@@ -29,6 +31,7 @@ export function PathFinderCableWorkspace(props: PathFinderCableWorkspaceProps) {
 function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }) {
   const [selected, setSelected] = useState<CableWorkflowRow | null>(null), [open, setOpen] = useState(false);
   const [impact, setImpact] = useState<Impact | null>(null), [revision, setRevision] = useState(0), [notice, setNotice] = useState<string | null>(null);
+  const [calculating, setCalculating] = useState(false);
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const callbacks = useRef(props); callbacks.current = props;
   const alive = useRef(false), read = useRef<AbortController | null>(null), historyRead = useRef<AbortController | null>(null);
@@ -102,6 +105,14 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     refreshDiagnostics();
   }, [refreshDiagnostics]);
   const selectedStatus = selected ? classifyCableWorkflow(selected) : null;
+  const calculateSelected = async () => {
+    const row = selectedRef.current, current = callbacks.current;
+    if (!enabled || calculating || !row || !current.preferences || row.calculation.jobStatus === 'queued' || row.calculation.jobStatus === 'running') return;
+    setCalculating(true); setNotice(null);
+    try { await current.pf.calculate([row.cable.id], true, current.preferences); if (alive.current && selectedRef.current?.cable.id === row.cable.id) refreshDiagnostics(); }
+    catch { if (alive.current && selectedRef.current?.cable.id === row.cable.id) setNotice('Routing could not be calculated. Refresh this cable and try again.'); }
+    finally { if (alive.current) setCalculating(false); }
+  };
   return <section aria-label="Cable routing workspace">
     <PathFinderNeedsRoutingList {...props} active={enabled} modelScopeKey={JSON.stringify([props.owner, revision])}
       preferences={preferences ?? { secondaryDistanceMeters: 2, preferVerticalApproach: true }} selectedCableId={selected?.cable.id ?? null}
@@ -129,6 +140,11 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         selectionRevision: model.selectionRevision, contentFingerprint: model.contentFingerprint } : null,
       preparationKey: JSON.stringify([props.pf.preparationViewerGeneration, props.pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
       calculation, initialFill: { mode: 'when-both-empty' }, readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
-    }} />
+    }} onCalculate={enabled && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
+      onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
+      pathVisible={props.display?.cableId === selected?.cable.id && props.display?.visible}
+      calculatedRouting={props.display?.cableId === selected?.cable.id ? props.display?.routing : undefined}
+      calculatedDesignLength={props.display?.cableId === selected?.cable.id ? props.display?.designLength : undefined}
+      actionsBusy={calculating || props.pf.busy} />
   </section>;
 }
