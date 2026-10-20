@@ -1,5 +1,21 @@
 # PathFinder local implementation progress
 
+## PF-U8 — owned5191 backup and popup delivery — ACTIVE 2026-10-21
+
+Branch pf-u8-owned-popup-delivery-local-20261021 inherits U7delivery71907dc and
+standalone handoffb44bc4d. Read handoffs/PF-U8-owned-backup-popup-delivery.md.
+Root sole actual SQL/HTTP/Docker executor. U7 fixtures retired, no active testPG.
+preview_diagnosis authors NEW owned-update.mjs (not yet frozen/executed);
+batch_contracts independently reviews it; root verifies and runs one-shot phases.
+Current source5191 ownership/configuration read-only PASS: exact runtimeowner
+8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46/projectwfc-pathfinder-local-0cba87606e9b,
+5services/4volumes/2nets, api78536ccd/web4bd4bda6, sourceproducerconfigured.
+No5191 mutation yet. Next freeze/review operator then init→coldbackup→fresh5192
+API-off restore→API/web-only update→retire owned5192. Record privatephasejournal;
+do not retry begun/uncertain mutations. Original5180/5190 excluded; PreparerPAUSED.
+RealAalborgreread/browser acceptance stillBLOCKED; full genuine engine-chain
+NOT_RUN. New producer runtime qualification must not be invented. Keep allgates.
+
 ## PF-U7 — independent delivery verified / PF-U8 next — 2026-10-21
 
 Branch pf-u7-integrated-workflow-local-20261020 inherits handoff b5a12e5 /
