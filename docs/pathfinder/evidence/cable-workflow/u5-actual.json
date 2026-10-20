@@ -1,0 +1,175 @@
+{
+  "schemaVersion": "wfc.pf.u5-evidence.v1",
+  "observedAt": "2026-10-20T19:25:08.8927681Z",
+  "branch": "pf-u5-cable-routing-workspace-local-20261020",
+  "inheritedHead": "9cc893442a7a897165cd80155a2f086e0ffb4bd1",
+  "status": "TECHNICAL_FOUNDATION_PASS",
+  "checks": {
+    "synthetic": {
+      "status": "PASS",
+      "tests": 470,
+      "files": 20,
+      "receipt": "u5-tests.json",
+      "scope": "u5-test-scope.json"
+    },
+    "tab": {
+      "status": "PASS",
+      "tests": 8,
+      "files": 1,
+      "skipped": 49,
+      "receipt": "u5-tab.json",
+      "fullSuite": "INTERRUPTED without terminal counts; see u5-tab-interrupted.json"
+    },
+    "actualPostgres": {
+      "status": "PASS",
+      "tests": 6,
+      "files": 1,
+      "receipt": "u5-progress-sql.json",
+      "scope": "actual SELECT/auth/immutable manifest metadata; synthetic job/result rows",
+      "draft": "5/6, seed clock drift fixed, new fixture used"
+    },
+    "distinctPassed": 484,
+    "frontendTypes": "PASS",
+    "backendTypes": "PASS",
+    "changedSourceLint": "PASS",
+    "changedSourceFiles": 27,
+    "whitespace": "PASS",
+    "runtime5191": "NOT_RUN",
+    "actualComputerUse": "NOT_RUN, saved site refusal not bypassed",
+    "nativeParity": "NOT_RUN",
+    "humanAcceptance": "NOT_RUN",
+    "remoteAndCI": "NOT_RUN"
+  },
+  "fixtures": [
+    {
+      "owner": "d57e972d-2365-4806-b19a-94100b9eff6e",
+      "containerId": "778c78c0f59107e6a521ff623489bff951d729d046bd6580006b27110f533339",
+      "state": "retired",
+      "credentialsRemoved": true
+    },
+    {
+      "owner": "82612605-b80a-48e2-82e8-94ee5e7adfbd",
+      "containerId": "b0cb85b52c9dc088747128268db43c3f1de384d8a410025c85d73e87b1a16c9d",
+      "state": "retired",
+      "credentialsRemoved": true
+    }
+  ],
+  "boundaries": {
+    "originalWfcHead": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "originalWfcBranch": "main",
+    "originalWfcStatus": "clean",
+    "runtimeChanged": false,
+    "preparer": "PAUSED",
+    "automation": "ACTIVE"
+  },
+  "sourceHashes": [
+    {
+      "path": "server/pathfinder/initialFillProgress.test.ts",
+      "sha256": "66c35fb47d8dbf8f9d782b19d4fff002698336d8d2458c8ef8b1c060cb95b7a9"
+    },
+    {
+      "path": "server/pathfinder/initialFillProgress.ts",
+      "sha256": "7815be684c7df88ab0c3d08de45a5a98e8eccc06c3548ef4b1a6e011faabb8a2"
+    },
+    {
+      "path": "server/pathfinder/initialFillProgressRoutes.test.ts",
+      "sha256": "f4780ee140719182e14f62bcddd320f2a11e07a27a52c2db0d2da56f35a429c5"
+    },
+    {
+      "path": "server/pathfinder/initialFillProgressRoutes.ts",
+      "sha256": "675889d88d9778c606c4f7ab74c8982d27639d93ecb149e895e33ed16a470731"
+    },
+    {
+      "path": "server/pathfinder/initialFillProgressSql.integration.test.ts",
+      "sha256": "1791193899727d88694ef64fb6cf18f25d37cf91a1270c25372d1231e92a162c"
+    },
+    {
+      "path": "server/pathfinder/runtime.ts",
+      "sha256": "ffef7704ead264a20260d872b8a730441ac0ed931cfcafda717db739f6318444"
+    },
+    {
+      "path": "server/routes/pathfinderRoutes.ts",
+      "sha256": "f3576ab967ecba480804ad879d9d98961f502d881778e8d98c6085857ff118de"
+    },
+    {
+      "path": "shared/pathfinderInitialFillProgress.test.ts",
+      "sha256": "abe9f25b8d165687b71bc0c63bac2befe2c4b3c49fcdea9df4aebe9c9262fa29"
+    },
+    {
+      "path": "shared/pathfinderInitialFillProgress.ts",
+      "sha256": "f922159b70491007fb486018095de2143ea19ae335482ef6eca6e9e9684d767b"
+    },
+    {
+      "path": "src/api/pathfinderInitialFillProgress.test.ts",
+      "sha256": "2d5800e6bf360e6cfbd7467f69fb2f87bf45f36080439aa37a53041ad443cfd4"
+    },
+    {
+      "path": "src/api/pathfinderInitialFillProgress.ts",
+      "sha256": "53edd5d677284362ddb44713cdf47639da8d7011080a49885828382e8c7580d0"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.test.tsx",
+      "sha256": "04df3fdf0a4c766228c356ba72a3abdb095b33aad4b6bf485f8290f3b451db0f"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableRoutingPanel.tsx",
+      "sha256": "596a258d3dc60a3a11a876701b2af9e306c6e461beaf82784d218b321f6ca34c"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.test.tsx",
+      "sha256": "838953eb8463b5fa313654440eae24ba91a19474162b4d1d8e228ca7c68d1a89"
+    },
+    {
+      "path": "src/components/pathfinder/PathFinderCableWorkspace.tsx",
+      "sha256": "b16a4c49fd092fbe4ad90a2772ce25d429018140448df7ecd5167e45988941b4"
+    },
+    {
+      "path": "src/hooks/useCableEndpointSelection.test.tsx",
+      "sha256": "ba6f50537358cb365c614b18da24d39531d9fbab9d3f652a3ebd5fbc9a4352b7"
+    },
+    {
+      "path": "src/hooks/useCableEndpointSelection.ts",
+      "sha256": "6ce99f3b7801ac10320ff7799309e16efc74744d2bf7b8a54c6c2385e9bc6518"
+    },
+    {
+      "path": "src/hooks/usePathfinderInitialFillProgress.test.tsx",
+      "sha256": "314b35ff41acc61c2e78cbcfaa326d7f51bcca99e9ec34eef4b1752870a10b32"
+    },
+    {
+      "path": "src/hooks/usePathfinderInitialFillProgress.ts",
+      "sha256": "1ad515cdcaa653967fd792c4a150e5ce071a7cae90ce406226cd55841968af7a"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathFinder.test.tsx",
+      "sha256": "38552b9b1488c38d56269151b6123ace83aed7abfa7751eddcca9f4e547b18f5"
+    },
+    {
+      "path": "src/pages/ProjectDetails/hooks/usePathFinder.ts",
+      "sha256": "5d353d79a28b6b461e2649b643c8dc5a01250e55317d29fc95bcf6cab134c08d"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+      "sha256": "f5e17b855cc0bc0856e1f9b01b4294c74bae4f3bddbeeeae56f90e6acb689464"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "sha256": "c19407104e3c8e471cabef35429b2a9bc7b037d840ba561dfc6e75a734796034"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx",
+      "sha256": "06b650330bda62843c0ddbbdb7594510317d27f15abdf86aab79d248d76a7d3f"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderRevisionResults.tsx",
+      "sha256": "165688281e41cf539b36a9b59bba76234b833c13cdf2d2df855c36cb9a32256f"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.test.tsx",
+      "sha256": "a510acbdc4ea8ff281e9cc88a971401846b0541bcca41b7d8b3701352dc72502"
+    },
+    {
+      "path": "src/pages/ProjectDetails/PathFinderTab.tsx",
+      "sha256": "58c92edd292b3a1484482d736fbf695a96ecba8ee3b8dad713c16051c40a9f43"
+    }
+  ]
+}

@@ -1,5 +1,22 @@
 # PathFinder local implementation progress
 
+## PF-U5 — persistent cable workspace — VERIFIED 2026-10-20
+
+Branch pf-u5-cable-routing-workspace-local-20261020 inherits handoff9cc893442a7a897165cd80155a2f086e0ffb4bd1 / U4b4db75c.
+Read Git for containing delivery. TECHNICAL_FOUNDATION_PASS484/484:470synthetic
+20files +8affected Tab cases1file +6actualPG metadata cases1file. Other49 Tab
+cases NOT_RUN; initial full styled jsdom run interrupted after>10m without any
+terminal PASS/count, exact own Vitest processes only. Final frontend/backend
+types, all27changed-source lint and diff PASS. Report66/u5-actual.json bind scope
+and source hashes. All agents frozen; no active root process/fixture. First PG
+5/6 seed clock drift fixed; fresh final6/6. Both own fixtures d57e972d/82612605
+retired, generated credentials removed. Persistent nonmodal From/To popup, exact
+v3 selected-object save, scoped progress/readiness, live selected-result review,
+confirmed-write bounded refresh and no periodic full-state polling implemented.
+No5191/5180/5190 writes/calcs/Review/Apply/upgrade/restart. ActualUI/fullengine/
+acceptance NOT_RUN. Preparer PAUSED, automation ACTIVE. Next finalizeU6handoff
+from delivery, create inherited branch, implement direct SECONDARY immediately.
+Preserve originals/models/backups/denied paths; no push/PR/merge/deployment.
 ## PF-U4 — conditional initial fill and comparison — VERIFIED 2026-10-20
 
 Branch pf-u4-conditional-initial-fill-local-20261020, inherited handoff

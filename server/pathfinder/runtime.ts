@@ -32,6 +32,7 @@ import { locationImpactAdmission } from './locationImpactAdmission.js';
 import {createInitialFillWriter} from './initialFillWriter.js';
 import {createInitialFillAttempts} from './initialFillAttempts.js';
 import {createInitialFillProducer} from './initialFillProducer.js';
+import {createInitialFillProgress} from './initialFillProgress.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
@@ -42,7 +43,7 @@ function createRuntime() {
   const locationImpacts=createLocationImpactRepository(pool,{admitInTransaction:locationImpactAdmission});
   const locationImpactProducer=createLocationImpactProducer(locationImpacts);
   const initialFillAttempts=createInitialFillAttempts(pool),initialFillWriter=createInitialFillWriter(pool);
-  const initialFillProducer=createInitialFillProducer(initialFillAttempts,initialFillWriter);
+  const initialFillProducer=createInitialFillProducer(initialFillAttempts,initialFillWriter),initialFillProgress=createInitialFillProgress(pool);
   const controlConfiguration=process.env.PF_PRODUCER_CONTROL_KEY?{
     key:process.env.PF_PRODUCER_CONTROL_KEY,owner:process.env.PF_PRODUCER_OWNER,project:process.env.PF_PRODUCER_PROJECT,
     image:process.env.PF_PRODUCER_IMAGE,runtimeInventorySha256:process.env.PF_PRODUCER_RUNTIME_SHA256,
@@ -65,7 +66,7 @@ function createRuntime() {
     qualification:producerQualification,onPrepared:async({candidate,result},signal)=>{
       await preparedMaintenance.onPrepared({candidate:{projectId:candidate.projectId,grant:candidate.grant,...candidate.model},result},signal);
     }});
-  return {registry,jobs,apply,worker,recalculations,producer,grantProducer,locationImpacts,locationImpactProducer,initialFillAttempts,initialFillWriter,initialFillProducer,managedControl,producerQualification,calculationGrants,producerResources,
+  return {registry,jobs,apply,worker,recalculations,producer,grantProducer,locationImpacts,locationImpactProducer,initialFillAttempts,initialFillWriter,initialFillProducer,initialFillProgress,managedControl,producerQualification,calculationGrants,producerResources,
     preparedMaintenance,managedPreparationProducer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
     preparations,geometryTraces,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters())};
 }

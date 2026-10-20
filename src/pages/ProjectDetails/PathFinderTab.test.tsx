@@ -14,6 +14,9 @@ vi.mock('@/api/pathfinderEndpointBindings', async original => ({ ...await origin
 
 vi.mock('./hooks/usePathFinder', () => ({ usePathFinder: vi.fn() }));
 vi.mock('./hooks/useRoutingsViewerHeight', () => ({ useRoutingsViewerHeight: () => 720 }));
+// Persistent workspace has its own component/API suites; these historical cases
+// exercise the retained advanced tools and exact proposal ownership only.
+vi.mock('@/components/pathfinder/PathFinderCableWorkspace', () => ({ PathFinderCableWorkspace: () => null }));
 // These network panels have dedicated contract/authority tests. This suite owns
 // Tab tool composition and the real pending-Apply hook, not incidental reads.
 vi.mock('./PathFinderCalculationGrantPanel', () => ({ PathFinderCalculationGrantPanel: () => null }));
@@ -61,7 +64,12 @@ beforeEach(() => { vi.clearAllMocks(); sessionStorage.clear(); pf = model(); vi.
   vi.mocked(fetchEndpointBindingHistory).mockResolvedValue({ schemaVersion: 'wfc.pf.endpoint-binding-history.v1', projectId, locationId, bindings: [], nextBeforeRevision: null });
   vi.mocked(saveEndpointBinding).mockImplementation(async (_project, _token, selectedId) => { const f = endpointBindingFixture(); return { ...f.receipt, projectId, locationId: selectedId, binding: { ...f.binding, projectId, locationId: selectedId } }; });
 });
-const mount = (isAdmin = true) => { const view = render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin={isAdmin} />); if (isAdmin) fireEvent.click(screen.getByRole('button', {name:'Manual diagnostic capture',hidden:true})); return view; };
+const mount = (isAdmin = true) => { const view = render(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin={isAdmin} />); if (isAdmin) {
+  fireEvent.click(screen.getByRole('button', {name:'Manual diagnostic capture',hidden:true}));
+  for (const label of ['Advanced standalone path', 'Advanced project cables and shared locations']) {
+    const summary = screen.getByText(label); (summary.parentElement as HTMLDetailsElement).open = true;
+  }
+} return view; };
 function proposal(synthetic: boolean): PathFinderProposal { return {
   id: '66666666-6666-4666-8666-666666666666', projectId, jobId: '77777777-7777-4777-8777-777777777777', cableId: pf.data.cables[0].id,
   status: 'calculated', proposalHash: 'f'.repeat(64), revisionResultHash: 'e'.repeat(64), revisionBaselineHash: 'd'.repeat(64), cableWriteRevision: '0', stale: false, synthetic, engineeringAccepted: synthetic, acceptanceScope: synthetic ? 'local-synthetic-fixture' : 'unaccepted-model', canApply: synthetic,
@@ -333,6 +341,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
   });
   it('offers three keyboard-accessible tools while retaining one protected model host and local drafts', async () => {
     const user = userEvent.setup(); mount(); const host = screen.getByTestId('pathfinder-model-host');
+    expect(vi.mocked(usePathFinder).mock.calls.at(-1)?.[0].automaticStatePolling).toBe(false);
     expect(screen.getByRole('tab', { name: 'Path' })).toHaveAttribute('aria-selected', 'true');
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Location name' })).toBeEnabled()); await user.type(screen.getByRole('textbox', { name: 'Location name' }), 'Draft location');
     await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'Equipment draft');

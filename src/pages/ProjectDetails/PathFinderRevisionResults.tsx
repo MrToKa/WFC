@@ -15,6 +15,7 @@ export type PathFinderRevisionResultsProps = RevisionResultsAccess & {
   batch?: BatchReviewController; cables?: PathFinderCable[]; jobs?: PathFinderJob[];
   readJob?: (jobId: string) => Promise<PathFinderJob | null>;
   onScopeReadinessChange?: (value: PathFinderCalculationScope) => void;
+  onHistorySelection?: () => void;
 };
 type Model = NonNullable<RevisionResultDetail['row']['result']>['newModel'];
 const unavailable = 'Unavailable';
@@ -162,6 +163,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   const open = async () => {
     const expectedJobId = state.admission?.jobId;
     if (frozen || !result || !detail?.envelope || !expectedJobId || !resultBelongsToScope || !props.isAdmin || !props.accountId || props.projectId !== props.loadedProjectId) return;
+    props.onHistorySelection?.();
     const started = owner, atGeneration = generation.current; setOpening(true); setOpenError(null);
     try { await props.onOpenProposal(result.proposalId, expectedJobId); }
     catch { if (latestOwner.current === started && generation.current === atGeneration) setOpenError('The exact proposal could not be opened. Refresh this calculation scope and try again.'); }
@@ -171,7 +173,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
     <h3>Cable revision results</h3>
     <Caption1>Inspect a saved calculation scope, including blocked cables. New calculations do not replace the selected page. Review and Apply remain explicit, individually or for a selected batch.</Caption1>
     <label htmlFor={selectId}>Calculation scope</label>
-    <select id={selectId} value={state.admission?.id ?? ''} disabled={frozen || choices.length === 0} onChange={event => state.selectAdmission(event.target.value)} style={{ width: '100%', minWidth: 0 }}>
+    <select id={selectId} value={state.admission?.id ?? ''} disabled={frozen || choices.length === 0} onChange={event => { props.onHistorySelection?.(); state.selectAdmission(event.target.value); }} style={{ width: '100%', minWidth: 0 }}>
       {!state.admission ? <option value="">Choose a calculation</option> : null}
       {choices.map(value => <option key={value.id} value={value.id}>{calculationLabel(value)} · {value.createdAt} · {value.total} cables{props.jobs?.find(item => item.id === value.jobId)?.status ? ` · ${label(props.jobs.find(item => item.id === value.jobId)!.status)}` : ''}</option>)}
     </select>
@@ -207,7 +209,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
               <p>{value.currentness.state === 'current' ? 'Current inputs' : label(value.currentness.state)}</p>
               {value.result?.reasonCodes.length ? <Caption1>{value.result.reasonCodes.map(label).join('; ')}</Caption1> : null}
             </td>
-            <td><Button disabled={frozen} aria-pressed={detail?.row.cableId === value.cableId} onClick={() => void state.readDetail(value.cableId)}>Inspect {value.baseline.currentCable.tag ?? 'cable'}</Button></td>
+            <td><Button disabled={frozen} aria-pressed={detail?.row.cableId === value.cableId} onClick={() => { props.onHistorySelection?.(); void state.readDetail(value.cableId); }}>Inspect {value.baseline.currentCable.tag ?? 'cable'}</Button></td>
           </tr>)}</tbody>
         </table>
       </div>

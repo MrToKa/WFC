@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 describe('bounded detail inspection and state polling', () => {
-  const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+  const mount = (automaticStatePolling?: boolean) => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling }));
   const detail = (): PathFinderProposal => ({ id: locationId, projectId, cableId: modelId, jobId: projectId, status: 'calculated',
     proposalHash: 'b'.repeat(64), cableWriteRevision: '9', stale: false, synthetic: false, engineeringAccepted: false,
     acceptanceScope: 'manual-review', canApply: true, compatibilityIssue: null, message: 'Review required.', engineeringMessage: 'Manual review required.',
@@ -127,6 +127,81 @@ describe('bounded detail inspection and state polling', () => {
       await act(() => vi.advanceTimersByTimeAsync(1999)); expect(fetchPathFinderState).toHaveBeenCalledTimes(3);
       await act(() => vi.advanceTimersByTimeAsync(1)); expect(fetchPathFinderState).toHaveBeenCalledTimes(4);
     } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it.each([false, true])('does not poll full state when disabled, including active jobs=%s', async active => {
+    vi.useFakeTimers(); const current = state();
+    if (active) current.jobs = [{ id: locationId, projectId, status: 'running', total: 1, completed: 0, cancelRequested: false, failure: null, attempts: 1, createdAt: '', updatedAt: '' }];
+    vi.mocked(fetchPathFinderState).mockResolvedValue(current); const view = mount(false);
+    try {
+      await act(async () => {}); expect(view.result.current.data).toEqual(current); expect(facts.instances).toBe(1);
+      await act(() => vi.advanceTimersByTimeAsync(60_000)); expect(fetchPathFinderState).toHaveBeenCalledOnce();
+      expect(view.result.current.busy).toBe(false); expect(facts.disposed).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('keeps the legacy idle fifteen-second poll by default', async () => {
+    vi.useFakeTimers(); const view = mount();
+    try {
+      await act(async () => {}); expect(fetchPathFinderState).toHaveBeenCalledOnce();
+      await act(() => vi.advanceTimersByTimeAsync(14_999)); expect(fetchPathFinderState).toHaveBeenCalledOnce();
+      await act(() => vi.advanceTimersByTimeAsync(1)); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('retains coalesced explicit and post-mutation reads with automatic state polling disabled', async () => {
+    vi.useFakeTimers(); const view = mount(false);
+    try {
+      await act(async () => {}); let finish!: (value: PathFinderState) => void;
+      vi.mocked(fetchPathFinderState).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+      act(() => { view.result.current.refresh(); }); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      act(() => { view.result.current.refresh(); view.result.current.refresh(); });
+      expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      await act(async () => finish(state())); expect(fetchPathFinderState).toHaveBeenCalledTimes(3);
+      await act(() => view.result.current.matchAll()); expect(fetchPathFinderState).toHaveBeenCalledTimes(4);
+      await act(() => vi.advanceTimersByTimeAsync(60_000)); expect(fetchPathFinderState).toHaveBeenCalledTimes(4);
+      expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('changes only the polling schedule when toggled and never recreates or disposes the protected model', async () => {
+    vi.useFakeTimers(); const current = { ...state(), jobs: [{ id: locationId, projectId, status: 'running' as const, total: 1, completed: 0, cancelRequested: false, failure: null, attempts: 1, createdAt: '', updatedAt: '' }] };
+    vi.mocked(fetchPathFinderState).mockResolvedValue(current);
+    const view = renderHook(({ automaticStatePolling }) => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling }),
+      { initialProps: { automaticStatePolling: false } });
+    try {
+      await act(async () => {}); view.rerender({ automaticStatePolling: true });
+      await act(() => vi.advanceTimersByTimeAsync(2000)); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      view.rerender({ automaticStatePolling: false }); await act(() => vi.advanceTimersByTimeAsync(60_000));
+      expect(fetchPathFinderState).toHaveBeenCalledTimes(2); expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('does not reschedule an older in-flight poll after the workspace disables full-state polling', async () => {
+    vi.useFakeTimers(); const current = { ...state(), jobs: [{ id: locationId, projectId, status: 'running' as const, total: 1, completed: 0, cancelRequested: false, failure: null, attempts: 1, createdAt: '', updatedAt: '' }] };
+    vi.mocked(fetchPathFinderState).mockResolvedValue(current);
+    const view = renderHook(({ automaticStatePolling }) => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container, automaticStatePolling }),
+      { initialProps: { automaticStatePolling: true } });
+    try {
+      await act(async () => {}); let finish!: (value: PathFinderState) => void;
+      vi.mocked(fetchPathFinderState).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+      await act(() => vi.advanceTimersByTimeAsync(2000)); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      view.rerender({ automaticStatePolling: false }); await act(async () => finish(current));
+      await act(() => vi.advanceTimersByTimeAsync(60_000)); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('still reloads an actually changed model selection after explicit refresh with polling disabled', async () => {
+    const view = mount(false); await waitFor(() => expect(facts.instances).toBe(1));
+    const oldSignal = vi.mocked(fetchPathFinderState).mock.calls[0][2]!, changed = { ...state(), activeModel: { ...state().activeModel, selectionRevision: '3' } };
+    vi.mocked(fetchPathFinderState).mockResolvedValue(changed);
+    const models = await vi.mocked(fetchProjectModels).mock.results[0].value;
+    vi.mocked(fetchProjectModels).mockResolvedValue({ ...models, selection: { ...models.selection, selectionRevision: 3 } });
+    act(() => view.result.current.refresh()); await waitFor(() => expect(facts.instances).toBe(2));
+    expect(oldSignal.aborted).toBe(true); expect(facts.disposed).toHaveBeenCalledWith('reload');
+    expect(view.result.current.data?.activeModel.selectionRevision).toBe('3'); view.unmount();
+  });
+  it('still clears current data and the protected frame on explicit current-role refusal with polling disabled', async () => {
+    const view = mount(false); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.mocked(fetchPathFinderState).mockRejectedValueOnce(new PathFinderApiError('ADMIN_REQUIRED', 403));
+    act(() => view.result.current.refresh()); await waitFor(() => expect(view.result.current.data).toBeNull());
+    expect(view.result.current.viewerPhase).toBe('error'); expect(facts.disposed).toHaveBeenCalledWith('reload'); view.unmount();
   });
 });
 afterEach(() => { document.body.replaceChildren(); });

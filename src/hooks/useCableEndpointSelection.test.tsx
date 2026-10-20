@@ -43,6 +43,8 @@ function receipt(input: CableEndpointCommand, selectedCable = cable, end: 'from'
 const access = (): CableEndpointSelectionAccess => ({ projectId: project, loadedProjectId: project, accountId: actor, token: 'private-current-token', isAdmin: true, active: true,
   cableId: cable, end: 'from', model: { modelVersionId: scope.modelVersionId, selectionRevision: scope.selectionRevision, contentFingerprint: scope.contentFingerprint }, preparationKey: 'current-preparation',
   readSelection: vi.fn(async () => viewerSelection()), onSaved: vi.fn(), onAuthorityLost: vi.fn() });
+const normalAccess = (): CableEndpointSelectionAccess => ({ ...access(), initialFill: { mode: 'when-both-empty' },
+  calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 } });
 const owner = { accountId: actor, projectId: project }, originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 beforeEach(() => {
   vi.resetAllMocks(); localStorage.clear(); let queue = Promise.resolve();
@@ -56,6 +58,71 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 
 describe('persistent owned cable endpoint selection', () => {
+  it('applies one protected selected object in a single owned operation using fresh context rather than React draft state', async () => {
+    const fresh = { ...context(), cableWriteRevision: '55', registryRevision: '66', contextSha256: 'e'.repeat(64) };
+    vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce(context()).mockResolvedValue(fresh);
+    const props = normalAccess(), view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canApplySelectedObject).toBe(true));
+    expect(view.result.current.draft).toBeNull();
+    vi.mocked(saveCableEndpoint).mockImplementationOnce(async (_project, _token, _cable, _end, command) => {
+      expect(readPendingCableEndpoint(owner)?.command).toEqual(command); expect(command).toMatchObject({ schemaVersion: 'wfc.pf.cable-endpoint-command.v3', expectedCableWriteRevision: '55', expectedRegistryRevision: '66', expectedContextSha256: fresh.contextSha256,
+        expectedLogicalName: 'LP-001', initialFill: { mode: 'when-both-empty' }, selection: { mode: 'object-derived', sdkObjectId: 99999, object } });
+      return receipt(command);
+    });
+    await act(async () => { expect(await view.result.current.applySelectedObject('Apply selected From object')).toBe(true); });
+    expect(props.readSelection).toHaveBeenCalledOnce(); expect(fetchCableEndpointSelection).toHaveBeenCalledWith(project, 'private-current-token', fresh, 99999, expect.any(AbortSignal));
+    expect(saveCableEndpoint).toHaveBeenCalledOnce(); expect(props.onSaved).toHaveBeenCalledWith(expect.objectContaining({ logicalName: 'LP-001' }), scope, props.calculation);
+    expect(readPendingCableEndpoint(owner)).toBeNull(); expect(view.result.current.receipt?.binding.binding.pointProjectMetres).toEqual([4, 5, 6]);
+  });
+  it.each(['calculation', 'policy'] as const)('requires explicit normal-workflow %s instead of silently changing command authority', async missing => {
+    const props = { ...normalAccess(), ...(missing === 'calculation' ? { calculation: null } : { initialFill: undefined }) };
+    const view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    expect(view.result.current.canApplySelectedObject).toBe(false); await act(async () => { expect(await view.result.current.applySelectedObject('Apply')).toBe(false); });
+    expect(props.readSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it('refuses an unavailable retained object without implicitly saving its displayed fixed-world point', async () => {
+    vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(async (_project, _token, current) => ({ ...evidence(current), selection: { ...evidence(current).selection, status: 'unavailable', reasonCodes: ['OBJECT_NOT_RETAINED'], object: null, pointProjectMetres: null, bounds: null, derivation: null } }));
+    const view = renderHook(() => useCableEndpointSelection(normalAccess())); await waitFor(() => expect(view.result.current.canApplySelectedObject).toBe(true));
+    await act(async () => { expect(await view.result.current.applySelectedObject('Apply')).toBe(false); });
+    expect(view.result.current.notice).toContain('No endpoint was saved'); expect(view.result.current.draft).toBeNull(); expect(saveCableEndpoint).not.toHaveBeenCalled(); expect(readPendingCableEndpoint(owner)).toBeNull();
+  });
+  it('refuses multiple model objects and unnamed fresh endpoint context before retaining a command', async () => {
+    const props = normalAccess(), selected = viewerSelection(); selected.objects.push({ ...selected.objects[0], objectId: 44 });
+    props.readSelection = vi.fn(async () => selected);
+    const view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canApplySelectedObject).toBe(true));
+    await act(async () => { expect(await view.result.current.applySelectedObject('Apply')).toBe(false); });
+    expect(fetchCableEndpointSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce({ ...context(), logicalName: null, logicalKey: null, canBind: false, reasonCodes: ['ENDPOINT_NAME_REQUIRED'] });
+    await act(async () => { expect(await view.result.current.applySelectedObject('Apply')).toBe(false); }); expect(props.readSelection).toHaveBeenCalledOnce(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each(['pause', 'cable', 'end', 'model', 'account', 'preferences'] as const)('does not save a late one-click selection after %s changes', async kind => {
+    let finish!: (selection: ViewerSelection) => void;
+    const props = { ...normalAccess(), readSelection: vi.fn(() => new Promise<ViewerSelection>(resolve => { finish = resolve; })) };
+    const view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canApplySelectedObject).toBe(true));
+    let pending!: Promise<boolean>; act(() => { pending = view.result.current.applySelectedObject('Apply'); }); await waitFor(() => expect(props.readSelection).toHaveBeenCalledOnce());
+    const change = kind === 'pause' ? { active: false } : kind === 'cable' ? { cableId: id(50) } : kind === 'end' ? { end: 'to' as const }
+      : kind === 'model' ? { model: { ...props.model!, selectionRevision: '99' } } : kind === 'preferences' ? { calculation: { preferences: { secondaryDistanceMeters: 9, preferVerticalApproach: false }, timeoutMilliseconds: 110000 } }
+        : { accountId: id(51), token: 'other-current-account' };
+    view.rerender({ ...props, ...change }); await act(async () => { finish(viewerSelection()); expect(await pending).toBe(false); });
+    expect(fetchCableEndpointSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled(); expect(readPendingCableEndpoint(owner)).toBeNull();
+  });
+  it('deduplicates a rapid repeated one-click action and retains an unknown v3 outcome', async () => {
+    vi.mocked(saveCableEndpoint).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown save'));
+    const props = normalAccess(), view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canApplySelectedObject).toBe(true));
+    await act(async () => { expect(await Promise.all([view.result.current.applySelectedObject('Apply'), view.result.current.applySelectedObject('Apply')])).toEqual([false, false]); });
+    expect(props.readSelection).toHaveBeenCalledOnce(); expect(saveCableEndpoint).toHaveBeenCalledOnce(); expect(readPendingCableEndpoint(owner)?.command.schemaVersion).toBe('wfc.pf.cable-endpoint-command.v3');
+    expect(view.result.current.canRetry).toBe(true); expect(view.result.current.canApplySelectedObject).toBe(false);
+  });
+  it('detects another endpoint editor’s durable pending command before reading or saving a second selection', async () => {
+    vi.mocked(saveCableEndpoint).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown save'));
+    const first = normalAccess(), second = { ...normalAccess(), end: 'to' as const };
+    const one = renderHook(() => useCableEndpointSelection(first)), two = renderHook(() => useCableEndpointSelection(second));
+    await waitFor(() => expect(one.result.current.canApplySelectedObject && two.result.current.canApplySelectedObject).toBe(true));
+    await act(async () => { expect(await one.result.current.applySelectedObject('Apply From')).toBe(false); });
+    const retained = readPendingCableEndpoint(owner); expect(retained?.end).toBe('from');
+    await act(async () => { expect(await two.result.current.applySelectedObject('Apply To')).toBe(false); });
+    expect(second.readSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).toHaveBeenCalledOnce();
+    expect(two.result.current.pending).toEqual(retained); expect(readPendingCableEndpoint(owner)).toEqual(retained);
+  });
   it('requests v3 only for explicit initial-fill policy without creating or claiming a human review', async () => {
     const props = { ...access(), initialFill: { mode: 'when-both-empty' as const }, calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 } };
     const view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
@@ -80,20 +147,27 @@ describe('persistent owned cable endpoint selection', () => {
     expect(view.result.current.error).toContain('Review the explicit initial-fill policy'); expect(saveCableEndpoint).not.toHaveBeenCalled();
   });
   it.each(['v1', 'v2', 'v3'] as const)('replays an unknown retained %s command byte-exactly despite a different current editor policy', async version => {
+    const originalCalculation = { preferences: { secondaryDistanceMeters: 7, preferVerticalApproach: true }, timeoutMilliseconds: 60000 };
     const current = context(), legacy: CableEndpointCommand = { schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idempotencyKey: id(90), expectedContextSha256: current.contextSha256,
       expectedCableWriteRevision: current.cableWriteRevision, expectedLogicalName: current.logicalName!, expectedRegistryRevision: current.registryRevision,
       expectedLocationId: null, expectedLocationRevision: null, expectedHeadId: null, expectedCurrent: current.current!, reason: 'Original retained assignment',
       selection: { mode: 'fixed-world', pointProjectMetres: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: null } };
-    const command: CableEndpointCommand = version === 'v1' ? legacy : version === 'v2' ? { ...legacy, schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null }
-      : { ...legacy, schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: { mode: 'when-both-empty' } };
+    const command: CableEndpointCommand = version === 'v1' ? legacy : version === 'v2' ? { ...legacy, schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: originalCalculation }
+      : { ...legacy, schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: originalCalculation, initialFill: { mode: 'when-both-empty' } };
     await retainPendingCableEndpoint(owner, cable, 'from', command); const encoded = JSON.stringify(readPendingCableEndpoint(owner)?.command);
     vi.mocked(saveCableEndpoint).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown outcome'));
-    const view = renderHook(() => useCableEndpointSelection({ ...access(), initialFill: null,
-      calculation: { preferences: { secondaryDistanceMeters: 99, preferVerticalApproach: false }, timeoutMilliseconds: 110000 } }));
+    const props = { ...access(), initialFill: null,
+      calculation: { preferences: { secondaryDistanceMeters: 99, preferVerticalApproach: false }, timeoutMilliseconds: 110000 } };
+    const view = renderHook(() => useCableEndpointSelection(props));
     await waitFor(() => expect(view.result.current.canRetry).toBe(true)); expect(saveCableEndpoint).not.toHaveBeenCalled();
     await act(async () => { expect(await view.result.current.retry()).toBe(false); });
     expect(JSON.stringify(vi.mocked(saveCableEndpoint).mock.calls[0][4])).toBe(encoded);
     expect(JSON.stringify(readPendingCableEndpoint(owner)?.command)).toBe(encoded); expect(view.result.current.pending?.command).toEqual(command);
+    expect(props.onSaved).not.toHaveBeenCalled();
+    await act(async () => { expect(await view.result.current.retry()).toBe(true); });
+    expect(JSON.stringify(vi.mocked(saveCableEndpoint).mock.calls[1][4])).toBe(encoded);
+    expect(props.onSaved).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ idempotencyKey: command.idempotencyKey }), scope, version === 'v1' ? null : originalCalculation);
+    expect(readPendingCableEndpoint(owner)).toBeNull();
   });
   it('fences a late selection response when the explicit initial-fill choice changes', async () => {
     let finish!: (value: ReturnType<typeof evidence>) => void;
@@ -222,8 +296,8 @@ describe('persistent owned cable endpoint selection', () => {
     act(() => { view.result.current.setFixedPoint([1, 2, 3]); }); await act(async () => { expect(await view.result.current.save('Explicit point')).toBe(true); });
     expect(view.result.current.receipt).not.toBeNull(); expect(view.result.current.pending).toBeNull(); expect(view.result.current.error).toContain('save is confirmed'); expect(view.result.current.error).not.toContain('unconfirmed');
   });
-  it('preserves confirmed proof and retires stale context when paused after storage clears but before refresh', async () => {
-    const props = access(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+  it('tracks the exact new impact once when paused after a verified save clears storage, then refreshes on reopen without another PUT', async () => {
+    const props = normalAccess(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
     let lockCount = 0, resumeClear!: () => void;
     Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: vi.fn(async (_name: string, _options: LockOptions, work: (lock: Lock) => unknown) => {
       const result = work({} as Lock); lockCount++;
@@ -234,9 +308,26 @@ describe('persistent owned cable endpoint selection', () => {
     await waitFor(() => expect(lockCount).toBe(3)); expect(readPendingCableEndpoint(owner)).toBeNull();
     view.rerender({ ...props, active: false }); await act(async () => { resumeClear(); expect(await saving).toBe(true); });
     expect(view.result.current.receipt).not.toBeNull(); expect(view.result.current.context).toBeNull(); expect(view.result.current.pending).toBeNull(); expect(view.result.current.canSave).toBe(false);
+    expect(props.onSaved).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ locationImpact: expect.objectContaining({ id: id(80) }), initialFillMandate: expect.objectContaining({ impactId: id(80) }) }), scope, props.calculation);
+    expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(saveCableEndpoint).toHaveBeenCalledOnce();
     vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce({ ...context(), registryRevision: '6' });
     view.rerender(props); await waitFor(() => expect(view.result.current.context?.registryRevision).toBe('6'));
     expect(view.result.current.error).toBeNull(); expect(view.result.current.draft).toBeNull(); expect(fetchCableEndpointContext).toHaveBeenCalledTimes(2);
+    expect(props.onSaved).toHaveBeenCalledOnce(); expect(saveCableEndpoint).toHaveBeenCalledOnce();
+  });
+  it.each(['account', 'model'] as const)('does not report the old confirmed impact after its %s owner changes during storage clear', async kind => {
+    const props = normalAccess(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    let lockCount = 0, resumeClear!: () => void;
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: { request: vi.fn(async (_name: string, _options: LockOptions, work: (lock: Lock) => unknown) => {
+      const result = work({} as Lock); lockCount++;
+      if (lockCount === 3) await new Promise<void>(resolve => { resumeClear = resolve; }); return result;
+    }) } });
+    act(() => { view.result.current.setFixedPoint([1, 2, 3]); }); let saving!: Promise<boolean>;
+    act(() => { saving = view.result.current.save('Explicit point'); }); await waitFor(() => expect(lockCount).toBe(3));
+    expect(readPendingCableEndpoint(owner)).toBeNull();
+    view.rerender({ ...props, ...(kind === 'account' ? { accountId: id(99), token: 'new-owner-login' } : { model: { ...props.model!, selectionRevision: '99' } }) });
+    await act(async () => { resumeClear(); expect(await saving).toBe(true); });
+    expect(props.onSaved).not.toHaveBeenCalled(); expect(view.result.current.receipt).toBeNull(); expect(saveCableEndpoint).toHaveBeenCalledOnce();
   });
   it('serializes two editor instances so only one unresolved PUT can be sent', async () => {
     vi.mocked(saveCableEndpoint).mockRejectedValue(new Error('Lost response'));

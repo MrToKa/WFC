@@ -15,7 +15,7 @@ export type ProjectPreparationViewer = {
   assertCurrent: () => void;
 };
 
-type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null> };
+type Options = { projectId: string | null; loadedProjectId: string | null; token: string | null; isAdmin: boolean; container: RefObject<HTMLDivElement | null>; automaticStatePolling?: boolean };
 type View = { data: PathFinderState | null; loading: boolean; busy: boolean; error: string | null; viewerPhase: 'loading' | 'ready' | 'no-model' | 'error'; viewerMessage: string };
 type Run = { closed: boolean; abort: AbortController; viewer: ViewerController | null; modelVersionId: string | null; selectionRevision: string | null; contentFingerprint: string | null; generation: number; captureProgressAt: number | null; stateRead: Promise<PathFinderState | null> | null };
 // Cosmetic text only. Capture protocol, geometry assembly and terminal/auth
@@ -25,7 +25,7 @@ const ENTITY_READ_TIMEOUT_MILLISECONDS = 30_000;
 const initial: View = { data: null, loading: true, busy: false, error: null, viewerPhase: 'loading', viewerMessage: 'Checking the active model…' };
 const message = (error: unknown) => error instanceof PathFinderApiError ? error.message : error instanceof ViewerAccessError && error.code === 'APPEARANCE_RESTORE_FAILED' ? new PathFinderApiError(error.code, 0).message : error instanceof ViewerAccessError && error.code === 'LOOKUP_GEOMETRY_NOT_FOUND' ? 'No display-visible route geometry matches the lookup. Check the route names and model visibility.' : error instanceof ViewerAccessError && error.code === 'CAPTURE_RELOAD_REQUIRED' ? 'Reload the model before preparing another snapshot; the bounded command budget has been reached.' : error instanceof ViewerAccessError && error.code === 'EXTRACTION_FAILED' ? 'The selected model capture could not be completed within its limits. Reduce the network or equipment scope and try again.' : error instanceof DOMException && error.name === 'AbortError' ? 'The operation was cancelled.' : 'The operation could not be completed. Refresh Path Finder and try again.';
 
-export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, container }: Options) {
+export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, container, automaticStatePolling = true }: Options) {
   const scope = useMemo(() => ({ projectId, loadedProjectId, token, isAdmin }), [projectId, loadedProjectId, token, isAdmin]);
   const latest = useRef(scope); latest.current = scope;
   const renderedScope = useRef(scope);
@@ -238,6 +238,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
   }, [accessFailure, live, projectId, token, update]);
   const running = view.data?.jobs.some(job => ['queued', 'running'].includes(job.status)) ?? false;
   useEffect(() => {
+    if (!automaticStatePolling) return;
     const run = runRef.current; if (!run || !live(run)) return;
     let closed = false, timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -247,7 +248,7 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
     };
     timer = setTimeout(() => void poll(), running ? 2000 : 15000);
     return () => { closed = true; clearTimeout(timer); };
-  }, [live, refresh, revision, running]);
+  }, [automaticStatePolling, live, refresh, revision, running]);
   const viewerAction = useCallback(async <T,>(operation: (viewer: ViewerController) => Promise<T>): Promise<T | null> => {
     const run = runRef.current; if (!run || !live(run) || !run.viewer || projectPreparationCapture.current) return null;
     try { const result = await operation(run.viewer); return live(run) ? result : null; } catch (error) { if (!(error instanceof DOMException && error.name === 'AbortError')) update(run, { error: message(error) }); return null; }

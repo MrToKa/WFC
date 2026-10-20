@@ -14,8 +14,10 @@ import { sealedCableItemApplicabilitySchema } from '../../../shared/pathfinderIt
 import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
 import { PathFinderCableComparison } from '@/components/pathfinder/PathFinderCableComparison';
 import { cableComparisonInputSchema, type CableComparisonInput } from '../../../shared/pathfinderCableComparison';
+import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
+import { revisionResultEnvelopeSchema } from '../../../shared/pathfinderRevisionResults';
 
-type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void };
+type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
 function hasExactItemApplicability(proposal: PathFinderProposal | null, projectId: string | null | undefined) {
   const proof = sealedCableItemApplicabilitySchema.safeParse(proposal?.itemApplicability);
@@ -23,40 +25,56 @@ function hasExactItemApplicability(proposal: PathFinderProposal | null, projectI
     && proposal.projectId === projectId && proof.data.projectId === projectId && proof.data.jobId === proposal.jobId
     && proof.data.cableId === proposal.cableId && proof.data.proposalId === proposal.id && proof.data.dependencyHash === proposal.provenance.dependencyHash);
 }
-export function PathFinderResults({ pf, selectedCableId, accountId, active = true, displayOwned = true, claimViewer, options, onBatchBusyChange }: Props) {
+export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, onBatchBusyChange, onCableValuesChanged }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [scopeReadiness, setScopeReadiness] = useState<PathFinderCalculationScope>({ admissionId: null, jobId: null, ready: false, message: 'Choose a completed calculation in Cable revision results below.' });
   const scope = useRef(scopeReadiness);
+  const historyScope = useRef(scopeReadiness), workflowScope = useRef<string | null>(null);
+  const workflowIdentity = useRef<string | null>(null), suppressedWorkflow = useRef<string | null>(null);
+  const [historyReadiness, setHistoryReadiness] = useState(scopeReadiness);
+  const [workflowScopeOwner, setWorkflowScopeOwner] = useState<string | null>(null), [workflowAttempt, setWorkflowAttempt] = useState(0);
   const [notice, setNotice] = useState<string | null>(null), data = pf.data;
+  const closeHadReceipt = useRef(false);
+  const confirmedCableWrite = () => { pf.refresh(); onCableValuesChanged?.(); };
   const pendingApply = usePathfinderPendingApply({
     projectId: pf.preparationAccess?.projectId ?? null, loadedProjectId: pf.preparationAccess?.loadedProjectId ?? null,
     token: pf.preparationAccess?.token ?? null, isAdmin: pf.preparationAccess?.isAdmin ?? false,
-    accountId: accountId ?? null, active, action: (path, body) => (pf.actionWithoutRefresh ?? pf.action)(path, body),
+    accountId: accountId ?? null, active, action: async (path, body) => {
+      const result = await (pf.actionWithoutRefresh ?? pf.action)(path, body);
+      if (path.endsWith('/close-pending-apply')) closeHadReceipt.current = result?.status === 'already-applied';
+      return result;
+    },
   });
   const ownershipKey = JSON.stringify([accountId, pf.preparationAccess]);
   const batch = usePathfinderBatchReview({ identityKey: ownershipKey,
     contextKey: JSON.stringify([data?.activeModel, data?.registryRevision, data?.settings, data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
     active, blocked: !active || options === null || pf.viewerPhase === 'error' || pf.viewerPhase === 'loading', options,
-    readProposal: pf.readProposal, reviewProposal: pf.reviewProposal, pendingApply, onApplied: pf.refresh,
+    readProposal: pf.readProposal, reviewProposal: pf.reviewProposal, pendingApply, onApplied: confirmedCableWrite,
   });
   useEffect(() => { onBatchBusyChange?.(batch.busy); return () => onBatchBusyChange?.(false); }, [batch.busy, onBatchBusyChange]);
   const operation = useRef(0), reviewContext = useRef(''), endpointRead = useRef<AbortController | null>(null);
   const displayed = useRef({ owned: displayOwned, path: pathDisplayed, clear: pf.clear });
   displayed.current = { owned: displayOwned, path: pathDisplayed, clear: pf.clear };
-  const receiveScope = useCallback((value: PathFinderCalculationScope) => {
+  const adoptScope = useCallback((value: PathFinderCalculationScope, force = false) => {
     const previous = scope.current;
     scope.current = value;
-    if (previous.admissionId === value.admissionId && previous.jobId === value.jobId && previous.ready === value.ready && previous.message === value.message
+    if (!force && previous.admissionId === value.admissionId && previous.jobId === value.jobId && previous.ready === value.ready && previous.message === value.message
       && previous.wholeJobReady === value.wholeJobReady && previous.jobStatus === value.jobStatus && previous.cancelRequested === value.cancelRequested) return;
     setScopeReadiness(value);
-    if (previous.admissionId === value.admissionId && previous.jobId === value.jobId) return;
+    if (!force && previous.admissionId === value.admissionId && previous.jobId === value.jobId) return;
     endpointRead.current?.abort(); operation.current++;
     setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null);
     if (displayed.current.owned && displayed.current.path) displayed.current.clear();
   }, []);
+  const receiveScope = useCallback((value: PathFinderCalculationScope) => {
+    historyScope.current = value; setHistoryReadiness(value); if (!workflowScope.current) adoptScope(value);
+  }, [adoptScope]);
+  const selectHistory = useCallback(() => {
+    suppressedWorkflow.current = workflowIdentity.current; workflowScope.current = null; setWorkflowScopeOwner(null); adoptScope(historyScope.current, true);
+  }, [adoptScope]);
   useEffect(() => { endpointRead.current?.abort(); operation.current++; setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { endpointRead.current?.abort(); operation.current++; }; }, [ownershipKey, selectedCableId, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
   useEffect(() => { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { endpointRead.current?.abort(); operation.current++; }; }, [active]);
   useEffect(() => { if (!displayOwned) { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); } }, [displayOwned]);
@@ -78,7 +96,7 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
   const comparisonRead = useRef<{ controller: AbortController; cableId: string; observedRevision: string | undefined } | null>(null);
   const [comparison, setComparison] = useState<{ owner: string; proposalId: string; proposalHash: string; revisionResultHash: string | null;
     observedRevision: string | undefined; loading: boolean; input: CableComparisonInput | null; error: string | null } | null>(null);
-  useEffect(() => { comparisonRead.current?.controller.abort(); comparisonRead.current = null; setComparison(null);
+  useEffect(() => { comparisonRead.current?.controller.abort(); comparisonRead.current = null; setComparison(value => value?.owner === comparisonOwner ? value : null);
     return () => { comparisonRead.current?.controller.abort(); comparisonRead.current = null; }; }, [comparisonOwner]);
   useEffect(() => {
     const current = comparisonRead.current;
@@ -145,6 +163,96 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       else setNotice('The From/To objects could not be checked. Open the path again.');
     } finally { if (endpointRead.current === controller) endpointRead.current = null; if (operation.current === current) setPreviewLoading(false); }
   };
+  const workflowRow = cableWorkflowRowSchema.safeParse(workflowSelection);
+  const workflowTarget = workflowRow.success && workflowRow.data.projectId === pf.preparationAccess?.projectId && workflowRow.data.cable.id === selectedCableId
+    && workflowRow.data.calculation.outcome === 'calculated' && workflowRow.data.calculation.proposalId && workflowRow.data.calculation.proposalHash && workflowRow.data.calculation.jobId
+    ? workflowRow.data : null;
+  // The hint identifies one selected result. Replacing list rows or updating
+  // their progress must never silently retarget the selected proposal.
+  const selectedWorkflowIdentity = workflowTarget ? JSON.stringify([ownershipKey, active, selectedCableId, data?.activeModel, settingsKey, optionsKey, workflowAttempt,
+    workflowTarget.calculation.jobId, workflowTarget.calculation.proposalId, workflowTarget.calculation.proposalHash, workflowTarget.cable.cableWriteRevision]) : null;
+  workflowIdentity.current = selectedWorkflowIdentity;
+  const workflowKey = workflowTarget ? JSON.stringify([selectedWorkflowIdentity, workflowTarget.calculation.jobStatus, workflowTarget.calculation.itemState,
+    workflowTarget.calculation.currentness, workflowTarget.calculation.reviewable, workflowTarget.calculation.itemApplicability ?? null]) : null;
+  const workflowLatest = useRef({ key: workflowKey, target: workflowTarget, pf, options, claimViewer,
+    comparisonBase: [ownershipKey, active, displayOwned, selectedCableId, data?.activeModel, settingsKey, optionsKey] });
+  workflowLatest.current = { key: workflowKey, target: workflowTarget, pf, options, claimViewer,
+    comparisonBase: [ownershipKey, active, displayOwned, selectedCableId, data?.activeModel, settingsKey, optionsKey] };
+  useEffect(() => {
+    const initial = workflowLatest.current, access = initial.pf.preparationAccess, target = initial.target;
+    if (workflowIdentity.current !== null && suppressedWorkflow.current === workflowIdentity.current) return;
+    if (!workflowKey || !target || !active || !accountId || !initial.pf.data || !access?.isAdmin || !access.projectId || access.projectId !== access.loadedProjectId || !access.token) {
+      if (workflowScope.current) selectHistory(); return;
+    }
+    const projectId = access.projectId, token = access.token;
+    workflowScope.current = workflowKey; setWorkflowScopeOwner(workflowKey);
+    adoptScope({ admissionId: null, jobId: target.calculation.jobId, ready: false, message: 'Checking the selected cable calculation…' }, true);
+    const atOperation = ++operation.current, currentDisplay = initial.claimViewer?.() ?? (() => true), controller = new AbortController();
+    endpointRead.current = controller; setPreviewLoading(true);
+    const current = () => !controller.signal.aborted && operation.current === atOperation && workflowScope.current === workflowKey
+      && workflowLatest.current.key === workflowKey && currentDisplay();
+    void (async () => {
+      try {
+        const detail = await initial.pf.readProposal(target.calculation.proposalId!);
+        if (!current() || !detail) return;
+        if (detail.id !== target.calculation.proposalId || detail.proposalHash !== target.calculation.proposalHash || detail.projectId !== target.projectId
+          || detail.cableId !== target.cable.id || detail.jobId !== target.calculation.jobId) throw new Error('WORKFLOW_PROPOSAL_SCOPE_CHANGED');
+        const parsedEnvelope = revisionResultEnvelopeSchema.safeParse(detail.revisionResult), envelope = parsedEnvelope.success ? parsedEnvelope.data : null;
+        if (detail.revisionResult && (!envelope || envelope.projectId !== detail.projectId || envelope.cableId !== detail.cableId || envelope.jobId !== detail.jobId
+          || envelope.proposalId !== detail.id || envelope.proposalHash !== detail.proposalHash || envelope.revisionResultSha256 !== detail.revisionResultHash
+          || envelope.baselineHash !== detail.revisionBaselineHash || envelope.dependencyHash !== detail.provenance?.dependencyHash)) throw new Error('WORKFLOW_RESULT_SCOPE_CHANGED');
+        const preferences = initial.options === undefined ? detail.routingPreferences : initial.options;
+        const [parentRead, cableRead] = await Promise.allSettled([
+          initial.pf.readJob(detail.jobId),
+          preferences ? fetchPathFinderCableWorkflowDetail(projectId, token, detail.cableId, preferences, controller.signal) : Promise.resolve(null),
+        ]);
+        if (!current()) return;
+        for (const read of [parentRead, cableRead]) if (read.status === 'rejected') {
+          const error = read.reason as { status?: unknown }; if (error?.status === 401 || error?.status === 403) throw read.reason;
+        }
+        const parent = parentRead.status === 'fulfilled' && parentRead.value?.projectId === detail.projectId && parentRead.value.id === detail.jobId ? parentRead.value : null;
+        const live = cableRead.status === 'fulfilled' ? cableRead.value : null;
+        if (live && (live.projectId !== detail.projectId || live.cableId !== detail.cableId || live.row.projectId !== detail.projectId || live.row.cable.id !== detail.cableId
+          || live.row.calculation.jobId !== detail.jobId || live.row.calculation.proposalId !== detail.id || live.row.calculation.proposalHash !== detail.proposalHash)) throw new Error('WORKFLOW_CURRENT_RESULT_CHANGED');
+        const liveCurrent = Boolean(live?.row.calculation.currentness === 'current' && live.row.calculation.reviewable && live.row.calculation.itemState === 'complete'
+          && live.row.calculation.outcome === 'calculated' && live.row.cable.cableWriteRevision === detail.cableWriteRevision);
+        const wholeJobReady = Boolean(envelope && parent?.status === 'complete' && !parent.cancelRequested && liveCurrent);
+        const itemReady = Boolean(envelope && parent && ['queued', 'running'].includes(parent.status) && !parent.cancelRequested && liveCurrent
+          && hasExactItemApplicability(detail, access.projectId));
+        const issue = !envelope ? 'This historical path has no verifiable calculation admission. It is preview only; use Cable revision results or calculate a fresh proposal before Review and Apply.'
+          : !parent ? 'The exact calculation state is unavailable. This path is preview only; reopen the selected cable result to check again.'
+            : parent.cancelRequested || ['cancelled', 'failed'].includes(parent.status) ? 'This calculation was cancelled or failed. Its saved path is preview only.'
+              : !liveCurrent ? 'The current cable proof is unavailable or changed. This path is preview only; refresh the cable list and calculate again when needed.'
+                : !wholeJobReady && !itemReady ? 'This calculation is still running and this cable has no current sealed item. Review is blocked until it is ready.' : null;
+        const selectedScope: PathFinderCalculationScope = { admissionId: envelope?.admissionId ?? null, jobId: detail.jobId, ready: wholeJobReady || itemReady,
+          wholeJobReady, jobStatus: parent?.status ?? null, cancelRequested: parent?.cancelRequested ?? false, message: issue };
+        scope.current = selectedScope; setScopeReadiness(selectedScope); setProposal(detail); setNotice(issue);
+        const latest = workflowLatest.current, observedRevision = latest.pf.data?.cables.find(value => value.id === detail.cableId)?.cableWriteRevision;
+        const comparisonOwner = JSON.stringify([...latest.comparisonBase, selectedScope.admissionId, selectedScope.jobId]);
+        const input = live ? cableComparisonInputSchema.safeParse({ projectId: detail.projectId, cableId: detail.cableId,
+          current: { source: 'live-cable-read', contextSha256: live.contextSha256, mto: live.row.mto, cable: live.row.cable },
+          proposal: { projectId: detail.projectId, cableId: detail.cableId, proposalId: detail.id, proposalHash: detail.proposalHash,
+            revisionResultHash: detail.revisionResultHash ?? null, cableWriteRevision: detail.cableWriteRevision,
+            routing: detail.route?.routeText ?? null, designLength: detail.design?.designLengthMeters ?? null } }) : null;
+        setComparison({ owner: comparisonOwner, proposalId: detail.id, proposalHash: detail.proposalHash, revisionResultHash: detail.revisionResultHash ?? null,
+          observedRevision, loading: false, input: input?.success ? input.data : null, error: input?.success ? null : 'Live cable comparison is unavailable. Reopen this selected result to check again.' });
+        if (!detail.route?.success || !detail.route.points.length) { initial.pf.clear(); setNotice('This proposal has no drawable path. Its diagnostic is shown below.'); return; }
+        if (detail.route.points.length > MAX_PATH_POINTS) { setNotice('This exact path exceeds the viewer point budget. The result is retained without truncation.'); return; }
+        const endpointIds = latest.pf.data ? await proposalEndpointObjectIds(detail, latest.pf.data, { projectId, token }, controller.signal) : [];
+        if (!current()) return; const objectIds = computedPathObjectIds(detail.route.objectIds, endpointIds);
+        if (!objectIds) { setNotice('This path and its From/To objects exceed the viewer object budget. The result is retained without truncation.'); return; }
+        const shown = await initial.pf.showPath({ pathId: detail.id, points: detail.route.points, objectIds });
+        if (!current()) return; setPathDisplayed(Boolean(shown));
+        if (!shown) setNotice('The selected proposal is available. Load the active model and reopen the selected cable result to view its exact path.');
+      } catch (error) {
+        if (!current()) return;
+        const status = error && typeof error === 'object' && 'status' in error ? error.status : null;
+        if (status === 401 || status === 403) { initial.pf.refresh(); setNotice('Current administrator access is required to inspect this cable result.'); }
+        else setNotice('The selected cable calculation changed or could not be verified. Refresh the cable list and open the result again.');
+      } finally { if (endpointRead.current === controller) endpointRead.current = null; if (operation.current === atOperation) setPreviewLoading(false); }
+    })();
+    return () => { controller.abort(); operation.current++; };
+  }, [workflowKey, active, accountId, adoptScope, selectHistory]);
   const confirmReview = async () => {
     if (!active || !displayOwned || !proposal || !pathDisplayed || !effectiveCanApply || stale || pf.busy || !pendingApply.canStart) return;
     const current = operation.current, context = reviewContext.current, target = proposal;
@@ -157,12 +265,12 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     const current = operation.current;
     const confirmed = await pendingApply.start({ proposalId: proposal.id, proposalHash: proposal.proposalHash, cableId: proposal.cableId,
       reviewId, expectedCableWriteRevision: proposal.cableWriteRevision, revisionResultHash: proposal.revisionResultHash ?? null });
-    if (confirmed) { if (operation.current === current) setApplied(true); pf.refresh(); }
+    if (confirmed) { if (operation.current === current) setApplied(true); confirmedCableWrite(); }
   };
   const summary = data?.proposals.find(value => value.id === proposal?.id), stale = proposal?.stale || summary?.stale || false;
   const preferencesMatch = options === undefined || Boolean(options && proposal?.routingPreferences && options.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && options.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach);
   const proposalJob = data?.jobs.find(value => value.id === proposal?.jobId);
-  const checkedJobStatus = proposalJob?.status ?? scopeReadiness.jobStatus;
+  const checkedJobStatus = workflowScopeOwner ? scopeReadiness.jobStatus : proposalJob?.status ?? scopeReadiness.jobStatus;
   const calculationCancelled = Boolean(proposalJob?.cancelRequested || scopeReadiness.cancelRequested || checkedJobStatus === 'cancelled' || scopeReadiness.jobStatus === 'cancelled');
   const calculationFailed = proposalJob?.status === 'failed' || scopeReadiness.jobStatus === 'failed';
   const wholeJobReady = scopeReadiness.wholeJobReady ?? scopeReadiness.ready;
@@ -173,6 +281,7 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     && comparison.input.current.cable.cableWriteRevision !== proposal?.cableWriteRevision);
   const ownedComparison = comparisonMatchesProposal && comparison?.observedRevision === selectedRevision ? comparison : null;
   const effectiveCanApply = Boolean(proposal && proposal.status === 'calculated' && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && !calculationCancelled
+    && (!workflowScopeOwner || scopeReadiness.ready)
     && !calculationFailed && !knownLiveRevisionMismatch && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady) && preferencesMatch && !stale && !proposal.compatibilityIssue
     && proposal.canApply && !(summary && summary.proposalHash === proposal.proposalHash && !summary.canApply));
   const proposalJobIssue = !proposal || effectiveCanApply ? null : calculationCancelled
@@ -193,8 +302,10 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       <h4>Pending Apply</h4>
       <Body1>The exact Apply command is retained for this account and project. Its outcome must be confirmed before another proposal can be reviewed or applied.</Body1>
       <Caption1>Proposal {pendingApply.pending.proposalId}; original cable revision {pendingApply.pending.expectedCableWriteRevision}. Current model or cable changes do not replace this command.</Caption1>
-      <Button disabled={!pendingApply.canRetry || pf.busy} onClick={() => void pendingApply.retry()}>Retry pending Apply</Button>
-      <Button disabled={!pendingApply.canRetry || pf.busy} onClick={() => void pendingApply.close().then(confirmed => { if (confirmed) setReviewId(null); })}>Close pending request</Button>
+      <Button disabled={!pendingApply.canRetry || pf.busy} onClick={() => void pendingApply.retry().then(confirmed => { if (confirmed) confirmedCableWrite(); })}>Retry pending Apply</Button>
+      <Button disabled={!pendingApply.canRetry || pf.busy} onClick={() => { closeHadReceipt.current = false; void pendingApply.close().then(confirmed => {
+        if (confirmed) { setReviewId(null); if (closeHadReceipt.current) confirmedCableWrite(); }
+      }); }}>Close pending request</Button>
       <Caption1>Closing reconciles an existing Apply receipt or records that this exact request cannot apply later. It does not apply a replacement result.</Caption1>
     </section> : null}
     {pendingApply.busy ? <Spinner size="tiny" label="Reconciling the exact Apply command…" /> : null}
@@ -203,12 +314,13 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     {pf.preparationAccess ? <PathFinderRecalculationPanel {...pf.preparationAccess} accountId={accountId ?? null} active={active} preferences={options}
       contextKey={JSON.stringify([data?.activeModel, pf.preparationViewerGeneration, options])}
       onChanged={pf.refresh} onAuthorityLost={pf.cancelOperation} /> : null}
-    <PathFinderBatchReview batch={batch} disabled={pf.busy || !active || !pendingApply.canStart || !scopeReadiness.ready}
-      disabledReason={!active ? 'Open Path with current administrator access to review results.' : !pendingApply.canStart ? 'Reconcile any pending Apply request before reviewing another result.' : scopeReadiness.message} />
+    <PathFinderBatchReview batch={batch} disabled={pf.busy || !active || !pendingApply.canStart || !historyReadiness.ready}
+      disabledReason={!active ? 'Open Path with current administrator access to review results.' : !pendingApply.canStart ? 'Reconcile any pending Apply request before reviewing another result.' : historyReadiness.message} />
     {pf.preparationAccess ? <PathFinderRevisionResults {...pf.preparationAccess} accountId={accountId??null} active={active && Boolean(data)} busy={pf.busy || batch.busy}
       contextKey={JSON.stringify([data?.activeModel, data?.registryRevision, settingsKey, optionsKey])}
       onAuthorityLost={pf.cancelOperation} onOpenProposal={openProposal} batch={batch} cables={data?.cables ?? []} jobs={data?.jobs ?? []}
-      readJob={pf.readJob} onScopeReadinessChange={receiveScope} /> : null}
+      readJob={pf.readJob} onScopeReadinessChange={receiveScope} onHistorySelection={selectHistory} /> : null}
+    {workflowTarget ? <Button disabled={!active || previewLoading || pf.busy || batch.busy} onClick={() => setWorkflowAttempt(value => value + 1)}>Reopen selected cable result</Button> : null}
     <Caption1>Calculations use the active model, shared locations, connection gap and allowances from Project Details. Instrumentation follows Control.</Caption1>
     <div className={styles.actions}>
       <Button disabled={options === null || !data?.artifacts.length || pf.busy || !nonMvCableIds.length || nonMvCableIds.length > 10000} onClick={() => void (options ? pf.calculate(nonMvCableIds, true, options) : pf.calculate(nonMvCableIds, true))}>Calculate non-MV cables</Button>

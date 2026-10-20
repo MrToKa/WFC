@@ -21,7 +21,7 @@ export type CableEndpointSelectionAccess = {
   /** Omission preserves calculation-only v2. Only explicit policy input creates v3. */
   initialFill?: InitialFillPolicy | null;
   readSelection: () => Promise<ViewerSelection | null>;
-  onSaved?: (receipt: CableEndpointReceipt) => void | Promise<void>; onAuthorityLost?: () => void;
+  onSaved?: (receipt: CableEndpointReceipt, current?: EndpointCurrentScope, calculation?: LocationImpactCalculation | null) => void | Promise<void>; onAuthorityLost?: () => void;
 };
 type Draft = { mode: 'object-derived'; sdkObjectId: number; object: EndpointObjectRef; point: CanonicalPoint }
   | { mode: 'fixed-world'; point: CanonicalPoint; derivation: 'manual-world-point' | 'picked-surface-point'; displaySdkObjectId: number | null };
@@ -144,7 +144,11 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
       await clearPendingCableEndpoint(owner(), verified); if (!live()) return true;
       update({ pending: null, receipt, draft: null, notice: receipt ? 'The shared endpoint save is confirmed. Its matching From/To occurrences use the same location.'
         : 'The pending command was closed without saving an endpoint. Its original key can never be used to save later.', error: null });
-      if (!latest.current.active || abort.signal.aborted) return true;
+      // Pausing only suspends reads. A conclusive save must still reach its
+      // live owner's progress tracker after the durable command is retired.
+      try { if (receipt) await callbacks.current.onSaved?.(receipt, verified.command.expectedCurrent,
+        'calculation' in verified.command ? verified.command.calculation : null); } catch { if (live()) update({ error: 'The shared endpoint was saved. Refresh the cable diagnostics to see its current state.' }); }
+      if (!live() || !latest.current.active || abort.signal.aborted) return true;
       try {
         if (access.cableId) {
           const context = await fetchCableEndpointContext(access.projectId!, access.token!, access.cableId, access.end, abort.signal);
@@ -158,10 +162,22 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
         else update({ error: receipt ? 'The shared endpoint save is confirmed. Refresh its current context before another assignment.'
           : 'The pending command is closed. Refresh the endpoint context before another assignment.', context: null });
       }
-      try { if (receipt) await callbacks.current.onSaved?.(receipt); } catch { if (live()) update({ error: 'The shared endpoint was saved. Refresh the cable diagnostics to see its current state.' }); }
       return true;
     } catch (error) { if (!abort.signal.aborted) failure(error); return false; }
   }, [owner, live, access.projectId, access.token, access.accountId, access.cableId, access.end, modelKey, update, failure]);
+  const persistDraft = useCallback(async (context: CableEndpointContext, draft: Draft, reason: string, abort: AbortController) => {
+    if (!live() || !latest.current.active || abort.signal.aborted || calculationKey === null || initialFillKey === null) return false;
+    const command = cableEndpointCommandSchema.parse({ ...(initialFillKey === 'unspecified' ? { schemaVersion: 'wfc.pf.cable-endpoint-command.v2' }
+      : { schemaVersion: 'wfc.pf.cable-endpoint-command.v3', initialFill: JSON.parse(initialFillKey) }), calculation: JSON.parse(calculationKey), idempotencyKey: crypto.randomUUID(),
+      expectedContextSha256: context.contextSha256, expectedCableWriteRevision: context.cableWriteRevision, expectedLogicalName: context.logicalName,
+      expectedRegistryRevision: context.registryRevision, expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null,
+      expectedHeadId: context.head?.id ?? null, expectedCurrent: context.current, reason,
+      selection: draft.mode === 'object-derived' ? { mode: draft.mode, sdkObjectId: draft.sdkObjectId, object: draft.object }
+        : { mode: draft.mode, pointProjectMetres: draft.point, derivation: draft.derivation, displaySdkObjectId: draft.displaySdkObjectId } });
+    const intent = await retainPendingCableEndpoint(owner(), context.cableId, context.end, command);
+    if (!live() || abort.signal.aborted) return false;
+    update({ pending: intent }); return execute(intent, abort);
+  }, [live, calculationKey, initialFillKey, owner, update, execute]);
   const save = useCallback(async (reason: string): Promise<boolean> => {
     const { context, draft, storageReady } = data.current;
     if (!canAct() || !storageReady || !context?.canBind || !context.logicalName || !context.current || !draft) return false;
@@ -170,19 +186,40 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
     if (!reason.trim() || reason.length > 2048 || /[\u0000-\u001f\u007f-\u009f]/u.test(reason)) { update({ error: 'Enter a nonempty confirmation reason without control characters.' }); return false; }
     const abort = new AbortController(); request.current = abort; update({ busy: true, error: null });
     try {
-      const command = cableEndpointCommandSchema.parse({ ...(initialFillKey === 'unspecified' ? { schemaVersion: 'wfc.pf.cable-endpoint-command.v2' }
-        : { schemaVersion: 'wfc.pf.cable-endpoint-command.v3', initialFill: JSON.parse(initialFillKey) }), calculation: JSON.parse(calculationKey), idempotencyKey: crypto.randomUUID(),
-        expectedContextSha256: context.contextSha256, expectedCableWriteRevision: context.cableWriteRevision, expectedLogicalName: context.logicalName,
-        expectedRegistryRevision: context.registryRevision, expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null,
-        expectedHeadId: context.head?.id ?? null, expectedCurrent: context.current, reason,
-        selection: draft.mode === 'object-derived' ? { mode: draft.mode, sdkObjectId: draft.sdkObjectId, object: draft.object }
-          : { mode: draft.mode, pointProjectMetres: draft.point, derivation: draft.derivation, displaySdkObjectId: draft.displaySdkObjectId } });
-      const intent = await retainPendingCableEndpoint(owner(), context.cableId, context.end, command);
-      if (!live() || abort.signal.aborted) return false;
-      update({ pending: intent }); return await execute(intent, abort);
+      return await persistDraft(context, draft, reason, abort);
     } catch (error) { if (live()) { try { update({ pending: readPendingCableEndpoint(owner()), error: error instanceof CableEndpointStorageError ? error.message : storageNotice }); } catch { update({ storageReady: false, error: storageNotice }); } } return false; }
     finally { if (request.current === abort) { request.current = null; update({ busy: false }); } }
-  }, [canAct, update, owner, live, execute, calculationKey, initialFillKey]);
+  }, [canAct, update, owner, live, persistDraft, calculationKey, initialFillKey]);
+  const applySelectedObject = useCallback(async (reason: string): Promise<boolean> => {
+    if (!canAct() || !data.current.storageReady || !access.cableId) return false;
+    if (calculationKey === null || calculationKey === 'null' || initialFillKey !== canonicalPurposeJson({ mode: 'when-both-empty' })) {
+      update({ error: 'Use explicit calculation settings and the both-empty initial-fill policy for this action.' }); return false;
+    }
+    if (!reason.trim() || reason.length > 2048 || /[\u0000-\u001f\u007f-\u009f]/u.test(reason)) { update({ error: 'Enter a nonempty confirmation reason without control characters.' }); return false; }
+    const abort = new AbortController(); request.current = abort; update({ busy: true, error: null, notice: 'Reading the current endpoint and selected model object…' });
+    const deadline = pathFinderRequestDeadline(abort.signal, 30_000, () => new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Checking the selected endpoint timed out. No replacement save was created.'));
+    try {
+      const pending = readPendingCableEndpoint(owner()); if (pending) { update({ pending, notice: unknownNotice }); return false; }
+      const context = await deadline.wait(() => fetchCableEndpointContext(access.projectId!, access.token!, access.cableId!, access.end, deadline.signal));
+      if (!live() || !latest.current.active || deadline.signal.aborted) return false;
+      if (!modelMatches(context.current, JSON.parse(modelKey))) throw new CableEndpointApiError('MODEL_CHANGED', 409, 'The prepared model changed. Refresh this cable before selecting an endpoint.', 'refused');
+      if (!context.canBind || !context.logicalName || !context.current) { update({ context, draft: null, notice: 'Set a named, eligible endpoint and prepare the current model before assigning an object.' }); return false; }
+      const display = selectedObject(await deadline.wait(() => callbacks.current.readSelection()));
+      if (!live() || !latest.current.active || deadline.signal.aborted) return false;
+      if (!display) { update({ context, draft: null, displaySelection: null, notice: 'Select exactly one current model object with a finite bounding-box bottom centre.' }); return false; }
+      update({ context, draft: null, displaySelection: display, notice: 'Checking retained geometry for the selected model object…' });
+      const response = await deadline.wait(() => fetchCableEndpointSelection(access.projectId!, access.token!, context, display.sdkObjectId, deadline.signal));
+      if (!live() || !latest.current.active || deadline.signal.aborted) return false;
+      const evidence = response.selection;
+      if (evidence.status !== 'available' || !evidence.object || !evidence.pointProjectMetres) {
+        update({ draft: null, notice: 'The selected object has no usable verified retained geometry. No endpoint was saved. A fixed-world point requires a separate explicit choice and will not follow model revisions.' }); return false;
+      }
+      const draft: Draft = { mode: 'object-derived', sdkObjectId: display.sdkObjectId, object: evidence.object, point: evidence.pointProjectMetres };
+      update({ draft, notice: 'Saving the verified approximate bottom-centre anchor for the unchanged logical location name…' });
+      deadline.dispose(); return await persistDraft(context, draft, reason, abort);
+    } catch (error) { if (!abort.signal.aborted) failure(error); return false; }
+    finally { deadline.dispose(); if (request.current === abort) { request.current = null; update({ busy: false }); } }
+  }, [canAct, access.cableId, access.projectId, access.token, access.end, calculationKey, initialFillKey, update, owner, live, modelKey, persistDraft, failure]);
   const reconcile = useCallback(async (mode: 'save' | 'close'): Promise<boolean> => {
     if (!canAct() || !data.current.storageReady) return false;
     let pending: PendingCableEndpoint | null; try { pending = readPendingCableEndpoint(owner()); } catch { update({ error: storageNotice }); return false; }
@@ -191,11 +228,13 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
     try { return await execute(pending, abort, mode); }
     finally { if (request.current === abort) { request.current = null; update({ busy: false }); } }
   }, [canAct, owner, update, execute]);
-  return { ...current, enabled: allowed && denied.current !== account, selectObject, setFixedPoint,
+  return { ...current, enabled: allowed && denied.current !== account, selectObject, setFixedPoint, applySelectedObject,
     chooseDisplayedPoint: () => { const display = data.current.displaySelection; return display ? setFixedPoint(display.point, display) : false; },
     refresh: loadContext, save, retry: () => reconcile('save'), closePending: () => reconcile('close'),
     canSelect: allowed && access.active && !current.busy && !current.pending && Boolean(current.context?.canBind),
     canSave: allowed && calculationKey !== null && initialFillKey !== null && access.active && !current.busy && current.storageReady && !current.pending && Boolean(current.context?.canBind && current.draft),
+    canApplySelectedObject: allowed && calculationKey !== null && calculationKey !== 'null' && initialFillKey === canonicalPurposeJson({ mode: 'when-both-empty' })
+      && access.active && !current.busy && current.storageReady && !current.pending && Boolean(current.context?.canBind && current.context.current && current.context.logicalName),
     canRetry: allowed && access.active && !current.busy && current.storageReady && Boolean(current.pending) && denied.current !== account,
   };
 }

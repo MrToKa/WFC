@@ -12,6 +12,8 @@ import { PathFinderPreview } from './PathFinderPreview';
 import { EndpointBindingPanel } from './EndpointBindingPanel';
 import { PathFinderCalculationGrantPanel } from './PathFinderCalculationGrantPanel';
 import { notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
+import { PathFinderCableWorkspace } from '@/components/pathfinder/PathFinderCableWorkspace';
+import type { CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 
 const useStyles = makeStyles({
   heading: { margin: 0, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightSemibold },
@@ -49,7 +51,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const anchor = useRef<HTMLElement>(null), container = useRef<HTMLDivElement>(null), fileInput = useRef<HTMLInputElement>(null);
   const height = useRoutingsViewerHeight(anchor);
   const [batchBusy, setBatchBusy] = useState(false);
-  const controller = usePathFinder({ projectId, loadedProjectId, token, isAdmin, container });
+  const controller = usePathFinder({ projectId, loadedProjectId, token, isAdmin, container, automaticStatePolling: false });
   const pf = { ...controller, busy: controller.busy || batchBusy };
   const panelId = useId();
   const [mode, setMode] = useState<'routes' | 'path' | 'lookup'>('path');
@@ -70,9 +72,13 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [search, setSearch] = useState(''), [onlyProblems, setOnlyProblems] = useState(false), [selectedCableId, setSelectedCableId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft), [notice, setNotice] = useState<string | null>(null), [localError, setLocalError] = useState<string | null>(null);
   const [endpointPending, setEndpointPending] = useState(false);
+  const [workflowSelection, setWorkflowSelection] = useState<CableWorkflowRow | null>(null);
+  const [cableWriteRefresh, setCableWriteRefresh] = useState(0);
+  const cableValuesChanged = useCallback(() => setCableWriteRefresh(value => value + 1), []);
   const [captureRoutes, setCaptureRoutes] = useState(''), [captureCategories, setCaptureCategories] = useState<('MV' | 'LV' | 'Control')[]>([]), [preparing, setPreparing] = useState(false);
   const data = pf.data, active = Boolean(data?.activeModel.modelVersionId), selected = data?.cables.find(cable => cable.id === selectedCableId);
   useEffect(() => { setDraft(emptyDraft()); setNotice(null); }, [data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
+  useEffect(() => { setWorkflowSelection(null); }, [projectId, accountId, token, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
   const changeMode = (next: 'routes' | 'path' | 'lookup') => {
     if (next === mode) return;
     restoreView(); setLocalError(null); setMode(next);
@@ -131,7 +137,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         {pf.error || localError ? <Body1 role="alert" className={styles.error}>{localError ?? pf.error}</Body1> : null}
         {notice ? <Body1 role="status">{notice}</Body1> : null}
         <div className={extra.warning} data-testid="pathfinder-readiness">
-          {mode === 'lookup' ? <><Body1>Path lookup reads the ordered route geometry from the active model. Routes preparation and category drafts are independent.</Body1><Caption1>This tool does not change cable endpoints, routes or lengths.</Caption1></> : <><Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects. Review the route and length before applying.` : 'Prepare the selected model network or import a canonical snapshot for automatic routing.'}</Body1><Caption1>Calculations create proposals. Cable values change only after review and Apply.</Caption1></>}
+          {mode === 'lookup' ? <><Body1>Path lookup reads the ordered route geometry from the active model. Routes preparation and category drafts are independent.</Body1><Caption1>This tool does not change cable endpoints, routes or lengths.</Caption1></> : <><Body1>{artifact ? `Model snapshot: ${artifact.objectCount.toLocaleString()} objects.` : 'Prepare the selected model network or import a canonical snapshot for automatic routing.'}</Body1><Caption1>After you assign a shared endpoint, successful current results can fill cables with both routing and design length empty. Existing or partially filled values require Review and Apply.</Caption1></>}
         </div>
         {mode !== 'lookup' ? <Caption1>Connection gap: {data?.settings.connectionGap ?? 'Not set'} m; SECONDARY: {data?.settings.secondaryTrayLength ?? 'Not set'} m; connection reserve: {data?.settings.endConnectionLength ?? 'Not set'} m; increase: {data?.settings.additionalBendingPercent ?? 'Not set'}%. Change these in Project Details.</Caption1> : null}
         <div className={styles.actions}>
@@ -174,8 +180,10 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { restoreView(); setSecondaryDistance(value.value); }} /></Field>
         {!preferences ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
-        <PathFinderPreview pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={routeRulesDirty ? null : preferences} onInputChange={restoreView} onEndpointNamesChange={updateStandaloneNames} />
-        <details open><summary>Project cables and shared locations</summary>
+        <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
+          pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences} onSelect={row => { setSelectedCableId(row.cable.id); setWorkflowSelection(row); }} />
+        <details><summary>Advanced standalone path</summary><PathFinderPreview pf={pf} active={mode === 'path'} displayOwned={mode === 'path' && displayOwner === 'standalone'} claimViewer={() => claimViewer('standalone')} options={routeRulesDirty ? null : preferences} onInputChange={restoreView} onEndpointNamesChange={updateStandaloneNames} /></details>
+        <details><summary>Advanced project cables and shared locations</summary>
         <div className={styles.actions}>
           <Button disabled={!active || pf.busy} onClick={() => void pf.matchAll()}>Match all locations</Button>
         </div>
@@ -184,7 +192,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         <Caption1>Automatic model points are approximate and unconfirmed. Point availability does not guarantee a route or authorize Apply.</Caption1>
         <Caption1>{rows.length} of {data?.cables.length ?? 0} cables</Caption1>
         <ul className={styles.cableList} aria-label="Path Finder cables">
-          {rows.map(cable => <li key={cable.id}><Button className={styles.cableRow} appearance={selectedCableId === cable.id ? 'secondary' : 'subtle'} aria-pressed={selectedCableId === cable.id} data-cable-id={cable.id} onClick={() => { setSelectedCableId(cable.id); setNotice(null); }}>
+          {rows.map(cable => <li key={cable.id}><Button className={styles.cableRow} appearance={selectedCableId === cable.id ? 'secondary' : 'subtle'} aria-pressed={selectedCableId === cable.id} data-cable-id={cable.id} onClick={() => { setSelectedCableId(cable.id); setWorkflowSelection(null); setNotice(null); }}>
             <span className={extra.row}><span>{cableLabel(cable)}</span><Caption1>From: {pointLabels[endpointPoint(cable.fromMatch).status]}; To: {pointLabels[endpointPoint(cable.toMatch).status]}</Caption1><Caption1>Saved bindings — From: {cable.fromMatch.status}; To: {cable.toMatch.status}</Caption1></span>
           </Button></li>)}
         </ul>
@@ -217,7 +225,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} onBatchBusyChange={setBatchBusy} />
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} onCableValuesChanged={cableValuesChanged} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} onBatchBusyChange={setBatchBusy} />
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
           <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={restoreView} onBusyChange={setLookupBusy} />

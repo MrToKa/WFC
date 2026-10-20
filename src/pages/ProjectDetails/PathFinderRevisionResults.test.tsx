@@ -52,6 +52,17 @@ function setup() {
 beforeEach(() => vi.clearAllMocks());
 
 describe('administrator cable revision inspection', () => {
+  it('announces explicit history selection, inspection and opening without treating automatic history reads as a selection', async () => {
+    const { state } = setup(), p = props(), chooseHistory = vi.fn();
+    render(<PathFinderRevisionResults {...p} onHistorySelection={chooseHistory} />);
+    expect(chooseHistory).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Calculation scope' }), { target: { value: id(2) } });
+    expect(chooseHistory).toHaveBeenCalledTimes(1); expect(state.selectAdmission).toHaveBeenCalledWith(id(2));
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect C-001' }));
+    expect(chooseHistory).toHaveBeenCalledTimes(2); expect(state.readDetail).toHaveBeenCalledWith(id(4));
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(p.onOpenProposal).toHaveBeenCalledWith(id(7), id(3))); expect(chooseHistory).toHaveBeenCalledTimes(3);
+  });
   it.each(['queued', 'running'] as const)('selects only exact current sealed v7 rows while the parent is %s', status => {
     const { f, state } = setup(), row = sealedRow(f.page.rows[0]), readiness = vi.fn();
     const sibling = { ...f.page.rows[0], cableId: id(40), baseline: { ...row.baseline, currentCable: { ...row.baseline.currentCable, id: id(40), tag: 'UNSEALED-SIBLING' } } };
