@@ -1,5 +1,30 @@
 # PathFinder local implementation progress
 
+## Latest user sequencing — 21 October 2026
+
+After this Path Finder implementation and its required technical checks finish,
+resume Simplified-Preparer-WFC automatically on the user-selected main WFC5180.
+This explicitly supersedes earlier indefinite Preparer pause instructions only
+AFTER the current Path Finder verification gate is completed. The new instruction
+does not establish changed browser permission or a passed real Aalborg reread.
+Do not retry the unchanged saved refusal, bypass it or claim UI/SDK acceptance.
+Human engineering acceptance remains separate from technical checks.
+
+The existing heartbeat was updated through the app tool with this conditional
+continuation, preserving its name/rule/target and PAUSED status while access is
+blocked. No duplicate automation, product edits, runtime operations, database or
+model writes were performed for this sequencing update. Current delivery commit
+is ef5258c2fc43a9c716cf0a3ea0074a82f001668e before this documentation checkpoint.
+
+Once the Path Finder technical gate is complete, recover the existing Preparer
+plan and unfinished changes rather than reseeding or starting duplicate work.
+Recheck live branch/status/test results and verify fresh database/model backups
+before any main5180 update. Preserve5191 and its backups. Continue stages with
+checks and handoffs; the browser flow is WFC login → Autodesk check → NWD choice
+→ Generate → WFC save + ZIP download. Access is admin-only and Autodesk keys are
+personal per user, with no use of another user's credentials. No new permission
+for Path Finder merge, push/PR/merge or unrelated runtime changes is implied.
+
 ## Current checkpoint — genuine U7 synthetic server chain PASS; real SDK/UI BLOCKED
 
 - Branch pf-u7-genuine-chain-local-20261021, qualification checkpoint442c981;

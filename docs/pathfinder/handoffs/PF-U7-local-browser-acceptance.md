@@ -112,4 +112,13 @@ Commit completed authorized local changes only. Apply prepare-stage-handoff for
 the next genuinely useful step and execute it if possible. If access or human
 selection/review is all that remains, leave this gate pending and automatic
 repetition PAUSED; explain the concrete external condition instead of repeatedly
-retrying or declaring the entire feature accepted. Do not resume Preparer5180.
+retrying or declaring the entire feature accepted. Latest user sequencing on
+21 October 2026 supersedes the earlier indefinite Preparer pause: after this
+Path Finder implementation and required technical checks finish, resume the
+existing Simplified-Preparer-WFC integration on main5180 automatically. First
+recover its actual plan/unfinished changes, reassess current Git/tests/runtime
+and verify fresh database/model backups before any update. Preserve5191. The
+Preparer browser flow is WFC login → Autodesk check → NWD selection → Generate
+→ WFC save and ZIP download, admin-only with separate personal Autodesk keys.
+This conditional continuation does not waive the blocked browser gate, permit
+a Path Finder merge, or authorize unrelated original runtime changes.
