@@ -1,139 +1,115 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T10:12:00Z
+## Current live checkpoint — 2026-10-20T10:23:44.804Z
 
-LATEST USER STEERING: **Skip MV cables.** Do not resume the all-category finite
-automatic policy or submit all2140 while this instruction applies. Scope the
-diagnostic continuation to exact non-MV cable IDs; preserve original routing
-permissions, category values and cable business rows. No code/product-wide MV
-rule change was requested.
+LATEST USER: **Skip MV cables.** Selected normal job
+a29cd4c2-2d86-4ee0-9cbb-5bc598552781 COMPLETE:1808nonMV (LV257/Control345/
+Instrumentation1206),230calculated/1578locations_required;332MVexcluded.
+All230fresh calculate v6 routes/design/length ledgers independently verified
+against DetailsS7/E5/P10/gap1, loadedFromDisktrue. No productwide MVrule/category/
+permission change. All-category policy staysPAUSED(control7), grantdisabled;
+previous finiteauthority expired09:11UTC. Never resumeall2140 or renewauthority.
 
-- Current branch `pf-aalborg-ordinary-trace-event-local-20261020` inherits
-  availability delivery/handoff4a5548c, source
-  `8407e52c815db636cccff2cd46a1efce561df6cf`. Executing
-  PF-Aalborg-ordinary-trace-event.md immediately under prior userauthority.
-  Repo/unitwriter and integrationmodulewriter both frozen/completed; independent
-  source/launcherreview clear. Rootsole actualtest/runtime/SQL/HTTP/UI executor.
-  Newsource3files: geometryTraceRepository.ts/.test.ts and
-  ordinaryTraceEvent.integration.ts. PASS104checks(93repo/grant/recalc+11contracts),
-  servertypes/build/importclosure/scopedlint. Initial fixtureunsafe-finallylintFAIL
-  corrected/refrozen/finalPASS. Fixturecorpus3objectroot-name mismatch caught
-  BEFOREexecution, corrected5objects(exactroots+STRAIGHTleaves+equipment),2segments.
-  Sourcecheckpoint7748a61e53b934c6a6c4123976dd1696d23ddb04; ownedcandidatebuildPASS
-  trace-event-build1-result(API859ed2c769ef37cdb3929ff611bebee0a3cc26cba17ba139195f004f843aa8f5,
-  web6579172256bcb7dd39c77ed0251307bbbd414b69f6e38466b72564ef939b7144),
-  actual5191runtimepreserved/outsidepreserved. FreshDBcase1 commitdisabled FAIL23514
-  during syntheticready-modelseed BEFOREtracepublication: validation/storedresource
-  receipt mismatch. Helperpositivelyremoved/DBdropped, failedreceiptsretained.
-  Test-only seed metadata fix frozen/reviewed: one shared explicitlysynthetic
-  manifest/package/fingerprint satisfies unchangedCHECKs/readytrigger. Root reran
-  servertypes/scopedlint/serverbuild/importclosure PASS; source2receipt reuses104
-  unchangedproductionchecks atsource1, retainscase1FAIL, atomicretestPENDING.
-  Revieweridentifiedcleanupreceipt evidenceordering; root movedpreservationchecks
-  beforewritingtrue; narrowfixreviewPASS. No actualatomicPASS/deploymentyet.
-  Do NOTreusecase1orbuild1labels. Rootlauncher
-  now accepts exactbuildBinding(trace-event-buildN-result), addslauncher/programpins.
-  Rootprivate run-trace-event-fixture1.mjs reviewed/syntaxPASS, boundedwait215s/
-  watchdog210s/awaitownedstop/positivePid0,2GiB/1CPU/128pids/readonlyroot/internal
-  ownedbackend, PF_LOCAL_DEMOtrue/newemptyPF_ROOT, DBmarker/zeroConnectionsDROP.
-  Availability technically VERIFIED, no engineeringacceptance. No active job/build/helper.
-  Root PASS161focusedchecks, types/lint/serverbuild/compiledimportclosure and
-  independentreview. Owned API/web-only build+upgrade PASS after selectedjob
-  terminal+fence;11,324,209Bbackup; otherown/outsidecontainers/resourcespreserved.
-  Normalbrowser/API PASS437automatic-ready/1042missing/48ambiguouslocations,
- 2140cables; filter1910; Controlbothendsapproximate/Resolve/manualcoords/pickingready.
-  ColdPath0hiddenprepGET; firstRoutes+warmrefresh6GET/all200; saved128MiBplanready.
-  APIafterUI2510.634/3274.846ms,1,707,893B; no speedup/SQLquerycount claim.
-  A120mapped1/1+filledGhost/originalpurple/yellowlinePASS; ClearopaqueplantPASS.
-  Keep calculation allowlist/matching.ts/C# unchanged for display-only work.
+- Branchpf-aalborg-ordinary-trace-event-local-20261020, source7748a61,
+  test-only metadata repairc68b4434ffadc73c7c6ca38997cfe4689aca928f.
+  Ordinarytraceevent technically VERIFIED/deployed own5191. Rootsole actual
+  test/runtime/SQL/HTTP/UIexecutor; agentscompleted/frozen, noactivebuild/helper/job.
+  Newcurrenthealthyordinarytrace emitsonegeometrydirtyevent atomicallyafterreceipt;
+  grantseparateemitter, replay/mismatchzero; finalauth/cancel/unknownCOMMITpreserved.
+  PASS104focusedtests(93repo/grant/recalc+11engine/contracts) atsource1; unchanged
+  productiontests reused aftertest-onlyfix. Reruntypes/scopedlint/serverbuild/
+  importclosurePASS. Independentproduction/fixture/launcherreviewPASS.
+- Actualcase1FAIL23514 during syntheticready-modelseed BEFOREtracecreation;
+  metadataomittedpackage/fingerprint/manifest. Exacthelperremoved/newDBdropped,
+  failurereceiptsretained. No guard/schema weakened. Fixedsharedsyntheticmanifest,
+  source2receipt. Candidatebuild2PASS; actualfreshcase2–6allPASS: commitdisabled/
+  paused/expired, rollbackafterstageddirty, lost-ackafteractualfinalCOMMIT. ActualC#/
+  worker/repository5syntheticobjects/2segments, notconverted/storage/nativeproof.
+  Commit8→9; bothreplayskeep9; rollbackrestores8/allpublishedrows0/pendingintent1;
+  lostackfreshconnectionreconcilesone9. Allpolicies/authoritypreserved,0cables/jobs/
+  Apply/grants. Allfiveexecutors/poolsclosed; positivehelpersremoved/markerDBsdropped.
+  Limits2GiB/1CPU/128pids/readonlyroot/separateemptyPF_ROOT/internalownedbackend;
+ 215swait/210swatchdog/positivePid0; launcher/programpins retained.
+- Preflight10/11BLOCKED(<3GiBWindowsfree); normalUITabDetailsunloadedViewer,
+  iframecount0, preflight12PASS8,750,649,344Bfree/11,773,755,392Bvirtual.
+  LinuxVM12,508,291,072B is separateoverlappingview. No processkill/guardreduction.
+  OneunusedmatrixwrapperrefusedCATALOG_IO_LIMIT BEFOREcreatingcase3; root instead
+  ransequentialexistingboundedlaunchers. No nested45stimeout/orphanfixture.
+- OwnAPI/web-only upgradePASS afterquiescence/new11,324,657BDBbackup;
+  otherown/outsidecontainers/volumes/networkspreserved. Runtimebinding
+  **trace-event1-source-runtime.private.json** inprivateb3work. API
+ 9387454711b7761c7434ee25f45ad4123435c7ce4fe87cb44c97f89ba1370fcd,
+  web0e1e8823ffa72fae8e5b00d2407254ea25e2e134237e522af1cf89b9f152c80d.
+  Actualbefore/aftercalculationidentityUNCHANGED
+ 4b9fac7d2b045a230c5cbf7ce4aeaea08917a20b3605ee15642a5effff8a74fd.
+  Tracederivationintentionallychanged883c213a7e6922e057833c5c3e3926f3908c4bcd72d70f59ef6961c56802ac6e;
+  oldcreate replayrefusalsremain; realAalborgtraceNOTrecreated. Do notcarryold
+  producerqualificationorgrantauthority silently. HistoricalGET/listreadable.
+- Normalreadbackprep24: publishedsessiond8b64b1b-018c-4b69-b1d7-f9952c413f17,
+  plan6adaeee3784e408e0b64e0094eeaa64c8fdb6461a018ccba0f7134a8db5c1545,
+  aggregate6e21b230-188e-49b8-92a8-fd3f202a9567,
+  artifact04782773-0701-4e60-b3af-d4e42b3f8288, revision1,
+  projection27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2,
+ 330trays/1165leaves/5parts114,186,790Bunchanged. Historicaltrace
+ 3976df4c-a6a1-4001-bf08-faf7070c4977:2965objects/1165segments/1484diagnostics.
+  Normalstate2readsPASS1,707,893B:437automatic-ready/1042missing/48ambiguouslocations,
+ 2140cables/230nonMVbothpoints/0MVbothpoints;30visibleproposalscurrent/unaccepted.
+  Workflow4grantdisabled/policypausedcontrol7/generation15. Fence7at10:18:48UTC
+  all2140-columnSHA0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155,
+ 0Apply. Existingcablerowsunchanged.
+- Computer-usepostupgradePASSactiveSDK/model, Details1/7/5/10,1808completejob,
+  normalControlsearch/selectionbothautomaticapproximatepoints, ResolveFrommanual
+  coords/pickready. Noendpointsave/calculation/review/Apply. PrivateAX/screenshots
+  ui-trace-event-selected1/resolve1. Initialtemporaryloading/oneclickdeadline
+  retained, laterreadyverified; noUIperformanceclaim. CurrenttabPathFinder,
+  Controlsearch/ResolveFromopen, no draftcoordinateinputs.
+- Reports52/53supersedehistoricalreport50fullnetworkNOT_RUN. Availabilitysource
+ 8407e52/deployment4a5548c alreadyverified161tests/types/lint/build/UI/HTTP;
+  filledGhost/originalpurple/yellowlineA120+ClearPASS. Displayavailabilitydoesnot
+  changeC#math/matching/identity. Publictraceeventsource1/source2/runtime1/ui1
+  recordexactscope/failures/checks; report54updatedtechnicaldelivery.
+- NEXT: localcommitreport54/runtime/UIreceipt, prepare-stage-handoff forfresh
+  **current-full-network recovery** evidence, thenexecute immediately onnewinherited
+  localbranch. Priorreport47R10archivepredatesfull114MB/2965objectnetwork;
+  currentfullbackup/restoreNOT_RUN. Needfresh5191coldarchive/separateprivate
+  hostprovenance, freshowned5192losslessrestore/authfence/protectedUI/retireONLY
+  newfixture. No old5190/defaultdrill or oldimage/table-countpinnedwrappers.
+  Existingcorebackuphelperslackhardbounds; inspect/reuseverifiedpatterns with
+  boundedexecution/positivecleanupbeforeclaimingPASS. Preserve5191explicitly
+  (it isitselfrestore). No further productfeature required. Aftercurrentrecovery,
+  onlyhuman1042missing/48ambiguouslocations,230proposalreview and17unresolved
+  crossrevisionrowsremain; donotinventmappings/engineeringacceptance/realApply.
 
-- Normal full publication PASS: d8b64b1b/plan6adaeee3, aggregate
-  6e21b230-188e-49b8-92a8-fd3f202a9567, artifact04782773-0701-4e60-b3af-d4e42b3f8288,
-  geometryrevision1, projection27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2.
-  Fresh5parts114,186,790B, protectednormalpublishedsessionrev7; readerprep23.
-- Normal trace PASS3976df4c-a6a1-4001-bf08-faf7070c4977,2965objects/1165segments/
-  1484diagnostics; nativeparitynotperformed/engineeringAcceptedfalse. Positive ordinary
-  session binding controls PASS4maps inclA105/A120, descriptor/GET/HEAD200, noCookie401,
-  4runtimeassetsbyteexact; only ownauxiliarysession revoked.
-- Finite automaticgeneration15 admitted230ready/1910locations_required. At08:45,
-  21fresh calculate proposals alreadycalculated, validroute/design/ledger/v6; noApply.
-  Then user requested skipMV. Mixedjob744fa8eb-0ce1-4fb7-8774-f18e676fa99a
-  positivelycancelled after normal pause command(control7); completedresultsretained.
-  Firstpauseattempt400missingreason, refused/nochange; correctedcommand2PASS, retainedboth.
-- **COMPLETE** normal selected non-MV job a29cd4c2-2d86-4ee0-9cbb-5bc598552781,
-  submitted08:48:42UTC via normal current-admin job API after positive mixedjobjoin.
-  1808selected:LV257/Control345/Instrumentation1206;332MVexcluded. ExactIDs/intents
-  private skip-mv1-*. No category/permission/cablevaluechange. All-categoryautomatic
-  policy remainsPAUSED(control7), persistent grantdisabled. Rootsoleexecutor.
-  Final09:24UTC:1578blockedlocations/230calculated/0running/0waiting. All230fresh
-  calculate proposals have successfulroutes/design/ledgers/v6, all exactledgers
-  validatedagainstDetails/allloadedFromDisktrue. FinalnonMVreader2PASS; reader1
-  exceededunchanged32MiBoutput/refused, retainedprivate; reader2projectsneededfields.
-  Finalfence4at09:25UTCmatchesall2140hash/0Apply/0reviews;0activejobs. Do not confuse
-  paused scheduler's oldmixedjob with this running selected normal job.
-- Ordinary Routings UI A105/A120 eachPASS1/1drawable+1yellowline+mappingnotice.
-  A120 screenshot visuallyproves filledGhost/originalpurpletray/yellowline;
-  Clear final screenshot opaqueplant/noRoute/noYellowlinePASS. A105 originalAX
-  wasdiffonly; retained, newfullAXui-published-a105-final.ax.txt proves status.
-- Actual non-MV fullcalculate sample PASS: v6, currentartifact, loadedFromDisktrue,
-  exactlengthledger revalidated against DetailsS7/E5/P10/gap1; sample private
-  non-mv-calculation1-result. Scope SQLjoin1808items/0MV. Fence3 at08:55UTC all2140
-  columnhash matches baseline/0Apply. Normal7-checkpoint publicreceipt +report52
-  committed aef9d38; later finalbatchreceipt non-mv-final2 supersedes runningnote.
-- NEXT: newlocalcommit/build2 afterverified seedfix;
-  then newcase2(commitdisabled) and remainingfreshownedDBcases sequentially:
-  commit disabled/paused/expired,rollback paused,lost-ack paused. Each ownhelper+
-  DBmustremove/drop afterpositivejoin+markerproof, outputs/receiptsretained. Actual
- 5191API remains availability1 until freshatomicproof PASS and guardedupgrade.
-  Implement one ordinarycurrenttraceevent in finaltransaction; grantownerseparate;
-  ownedfreshsyntheticDBatomicproof, no realAalborgretrace/authorityrenewal/MV/Apply.
-  Never Apply. Privateoutcomesreader lastnon-mv-outcomes7. Appautomation
-  updated ACTIVE with latestMVexclusion/currenthandoff before oldbaselineprompt.
-  Availabilitybuild/upgrade/identity/API/HTTP/UIreceiptsPASS; report53 and runtime1
-  publicreceipt ready. One wholelist CUAcall timedout/kernelreset; bounded normal
-  search then verifiedcontrols; no hiddenstate/SDK bypass. Finalfence5at09:36same
-  2140hash/0Apply; current30returnedproposalsnotstale. Normalgrantdisabled,
-  allcategorypolicypausedcontrol7, previousfiniteauthorityexpired, neverrenewed.
+## Fixed runtime boundaries and preserved evidence
 
-## Runtime and immutable evidence anchors
-
-- Own5191 binding availability1-source-runtime.private.json in the private b3c21429
-  work. Owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46, compose
-  wfc-pathfinder-local-0cba87606e9b, runtime batched-capture-runtime-20261018-1600,
-  DBepoch69f3bee1-298b-48d1-8af9-3ecbea23d975. Verify owner/path/project/ports
-  and resources before every runtime mutation. Original apps/5190 unchanged.
-- APIf1f28ed2ae6caa5700de5394a5ebbfdfb636ed093ee3f058f7b290c0b807d543,
-  web6ec2c072bef4c044ee5179302b98effb24322fe7e0b58effbaea7f8df3ee93ca;
-  code8407e52. OwnAPI4GiB/pids256/NODE1536; PG+Minio1GiB/web256MiB unchanged.
-  Latest private database backup11,324,209bytes. No active helper/build/validation.
-- Before/after availability deployment actual calculation identity unchangedPASS
-  4b9fac7d2b045a230c5cbf7ce4aeaea08917a20b3605ee15642a5effff8a74fd;
-  private identity-before/after-availability1-result. Preserve allowlisted sources/C#;
-  futuretraceeventsource changes trace derivationidentity, notcalculationidentity.
-- Actual capacity qualification: new128MiB profile preserves legacy32MiB.
-  Trial1OOM FAIL led to reference/incremental repair;176checksPASS.
-  Trial4 RSS failure precise cause UNKNOWN. Trial8 exact own-rootZ/exitack race
-  diagnosed and narrowly reconciled after prior samples/cleanexit/groupESRCH/
-  strictoutput within unchanged deadline. Source70checks/types/lintPASS.
-  Actual trial10 publisherPASS36.15s/reconciliationtrue;trial11tracePASS67.36s,
-  all5evidence/0missing, bothhelpersremoved. Cgroupv2metricsNOT_MEASURED;
-  sequentialsampledRSSnotexactpeak. Requested512MiBworkerheap is historically
-  overridden by parent1536MiB; don't claim512MiBqualification or changeguards.
-  Receipts evidence/aalborg-capacity/{memory-source5,engine-terminal7,workload7-actual,normal7-checkpoint}.json.
-- Old complete session9f8f7c49 is EXPIRED, immutable inputs1 retained for workload
-  checks only; never retime/publish/reuse its authority. Current published d8b64b1b
-  is fresh and independently normalvalidated. No redundant capture/import/seed.
-- Docs00/PF0fixtures/receipts frozen; no PF0validation regeneration. Reports50,
-  51,52 and current handoff carry technical scope; old full progress saved
-  privately as progress-before-availability1 and retained in Git history.
-- No Navisworks licence/nativeoracle. User chose actualconvertedmodel comparison
-  and ownmanualreview; engineeringAcceptedfalse. Preserve olderSVF ZIP and needed
-  snapshots/privateevidence/backups; no Autodesk reupload/resubmit.
-- OriginalWFC cleanmain96e63f13; oldPF35f4fb46 localAddinRibbon/.vscode edits
-  preserved; canonicalPFclean45c24bf5; sources readonly. No push/PR/merge/original
-  deployment/restart/datachange. Historical deniedscratchchildren/parents and
-  .pf0-work/.pf2-work untouched; no prune/retry/bypass. Clean only proven own
-  unnecessary resources; preserve5191demo/archive/evidence.
-- Automation path-finder-purpose-rules-and-model-revisions ACTIVE. Continue
-  useful independent authorized work; never routine-stop or claim complete
-  because a turn ends. Final engine/mapping/Apply acceptance remains human.
+- WorktreeC:/Users/todor.chankov/source/WFC-pathfinder-local only.
+  Owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46, composewfc-pathfinder-local-0cba87606e9b,
+  runtimepathfinder-engine/.scratch/batched-capture-runtime-20261018-1600,
+  DBepoch69f3bee1-298b-48d1-8af9-3ecbea23d975,port5191,
+  copiedproject1af0f807-7653-40ea-8391-7eea6c54e7d4,
+  activemodela613151e-c370-45c5-80f3-42ae58603b9a. API4GiB/pids256/NODE1536;
+  PG+Minio1GiB/web256MiB; capacityprofile128munchanged. Verifyexactbindingbefore
+  everymutation. Availability1/capacity7bindingsarehistoricalafternewupgrade.
+- Privateworkpathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42;
+  normalJWTlogin2inprivate1043work, neverprint/reset/promote. Allrawbusiness/auth/
+  envs/screenshots/privateprovenanceignored. OlderSVFZIP/backups/immutableinputs1
+  retained. Oldcompletesession9f8f7c49EXPIRED; neverretime/publish/reuseauthority.
+- Capacity128m qualificationtechnicalPASS trial10publisher36.15s/trial11trace67.36s,
+  reference/incrementalrepair andnarrowroot-Zexitackreconciliation; RSSsequential
+  samplednotexactpeak, cgroupv2NOT_MEASURED. Historical512MiBworkerrequestwas
+  overriddenbyparent1536; no512MiBqualificationclaim. Keepmemory-source5,
+  engine-terminal7,workload7-actual,normal7-checkpoint receipts.
+- No Navisworkslicence/nativeoracle; userchoseconvertedcomparison/manualreview.
+  Instrumentation→Control; UIEnglish/trueadmin/protectedbridge; noNOP_VIEWERAPI.
+  SettingsfromDetails; filledGhost/originalcolors/yellowline/Clearpreserved.
+- OriginalWFCcleanmain96e63f13; canonicalPFclean45c24bf5; oldPFmaster35f4fb46
+  AddinRibboncsproj/ClAddin/.vscodechangespreserved. At10:21UTCconnectorcurrent
+  WFCmain96e63f13fdc2b1d30b8f8ff658dd662f25fac104/PFmaster45c24bf5f433f13e102600b36f20327c77961d0a;
+  noopenPRfortraceeventbranch, noCIacceptanceoflocalfeature. Cachedahead84/behind3
+  atc68b443isnotlivebranchparity. No push/PR/merge/original/5190restartsorwrites.
+- sources/readonly; PF0fixtures/receiptsfrozen. Sevenhistoricaldeniedscratchchildren/
+  parents,.pf0-work/.pf2-workuntouched; no retry/bypass/prune. Newfixturehelpers/DBs
+  cleaned, proofoutputsretained. Preserve5191demo/archive/evidence.
+- Automationpath-finder-purpose-rules-and-model-revisionsACTIVE. Continueuseful
+  independentauthorizedwork; no routine-stagepause. Onceonlyhumanstepsremain,
+  pauseautomationthroughapptool andstateexactmanualnextsteps. Noacceptanceinvented.

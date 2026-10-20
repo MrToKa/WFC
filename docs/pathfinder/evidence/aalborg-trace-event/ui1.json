@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "wfc.pf.ordinary-trace-event-ui.v1",
+  "status": "PASS",
+  "at": "2026-10-20T10:22:48.653Z",
+  "runtimeSource": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "port": 5191,
+  "checks": [
+    "active model and SDK ready",
+    "Details gap1/secondary7/end5/percent10",
+    "completed1808 selected non-MV scope visible",
+    "Control cable both automatic approximate points",
+    "Resolve From manual coordinate inputs and surface picking enabled"
+  ],
+  "observations": [
+    "Initial state remained loading temporarily; one Refresh click reached browser deadline. Later normal ready state verified. No UI performance improvement inferred."
+  ],
+  "privateEvidence": [
+    {
+      "kind": "accessibility-state",
+      "bytes": 109866,
+      "sha256": "9f675f27e20a52c84666f4d34352f59043fcc7c4340316492799688a8d06a381"
+    },
+    {
+      "kind": "accessibility-state",
+      "bytes": 109712,
+      "sha256": "071bdab3bb38ffd390999443fc9cb7ad5acee3db6ccba0a5201816e6ac16c0dd"
+    },
+    {
+      "kind": "screenshot",
+      "bytes": 82500,
+      "sha256": "3c103d208a12f39a70023b13dfd2d991dc1988d2ed2aa65e8a219a534bc54475"
+    }
+  ],
+  "noEndpointSave": true,
+  "noCalculationSubmission": true,
+  "noReviewOrApply": true,
+  "engineeringAccepted": false
+}
