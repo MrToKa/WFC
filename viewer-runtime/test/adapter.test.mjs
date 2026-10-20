@@ -10,7 +10,7 @@ function sdkFixture(options = {}) {
   const assets = [], viewers = [], evidence = [];
   const facts = { observerDisconnects: 0, finishes: 0, replacements: 0, propertyReads: 0, isolated: [], initializeOptions: null,
     featureFlagWrites: [], webgpuEnabled: true, webgpuAtInitialization: null };
-  const tree = { getRootId: () => 1, getChildCount: id => id === 1 ? 2 : 0,
+  const tree = { getRootId: () => 1, getNodeParentId: id => id === 1 ? 0 : 1, getChildCount: id => id === 1 ? 2 : 0,
     enumNodeChildren(id, callback) { if (id === 1) for (const child of [2, 3]) { if (callback(child)) break; } },
     getNodeName: id => ({ 1: 'Model', 2: 'BC1', 3: options.ambiguous ? 'ＢＣ１' : 'BC2' })[id],
     enumNodeFragments() {} };
@@ -227,4 +227,20 @@ test('pending object-tree index is cancellable and ignores late SDK callback', a
   const controller = new AbortController(); const routes = createRouteController(new f.window.Autodesk.Viewing.GuiViewer3D(), { signal: controller.signal });
   const pending = routes.prepareIndex(), rejected = assert.rejects(pending, { name: 'AbortError' }); await ready;
   controller.abort(); await rejected; success(f.tree); routes.dispose();
+});
+
+test('adapter binds published roots to the loaded descriptor identity before route resolution', async t => {
+  const f = sdkFixture(), previous = globalThis.window; globalThis.window = f.window;
+  t.after(() => { f.adapter.dispose(); globalThis.window = previous; });
+  await f.adapter.initialize();
+  const descriptor = { modelVersionId: '22222222-2222-4222-8222-222222222222', contentFingerprint: 'a'.repeat(64) };
+  const handle = await f.adapter.load({ modelUrl: 'http://localhost:18085/model.svf', descriptor });
+  const response = { schemaVersion: 'wfc.viewer.routing-bindings.v1', ...descriptor, selectionRevision: '12', aggregateId: '33333333-3333-4333-8333-333333333333', bindings: [{ routeName: '/A105', rootObjectIds: ['dbid:2', 'dbid:3'] }] };
+  for (const invalid of [{ ...response, modelVersionId: '44444444-4444-4444-8444-444444444444' }, { ...response, contentFingerprint: 'b'.repeat(64) }]) {
+    assert.throws(() => handle.showRoute('/A105', { routingBindings: invalid }), { code: 'ROUTING_BINDINGS_INVALID' });
+    assert.equal(f.facts.isolated.length, 0);
+  }
+  const result = await handle.showRoute('/A105', { routingBindings: response });
+  assert.equal(result.segments[0].count, 1); assert.equal(result.segments[0].mapped, true); assert.equal(result.segments[0].drawable, false);
+  assert.deepEqual(f.facts.isolated.at(-1), [2, 3]);
 });

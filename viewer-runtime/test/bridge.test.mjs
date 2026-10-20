@@ -7,6 +7,7 @@ import { planModelCaptureInput } from '../capture-input.mjs';
 const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 const turn = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+const routingBindings = (overrides = {}) => ({ schemaVersion: 'wfc.viewer.routing-bindings.v1', modelVersionId: uuid(3), contentFingerprint: 'b'.repeat(64), selectionRevision: '12', aggregateId: null, bindings: [], ...overrides });
 
 function fixture(options = {}) {
   const sent = [], fetches = [], loads = [], listeners = new Set(), states = [];
@@ -15,7 +16,7 @@ function fixture(options = {}) {
   const window = { location: { origin: 'http://localhost:18085' }, crypto: { randomUUID: () => uuid(next++) },
     parent: { postMessage(value, origin) { sent.push({ value, origin }); } },
     addEventListener(type, fn) { if (type === 'message') listeners.add(fn); }, removeEventListener(type, fn) { if (type === 'message') listeners.delete(fn); } };
-  const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [] };
+  const facts = { clears: 0, fits: 0, finishes: 0, disposed: 0, shows: [], bindingShows: [] };
   const handle = { finish() { facts.finishes++; }, prepareIndex: options.prepareIndex ?? (async () => {}),
     clearRoute() { facts.clears++; return options.clearRoute?.(); }, fitRoute() { facts.fits++; },
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
@@ -26,12 +27,16 @@ function fixture(options = {}) {
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
     readModelCapture: options.readModelCapture ?? (async ({ captureId, index }) => ({ captureId, index, done: true, eventJson: JSON.stringify({ type: 'complete', captureId }) })),
-    showRoute: options.showRoute ?? (async raw => { facts.shows.push(raw); return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1, diagnostics: {} }; }) };
+    showRoute: options.showRoute ?? (async (raw, value) => { facts.shows.push(raw); facts.bindingShows.push(value.routingBindings); return { segments: parseRouting(raw).segments.map(() => ({ status: 'found', count: 1, drawable: true })), lineCount: 1, diagnostics: {} }; }) };
   const adapter = { initialize: options.initialize ?? (async () => {}), async load(value) { loads.push(value); return options.load ? options.load(value) : handle; }, dispose() { facts.disposed++; } };
   const fetchImpl = async (url, init) => {
     fetches.push({ url, init });
     if (options.fetchImpl) return options.fetchImpl(url, init);
     if (url.endsWith('/pathfinder-authorization')) return Response.json({ authorized: true, loadId: identity.loadId });
+    if (url.endsWith('/routing-bindings')) {
+      const value = await (typeof options.routingBindings === 'function' ? options.routingBindings() : options.routingBindings ?? routingBindings({ modelVersionId: identity.modelVersionId }));
+      return value instanceof Response ? value : Response.json(value);
+    }
     return Response.json({ projectId: bootstrap.projectId, ...identity, contentFingerprint: 'b'.repeat(64), supportProfile: 'svf-local-7.130.0-v1', format: 'svf', sdkVersion: '7.130.0', entrypoint: 'resources/output/0/0.svf', resourceCount: 342, totalBytes: 439007803 });
   };
   const bridge = createRuntimeBridge({ window, bootstrap, adapter, fetchImpl, onState: state => states.push(state) });
@@ -316,6 +321,79 @@ test('partial/missing/ambiguous/non-drawable matches remain occurrence-preservin
   assert.deepEqual(result.segments.map(segment => segment.model.state), ['found', 'missing', 'ambiguous', 'found']);
   assert.equal(result.drawableCount, 1); assert.equal(result.lineCount, 2); assert.equal(Object.hasOwn(result, 'project'), false);
   assert.ok(result.warnings.some(warning => warning.code === 'UNMODELLED_CONNECTOR')); f.bridge.dispose();
+});
+
+test('each route reads current cookie-bound published mappings without extending the parent command', async () => {
+  let reads = 0;
+  const f = fixture({ routingBindings: () => routingBindings({ aggregateId: uuid(7), bindings: [{ routeName: '/A105', rootObjectIds: [`dbid:${++reads + 1}`] }] }) });
+  await f.loaded();
+  for (let i = 0; i < 2; i++) { f.send('SHOW_ROUTE', { rawRouting: '/A105', source: 'cable', cableId: uuid(12) }); await turn(); }
+  assert.deepEqual(f.facts.bindingShows.map(value => value.bindings[0].rootObjectIds), [['dbid:2'], ['dbid:3']]);
+  const fetches = f.fetches.filter(value => value.url.endsWith('/routing-bindings'));
+  assert.equal(fetches.length, 2);
+  for (const { url, init } of fetches) {
+    assert.equal(url, `http://localhost:18085/api/projects/${uuid(2)}/model-versions/${uuid(3)}/viewer-sessions/${uuid(6)}/routing-bindings`);
+    assert.equal(init.credentials, 'same-origin'); assert.equal(init.cache, 'no-store'); assert.equal(init.mode, 'same-origin'); assert.equal(init.redirect, 'error'); assert.equal(init.headers, undefined);
+  }
+  const count = f.facts.shows.length;
+  f.send('SHOW_ROUTE', { rawRouting: '/A105', source: 'manual', cableId: null, rootObjectIds: ['dbid:99'] }); await turn();
+  assert.equal(f.facts.shows.length, count); assert.equal(f.fetches.filter(value => value.url.endsWith('/routing-bindings')).length, 2); f.bridge.dispose();
+});
+
+test('multi-root project mappings remain one logical match and produce an English provenance indication', async () => {
+  const f = fixture({ routingBindings: routingBindings({ aggregateId: uuid(7), bindings: [{ routeName: '/A105', rootObjectIds: ['dbid:2', 'dbid:3'] }] }),
+    showRoute: async (_raw, options) => {
+      assert.deepEqual(options.routingBindings.bindings[0].rootObjectIds, ['dbid:2', 'dbid:3']);
+      return { segments: [{ status: 'found', count: 1, drawable: true, mapped: true }], lineCount: 1 };
+    } });
+  await f.loaded(); f.send('SHOW_ROUTE', { rawRouting: '/A105', source: 'cable', cableId: uuid(12) }); await turn();
+  const result = f.messages('ROUTE_RESULT')[0].payload;
+  assert.deepEqual(result.segments[0].model, { state: 'found', matchCount: 1, drawable: true });
+  assert.deepEqual(result.warnings, [{ code: 'PUBLISHED_TRAY_ROOT_MAPPING', segmentIndex: 0, message: 'This project tray is shown through its published model-root mapping.' }]);
+  assert.equal(JSON.stringify(result).includes('dbid:'), false); f.bridge.dispose();
+});
+
+test('mapping identity, revision, shape and response budgets are checked before geometry', async () => {
+  for (const value of [routingBindings({ modelVersionId: uuid(99) }), routingBindings({ contentFingerprint: 'c'.repeat(64) }), routingBindings({ selectionRevision: 12 }),
+    routingBindings({ extra: ['dbid:2'] }), new Response('x'.repeat(28 * 1024 + 1))]) {
+    const f = fixture({ routingBindings: value }); await f.loaded(); f.send('SHOW_ROUTE', { rawRouting: 'BC1', source: 'manual', cableId: null }); await turn();
+    assert.equal(f.facts.shows.length, 0); assert.equal(f.messages('ROUTE_RESULT').length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, 'INVALID_MESSAGE'); f.bridge.dispose();
+  }
+  let reads = 0;
+  const f = fixture({ routingBindings: () => routingBindings({ selectionRevision: ++reads === 1 ? '12' : '13' }) });
+  await f.loaded();
+  for (let i = 0; i < 2; i++) { f.send('SHOW_ROUTE', { rawRouting: 'BC1', source: 'manual', cableId: null }); await turn(); }
+  assert.equal(f.facts.shows.length, 1); assert.equal(f.messages('ERROR').at(-1).payload.code, 'INVALID_MESSAGE'); f.bridge.dispose();
+});
+
+test('protected mapping refusals preserve sanitized session and permission errors without falling back to names', async () => {
+  for (const [status, code] of [[401, 'SESSION_EXPIRED'], [403, 'ACCESS_REVOKED'], [409, 'MODEL_SELECTION_CHANGED'], [410, 'SESSION_EXPIRED'], [503, 'MODEL_UNAVAILABLE']]) {
+    const f = fixture({ routingBindings: () => new Response('private mapping details', { status }) }); await f.loaded();
+    f.send('SHOW_ROUTE', { rawRouting: 'BC1', source: 'manual', cableId: null }); await turn();
+    assert.equal(f.facts.shows.length, 0); assert.equal(f.messages('ERROR').at(-1).payload.code, code); assert.equal(JSON.stringify(f.sent).includes('private'), false); f.bridge.dispose();
+  }
+});
+
+test('Clear, cancellation, replacement and disposal abort late mapping reads before SDK access', async () => {
+  for (const action of ['clear', 'cancel', 'replace', 'dispose']) {
+    const pending = deferred(), f = fixture({ routingBindings: () => pending.promise }); await f.loaded();
+    const command = f.send('SHOW_ROUTE', { rawRouting: 'BC1', source: 'manual', cableId: null }); await turn();
+    const read = f.fetches.find(value => value.url.endsWith('/routing-bindings'));
+    if (action === 'clear') f.send('CLEAR_ROUTE', { reason: 'user' });
+    if (action === 'cancel') f.send('CANCEL_REQUEST', { targetRequestId: command.requestId });
+    if (action === 'replace') f.send('LOAD_MODEL', { sessionId: uuid(7) }, { modelVersionId: uuid(9), loadId: uuid(8) });
+    if (action === 'dispose') f.bridge.dispose();
+    assert.equal(read.init.signal.aborted, true);
+    pending.resolve(routingBindings()); await turn(); assert.equal(f.facts.shows.length, 0); assert.equal(f.messages('ROUTE_RESULT').length, 0); f.bridge.dispose();
+  }
+});
+
+test('a replacement load resets only its own mapping revision pin', async () => {
+  let revision = '12'; const f = fixture({ routingBindings: () => routingBindings({ selectionRevision: revision }) });
+  await f.loaded(); f.send('SHOW_ROUTE', { rawRouting: 'BC1', source: 'manual', cableId: null }); await turn();
+  revision = '13'; f.send('LOAD_MODEL', { sessionId: uuid(7) }, { loadId: uuid(8) }); await turn();
+  f.send('SHOW_ROUTE', { rawRouting: 'BC1', source: 'manual', cableId: null }); await turn();
+  assert.deepEqual(f.facts.bindingShows.map(value => value.selectionRevision), ['12', '13']); assert.equal(f.messages('ERROR').length, 0); f.bridge.dispose();
 });
 
 test('clear and cancel invalidate pending route results, stale identity and unknown target cannot change active view', async () => {

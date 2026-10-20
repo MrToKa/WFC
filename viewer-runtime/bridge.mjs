@@ -1,5 +1,6 @@
 import { CHANNEL, PROTOCOL_VERSION, SDK_VERSION, validateEnvelope, validateDescriptor, parseRouting } from './protocol.mjs';
 import { isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
+import { parseRoutingBindings, ROUTING_BINDINGS_LIMITS } from './routing-bindings.mjs';
 
 const messages = {
   INVALID_STATE: 'The viewer is not ready for this operation.', ROUTE_INVALID: 'The route contains invalid identifiers.',
@@ -15,6 +16,7 @@ const messages = {
   PREPARATION_PAGE_TOO_LARGE: 'A model discovery record exceeds the bounded page size.',
   SELECTION_TOO_LARGE: 'Select at most 16 model objects at a time, then add another route rule.',
   APPEARANCE_RESTORE_FAILED: 'Some viewer appearance could not be restored. Press Clear again, or reload the model.',
+  ROUTING_BINDINGS_INVALID: 'The published tray-root mapping is invalid for this loaded model. Refresh the model or preparation.',
 };
 const failure = code => Object.assign(new Error(messages[code] ?? messages.RESOURCE_FAILED), { code });
 const httpCode = status => status === 401 || status === 410 ? 'SESSION_EXPIRED' : status === 403 ? 'ACCESS_REVOKED' : status === 409 ? 'MODEL_SELECTION_CHANGED' : status === 503 ? 'MODEL_UNAVAILABLE' : 'RESOURCE_FAILED';
@@ -27,6 +29,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   const requests = new Map(), usedLoads = new Set(), cleanupRequests = new Set();
   let disposed = false, phase = 'hello', current = null, handle, loadController, initController, initCommand, routeRequest, routeHasLine = false;
   let computed, captureScope;
+  let loadedDescriptor, routingSelectionRevision, routeController;
   const capabilities = new Map();
   const lifetime = new AbortController();
   const identityMatches = command => command.modelVersionId === (current?.modelVersionId ?? null) && command.loadId === (current?.loadId ?? null);
@@ -65,11 +68,11 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     if (!scope || scope.closed || Date.now() - scope.startedAt > CAPTURE_INPUT_LIMITS.milliseconds || scope.installed && captureScope !== scope) throw failure('EXTRACTION_FAILED');
   }
   const liveLoad = command => !disposed && current === command && !loadController?.signal.aborted;
-  async function responseJson(response) {
+  async function responseJson(response, maximum = 32768) {
     const reader = response.body.getReader();
     const chunks = []; let length = 0;
     try {
-      for (;;) { const part = await reader.read(); if (part.done) break; length += part.value.byteLength; if (length > 32768) throw failure('INVALID_MESSAGE'); chunks.push(part.value); }
+      for (;;) { const part = await reader.read(); if (part.done) break; length += part.value.byteLength; if (length > maximum) throw failure('INVALID_MESSAGE'); chunks.push(part.value); }
     } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
     const bytes = new Uint8Array(length); let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
@@ -91,6 +94,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     return { descriptor: parsed, modelUrl: new URL(parsed.entrypoint, base).href };
   }
   function stopRoute(exceptRequestId) {
+    routeController?.abort(); routeController = undefined;
     releaseCapture(captureScope, true);
     if (routeRequest) { const entry = requests.get(routeRequest.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
     routeRequest = undefined;
@@ -110,6 +114,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     releaseCapture(captureScope, true);
     if (current) { const entry = requests.get(current.requestId); if (entry?.status === 'pending') entry.status = 'cancelled'; }
     loadController?.abort();
+    routeController?.abort(); routeController = undefined; loadedDescriptor = undefined; routingSelectionRevision = undefined;
     handle?.finish();
     handle = undefined;
     routeRequest = undefined;
@@ -222,6 +227,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
       handle = loaded;
       await loaded.prepareIndex();
       if (!liveLoad(command)) return;
+      loadedDescriptor = target.descriptor;
       phase = 'loaded';
       finish(command);
       emit(command, 'MODEL_LOADED', { sdkVersion: SDK_VERSION, format: 'svf', nodeIndexReady: true });
@@ -239,9 +245,19 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     try { stopRoute(); } catch (cause) { error(command, cause); return; }
     routeRequest = command;
     const ticket = command;
+    const controller = new AbortController(); routeController = controller;
+    const signal = AbortSignal.any([lifetime.signal, loadController.signal, controller.signal]);
     try {
       const parsed = parseRouting(command.payload.rawRouting);
-      const result = parsed.segments.length ? await handle.showRoute(command.payload.rawRouting) : { segments: [], drawableCount: 0, lineCount: 0, warnings: [], diagnostics: { connectors: [] } };
+      const base = new URL(`/api/projects/${bootstrap.projectId}/model-versions/${command.modelVersionId}/${sessionFamily}/${current.payload.sessionId}/`, origin);
+      const response = await fetchImpl(new URL('routing-bindings', base).href,
+        { signal, credentials: 'same-origin', cache: 'no-store', mode: 'same-origin', redirect: 'error' });
+      if (!response.ok) throw failure(httpCode(response.status));
+      const bindings = parseRoutingBindings(await responseJson(response, ROUTING_BINDINGS_LIMITS.bytes), loadedDescriptor, routingSelectionRevision);
+      if (!bindings) throw failure('INVALID_MESSAGE');
+      if (disposed || signal.aborted || routeRequest !== ticket || !identityMatches(command)) return;
+      routingSelectionRevision = bindings.selectionRevision;
+      const result = parsed.segments.length ? await handle.showRoute(command.payload.rawRouting, { routingBindings: bindings }) : { segments: [], drawableCount: 0, lineCount: 0, warnings: [], diagnostics: { connectors: [] } };
       if (disposed || routeRequest !== ticket || !identityMatches(command)) return;
       const warnings = [];
       const segments = parsed.segments.map((entry, index) => {
@@ -249,6 +265,7 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         const state = model.status;
         if (state !== 'found') warnings.push({ code: state === 'missing' ? 'MODEL_MISSING' : 'MODEL_AMBIGUOUS', segmentIndex: entry.segmentIndex, message: state === 'missing' ? 'The identifier was not found in the model.' : 'The identifier matches more than one model object.' });
         else if (!model.drawable) warnings.push({ code: 'NO_DRAWABLE_GEOMETRY', segmentIndex: entry.segmentIndex, message: 'The identifier has no usable geometry.' });
+        if (state === 'found' && model.mapped) warnings.push({ code: 'PUBLISHED_TRAY_ROOT_MAPPING', segmentIndex: entry.segmentIndex, message: 'This project tray is shown through its published model-root mapping.' });
         return { ...entry, model: { state, matchCount: model.count, drawable: model.drawable } };
       });
       if (result.diagnostics?.connectors?.length) warnings.push({ code: 'UNMODELLED_CONNECTOR', segmentIndex: null, message: 'An unmodelled connection between segments is shown approximately.' });

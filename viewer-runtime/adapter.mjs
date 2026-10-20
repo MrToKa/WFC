@@ -3,6 +3,7 @@ import { createPathFinderController } from './pathfinder.mjs';
 import { captureSelectedModel } from './model-capture.mjs';
 import { createModelCaptureInputStage, isStagedModelCaptureStart, isModelCaptureInputAppend, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
 import { SDK_VERSION } from './protocol.mjs';
+import { parseRoutingBindings } from './routing-bindings.mjs';
 
 const interrupted = () => new DOMException('Operation cancelled.', 'AbortError');
 const active = signal => { if (signal?.aborted) throw interrupted(); };
@@ -221,7 +222,12 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
             propertiesLoaded: true, propertiesCount,
             fragmentCount: viewer.model.getFragmentList()?.getCount?.() ?? viewer.model.getData()?.fragments?.length ?? 0 });
         },
-        showRoute(...args) { pathfinder.clear(); computedPath = false; legacyPath = true; return routes.showRoute(...args); },
+        showRoute(text, options = {}) {
+          const bindings = options.routingBindings === undefined ? undefined : parseRoutingBindings(options.routingBindings, descriptor);
+          if (options.routingBindings !== undefined && !bindings) throw safeError('ROUTING_BINDINGS_INVALID');
+          pathfinder.clear(); computedPath = false; legacyPath = true;
+          return routes.showRoute(text, { ...options, routingBindings: bindings });
+        },
         clearRoute() {
           cancelCapture();
           if (computedPath) pathfinder.clear(); else if (legacyPath) routes.clearRoute(); else { viewer.clearSelection(); viewer.fitToView(); }

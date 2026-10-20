@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg';
 import { resolveUserRole, type UserRow } from '../models/user.js';
 import { ViewerSessionError } from './errors.js';
 import type { AuthorizedViewerResource, ResourceIdentity, ViewerPrincipal, ViewerSessionDto, ViewerVersion } from './types.js';
+import { readViewerRoutingBindings } from './routingBindings.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const secretPattern = /^[A-Za-z0-9_-]{43}$/;
@@ -113,6 +114,19 @@ export function createViewerSessionService(options: { pool: Pool; clock?: () => 
       return unwrap(result);
     },
     async authorizeResource(input: ResourceIdentity): Promise<AuthorizedViewerResource> { return unwrap(await transaction(client => authorize(client,input))); },
+    async routingBindings(input: ResourceIdentity) {
+      return transaction(async client => {
+        const current = unwrap(await authorize(client,input));
+        const result = await readViewerRoutingBindings(client, { projectId: current.session.projectId,
+          modelVersionId: current.session.modelVersionId, contentFingerprint: current.version.contentFingerprint });
+        // This read grants the ordinary model-view projection only. Recheck the
+        // live session/selection/login/assignment before its transaction commits.
+        const checked = unwrap(await authorize(client,input));
+        if (checked.version.contentFingerprint !== current.version.contentFingerprint || checked.session.loadId !== current.session.loadId)
+          throw new ViewerSessionError('MODEL_SELECTION_CHANGED',409);
+        return result;
+      });
+    },
     async authorizePathFinder(input: ResourceIdentity): Promise<{ authorized: true; loadId: string }> {
       return transaction(async client => {
         const current = unwrap(await authorize(client,input));

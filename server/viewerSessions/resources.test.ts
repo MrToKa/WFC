@@ -31,7 +31,7 @@ async function fixture() {
   const storage=createModelStorage({client,bucket:'unit-models'});
   const session={sessionId,projectId,modelVersionId,loadId,expiresAt:new Date(Date.now()+300000).toISOString(),absoluteExpiresAt:new Date(Date.now()+1800000).toISOString()};
   const version={id:modelVersionId,projectId,contentFingerprint:'b'.repeat(64),supportProfile:'svf-local-7.130.0-v1',format:'svf',sdkVersion:'7.130.0',entrypoint:'resources/output/0/0.svf',resourceCount:1,totalBytes:raw.length,storagePrefix:storage.prefix(projectId,modelVersionId),manifest:{resources:[resource]}};
-  const service={create:vi.fn(async () => ({session,cookieSecret})),authorizeResource:vi.fn(async () => ({session,version})),renew:vi.fn(async () => session),revoke:vi.fn(async () => undefined),revokeLogin:vi.fn(async () => undefined),markUnavailable:vi.fn(async () => undefined)} as unknown as ViewerSessionService;
+  const service={create:vi.fn(async () => ({session,cookieSecret})),authorizeResource:vi.fn(async () => ({session,version})),routingBindings:vi.fn(async () => ({schemaVersion:'wfc.viewer.routing-bindings.v1',modelVersionId,contentFingerprint:version.contentFingerprint,selectionRevision:'1',aggregateId:null,bindings:[]})),renew:vi.fn(async () => session),revoke:vi.fn(async () => undefined),revokeLogin:vi.fn(async () => undefined),markUnavailable:vi.fn(async () => undefined)} as unknown as ViewerSessionService;
   const runtime=createViewerRuntime({service,storage});runtimes.push(runtime);
   const origins:string[]=[];
   const app=express();app.use(createViewerSessionRouter({runtime,policy:{origins,allowHttpLoopback:true,trustProxy:false}}));
@@ -44,6 +44,24 @@ async function fixture() {
   return {raw,resource,storage,session,version,service,client,runtime,origin,base,path,headers,userId,reads:()=>reads,corrupt:()=>{stored=Buffer.alloc(raw.length,2);}};
 }
 describe('protected resources through the actual HTTP and full-hash storage boundary',() => {
+  it('serves the bounded routing projection through the existing HttpOnly ordinary session family',async () => {
+    const f=await fixture(),url=`${f.origin}${f.base}/${f.session.sessionId}/routing-bindings`;
+    const response=await fetch(url,{headers:f.headers});expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({schemaVersion:'wfc.viewer.routing-bindings.v1',modelVersionId:f.session.modelVersionId,contentFingerprint:f.version.contentFingerprint,selectionRevision:'1',aggregateId:null,bindings:[]});
+    expect(f.service.routingBindings).toHaveBeenCalledWith({projectId:f.session.projectId,modelVersionId:f.session.modelVersionId,sessionId:f.session.sessionId,cookieSecret:f.headers.Cookie.slice('wfc_viewer_session='.length)});
+    expect(response.headers.get('cache-control')).toBe('private, no-store');expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    const head=await fetch(url,{method:'HEAD',headers:f.headers});expect(head.status).toBe(200);expect(await head.text()).toBe('');expect(f.reads()).toBe(0);
+    expect(f.service.authorizeResource).not.toHaveBeenCalled();
+  });
+  it('does not accept routing-binding query/path/method overrides or stale authority',async () => {
+    const f=await fixture(),url=`${f.origin}${f.base}/${f.session.sessionId}/routing-bindings`;
+    for(const suffix of ['?domain='+encodeURIComponent(f.origin),'/extra']){const response=await fetch(url+suffix,{headers:f.headers});expect(response.status).toBe(suffix.startsWith('?')?400:404);}
+    const method=await fetch(url,{method:'POST',headers:f.headers});expect(method.status).toBe(405);
+    const noCookie=await fetch(url,{headers:{Origin:f.origin}});expect(noCookie.status).toBe(401);
+    expect(f.service.routingBindings).not.toHaveBeenCalled();
+    vi.mocked(f.service.routingBindings).mockRejectedValueOnce(new ViewerSessionError('ACCESS_REVOKED',403));
+    const denied=await fetch(url,{headers:f.headers});expect(denied.status).toBe(403);expect(await denied.json()).toMatchObject({code:'ACCESS_REVOKED'});expect(f.reads()).toBe(0);
+  });
   it('serves raw gzip bytes, truthful HEAD and ranges from a fully verified handle each time',async () => {
     const f=await fixture();
     const full=await fetch(f.origin+f.path,{headers:f.headers});

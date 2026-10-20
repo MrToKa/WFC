@@ -1,4 +1,5 @@
 import { profileGeometry, buildRouteLines } from './route-geometry.mjs';
+import { parseRoutingBindings } from './routing-bindings.mjs';
 
 export function normalizeIdentifier(value) {
   return String(value).normalize('NFKC').trim().replace(/^\/+|\/+$/g, '').toUpperCase();
@@ -27,6 +28,8 @@ export function createRouteController(viewer, { signal } = {}) {
   let generation = 0;
   const profileCache = new Map();
   let ghostState;
+  let inventoryIds;
+  const invalidBindings = () => Object.assign(new Error('The published tray-root mapping is invalid for this loaded model.'), { code: 'ROUTING_BINDINGS_INVALID' });
 
   function captureGhostState() {
     if (!ghostState) ghostState = { preference: viewer.prefs?.get('ghosting'), renderPass: viewer.impl.showGhosting, materials: new Map() };
@@ -101,16 +104,19 @@ export function createRouteController(viewer, { signal } = {}) {
       active();
       onProgress?.({ loaded: nodes.length, total: nodes.length });
       nameIndex = index;
+      inventoryIds = new Set(nodes);
       return index;
     })().catch(error => { indexPromise = null; throw error; });
     return indexPromise;
   }
 
   function collectProfiles(tree, groupId) {
-    const nodes = [];
+    // A manually mapped root may itself be a physical leaf. Keep the existing
+    // 1,024-descendant limit while including its own geometry as well.
+    const nodes = [groupId];
     // A truthy callback return stops Autodesk's tree traversal.
-    tree.enumNodeChildren(groupId, id => { nodes.push(id); return nodes.length > 1024; }, true);
-    if (nodes.length > 1024) throw new Error('Означението обхваща твърде голяма част от модела. Въведи имената на отделните трасета.');
+    tree.enumNodeChildren(groupId, id => { nodes.push(id); return nodes.length > 1025; }, true);
+    if (nodes.length > 1025) throw new Error('Означението обхваща твърде голяма част от модела. Въведи имената на отделните трасета.');
     const fragments = model.getFragmentList();
     const profiles = [];
     for (const id of nodes) {
@@ -195,17 +201,44 @@ export function createRouteController(viewer, { signal } = {}) {
     viewer.impl.invalidate(true, true, true);
   }
 
-  async function showRoute(text, { onProgress } = {}) {
+  async function validateRootOwnership(tree, roots, ticket) {
+    if (!roots.length) return;
+    if (typeof tree.getNodeParentId !== 'function') throw invalidBindings();
+    const global = tree.getRootId(), selected = new Set(roots);
+    for (let index = 0; index < roots.length; index++) {
+      const root = roots[index];
+      if (root === global || !inventoryIds?.has(root)) throw invalidBindings();
+      let current = root, depth = 0; const seen = new Set();
+      while (current !== global) {
+        active(ticket);
+        if (++depth > 512 || seen.has(current) || !inventoryIds.has(current) || current !== root && selected.has(current)) throw invalidBindings();
+        seen.add(current); current = tree.getNodeParentId(current);
+        if (!Number.isSafeInteger(current) || current < 0) throw invalidBindings();
+      }
+      if (index % 16 === 15) { await nextFrame(); active(ticket); }
+    }
+  }
+
+  async function showRoute(text, { onProgress, routingBindings } = {}) {
     const tokens = parseRoute(text);
     const ticket = ++generation;
     const index = await indexNames(onProgress);
     const tree = await getTree();
     active(ticket);
+    const bindings = routingBindings === undefined ? null : parseRoutingBindings(routingBindings,
+      { modelVersionId: routingBindings?.modelVersionId, contentFingerprint: routingBindings?.contentFingerprint });
+    if (routingBindings !== undefined && !bindings) throw invalidBindings();
+    const mapped = new Map((bindings?.bindings ?? []).map(binding => [normalizeIdentifier(binding.routeName), binding.rootObjectIds.map(id => Number(id.slice(5)))]));
+    await validateRootOwnership(tree, [...mapped.values()].flat(), ticket);
+    active(ticket);
     const segments = tokens.map(token => {
+      const assigned = mapped.get(normalizeIdentifier(token));
+      if (assigned) return { token, ids: assigned, count: 1, status: 'found', mapped: true };
       const ids = index.get(normalizeIdentifier(token)) || [];
       return { token, ids, count: ids.length, status: ids.length === 1 ? 'found' : ids.length ? 'ambiguous' : 'missing' };
     });
     const found = segments.filter(segment => segment.status === 'found');
+    if (mapped.size) await validateRootOwnership(tree, [...new Set(found.flatMap(segment => segment.ids))], ticket);
     if (!found.length) return { segments: segments.map(segment => ({ ...segment, drawable: false })), matchedCount: 0, drawableCount: 0, lineCount: 0, warnings: [], diagnostics: { connectors: [] } };
     const groups = [];
     for (let i = 0; i < segments.length; i++) {
@@ -213,12 +246,14 @@ export function createRouteController(viewer, { signal } = {}) {
       const segment = segments[i];
       onProgress?.(`Проследяване на трасетата… ${i + 1}/${segments.length}`);
       // Unresolved names stay in the result list; the line joins known parts.
-      groups.push({ token: segment.token, profiles: segment.status === 'found' ? collectProfiles(tree, segment.ids[0]) : [] });
+      const profiles = segment.status === 'found' ? segment.ids.flatMap(id => collectProfiles(tree, id)) : [];
+      if (profiles.length > 128) throw invalidBindings();
+      groups.push({ token: segment.token, profiles });
       await nextFrame();
     }
     const line = buildRouteLines(groups);
     active(ticket);
-    const ids = [...new Set(found.map(segment => segment.ids[0]))];
+    const ids = [...new Set(found.flatMap(segment => segment.ids))];
     viewer.clearSelection();
     captureGhostState();
     viewer.isolate(ids, model);
@@ -237,7 +272,7 @@ export function createRouteController(viewer, { signal } = {}) {
     disposed = true; generation++; removeOverlay();
     if (ghostState) viewer.isolate([], model);
     restoreGhostContext();
-    routeIds = []; profileCache.clear(); nameIndex = null;
+    routeIds = []; profileCache.clear(); nameIndex = null; inventoryIds = undefined;
   }
   return { prepareIndex: indexNames, showRoute, clearRoute, fitRoute, dispose };
 }
