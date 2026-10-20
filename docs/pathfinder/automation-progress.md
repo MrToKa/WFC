@@ -1,5 +1,28 @@
 # PathFinder local implementation progress
 
+## PF-U0 — new shared-location cable workflow — 2026-10-20
+
+TECHNICAL_CONTRACTS_PASS / PF-U1_NEXT. Branchpf-u0-cable-workflow-contracts-local-20261020,
+parent57a203a; readGitforcontainingcommit. Rootdocs/evidence/automation; contract
+writercompletedONLYshared/pathfinderCableWorkflow.ts+test. Newplan60/handoffU0/report61.
+Final47syntheticcontractsPASS +frontend/backendtypes/scopedlint/diffPASS. Pure
+eligibilitynevergrantswrite. Per-itemstatespreserveblockedrowsinsideactivejobs;
+query/contextboundscannedcursor100matches/200scanspreservesemptycontinuations.
+Initial36PASSledtosourcereviewcorrections,final47supersedesonlyatsourcehashreceipt.
+Acceptedpolicy: auto-initial-fillONLYbothcurrentrouting/designLengthblank;
+partial/0/existing→manualold/neworderedroute+lengthcomparison. Installedlength
+preserved; nofakeReview orcalculation-onlygrantwrites. DirectSECONDARYdecision
+nowresolved: D<F OR D<T acrossalldevicekinds,nearestcategory-eligibletrays,
+strictinequality,nofixedmax; ceil((actualD+E)*(1+P/100)),noextraS/gap. U6notimplemented.
+Automationupdatedthroughapp ACTIVEevery10minoncurrentchatforPF-Uonly,
+includinglatestdirectrule; no duplicate. PrimarySimplifiedPreparerremainsPAUSED.
+NoWFCruntime/SQL/HTTP/newjobs/Review/Apply/initial-fill/Dockercontrols. Original
+5180/5190/PathFinder/sources anddeniedpathsunchanged; .pf0/.pf2preexistingpreserved.
+OriginalWFCcleanmain96e63f13; cachedorigin94ahead/3behindbeforeU0commit;
+liveRemote/CI NOT_RUN. NextlocalcommitU0→prepare/executePF-U1boundeddiagnostics
+handoffonnewinheritedbranch. Independentread-model/auth/paginationauditcompleted;
+no blockersleftforthisstage, no direct-policyquestionspending.
+
 ## Selected calculation / proposal ownership correction — 2026-10-20
 
 Inherited branch pf-review-scope-consistency-local-20261020, parent e0eb4f8.
