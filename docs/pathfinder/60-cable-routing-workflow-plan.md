@@ -1,6 +1,6 @@
 # PF-U: опростено разрешаване на кабели без автоматичен маршрут
 
-Дата: 20 октомври 2026. Състояние: **PF-U0–PF-U6a TECHNICAL_SOURCE_VERIFIED; PF-U7 NEXT; real-model reread BLOCKED**. Планът и изпълнението са
+Дата: 21 октомври 2026. Състояние: **PF-U0–PF-U6a TECHNICAL_SOURCE_VERIFIED; PF-U7 INDEPENDENT_VERIFIED; PF-U8 ACTIVE; real-model reread BLOCKED**. Планът и изпълнението са
 изрично разрешени от потребителя; след всеки проверен етап се подготвя и изпълнява
 следващият. Техническите проверки не са човешко инженерно приемане.
 
