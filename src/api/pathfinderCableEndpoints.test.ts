@@ -33,7 +33,8 @@ function receipt(input = command()) {
     commandSha256: digest(input), expectedCableWriteRevision: input.expectedCableWriteRevision, expectedContextSha256: input.expectedContextSha256, locationId: id(11),
     binding: { schemaVersion: 'wfc.pf.endpoint-binding-receipt.v1', projectId: project, locationId: id(11), registryRevision: '6', locationRevision: '1', binding, duplicate: false },
     impact: { fromOccurrences: 1, toOccurrences: 1, distinctCables: 1, cableIds: [cable] },
-    ...(input.schemaVersion === 'wfc.pf.cable-endpoint-command.v2' ? { locationImpact: { id: id(80), status: input.calculation === null ? 'blocked' as const : 'pending' as const, eligibleCables: 1, excludedMvCables: 0, blockedCategoryCables: 0 } } : {}), duplicate: false };
+    ...(input.schemaVersion !== 'wfc.pf.cable-endpoint-command.v1' ? { locationImpact: { id: id(80), status: input.calculation === null ? 'blocked' as const : 'pending' as const, eligibleCables: 1, excludedMvCables: 0, blockedCategoryCables: 0 } } : {}),
+    ...(input.schemaVersion === 'wfc.pf.cable-endpoint-command.v3' && input.initialFill !== null ? { initialFillMandate: { id: id(81), contentSha256: 'd'.repeat(64), impactId: id(80), mode: 'when-both-empty' as const } } : {}), duplicate: false };
 }
 function closure(input = command()) { return { schemaVersion: 'wfc.pf.cable-endpoint-recovery.v1', status: 'closed', closure: {
   schemaVersion: 'wfc.pf.cable-endpoint-closed.v1', actorId: actor, projectId: project, cableId: cable, end: 'from', idempotencyKey: input.idempotencyKey,
@@ -43,6 +44,42 @@ beforeEach(() => { vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('crypto', webc
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('exact cable endpoint transport and recovery', () => {
+  it('sends an explicit v3 initial-fill policy exactly and verifies its impact-bound server mandate commitment', async () => {
+    const input: CableEndpointCommand = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 }, initialFill: { mode: 'when-both-empty' } };
+    const result = receipt(input); vi.mocked(fetch).mockResolvedValueOnce(response(result));
+    await expect(saveCableEndpoint(project, 'token', cable, 'from', input, actor)).resolves.toEqual(result);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBe(JSON.stringify(input)); expect(result.commandSha256).toBe(digest(input));
+    expect(result.initialFillMandate).toMatchObject({ impactId: result.locationImpact?.id, mode: 'when-both-empty' });
+    expect(vi.mocked(fetch).mock.calls[0][1]?.body).not.toContain('reviewId');
+  });
+  it.each(['missing', 'impact', 'mode', 'hash', 'actor', 'command'] as const)('refuses an unverifiable v3 mandate receipt: %s', field => {
+    const input: CableEndpointCommand = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: { mode: 'when-both-empty' } };
+    const base = receipt(input), mandate = base.initialFillMandate!;
+    const value = field === 'missing' ? { ...base, initialFillMandate: undefined } : field === 'actor' ? { ...base, actorId: id(99) }
+      : field === 'command' ? { ...base, commandSha256: 'f'.repeat(64) } : { ...base, initialFillMandate: { ...mandate,
+        ...(field === 'impact' ? { impactId: id(99) } : field === 'mode' ? { mode: 'overwrite-existing' } : { contentSha256: 'unverified' }) } };
+    vi.mocked(fetch).mockResolvedValueOnce(response(value)); return expect(saveCableEndpoint(project, 'token', cable, 'from', input, actor)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+  it('accepts explicit null v3 policy without promoting it into an initial-fill mandate', async () => {
+    const input: CableEndpointCommand = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: null };
+    vi.mocked(fetch).mockResolvedValueOnce(response(receipt(input)));
+    const result = await saveCableEndpoint(project, 'token', cable, 'from', input, actor); expect(result.initialFillMandate).toBeUndefined();
+    expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBe(JSON.stringify(input));
+  });
+  it.each(['v1', 'v2', 'null-v3'] as const)('refuses a mandate attached to a calculation-only %s command', async version => {
+    const input: CableEndpointCommand = version === 'v1' ? command() : version === 'v2' ? { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null }
+      : { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: null };
+    const result = { ...receipt(input), initialFillMandate: { id: id(81), contentSha256: 'd'.repeat(64), impactId: id(80), mode: 'when-both-empty' } };
+    vi.mocked(fetch).mockResolvedValueOnce(response(result)); await expect(saveCableEndpoint(project, 'token', cable, 'from', input, actor)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
+  it('reconciles saved or closed v3 commands with the exact same body and key', async () => {
+    const input: CableEndpointCommand = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: { mode: 'when-both-empty' } };
+    const saved = { schemaVersion: 'wfc.pf.cable-endpoint-recovery.v1', status: 'saved', receipt: receipt(input) }, closed = closure(input);
+    vi.mocked(fetch).mockResolvedValueOnce(response(saved)).mockResolvedValueOnce(response(closed));
+    await expect(closePendingCableEndpoint(project, 'new-current-token', cable, 'from', input, actor)).resolves.toEqual(saved);
+    await expect(closePendingCableEndpoint(project, 'new-current-token', cable, 'from', input, actor)).resolves.toEqual(closed);
+    for (const [, options] of vi.mocked(fetch).mock.calls) expect(options).toMatchObject({ method: 'POST', body: JSON.stringify(input), headers: { Authorization: 'Bearer new-current-token' } });
+  });
   it('verifies owned context and exact retained selection using fixed GET paths', async () => {
     const scope = context(), selected = { schemaVersion: 'wfc.pf.cable-endpoint-selection-response.v1', projectId: project, cableId: cable, end: 'from', contextSha256: scope.contextSha256,
       selection: { schemaVersion: 'wfc.pf.cable-endpoint-selection.v1', projectId: project, current: scope.current, sdkObjectId: 99999, status: 'available', reasonCodes: [],

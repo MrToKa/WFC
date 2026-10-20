@@ -4,6 +4,9 @@ import { PathFinderResults } from './PathFinderResults';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
 import type { PathFinderProposal } from '@/api/pathfinder';
+import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
+import { cableWorkflowDetailSchema } from '../../../shared/pathfinderCableWorkflowQueries';
+vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 const mockScope = vi.hoisted(() => ({ initial: null as import('./PathFinderRevisionResults').PathFinderCalculationScope | null }));
 vi.mock('./pathFinderEndpointVisibility', async original => ({ ...await original<typeof import('./pathFinderEndpointVisibility')>(), proposalEndpointObjectIds: vi.fn(async () => [] as string[]) }));
 vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: () => <div>Server recalculation status</div> }));
@@ -22,7 +25,8 @@ vi.mock('./PathFinderRevisionResults', async () => {
     </section>;
   } };
 });
-beforeEach(() => { sessionStorage.clear(); mockScope.initial = null; vi.mocked(proposalEndpointObjectIds).mockReset().mockResolvedValue([]); });
+beforeEach(() => { sessionStorage.clear(); mockScope.initial = null; vi.mocked(proposalEndpointObjectIds).mockReset().mockResolvedValue([]);
+  vi.mocked(fetchPathFinderCableWorkflowDetail).mockReset().mockResolvedValue(liveCableDetail()); });
 afterEach(() => { sessionStorage.clear(); });
 describe('calculation production boundary', () => {
   it('does not create jobs from ready data or dependency changes; manual actions remain explicit', () => {
@@ -49,6 +53,12 @@ describe('calculation production boundary', () => {
 
 const id = (value: number) => `50000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 const options = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+function liveCableDetail() {
+  const available = { status: 'confirmed-ready', pointAvailable: true, source: 'confirmed-shared-location', approximate: false, candidateObjectIds: [], reasonCode: null, engineeringAccepted: false };
+  return cableWorkflowDetailSchema.parse({ schemaVersion: 'wfc.pf.cable-workflow-detail.v1', projectId: id(1), cableId: id(4), querySha256: 'e'.repeat(64), contextSha256: 'f'.repeat(64),
+    row: { projectId: id(1), mto: 'Control', cable: { id: id(4), tag: 'Live cable', fromLocation: 'Live From', toLocation: 'Live To', routing: '/LIVE-CURRENT', designLength: '12.00000000000000000001', installLength: '123.2500', cableWriteRevision: '9' },
+      from: available, to: available, calculation: { jobId: null, jobStatus: null, itemState: null, outcome: 'not-evaluated', reasonCodes: [], errorCode: null, currentness: 'not-evaluated', proposalId: null, proposalHash: null, reviewable: false, acceptedMatchesCurrent: false } } });
+}
 function recoveryFixture() {
   const proposal = { id: id(3), projectId: id(1), jobId: id(7), cableId: id(4), status: 'calculated', proposalHash: 'a'.repeat(64),
     revisionResultHash: 'b'.repeat(64), cableWriteRevision: '9', stale: false, synthetic: true, canApply: true,
@@ -60,7 +70,7 @@ function recoveryFixture() {
       fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0, routeText: '/BC1' } };
   const action = vi.fn(async (): Promise<Record<string, unknown> | null> => null);
   const pf = { data: { projectId: id(1), registryRevision: '1', activeModel: { modelVersionId: id(8), selectionRevision: '1' }, settings: {},
-    artifacts: [{ id: id(9) }], cables: [{ id: id(4), tag: 'Fixture cable', cableWriteRevision: '9' }], jobs: [], proposals: [proposal] },
+    artifacts: [{ id: id(9) }], cables: [{ id: id(4), tag: 'Fixture cable', mto: 'Control', cableWriteRevision: '9' }], jobs: [], proposals: [proposal] },
     preparationAccess: { projectId: id(1), loadedProjectId: id(1), token: 'current-private-token', isAdmin: true },
     busy: false, calculate: vi.fn(), clear: vi.fn(), action, cancelOperation: vi.fn(), refresh: vi.fn(),
     readProposal: vi.fn(async () => proposal), showPath: vi.fn(async () => true), reviewProposal: vi.fn(async () => ({ reviewId: id(5), proposal })) };
@@ -95,6 +105,104 @@ async function submitFirstApply(fixture: Fixture) {
 }
 
 describe('exact pending Apply through result display resets', () => {
+  it('reads live values once on explicit proposal opening instead of using the project state or frozen admission values', async () => {
+    const f = recoveryFixture(), pf = { ...f.pf, data: { ...f.pf.data, cables: [{ ...f.pf.data.cables[0], routing: '/OLD-PROJECT-STATE', designLength: '999' }] } };
+    const view = render(<PathFinderResults pf={asPf(pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    expect(fetchPathFinderCableWorkflowDetail).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    const current = await screen.findByRole('region', { name: 'Current cable values' });
+    expect(current).toHaveTextContent('/LIVE-CURRENT'); expect(current).toHaveTextContent('12.00000000000000000001 m'); expect(current).toHaveTextContent('123.2500 m');
+    expect(current).not.toHaveTextContent('/OLD-PROJECT-STATE'); expect(screen.getByText('Design length delta: -5.00000000000000000001 m')).toBeVisible();
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledWith(id(1), 'current-private-token', id(4), options, expect.any(AbortSignal));
+    view.rerender(<PathFinderResults pf={asPf({ ...pf, data: { ...pf.data, proposals: [...pf.data.proposals], registryRevision: '2' } })} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('keeps preview and unrelated controls available while the independent live comparison is slow', async () => {
+    const f = recoveryFixture(); vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(() => undefined));
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
+    expect(screen.getByText('Reading live cable values for comparison…')).toBeVisible(); expect(screen.getByRole('button', { name: 'Calculate non-MV cables' })).toBeEnabled();
+    expect(f.pf.clear).not.toHaveBeenCalled(); expect(f.pf.cancelOperation).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
+    const signal = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls[0][4]!; view.unmount(); expect(signal.aborted).toBe(true);
+  });
+  it('reports unavailable live comparison without disposing the Viewer, inventing blank values or changing approval gates', async () => {
+    const f = recoveryFixture(); vi.mocked(fetchPathFinderCableWorkflowDetail).mockRejectedValueOnce(Object.assign(new Error('Private old cable names'), { status: 403 }));
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByText(/Live cable comparison is unavailable/)).toBeVisible();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
+    expect(screen.queryByRole('region', { name: 'Current cable values' })).toBeNull(); expect(screen.queryByText(/Both current fields are empty/)).toBeNull();
+    expect(screen.queryByText('Private old cable names')).toBeNull(); expect(f.pf.clear).not.toHaveBeenCalled(); expect(f.pf.cancelOperation).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it.each(['account', 'model', 'options', 'cable', 'scope'] as const)('aborts and ignores late live comparison after a %s change', async change => {
+    const f = recoveryFixture(); let finish!: (value: ReturnType<typeof liveCableDetail>) => void;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })); await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    const signal = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls[0][4]!;
+    if (change === 'scope') fireEvent.click(screen.getByRole('button', { name: 'Select another completed calculation' }));
+    else view.rerender(<PathFinderResults pf={asPf(change === 'model' ? { ...f.pf, data: { ...f.pf.data, activeModel: { modelVersionId: id(20), selectionRevision: '2' } } } : f.pf)}
+      selectedCableId={change === 'cable' ? id(30) : id(4)} accountId={change === 'account' ? id(21) : id(2)} options={change === 'options' ? { ...options, secondaryDistanceMeters: 3 } : options} />);
+    expect(signal.aborted).toBe(true);
+    await act(async () => { finish(liveCableDetail()); });
+    expect(screen.queryByText('/LIVE-CURRENT')).toBeNull(); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('keeps a newer explicit comparison when an older read resolves late', async () => {
+    const f = recoveryFixture(); let finish!: (value: ReturnType<typeof liveCableDetail>) => void;
+    const fresh = liveCableDetail(); fresh.row.cable.routing = '/NEWER-LIVE';
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValueOnce(fresh);
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })); await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    const original = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls[0][4]!;
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })); expect(await screen.findByText('/NEWER-LIVE')).toBeVisible(); expect(original.aborted).toBe(true);
+    await act(async () => { finish(liveCableDetail()); }); expect(screen.queryByText('/LIVE-CURRENT')).toBeNull(); expect(screen.getByText('/NEWER-LIVE')).toBeVisible();
+  });
+  it('aborts an in-flight comparison when polling observes an intervening cable write, without automatically replacing the read', async () => {
+    const f = recoveryFixture(); let finish!: (value: ReturnType<typeof liveCableDetail>) => void;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })); await waitFor(() => expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce());
+    const signal = vi.mocked(fetchPathFinderCableWorkflowDetail).mock.calls[0][4]!;
+    view.rerender(<PathFinderResults pf={asPf({ ...f.pf, data: { ...f.pf.data, cables: [{ ...f.pf.data.cables[0], cableWriteRevision: '10' }] } })} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    expect(signal.aborted).toBe(true); await act(async () => { finish(liveCableDetail()); });
+    expect(screen.queryByText('/LIVE-CURRENT')).toBeNull(); expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('rejects a mismatched live cable response instead of substituting a project-state snapshot', async () => {
+    const f = recoveryFixture(), wrong = liveCableDetail(); wrong.cableId = id(99); wrong.row.cable.id = id(99);
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce(wrong);
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })); expect(await screen.findByText(/Live cable comparison is unavailable/)).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Current cable values' })).toBeNull(); expect(f.pf.clear).not.toHaveBeenCalled();
+  });
+  it('blocks only the exact proposal review and Apply when a verified live read proves a different cable revision', async () => {
+    const f = recoveryFixture(), live = liveCableDetail(); live.row.cable.cableWriteRevision = '10';
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce(live);
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByRole('region', { name: 'Current cable values' })).toHaveTextContent('revision 10');
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Calculate non-MV cables' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Open path again' })).toBeEnabled();
+    expect(screen.getByText(/current cable revision differs from this proposal/)).toBeVisible();
+    view.rerender(<PathFinderResults pf={asPf({ ...f.pf, data: { ...f.pf.data, cables: [{ ...f.pf.data.cables[0], cableWriteRevision: '10' }] } })} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    expect(fetchPathFinderCableWorkflowDetail).toHaveBeenCalledOnce(); expect(f.pf.clear).not.toHaveBeenCalled(); expect(f.pf.cancelOperation).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('disables a previously reviewed proposal when its independent live comparison later proves an intervening write', async () => {
+    const f = recoveryFixture(); let finish!: (value: ReturnType<typeof liveCableDetail>) => void;
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm proposal review' })); await waitFor(() => expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeEnabled());
+    const live = liveCableDetail(); live.row.cable.cableWriteRevision = '10'; await act(async () => { finish(live); });
+    expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed result' })); expect(f.pf.action).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Calculate non-MV cables' })).toBeEnabled(); expect(f.pf.clear).not.toHaveBeenCalled(); expect(f.pf.cancelOperation).not.toHaveBeenCalled();
+  });
   it('reviews a fresh individually sealed v7 result while siblings calculate, without requiring it on the current page or recent list', async () => {
     const { f, proposal } = sealedFixture();
     render(<PathFinderResults pf={asPf({ ...f.pf, data: { ...f.pf.data, proposals: [] } })} selectedCableId={id(4)} accountId={id(2)} options={options} />);

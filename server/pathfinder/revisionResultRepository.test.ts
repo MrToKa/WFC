@@ -1,13 +1,17 @@
 // @vitest-environment node
 import type { Pool, PoolClient } from 'pg';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LengthLedger } from '../../shared/pathfinderLengthLedger.js';
 import { defaultOptions, type DependencySnapshot } from './jobContracts.js';
+import { PathFinderError } from './errors.js';
 import type { collectDependencyBatchInTransaction } from './dependencyBatch.js';
 import { persistRevisionAdmission, readRevisionBaseline, revisionResultHash, sealRevisionResult, verifyRevisionResultForProposal, createRevisionResults,
   type RevisionAdmissionInput } from './revisionResultRepository.js';
 
 vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: async () => ({ enrolled: false }) }));
+const initialFillProof = vi.hoisted(() => vi.fn());
+vi.mock('./initialFillReceiptProof.js', () => ({ createInitialFillReceiptProofReader: () => initialFillProof }));
+beforeEach(() => { initialFillProof.mockReset(); initialFillProof.mockResolvedValue(false); });
 type Row = Record<string, unknown>;
 const id = (n: number) => 'd9000000-0000-4000-8000-' + n.toString(16).padStart(12, '0');
 const pid = id(1), jid = id(2), model = { id: id(3), selectionRevision: '1', contentFingerprint: 'a'.repeat(64) },
@@ -96,6 +100,35 @@ describe('immutable admission snapshots and revision envelopes', () => {
       after_routing: '/OLD', after_design_length: '4.00', proposal_hash: 'c'.repeat(64), dependency_hash: 'd'.repeat(64), model_ref: model,
       route_text: '/OLD', raw_length: 2.5, design_length: '4', unrounded_length: '3.2' });
     await persistRevisionAdmission(f.client, f.input()); expect((await readRevisionBaseline(f.client, { projectId: pid, jobId: jid, cableId: id(10) })).baseline.acceptedMatchesCurrent).toBe(true);
+  });
+  it.each([false, true, 'limit'] as const)('recognizes only the newest initial-fill baseline with complete retained proof, valid=%s', async valid => {
+    const f = fixture(), p = await f.prepare();
+    const seal = await sealRevisionResult(f.client, { projectId: pid, jobId: jid, cableId: id(10), proposalId: p.proposalId,
+      dependencyHash: revisionResultHash(p.deps), result: p.result, dependencies: p.deps });
+    if (valid === 'limit') initialFillProof.mockRejectedValue(new PathFinderError('INITIAL_FILL_PROOF_READ_LIMIT', 413));
+    else initialFillProof.mockResolvedValue(valid);
+    f.accepted.push({ receipt_id: id(30), cable_id: id(10), proposal_id: p.proposalId, applied_at: '2026-10-20T00:00:00Z', after_revision: '9007199254740993',
+      after_routing: '/OLD', after_design_length: '4.00', proposal_hash: f.proposals[0].proposal_hash, dependency_hash: seal.dependencyHash, model_ref: model,
+      route_text: '/A', raw_length: 5, design_length: '7', unrounded_length: '6.6', sealed_hash: seal.revisionResultSha256,
+      engine_result_sha256: seal.engineResultSha256, ledger_sha256: seal.ledgerHash, initial_fill_kind: true,
+      receipt_actor_id: who.userId, receipt_idempotency_key: id(31), receipt_payload_hash: 'f'.repeat(64), accepted_before: { original: 'before' },
+      accepted_after: { original: 'after' }, accepted_provenance: { schemaVersion: 'pathfinder.initial-fill.v1' }, accepted_dependencies: p.deps, accepted_result: p.result });
+    const input = f.input(); input.jobId = id(99);
+    if (valid === 'limit') { await expect(persistRevisionAdmission(f.client, input)).rejects.toMatchObject({ code: 'INITIAL_FILL_PROOF_READ_LIMIT' }); expect(f.admissions).toHaveLength(1); return; }
+    const admissionId = await persistRevisionAdmission(f.client, input);
+    const row = f.baselines.find(row => row.admission_id === admissionId)!.baseline as { lastAcceptedApply: unknown; acceptedMatchesCurrent: boolean };
+    expect(row.lastAcceptedApply !== null).toBe(valid); expect(row.acceptedMatchesCurrent).toBe(valid);
+    expect(initialFillProof).toHaveBeenCalledOnce(); expect(initialFillProof.mock.calls[0][0]).toMatchObject({ projectId: pid, cableId: id(10), seal,
+      dependencies: p.deps, result: p.result });
+    const sql = f.calls.find(call => call.sql.includes('SELECT DISTINCT ON'))!.sql;
+    expect(sql).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
+  });
+  it('refuses an oversized or unknown new-kind newest receipt without silently selecting older accepted data', async () => {
+    const f = fixture(); f.accepted.push({ receipt_id: id(30), cable_id: id(10), proposal_id: id(31), initial_fill_kind: true,
+      accepted_result: null, accepted_provenance: null });
+    const admissionId = await persistRevisionAdmission(f.client, f.input());
+    expect((f.baselines.find(row => row.admission_id === admissionId)!.baseline as { lastAcceptedApply: unknown }).lastAcceptedApply).toBeNull();
+    expect(initialFillProof).not.toHaveBeenCalled(); expect(f.calls.filter(call => call.sql.includes('SELECT DISTINCT ON'))).toHaveLength(1);
   });
   it('reuses the original baseline on exact admission replay and refuses a changed scope', async () => {
     const f = fixture(), input = f.input(), a = await persistRevisionAdmission(f.client, input); f.accepted.push({ invalid: 'later receipt must not be consulted' });

@@ -9,12 +9,13 @@ import { REVISION_RESULTS_LIMITS, revisionAdmissionSchema, revisionAdmissionsPag
   type RevisionResultRow } from '../../shared/pathfinderRevisionResults.js';
 import { principalTransaction } from './auth.js';
 import { collectDependencyBatchInTransaction } from './dependencyBatch.js';
-import { engineResponseSchema, optionsSchema, type DependencySnapshot, type EngineOptions, type JobPrincipal } from './jobContracts.js';
+import { engineResponseSchema, optionsSchema, type DependencySnapshot, type EngineOptions, type EngineResponse, type JobPrincipal } from './jobContracts.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { readRecalculationJobAuthority } from './recalculationRepository.js';
 import { PathFinderError } from './errors.js';
 import { readProposalApplicability } from './proposalApplicability.js';
 import type { SealedCableItemApplicability } from '../../shared/pathfinderItemApplicability.js';
+import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
 
 type Row = Record<string, unknown>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The immutable cable revision result is unavailable or inconsistent. Refresh the admission and calculate a new proposal when required.'); };
@@ -47,18 +48,48 @@ function cableSnapshot(row: Row): RevisionBaseline['currentCable'] {
 }
 async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[]): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
   const result = new Map<string, RevisionBaseline['lastAcceptedApply']>();
+  const initialFillBody = `r.provenance->>'schemaVersion'='pathfinder.initial-fill.v1' AND
+    octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)
+      +octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144`;
   for (let at = 0; at < ids.length; at += REVISION_RESULTS_LIMITS.chunk) {
+    const initialFillReceipt = createInitialFillReceiptProofReader(client);
     const values = (await client.query<Row>(`SELECT DISTINCT ON (r.cable_id) r.id AS receipt_id,r.cable_id,r.proposal_id,r.applied_at,
       r.after_snapshot->>'cable_write_revision' AS after_revision,r.after_snapshot->>'routing' AS after_routing,
       r.after_snapshot->>'design_length' AS after_design_length,p.proposal_hash,p.dependency_hash,p.dependencies->'model' AS model_ref,
       p.result#>>'{route,routeText}' AS route_text,p.result#>'{route,lengthMeters}' AS raw_length,
       p.result#>>'{design,designLengthMeters}' AS design_length,p.result#>>'{design,unroundedLengthMeters}' AS unrounded_length,
-      s.record_sha256 AS sealed_hash,s.engine_result_sha256,s.ledger_sha256
+      s.record_sha256 AS sealed_hash,s.engine_result_sha256,s.ledger_sha256,
+      coalesce(r.provenance->>'schemaVersion' LIKE 'pathfinder.initial-fill.%',false) AS initial_fill_kind,
+      r.actor_id AS receipt_actor_id,r.idempotency_key AS receipt_idempotency_key,r.payload_hash AS receipt_payload_hash,
+      CASE WHEN ${initialFillBody} THEN r.before_snapshot ELSE NULL END AS accepted_before,
+      CASE WHEN ${initialFillBody} THEN r.after_snapshot ELSE NULL END AS accepted_after,
+      CASE WHEN ${initialFillBody} THEN r.provenance ELSE NULL END AS accepted_provenance,
+      CASE WHEN ${initialFillBody} THEN p.dependencies ELSE NULL END AS accepted_dependencies,
+      CASE WHEN ${initialFillBody} THEN p.result ELSE NULL END AS accepted_result
       FROM pf_apply_receipts r JOIN pf_proposals p ON p.project_id=r.project_id AND p.id=r.proposal_id AND p.cable_id=r.cable_id
       LEFT JOIN pf_revision_results s ON s.project_id=p.project_id AND s.proposal_id=p.id
       WHERE r.project_id=$1 AND r.cable_id=ANY($2::uuid[]) ORDER BY r.cable_id,r.applied_at DESC,r.id DESC`, [projectId, ids.slice(at, at + REVISION_RESULTS_LIMITS.chunk)])).rows;
     for (const row of values) {
       const cableId = policyUuidSchema.parse(row.cable_id); if (result.has(cableId) || !ids.includes(cableId)) return fail('REVISION_ACCEPTED_BASELINE_SCOPE', 500);
+      if (row.initial_fill_kind) {
+        // A new write kind is recognized only through its complete immutable
+        // mandate/command/result chain. Never fall back to an older receipt.
+        try {
+          const dependencies = row.accepted_dependencies as DependencySnapshot, retained = object(row.accepted_result);
+          if (!retained || !['calculate', 'design'].includes(String(retained.calculationMode))) continue;
+          const { calculationMode: _mode, ...response } = retained; engineResponseSchema.parse(response);
+          // The persisted mode is part of the immutable proposal/result hash.
+          const output = retained as unknown as EngineResponse;
+          const seal = await verifyRevisionResultForProposal(client, { projectId, proposalId: String(row.proposal_id),
+            dependencies, result: output, proposalHash: String(row.proposal_hash) });
+          if (!seal || !await initialFillReceipt({ projectId, cableId, receiptId: String(row.receipt_id), proposalId: String(row.proposal_id),
+            actorId: String(row.receipt_actor_id), idempotencyKey: String(row.receipt_idempotency_key), payloadHash: String(row.receipt_payload_hash),
+            before: row.accepted_before, after: row.accepted_after, provenance: row.accepted_provenance, dependencies, result: output, seal })) continue;
+        } catch (error) {
+          if (error instanceof PathFinderError && /DEADLINE|READ_LIMIT|DATABASE_BUSY|ABORT/.test(error.code) || error instanceof Error && error.name === 'AbortError') throw error;
+          continue;
+        }
+      }
       const value = revisionBaselineSchema.parse({ schemaVersion: 'wfc.pf.cable-revision-baseline.v1', currentCable: {
         id: cableId, tag: null, fromLocation: null, toLocation: null, routing: null, designLength: null, installLength: null, cableWriteRevision: '0' },
         acceptedMatchesCurrent: false, lastAcceptedApply: { receiptId: row.receipt_id, proposalId: row.proposal_id, proposalHash: row.proposal_hash,

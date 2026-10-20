@@ -11,6 +11,9 @@ import { usePathfinderBatchReview } from './hooks/usePathfinderBatchReview';
 import { PathFinderBatchReview } from './PathFinderBatchReview';
 import { computedPathObjectIds, proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
 import { sealedCableItemApplicabilitySchema } from '../../../shared/pathfinderItemApplicability';
+import { fetchPathFinderCableWorkflowDetail } from '@/api/pathfinderCableWorkflow';
+import { PathFinderCableComparison } from '@/components/pathfinder/PathFinderCableComparison';
+import { cableComparisonInputSchema, type CableComparisonInput } from '../../../shared/pathfinderCableComparison';
 
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
@@ -70,11 +73,52 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     // different proposal already resets review state synchronously above.
     if (previous?.proposalId === proposalId && previous.key !== key) { setReviewId(null); setApplied(false); setNotice(null); }
   }, [data?.registryRevision, data?.activeModel.selectionRevision, settingsKey, selectedRevision, proposal?.id]);
+  const comparisonOwner = JSON.stringify([ownershipKey, active, displayOwned, selectedCableId, data?.activeModel, settingsKey, optionsKey, scopeReadiness.admissionId, scopeReadiness.jobId]);
+  const comparisonLatest = useRef({ owner: comparisonOwner, cables: data?.cables }); comparisonLatest.current = { owner: comparisonOwner, cables: data?.cables };
+  const comparisonRead = useRef<{ controller: AbortController; cableId: string; observedRevision: string | undefined } | null>(null);
+  const [comparison, setComparison] = useState<{ owner: string; proposalId: string; proposalHash: string; revisionResultHash: string | null;
+    observedRevision: string | undefined; loading: boolean; input: CableComparisonInput | null; error: string | null } | null>(null);
+  useEffect(() => { comparisonRead.current?.controller.abort(); comparisonRead.current = null; setComparison(null);
+    return () => { comparisonRead.current?.controller.abort(); comparisonRead.current = null; }; }, [comparisonOwner]);
+  useEffect(() => {
+    const current = comparisonRead.current;
+    if (current && current.observedRevision !== data?.cables.find(value => value.id === current.cableId)?.cableWriteRevision) {
+      current.controller.abort(); comparisonRead.current = null;
+    }
+  }, [data?.cables]);
+  const readComparison = async (detail: PathFinderProposal, atOperation: number) => {
+    const access = pf.preparationAccess, preferences = options === undefined ? detail.routingPreferences : options;
+    const owner = comparisonOwner, controller = new AbortController(), observedRevision = data?.cables.find(value => value.id === detail.cableId)?.cableWriteRevision;
+    comparisonRead.current?.controller.abort(); comparisonRead.current = { controller, cableId: detail.cableId, observedRevision };
+    const state = { owner, proposalId: detail.id, proposalHash: detail.proposalHash, revisionResultHash: detail.revisionResultHash ?? null, observedRevision };
+    const current = () => !controller.signal.aborted && comparisonRead.current?.controller === controller && operation.current === atOperation
+      && comparisonLatest.current.owner === owner
+      && comparisonLatest.current.cables?.find(value => value.id === detail.cableId)?.cableWriteRevision === observedRevision;
+    setComparison({ ...state, loading: true, input: null, error: null });
+    try {
+      if (!access?.isAdmin || !access.projectId || access.projectId !== access.loadedProjectId || access.projectId !== detail.projectId || !access.token || !preferences)
+        throw new Error('CURRENT_COMPARISON_SCOPE_REQUIRED');
+      const live = await fetchPathFinderCableWorkflowDetail(access.projectId, access.token, detail.cableId,
+        { secondaryDistanceMeters: preferences.secondaryDistanceMeters, preferVerticalApproach: preferences.preferVerticalApproach }, controller.signal);
+      if (!current()) return;
+      const input = cableComparisonInputSchema.safeParse({ projectId: access.projectId, cableId: detail.cableId,
+        current: { source: 'live-cable-read', contextSha256: live.contextSha256, mto: live.row.mto, cable: live.row.cable },
+        proposal: { projectId: detail.projectId, cableId: detail.cableId, proposalId: detail.id, proposalHash: detail.proposalHash,
+          revisionResultHash: detail.revisionResultHash ?? null, cableWriteRevision: detail.cableWriteRevision,
+          routing: detail.route?.routeText ?? null, designLength: detail.design?.designLengthMeters ?? null } });
+      if (!input.success || live.projectId !== access.projectId || live.cableId !== detail.cableId || live.row.projectId !== access.projectId
+        || live.row.cable.id !== detail.cableId) throw new Error('COMPARISON_SCOPE_MISMATCH');
+      setComparison({ ...state, loading: false, input: input.data, error: null });
+    } catch {
+      if (current()) setComparison({ ...state, loading: false, input: null, error: 'Live cable comparison is unavailable. Open this exact proposal again to refresh it. The model and saved proposal remain available.' });
+    } finally { if (comparisonRead.current?.controller === controller) comparisonRead.current = null; }
+  };
   const openProposal = async (id: string, expectedJobId: string) => {
     const selectedScope = scope.current;
     if (!active || !selectedScope.admissionId || selectedScope.jobId !== expectedJobId) return;
     const currentDisplay = claimViewer?.() ?? (() => true);
     const current = ++operation.current;
+    comparisonRead.current?.controller.abort(); comparisonRead.current = null; setComparison(null);
     endpointRead.current?.abort(); const controller = new AbortController(); endpointRead.current = controller;
     setNotice(null); setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(true);
     try {
@@ -82,6 +126,7 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       if (scope.current.admissionId !== selectedScope.admissionId || scope.current.jobId !== expectedJobId) return;
       if (detail.id !== id || detail.jobId !== expectedJobId) { setNotice('This proposal does not belong to the selected calculation. Open a result from that calculation again.'); return; }
       setProposal(detail);
+      void readComparison(detail, current);
       if (!detail.route?.success || detail.route.points.length < 1) { pf.clear(); setNotice('This proposal has no drawable path. Its diagnostic is shown below.'); return; }
       if (detail.route.points.length > MAX_PATH_POINTS) { setNotice('This exact path exceeds the viewer point budget. The result is retained without truncation.'); return; }
       const access = pf.preparationAccess;
@@ -122,8 +167,13 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
   const calculationFailed = proposalJob?.status === 'failed' || scopeReadiness.jobStatus === 'failed';
   const wholeJobReady = scopeReadiness.wholeJobReady ?? scopeReadiness.ready;
   const sealedItemReady = ['queued', 'running'].includes(checkedJobStatus ?? '') && hasExactItemApplicability(proposal, pf.preparationAccess?.projectId);
+  const comparisonMatchesProposal = comparison?.owner === comparisonOwner && comparison.proposalId === proposal?.id && comparison.proposalHash === proposal?.proposalHash
+    && comparison.revisionResultHash === (proposal?.revisionResultHash ?? null);
+  const knownLiveRevisionMismatch = Boolean(comparisonMatchesProposal && comparison?.input
+    && comparison.input.current.cable.cableWriteRevision !== proposal?.cableWriteRevision);
+  const ownedComparison = comparisonMatchesProposal && comparison?.observedRevision === selectedRevision ? comparison : null;
   const effectiveCanApply = Boolean(proposal && proposal.status === 'calculated' && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && !calculationCancelled
-    && !calculationFailed && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady) && preferencesMatch && !stale && !proposal.compatibilityIssue
+    && !calculationFailed && !knownLiveRevisionMismatch && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady) && preferencesMatch && !stale && !proposal.compatibilityIssue
     && proposal.canApply && !(summary && summary.proposalHash === proposal.proposalHash && !summary.canApply));
   const proposalJobIssue = !proposal || effectiveCanApply ? null : calculationCancelled
     ? 'This calculation was cancelled. Its saved path can be inspected, but cannot be reviewed or applied. Choose a completed calculation in Cable revision results, or calculate non-MV cables again if needed.'
@@ -190,6 +240,9 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       <Body1>{proposal.synthetic ? 'Local synthetic fixture for demonstration.' : 'Review the route and length before applying.'}</Body1>
       {stale ? <Body1 role="alert">This result is outdated. Calculate a new proposal before reviewing or applying it.</Body1> : null}
       <Body1>{proposal.message}</Body1>
+      {ownedComparison?.loading ? <Caption1 role="status">Reading live cable values for comparison…</Caption1> : null}
+      {ownedComparison?.error ? <Body1 role="status">{ownedComparison.error}</Body1> : null}
+      {!ownedComparison?.loading ? <PathFinderCableComparison input={ownedComparison?.input ?? null} /> : null}
       {proposalJobIssue ? <Body1 role="alert">{proposalJobIssue}</Body1> : null}
       {proposal.routingPreferences ? <Caption1>Calculated with SECONDARY trigger {proposal.routingPreferences.secondaryDistanceMeters} m; vertical approach {proposal.routingPreferences.preferVerticalApproach ? 'preferred' : 'not preferred'}.</Caption1> : <Caption1>The original routing preferences are unavailable.</Caption1>}
       {options !== null && !preferencesMatch ? <Body1 role="alert">This proposal uses different routing preferences. Calculate a new proposal with the current Path values before reviewing or applying.</Body1> : null}

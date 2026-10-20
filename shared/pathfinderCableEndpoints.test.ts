@@ -62,4 +62,21 @@ describe('strict cable endpoint command and display contracts', () => {
     expect(cableEndpointRecoverySchema.safeParse({ schemaVersion: 'wfc.pf.cable-endpoint-recovery.v1', status: 'closed', closure, receipt: {} }).success).toBe(false);
     const { actorId: _actor, ...noActor } = closure; expect(cableEndpointClosedSchema.safeParse(noActor).success).toBe(false);
   });
+  it('retained v1 and v2 bodies keep their exact fields without a new initial-fill default', () => {
+    const v1 = command(), v2 = { ...v1, schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };
+    expect(cableEndpointCommandSchema.parse(v1)).toEqual(v1); expect(cableEndpointCommandSchema.parse(v2)).toEqual(v2);
+    expect(Object.hasOwn(cableEndpointCommandSchema.parse(v2), 'initialFill')).toBe(false);
+  });
+  it('v3 requires an explicit nullable policy while a policy cannot silently promote older commands', () => {
+    const v2 = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };
+    expect(cableEndpointCommandSchema.safeParse({ ...v2, schemaVersion: 'wfc.pf.cable-endpoint-command.v3' }).success).toBe(false);
+    expect(cableEndpointCommandSchema.safeParse({ ...v2, initialFill: { mode: 'when-both-empty' } }).success).toBe(false);
+    expect(cableEndpointCommandSchema.safeParse({ ...command(), initialFill: null }).success).toBe(false);
+  });
+  it('only exact explicit v3 when-both-empty policy carries its narrowly specified intent', () => {
+    const input = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: { mode: 'when-both-empty' } };
+    expect(cableEndpointCommandSchema.parse(input)).toEqual(input);
+    expect(cableEndpointCommandSchema.safeParse({ ...input, initialFill: { mode: 'always' } }).success).toBe(false);
+    expect(cableEndpointCommandSchema.safeParse({ ...input, initialFill: { mode: 'when-both-empty', actorId: id(99) } }).success).toBe(false);
+  });
 });

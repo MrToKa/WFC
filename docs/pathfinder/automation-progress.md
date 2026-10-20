@@ -1,5 +1,24 @@
 # PathFinder local implementation progress
 
+## PF-U4 — conditional initial fill and comparison — VERIFIED 2026-10-20
+
+Branch pf-u4-conditional-initial-fill-local-20261020, inherited handoff
+12972001c1f5bc37c72411d6d3b8fd2e06d22749. Read Git for containing delivery.
+TECHNICAL_FOUNDATION_PASS: 846 distinct synthetic checks in31 files +12 actual
+PostgreSQL cases in1 file; frontend/backend types, changed-source lint/diff PASS.
+Report65/u4-actual.json contain exact source hashes and scope. All agents frozen;
+root sole actual executor. v3-only finite initial-fill mandate, both-empty atomic
+writer/history/provenance, immutable request/claim recovery, historical receipt
+proof and live ordered comparison implemented. No fake Review/grant escalation.
+SQL engineering/admission adapters explicitly synthetic; real engine/UI/5191
+upgrade/acceptance NOT_RUN. New3 tables plus prior5 impacts require U7/U8 backup
+inventories. Own PG fixture b7b5946e/container76d6b99f retired, credentials removed.
+No5191/original5180/5190 SQL/HTTP write/upgrade/restart/calculation/Review/Apply.
+Original WFC clean main96e63f13/cached origin same; live remote/CI NOT_RUN.
+Next finalize U5 standalone handoff, create inherited local branch and execute
+persistent Needs routing/popup/Model Browser/shared progress/polling integration.
+Automation ACTIVE; Preparer PAUSED. Preserve original data/models/backups,
+.pf0-work/.pf2-work and denied historical paths. No push/PR/merge/deploy.
 ## PF-U3 — scoped affected recalculation — VERIFIED 2026-10-20
 
 Branch pf-u3-scoped-location-recalculation-local-20261020, inherited handoff

@@ -9,7 +9,7 @@ export function PathFinderBatchReview({ batch, disabled, disabledReason }: { bat
   const styles = useRoutingsViewerStyles();
   return <section aria-label="Batch review and Apply" className={styles.result}>
     <h3>Review selected cables</h3>
-    <Caption1>Choose a completed calculation below, select ready cables across its pages, inspect their routes, endpoints and lengths, then confirm review and Apply.</Caption1>
+    <Caption1>Choose a calculation below and select its current ready results. A completed calculation or individually sealed current cable results can be reviewed. Inspect their routes, endpoints and lengths, then confirm review and Apply.</Caption1>
     <p>{batch.counts.total} selected records; {batch.counts.reviewed} reviewed; {batch.counts.applied} applied; {batch.counts.blocked} blocked.</p>
     {disabledReason ? <p role="status">{disabledReason}</p> : !batch.entries.length ? <p role="status">No cables selected. Use the checkboxes or Select ready cables on this page below. Selection does not change cable values.</p> : null}
     {batch.entries.length ? <div style={{ maxHeight: '24rem', overflow: 'auto' }}>

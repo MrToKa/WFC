@@ -5,6 +5,7 @@ import { endpointBindingSchema, endpointBindingReceiptSchema, endpointCurrentSco
 import { geometryObjectSummarySchema } from './pathfinderGeometryTrace.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
 import { locationImpactCalculationSchema, locationImpactReferenceSchema } from './pathfinderLocationImpacts.js';
+import { initialFillPolicySchema, initialFillMandateReferenceSchema } from './pathfinderInitialFill.js';
 
 export const CABLE_ENDPOINT_LIMITS = Object.freeze({ controlBytes: 65536, responseBytes: 1024 * 1024, projectCables: 10000, impactTextBytes: 8 * 1024 * 1024, reasonCodes: 64 });
 export const cableEndpointEndSchema = z.enum(['from', 'to']);
@@ -58,8 +59,10 @@ const locationExpectation = (value: { expectedLocationId: string | null; expecte
 const legacyCommand = z.object({ ...common, selection }).strict().refine(locationExpectation);
 const impactCommand = z.object({ ...common, schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v2'), selection,
   calculation: locationImpactCalculationSchema.nullable() }).strict().refine(locationExpectation);
+const initialFillCommand = z.object({ ...common, schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v3'), selection,
+  calculation: locationImpactCalculationSchema.nullable(), initialFill: initialFillPolicySchema.nullable() }).strict().refine(locationExpectation);
 /** Legacy pending bodies retain their exact v1 shape, without inserted defaults or new authority. */
-export const cableEndpointCommandSchema = z.union([legacyCommand, impactCommand]);
+export const cableEndpointCommandSchema = z.union([legacyCommand, impactCommand, initialFillCommand]);
 export type CableEndpointCommand = z.infer<typeof cableEndpointCommandSchema>;
 /** The exact strict command, including its idempotency key, is the pending-command hash input. */
 export function cableEndpointCommandHashInput(value: CableEndpointCommand) { return cableEndpointCommandSchema.parse(value); }
@@ -72,7 +75,9 @@ export const cableEndpointReceiptSchema = z.object({ schemaVersion: z.literal('w
   projectId: policyUuidSchema, actorId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, logicalName: endpointLocationNameSchema,
   idempotencyKey: policyUuidSchema, commandSha256: policyHashSchema, expectedCableWriteRevision: policyRevisionSchema,
   expectedContextSha256: policyHashSchema, locationId: policyUuidSchema, binding: endpointBindingReceiptSchema,
-  impact: cableEndpointImpactSchema, locationImpact: locationImpactReferenceSchema.optional(), duplicate: z.boolean() }).strict().refine(value => value.binding.projectId === value.projectId && value.binding.locationId === value.locationId);
+  impact: cableEndpointImpactSchema, locationImpact: locationImpactReferenceSchema.optional(), initialFillMandate: initialFillMandateReferenceSchema.optional(), duplicate: z.boolean() }).strict()
+  .refine(value => value.binding.projectId === value.projectId && value.binding.locationId === value.locationId
+    && (!value.initialFillMandate || value.initialFillMandate.impactId === value.locationImpact?.id));
 export type CableEndpointReceipt = z.infer<typeof cableEndpointReceiptSchema>;
 export const cableEndpointClosedSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-closed.v1'),
   projectId: policyUuidSchema, actorId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, idempotencyKey: policyUuidSchema,

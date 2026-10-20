@@ -30,7 +30,8 @@ function receipt(input: CableEndpointCommand, selectedCable = cable, end: 'from'
   return { schemaVersion: 'wfc.pf.cable-endpoint-receipt.v1', projectId: project, actorId: actor, cableId: selectedCable, end, logicalName: input.expectedLogicalName,
     idempotencyKey: input.idempotencyKey, commandSha256: hash, expectedCableWriteRevision: input.expectedCableWriteRevision, expectedContextSha256: input.expectedContextSha256,
     locationId: id(11), duplicate: false, impact: { fromOccurrences: 1, toOccurrences: 1, distinctCables: 1, cableIds: [selectedCable] },
-    ...(input.schemaVersion === 'wfc.pf.cable-endpoint-command.v2' ? { locationImpact: { id: id(80), status: input.calculation === null ? 'blocked' as const : 'pending' as const, eligibleCables: 1, excludedMvCables: 0, blockedCategoryCables: 0 } } : {}),
+    ...(input.schemaVersion !== 'wfc.pf.cable-endpoint-command.v1' ? { locationImpact: { id: id(80), status: input.calculation === null ? 'blocked' as const : 'pending' as const, eligibleCables: 1, excludedMvCables: 0, blockedCategoryCables: 0 } } : {}),
+    ...(input.schemaVersion === 'wfc.pf.cable-endpoint-command.v3' && input.initialFill !== null ? { initialFillMandate: { id: id(81), contentSha256: 'd'.repeat(64), impactId: id(80), mode: 'when-both-empty' as const } } : {}),
     binding: { schemaVersion: 'wfc.pf.endpoint-binding-receipt.v1', projectId: project, locationId: id(11), registryRevision: '6', locationRevision: '1', duplicate: false,
       binding: { schemaVersion: 'wfc.pf.endpoint-binding.v1', id: id(10), projectId: project, locationId: id(11), locationRevision: '1', bindingRevision: '1', locationRegistryRevision: '6',
         modelVersionId: current.modelVersionId, aggregateId: current.aggregateId, artifactId: current.artifactId, projectionSha256: current.projectionSha256, captureFrameId: current.captureFrameId,
@@ -55,6 +56,56 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks); else Reflect.deleteProperty(navigator, 'locks'); });
 
 describe('persistent owned cable endpoint selection', () => {
+  it('requests v3 only for explicit initial-fill policy without creating or claiming a human review', async () => {
+    const props = { ...access(), initialFill: { mode: 'when-both-empty' as const }, calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 } };
+    const view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.selectObject(); });
+    await act(async () => { await view.result.current.save('Bind and fill eligible blank cables'); });
+    const command = vi.mocked(saveCableEndpoint).mock.calls[0][4];
+    expect(command).toMatchObject({ schemaVersion: 'wfc.pf.cable-endpoint-command.v3', initialFill: { mode: 'when-both-empty' }, calculation: props.calculation });
+    expect(command).not.toHaveProperty('reviewId'); expect(view.result.current.receipt?.initialFillMandate).toMatchObject({ impactId: id(80), mode: 'when-both-empty' });
+    expect(readPendingCableEndpoint(owner)).toBeNull(); expect(props.onSaved).toHaveBeenCalledOnce();
+  });
+  it('keeps an explicitly null policy as v3 without requesting an initial-fill mandate', async () => {
+    const view = renderHook(() => useCableEndpointSelection({ ...access(), initialFill: null })); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.selectObject(); });
+    await act(async () => { await view.result.current.save('Explicit calculation only'); });
+    expect(vi.mocked(saveCableEndpoint).mock.calls[0][4]).toMatchObject({ schemaVersion: 'wfc.pf.cable-endpoint-command.v3', initialFill: null, calculation: null });
+    expect(view.result.current.receipt?.initialFillMandate).toBeUndefined();
+  });
+  it('refuses malformed explicit policy instead of silently falling back to calculation-only or enabling writes', async () => {
+    const view = renderHook(() => useCableEndpointSelection({ ...access(), initialFill: { mode: 'overwrite-existing' } as never })); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.selectObject(); }); expect(view.result.current.canSave).toBe(false);
+    await act(async () => { expect(await view.result.current.save('Invalid policy')).toBe(false); });
+    expect(view.result.current.error).toContain('Review the explicit initial-fill policy'); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each(['v1', 'v2', 'v3'] as const)('replays an unknown retained %s command byte-exactly despite a different current editor policy', async version => {
+    const current = context(), legacy: CableEndpointCommand = { schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idempotencyKey: id(90), expectedContextSha256: current.contextSha256,
+      expectedCableWriteRevision: current.cableWriteRevision, expectedLogicalName: current.logicalName!, expectedRegistryRevision: current.registryRevision,
+      expectedLocationId: null, expectedLocationRevision: null, expectedHeadId: null, expectedCurrent: current.current!, reason: 'Original retained assignment',
+      selection: { mode: 'fixed-world', pointProjectMetres: [7, 8, 9], derivation: 'manual-world-point', displaySdkObjectId: null } };
+    const command: CableEndpointCommand = version === 'v1' ? legacy : version === 'v2' ? { ...legacy, schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null }
+      : { ...legacy, schemaVersion: 'wfc.pf.cable-endpoint-command.v3', calculation: null, initialFill: { mode: 'when-both-empty' } };
+    await retainPendingCableEndpoint(owner, cable, 'from', command); const encoded = JSON.stringify(readPendingCableEndpoint(owner)?.command);
+    vi.mocked(saveCableEndpoint).mockRejectedValueOnce(new CableEndpointApiError('REQUEST_TIMEOUT', null, 'Unknown outcome'));
+    const view = renderHook(() => useCableEndpointSelection({ ...access(), initialFill: null,
+      calculation: { preferences: { secondaryDistanceMeters: 99, preferVerticalApproach: false }, timeoutMilliseconds: 110000 } }));
+    await waitFor(() => expect(view.result.current.canRetry).toBe(true)); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    await act(async () => { expect(await view.result.current.retry()).toBe(false); });
+    expect(JSON.stringify(vi.mocked(saveCableEndpoint).mock.calls[0][4])).toBe(encoded);
+    expect(JSON.stringify(readPendingCableEndpoint(owner)?.command)).toBe(encoded); expect(view.result.current.pending?.command).toEqual(command);
+  });
+  it('fences a late selection response when the explicit initial-fill choice changes', async () => {
+    let finish!: (value: ReturnType<typeof evidence>) => void;
+    vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const first: CableEndpointSelectionAccess = { ...access(), initialFill: { mode: 'when-both-empty' } };
+    const view = renderHook(value => useCableEndpointSelection(value), { initialProps: first }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    let selection!: Promise<void>; act(() => { selection = view.result.current.selectObject(); });
+    await waitFor(() => expect(fetchCableEndpointSelection).toHaveBeenCalledOnce());
+    view.rerender({ ...first, initialFill: null });
+    await act(async () => { finish(evidence()); await selection; });
+    expect(view.result.current.draft).toBeNull(); expect(view.result.current.canSave).toBe(false); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
   it('never reads, binds or shows another principal’s data without an active administrator scope', async () => {
     const props = access(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: { ...props, isAdmin: false } });
     expect(fetchCableEndpointContext).not.toHaveBeenCalled(); expect(view.result.current.context).toBeNull();

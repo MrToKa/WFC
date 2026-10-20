@@ -16,6 +16,7 @@ import { confirmEndpointBindingChangeInTransaction, endpointBindingHash, endpoin
   readCurrentEndpointBindingContext } from './endpointBindingRepository.js';
 import { readCableEndpointSelection } from './cableEndpointSelection.js';
 import { appendLocationImpactInTransaction } from './locationImpactRepository.js';
+import { appendInitialFillMandateInTransaction } from './initialFillMandates.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The cable endpoint changed or is unavailable. Refresh its context; retain an uncertain command until it is saved or explicitly closed.'); };
 const budget = <T>(value: T): T => { if (Buffer.byteLength(canonicalPurposeJson(value)) > CABLE_ENDPOINT_LIMITS.responseBytes) return fail('CABLE_ENDPOINT_RESPONSE_LIMIT', 413); return value; };
@@ -184,16 +185,20 @@ export function createCableEndpointCommands(pool: Pool) {
         expectedSelectionRevision: value.current.selectionRevision, modelVersionId: value.current.modelVersionId, aggregateId: value.current.aggregateId,
         projectionSha256: value.current.projectionSha256, captureFrameId: value.current.captureFrameId, idempotencyKey: command.idempotencyKey,
         reason: command.reason, location: names };
-      if (command.schemaVersion === 'wfc.pf.cable-endpoint-command.v2') await client.query("SET LOCAL wfc.pathfinder_location_impact='1'");
+      if (command.schemaVersion !== 'wfc.pf.cable-endpoint-command.v1') await client.query("SET LOCAL wfc.pathfinder_location_impact='1'");
       const binding = await confirmEndpointBindingChangeInTransaction(client, projectId, who, locationId, command.selection.mode === 'object-derived'
         ? { ...common, mode: 'object-derived', object: command.selection.object, anchorRule: ENDPOINT_ANCHOR_RULE }
         : { ...common, mode: 'fixed-world', pointProjectMetres: command.selection.pointProjectMetres, derivation: command.selection.derivation, provenanceObject: null }, signal);
-      const locationImpact = command.schemaVersion === 'wfc.pf.cable-endpoint-command.v2' ? await appendLocationImpactInTransaction(client, {
+      const locationImpact = command.schemaVersion !== 'wfc.pf.cable-endpoint-command.v1' ? await appendLocationImpactInTransaction(client, {
         projectId, principal: who, idempotencyKey: command.idempotencyKey, commandSha256: endpointBindingHash(command), binding, current: value.current,
         affectedCableIds: affected.cableIds, calculation: command.calculation }, check) : undefined;
+      const initialFillMandate = command.schemaVersion === 'wfc.pf.cable-endpoint-command.v3' && command.initialFill && locationImpact
+        ? await appendInitialFillMandateInTransaction(client, { projectId, principal: who, impactId: locationImpact.id, commandSha256: endpointBindingHash(command),
+          idempotencyKey: command.idempotencyKey, command }, check) : undefined;
       const receipt = cableEndpointReceiptSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-receipt.v1', projectId, actorId: who.userId, cableId, end, logicalName: value.logicalName,
         idempotencyKey: command.idempotencyKey, commandSha256: endpointBindingHash(command), expectedCableWriteRevision: command.expectedCableWriteRevision,
-        expectedContextSha256: command.expectedContextSha256, locationId, binding, impact: affected, ...(locationImpact ? { locationImpact } : {}), duplicate: false });
+        expectedContextSha256: command.expectedContextSha256, locationId, binding, impact: affected, ...(locationImpact ? { locationImpact } : {}),
+        ...(initialFillMandate ? { initialFillMandate } : {}), duplicate: false });
       check(); await store(client, projectId, who, cableId, end, command, { schemaVersion: 'wfc.pf.cable-endpoint-stored.v1', status: 'saved', receipt }); return budget(receipt);
     }, signal);
   };

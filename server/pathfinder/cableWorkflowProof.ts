@@ -10,6 +10,7 @@ import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { readRecalculationJobAuthority } from './recalculationRepository.js';
 import { readProposalApplicability } from './proposalApplicability.js';
+import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
 
 export const WORKFLOW_PROOF_BYTES = 256 * 1024;
 type Data = Record<string, any>;
@@ -49,6 +50,7 @@ export async function readWorkflowVerifiedProposal(client: PoolClient, projectId
 
 export function createCableWorkflowProofReader(client: PoolClient, projectId: string, check: () => void) {
   const proposals = new Map<string, Promise<Verified | null>>(), enrollment = new Map<string, ReturnType<typeof readRecalculationJobAuthority>>();
+  const initialFillReceipt = createInitialFillReceiptProofReader(client, check);
   const proposal = (cableId: string, proposalId: string) => {
     const key = cableId + ':' + proposalId;
     if (!proposals.has(key)) proposals.set(key, readWorkflowVerifiedProposal(client, projectId, cableId, proposalId));
@@ -88,7 +90,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
       try {
         if (!receipt || receipt.project_id !== projectId || receipt.cable_id !== cable.id || !policyUuidSchema.safeParse(receipt.proposal_id).success) return false;
         const before = object(receipt.before_snapshot), after = object(receipt.after_snapshot), provenance = object(receipt.provenance);
-        if (!before || !after || !provenance || provenance.schemaVersion !== 'pathfinder.apply.v2'
+        if (!before || !after || !provenance || !['pathfinder.apply.v2', 'pathfinder.initial-fill.v1'].includes(provenance.schemaVersion)
           || before.id !== cable.id || after.id !== cable.id || before.project_id !== projectId || after.project_id !== projectId
           || !policyRevisionSchema.safeParse(before.cable_write_revision).success || !policyRevisionSchema.safeParse(after.cable_write_revision).success
           || BigInt(after.cable_write_revision) !== BigInt(before.cable_write_revision) + 1n || after.cable_write_revision !== cable.cableWriteRevision
@@ -97,7 +99,12 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
         if (!same(Object.keys(before).sort(), Object.keys(after).sort()) || Object.keys(before).some(key => !changed.has(key) && !same(before[key], after[key]))) return false;
         const verified = await proposal(cable.id, receipt.proposal_id); check(); if (!verified) return false;
         const { dependencies, result, seal, raw } = verified;
-        if (dependencies.cableWriteRevision !== before.cable_write_revision || provenance.proposalId !== raw.id || provenance.proposalHash !== raw.proposal_hash
+        if (provenance.schemaVersion === 'pathfinder.initial-fill.v1') {
+          if (!await initialFillReceipt({ projectId, cableId: cable.id, receiptId: receipt.id, proposalId: receipt.proposal_id,
+            actorId: receipt.actor_id, idempotencyKey: receipt.idempotency_key, payloadHash: receipt.payload_hash,
+            before, after, provenance, dependencies, result, seal })) return false;
+          check();
+        } else if (dependencies.cableWriteRevision !== before.cable_write_revision || provenance.proposalId !== raw.id || provenance.proposalHash !== raw.proposal_hash
           || provenance.reviewId !== receipt.review_id || provenance.review?.id !== receipt.review_id || provenance.review?.actorId !== receipt.actor_id
           || receipt.review_actor !== receipt.actor_id || receipt.review_proposal !== raw.id || receipt.review_proposal_hash !== raw.proposal_hash
           || !['manual-review', 'synthetic-fixture'].includes(receipt.validation_method) || provenance.validationMethod !== receipt.validation_method

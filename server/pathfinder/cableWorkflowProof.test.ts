@@ -7,11 +7,12 @@ import { defaultOptions } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES } from './cableWorkflowProof.js';
 
-const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn() }));
+const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn(), initialFill: vi.fn() }));
 vi.mock('./revisionResultRepository.js', () => ({ verifyRevisionResultForProposal: proof.seal }));
 vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: proof.enrollment }));
 vi.mock('./routingScope.js', () => ({ requireVersionedCalculationScope: proof.scope }));
 vi.mock('./locationImpactRepository.js',()=>({readLocationImpactJobAuthority:proof.scoped}));
+vi.mock('./initialFillReceiptProof.js', () => ({ createInitialFillReceiptProofReader: () => proof.initialFill }));
 
 type Data = Record<string, any>;
 const id = (n: number) => 'ce000000-0000-4000-8000-' + n.toString(16).padStart(12, '0');
@@ -65,6 +66,7 @@ function fixture() {
 beforeEach(() => {
   vi.clearAllMocks(); proof.scope.mockImplementation(() => undefined); proof.enrollment.mockResolvedValue({ enrolled: false });
   proof.scoped.mockResolvedValue({enrolled:true,valid:true,scope:'location-impact'});
+  proof.initialFill.mockResolvedValue(false);
 });
 
 describe('cable workflow positive result evidence (synthetic boundaries)', () => {
@@ -177,5 +179,28 @@ describe('receipt-backed current accepted cable display', () => {
   it('retains deadline refusal across the accepted-proof fail-closed catch', async () => {
     const f = fixture(); f.check.mockImplementation(() => { throw Error('Deadline.'); });
     await expect(f.reader.accepted(f.cable, async () => f.current)).rejects.toThrow('Deadline.');
+  });
+  it('recognizes a distinct proven initial-fill receipt with no fabricated review, retaining exact current dependency checks', async () => {
+    const f = fixture(); f.before.routing = ''; (f.before as Data).design_length = null;
+    f.receipt.provenance = { schemaVersion: 'pathfinder.initial-fill.v1' };
+    for (const key of ['review_id', 'review_actor', 'review_proposal', 'review_proposal_hash', 'validation_method', 'review_login_id']) delete f.receipt[key];
+    proof.initialFill.mockResolvedValue(true); const currentForOptions = vi.fn(async () => f.current);
+    expect(await f.reader.accepted(f.cable, currentForOptions)).toBe(true);
+    expect(proof.initialFill).toHaveBeenCalledExactlyOnceWith({ projectId, cableId, receiptId: f.receipt.id, proposalId,
+      actorId: f.receipt.actor_id, idempotencyKey: f.receipt.idempotency_key, payloadHash: f.receipt.payload_hash,
+      before: f.before, after: f.after, provenance: f.receipt.provenance, dependencies: f.dependencies, result: f.result, seal: f.seal });
+    expect(currentForOptions).toHaveBeenCalledWith(f.dependencies.options, f.dependencies.schemaVersion);
+    expect(proof.enrollment).not.toHaveBeenCalled();
+  });
+  it('never promotes an unproven newest initial-fill receipt or searches an older manual success', async () => {
+    const f = fixture(); f.receipt.provenance = { schemaVersion: 'pathfinder.initial-fill.v1' }; const currentForOptions = vi.fn();
+    expect(await f.reader.accepted(f.cable, currentForOptions)).toBe(false);
+    expect(proof.initialFill).toHaveBeenCalledOnce(); expect(currentForOptions).not.toHaveBeenCalled();
+    expect(f.query.mock.calls.filter(([sql]) => sql.includes('accepted-proof'))).toHaveLength(1);
+  });
+  it('does not allow a valid historical initial fill to exempt any later model/settings change', async () => {
+    const f = fixture(); f.receipt.provenance = { schemaVersion: 'pathfinder.initial-fill.v1' }; proof.initialFill.mockResolvedValue(true);
+    const current = { ...f.current, settings: { ...f.current.settings, revision: '99' } };
+    expect(await f.reader.accepted(f.cable, async () => current)).toBe(false);
   });
 });
