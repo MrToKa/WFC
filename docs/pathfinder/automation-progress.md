@@ -1,88 +1,88 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T10:34:33Z
+## Current live checkpoint — 2026-10-20T11:34:59.856Z
 
-CURRENT STAGE: current-full-network recovery evidence, backup1/2FAIL retained;
-restoreNOT_RUN. Narrow source3 controls PASS232/232 plus actual read controlsPASS.
-Branchpf-aalborg-current-full-recovery-local-20261020 nowHEAD
-6e37e7a13d7ffa71690696c693c8ea5ce8960963, inherits handoffa15721d and
-verifiedtraceeventdeliverya625234. ExecutePF-Aalborg-current-full-recovery.md.
-Do not duplicateactivework. Capacityagentownsoperationsdocker/bounds/tests plus
-narrowportablebundlelist/tests; preparationagentownsprivatefull-recovery1 observer/
-backup/restore/retire+copiedSQLbody; matchingagentindependentreview; rootowns
-profiles/preflights/docs/allactualexecution. AllauthorsFROZEN afterreviewfixes.
-Source-firsttests1actualFAIL180/179pass/1aggregatefilefail from4latefakeHTTPerrors;
-54individualnew+125existingcasespassed. No precisesourcehasheswerecapturedfor
-failedworkingdraft; report55/publicsource-attempt1recordlimitation/failureTAPSHA.
-Narrowfixonce-onlydestroy+idempotentfake; furtherreviewguardsallocatedrequestend
-close/stderrjoin/one-shothelperstart. No blanketsuppression/guardreduction.
-Exact12filepins+commit6e37e7a recordedBEFOREtests2. Root4-filesuite2PASS
-182/182 (57new bounds +125existing controls), zero failures/cancelled/skipped;
-session59330 joined exit0. Final scopedlint/9syntaxPASS, source2receipt retained.
-Profile creator subsequently gained a normal authenticated read; excluded from
-source2 pin and freshly syntax-checked, actual qualification still NOT_RUN.
-Actualprobe3PASS six bounded synthetic helpers, two nonce-only volumes, exact
-binary/Unicode UID/GID/mode/nanosecond/content round trip; all helpers and both
-volumes positively removed. Source writes0, outside18containers/27volumes/14networks
-unchanged. Probe1/2 failed before first/capture helper starts on daemon omittedfalse/
-Windows bind normalization; both cleanupPASS and immutable failure receipts kept.
-Probe-only closed canonical normalization fixes; production6e37 unchanged.
-Profile1 actualPASS126tables, host90,463,178,752Bfree/17,056,527,232Brequired;
-Linuxvolume969,618,956,288Bfree/7,690,345,850Brequired (separate overlapping views).
-Backup1 actualFAIL PF_OPERATION_FAILED at model audit, before cold observation;
-positive scope cleanupPASS/all helpers removed, exactsource recoveryPASS/healthy,
-PG unchanged/outside18/27/14 preserved. Diagnosis1 wrapper missing JWT config
-failed before usable JSON; kept, helper removed/outside preserved. Separate
-diagnosis2 actual same233,991,168Bresource:128MiBtmp STORAGE_EXHAUSTED,512MiBtmp
-PASS. Full512MiBauditPASS5versions/1541resources/1,930,801,055B/allhealthy.
-Observer nowSHAa5cb1d8... uses512MiBtmp (same2GiBmemory/1CPU/120s), accepts only
-the exact positively reconciled source-resumed1 binding pinned to failure/intent.
-Independent reviewPASS; tracked6e37 source unchanged. Profile3freshPASS,
-Backup2 actualFAIL finalPF_BACKUP_INVALID despite8payloadmembers/complete marker:
-manifest.artifacts isFAIL/PF_ARTIFACT_AUDIT_FAILED; never label archive verified.
-All3scopeclosuresPASS/helpersremoved/noUnknown. Core already resumed source5191;
-root reconcile1 health200/allcore rolesrunning/PGStartedAtunchanged. Wrapper's
-recoveryUNCONFIRMED ERR_ASSERTION retained; currentstaticdiagnosis allpinsmatch,
-8readonly API inspections show7rawmatch/1exactreverse, Config/HostConfig allsame.
-Docker's Mounts array order is observably unstable. Future pins must retain all
-mount fields and canonicalize ordering, never relabel old failure/recovery.
-Outsideguard2FAIL one newly added anonymousvolume5a66c738...; existingoutside
-containers/networks/volumes unchanged. PGTOC image declares /var/lib/postgresql;
-unshadowed image VOLUME likely caused it. Eventhistory lookup returned0; retain
-unknownvolume until positive ownership qualification, no prune/delete guessing.
-Artifact direct-root and1000 actualcontrols bothEACCES; allhelpersremoved and
-sourceunchanged. Capacityagent owns narrowruntime-lib/TOC/read-onlyartifactcaps/
-bounds tests fixes (not yet verified), preparationagent reviewed recoverypins.
-Source3 exact8filepins before5suiteexecution:232/232PASS/zero failures/cancelled/
-skipped; scoped4filelintPASS, independentreviewPASS. Actualcontrols3PASS:
-root exactreadonly inventory+DAC reads372files/736,625,033B SHA
-c054b1995af3ea2e7b6fd3bef1bb98110db971436428391de61fa9d72a3fcac1;
-readonly1MiB PGtmpfs TOCPASS84,447B/no newanonymousvolume. Allhelpersremoved,
-sourceunchanged/outsidefreshbaseline18/28/14 unchanged. Existing1Bunqualified
-anonymousvolume remainsretained. Rootpositive source-reconciled2/currentadmin200/
-5fullstaticpins/PGunchanged available; privateobserverfuturecanonicalpins and
-exactresumed2guard preparationagentauthoring. Rootowns profiles/proofs/actualexec.
-No restore has run.
-Rootactualreadonlydiscovery1PASS same
-reviewedSQLbody371e2826:126tables/44,395rows/124,663,397textbytes, rollback+close
-confirmed, existingownedAPIonly/nohelper. Inputs/transportrawprivate. Rootprofile
-creatorauthoredNOT_RUN; mustfreshqualifyrealheadroom/disk/port5192/journal/host/
-lease/job/import/validation/quiescence/outsidepreservation andpintablecolumns.
-CurrentIABDetails(viaordinarynavigation) Viewerunloaded forheadroom; no formsave.
-BoundsinterfacewithBoundedDockerExecution/getBoundedDockerCleanup: harddeadlines,
-nonceownednewtemporaryhelpers/positivejoin/cleanup, streamedarchivecap, failclosed
-remoteexecunknown. Trackedhelperwaitusesmetadata pollingwithinunchangedhelper
-120sdeadline; no4hwait. TerminalwitnessproposalfornarrowfixedPostgresremoteexec
-nowbyte-exactforfixedPostgreSQLonly; no localexit-only inference. Closedarchive
-ownershipmodepreservesmetadatausingonlynecessaryexactarchivecmd/mountcaps;
-ReadonlyRootfs/CapDropALL/no-newprivilege/defaultnoaddedcapsretained. Observer
-refrozenSHAa1dbaccb9ee6c3e2b0e4ab236c97c29b73814796fd8acffaa58f616befb66f47.
-Rootmake-profile/outsideguard authored+syntaxPASS, actualprofileNOT_RUN.
-Capacity agent is authoring a separate nonce-owned actual archive/capability
-probe; root will execute only after review and retain positive cleanup evidence.
-Next: actual small probe→freshrootprofile→explicitown5191
-coldbackup→new5192restore/readback/UI/
-qualifiedretireONLYtarget. Neverdefault5190. KeepMVskip/policyPAUSED/noApply.
+CURRENT STAGE: **BLOCKED_WINDOWS_MEMORY** — unfinished current-full-network
+recovery proof. Backup1/2 FAIL retained; backup3/restore5192 NOT_RUN.
+Automation path-finder-purpose-rules-and-model-revisions **PAUSED** through the
+app tool, verified by TOML readback. No further unchanged automatic attempts.
+
+Worktree C:/Users/todor.chankov/source/WFC-pathfinder-local; branch
+pf-aalborg-current-full-recovery-local-20261020. Operator source checkpoint
+7c0c673fd1a6aa442c4989c816d760f2626797b6; final documentation commit descends
+from it (read live HEAD). Continue using handoffs/PF-Aalborg-current-full-recovery-resume.md
+when host headroom is available. Do not restart completed PF-0–PF-R10 work.
+
+Root sole actual executor; capacity/preparation/matching agents completed/frozen.
+All test/driver processes joined, no active helper/job/restore. Source5191 is
+healthy; browser2/tab2 shows Details/available model/settings1/7/5/10 and is a
+marked deliverable. Previous agent test tab was unloaded/replaced for memory;
+no outside processes or original containers were stopped.
+
+Final source normal state/job/policy/grant reads PASS at11:29UTC:
+1808nonMV complete (LV257/Control345/Instrumentation1206),230calculated/
+1578locations_required,332MVexcluded. Policy PAUSED control7/grantdisabled,
+prior authority expired; never resume all2140 or renew authority silently.
+Fence8 PASS2140all-columnSHA
+0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155,0Apply.
+No new calculation, mappings, engineering acceptance or real Apply in this stage.
+
+Current source binding in private b3 directory:
+full-recovery1-source-resumed2.private.json, positive source-reconciled2 proof.
+Same owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46/projectwfc-pathfinder-local-0cba87606e9b/
+runtimebatched-capture-runtime-20261018-1600/port5191/epoch69f3bee1... .
+API9387454711b7761c7434ee25f45ad4123435c7ce4fe87cb44c97f89ba1370fcd,
+web0e1e8823ffa72fae8e5b00d2407254ea25e2e134237e522af1cf89b9f152c80d.
+Own runtime images still c68b443; new changes are host operator tooling only.
+Original WFC/old and canonical PF/sources/original data/5190 remain untouched.
+No push/PR/merge. Denied paths and .pf0-work/.pf2-work remain untouched.
+
+Verified at7c0c673: source3 five-file Node controls232/232/0fail/cancel/skip,
+scopedlint and independentreview PASS; exact8file inputs pinned before execution.
+Actual controls3 PASS372PFfiles/736625033B SHA
+c054b1995af3ea2e7b6fd3bef1bb98110db971436428391de61fa9d72a3fcac1 and
+mounted-file TOC84447B. Exact opt-in RO inventory gets onlyDAC_OVERRIDE;
+PG image VOLUME shadowed by1MiBROtmpfs. All helpers removed/no newanonvolume.
+Earlier source2 PASS182; failed source attempt1 retained (late fake transport errors).
+Actual synthetic probe3 PASS6helpers/two fresh volumes/byte+POSIXns restoration,
+all removed; two preceding daemon-normalization failures retained/cleaned.
+
+Actual backup1 FAIL at model audit before cold snapshot. Same233991168Bresource
+failed128MiBtmp STORAGE_EXHAUSTED, passed512MiBtmp; complete corrected audit
+PASS5versions/1541resources/1930801055B/allhealthy. Actual backup2 FAIL final
+PF_BACKUP_INVALID because artifact audit EACCES;8written payloads are NOT a
+verified archive. Do not repair/relabel failed manifest. Both root and UID1000
+EACCES controls retained; corrected exact-capability inventory proved PASS.
+All prior scopes joined/helpersremoved/noUnknown. Wrapper recovery2 remains
+UNCONFIRMED/ERR_ASSERTION; later source reconciliation positively verified5full
+pins/currentadmin+health200/PGunchanged.8APIreads demonstrated full Mounts record
+order can reverse (7original/1reverse) with unchangedConfig/HostConfig.
+Private observer84bda1313a7991b9bac0f0b0f7418d97cda4b4e5742832e7d4905c41045db3a4
+has reviewed future canonical full pins/exact resumed2 guard; old failures retained.
+
+Whole-outside guard afterbackup2 FAIL on one additional anonymous volume
+5a66c738b3617193af425e6532dd6fee7e46c80d6a0c74d00855ce7ffa3b210e:
+Docker reports1B/refcount0, eventhistory unavailable. OwnershipUNCONFIRMED;
+retain, no delete/prune. Subsequent bookends preserve18outside containers/
+28volumes/14networks. All original container states/images/start times preserved.
+Failed archives/private configs/proofs retained for diagnosis and continuation.
+
+Fresh preflights4/5 BLOCKED onlyWindows physicalRAM<3GiB. Profile5 at11:25UTC:
+2686881792Bphysicalfree/4353859584Bvirtualfree;LinuxVM12703526912Bavailable is a
+SEPARATE overlapping view, never summed. Unloading/replacing agent test page did
+not resolve it (later host check2463027200B). No backup3/5192target was created.
+Do not lower guards/kill outside processes/restart originals/repeat unchanged polls.
+All independent source fixes/controls/readback/docs/handoff work is done for now;
+resume actual backup3 only after a meaningful host-memory change and fresh gates.
+Remaining human work:1042missing/48ambiguous shared locations, review230proposals,
+17unresolved cross-revision mappings. Never invent these decisions.
+
+Public report55 and evidence/aalborg-full-recovery/{source3,controls3,
+backup-attempt1,backup-attempt2,blocked1,source-final1}.json distinguish scope/status.
+Remote connector refreshed20Oct: WFCmain96e63f13,PFmaster45c24bf5; no remotebranch/
+PR for current local branch. Original cleanmain96e63/canonicalcleanmaster45c24;
+oldPFmaster35f4fb46localcsproj/ClAddin/.vscode preserved. At7c0c673 isolated
+88ahead/3behind cachedorigin/main/no upstream; no remoteCI acceptance claimed.
 
 LATEST USER: **Skip MV cables.** Selected normal job
 a29cd4c2-2d86-4ee0-9cbb-5bc598552781 COMPLETE:1808nonMV (LV257/Control345/
