@@ -1,6 +1,7 @@
 # Aalborg — atomic ordinary trace publication event
 
-**Source verified; actual database controls and deployment NOT_RUN yet.**
+**Source verified; first actual fixture failed during seed before publication;
+metadata fix reviewed, actual atomic controls and deployment pending.**
 Local branch `pf-aalborg-ordinary-trace-event-local-20261020` inherits availability
 delivery `4a5548c812a16529889425bff8fa54d85f0eef1c`.
 
@@ -17,6 +18,15 @@ Initial lint found an unsafe finally throw in the new fixture; it was corrected,
 with primary and cleanup failures retained, before the successful scoped check.
 No database result is inferred from mocks. Source hashes/test-report hashes:
 `evidence/aalborg-trace-event/source1.json`.
+
+Candidate1 built from7748a61. Fresh commit/disabled case1 failed with23514 in
+the existing ready-model guard before trace creation: synthetic validation
+metadata omitted package/fingerprint/full-manifest identities. Its helper was
+positively joined/removed and only its marker-verified fresh database was dropped.
+Failure receipts are retained. The test-only repair reuses one explicitly
+synthetic manifest across report/model fields; constraints remain unchanged.
+Independent source review confirms conformance to both SQL CHECKs and trigger.
+No actual atomic PASS is inferred from this repair.
 
 The new integration control guards a fresh uniquely owned database and empty
 storage before initialization. Its five-object synthetic corpus preserves exact

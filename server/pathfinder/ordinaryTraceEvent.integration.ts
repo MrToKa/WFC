@@ -124,7 +124,12 @@ async function seed(pool: Pool, input: OrdinaryTraceEventControlOptions) {
   // Constrained metadata is intentionally simulated only inside this fresh SQL
   // fixture. No model storage verifier, import, or conversion is claimed here.
   const synthetic = { syntheticFixtureOnly: true, scope: 'seeded SQL health state; no SVF package or storage verification performed' };
-  const verification = { reportSchemaVersion: 1, status: 'PASS', operation: 'verify', checks: Object.fromEntries(['portableManifest', 'safeArchive', 'rawInventory', 'fingerprint', 'supportedProfile', 'nestedReferences'].map(name => [name, 'PASS'])), resourceCount: 1, totalRawBytes: 0, ...synthetic };
+  // The real ready-model guard compares these identities and the entire JSON
+  // manifest. Reuse one explicitly synthetic value; do not bypass that guard.
+  const label = 'Synthetic SQL trace transaction fixture', supportProfile = 'svf-local-7.130.0-v1';
+  const modelManifest = { ...synthetic, source: synthetic, label, packageId, contentFingerprint: plan.contentFingerprint, supportProfile };
+  const verification = { reportSchemaVersion: 1, status: 'PASS', operation: 'verify', checks: Object.fromEntries(['portableManifest', 'safeArchive', 'rawInventory', 'fingerprint', 'supportedProfile', 'nestedReferences'].map(name => [name, 'PASS'])),
+    package: { packageId, ...synthetic }, contentFingerprint: plan.contentFingerprint, manifest: modelManifest, resourceCount: 1, totalRawBytes: 0, ...synthetic };
   const readback = { status: 'PASS', algorithm: 'SHA-256', resourceCount: 1, totalBytes: 0, verifiedAt: now, ...synthetic };
   const c = await pool.connect(); let commitStarted = false;
   try {
@@ -136,8 +141,8 @@ async function seed(pool: Pool, input: OrdinaryTraceEventControlOptions) {
     await c.query('INSERT INTO model_validation_reports(id,report,storage_readback) VALUES($1,$2,$3)', [reportId, verification, readback]);
     await c.query("INSERT INTO model_import_jobs(id,project_id,requested_by,idempotency_key,archive_sha256,expected_bytes,owner_token,state,model_version_id) VALUES($1,$2,$3,$4,$5,0,$6,'complete',$7)", [importId, projectId, actorId, randomUUID(), projection.sha256, randomUUID(), plan.modelVersionId]);
     await c.query(`INSERT INTO model_versions(id,project_id,package_id,content_fingerprint,label,source,schema_version,support_profile,format,sdk_version,entrypoint,prepared_at,imported_at,imported_by,state,health,resource_count,total_bytes,validation_report_id,manifest,storage_prefix,owner_import_id)
-      VALUES($1,$2,$3,$4,'Synthetic SQL trace transaction fixture',$5,1,'svf-local-7.130.0-v1','svf','7.130.0','resources/output/0/0.svf',$6,$6,$7,'ready','healthy',1,0,$8,$5,$9,$10)`,
-    [plan.modelVersionId, projectId, packageId, plan.contentFingerprint, synthetic, now, actorId, reportId, `projects/${projectId}/versions/${plan.modelVersionId}/`, importId]);
+      VALUES($1,$2,$3,$4,$5,$6,1,'svf-local-7.130.0-v1','svf','7.130.0','resources/output/0/0.svf',$7,$7,$8,'ready','healthy',1,0,$9,$10,$11,$12)`,
+    [plan.modelVersionId, projectId, packageId, plan.contentFingerprint, label, synthetic, now, actorId, reportId, modelManifest, `projects/${projectId}/versions/${plan.modelVersionId}/`, importId]);
     await c.query('UPDATE project_model_selections SET active_model_version_id=$2,selection_revision=$3 WHERE project_id=$1', [projectId, plan.modelVersionId, plan.selectionRevision]);
     for (const tray of plan.requestedScope.trays) await c.query("INSERT INTO trays(id,project_id,name,purpose,width_mm,height_mm,length_mm) VALUES($1,$2,$3,'Control',1000,100,10000)", [tray.projectTrayId, projectId, tray.rawName]);
     await c.query('UPDATE pf_project_state SET registry_revision=$2 WHERE project_id=$1', [projectId, plan.locationRegistryRevision]);

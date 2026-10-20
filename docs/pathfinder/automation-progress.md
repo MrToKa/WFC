@@ -1,6 +1,6 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T09:59:00Z
+## Current live checkpoint — 2026-10-20T10:12:00Z
 
 LATEST USER STEERING: **Skip MV cables.** Do not resume the all-category finite
 automatic policy or submit all2140 while this instruction applies. Scope the
@@ -19,7 +19,20 @@ rule change was requested.
   servertypes/build/importclosure/scopedlint. Initial fixtureunsafe-finallylintFAIL
   corrected/refrozen/finalPASS. Fixturecorpus3objectroot-name mismatch caught
   BEFOREexecution, corrected5objects(exactroots+STRAIGHTleaves+equipment),2segments.
-  Actual freshDBcontrols/imagebuild/deployment NOT_RUN; no fakefitteddataused.
+  Sourcecheckpoint7748a61e53b934c6a6c4123976dd1696d23ddb04; ownedcandidatebuildPASS
+  trace-event-build1-result(API859ed2c769ef37cdb3929ff611bebee0a3cc26cba17ba139195f004f843aa8f5,
+  web6579172256bcb7dd39c77ed0251307bbbd414b69f6e38466b72564ef939b7144),
+  actual5191runtimepreserved/outsidepreserved. FreshDBcase1 commitdisabled FAIL23514
+  during syntheticready-modelseed BEFOREtracepublication: validation/storedresource
+  receipt mismatch. Helperpositivelyremoved/DBdropped, failedreceiptsretained.
+  Test-only seed metadata fix frozen/reviewed: one shared explicitlysynthetic
+  manifest/package/fingerprint satisfies unchangedCHECKs/readytrigger. Root reran
+  servertypes/scopedlint/serverbuild/importclosure PASS; source2receipt reuses104
+  unchangedproductionchecks atsource1, retainscase1FAIL, atomicretestPENDING.
+  Revieweridentifiedcleanupreceipt evidenceordering; root movedpreservationchecks
+  beforewritingtrue; narrowfixreviewPASS. No actualatomicPASS/deploymentyet.
+  Do NOTreusecase1orbuild1labels. Rootlauncher
+  now accepts exactbuildBinding(trace-event-buildN-result), addslauncher/programpins.
   Rootprivate run-trace-event-fixture1.mjs reviewed/syntaxPASS, boundedwait215s/
   watchdog210s/awaitownedstop/positivePid0,2GiB/1CPU/128pids/readonlyroot/internal
   ownedbackend, PF_LOCAL_DEMOtrue/newemptyPF_ROOT, DBmarker/zeroConnectionsDROP.
@@ -67,8 +80,8 @@ rule change was requested.
   non-mv-calculation1-result. Scope SQLjoin1808items/0MV. Fence3 at08:55UTC all2140
   columnhash matches baseline/0Apply. Normal7-checkpoint publicreceipt +report52
   committed aef9d38; later finalbatchreceipt non-mv-final2 supersedes runningnote.
-- NEXT: local sourcecheckpointcommit then prepare-trace-event-build1.mjs and
-  build-trace-event1.mjs(newcandidateonly); run5freshownedDBcases sequentially:
+- NEXT: newlocalcommit/build2 afterverified seedfix;
+  then newcase2(commitdisabled) and remainingfreshownedDBcases sequentially:
   commit disabled/paused/expired,rollback paused,lost-ack paused. Each ownhelper+
   DBmustremove/drop afterpositivejoin+markerproof, outputs/receiptsretained. Actual
  5191API remains availability1 until freshatomicproof PASS and guardedupgrade.
