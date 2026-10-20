@@ -1,6 +1,28 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T10:23:44.804Z
+## Current live checkpoint — 2026-10-20T10:34:33Z
+
+CURRENT STAGE: current-full-network recovery evidence, NOT_RUN actualbackup/restore.
+Branchpf-aalborg-current-full-recovery-local-20261020 inherits handoffa15721d and
+verifiedtraceeventdeliverya625234. ExecutePF-Aalborg-current-full-recovery.md.
+Do not duplicateactivework. Capacityagentownsoperationsdocker/bounds/tests plus
+narrowportablebundlelist/tests; preparationagentownsprivatefull-recovery1 observer/
+backup/restore/retire+copiedSQLbody; matchingagentindependentreview; rootowns
+profiles/preflights/docs/allactualexecution. AuthorsNOTfrozenyet, no actualtests
+ofnewboundsorbackup/restore/helperstarted. Rootactualreadonlydiscovery1PASS same
+reviewedSQLbody371e2826:126tables/44,395rows/124,663,397textbytes, rollback+close
+confirmed, existingownedAPIonly/nohelper. Inputs/transportrawprivate. Rootprofile
+creatorauthoredNOT_RUN; mustfreshqualifyrealheadroom/disk/port5192/journal/host/
+lease/job/import/validation/quiescence/outsidepreservation andpintablecolumns.
+CurrentIABDetails(viaordinarynavigation) Viewerunloaded forheadroom; no formsave.
+BoundsinterfacewithBoundedDockerExecution/getBoundedDockerCleanup: harddeadlines,
+nonceownednewtemporaryhelpers/positivejoin/cleanup, streamedarchivecap, failclosed
+remoteexecunknown. Trackedhelperwaitusesmetadata pollingwithinunchangedhelper
+120sdeadline; no4hwait. TerminalwitnessproposalfornarrowfixedPostgresremoteexec
+mustbesource-reviewed/tested beforeactualexecution; no localexit-only inference.
+Next: authorsfreeze→independentreview→rootappropriatecontroltests/syntax→source
+checkpoint→freshrootprofile→explicitown5191coldbackup→new5192restore/readback/UI/
+qualifiedretireONLYtarget. Neverdefault5190. KeepMVskip/policyPAUSED/noApply.
 
 LATEST USER: **Skip MV cables.** Selected normal job
 a29cd4c2-2d86-4ee0-9cbb-5bc598552781 COMPLETE:1808nonMV (LV257/Control345/
@@ -10,7 +32,7 @@ against DetailsS7/E5/P10/gap1, loadedFromDisktrue. No productwide MVrule/categor
 permission change. All-category policy staysPAUSED(control7), grantdisabled;
 previous finiteauthority expired09:11UTC. Never resumeall2140 or renewauthority.
 
-- Branchpf-aalborg-ordinary-trace-event-local-20261020, source7748a61,
+- Previousdeliverybranchpf-aalborg-ordinary-trace-event-local-20261020, source7748a61,
   test-only metadata repairc68b4434ffadc73c7c6ca38997cfe4689aca928f.
   Ordinarytraceevent technically VERIFIED/deployed own5191. Rootsole actual
   test/runtime/SQL/HTTP/UIexecutor; agentscompleted/frozen, noactivebuild/helper/job.

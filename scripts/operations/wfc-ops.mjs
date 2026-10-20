@@ -18,7 +18,7 @@ const privateEnv=config=>[...environment(config)].map(([key,value])=>key+'='+val
 const safeJSON=value=>JSON.parse(JSON.stringify(value));
 export async function bundleOperatorModules(directory){
   const sourceRoot=path.dirname(fileURLToPath(import.meta.url)),records=[];
-  for(const name of ['wfc-ops.mjs','docker.mjs','manifest.mjs','archives.mjs','restore-fencing.mjs']){const source=path.join(sourceRoot,name);await assertCanonicalPath(source);const before=await recordFile(sourceRoot,name,'source');await fs.copyFile(source,path.join(directory,name),1);const copied=await recordFile(directory,name,'source'),after=await recordFile(sourceRoot,name,'source');if(copied.sha256!==before.sha256||copied.bytes!==before.bytes||after.sha256!==before.sha256||after.bytes!==before.bytes)fail('OPERATOR_SOURCE_CHANGED');records.push(copied);}
+  for(const name of ['wfc-ops.mjs','docker.mjs','docker-bounds.mjs','manifest.mjs','archives.mjs','restore-fencing.mjs']){const source=path.join(sourceRoot,name);await assertCanonicalPath(source);const before=await recordFile(sourceRoot,name,'source');await fs.copyFile(source,path.join(directory,name),1);const copied=await recordFile(directory,name,'source'),after=await recordFile(sourceRoot,name,'source');if(copied.sha256!==before.sha256||copied.bytes!==before.bytes||after.sha256!==before.sha256||after.bytes!==before.bytes)fail('OPERATOR_SOURCE_CHANGED');records.push(copied);}
   return records;
 }
 export function pathContained(parent,candidate){const normalize=value=>process.platform==='win32'?path.resolve(value).toLowerCase():path.resolve(value),relative=path.relative(normalize(parent),normalize(candidate));return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);}
