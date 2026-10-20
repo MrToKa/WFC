@@ -7,11 +7,12 @@ import type { PathFinderCable, PathFinderJob } from '@/api/pathfinder';
 import type { BatchReviewCandidate } from './hooks/usePathfinderBatchReview';
 import type { BatchReviewController } from './PathFinderBatchReview';
 
+export type PathFinderCalculationScope = { admissionId: string | null; jobId: string | null; ready: boolean; message: string | null };
 export type PathFinderRevisionResultsProps = RevisionResultsAccess & {
-  onOpenProposal: (proposalId: string) => void | Promise<void>; busy?: boolean;
+  onOpenProposal: (proposalId: string, expectedJobId: string) => void | Promise<void>; busy?: boolean;
   batch?: BatchReviewController; cables?: PathFinderCable[]; jobs?: PathFinderJob[];
   readJob?: (jobId: string) => Promise<PathFinderJob | null>;
-  onScopeReadinessChange?: (value: { ready: boolean; message: string | null }) => void;
+  onScopeReadinessChange?: (value: PathFinderCalculationScope) => void;
 };
 type Model = NonNullable<RevisionResultDetail['row']['result']>['newModel'];
 const unavailable = 'Unavailable';
@@ -103,7 +104,8 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   }, [jobOwner, knownJobKey, props.readJob, props.active, state.enabled, jobAttempt]);
   const ownedJobRead = jobRead.owner === jobOwner ? jobRead : null;
   const scopeJob = knownJob ?? ownedJobRead?.value;
-  const scopeIssue = !state.enabled ? 'Administrator access is required. Refresh your account before continuing.'
+  const ownsScope = Boolean(state.enabled && props.isAdmin && props.accountId && props.token && props.projectId === props.loadedProjectId);
+  const scopeIssue = !ownsScope ? 'Administrator access is required. Refresh your account before continuing.'
     : !state.admission ? state.admissionsLoading ? 'Loading calculation scopes…' : 'Choose a completed calculation below. No saved calculation is currently selected.'
       : !state.admission.jobId ? 'This calculation has no job or applicable output. Choose a completed calculation, or calculate non-MV cables again if needed.'
         : scopeJob?.cancelRequested || scopeJob?.status === 'cancelled'
@@ -112,8 +114,10 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
             ? `This calculation is ${scopeJob.status}. Review and Apply require a completed calculation. Wait for it to finish, or calculate again after a failed job.`
             : !scopeJob ? ownedJobRead?.loading ? 'Checking the selected calculation state…'
               : 'The selected calculation state is unavailable. Check it again before selecting results for review.' : null;
-  const scopeReady = Boolean(props.active && state.enabled && scopeJob?.status === 'complete' && !scopeJob.cancelRequested);
-  useEffect(() => { props.onScopeReadinessChange?.({ ready: scopeReady, message: scopeIssue }); }, [props.onScopeReadinessChange, scopeReady, scopeIssue]);
+  const scopeReady = Boolean(props.active && ownsScope && scopeJob?.status === 'complete' && !scopeJob.cancelRequested);
+  const scopeAdmissionId = ownsScope ? state.admission?.id ?? null : null, scopeJobId = ownsScope ? state.admission?.jobId ?? null : null;
+  useEffect(() => { props.onScopeReadinessChange?.({ admissionId: scopeAdmissionId, jobId: scopeJobId, ready: scopeReady, message: scopeIssue }); },
+    [props.onScopeReadinessChange, scopeAdmissionId, scopeJobId, scopeReady, scopeIssue]);
   if (!props.isAdmin || !props.accountId || !props.token || props.projectId !== props.loadedProjectId) return null;
   if (!state.enabled) return <section aria-label="Cable revision results" className={styles.result}><h3>Cable revision results</h3>
     <p role="alert">Administrator access is required. Refresh your account before continuing.</p></section>;
@@ -121,6 +125,8 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   const frozen = !props.active || props.busy || loading || opening;
   const choices = state.admission && !state.admissions.some(value => value.id === state.admission?.id) ? [state.admission, ...state.admissions] : state.admissions;
   const detail = state.detail, row = detail?.row, baseline = row?.baseline, accepted = baseline?.lastAcceptedApply, result = row?.result;
+  const resultBelongsToScope = Boolean(state.admission?.jobId && detail?.admissionId === state.admission.id
+    && detail.envelope?.jobId === state.admission.jobId);
   const candidate = (value: RevisionResultDetail['row']): BatchReviewCandidate | null => {
     const cable = props.cables?.find(item => item.id === value.cableId), output = value.result;
     if (!scopeReady) return null;
@@ -136,9 +142,10 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
       : value.currentness.state !== 'current' ? 'Outdated — review blocked' : status(value.status);
   const selectable = (state.page?.rows ?? []).map(candidate).filter((value): value is BatchReviewCandidate => value !== null);
   const open = async () => {
-    if (frozen || !result || !detail?.envelope || !props.isAdmin || !props.accountId || props.projectId !== props.loadedProjectId) return;
+    const expectedJobId = state.admission?.jobId;
+    if (frozen || !result || !detail?.envelope || !expectedJobId || !resultBelongsToScope || !props.isAdmin || !props.accountId || props.projectId !== props.loadedProjectId) return;
     const started = owner, atGeneration = generation.current; setOpening(true); setOpenError(null);
-    try { await props.onOpenProposal(result.proposalId); }
+    try { await props.onOpenProposal(result.proposalId, expectedJobId); }
     catch { if (latestOwner.current === started && generation.current === atGeneration) setOpenError('The exact proposal could not be opened. Refresh this calculation scope and try again.'); }
     finally { if (latestOwner.current === started && generation.current === atGeneration) setOpening(false); }
   };
@@ -150,6 +157,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
       {!state.admission ? <option value="">Choose a calculation</option> : null}
       {choices.map(value => <option key={value.id} value={value.id}>{value.kind === 'automatic' ? `Generation ${value.generation}` : 'Manual calculation'} · {value.createdAt} · {value.total} cables{props.jobs?.find(item => item.id === value.jobId)?.status ? ` · ${label(props.jobs.find(item => item.id === value.jobId)!.status)}` : ''}</option>)}
     </select>
+    {state.admission ? <p role="status" aria-label="Selected calculation scope">Selected calculation: {state.admission.kind === 'automatic' ? `Generation ${state.admission.generation}` : 'Manual calculation'} · {state.admission.createdAt} · {state.admission.total} cables. Status: {scopeJob?.cancelRequested ? 'cancellation requested' : scopeJob ? label(scopeJob.status) : state.admission.jobId ? 'checking calculation state' : 'no calculation job'}.</p> : null}
     <div className={styles.actions}>
       <Button disabled={frozen || !state.previousAdmissions} onClick={state.previousAdmissionsPage}>Previous calculations</Button>
       <Button disabled={frozen || !state.nextAdmissionsCursor} onClick={state.nextAdmissions}>More calculations</Button>
@@ -224,8 +232,9 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
         {result ? <><p>Proposal hash: {result.proposalHash}</p><p>Revision-result hash: {result.revisionResultSha256}</p><p>Engine-result hash: {result.engineResultSha256}</p><p>Length-component hash: {text(result.ledgerHash)}</p><p>Dependency hash: {result.dependencyHash}</p></> : null}
         <Caption1>Installed length is preserved. Native parity and wider model acceptance are not established by this result.</Caption1>
       </details>
-      <Button appearance="primary" disabled={frozen || !result || !detail.envelope} onClick={() => void open()}>Open exact proposal in Viewer</Button>
-      <Caption1>The existing protected proposal flow checks the exact path and current authority before human Review and Apply.</Caption1>
+      {result && detail.envelope && !resultBelongsToScope ? <p role="alert">This saved result does not match the selected calculation. Refresh the selected calculation before opening a proposal.</p> : null}
+      <Button appearance="primary" disabled={frozen || !result || !detail.envelope || !resultBelongsToScope} onClick={() => void open()}>Open exact proposal in Viewer</Button>
+      <Caption1>The exact proposal is opened from the selected calculation. The protected flow checks its path and current authority before human Review and Apply.</Caption1>
     </section> : null}
   </section>;
 }

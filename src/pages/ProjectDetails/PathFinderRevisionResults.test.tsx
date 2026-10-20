@@ -74,6 +74,30 @@ describe('administrator cable revision inspection', () => {
     expect(screen.getAllByText(/Review blocked — cancelled calculation/).length).toBeGreaterThan(0);
     expect(batch.select).not.toHaveBeenCalled();
   });
+  it('reports the exact selected admission and job, including changes, without opening or approving a proposal', () => {
+    const { f, state } = setup(), p = props(), changed = vi.fn();
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    const view = render(<PathFinderRevisionResults {...p} batch={batch} onScopeReadinessChange={changed} />);
+    expect(changed).toHaveBeenLastCalledWith({ admissionId: id(2), jobId: id(3), ready: true, message: null });
+    expect(screen.getByRole('status', { name: 'Selected calculation scope' })).toHaveTextContent('Status: complete.');
+    const admission = { ...f.admissions.admissions[0], id: id(70), jobId: id(71), createdAt: '2026-10-20T08:48:42Z' };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, admission, detail: null, page: { ...f.page, admissionId: admission.id } });
+    view.rerender(<PathFinderRevisionResults {...p} batch={batch} jobs={[completeJob(id(71))]} onScopeReadinessChange={changed} />);
+    expect(changed).toHaveBeenLastCalledWith({ admissionId: id(70), jobId: id(71), ready: true, message: null });
+    expect(screen.getByRole('status', { name: 'Selected calculation scope' })).toHaveTextContent('2026-10-20T08:48:42Z');
+    expect(batch.clearSelection).toHaveBeenCalledOnce(); expect(batch.select).not.toHaveBeenCalled(); expect(p.onOpenProposal).not.toHaveBeenCalled();
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, admission: null, detail: null, page: null });
+    view.rerender(<PathFinderRevisionResults {...p} batch={batch} onScopeReadinessChange={changed} />);
+    expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ admissionId: null, jobId: null, ready: false }));
+  });
+  it('does not open a proposal whose sealed job differs from the selected calculation', () => {
+    const { f, state } = setup(), p = props();
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, detail: { ...f.detail, envelope: { ...f.detail.envelope!, jobId: id(90) } } });
+    render(<PathFinderRevisionResults {...p} />);
+    expect(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('This saved result does not match the selected calculation.');
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })); expect(p.onOpenProposal).not.toHaveBeenCalled();
+  });
   it.each(['queued', 'running', 'failed'] as const)('labels %s calculation outputs as blocked instead of ready for review', status => {
     const { f } = setup(), row = f.page.rows[0], readiness = vi.fn();
     const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
@@ -125,10 +149,11 @@ describe('administrator cable revision inspection', () => {
   });
   it('shows a safe denied-access explanation without exposing prior rows, private error text or actions', () => {
     const { state } = setup(); vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, enabled: false, error: 'Private old cable information' });
-    render(<PathFinderRevisionResults {...props()} />);
+    const changed = vi.fn(); render(<PathFinderRevisionResults {...props()} onScopeReadinessChange={changed} />);
     expect(screen.getByRole('alert')).toHaveTextContent('Administrator access is required. Refresh your account before continuing.');
     expect(screen.queryByText('C-001')).toBeNull(); expect(screen.queryByText('Private old cable information')).toBeNull();
     expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('button')).toBeNull();
+    expect(changed).toHaveBeenLastCalledWith({ admissionId: null, jobId: null, ready: false, message: 'Administrator access is required. Refresh your account before continuing.' });
   });
   it('separates edited current cable values from historical accepted geometry and preserves exact server decimal text', () => {
     setup(); const p = props(); render(<PathFinderRevisionResults {...p} />);
@@ -169,7 +194,7 @@ describe('administrator cable revision inspection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More calculations' })); expect(state.nextAdmissions).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button', { name: 'Inspect C-001' })); expect(state.readDetail).toHaveBeenCalledWith(id(4));
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' })));
-    expect(p.onOpenProposal).toHaveBeenCalledOnce(); expect(p.onOpenProposal).toHaveBeenCalledWith(id(7));
+    expect(p.onOpenProposal).toHaveBeenCalledOnce(); expect(p.onOpenProposal).toHaveBeenCalledWith(id(7), id(3));
   });
   it('keeps currentness warnings visible, permits protected inspection, and disables actions while inactive or busy', () => {
     const { f, state } = setup(); vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, detail: { ...f.detail, row: { ...f.detail.row, currentness: { state: 'changed', reasonCodes: ['CABLE_CHANGED'] } } } });

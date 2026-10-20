@@ -1,170 +1,35 @@
-# Path Finder — verify proposal preview and selected batch acceptance
+# Path Finder — selected calculation Review and Apply acceptance
 
-Status: technical delivery verified; live browser verification BLOCKED and real
-engineering acceptance AWAITING_HUMAN_INPUT. This is not a new full implementation
-stage or permission to rerun completed PF stages.
+Goal: verify that the completed calculation selected by the human owns the displayed proposal and review controls, then allow the human to review/apply selected non-MV proposals. Automated verification never supplies that acceptance.
 
-## Goal and baseline
+## Baseline and observed defect
 
-Verify the reported slow/disappearing proposal preview in the actual browser,
-then let the human review and explicitly apply selected non-MV proposals through
-the new batch controls. Do not treat automated tests as live visual acceptance.
+Worktree `C:/Users/todor.chankov/source/WFC-pathfinder-local`, inherited branch `pf-review-scope-consistency-local-20261020`, parent `e0eb4f8bf84dbfb388c6c10cb6f7b7be19867119`. Read live branch/HEAD/status and agents before work; the containing delivery commit follows this parent. Byte revision, checks and runtime are recorded in [report59](../59-selected-calculation-review.md) and its [actual receipt](../evidence/selected-calculation-review/actual.json). Reports56–58 remain historical at their revisions. Do not rerun accepted stages or PF-0 receipt writers for handoff preparation.
 
-Worktree: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-Branch: `pf-path-endpoints-visible-local-20261020`, parent
-`0166c8828458f35e676627bebe9a3f93cb2c903c`. Read live HEAD/status and agents first;
-the containing local delivery commit follows that parent. Production and test
-bytes are identified in [current actual.json](../evidence/path-endpoint-visibility/actual.json).
-Read [report58](../58-path-endpoint-visibility.md),
-[report57](../57-review-discoverability.md),
-[report56](../56-review-batch-and-preview-reliability.md),
-[progress](../automation-progress.md), and the still-applicable engineering scope
-in [PF-Aalborg-engineering-review.md](PF-Aalborg-engineering-review.md).
+The user correctly selected manual scope2026-10-20T08:48:42.348Z. Its table was selected, but parent preview/recent shortcuts could remain from a newer running job. The correction pins admission/job identity, clears old scope display/review, filters shortcuts and checks exact returned proposal/job before showing a path. Do not explain a newer running proposal as if the human chose the wrong scope.
 
-On 20 October, live remote main and the clean original WFC checkout were both
-`96e63f13fdc2b1d30b8f8ff658dd662f25fac104`. Before this delivery commit the local
-branch was 92 ahead/3 behind cached main. No remote CI, push, PR or merge occurred.
-Do not infer remote acceptance from these local checks.
+Read-only observations2026-10-20T15:55:12.985Z: selected old scope complete,230calculated/1578blocked, exact user's result current/compatible/canApplytrue; Aalborg0successful Review/0Apply. Two other queued/running jobs shared one engine. These counts are observations, not permanent current state. Old batch duration33m51.043s does not establish a new ETA or performance improvement.
 
-## Runtime, authority and preserved behavior
+Original WFC was cleanmain96e63f13 when inspected. This branch was93ahead/3behind cachedorigin/main before delivery commit; live remote and remote CI NOT_RUN for this local correction. No push, PR or merge. Do not infer remote acceptance.
 
-- Only own 5191 is eligible: owner `8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46`, compose
-  project `wfc-pathfinder-local-0cba87606e9b`, runtime
-  `pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600`, Aalborg
-  project `1af0f807-7653-40ea-8391-7eea6c54e7d4`.
-- API image is `sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c`;
-  web is `sha256:cf8f9bc50b7ccccdfcb009dc28908c91aa2c61e8b6bcd169f0330424ba0de397`.
-  Upgrade/final health PASS. Engine identity and all2153database cable rows plus
-  2preexisting database Apply receipts unchanged; Aalborg itself has2140cables.
-- Two earlier full2140jobs were explicitly cancelled;0activejobs and412retained
-  project proposals were checked. Do not relaunch those jobs or calculate all
-  cables merely to inspect this UI. The earlier230calculated results are a
-  historical count, not proof that230are currently applicable.
-- A newly observed2140calculation was running during report57; the agent did not
-  submit it, and this diagnosis did not establish the originating actor.
-  The UI correction did not cancel/restart it or control API/PG/MinIO. The final
-  upgrade saw2active jobs globally before/after, allowing natural progress. Read
-  current job states; do not carry that count forward as current. One normal GET
-  from the oldercomplete1808job still hadcanApplytrue/stalefalse after upgrade.
-- Keep strict current-role admin enforcement, protected Viewer bridge, exact
-  immutable proposal/revision/dependency/cableWriteRevision guards and idempotency.
-  Preserve filled Ghost, original tray colors, yellow path and Clear/restore.
-  No direct NOP_VIEWER integration or relaxed engineering gate.
-- MV stays excluded from batch selection; Instrumentation uses Control. Project
-  Details remains the source of SECONDARY/end connection/bending/gap values.
-  Drawing Left/Right rules do not change routing or design length.
-- Primary WFC5180, old5190, original/canonical PathFinder and synced sources are
-  read-only/outside runtime changes. The primary Simplified Preparer integration
-  and recurring PF automation remain PAUSED. No background authority was enabled.
+## Runtime and boundaries
 
-## What is implemented and verified
+Only owned5191 is eligible: owner `8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46`, compose project `wfc-pathfinder-local-0cba87606e9b`, runtime `pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600`, Aalborg project `1af0f807-7653-40ea-8391-7eea6c54e7d4`. Read current resources/images from the validated runtime and actual receipt; root is sole runtime/SQL/HTTP executor. Do not restart API/worker or submit/cancel calculations just to inspect the UI.
 
-Source contains independently bounded detail reads, single non-overlapping polls,
-a five-row recent preview with complete paged results, preserved appearance while
-loading a proposal, acknowledged Clear before Begin and bounded60sappearance
-commands. It includes model reload recovery and specific missing-result handling.
+Preserve current-role admin/auth, protected Viewer bridge, exact proposal/hash/dependency/cableWriteRevision/idempotency and pending-command recovery. MV remains excluded; Instrumentation follows Control. Project Details supplies S/E/P/gap. Keep From/To foreground, original materials, filled Ghost, yellow path and Clear. No direct NOP_VIEWER product API. No real Review/Apply on behalf of the human.
 
-Batch selection persists across pages of the same calculation. Explicit
-`Confirm review for selected cables` and then `Apply reviewed selection` use the
-existing server Review/Apply endpoints, with shared durable pending-command
-recovery and exact identity checks before each dispatch. Batches are atomic per
-cable; confirmed partial success survives stop/failure. No real engineering
-Review/Apply was performed during this delivery.
+Original5180/old5190, original/canonical PathFinder and sources remain untouched. Primary Simplified Preparer integration and recurring PF automation remain PAUSED. No push/PR/merge/deployment or activation of background authority. Retain5191, model archives, backups, evidence and historically denied cleanup paths.
 
-Report57 adds an always-visible batch toolbar above pages, exact cancellation/
-incomplete/unknown job explanations, initial known-complete selection without
-poll retargeting, historical job-state verification and explicit manual non-MV
-calculation IDs. Empty selection never calls Review/Apply. Ctrl+F5 the browser;
-choose the complete1808scope, inspect/select ready rows and use the visible toolbar.
+## Required next checks and stopping condition
 
-Report57 verified55distinct targeted tests, final frontend/backend typecheck, scoped lint,
-production WEB build and WEBONLY upgrade PASS. API/PG/MinIO IDs/start times stayed
-exact, all2153DBcables/2preexistingApplyreceipts unchanged; no realReview/Apply.
-1277consumed inputs/94412540bytes had before/after source-closure verification.
-New consistent concurrentDBsnapshot16225946bytes passed mountedTOC and finalhash
-readback; it is not a cold dump or new restore drill. Do not rerun checks merely
-for handoff. Historical228checks and the first build's NOT_MEASURED closure are
-recorded at report56's revision; firstupgradeFAIL/reconciliationPASS/case2PASS
-remain immutable. User screenshots show route/Ghost; no new toolbrowservisual
-acceptance is claimed. That historical scope is in report57 and its receipt.
+1. If browser tool access becomes available, use normal computer-use without bypassing the saved refusal. No tool visual PASS is established by a replay. User-provided screenshots are user evidence only.
+2. Reload5191 with Ctrl+F5. Select the completed manual scope at08:48:42.348Z (11:48local Europe/Kiev on20October). The explicit status must be complete.
+3. Inspect a calculated row, then Open exact proposal in Viewer. Its route, From/To equipment and job must belong to that selection. Another running job must not replace it. Verify original colors/Ghost/clear; changing scope must invalidate the old individual review, including outstanding late responses.
+4. Human individual flow: Confirm proposal review, then Apply reviewed result. Human batch flow: select current non-MV row checkboxes or Select ready cables on this page; use Review selected cables above the selector, Confirm review for selected cables, then Apply reviewed selection. Do not click these on actual data autonomously. Verify exact atomic routing+designLength update, installLength preservation, partial success/history and pending recovery.
+5. If controls remain blocked, record selected admission/job, actual opened proposal/job and precise visible reason; use normal authorized bounded GETs to check those exact records. Do not assume cancellation or missing approval is the UI cause. Never manufacture canApply, review IDs, credentials or roles.
 
-Report58 supersedes the above verification revision for the From/To visual change:
-71distinct targeted tests/types/lint/WEBbuild/WEBONLYupgradePASS. Optional current
-display provenance and bounded confirmed-object reads retain linked From/To
-equipment in the foreground alongside exact route objects. Explicit selected
-equipment IDs stay UI-only and model/job-scoped. Manual coordinate-only points
-have no object to infer. Original colors/materials, Ghost/Clear and all path points,
-lengths, calculation requests, server guards and bridge limits remain unchanged.
-This affects proposal and standalone Path, not ordered lookup/separateRoutings.
-Real converted reference replay passed2endpoints/7foreground/exactpoints; this
-does not establish a new live browser render or engineering acceptance. Current
-sourceclosure1280inputs andconsistentDBbackup17970330bytes+TOCpassed. CoreAPI/
-PG/MinioIDs+starts and2153cables/2Applyreceipts unchanged; jobs3→2naturally without
-APIcontrol/cancellation. Read current states instead of carrying these counts
-forward. Report58 retains intermediate test/harness failures and final PASS.
+Stop technical acceptance when the delivered scope binding is verified and only human engineering Review/Apply remains. Report PASS/FAIL/BLOCKED/NOT_RUN at the actual revision; native parity and human acceptance remain NOT_RUN until proven.
 
-## Bounded next actions and acceptance
+## Separate performance follow-up
 
-1. Use the supported browser tool only if its saved-permission state is changed
-   or access is otherwise actually restored. Current tool inventory could list
-   tabs but binding `http://127.0.0.1:5191/login` was refused even after the user
-   enabled Browser/Browsing and rebooted. Do not bypass the refusal with another
-   browser, raw CDP, token extraction or indirect page-content access. If the same
-   denial remains, record BLOCKED and continue only genuinely independent work.
-2. With the human's existing normal administrator login, hard-refresh5191, open
-   Path Finder → Path, choose an actual completed calculation under Cable revision
-   results, and inspect an eligible exact proposal. Confirm model remains visible
-   while loading, the exact path appears with filled Ghost/colors/yellow line,
-   Zoom works, and Clear restores the full model. Capture actual errors and
-   bounded timings; do not call the exact disappearance issue reproduced without
-   observing it. Reload protected model should recover a genuine failed session.
-   Also verify From/To equipment remains visible with native colors/materials for
-   real linked endpoints and explicit Use selection as From/To. Name/coordinate
-   edits or model changes must drop stale selected-object references; do not infer
-   nearby objects for coordinate-only points. This is visual only, never a new
-   endpoint confirmation or length calculation.
-3. Inspect checkboxes and selected route/design information across pages. Changing
-   calculation must clear unprocessed selections; MV and known cancelled/incomplete
-   jobs cannot be selected. Current dependency and server eligibility still govern
-   all selections. A blocked result requires its actual reason to be resolved;
-   never invent locations, aliases or geometry to make it ready.
-4. Human must approve the concrete selection before Confirm review/Apply. Do not
-   activate those real-data controls on the human's behalf from this generic
-   diagnostic handoff. Real routes/lengths remain engineering decisions. Test
-   mutation behavior only on positively owned synthetic fixtures if additional
-   implementation changes genuinely require it. Never alter real cable values
-   merely to demonstrate that the batch buttons work.
-5. For a human-approved actual batch, verify routing+designLength together,
-   installed length preserved, per-cable history/provenance, exact pending-command
-   reconciliation and partial-success reporting. Pending Retry/Close confirmations
-   currently refresh through the normal idle poll; normal Apply and batch completion
-   force a fresh read. Distinguish that delay from an unconfirmed command.
-6. If code changes are needed, use a new inheriting local branch, divide file
-   ownership and preserve concurrent work. Root alone performs actual runtime,
-   SQL and HTTP operations. Run tests appropriate to the changed behavior, create
-   a fresh own backup before upgrade and compare exact engine/data/auth boundaries.
-
-Complete only when actual browser checks and explicit human acceptance have the
-corresponding evidence. Otherwise report the precise remaining BLOCKED/NOT_RUN
-checks. Keep implementation/verification/acceptance separate. No automatic real
-Apply, push/PR/merge or primary deployment is authorized by this prompt.
-
-## Evidence and cleanup
-
-Retain5191, its prior full model archive, both new cold DB dumps, original rollback
-images, and private failure/reconciliation receipts under owned ignored
-`pathfinder-engine/.scratch/tray-catalog-48e496e3-b4b3-4f6f-bc6c-cc595d8da8ad`.
-The newest consistentDBbackup and currentUIrawreceipts are separately retained in
-ownedignored `pathfinder-engine/.scratch/tray-catalog-344b78b8-6f66-4532-b9f6-0825f889b47c`.
-Endpoint visibility's newest backup/readbacks/private replay are separately in
-ownedignored `pathfinder-engine/.scratch/tray-catalog-466d4ef7-a66c-476a-ad0b-8038ea4fe4b3`.
-Final readback proved0owned temporary helper containers; no new test stack exists.
-The finalizer initially matched the retainedAPI/web image provenance labels; exact
-runtime IDs corrected classification before any deletion. Do not remove the demo.
-Historical denied scratch paths and parents remain untouched; no global prune.
-Do not use5192-only test credentials at5191/5180 or reset/promote accounts.
-
-After any genuinely new completed authorized work, record exact revision, scope,
-PASS/FAIL/BLOCKED/NOT_RUN and retained failures; commit locally, then prepare the
-next evidence-backed prompt. Stop at missing human engineering decisions rather
-than creating recurring unchanged work.
+No performance improvement is claimed by this UI correction. The current oneshot worker serializes jobs, rebuilds category-specific graph work per cable, repeats snapshot/dependency/identity checks, and competes with full-state polling. Phase costs have not been measured. After preserving active work, a separately scoped stage should profile a bounded10–20request isolated replay, prevent redundant scope submissions, reduce full-state progress reads and qualify session/topology reuse against exact route/length outputs and all authority/fencing checks. Never silently change engine identity or mode under admitted current jobs. Preparing this follow-up does not resume the paused Preparer/PF automation.

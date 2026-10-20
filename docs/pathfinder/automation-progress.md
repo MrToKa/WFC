@@ -1,5 +1,37 @@
 # PathFinder local implementation progress
 
+## Selected calculation / proposal ownership correction — 2026-10-20
+
+Inherited branch pf-review-scope-consistency-local-20261020, parent e0eb4f8.
+TECHNICAL_SCOPE_CORRECTION_PASS / AWAITING_HUMAN_REVIEW. Read live HEAD for commit.
+User correctly selected COMPLETE08:48 scope; global recent proposal/preview could
+still belong to RUNNING job. Fixed exact admission/job ownership callback,
+scope-change invalidation, filtered shortcuts, sealed child/fetched parent ID/job
+checks and explicit selected status. Pending Apply survives; no server/core change.
+Root sole actual runtime executor; source agents completed/frozen before build.
+65distinctchecksPASS: Results20+Revision18+hook18+affectedTab8+actualGETreplay1;
+49otherTabcasesNOT_RUN. FullTabattempt interrupted; firstbounded6/8assertionfails
+fixedtestonly, final8/8PASS. Types/lint/diffPASS. Report59 retains failures.
+Actual readonly15:55Z: oldcomplete1808 took33m51.043s,230calculated/1578blocked;
+exact targetcanApplytrue/stalefalse/compatible; Aalborg0Review/0Apply atobservation.
+Overlappingjobs share oneshot lane; no performance improvement claimed.
+Privatework pathfinder-engine/.scratch/tray-catalog-f31630bd-db55-4105-8cad-f1be475f2f10.
+Initialdiagnosticpooltimeout corrected; exactowned orphanhelper terminated;
+API/worker unchanged. WEBbuildPASS16:08:10Z closure1280files/94473363bytes.
+WEBONLYupgradePASS16:11:37Z newweb4bd4bda6; API78536ccd ID/start plusPG/MinIO exact.
+2153globalcablerows/2preexistingglobalApplyreceipts unchanged; engineidentity exact;
+1activejob before/after naturally progressing. Fresh consistentDBsnapshot20064233
+bytes+mountedTOC84447PASS; finalhealth200/source/dump hashes/resourcesPASS16:11:57Z,
+0temporaryhelpers; exacttarget freshnormalGETstillcanApplytrue/nostale.
+Outsideconfigexact; observedoriginalbackendrestart-loop timestampchange, norootcontrol.
+OriginalWFC cleanmain96e63f13 read-only; cachedorigin3behind/93ahead beforecommit,
+live remote/CI NOT_RUN. Preparer integration/PFautomation remain PAUSED.
+Report59/evidence selected-calculation-review/actual.json + acceptance handoff
+recordnext humanCtrlF5→completed08:48scope→Inspect/Open→explicitReview/Apply.
+No newjobs/cancel/realReview/Apply/original/5190control/publish; preserveevidence,
+models/dumps/rollbackimages/deniedpaths. Separate performance profiling remains
+unimplemented; never change currentengineidentity/mode under admittedjobs.
+
 ## Active From/To visibility delivery — 2026-10-20
 
 New inheritedbranchpf-path-endpoints-visible-local-20261020,parent0166c88.
