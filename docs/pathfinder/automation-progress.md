@@ -1,9 +1,43 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T08:27:00Z
+## Current live checkpoint — 2026-10-20T08:49:00Z
+
+LATEST USER STEERING: **Skip MV cables.** Do not resume the all-category finite
+automatic policy or submit all2140 while this instruction applies. Scope the
+diagnostic continuation to exact non-MV cable IDs; preserve original routing
+permissions, category values and cable business rows. No code/product-wide MV
+rule change was requested.
+
+- Normal full publication PASS: d8b64b1b/plan6adaeee3, aggregate
+  6e21b230-188e-49b8-92a8-fd3f202a9567, artifact04782773-0701-4e60-b3af-d4e42b3f8288,
+  geometryrevision1, projection27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2.
+  Fresh5parts114,186,790B, protectednormalpublishedsessionrev7; readerprep23.
+- Normal trace PASS3976df4c-a6a1-4001-bf08-faf7070c4977,2965objects/1165segments/
+  1484diagnostics; nativeparitynotperformed/engineeringAcceptedfalse. Positive ordinary
+  session binding controls PASS4maps inclA105/A120, descriptor/GET/HEAD200, noCookie401,
+  4runtimeassetsbyteexact; only ownauxiliarysession revoked.
+- Finite automaticgeneration15 admitted230ready/1910locations_required. At08:45,
+  21fresh calculate proposals alreadycalculated, validroute/design/ledger/v6; noApply.
+  Then user requested skipMV. Mixedjob744fa8eb-0ce1-4fb7-8774-f18e676fa99a
+  positivelycancelled after normal pause command(control7); completedresultsretained.
+  Firstpauseattempt400missingreason, refused/nochange; correctedcommand2PASS, retainedboth.
+- **ACTIVE** normal selected non-MV job a29cd4c2-2d86-4ee0-9cbb-5bc598552781,
+  submitted08:48:42UTC via normal current-admin job API after positive mixedjobjoin.
+  1808selected:LV257/Control345/Instrumentation1206;332MVexcluded. ExactIDs/intents
+  private skip-mv1-*. No category/permission/cablevaluechange. All-categoryautomatic
+  policy remainsPAUSED(control7), persistent grantdisabled. Rootsoleexecutor.
+- Ordinary Routings UI A105 PASS1/1drawable+1yellowline+publishedmappingnotice;
+  Clear restores no-route state. A120 submitted and awaits final AX/visualreceipt.
+  A105 tightzoom screenshot has white surrounding view; filledGhostvisualnotproven
+  fromthatframe alone. Do not relabel it as a GhostPASS.
+- NEXT: finish A120/Clear/Ghost UI checks; monitor selected non-MV job, verify
+  actual freshcalculate diskcache/ledger provenance and finalcablefence. Public
+  normalpublication receipt and stagecompletion report still pending. Never Apply.
+
+## Earlier checkpoint — source7 and qualification
 
 - Task ACTIVE, user explicitly resumed. Branch `pf-aalborg-capacity-local-20261020`,
-  source checkpoint `b5690038c63b2fcfbc7e3457cbee709739829160`; terminal repair and
+  HEAD `b4f0739d339d4f2a8a1ad3f0970f44d3801313ea`, code `b5690038c63b2fcfbc7e3457cbee709739829160`; terminal repair and
   actual workload receipts are committed locally. Root sole
   runtime/SQL/HTTP/UI/test executor; all source agents frozen/completed, two independent
   source reviews found no blocking terminal-root repair issue. PASS70 focused engine/resource
@@ -13,8 +47,13 @@
   helperremoved; trial10 publisher PASS36.15s; actual exact Z-root race reconciledtrue,
   187realRSSsamples/max1,176,158,208B, originalstrictresult/countsPASS.
   Trial11 same-image trace PASS67.36s,2965objects/1165segments/5evidence/0missing,
-  observedtree1,344,507,904B; bothhelpers10/11removed. No active heavyexecutor.
-  Exact workload7-actual.json receipt recorded; fresh normal UI preparation next.
+  observedtree1,344,507,904B; bothhelpers10/11removed. Exact workload7-actual.json recorded.
+  ACTIVE normal UI publication d8b64b1b-018c-4b69-b1d7-f9952c413f17, created08:32:24UTC,
+  plan6adaeee3784e408e0b64e0094eeaa64c8fdb6461a018ccba0f7134a8db5c1545.
+  Fresh actual discovery2965records/438155properties/0missing; plan330trays/0diagnostics/
+  1165leaves/1527names/5parts; all5committed/rev5/114,186,790B by08:38UTC.
+  Normal reason filled and Validate+Publish clicked08:38UTC, UIworking; do not duplicate.
+  Root sole runtime executor; matchingagent read-only cold-start request/lock audit.
   Currentruntime7 is running; build/guardedAPIweb-onlyupgradePASS.
   Source repair complete: exact Linux terminal-root
   reconciliation only, <=1000ms within unchanged deadline, prior samples,
@@ -59,9 +98,9 @@
 - Browser on Details and reloaded to release unused3D memory; initial transient prep readdeadline afterupgrade5
   resolved normalRefresh. ReadonlyPGdiagidle/noblockers, initialcauseunknown.
   Keep original apps/5190/oldPathFinder/sources/deniedscratchpaths untouched.
-- NEXT: freshnormal discovery/freeze/capture (do NOT overwrite inputs1
-  or old receipts), protectedpublication/currenttrace/rootmaps/automaticproposals.
-  Last private preparation reader label prep20; use prep21 next.
+- NEXT: observe active normal publication, then currenttrace/rootmaps/automaticproposals.
+  Do NOT overwrite inputs1 or old receipts.
+  Last private preparation reader label prep22; use prep23 next.
   No real Apply/installLengthwrites. Final cable fence baseline cable-fence1:
   2140all-columnSHA0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155,
   zeroApplyreceipts. After fullstage technical completion use prepare-stage-handoff
