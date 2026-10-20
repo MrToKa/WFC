@@ -23,6 +23,8 @@ import type { EngineInvocation } from './engineSession.js';
 import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { readRevisionBaseline, sealRevisionResult, verifyRevisionResultForProposal } from './revisionResultRepository.js';
+import { DIRECT_SECONDARY_POLICY, directSecondaryDecisionSchema } from '../../shared/pathfinderDirectSecondary.js';
+import { directSecondaryPolicyForScope, requireDirectSecondaryStrategy } from './directSecondaryStrategy.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -33,12 +35,48 @@ function unconfirmedEngineJoin(error:unknown):boolean {
 function implementationRestartRequired(error:unknown):boolean {
   return error!==null&&typeof error==='object'&&(error as {code?:unknown}).code==='ENGINE_IMPLEMENTATION_RESTART_REQUIRED';
 }
+/** The admitted engine identity, never route text or mutable UI, selects the strategy. */
+export function cableDirectSecondaryPolicy(dependencies:DependencySnapshot):typeof DIRECT_SECONDARY_POLICY|null {
+  return directSecondaryPolicyForScope({category:dependencies.cableInputs.mto,engineIdentity:'engineIdentity' in dependencies?dependencies.engineIdentity:null});
+}
+/** A legacy failure may occur before geometry exists; successful opt-in may never silently become legacy. */
+export function requireCableEngineStrategy(response:EngineResponse,dependencies:DependencySnapshot):void {
+  requireDirectSecondaryStrategy(response,{category:dependencies.cableInputs.mto,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
+    engineIdentity:'engineIdentity' in dependencies?dependencies.engineIdentity:null});
+}
+function retainedStrategyCompatible(response:EngineResponse,dependencies:DependencySnapshot):boolean {
+  try {requireCableEngineStrategy(response,dependencies);return response.status==='calculated'&&response.route?.success===true;}
+  catch{return false;}
+}
+/** Only C# calculates geometry/design; this projection retains the exact admitted strategy evidence. */
+export function buildCableEngineRequest(dependencies:DependencySnapshot,requestId:string,timeoutMilliseconds:number,retained?:EngineResponse):EngineInvocation {
+  const policy=cableDirectSecondaryPolicy(dependencies),route=retained?.route;
+  if(retained&&!retainedStrategyCompatible(retained,dependencies))throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'The retained calculation strategy is unavailable or incompatible; calculate a fresh route.');
+  return {schemaVersion:'pathfinder.model.runner.v1',requestId,operation:route?'design':'calculate',projectId:dependencies.projectId,
+    modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds,includeLengthLedger:true,
+    ...(policy?{directSecondaryPolicy:policy}:{}),
+    ...(route?{route:{success:true,lengthMeters:route.lengthMeters,fromDistanceMeters:route.fromDistanceMeters,toDistanceMeters:route.toDistanceMeters,
+      fromRequiresSecondary:route.fromRequiresSecondary,toRequiresSecondary:route.toRequiresSecondary,
+      ...(policy&&retained&&'directSecondary' in retained?{directSecondary:retained.directSecondary}:{})},...(policy?{category:dependencies.cableInputs.mto}:{})}
+      :{category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
+        to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),
+    projectSettings:engineProjectSettings(dependencies.settings)};
+}
 /** Reused geometry keeps its original diagnostics; category comes from the immutable calculation inputs. */
 export function mergeRetainedGeometryResponse(response:EngineResponse,retained:EngineResponse,frozenCategory:string|null):EngineResponse {
   const effectiveCategory=frozenCategory==='Instrumentation' ? 'Control' : frozenCategory;
   if (!effectiveCategory || !['MV','LV','Control'].includes(effectiveCategory) || !retained.route?.success
     || retained.effectiveCategory!=null && retained.effectiveCategory!==effectiveCategory)
     throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'The retained geometry metadata does not match the original calculation inputs.');
+  if(retained.schemaVersion==='pathfinder.model.response.v2'){
+    // An early C# settings/boundary failure has no decision; retain that honest failure.
+    if(response.status!=='calculated')return response;
+    const previous=directSecondaryDecisionSchema.safeParse('directSecondary' in retained?retained.directSecondary:undefined);
+    const current=directSecondaryDecisionSchema.safeParse('directSecondary' in response?response.directSecondary:undefined);
+    if(response.schemaVersion!=='pathfinder.model.response.v2'||response.effectiveCategory!==effectiveCategory||!previous.success||!current.success||hash(previous.data)!==hash(current.data))
+      throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'The retained direct SECONDARY decision changed during the design-only calculation.');
+  }else if(response.schemaVersion!=='pathfinder.model.response.v1'||'directSecondary' in response&&response.directSecondary!==undefined)
+    throw new PathFinderError('ENGINE_RETAINED_GEOMETRY_INVALID',502,'A historical retained route cannot acquire a new calculation strategy.');
   return {...response,route:retained.route,effectiveCategory,prepared:retained.prepared ?? response.prepared};
 }
 /** Compare the latest result; a geometry-key search must not skip intervening input changes. */
@@ -46,6 +84,7 @@ export async function readRetainedDesignGeometry(client:Pick<PoolClient,'query'>
   const previous=(await client.query<Row>(`SELECT result,dependencies,status FROM pf_proposals WHERE project_id=$1 AND cable_id=$2
     ORDER BY created_at DESC,id DESC LIMIT 1`,[projectId,cableId])).rows[0];
   return previous?.status==='calculated'&&previous.result?.route?.success===true&&verifiedDesignOnlyChange(dependencies,previous.dependencies)
+    &&retainedStrategyCompatible(previous.result as EngineResponse,dependencies)
     ? previous.result as EngineResponse : undefined;
 }
 async function fencedJob(client:PoolClient,job:Row):Promise<void> {
@@ -120,6 +159,8 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       });
       await readSnapshot(dependencies.artifactId,dependencies.snapshotSha256);
       const response=await engine.execute(previewEngineRequest(dependencies,randomUUID(),job.timeout_ms),signal);
+      requireDirectSecondaryStrategy(response,{category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
+        engineIdentity:dependencies.engineIdentity,reverse:dependencies.input.reverse});
       signal.throwIfAborted();
       await authorized(async client=>{
         await fencedJob(client,job);let stale=false;
@@ -159,12 +200,8 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         retainedResult = await readRetainedDesignGeometry(pool,job.project_id,item.cable_id,dependencies);
         retained = retainedResult?.route;
         calculationMode = retained ? 'design' : 'calculate';
-        response = await engine.execute({schemaVersion:'pathfinder.model.runner.v1',requestId,operation:calculationMode,projectId:job.project_id,
-          modelVersionId:dependencies.model.id,snapshotId:dependencies.artifact.id,snapshotSha256:dependencies.artifact.sha256,timeoutMilliseconds:job.timeout_ms,includeLengthLedger:true,
-          ...(retained ? {route:{success:true,lengthMeters:retained.lengthMeters,fromDistanceMeters:retained.fromDistanceMeters,toDistanceMeters:retained.toDistanceMeters,
-            fromRequiresSecondary:retained.fromRequiresSecondary,toRequiresSecondary:retained.toRequiresSecondary}} : {
-            category:dependencies.cableInputs.mto,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
-            to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},options:dependencies.options}),projectSettings:engineProjectSettings(dependencies.settings)},signal);
+        response = await engine.execute(buildCableEngineRequest(dependencies,requestId,job.timeout_ms,retainedResult),signal);
+        requireCableEngineStrategy(response,dependencies);
         if (retainedResult && retained) response = mergeRetainedGeometryResponse(response,retainedResult,dependencies.cableInputs.mto);
         requireCalculationLengthLedger(response,dependencies.settings);
       } catch(error) {

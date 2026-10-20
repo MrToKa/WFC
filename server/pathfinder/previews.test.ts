@@ -7,7 +7,14 @@ import { snapshotObject } from './contracts.js';
 import { proposalRoutingPreferences } from './jobContracts.js';
 import { createPathFinderApply } from './apply.js';
 import { syntheticEngineIdentity } from './calculationFixtures.js';
-vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:vi.fn(async()=>syntheticEngineIdentity())}));
+import { hash } from './dependencies.js';
+import { DIRECT_SECONDARY_POLICY, type DirectSecondaryDecision } from '../../shared/pathfinderDirectSecondary.js';
+function historicalEngineIdentity(){
+  const identity=syntheticEngineIdentity(),{numeric,routing,fitting,projection,categoryMapping}=identity.policyVersions;
+  const {contentSha256:_hash,...body}={...identity,policyVersions:{numeric,routing,fitting,projection,categoryMapping}};
+  return{...body,contentSha256:hash(body)};
+}
+vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:vi.fn(async()=>historicalEngineIdentity())}));
 
 // Preview's former behaviour is retained only behind an explicitly scoped
 // producer. Actual missing/mismatched producer controls live in routingScope.test.
@@ -56,6 +63,27 @@ const response:EngineResponse={schemaVersion:'pathfinder.model.response.v1',requ
     pathPoints:[{x:0,y:0,z:.5},{x:10,y:0,z:.5}],lengthMeters:10,fromDistanceMeters:0,toDistanceMeters:0,fromRequiresSecondary:false,toRequiresSecondary:false,connectionGapCount:0,connectionGapLengthMeters:0}};
 
 describe('standalone Path preview contract and dependency boundary',()=>{
+  it.each(['LV','Control','Instrumentation','MV'] as const)('opts new %s previews in only according to their frozen identity and category',async category=>{
+    const dependencies=await collectPreviewDependencies(database().client,projectId,{...input(),category});
+    expect(previewEngineRequest(dependencies,modelId,60000)).not.toHaveProperty('directSecondaryPolicy');
+    dependencies.engineIdentity=syntheticEngineIdentity();dependencies.engineIdentity.policyVersions={...dependencies.engineIdentity.policyVersions,directSecondary:DIRECT_SECONDARY_POLICY};
+    const request=previewEngineRequest(dependencies,modelId,60000);
+    if(category==='MV')expect(request).not.toHaveProperty('directSecondaryPolicy');else expect(request).toHaveProperty('directSecondaryPolicy',DIRECT_SECONDARY_POLICY);
+    expect(request).not.toHaveProperty('includeLengthLedger');expect(request.projectSettings).toEqual({revision:'7',secondaryTrayLength:'5',endConnectionLength:'6',additionalBendingPercent:'10'});
+  });
+  it.each([false,true])('exposes the exact direct preview evidence and endpoint line with reverse=%s without granting a cable write',async reverse=>{
+    const dependencies=await collectPreviewDependencies(database().client,projectId,{...input(),reverse});
+    dependencies.engineIdentity=syntheticEngineIdentity();dependencies.engineIdentity.policyVersions={...dependencies.engineIdentity.policyVersions,directSecondary:DIRECT_SECONDARY_POLICY};
+    const fromPoint=reverse?dependencies.to.point:dependencies.from.point,toPoint=reverse?dependencies.from.point:dependencies.to.point;
+    const directSecondary:DirectSecondaryDecision={schemaVersion:'wfc.pf.direct-secondary.v1',policyVersion:DIRECT_SECONDARY_POLICY,coordinateFrame:'canonical-world-metres',
+      mode:'direct-secondary',fromPoint,toPoint,distanceMeters:10,nearestFromMeters:20,nearestToMeters:30,eligibleTrays:2,comparison:'both'};
+    const direct:Extract<EngineResponse,{schemaVersion:'pathfinder.model.response.v2'}>={...response,status:'calculated',schemaVersion:'pathfinder.model.response.v2',directSecondary,route:{...response.route!,routeText:'/SECONDARY',routeCodes:['/SECONDARY'],segmentIds:[],
+      pathPoints:[fromPoint,toPoint].map(([x,y,z])=>({x,y,z}))}};
+    const dto=previewResultDto(direct,dependencies,false);expect(dto.directSecondary).toEqual(directSecondary);expect(dto.route?.points).toEqual([fromPoint,toPoint]);
+    expect(dto).toMatchObject({canApply:false,engineeringAccepted:false,acceptanceScope:'standalone-preview'});
+    expect(()=>previewResultDto({...direct,directSecondary:{...directSecondary,fromPoint:[1,2,3]}},dependencies,false)).toThrowError(expect.objectContaining({code:'ENGINE_ROUTING_STRATEGY_INVALID'}));
+    expect(()=>previewResultDto(response,dependencies,false)).toThrowError(expect.objectContaining({code:'ENGINE_ROUTING_STRATEGY_INVALID'}));
+  });
   it('returns immutable retained proposal preferences and fails closed when either original option is unknown',()=>{
     expect(proposalRoutingPreferences({secondaryDistanceMeters:2,preferVerticalApproach:true,irrelevant:1})).toEqual({secondaryDistanceMeters:2,preferVerticalApproach:true});
     expect(proposalRoutingPreferences({secondaryDistanceMeters:0,preferVerticalApproach:false})).toEqual({secondaryDistanceMeters:0,preferVerticalApproach:false});

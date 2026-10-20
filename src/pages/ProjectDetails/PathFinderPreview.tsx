@@ -5,6 +5,7 @@ import { isCanonicalPoint, MAX_PATH_POINTS, type CanonicalPoint } from '../../..
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { computedPathObjectIds, previewEndpointObjectIds } from './pathFinderEndpointVisibility';
+import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
 
 type Endpoint = { name: string; coordinates: [string, string, string] };
 type EndpointSelection = { objectId: string; modelScope: string };
@@ -129,6 +130,7 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
       {preview.failure ? <Body1 role="alert">{preview.failure}</Body1> : null}
       {preview.result ? <><Body1>{preview.result.message}</Body1>{preview.result.stale ? <Body1 role="alert">This path is outdated. Calculate again before using it.</Body1> : null}
         {preview.result.route ? <><Body1>Geometric length: {preview.result.route.lengthMeters} m</Body1><Caption1>From approach: {preview.result.route.fromDistanceMeters} m{preview.result.route.fromRequiresSecondary ? ' (SECONDARY)' : ''}; To approach: {preview.result.route.toDistanceMeters} m{preview.result.route.toRequiresSecondary ? ' (SECONDARY)' : ''}</Caption1><Caption1>Connection gaps: {preview.result.route.connectionGapCount}; total gap length: {preview.result.route.connectionGapLengthMeters} m</Caption1><details><summary>Standalone route text</summary><p style={{ overflowWrap: 'anywhere' }}>{preview.result.route.routeText}</p></details></> : null}
+        <PathFinderDirectSecondary decision={preview.result.directSecondary} />
         {preview.result.design ? <><Caption1>Before percentage: {preview.result.design.lengthBeforePercentageMeters} m; before rounding: {preview.result.design.unroundedLengthMeters} m</Caption1><Body1>Design length: {preview.result.design.designLengthMeters} m</Body1></> : null}
       </> : null}
       <Caption1>Standalone preview only. Cable values are changed through Calculate and review below.</Caption1>

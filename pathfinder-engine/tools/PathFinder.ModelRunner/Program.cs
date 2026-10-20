@@ -68,6 +68,35 @@ internal static partial class Program
             var route = request.Route ?? throw new ArgumentException("Retained route metrics are required.");
             if (!route.Success) throw new ArgumentException("A successfully calculated retained route is required.");
             if (settings is null) throw new ArgumentException("Project Details settings are required.");
+            if (request.DirectSecondaryPolicy is not null)
+            {
+                var effectiveCategory = request.Category == "Instrumentation" ? "Control" : request.Category;
+                var decision = route.DirectSecondary ?? throw new ArgumentException("A retained opted-in route requires its exact direct SECONDARY decision.");
+                decision.Validate();
+                if (decision.Mode == "direct-secondary")
+                {
+                    if (route.LengthMeters != decision.DistanceMeters || route.FromDistanceMeters != 0 || route.ToDistanceMeters != 0 || route.FromRequiresSecondary || route.ToRequiresSecondary)
+                        throw new ArgumentException("Retained direct SECONDARY metrics do not match their decision.");
+                    var observed = DirectSecondaryLengthObserver.Calculate(decision, settings, token);
+                    if (request.IncludeLengthLedger) return new { schemaVersion = "pathfinder.model.response.v2", request.RequestId, status = "calculated",
+                        message = "Direct SECONDARY design allowances recalculated from retained geometry.", effectiveCategory, design = observed.Design, lengthLedger = observed.Ledger, directSecondary = decision, engineeringAccepted = false };
+                    return new { schemaVersion = "pathfinder.model.response.v2", request.RequestId, status = "calculated",
+                        message = "Direct SECONDARY design allowances recalculated from retained geometry.", effectiveCategory, design = observed.Design, directSecondary = decision, engineeringAccepted = false };
+                }
+                if ((route.FromRequiresSecondary || route.ToRequiresSecondary) && settings.SecondaryTrayLength is null)
+                    return Failure(request, "settings_required", "Project Details SECONDARY length is required.");
+                if (request.IncludeLengthLedger)
+                {
+                    var observed = LengthLedgerObserver.CalculateRetained(route.LengthMeters, route.FromDistanceMeters, route.ToDistanceMeters, route.FromRequiresSecondary, route.ToRequiresSecondary, settings, token);
+                    return new { schemaVersion = "pathfinder.model.response.v2", request.RequestId, status = "calculated", message = "Design allowances recalculated from retained geometry.",
+                        effectiveCategory, design = observed.Design, lengthLedger = observed.Ledger, directSecondary = decision, engineeringAccepted = false };
+                }
+                var retainedDesign = SavedRouteDesign.Calculate(route.LengthMeters, route.FromDistanceMeters, route.ToDistanceMeters, route.FromRequiresSecondary, route.ToRequiresSecondary,
+                    settings.EndConnectionLength, settings.SecondaryTrayLength ?? 0m, settings.AdditionalBendingPercent);
+                token.ThrowIfCancellationRequested();
+                return new { schemaVersion = "pathfinder.model.response.v2", request.RequestId, status = "calculated", message = "Design allowances recalculated from retained geometry.",
+                    effectiveCategory, design = retainedDesign, directSecondary = decision, engineeringAccepted = false };
+            }
             if ((route.FromRequiresSecondary || route.ToRequiresSecondary) && settings.SecondaryTrayLength is null)
                 return Failure(request, "settings_required", "Project Details SECONDARY length is required.");
             if (request.IncludeLengthLedger)
@@ -154,18 +183,41 @@ internal static partial class Program
             SecondaryDistanceMeters = options.SecondaryDistanceMeters, PreferVerticalApproach = options.PreferVerticalApproach,
             MaxGraphNodes = options.MaxGraphNodes, MaxGraphConnections = options.MaxGraphConnections
         };
-        var routeResult = request.Operation == "lookup"
+        DirectSecondaryDecision? directSecondary = null;
+        RouteResult routeResult;
+        if (request.Operation == "calculate" && request.DirectSecondaryPolicy is not null)
+        {
+            var evaluated = DirectSecondaryRoute.Evaluate(prepared.Segments, Point(request.From), Point(request.To), category, routeOptions, token);
+            directSecondary = DirectSecondaryDecision.Capture(evaluated);
+            routeResult = evaluated.IsDirect ? evaluated.DirectRoute : new RouteCalculator().Calculate(prepared.Segments, Point(request.From), Point(request.To), category, routeOptions, token);
+        }
+        else routeResult = request.Operation == "lookup"
             ? RouteLookupCalculator.Calculate(prepared.Segments, RouteLookupCalculator.Parse(request.RouteText), routeOptions, token)
             : new RouteCalculator().Calculate(prepared.Segments, Point(request.From), Point(request.To), category, routeOptions, token);
         token.ThrowIfCancellationRequested();
-        if (request.Reverse) routeResult = routeResult.Reverse();
+        if (request.Reverse)
+        {
+            directSecondary = directSecondary?.Reverse();
+            // A binary64 zero-length direct line retains one exact From point.
+            // Recreate that point after reversing even when tiny deltas underflow.
+            routeResult = directSecondary?.Mode == "direct-secondary" ? directSecondary.DirectRoute() : routeResult.Reverse();
+        }
         CableDesignLength? resultDesign = null;
-        LengthLedger? lengthLedger = null;
+        object? lengthLedger = null;
         var status = routeResult.Success ? "calculated" : IsCoreResourceLimit(routeResult.Message) ? "resource_limit" : "no_path";
         if (routeResult.Success && request.Operation == "calculate")
         {
             if (settings is null) throw new ArgumentException("Project Details settings are required.");
-            if ((routeResult.FromRequiresSecondary || routeResult.ToRequiresSecondary) && settings.SecondaryTrayLength is null)
+            if (directSecondary?.Mode == "direct-secondary")
+            {
+                if (request.IncludeLengthLedger)
+                {
+                    var observed = DirectSecondaryLengthObserver.Calculate(directSecondary, settings, token);
+                    resultDesign = observed.Design; lengthLedger = observed.Ledger;
+                }
+                else resultDesign = CableDesignLength.Calculate(routeResult, settings.EndConnectionLength, 0m, settings.AdditionalBendingPercent);
+            }
+            else if ((routeResult.FromRequiresSecondary || routeResult.ToRequiresSecondary) && settings.SecondaryTrayLength is null)
                 status = "settings_required";
             else if (request.IncludeLengthLedger)
             {
@@ -174,6 +226,26 @@ internal static partial class Program
             }
             else resultDesign = CableDesignLength.Calculate(routeResult, settings.EndConnectionLength,
                 settings.SecondaryTrayLength ?? 0m, settings.AdditionalBendingPercent);
+        }
+        if (directSecondary is not null)
+        {
+            // Only an executed route result has the v2 strategy transport.
+            // Operational/settings failures retain the established v1 failure boundary.
+            if (status is not ("calculated" or "no_path"))
+                return Failure(request, status, status == "settings_required" ? "Project Details SECONDARY length is required." : routeResult.Message);
+            if (lengthLedger is not null) return new
+            {
+                schemaVersion = "pathfinder.model.response.v2", request.RequestId, status, message = routeResult.Message,
+                snapshot.Model, prepared = summary, effectiveCategory = category.ToString(), route = routeResult, design = resultDesign,
+                projectSettings = settings, engineeringAccepted = false, lookupScope, usedConnectionGapMeters = (double?)null, lengthLedger, directSecondary
+            };
+            return new
+            {
+                schemaVersion = "pathfinder.model.response.v2", request.RequestId, status,
+                message = status == "settings_required" ? "Project Details SECONDARY length is required." : routeResult.Message,
+                snapshot.Model, prepared = summary, effectiveCategory = category.ToString(), route = routeResult, design = resultDesign,
+                projectSettings = settings, engineeringAccepted = false, lookupScope, usedConnectionGapMeters = (double?)null, directSecondary
+            };
         }
         if (lengthLedger is not null) return new
         {
@@ -204,6 +276,9 @@ internal static partial class Program
             throw new ArgumentException("Unknown schema, operation, identity, hash or deadline.");
         if (r.IncludeLengthLedger && r.Operation is not ("calculate" or "design"))
             throw new ArgumentException("Length-component ledgers apply only to calculate and design operations.");
+        if (r.DirectSecondaryPolicy is not null && (r.DirectSecondaryPolicy != DirectSecondaryRoute.PolicyVersion || r.Operation is not ("calculate" or "design")
+            || r.Category is not ("LV" or "Control" or "Instrumentation"))) throw new ArgumentException("Direct SECONDARY requires the explicit supported policy and a non-MV calculation category.");
+        if (r.Route?.DirectSecondary is not null && (r.Operation != "design" || r.DirectSecondaryPolicy is null)) throw new ArgumentException("A retained direct decision requires its opted-in design operation.");
         if (r.Operation == "lookup-plan")
         {
             if (r.SnapshotId is not null || r.SnapshotSha256 is not null || r.Options is not null || r.ProjectSettings is not null
@@ -288,7 +363,9 @@ internal static partial class Program
             var result = await stdout; _ = await stderr;
             if (process.ExitCode != 0 || result.Length == 0) throw new InvalidOperationException("Worker failed without a valid result.");
             using var parsed = JsonDocument.Parse(result);
-            if (parsed.RootElement.GetProperty("schemaVersion").GetString() != "pathfinder.model.response.v1") throw new InvalidOperationException("Worker response schema mismatch.");
+            var responseVersion = parsed.RootElement.GetProperty("schemaVersion").GetString();
+            if (responseVersion is not ("pathfinder.model.response.v1" or "pathfinder.model.response.v2") || responseVersion == "pathfinder.model.response.v2" && request.DirectSecondaryPolicy is null)
+                throw new InvalidOperationException("Worker response schema mismatch.");
             await Console.OpenStandardOutput().WriteAsync(result); return 0;
         }
         finally
@@ -341,6 +418,8 @@ internal sealed record Request
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IncludeLengthLedger { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DirectSecondaryPolicy { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FittedTraceExportRequest? FittedTraceExport { get; init; }
 }
 internal sealed record RetainedRoute
@@ -351,4 +430,6 @@ internal sealed record RetainedRoute
     public required double ToDistanceMeters { get; init; }
     public required bool FromRequiresSecondary { get; init; }
     public required bool ToRequiresSecondary { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DirectSecondaryDecision? DirectSecondary { get; init; }
 }

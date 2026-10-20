@@ -4,7 +4,8 @@ import type { RoutingScope } from './routingScope.js';
 import type { EndpointCalculationPoint, EndpointCalculationPreparation, CurrentEndpointCalculationPoint, ScopedEndpointResolution } from './endpointCalculationProvenance.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
 import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
-import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
+import { lengthLedgerSchema, legacyLengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
+import { directSecondaryDecisionSchema, directSecondaryRouteIssue } from '../../shared/pathfinderDirectSecondary.js';
 
 export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
@@ -62,13 +63,30 @@ export const routeSchema = z.object({success:z.boolean(),message:z.string().max(
 }).strict();
 const decimal = z.string().regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/).max(100);
 export const designSchema = z.object({lengthBeforePercentageMeters:decimal,unroundedLengthMeters:decimal,designLengthMeters:decimal}).strict();
-export const engineResponseSchema = z.object({schemaVersion:z.literal('pathfinder.model.response.v1'),requestId:uuid,
+const engineResponseObjectSchema = z.object({schemaVersion:z.literal('pathfinder.model.response.v1'),requestId:uuid,
   status:z.enum(['prepared','calculated','lookup_planned','no_path','settings_required','category_required','model_needs_review','invalid_request','deadline_exceeded','resource_limit']),
   message:z.string().max(32768),engineeringAccepted:z.literal(false),model:z.unknown().optional(),prepared:z.unknown().optional(),
   effectiveCategory:z.string().nullable().optional(),route:routeSchema.optional(),design:designSchema.nullable().optional(),lengthLedger:lengthLedgerSchema.optional(),projectSettings:z.unknown().optional(),
   routeCodes:z.array(z.string().max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/)).min(1).max(100).optional(),usedConnectionGapMeters:z.number().finite().positive().max(100).nullable().optional(),
   lookupScope:z.object({requestedCodeCount:z.number().int().nonnegative(),uniqueCodeCount:z.number().int().nonnegative(),discoveredObjectCount:z.number().int().nonnegative(),resolvedOwnerCount:z.number().int().nonnegative(),resolvedLeafCount:z.number().int().nonnegative(),warnings:z.array(z.string().max(32768)).max(2048)}).strict().nullable().optional(),
 }).strict();
+const legacyEngineResponseSchema = engineResponseObjectSchema.extend({ lengthLedger: legacyLengthLedgerSchema.optional() }).strict();
+const directEngineResponseSchema = engineResponseObjectSchema.extend({ schemaVersion: z.literal('pathfinder.model.response.v2'),
+  status: z.enum(['calculated', 'no_path']), directSecondary: directSecondaryDecisionSchema, lengthLedger: lengthLedgerSchema.optional(),
+}).strict().superRefine((value, context) => {
+  if (!['LV', 'Control', 'Instrumentation'].includes(value.effectiveCategory ?? '')) context.addIssue({ code: 'custom', message: 'Direct strategy requires an eligible effective cable category.' });
+  if (value.directSecondary.mode === 'direct-secondary') {
+    if (value.status === 'no_path') context.addIssue({ code: 'custom', message: 'A direct successful strategy cannot carry a no-path outcome.' });
+    if (value.lengthLedger && (value.lengthLedger.schemaVersion !== 'wfc.pf.length-components.v2'
+      || JSON.stringify(value.lengthLedger.directSecondary) !== JSON.stringify(value.directSecondary)))
+      context.addIssue({ code: 'custom', message: 'Direct components must retain the exact direct decision.' });
+    if (value.route) {
+      const issue = directSecondaryRouteIssue(value.directSecondary, { ...value.route, points: value.route.pathPoints.map(point => [point.x, point.y, point.z]) });
+      if (issue) context.addIssue({ code: 'custom', message: issue });
+    }
+  } else if (value.lengthLedger?.schemaVersion === 'wfc.pf.length-components.v2') context.addIssue({ code: 'custom', message: 'Tray-network fallback retains its legacy formula.' });
+});
+export const engineResponseSchema = z.union([legacyEngineResponseSchema, directEngineResponseSchema]);
 export type EngineResponse = z.infer<typeof engineResponseSchema>;
 export type EngineRoute = z.infer<typeof routeSchema>;
 export type EngineDesign = z.infer<typeof designSchema>;

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { canonicalPurposeJson, policyHashSchema } from './pathfinderPurposePolicy.js';
+import { DIRECT_SECONDARY_POLICY } from './pathfinderDirectSecondary.js';
 
 /** Existing Core source label; actual module digests are required independently. */
 export const ENGINE_IDENTITY_VERSION = '45c24bf5f433f13e102600b36f20327c77961d0a' as const;
@@ -10,6 +11,7 @@ export const ENGINE_IDENTITY_POLICY_VERSIONS = Object.freeze({
   fitting: 'pf2.rules.v1',
   projection: 'wfc.pf.model-runner-v1-projection.v1',
   categoryMapping: 'wfc-mto-v1',
+  directSecondary: DIRECT_SECONDARY_POLICY,
 } as const);
 
 export const engineIdentityPoliciesSchema = z.object({
@@ -18,6 +20,8 @@ export const engineIdentityPoliciesSchema = z.object({
   fitting: z.literal(ENGINE_IDENTITY_POLICY_VERSIONS.fitting),
   projection: z.literal(ENGINE_IDENTITY_POLICY_VERSIONS.projection),
   categoryMapping: z.literal(ENGINE_IDENTITY_POLICY_VERSIONS.categoryMapping),
+  // Absence is the historical strategy; never insert a default into retained identities.
+  directSecondary: z.literal(DIRECT_SECONDARY_POLICY).optional(),
 }).strict();
 
 export const engineIdentityBodySchema = z.object({

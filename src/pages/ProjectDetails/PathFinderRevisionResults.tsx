@@ -7,6 +7,7 @@ import type { PathFinderCable, PathFinderJob } from '@/api/pathfinder';
 import type { BatchReviewCandidate } from './hooks/usePathfinderBatchReview';
 import type { BatchReviewController } from './PathFinderBatchReview';
 import { sealedCableItemApplicabilitySchema } from '../../../shared/pathfinderItemApplicability';
+import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
 
 export type PathFinderCalculationScope = { admissionId: string | null; jobId: string | null; ready: boolean; message: string | null;
   wholeJobReady?: boolean; jobStatus?: PathFinderJob['status'] | null; cancelRequested?: boolean };
@@ -64,7 +65,10 @@ function LengthComponents({ detail }: { detail: RevisionResultDetail }) {
   ];
   return <section aria-label="Exact length components">
     <h5>Exact length components</h5>
-    <Caption1>Recorded calculation values are shown exactly. SECONDARY replaces the flagged approach; end connection is added once before bending and final rounding.</Caption1>
+    {ledger.schemaVersion === 'wfc.pf.length-components.v2' ? <>
+      <PathFinderDirectSecondary decision={ledger.directSecondary} />
+      <Caption1>Recorded calculation values are shown exactly. Secondary tray length is recorded for audit only and is unused for this direct connection. End connection is added once before bending and final rounding.</Caption1>
+    </> : <Caption1>Recorded calculation values are shown exactly. SECONDARY replaces the flagged approach; end connection is added once before bending and final rounding.</Caption1>}
     <dl style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '4px 12px', overflowWrap: 'anywhere' }}>
       {values.map(([name, value]) => <div key={name} style={{ display: 'contents' }}><dt>{name}</dt><dd style={{ margin: 0 }}>{value}</dd></div>)}
     </dl>

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest } from './pathfinder';
+import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest, parsePathFinderProposal } from './pathfinder';
 import { createHash } from 'node:crypto';
 import { ENGINE_IDENTITY_POLICY_VERSIONS, ENGINE_IDENTITY_VERSION, engineIdentityCanonicalBody } from '../../shared/pathfinderEngineIdentity';
 import { notEvaluatedCalculationAvailability } from '../../shared/pathfinderCalculationAvailability';
+import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary';
 
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', cableId = '33333333-3333-4333-8333-333333333333';
 afterEach(() => vi.restoreAllMocks());
@@ -25,6 +26,26 @@ function recordedProposal(dependencyVersion: string) {
       ...(dependencyVersion==='pathfinder.dependencies.v6'?{endpointSources:{from:'automatic-model-candidate',to:'confirmed-shared-location'}}:{}) } };
 }
 describe('PathFinder API contract', () => {
+  it('retains explicit direct decisions and length v2 without reinterpreting historical SECONDARY routes', () => {
+    const directSecondary = { schemaVersion: 'wfc.pf.direct-secondary.v1', policyVersion: DIRECT_SECONDARY_POLICY, coordinateFrame: 'canonical-world-metres',
+      mode: 'direct-secondary', fromPoint: [0, 0, 0], toPoint: [3, 0, 0], distanceMeters: 3, nearestFromMeters: 4, nearestToMeters: 5, eligibleTrays: 1, comparison: 'both' };
+    const route = { success: true, message: '', routeText: '/SECONDARY', routeCodes: ['/SECONDARY'], segmentIds: [], objectIds: [], points: [[0, 0, 0], [3, 0, 0]],
+      lengthMeters: 3, fromDistanceMeters: 0, toDistanceMeters: 0, fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 };
+    const lengthLedger = { schemaVersion: 'wfc.pf.length-components.v2', formulaVersion: 'direct-secondary-3d.v1', settingsRevision: '2',
+      raw: { lengthMeters: 3, fromDistanceMeters: 0, toDistanceMeters: 0 }, rawLengthDecimalMeters: '3', from: { requiresSecondary: false, removedApproachMeters: '0' }, to: { requiresSecondary: false, removedApproachMeters: '0' },
+      settings: { secondaryTrayLengthMeters: '7', endConnectionLengthMeters: '2', additionalBendingPercent: '10' }, secondaryEnds: 0, replacementMeters: '0', beforeClampMeters: '3', clampAdjustmentMeters: '0', afterClampMeters: '3',
+      beforePercentageMeters: '5', bendingIncrementMeters: '0.5', unroundedMeters: '5.5', ceilingIncrementMeters: '0.5', designLengthMeters: '6', gapAccounting: 'already-in-raw-geometry', directSecondary };
+    const value = { ...recordedProposal('pathfinder.dependencies.v5'), route, directSecondary, lengthLedger };
+    expect(parsePathFinderProposal(value).directSecondary).toEqual(directSecondary); expect(parsePathFinderProposal(value).lengthLedger).toEqual(lengthLedger);
+    const historical = { ...recordedProposal('pathfinder.dependencies.v1'), route };
+    expect(parsePathFinderProposal(historical).directSecondary).toBeUndefined();
+    expect(() => parsePathFinderProposal({ ...historical, directSecondary })).toThrow();
+    for (const malformed of [
+      { ...value, directSecondary: undefined }, { ...value, directSecondary: { ...directSecondary, distanceMeters: 2 } },
+      { ...value, route: { ...route, segmentIds: ['fake'] } }, { ...value, route: { ...route, fromRequiresSecondary: true } },
+      { ...value, route: { ...route, points: [[0, 0, 0], [4, 0, 0]] } }, { ...value, route: { ...route, connectionGapLengthMeters: 1 } },
+    ]) expect(() => parsePathFinderProposal(malformed)).toThrow();
+  });
   it('retains confirmed and approximate automatic point availability separately from legacy bindings without granting acceptance', async () => {
     const automatic = { status: 'automatic-ready', pointAvailable: true, source: 'automatic-model-candidate', approximate: true, candidateObjectIds: ['dbid:23'], reasonCode: null, engineeringAccepted: false };
     const confirmed = { status: 'confirmed-ready', pointAvailable: true, source: 'confirmed-shared-location', approximate: false, candidateObjectIds: [], reasonCode: null, engineeringAccepted: false };
@@ -165,6 +186,12 @@ describe('PathFinder API contract', () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json(detail));
     const value = await fetchPathFinderPreview(projectId, 'test-token', id);
     expect(value.result?.route?.lengthMeters).toBe(10); expect(value.result?.design?.designLengthMeters).toBe('13'); expect(value.result?.canApply).toBe(false);
+    const directSecondary = { schemaVersion: 'wfc.pf.direct-secondary.v1', policyVersion: DIRECT_SECONDARY_POLICY, coordinateFrame: 'canonical-world-metres', mode: 'direct-secondary',
+      fromPoint: endpoint.point, toPoint: detail.result.to.point, distanceMeters: 10, nearestFromMeters: 11, nearestToMeters: 12, eligibleTrays: 1, comparison: 'both' };
+    const direct = { ...detail, result: { ...detail.result, directSecondary, route: { ...detail.result.route, routeText: '/SECONDARY', routeCodes: ['/SECONDARY'], segmentIds: [], objectIds: [] } } };
+    fetch.mockResolvedValueOnce(Response.json(direct)); expect((await fetchPathFinderPreview(projectId, 'test-token', id)).result?.directSecondary).toEqual(directSecondary);
+    fetch.mockResolvedValueOnce(Response.json({ ...direct, result: { ...direct.result, route: { ...direct.result.route, lengthMeters: 11 } } }));
+    await expect(fetchPathFinderPreview(projectId, 'test-token', id)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
     for (const invalid of [{ ...detail, projectId: modelId }, { ...detail, id: modelId }, { ...detail, result: { ...detail.result, canApply: true } }, { ...detail, result: { ...detail.result, engineeringAccepted: true } }]) {
       fetch.mockResolvedValueOnce(Response.json(invalid)); await expect(fetchPathFinderPreview(projectId, 'test-token', id)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
     }

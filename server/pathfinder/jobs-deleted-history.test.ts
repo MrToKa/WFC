@@ -57,6 +57,17 @@ describe('retained proposal reads after live cable deletion',()=>{
     expect(db.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');expect(db.release).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
+  it('preserves an explicit strategy decision in both metadata and detail without inventing one for historical results',async()=>{
+    const db=database(),legacy=await proposalDto(db.client,db.proposal,false);
+    expect(Object.hasOwn(legacy,'directSecondary')).toBe(false);
+    const decision={schemaVersion:'wfc.pf.direct-secondary.v1',policyVersion:'nearest-eligible-tray-or.v1',coordinateFrame:'canonical-world-metres',mode:'tray-network',
+      fromPoint:[0,0,0],toPoint:[5,0,0],distanceMeters:5,nearestFromMeters:0,nearestToMeters:0,eligibleTrays:1,comparison:null};
+    const supplied={...db.proposal,result:{...db.proposal.result,schemaVersion:'pathfinder.model.response.v2',directSecondary:decision}};
+    expect((await proposalDto(db.client,supplied,false)).directSecondary).toEqual(decision);
+    expect((await proposalDto(db.client,supplied,true)).directSecondary).toEqual(decision);
+    expect(Object.hasOwn(db.proposal.result,'directSecondary')).toBe(false);
+  });
+
   it('keeps the exact historical proposal detail readable through the normal service',async()=>{
     const db=database(),value=await createPathFinderJobs(db.pool,{} as PathFinderRepository).proposal(projectId,who,proposalId);
     expect(value).toMatchObject({id:proposalId,cableId,stale:true,canApply:false});expect(value.route?.points).toHaveLength(2);

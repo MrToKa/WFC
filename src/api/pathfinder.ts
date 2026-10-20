@@ -5,6 +5,7 @@ import { validateModelCaptureInputScope, type ModelCaptureInputScope } from '../
 import { engineIdentitySchema } from '../../shared/pathfinderEngineIdentity';
 import { policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy';
 import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger';
+import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSecondaryDecision } from '../../shared/pathfinderDirectSecondary';
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
@@ -36,17 +37,30 @@ const proposalProvenanceSchema = z.object({
 });
 const proposalSummaryObjectSchema = z.object({ schemaVersion: z.literal('wfc.pf.proposal.v2').optional(), provenance: proposalProvenanceSchema.optional(), id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
   stale: z.boolean(), synthetic: z.boolean(), engineeringAccepted: z.boolean(), acceptanceScope: z.string(), canApply: z.boolean(), compatibilityIssue: z.string().nullable(), message: z.string(), engineeringMessage: z.string(),
-  design: designSchema.nullable(),lengthLedger:lengthLedgerSchema.nullable().optional(),revisionResultHash:policyHashSchema.nullable().optional(),revisionBaselineHash:policyHashSchema.nullable().optional(),
+  design: designSchema.nullable(),lengthLedger:lengthLedgerSchema.nullable().optional(),directSecondary:directSecondaryDecisionSchema.nullable().optional(),revisionResultHash:policyHashSchema.nullable().optional(),revisionBaselineHash:policyHashSchema.nullable().optional(),
   route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.enum(['calculate', 'design']).optional(),
   itemApplicability:sealedCableItemApplicabilitySchema.nullable().optional() });
 const validateProposalItem=(value:z.infer<typeof proposalSummaryObjectSchema>,context:z.RefinementCtx)=>{
     const proof=value.itemApplicability;
     if(proof&&(proof.projectId!==value.projectId||proof.jobId!==value.jobId||proof.cableId!==value.cableId||proof.proposalId!==value.id
       ||proof.dependencyHash!==value.provenance?.dependencyHash||value.provenance?.dependencyVersion!=='pathfinder.dependencies.v7'))context.addIssue({code:'custom',message:'Sealed item applicability must belong to the exact proposal.'});
+    if (value.directSecondary && value.provenance?.engineIdentity?.policyVersions.directSecondary !== value.directSecondary.policyVersion)
+      context.addIssue({ code: 'custom', message: 'Direct strategy must be explicitly recorded in this proposal’s engine identity.' });
+    if (value.lengthLedger?.schemaVersion === 'wfc.pf.length-components.v2'
+      && (!value.directSecondary || JSON.stringify(value.lengthLedger.directSecondary) !== JSON.stringify(value.directSecondary)))
+      context.addIssue({ code: 'custom', message: 'Direct length components require their exact direct strategy decision.' });
+    if (value.directSecondary?.mode === 'direct-secondary' && value.lengthLedger && value.lengthLedger.schemaVersion !== 'wfc.pf.length-components.v2')
+      context.addIssue({ code: 'custom', message: 'Direct strategy cannot use the legacy secondary-end formula.' });
   };
 const proposalSummarySchema=proposalSummaryObjectSchema.superRefine(validateProposalItem);
 const computedRouteSchema = z.object({ success: z.boolean(), message: z.string(), routeText: z.string(), routeCodes: z.array(z.string()), segmentIds: z.array(z.string()),
   points: z.array(point).max(200000), objectIds: z.array(z.string()).max(200000), lengthMeters: z.number().finite(), fromDistanceMeters: z.number().finite(), toDistanceMeters: z.number().finite(), fromRequiresSecondary: z.boolean(), toRequiresSecondary: z.boolean(), connectionGapCount: z.number().int().nonnegative(), connectionGapLengthMeters: z.number().finite() });
+const validateDirectComputedRoute = (value: { directSecondary?: DirectSecondaryDecision | null; route: z.infer<typeof computedRouteSchema> | null }, context: z.RefinementCtx) => {
+  if (value.directSecondary && value.route) {
+    const issue = directSecondaryRouteIssue(value.directSecondary, value.route);
+    if (issue) context.addIssue({ code: 'custom', message: issue });
+  }
+};
 const legacyDisplayEndpointSchema = z.object({ locationId: uuid, bindingRevision: revision, point });
 const boundDisplayEndpointSchema = legacyDisplayEndpointSchema.extend({ locationRevision: revision, bindingId: uuid,
   bindingContentSha256: policyHashSchema, mode: z.enum(['fixed-world', 'object-derived', 'object-attached']),
@@ -69,7 +83,7 @@ const proposalDisplayDependenciesSchema = z.union([
     from: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]), to: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]) }),
 ]);
 const proposalSchema = proposalSummaryObjectSchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional(),revisionResult:revisionResultEnvelopeSchema.nullable().optional(),
-  dependencies: proposalDisplayDependenciesSchema.optional().catch(undefined) }).superRefine(validateProposalItem);
+  dependencies: proposalDisplayDependenciesSchema.optional().catch(undefined) }).superRefine((value, context) => { validateProposalItem(value, context); validateDirectComputedRoute(value, context); });
 const diagnosticCount = z.number().int().nonnegative().max(1_000_000).nullable();
 const lookupPlanSchema = z.object({ routeCodes: z.array(z.string().min(2).max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).refine(value => value !== '/SECONDARY')).min(1).max(100), connectionGap: connectionGapSchema, selectionRevision: revision });
 const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('lookup'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
@@ -83,7 +97,8 @@ const previewInputSchema = z.object({ from: endpointSchema, to: endpointSchema, 
 const resolvedEndpointSchema = z.object({ name: z.string(), point, source: z.enum(['manual-world-point', 'shared-location', 'equipment-bottom-aabb']), objectId: z.string().nullable(), locationId: uuid.nullable(), bindingRevision: revision.nullable() });
 const previewSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('preview'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), cancelRequested: z.boolean(), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),
   input: previewInputSchema, result: z.object({ status: z.string(), message: z.string(), route: computedRouteSchema.nullable(), design: designSchema.nullable(), prepared: z.unknown(), effectiveCategory: z.string().nullable(), settings: projectSettingsSchema,
-    from: resolvedEndpointSchema, to: resolvedEndpointSchema, stale: z.boolean(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('standalone-preview'), canApply: z.literal(false) }).nullable() });
+    directSecondary: directSecondaryDecisionSchema.nullable().optional(),
+    from: resolvedEndpointSchema, to: resolvedEndpointSchema, stale: z.boolean(), engineeringAccepted: z.literal(false), acceptanceScope: z.literal('standalone-preview'), canApply: z.literal(false) }).superRefine(validateDirectComputedRoute).nullable() });
 const cable = z.object({ id: uuid, cableId: z.number().int(), tag: z.string().nullable(), fromLocation: z.string().nullable(), toLocation: z.string().nullable(), mto: z.string().nullable(),
   routing: z.string().nullable(), designLength: numeric, installLength: numeric, cableWriteRevision: revision, fromMatch: match, toMatch: match });
 const stateSchema = z.object({ schemaVersion: z.literal(1), projectId: uuid, registryRevision: revision,

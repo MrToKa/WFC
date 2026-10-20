@@ -37,7 +37,7 @@ function fixture() {
 afterEach(() => vi.clearAllMocks());
 
 describe('calculation engine identity against synthetic filesystem facts, not actual DLL execution', () => {
-  it.each(['./lengthLedger.js','../../shared/pathfinderLengthLedger.js','./automaticEndpointCandidates.js','./matching.js','./policyJson.js','../../shared/pathfinderPurposePolicy.js','../../shared/pathfinderPreparation.js','../../shared/pathfinderCapacity.js','../../shared/pathfinderGeometryTrace.js','../../shared/pathfinderEndpointBindings.js','../../viewer-runtime/equipment-names.mjs'])('pins the actual %s validator and changes identity for its sole replacement', async name=>{
+  it.each(['./lengthLedger.js','../../shared/pathfinderLengthLedger.js','./directSecondaryStrategy.js','../../shared/pathfinderDirectSecondary.js','./automaticEndpointCandidates.js','./matching.js','./policyJson.js','../../shared/pathfinderPurposePolicy.js','../../shared/pathfinderPreparation.js','../../shared/pathfinderCapacity.js','../../shared/pathfinderGeometryTrace.js','../../shared/pathfinderEndpointBindings.js','../../viewer-runtime/equipment-names.mjs'])('pins the actual %s validator and changes identity for its sole replacement', async name=>{
     expect(calculationProjectionFiles().map(file=>file.name)).toContain(name);
     const f=fixture(),filename=path.join(f.root,'ledger-validator.js');
     f.files.set(filename,{bytes:Buffer.from('ledger-validator-original'),size:25n,ino:50n,mtimeNs:10n,ctimeNs:20n,nlink:1n,symlink:false});
@@ -57,6 +57,8 @@ describe('calculation engine identity against synthetic filesystem facts, not ac
     const projected = f.files.get(path.join(f.root, 'projection.js'))!.bytes;
     expect(value.derivationSha256).toBe(sha(Buffer.concat([Buffer.from('./projection.js\n' + projected.length + '\n'), projected, Buffer.from('\n')])));
     expect(verifyEngineIdentity(value, sha)).toBe(true);
+    expect(value.policyVersions.directSecondary).toBe('nearest-eligible-tray-or.v1');
+    expect(calculationProjectionFiles().length).toBeLessThanOrEqual(32);
     expect(fs.readFile).toHaveBeenCalledTimes(5);
   });
   it.each(['PathFinder.ModelRunner.dll', 'PathFinder.Model.dll', 'PathFinder.Core.dll', 'PathFinder.Adapter.dll', 'projection.js'])('changes the exact identity when %s bytes change under the same version label', async name => {

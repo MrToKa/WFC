@@ -63,7 +63,9 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
     engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : (dependencies.schemaVersion === 'pathfinder.dependencies.v6'||dependencies.schemaVersion === 'pathfinder.dependencies.v7')&&(isAutomaticEndpointCalculationPoint(dependencies.from)||isAutomaticEndpointCalculationPoint(dependencies.to))
       ? 'Automatic model endpoint candidates use approximate bounding-box anchors. Review their positions, route and length before explicit Apply. These endpoints have not been manually confirmed. Native engineering parity has not been performed.'
       : 'Manual review and explicit Apply are required for this exact proposal. Native engineering parity has not been performed.',
-    design:result.design ?? null,lengthLedger:result.lengthLedger??null,revisionResultHash:revisionResult?.revisionResultSha256??null,revisionBaselineHash:revisionResult?.baselineHash??null,
+    design:result.design ?? null,lengthLedger:result.lengthLedger??null,
+    ...(result.directSecondary ? { directSecondary: result.directSecondary } : {}),
+    revisionResultHash:revisionResult?.revisionResultSha256??null,revisionBaselineHash:revisionResult?.baselineHash??null,
     ...(detail?{revisionResult}:{}),route:route ? {...route,pathPoints:undefined,...(detail ? {points:route.pathPoints.map((point:Row) => [point.x,point.y,point.z]),objectIds:[...new Set(route.segmentIds as string[])]} : {})} : null,
     calculationMode:result.calculationMode,
     provenance:{dependencyVersion:dependencies.schemaVersion,dependencyHash:row.dependency_hash,

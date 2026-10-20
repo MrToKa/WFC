@@ -16,6 +16,7 @@ import { PathFinderCableComparison } from '@/components/pathfinder/PathFinderCab
 import { cableComparisonInputSchema, type CableComparisonInput } from '../../../shared/pathfinderCableComparison';
 import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { revisionResultEnvelopeSchema } from '../../../shared/pathfinderRevisionResults';
+import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
 
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
@@ -369,10 +370,11 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       </details> : <Caption1>Calculation provenance is unavailable for this historical result.</Caption1>}
       {proposal.route ? <><Body1>Geometric length: {proposal.route.lengthMeters} m</Body1><Caption1>From approach: {proposal.route.fromDistanceMeters} m{proposal.route.fromRequiresSecondary ? ' (SECONDARY)' : ''}; To approach: {proposal.route.toDistanceMeters} m{proposal.route.toRequiresSecondary ? ' (SECONDARY)' : ''}</Caption1><Caption1>Connection gaps: {proposal.route.connectionGapCount}; total gap length: {proposal.route.connectionGapLengthMeters} m</Caption1><details><summary>Exact route text</summary><p style={{ overflowWrap: 'anywhere' }}>{proposal.route.routeText}</p></details></> : null}
       {proposal.design ? <><Body1>Before percentage: {proposal.design.lengthBeforePercentageMeters} m</Body1><Caption1>Before rounding: {proposal.design.unroundedLengthMeters} m</Caption1><Body1>Design length: {proposal.design.designLengthMeters} m</Body1></> : null}
+      <PathFinderDirectSecondary decision={proposal.directSecondary} />
       {proposal.lengthLedger ? <details><summary>Exact length components</summary>
         <p>Raw geometry: {proposal.lengthLedger.rawLengthDecimalMeters} m. Connection gaps are already included.</p>
         <p>Removed From approach: {proposal.lengthLedger.from.removedApproachMeters} m; removed To approach: {proposal.lengthLedger.to.removedApproachMeters} m.</p>
-        <p>SECONDARY ends: {proposal.lengthLedger.secondaryEnds}; replacement: {proposal.lengthLedger.replacementMeters} m; Secondary tray length: {proposal.lengthLedger.settings.secondaryTrayLengthMeters??'Not required'}.</p>
+        <p>SECONDARY ends: {proposal.lengthLedger.secondaryEnds}; replacement: {proposal.lengthLedger.replacementMeters} m; Secondary tray length: {proposal.lengthLedger.settings.secondaryTrayLengthMeters??'Not required'}{proposal.lengthLedger.schemaVersion === 'wfc.pf.length-components.v2' ? ' (recorded only; unused for direct SECONDARY)' : ''}.</p>
         <p>Before clamp: {proposal.lengthLedger.beforeClampMeters} m; clamp adjustment: {proposal.lengthLedger.clampAdjustmentMeters} m; after clamp: {proposal.lengthLedger.afterClampMeters} m.</p>
         <p>For end connection: {proposal.lengthLedger.settings.endConnectionLengthMeters} m; Additional % for bending: {proposal.lengthLedger.settings.additionalBendingPercent}%.</p>
         <p>Bending increment: {proposal.lengthLedger.bendingIncrementMeters} m; ceiling increment: {proposal.lengthLedger.ceilingIncrementMeters} m.</p>

@@ -7,7 +7,7 @@ import type { PathFinderJobs } from './jobs.js';
 import type { GrantJobExecution, GrantJobClaimRecovery } from './grantWorkerAuthority.js';
 import { PathFinderError } from './errors.js';
 import { syntheticEngineIdentity } from './calculationFixtures.js';
-import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
+import { legacyLengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
 import { revisionBaselineSchema, revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults.js';
 
 const seams = vi.hoisted(() => ({ claim: vi.fn(), acquire: vi.fn(), transaction: vi.fn(), collect: vi.fn(),
@@ -48,7 +48,7 @@ function fixture(options: { kind?: 'current-login' | 'calculation-grant'; unknow
     pathPoints: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }], lengthMeters: 1, fromDistanceMeters: 0, toDistanceMeters: 0,
     fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 };
   const design = { lengthBeforePercentageMeters: '6', unroundedLengthMeters: '6.6', designLengthMeters: '7' };
-  const ledger = lengthLedgerSchema.parse({ schemaVersion: 'wfc.pf.length-components.v1', formulaVersion: 'pathfinder-45c24bf5', settingsRevision: '1',
+  const ledger = legacyLengthLedgerSchema.parse({ schemaVersion: 'wfc.pf.length-components.v1', formulaVersion: 'pathfinder-45c24bf5', settingsRevision: '1',
     raw: { lengthMeters: 1, fromDistanceMeters: 0, toDistanceMeters: 0 }, rawLengthDecimalMeters: '1',
     from: { requiresSecondary: false, removedApproachMeters: '0' }, to: { requiresSecondary: false, removedApproachMeters: '0' },
     settings: { secondaryTrayLengthMeters: '7', endConnectionLengthMeters: '5', additionalBendingPercent: '10' },

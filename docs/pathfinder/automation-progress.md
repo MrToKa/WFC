@@ -1,5 +1,21 @@
 # PathFinder local implementation progress
 
+## PF-U6 — direct SECONDARY — VERIFIED 2026-10-20
+
+Branch pf-u6-direct-secondary-local-20261020 inherits final U6handoff85bfc2bd /
+U5delivery785649bb. Current interface: optional explicit nearest-eligible-tray-or.v1
+engine policy, v2response+decision, v2direct ledger/direct-secondary-3d.v1; absent
+old policies/requests remain legacy. Canonical11Routing sources immutable.
+TECHNICAL_FOUNDATION_PASS1313/1313:587TS/25files +726C#syntheticactualharness;
+canonical11byte/hashauditPASS; types/lint28/diffPASS. Report67/u6-actual.json
+bindexactscope/sourcehashes; earlierstaletestDLLrefusalretained/excluded.
+AllU6sourcesfrozen/processesjoined. No runtime/fixtureactive; no5191upgrade/
+restart/SQL/HTTP/write. UseraddedPropertiesmatching+hiddenexclusion: nextprepare
+andexecuteinheritedU6a, thenU7/U8automatically. Previewagentreadonlymapping;
+otheragentsfrozen. PreparerPAUSED; automationACTIVE; nooriginal5180/old5190
+writes or push/PR/merge/deploy; preservehistoricalpaths. ActualUI/realmodel/
+SQLchain/engineeringacceptanceNOT_RUN. C#ownedscratchartifactsretainedforU7.
+
 ## PF-U5 — persistent cable workspace — VERIFIED 2026-10-20
 
 Branch pf-u5-cable-routing-workspace-local-20261020 inherits handoff9cc893442a7a897165cd80155a2f086e0ffb4bd1 / U4b4db75c.

@@ -1,6 +1,8 @@
 import { lengthLedgerSchema, canonicalDecimalString, type LengthLedger } from '../../shared/pathfinderLengthLedger.js';
 import type { EngineResponse, ProjectSettings } from './jobContracts.js';
 import { PathFinderError } from './errors.js';
+import { directSecondaryDecisionSchema, directSecondaryRouteIssue } from '../../shared/pathfinderDirectSecondary.js';
+import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 
 /** The C# observer supplies components. Never recalculate its design in JS. */
 export function requireCalculationLengthLedger(response: EngineResponse, settings: ProjectSettings): LengthLedger | null {
@@ -13,6 +15,11 @@ export function requireCalculationLengthLedger(response: EngineResponse, setting
   if (!parsed.success) return fail();
   const ledger = parsed.data, route = response.route, design = response.design;
   try {
+    if (ledger.schemaVersion === 'wfc.pf.length-components.v2') {
+      const decision = response.schemaVersion === 'pathfinder.model.response.v2' ? directSecondaryDecisionSchema.safeParse(response.directSecondary) : null;
+      if (!decision?.success || canonicalPurposeJson(ledger.directSecondary) !== canonicalPurposeJson(decision.data)
+        || directSecondaryRouteIssue(decision.data, { ...route, points: route.pathPoints.map(point => [point.x, point.y, point.z]) })) return fail();
+    } else if (response.schemaVersion === 'pathfinder.model.response.v2' && response.directSecondary.mode === 'direct-secondary') return fail();
     if (ledger.settingsRevision !== settings.revision
       || ledger.raw.lengthMeters !== route.lengthMeters || ledger.raw.fromDistanceMeters !== route.fromDistanceMeters || ledger.raw.toDistanceMeters !== route.toDistanceMeters
       || ledger.from.requiresSecondary !== route.fromRequiresSecondary || ledger.to.requiresSecondary !== route.toRequiresSecondary

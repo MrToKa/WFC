@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import type { EngineResponse, ProjectSettings } from './jobContracts.js';
 import type { LengthLedger } from '../../shared/pathfinderLengthLedger.js';
+import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
 
 const settings:ProjectSettings={revision:'2',connectionGap:'1',secondaryTrayLength:null,endConnectionLength:'2.00',additionalBendingPercent:'10.0'};
 const ledger:LengthLedger={schemaVersion:'wfc.pf.length-components.v1',formulaVersion:'pathfinder-45c24bf5',settingsRevision:'2',
@@ -12,6 +13,16 @@ const ledger:LengthLedger={schemaVersion:'wfc.pf.length-components.v1',formulaVe
 const response=():EngineResponse=>({schemaVersion:'pathfinder.model.response.v1',requestId:'00000000-0000-4000-8000-000000000001',status:'calculated',message:'',engineeringAccepted:false,
   route:{success:true,message:'',routeText:'/A',routeCodes:['A'],segmentIds:['id'],pathPoints:[],lengthMeters:3,fromDistanceMeters:1,toDistanceMeters:1,fromRequiresSecondary:false,toRequiresSecondary:false,connectionGapCount:1,connectionGapLengthMeters:0.5},
   design:{lengthBeforePercentageMeters:'5.00',unroundedLengthMeters:'5.50',designLengthMeters:'6'},lengthLedger:structuredClone(ledger)});
+const directResponse = (): EngineResponse => {
+  const directSecondary = { schemaVersion: 'wfc.pf.direct-secondary.v1' as const, policyVersion: DIRECT_SECONDARY_POLICY, coordinateFrame: 'canonical-world-metres' as const,
+    mode: 'direct-secondary' as const, fromPoint: [0, 0, 0] as [number, number, number], toPoint: [3, 0, 0] as [number, number, number], distanceMeters: 3,
+    nearestFromMeters: 4, nearestToMeters: 5, eligibleTrays: 1, comparison: 'both' as const };
+  return { ...response(), schemaVersion: 'pathfinder.model.response.v2', status: 'calculated', effectiveCategory: 'LV', directSecondary,
+    route: { ...response().route!, routeText: '/SECONDARY', routeCodes: ['/SECONDARY'], segmentIds: [], pathPoints: [{ x: 0, y: 0, z: 0 }, { x: 3, y: 0, z: 0 }],
+      fromDistanceMeters: 0, toDistanceMeters: 0, connectionGapCount: 0, connectionGapLengthMeters: 0 },
+    lengthLedger: { ...structuredClone(ledger), schemaVersion: 'wfc.pf.length-components.v2', formulaVersion: 'direct-secondary-3d.v1',
+      raw: { lengthMeters: 3, fromDistanceMeters: 0, toDistanceMeters: 0 }, directSecondary: structuredClone(directSecondary) } };
+};
 
 describe('length observer response binding',()=>{
   it('retains exact C# components and tolerates stored setting scale only',()=>{
@@ -35,5 +46,23 @@ describe('length observer response binding',()=>{
     failed.lengthLedger=ledger;expect(()=>requireCalculationLengthLedger(failed,settings)).toThrow();
     const malformed=response();malformed.lengthLedger!.from.removedApproachMeters='1';expect(()=>requireCalculationLengthLedger(malformed,settings)).toThrow();
     const count=response();count.lengthLedger!.secondaryEnds=2;expect(()=>requireCalculationLengthLedger(count,settings)).toThrow();
+  });
+  it('binds a direct v2 ledger to exact decision, endpoints, no gaps and current audit-only S', () => {
+    const value = directResponse(); expect(requireCalculationLengthLedger(value, settings)).toEqual(value.lengthLedger);
+    expect(() => requireCalculationLengthLedger(value, { ...settings, secondaryTrayLength: '7' })).toThrow();
+    value.lengthLedger!.settings.secondaryTrayLengthMeters = '7';
+    expect(requireCalculationLengthLedger(value, { ...settings, secondaryTrayLength: '7' })?.designLengthMeters).toBe('6');
+  });
+  it.each(['legacy-response', 'legacy-ledger', 'decision', 'point', 'route', 'segment', 'gap', 'old-flag'] as const)('refuses cross-strategy direct proof: %s', change => {
+    const value = directResponse();
+    if (change === 'legacy-response') Object.assign(value, { schemaVersion: 'pathfinder.model.response.v1' });
+    if (change === 'legacy-ledger') value.lengthLedger = structuredClone(ledger);
+    if (change === 'decision' && value.schemaVersion === 'pathfinder.model.response.v2') value.directSecondary.nearestFromMeters = 100;
+    if (change === 'point') value.route!.pathPoints[1].x = 4;
+    if (change === 'route') value.route!.routeText = '/A';
+    if (change === 'segment') value.route!.segmentIds.push('imaginary-tray');
+    if (change === 'gap') value.route!.connectionGapLengthMeters = 1;
+    if (change === 'old-flag') value.route!.fromRequiresSecondary = true;
+    expect(() => requireCalculationLengthLedger(value, settings)).toThrow();
   });
 });

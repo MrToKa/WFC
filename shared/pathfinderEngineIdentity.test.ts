@@ -35,9 +35,20 @@ describe('R7 exact engine implementation identity', () => {
     const { contentSha256: _hash, ...changedBody } = changed;
     expect(complete(changedBody).contentSha256).not.toBe(previous.contentSha256);
   });
-  it.each(['numeric', 'routing', 'fitting', 'projection', 'categoryMapping'] as const)('rejects unsupported %s policy rather than silently relabelling it', field => {
+  it.each(['numeric', 'routing', 'fitting', 'projection', 'categoryMapping', 'directSecondary'] as const)('rejects unsupported %s policy rather than silently relabelling it', field => {
     const input = body();
     expect(engineIdentityBodySchema.safeParse({ ...input, policyVersions: { ...input.policyVersions, [field]: 'unrecognized.v2' } }).success).toBe(false);
+  });
+  it('preserves an old absent strategy without changing its canonical bytes or hash', () => {
+    const current = body(), { directSecondary: _policy, ...historicalPolicies } = current.policyVersions;
+    const historical = { ...current, policyVersions: historicalPolicies };
+    const value = complete(historical), parsed = engineIdentitySchema.parse(value);
+    expect(Object.hasOwn(parsed.policyVersions, 'directSecondary')).toBe(false);
+    expect(engineIdentityCanonicalBody(parsed)).toBe(engineIdentityCanonicalBody(historical));
+    expect(verifyEngineIdentity(parsed, sha)).toBe(true);
+    expect(value.contentSha256).not.toBe(complete(current).contentSha256);
+    expect(engineIdentitySchema.safeParse({ ...value, policyVersions: current.policyVersions }).success).toBe(true);
+    expect(verifyEngineIdentity({ ...value, policyVersions: current.policyVersions }, sha)).toBe(false);
   });
   it.each(['runnerSha256', 'modelModuleSha256', 'coreModuleSha256', 'adapterModuleSha256', 'derivationSha256', 'contentSha256'] as const)('requires absolute canonical lowercase SHA in %s', field => {
     for (const invalid of ['a'.repeat(64) + '\n', 'A'.repeat(64), 'a'.repeat(63), ' a'.repeat(32)]) expect(engineIdentitySchema.safeParse({ ...complete(), [field]: invalid }).success).toBe(false);

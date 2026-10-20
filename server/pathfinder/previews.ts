@@ -18,6 +18,7 @@ import { readComparisonDependency } from './revisionComparisonRepository.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { directSecondaryPolicyForScope, requireDirectSecondaryStrategy } from './directSecondaryStrategy.js';
 
 const name = z.string().trim().max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
 export const previewEndpointSchema = z.object({ name, point: point.optional() }).strict().refine(value=>Boolean(value.name || value.point),'Enter an endpoint name or choose an explicit point.');
@@ -84,17 +85,22 @@ export async function collectPreviewDependencies(client:PoolClient,projectId:str
 
 /** Reverse is performed by the unchanged C# core after calculation, preserving its tie and reversal semantics. */
 export function previewEngineRequest(dependencies:PreviewDependencies,requestId:string,timeoutMilliseconds:number) {
+  const policy=directSecondaryPolicyForScope({category:dependencies.input.category,engineIdentity:dependencies.engineIdentity});
   return {schemaVersion:'pathfinder.model.runner.v1',requestId,operation:'calculate',projectId:dependencies.projectId,
     modelVersionId:dependencies.modelVersionId,snapshotId:dependencies.artifactId,snapshotSha256:dependencies.snapshotSha256,timeoutMilliseconds,
+    ...(policy?{directSecondaryPolicy:policy}:{}),
     category:dependencies.input.category,from:{x:dependencies.from.point[0],y:dependencies.from.point[1],z:dependencies.from.point[2]},
     to:{x:dependencies.to.point[0],y:dependencies.to.point[1],z:dependencies.to.point[2]},reverse:dependencies.input.reverse,
     options:dependencies.options,projectSettings:engineProjectSettings(dependencies.settings)};
 }
 
 export function previewResultDto(response:EngineResponse,dependencies:PreviewDependencies,stale:boolean) {
+  const decision=requireDirectSecondaryStrategy(response,{category:dependencies.input.category,fromPoint:dependencies.from.point,toPoint:dependencies.to.point,
+    engineIdentity:dependencies.engineIdentity,reverse:dependencies.input.reverse});
   const route=response.route;
   return {status:response.status,message:response.message,prepared:response.prepared ?? null,effectiveCategory:response.effectiveCategory ?? null,
     engineeringAccepted:false,acceptanceScope:'standalone-preview',canApply:false,stale,settings:dependencies.settings,
+    ...(decision?{directSecondary:decision}:{}),
     from:dependencies.input.reverse ? dependencies.to : dependencies.from,to:dependencies.input.reverse ? dependencies.from : dependencies.to,
     design:response.design ?? null,route:route ? {...route,pathPoints:undefined,points:route.pathPoints.map(value=>[value.x,value.y,value.z]),objectIds:[...new Set(route.segmentIds)]} : null};
 }
