@@ -45,6 +45,31 @@ function setup() {
 beforeEach(() => vi.clearAllMocks());
 
 describe('administrator cable revision inspection', () => {
+  it('selects exact ready page rows while excluding MV, stale and blocked cables', () => {
+    const { f, state } = setup(), p = props(), row = f.page.rows[0];
+    const rows = [row, { ...row, cableId: id(40), baseline: { ...row.baseline, currentCable: { ...row.baseline.currentCable, id: id(40), tag: 'MV-TEST' } } },
+      { ...row, cableId: id(41), baseline: { ...row.baseline, currentCable: { ...row.baseline.currentCable, id: id(41), tag: 'STALE-TEST' } }, currentness: { state: 'changed' as const, reasonCodes: ['CABLE_EDITED'] } }];
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    const cables = rows.map((item, index) => ({ id: item.cableId, mto: index === 1 ? 'MV' : 'Control' })) as PathFinderRevisionResultsProps['cables'];
+    render(<PathFinderRevisionResults {...p} batch={batch} cables={cables} />);
+    expect(screen.getByRole('checkbox', { name: 'Select MV-TEST for review' })).toBeDisabled();
+    expect(screen.getByRole('checkbox', { name: 'Select STALE-TEST for review' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Select ready cables on this page' }));
+    expect(batch.select).toHaveBeenCalledTimes(1); expect(batch.select).toHaveBeenCalledWith(expect.objectContaining({ proposalId: row.result!.proposalId, proposalHash: row.result!.proposalHash,
+      revisionResultHash: row.result!.revisionResultSha256, cableId: row.cableId, cableWriteRevision: '8', routeText: '/NEW', designLength: '13' }), true);
+    expect(batch.clearSelection).not.toHaveBeenCalled();
+  });
+  it('does not select partial outputs from a cancelled calculation', () => {
+    const { f } = setup(), row = f.page.rows[0];
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ id: f.admissions.admissions[0].jobId, status: 'cancelled', cancelRequested: true }] as PathFinderRevisionResultsProps['jobs']} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Select ready cables on this page' })).toBeDisabled();
+    expect(batch.select).not.toHaveBeenCalled();
+  });
   it('separates edited current cable values from historical accepted geometry and preserves exact server decimal text', () => {
     setup(); const p = props(); render(<PathFinderRevisionResults {...p} />);
     const current = screen.getByRole('region', { name: 'Current cable at admission' });

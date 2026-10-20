@@ -202,6 +202,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     const s = await loaded();
     let received = 0;
     s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
       const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
       if (phase === 'appended') received += value.payload.points.length;
       if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
@@ -217,9 +218,155 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(requestId).toBeTruthy(); expect(() => s.c.zoom()).not.toThrow();
     expect(s.send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'ZOOM_ROUTE', payload: { routeRequestId: requestId } });
   });
+  it('keeps a large-model computed appearance commit alive past ten seconds and accepts its bounded acknowledgement', async () => {
+    const s = await loaded(600_000); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const showing = s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0], [1, 2, 3]], objectIds: [23] });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'COMMIT_COMPUTED_PATH')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'COMMIT_COMPUTED_PATH')![0];
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.some(event => event.type === 'ERROR')).toBe(false);
+    await vi.advanceTimersByTimeAsync(48_000);
+    s.message('COMPUTED_PATH_UPDATED', { pathId: command.payload.pathId, phase: 'displayed', received }, command.requestId, s.identity);
+    await expect(showing).resolves.toBe(command.requestId);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.some(event => event.type === 'ERROR')).toBe(false);
+  });
+  it('gives whole-model visibility restoration the same bounded appearance allowance', async () => {
+    const s = await loaded(600_000), requestId = s.c.clear();
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.some(event => event.type === 'ERROR')).toBe(false);
+    await vi.advanceTimersByTimeAsync(48_000);
+    s.message('ROUTE_CLEARED', {}, requestId, s.identity);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.filter(event => event.type === 'ROUTE_CLEARED')).toHaveLength(1);
+    expect(s.events.some(event => event.type === 'ERROR')).toBe(false);
+  });
+  it('waits for delayed Clear before sending BEGIN so restoration cannot consume the next command deadline', async () => {
+    const s = await loaded(600_000); let received = 0;
+    s.send.mockImplementation(value => {
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const showing = s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const clear = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    expect(s.send.mock.calls.some(call => call[0].type === 'BEGIN_COMPUTED_PATH')).toBe(false);
+    s.message('ROUTE_CLEARED', {}, clear.requestId, s.identity);
+    await expect(showing).resolves.toBeTruthy();
+    expect(s.send.mock.calls.some(call => call[0].type === 'BEGIN_COMPUTED_PATH')).toBe(true);
+    expect(s.events.some(event => event.type === 'ERROR')).toBe(false);
+  });
+  it('does not start a computed path if the user clears it while waiting for appearance restoration', async () => {
+    const s = await loaded(600_000);
+    const showing = s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const rejected = expect(showing).rejects.toMatchObject({ name: 'AbortError' });
+    const restoring = s.send.mock.calls.find(call => call[0].type === 'CLEAR_ROUTE')![0];
+    s.c.clear(); await rejected;
+    s.message('ROUTE_CLEARED', {}, restoring.requestId, s.identity);
+    await Promise.resolve();
+    expect(s.send.mock.calls.some(call => call[0].type === 'BEGIN_COMPUTED_PATH')).toBe(false);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+  });
+  it('allows bounded whole-model material preparation for transparency without expiring at ten seconds', async () => {
+    const s = await loaded(600_000); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    await s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const updating = s.c.setPathTransparency(75);
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SET_PATH_TRANSPARENCY')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'SET_PATH_TRANSPARENCY')![0];
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.some(event => event.type === 'ERROR')).toBe(false);
+    await vi.advanceTimersByTimeAsync(48_000);
+    s.message('PATH_TRANSPARENCY_UPDATED', command.payload, command.requestId, s.identity);
+    await expect(updating).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.some(event => event.type === 'ERROR')).toBe(false);
+  });
+  it('fails closed when whole-model material preparation does not acknowledge within sixty seconds', async () => {
+    const s = await loaded(600_000); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    await s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const rejected = expect(s.c.setPathTransparency(75)).rejects.toThrow('Viewer request timed out');
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'SET_PATH_TRANSPARENCY')).toBe(true));
+    await vi.advanceTimersByTimeAsync(59_000); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_001); await rejected;
+    expect(s.c.getLoadSnapshot()).toBeNull(); expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(true);
+  });
+  it('fails closed at sixty seconds when a computed appearance commit never acknowledges', async () => {
+    const s = await loaded(600_000); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const showing = s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const rejected = expect(showing).rejects.toThrow('Viewer request timed out');
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'COMMIT_COMPUTED_PATH')).toBe(true));
+    await vi.advanceTimersByTimeAsync(59_000); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_001); await rejected;
+    expect(s.c.getLoadSnapshot()).toBeNull(); expect(s.c.iframe.style.display).toBe('none');
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(true);
+  });
+  it('fails closed at sixty seconds when visibility restoration never acknowledges', async () => {
+    const s = await loaded(600_000); s.c.clear();
+    await vi.advanceTimersByTimeAsync(59_999); expect(s.c.getLoadSnapshot()?.ready).toBe(true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(s.c.getLoadSnapshot()).toBeNull(); expect(s.c.iframe.style.display).toBe('none');
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(true);
+  });
+  it.each(['BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH'])('retains the ten-second bound for the small %s transport command', async delayed => {
+    const s = await loaded(600_000); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase && value.type !== delayed) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const rejected = expect(s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] })).rejects.toThrow('Viewer request timed out');
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === delayed)).toBe(true));
+    await vi.advanceTimersByTimeAsync(10_001); await rejected;
+    expect(s.c.getLoadSnapshot()).toBeNull(); expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(true);
+  });
+  it('disposes immediately on revoked access during an appearance commit without waiting for the allowance', async () => {
+    const s = await loaded(600_000); let received = 0;
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : null;
+      if (phase === 'appended') received += value.payload.points.length;
+      if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
+    });
+    const showing = s.c.showComputedPath({ pathId: crypto.randomUUID(), points: [[0, 0, 0]], objectIds: [23] });
+    const rejected = expect(showing).rejects.toMatchObject({ code: 'ACCESS_REVOKED' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'COMMIT_COMPUTED_PATH')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'COMMIT_COMPUTED_PATH')![0], now = Date.now();
+    s.message('ERROR', { code: 'ACCESS_REVOKED', message: 'Access revoked.', retryable: false, operation: 'COMMIT_COMPUTED_PATH' }, command.requestId, s.identity);
+    await rejected;
+    expect(Date.now()).toBe(now); expect(s.c.getLoadSnapshot()).toBeNull(); expect(s.c.iframe.style.display).toBe('none');
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'ACCESS_REVOKED')).toBe(true);
+  });
   it('Clear during a chunk cancels the calculated path and cannot commit later', async () => {
     const s = await loaded();
     s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
       if (value.type === 'BEGIN_COMPUTED_PATH') s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase: 'begun', received: 0 }, value.requestId, s.identity);
       if (value.type === 'APPEND_COMPUTED_PATH') s.c.clear();
     });
@@ -230,6 +377,7 @@ describe('PathFinder protected Viewer capabilities', () => {
   it('acknowledges a legitimate one-point zero-length path without synthesizing geometry input', async () => {
     const s = await loaded(); let received = 0;
     s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
       const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
       if (phase === 'appended') received += value.payload.points.length;
       if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);
@@ -251,6 +399,7 @@ describe('PathFinder protected Viewer capabilities', () => {
   it('reads only the protected current SDK selection and binds transparency acknowledgements to the displayed path', async () => {
     const s = await loaded(); let received = 0;
     s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
       const phase = value.type === 'BEGIN_COMPUTED_PATH' ? 'begun' : value.type === 'APPEND_COMPUTED_PATH' ? 'appended' : value.type === 'COMMIT_COMPUTED_PATH' ? 'displayed' : null;
       if (phase === 'appended') received += value.payload.points.length;
       if (phase) s.message('COMPUTED_PATH_UPDATED', { pathId: value.payload.pathId, phase, received }, value.requestId, s.identity);

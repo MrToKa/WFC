@@ -1,14 +1,14 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePathFinder } from './usePathFinder';
-import { fetchPathFinderState, fetchPathFinderLookupPlan, pathFinderRequest, PathFinderApiError, type PathFinderState } from '@/api/pathfinder';
+import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposal, fetchPathFinderJob, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
 
 const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
-  return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), pathFinderRequest: vi.fn() };
+  return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn() };
 });
 vi.mock('@/api/projectModels', () => ({ fetchProjectModels: vi.fn() }));
 vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
@@ -24,9 +24,110 @@ let container: { current: HTMLDivElement };
 beforeEach(() => {
   vi.clearAllMocks(); facts.instances = 0; facts.events.length = 0; container = { current: document.createElement('div') }; document.body.append(container.current);
   vi.mocked(fetchPathFinderState).mockResolvedValue(state()); vi.mocked(pathFinderRequest).mockResolvedValue({ locationId });
+  vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
   vi.mocked(fetchPathFinderLookupPlan).mockReset().mockResolvedValue({ routeCodes: ['/BC1', '/BC2'], selectionRevision: '2', connectionGap: '0.250' });
   facts.capture.mockReset().mockResolvedValue({ snapshot: { lookup: 'owned-protected-capture' }, summary: {} });
   vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { projectId, activeModelVersionId: modelId, selectionRevision: 2, updatedAt: '2026-10-18T00:00:00Z' }, versions: [{ id: modelId, projectId, label: 'Model', source: { name: 'test.nwd', bytes: 1, sha256: 'a'.repeat(64), identityBasis: 'observed-local-file' }, preparedAt: '2026-10-18T00:00:00Z', importedAt: null, state: 'ready', health: 'healthy' }] });
+});
+
+describe('bounded detail inspection and state polling', () => {
+  const mount = () => renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+  const detail = (): PathFinderProposal => ({ id: locationId, projectId, cableId: modelId, jobId: projectId, status: 'calculated',
+    proposalHash: 'b'.repeat(64), cableWriteRevision: '9', stale: false, synthetic: false, engineeringAccepted: false,
+    acceptanceScope: 'manual-review', canApply: true, compatibilityIssue: null, message: 'Review required.', engineeringMessage: 'Manual review required.',
+    design: { lengthBeforePercentageMeters: '10', unroundedLengthMeters: '11', designLengthMeters: '11' }, route: null,
+    routingPreferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, createdAt: '2026-10-20T00:00:00Z' });
+  it.each(['proposal', 'job'] as const)('returns a %s GET without another full state read or global busy lock', async kind => {
+    const view = mount(); await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    const reads = vi.mocked(fetchPathFinderState).mock.calls.length;
+    const value = kind === 'proposal' ? detail() : { id: locationId };
+    if (kind === 'proposal') vi.mocked(fetchPathFinderProposal).mockResolvedValueOnce(value as PathFinderProposal);
+    else vi.mocked(fetchPathFinderJob).mockResolvedValueOnce(value as Awaited<ReturnType<typeof fetchPathFinderJob>>);
+    // A full state refresh would stall inspection indefinitely.
+    vi.mocked(fetchPathFinderState).mockImplementation(() => new Promise(() => {}));
+    await act(async () => { expect(await (kind === 'proposal' ? view.result.current.readProposal(locationId) : view.result.current.readJob(locationId))).toEqual(value); });
+    expect(fetchPathFinderState).toHaveBeenCalledTimes(reads); expect(view.result.current.busy).toBe(false); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it.each(['proposal', 'job'] as const)('preserves the protected model when a selected %s no longer exists', async kind => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+    const failure = new PathFinderApiError(kind === 'proposal' ? 'PROPOSAL_NOT_FOUND' : 'JOB_NOT_FOUND', 404);
+    if (kind === 'proposal') vi.mocked(fetchPathFinderProposal).mockRejectedValueOnce(failure); else vi.mocked(fetchPathFinderJob).mockRejectedValueOnce(failure);
+    await act(async () => { expect(await (kind === 'proposal' ? view.result.current.readProposal(locationId) : view.result.current.readJob(locationId))).toBeNull(); });
+    expect(view.result.current.data).not.toBeNull(); expect(view.result.current.viewerPhase).toBe('ready');
+    expect(view.result.current.error).toContain('result is no longer available'); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it.each([401, 403])('still clears data and the protected model on a current detail authority refusal (%s)', async status => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.mocked(fetchPathFinderProposal).mockRejectedValueOnce(new PathFinderApiError('ADMIN_REQUIRED', status));
+    await act(() => view.result.current.readProposal(locationId));
+    expect(view.result.current.data).toBeNull(); expect(view.result.current.viewerPhase).toBe('error'); expect(facts.disposed).toHaveBeenCalledWith('reload'); view.unmount();
+  });
+  it('retains the terminal project-not-found boundary when a detail request loses its project scope', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.mocked(fetchPathFinderProposal).mockRejectedValueOnce(new PathFinderApiError('PROJECT_NOT_FOUND', 404));
+    await act(() => view.result.current.readProposal(locationId));
+    expect(view.result.current.data).toBeNull(); expect(view.result.current.viewerPhase).toBe('error'); expect(facts.disposed).toHaveBeenCalledWith('reload'); view.unmount();
+  });
+  it('aborts a superseded proposal read and ignores its late response without another model load', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    let finish!: (value: PathFinderProposal) => void;
+    vi.mocked(fetchPathFinderProposal).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; })).mockResolvedValueOnce(detail());
+    let first!: ReturnType<typeof view.result.current.readProposal>, second!: ReturnType<typeof view.result.current.readProposal>;
+    act(() => { first = view.result.current.readProposal(modelId); });
+    const oldSignal = vi.mocked(fetchPathFinderProposal).mock.calls[0][3]!;
+    await act(async () => { second = view.result.current.readProposal(locationId); expect(await first).toBeNull(); expect(await second).toEqual(detail()); });
+    expect(oldSignal.aborted).toBe(true);
+    await act(async () => finish({ ...detail(), id: modelId }));
+    expect(view.result.current.error).toBeNull(); expect(facts.instances).toBe(1); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('releases an unresponsive detail read at its deadline and ignores the late rejection', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.useFakeTimers(); let reject!: (error: Error) => void;
+    vi.mocked(fetchPathFinderProposal).mockImplementationOnce(() => new Promise((_resolve, refuse) => { reject = refuse; }));
+    let pending!: ReturnType<typeof view.result.current.readProposal>;
+    try {
+      act(() => { pending = view.result.current.readProposal(locationId); });
+      await act(async () => { await vi.advanceTimersByTimeAsync(30_001); expect(await pending).toBeNull(); });
+      expect(view.result.current.error).toContain('took too long'); expect(view.result.current.busy).toBe(false); expect(facts.disposed).not.toHaveBeenCalled();
+      await act(async () => reject(new Error('late transport failure'))); expect(view.result.current.error).toContain('took too long');
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+  it('cancels detail inspection explicitly without treating it as access loss', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1));
+    vi.mocked(fetchPathFinderProposal).mockImplementationOnce(() => new Promise(() => {}));
+    let pending!: ReturnType<typeof view.result.current.readProposal>;
+    act(() => { pending = view.result.current.readProposal(locationId); });
+    await act(async () => { view.result.current.cancelOperation(); expect(await pending).toBeNull(); });
+    expect(view.result.current.error).toBeNull(); expect(facts.disposed).not.toHaveBeenCalled(); view.unmount();
+  });
+  it('does not refresh all state after an exact review or a batch-owned action, while normal mutations still refresh', async () => {
+    const view = mount(); await waitFor(() => expect(facts.instances).toBe(1)); const reads = vi.mocked(fetchPathFinderState).mock.calls.length;
+    vi.mocked(pathFinderRequest).mockResolvedValueOnce({ reviewId: modelId, proposal: detail() });
+    await act(async () => expect(await view.result.current.reviewProposal(detail())).toEqual({ reviewId: modelId, proposal: detail() }));
+    expect(fetchPathFinderState).toHaveBeenCalledTimes(reads);
+    vi.mocked(pathFinderRequest).mockResolvedValueOnce({ receipt: 'exact-server-receipt' });
+    await act(async () => expect(await view.result.current.actionWithoutRefresh(`/proposals/${locationId}/apply`, { exact: 'retained-command' })).toEqual({ receipt: 'exact-server-receipt' }));
+    expect(fetchPathFinderState).toHaveBeenCalledTimes(reads);
+    await act(() => view.result.current.matchAll()); expect(fetchPathFinderState).toHaveBeenCalledTimes(reads + 1); view.unmount();
+  });
+  it('uses one completion-scheduled poll and serializes one fresh explicit read after an older active poll', async () => {
+    vi.useFakeTimers();
+    const running = { ...state(), jobs: [{ id: locationId, projectId, status: 'running' as const, total: 1, completed: 0, cancelRequested: false, failure: null, attempts: 1, createdAt: '', updatedAt: '' }] };
+    vi.mocked(fetchPathFinderState).mockResolvedValue(running); const view = mount();
+    try {
+      await act(async () => {}); expect(view.result.current.data).not.toBeNull();
+      let finish!: (value: PathFinderState) => void;
+      vi.mocked(fetchPathFinderState).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+      await act(() => vi.advanceTimersByTimeAsync(2000)); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      act(() => { view.result.current.refresh(); view.result.current.refresh(); });
+      await act(() => vi.advanceTimersByTimeAsync(10_000)); expect(fetchPathFinderState).toHaveBeenCalledTimes(2);
+      await act(async () => finish(running));
+      expect(fetchPathFinderState).toHaveBeenCalledTimes(3);
+      await act(() => vi.advanceTimersByTimeAsync(1999)); expect(fetchPathFinderState).toHaveBeenCalledTimes(3);
+      await act(() => vi.advanceTimersByTimeAsync(1)); expect(fetchPathFinderState).toHaveBeenCalledTimes(4);
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
 });
 afterEach(() => { document.body.replaceChildren(); });
 describe('PathFinder scope and shared-location orchestration', () => {

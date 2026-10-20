@@ -7,10 +7,12 @@ import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { PathFinderRecalculationPanel } from './PathFinderRecalculationPanel';
 import { PathFinderRevisionResults } from './PathFinderRevisionResults';
 import { usePathfinderPendingApply } from './hooks/usePathfinderPendingApply';
+import { usePathfinderBatchReview } from './hooks/usePathfinderBatchReview';
+import { PathFinderBatchReview } from './PathFinderBatchReview';
 
-type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null };
+type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
-export function PathFinderResults({ pf, selectedCableId, accountId, active = true, displayOwned = true, claimViewer, options }: Props) {
+export function PathFinderResults({ pf, selectedCableId, accountId, active = true, displayOwned = true, claimViewer, options, onBatchBusyChange }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
@@ -19,9 +21,15 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
   const pendingApply = usePathfinderPendingApply({
     projectId: pf.preparationAccess?.projectId ?? null, loadedProjectId: pf.preparationAccess?.loadedProjectId ?? null,
     token: pf.preparationAccess?.token ?? null, isAdmin: pf.preparationAccess?.isAdmin ?? false,
-    accountId: accountId ?? null, active, action: (path, body) => pf.action(path, body),
+    accountId: accountId ?? null, active, action: (path, body) => (pf.actionWithoutRefresh ?? pf.action)(path, body),
   });
   const ownershipKey = JSON.stringify([accountId, pf.preparationAccess]);
+  const batch = usePathfinderBatchReview({ identityKey: ownershipKey,
+    contextKey: JSON.stringify([data?.activeModel, data?.registryRevision, data?.settings, data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
+    active, blocked: !active || options === null || pf.viewerPhase === 'error' || pf.viewerPhase === 'loading', options,
+    readProposal: pf.readProposal, reviewProposal: pf.reviewProposal, pendingApply, onApplied: pf.refresh,
+  });
+  useEffect(() => { onBatchBusyChange?.(batch.busy); return () => onBatchBusyChange?.(false); }, [batch.busy, onBatchBusyChange]);
   const operation = useRef(0), reviewContext = useRef('');
   useEffect(() => { operation.current++; setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { operation.current++; }; }, [ownershipKey, selectedCableId, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
   useEffect(() => { operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { operation.current++; }; }, [active]);
@@ -35,10 +43,10 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     if (!active) return;
     const currentDisplay = claimViewer?.() ?? (() => true);
     const current = ++operation.current;
-    setNotice(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(true); pf.clear();
+    setNotice(null); setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(true);
     try {
       const detail = await pf.readProposal(id); if (!detail || operation.current !== current || !currentDisplay()) return; setProposal(detail);
-      if (!detail.route?.success || detail.route.points.length < 1) return;
+      if (!detail.route?.success || detail.route.points.length < 1) { pf.clear(); setNotice('This proposal has no drawable path. Its diagnostic is shown below.'); return; }
       if (detail.route.points.length > MAX_PATH_POINTS) { setNotice('This exact path exceeds the viewer point budget. The result is retained without truncation.'); return; }
       const objectIds = [...new Set(detail.route.objectIds.filter(value => /^dbid:[1-9][0-9]*$/.test(value)).map(value => Number(value.slice(5))))];
       if (objectIds.length > 512) { setNotice('This path exceeds the viewer object budget. The result is retained without truncation.'); return; }
@@ -59,7 +67,7 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     const current = operation.current;
     const confirmed = await pendingApply.start({ proposalId: proposal.id, proposalHash: proposal.proposalHash, cableId: proposal.cableId,
       reviewId, expectedCableWriteRevision: proposal.cableWriteRevision, revisionResultHash: proposal.revisionResultHash ?? null });
-    if (confirmed && operation.current === current) setApplied(true);
+    if (confirmed) { if (operation.current === current) setApplied(true); pf.refresh(); }
   };
   const summary = data?.proposals.find(value => value.id === proposal?.id), stale = proposal?.stale || summary?.stale || false;
   const preferencesMatch = options === undefined || Boolean(options && proposal?.routingPreferences && options.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && options.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach);
@@ -83,9 +91,10 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     {pf.preparationAccess ? <PathFinderRecalculationPanel {...pf.preparationAccess} accountId={accountId ?? null} active={active} preferences={options}
       contextKey={JSON.stringify([data?.activeModel, pf.preparationViewerGeneration, options])}
       onChanged={pf.refresh} onAuthorityLost={pf.cancelOperation} /> : null}
-    {pf.preparationAccess ? <PathFinderRevisionResults {...pf.preparationAccess} accountId={accountId??null} active={active} busy={pf.busy}
+    {pf.preparationAccess ? <PathFinderRevisionResults {...pf.preparationAccess} accountId={accountId??null} active={active} busy={pf.busy || batch.busy}
       contextKey={JSON.stringify([data?.activeModel, data?.registryRevision, settingsKey, optionsKey])}
-      onAuthorityLost={pf.cancelOperation} onOpenProposal={openProposal} /> : null}
+      onAuthorityLost={pf.cancelOperation} onOpenProposal={openProposal} batch={batch} cables={data?.cables ?? []} jobs={data?.jobs ?? []} /> : null}
+    <PathFinderBatchReview batch={batch} disabled={pf.busy || !active || !pendingApply.canStart} />
     <Caption1>Calculations use the active model, shared locations, connection gap and allowances from Project Details. Instrumentation follows Control.</Caption1>
     <div className={styles.actions}>
       <Button disabled={options === null || !data?.artifacts.length || pf.busy || !data.cables.length || data.cables.length > 10000} onClick={() => void (options ? pf.calculate(undefined, true, options) : pf.calculate(undefined, true))}>Calculate all cables</Button>
@@ -105,10 +114,11 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       {job?.items ? <ul aria-label="Calculation outcomes">{job.items.map(item => <li key={item.cableId}>{data?.cables.find(cable => cable.id === item.cableId)?.tag ?? 'Cable'}: {resultLabel(item.status)}{item.message ? ` — ${item.message}` : ''}</li>)}</ul> : null}
     </details>
     <ul className={styles.cableList} aria-label="Path Finder proposals">
-      {proposals.slice(0, 30).map(item => <li key={item.id}><Button disabled={pf.busy} aria-pressed={proposal?.id === item.id} onClick={() => void openProposal(item.id)}>
-        {data?.cables.find(cable => cable.id === item.cableId)?.tag ?? 'Cable'} — {item.stale ? 'Outdated' : resultLabel(item.status)}{item.synthetic ? ' — local synthetic fixture' : ''}
+      {proposals.slice(0, 5).map(item => <li key={item.id}><Button disabled={pf.busy || batch.busy || previewLoading} aria-pressed={proposal?.id === item.id} onClick={() => void openProposal(item.id)}>
+        {data?.cables.find(cable => cable.id === item.cableId)?.tag ?? 'Cable'} — {item.stale ? 'Outdated' : item.status === 'calculated' && !item.canApply ? 'Review blocked' : resultLabel(item.status)}{item.synthetic ? ' — local synthetic fixture' : ''}
       </Button></li>)}
     </ul>
+    <Caption1>The five most recent proposals are shown here. Cable revision results contains every cable in the selected calculation, with pages of up to 100.</Caption1>
     {proposal ? <section className={styles.result} aria-label="Proposal review" data-testid="pathfinder-proposal" data-stale={String(stale)}>
       <h4>Proposal review</h4>
       <Body1>Cable: {data?.cables.find(cable => cable.id === proposal.cableId)?.tag ?? proposal.cableId}</Body1>
@@ -138,9 +148,11 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       </details> : <Caption1>Exact length components are unavailable for this historical or unsuccessful result.</Caption1>}
       <Caption1>Installed length is not changed by Apply.</Caption1>
       <div className={styles.actions}>
-        <Button disabled={!active || !displayOwned || pf.busy || stale || !pathDisplayed || !effectiveCanApply || Boolean(reviewId) || !pendingApply.canStart} onClick={() => void confirmReview()}>Confirm proposal review</Button>
-        <Button appearance="primary" disabled={!active || !displayOwned || pf.busy || stale || !reviewId || !effectiveCanApply || applied || !pendingApply.canStart} onClick={() => void apply()}>Apply reviewed result</Button>
+        <Button disabled={!active || !displayOwned || pf.busy || batch.busy || previewLoading || stale || !pathDisplayed || !effectiveCanApply || Boolean(reviewId) || !pendingApply.canStart} onClick={() => void confirmReview()}>Confirm proposal review</Button>
+        <Button appearance="primary" disabled={!active || !displayOwned || pf.busy || batch.busy || stale || !reviewId || !effectiveCanApply || applied || !pendingApply.canStart} onClick={() => void apply()}>Apply reviewed result</Button>
       </div>
+      {!pathDisplayed && !previewLoading ? <Caption1>The exact path has not been displayed. Load the model and use Open path again before confirming individual review.</Caption1> : null}
+      <Button disabled={!active || pf.busy || batch.busy || previewLoading || pf.viewerPhase === 'error'} onClick={() => void openProposal(proposal.id)}>Open path again</Button>
       {!effectiveCanApply && !stale ? <Caption1>{proposal.engineeringMessage}</Caption1> : null}
     </section> : null}
   </section>;

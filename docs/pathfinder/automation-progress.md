@@ -1,5 +1,72 @@
 # PathFinder local implementation progress
 
+## Resumed review/batch correction — 2026-10-20
+
+User-authorized new scope: fix slow/disappearing proposal preview and add explicit
+batch Review → Apply for selected approved non-MV proposals. Preparer integration
+remains PAUSED. Worktree unchanged; new inherited local branch
+`pf-review-batch-preview-local-20261020`, base `efe9fc0b7358ed2397d4850eb770335be676b890`.
+CURRENT STATUS: **TECHNICAL_DELIVERY_PASS / LIVE_BROWSER_VERIFICATION_BLOCKED /
+AWAITING_HUMAN_ENGINEERING_REVIEW**. Read live HEAD for the containing local commit.
+No engine projection, C# mathematics, original checkout, 5180 or 5190 changes.
+Three delegated agents completed source and isolated checks; root alone executed
+runtime operations. No real Review/Apply was performed.
+
+Delivered source changes: direct bounded proposal/job reads without full-state
+refresh; one non-overlapping poll; no full-state refresh after Review or per batch
+item; recent state preview 30→5 while full results remain paged; preserve the old
+appearance until a proposal is read; acknowledge Clear before computed path;
+bounded 60s appearance commands; visible reload recovery; pinned batch selection,
+explicit Review and sequential shared exact-key pending Apply recovery. No
+automatic human acceptance or Apply. Selection excludes MV. Per-cable server
+auth, dependency, revision, atomicity and idempotency gates remain unchanged.
+
+Final checks: **228 distinct targeted tests PASS**: Tab/results/revision/batch
+controls74, batchhook26, pendingApply34, lifecyclehook36, ViewerController47,
+recent-window/deleted-history11. Final frontend/backend typecheck, scoped ESLint,
+diff check and Docker production API/web builds PASS. Earlier Tab52/57 FAIL is
+retained in report56; corrected combined74/74 PASS supersedes it. Independent
+final source reviews found no blockers. No production source was edited after
+the build freeze. The original build operator's before/after byte source closure
+was NOT_MEASURED; later script additions are not retroactive build evidence.
+
+Browser origin access was refused repeatedly, even after user changed Browsing
+to Always allow. No bypass/CDP/alternate browser was attempted. User paused,
+restarted computer, then explicitly resumed browser check. Root started only the
+existing positively identified5191 installation; startup joined successfully.
+The user reloaded and reported Login. Binding the now reachable page again
+returned the saved-permission denial. No website content or new live visual
+acceptance was obtained. Original5180 externally restarted after reboot; no
+command targeted it. It remains outside our runtime controls.
+
+Explicitly approved cancellation PASS at14:24:59.599Z: two earlier full2140 jobs
+cancelled normally;0activejobs,2140project cable rows unchanged,412proposals retained,
+Applycount unchanged. No replacement calculation submitted. Final upgrade PASS
+at14:43:11.855Z; finalreadback14:45:52.217Z health200,0temporaryhelpers. Only own5191
+API/web replaced; PG/Minio ID/start times, volumes/networks/outside configuration
+preserved. Two cold DB dumps13759262bytes retained; mounted TOC84447bytesPASS.
+All2153database cable rows and2preexisting databaseApplyreceipts unchanged; this
+is a wider scope than Aalborg2140. Exact calculation engine identity unchanged.
+Images API78536ccd / web4f6acddc (fullIDs inreceipt). No new full-model archive or
+restore drill claimed; prior verified model archive retained.
+
+First upgradeFAIL/rollbackUNCONFIRMED is preserved: unrelated stopped-container
+mount ordering caused a false bookend mismatch. Separate root reconciliationPASS
+proved original restored images/config/data; case2 used new receipts/backup and
+full-record mount comparison sorted only for order. Initial cleanup readbackFAIL
+also retained: inherited image labels identified the retainedAPI/web; exact verified
+runtimeIDs excluded,0temporaryhelpers verified, no deletion attempted.
+
+Report56 and evidence/review-batch/actual.json record exact source hashes, scope,
+failures and finalPASS. Next prompt: handoffs/PF-Review-batch-acceptance.md; only
+normal browser verification when access is restored and human engineering
+decisions remain. Do not rerun finished stages, relaunch cancelled fulljobs or
+accept/apply real proposals automatically. Preserve5191/backups/rollbackimages/
+privateevidence and historically denied paths. PF automation and primaryPreparer
+integration stay PAUSED; no producer/background authority enabled. All root
+processes joined. OriginalWFC Git check cleanmain96e63f13; livemainrefsame;
+90ahead/3behind cachedmain before the new local delivery commit. No push/PR/merge.
+
 ## Current verified delivery — 2026-10-20T12:46Z
 
 CURRENT STAGE: **TECHNICAL_RECOVERY_PASS / AWAITING_HUMAN_ENGINEERING_REVIEW**.

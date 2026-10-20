@@ -57,6 +57,18 @@ async function submitFirstApply(fixture: Fixture) {
 }
 
 describe('exact pending Apply through result display resets', () => {
+  it('keeps the current model appearance while the selected proposal is being read', async () => {
+    const f = recoveryFixture(); let finish!: (value: typeof f.pf.data.proposals[0]) => void;
+    f.pf.readProposal.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(screen.getByText('Loading the exact computed path…')).toBeVisible();
+    expect(f.pf.clear).not.toHaveBeenCalled(); expect(f.pf.showPath).not.toHaveBeenCalled();
+    finish(f.pf.data.proposals[0]);
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
+    expect(f.pf.clear).not.toHaveBeenCalled();
+  });
   it('reconciles a committed-but-unacknowledged Apply after polling changes the cable revision', async () => {
     const f = recoveryFixture(), view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
     await submitFirstApply(f); const first = f.pf.action.mock.calls[0];

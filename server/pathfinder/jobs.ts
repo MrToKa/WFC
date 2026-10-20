@@ -17,6 +17,10 @@ import { persistRevisionAdmission, verifyRevisionResultForProposal } from './rev
 import { isAutomaticEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 
 type Row = Record<string,any>;
+// The full admission history is separately paginated by Cable revision results.
+// Keep the frequently refreshed state preview small: every returned proposal
+// still performs the complete live dependency and authority validation below.
+const RECENT_PROPOSAL_PREVIEW_LIMIT = 5;
 export function jobDto(row:Row) {
   return {id:row.id,projectId:row.project_id,kind:row.kind ?? 'calculate',status:row.state,total:row.total,completed:row.completed,
     cancelRequested:row.cancel_requested,failure:row.failure,attempts:row.attempts,createdAt:row.created_at,updatedAt:row.updated_at};
@@ -137,7 +141,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
       return principalTransaction(pool,projectId,who,async client => {
         const jobs = await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100',[projectId]);
         const proposals = await client.query<Row>(`SELECT p.*,j.state AS job_state,j.cancel_requested FROM pf_proposals p JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id
-          WHERE p.project_id=$1 ORDER BY p.created_at DESC,p.id DESC LIMIT 30`,[projectId]);
+          WHERE p.project_id=$1 ORDER BY p.created_at DESC,p.id DESC LIMIT ${RECENT_PROPOSAL_PREVIEW_LIMIT}`,[projectId]);
         const values = []; for (const proposal of proposals.rows) values.push(await proposalDto(client,proposal,false));
         return {jobs:jobs.rows.map(jobDto),proposals:values};
       });

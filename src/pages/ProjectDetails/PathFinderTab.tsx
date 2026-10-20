@@ -48,7 +48,9 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const styles = useRoutingsViewerStyles(), extra = useStyles();
   const anchor = useRef<HTMLElement>(null), container = useRef<HTMLDivElement>(null), fileInput = useRef<HTMLInputElement>(null);
   const height = useRoutingsViewerHeight(anchor);
-  const pf = usePathFinder({ projectId, loadedProjectId, token, isAdmin, container });
+  const [batchBusy, setBatchBusy] = useState(false);
+  const controller = usePathFinder({ projectId, loadedProjectId, token, isAdmin, container });
+  const pf = { ...controller, busy: controller.busy || batchBusy };
   const panelId = useId();
   const [mode, setMode] = useState<'routes' | 'path' | 'lookup'>('path');
   const [lookupBusy, setLookupBusy] = useState(false);
@@ -60,8 +62,8 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const secondaryValue = secondaryDistance.trim() ? Number(secondaryDistance) : NaN;
   const preferences: PathFinderPreferences | null = Number.isFinite(secondaryValue) && secondaryValue >= 0 && secondaryValue <= 1_000_000 ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical } : null;
   const transparencyValue = transparency.trim() ? Number(transparency) : NaN;
-  const claimViewer = (owner: typeof displayOwner) => {
-    const current = ++displayGeneration.current; setDisplayOwner(owner); pf.cancelPicking(); pf.clear();
+  const claimViewer = (owner: typeof displayOwner, clear = true) => {
+    const current = ++displayGeneration.current; setDisplayOwner(owner); pf.cancelPicking(); if (clear) pf.clear();
     return () => displayGeneration.current === current;
   };
   const restoreView = () => { claimViewer('none'); pf.cancelOperation(); setNotice(null); };
@@ -215,13 +217,20 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal')} options={routeRulesDirty ? null : preferences} />
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} onBatchBusyChange={setBatchBusy} />
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>
           <PathFinderLookup pf={pf} selectedCable={selected} active={mode === 'lookup'} displayOwned={mode === 'lookup' && displayOwner === 'lookup'} claimViewer={() => claimViewer('lookup')} onInputChange={restoreView} onBusyChange={setLookupBusy} />
         </div>
       </div>
-      <div className={styles.host} ref={container} data-testid="pathfinder-model-host" />
+      <div className={styles.host} style={{ position: 'relative' }}>
+        <div ref={container} data-testid="pathfinder-model-host" style={{ height: '100%' }} />
+        {pf.viewerPhase === 'error' ? <div role="alert" style={{ position: 'absolute', inset: 0, padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', color: tokens.colorNeutralForeground1, backgroundColor: tokens.colorNeutralBackground1 }}>
+          <Body1>{pf.viewerMessage}</Body1>
+          <Button onClick={pf.reloadViewer}>Reload protected model</Button>
+          <Caption1>Reloading checks your current access again. Calculated proposals are retained.</Caption1>
+        </div> : null}
+      </div>
     </div>
   </section>;
 }

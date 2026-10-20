@@ -3,9 +3,13 @@ import { Button, Caption1, Spinner } from '@fluentui/react-components';
 import { usePathfinderRevisionResults, type RevisionResultsAccess } from './hooks/usePathfinderRevisionResults';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import type { RevisionResultDetail } from '@/api/pathfinderRevisionResults';
+import type { PathFinderCable, PathFinderJob } from '@/api/pathfinder';
+import type { BatchReviewCandidate } from './hooks/usePathfinderBatchReview';
+import type { BatchReviewController } from './PathFinderBatchReview';
 
 export type PathFinderRevisionResultsProps = RevisionResultsAccess & {
   onOpenProposal: (proposalId: string) => void | Promise<void>; busy?: boolean;
+  batch?: BatchReviewController; cables?: PathFinderCable[]; jobs?: PathFinderJob[];
 };
 type Model = NonNullable<RevisionResultDetail['row']['result']>['newModel'];
 const unavailable = 'Unavailable';
@@ -59,6 +63,13 @@ function LengthComponents({ detail }: { detail: RevisionResultDetail }) {
 /** Paged inspection only; opening a proposal delegates the existing protected review flow. */
 export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps) {
   const state = usePathfinderRevisionResults(props), styles = useRoutingsViewerStyles(), selectId = useId();
+  const admission = useRef<string | null>(null);
+  useEffect(() => {
+    if (state.admission?.id && admission.current !== state.admission.id) {
+      if (admission.current !== null) props.batch?.clearSelection();
+      admission.current = state.admission.id;
+    }
+  }, [state.admission?.id, props.batch]);
   const [opening, setOpening] = useState(false), [openError, setOpenError] = useState<string | null>(null);
   const owner = JSON.stringify([props.projectId, props.loadedProjectId, props.accountId, props.token, props.isAdmin, props.active, props.contextKey,
     state.admission?.id, state.detail?.row.cableId, state.detail?.row.baselineHash, state.detail?.row.result?.revisionResultSha256]);
@@ -70,6 +81,17 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   const frozen = !props.active || props.busy || loading || opening;
   const choices = state.admission && !state.admissions.some(value => value.id === state.admission?.id) ? [state.admission, ...state.admissions] : state.admissions;
   const detail = state.detail, row = detail?.row, baseline = row?.baseline, accepted = baseline?.lastAcceptedApply, result = row?.result;
+  const candidate = (value: RevisionResultDetail['row']): BatchReviewCandidate | null => {
+    const cable = props.cables?.find(item => item.id === value.cableId), output = value.result;
+    const job = props.jobs?.find(item => item.id === state.admission?.jobId);
+    if (job && (job.status !== 'complete' || job.cancelRequested)) return null;
+    if (!cable || !['LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '') || value.status !== 'calculated'
+      || value.currentness.state !== 'current' || !output?.ledgerHash || !output.routeText || output.designLengthMeters === null) return null;
+    return { cableId: value.cableId, cableWriteRevision: value.baseline.currentCable.cableWriteRevision,
+      proposalId: output.proposalId, proposalHash: output.proposalHash, revisionResultHash: output.revisionResultSha256,
+      tag: value.baseline.currentCable.tag ?? value.cableId, routeText: output.routeText, designLength: output.designLengthMeters };
+  };
+  const selectable = (state.page?.rows ?? []).map(candidate).filter((value): value is BatchReviewCandidate => value !== null);
   const open = async () => {
     if (frozen || !result || !detail?.envelope || !props.isAdmin || !props.accountId || props.projectId !== props.loadedProjectId) return;
     const started = owner, atGeneration = generation.current; setOpening(true); setOpenError(null);
@@ -79,11 +101,11 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   };
   return <section className={styles.result} aria-label="Cable revision results">
     <h3>Cable revision results</h3>
-    <Caption1>Inspect a saved calculation scope, including blocked cables. New calculations do not replace the selected page. Review and Apply remain explicit in the existing proposal Viewer.</Caption1>
+    <Caption1>Inspect a saved calculation scope, including blocked cables. New calculations do not replace the selected page. Review and Apply remain explicit, individually or for a selected batch.</Caption1>
     <label htmlFor={selectId}>Calculation scope</label>
     <select id={selectId} value={state.admission?.id ?? ''} disabled={frozen || choices.length === 0} onChange={event => state.selectAdmission(event.target.value)} style={{ width: '100%', minWidth: 0 }}>
       {!state.admission ? <option value="">Choose a calculation</option> : null}
-      {choices.map(value => <option key={value.id} value={value.id}>{value.kind === 'automatic' ? `Generation ${value.generation}` : 'Manual calculation'} · {value.createdAt} · {value.total} cables</option>)}
+      {choices.map(value => <option key={value.id} value={value.id}>{value.kind === 'automatic' ? `Generation ${value.generation}` : 'Manual calculation'} · {value.createdAt} · {value.total} cables{props.jobs?.find(item => item.id === value.jobId)?.status ? ` · ${label(props.jobs.find(item => item.id === value.jobId)!.status)}` : ''}</option>)}
     </select>
     <div className={styles.actions}>
       <Button disabled={frozen || !state.previousAdmissions} onClick={state.previousAdmissionsPage}>Previous calculations</Button>
@@ -97,10 +119,18 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
     {state.admission ? <>
       <Caption1>{state.admission.total} cables in this immutable scope. {state.admission.jobId ? `Job ${state.admission.jobId}.` : 'This blocked generation has no calculation job.'}</Caption1>
       <Caption1>Page contains {state.page?.rows.length ?? 0} cables; at most 100 per page.</Caption1>
+      {props.batch ? <div className={styles.actions}>
+        <Button disabled={frozen || !selectable.length} onClick={() => selectable.forEach(value => props.batch!.select(value, true))}>Select ready cables on this page</Button>
+        <Caption1>Page selection includes current LV, Control and Instrumentation results only. MV cables are excluded. Selection is retained across cable pages; changing the calculation clears unprocessed selections.</Caption1>
+      </div> : null}
       <div style={{ overflowX: 'auto', minWidth: 0 }}>
         <table className={styles.table} aria-label="Cable revision result page" style={{ minWidth: 360 }}>
-          <thead><tr><th scope="col">Cable / From → To</th><th scope="col">Outcome and length changes</th><th scope="col">Inspect</th></tr></thead>
+          <thead><tr>{props.batch ? <th scope="col">Select</th> : null}<th scope="col">Cable / From → To</th><th scope="col">Outcome and length changes</th><th scope="col">Inspect</th></tr></thead>
           <tbody>{state.page?.rows.map(value => <tr key={value.cableId}>
+            {props.batch ? <td><input type="checkbox" aria-label={`Select ${value.baseline.currentCable.tag ?? value.cableId} for review`}
+              disabled={frozen || !candidate(value) || props.batch.entries.some(entry => entry.proposalId === value.result?.proposalId && entry.status === 'applied')}
+              checked={props.batch.entries.some(entry => entry.proposalId === value.result?.proposalId)}
+              onChange={event => { const selected = candidate(value); if (selected) props.batch!.select(selected, event.target.checked); }} /></td> : null}
             <th scope="row">{text(value.baseline.currentCable.tag)}<br /><Caption1>{text(value.baseline.currentCable.fromLocation)} → {text(value.baseline.currentCable.toLocation)}</Caption1></th>
             <td>{status(value.status)}<br /><Caption1>Current design: {metres(value.baseline.currentCable.designLength)}<br />New design: {metres(value.result?.designLengthMeters)}<br />Design delta: {signedMetres(value.result?.delta.designLengthMeters)}<br />Geometry delta: {signedMetres(value.result?.delta.rawLengthMeters)}</Caption1>
               <p>{value.currentness.state === 'current' ? 'Current inputs' : label(value.currentness.state)}</p>

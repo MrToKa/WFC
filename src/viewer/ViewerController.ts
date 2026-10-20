@@ -33,6 +33,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // 15s access-check/transport allowance and is never renewed by progress replies.
 const CAPTURE_WALL_MILLISECONDS = CAPTURE_INPUT_LIMITS.milliseconds + 15_000;
 const CAPTURE_TIMING_MAX_MILLISECONDS = CAPTURE_WALL_MILLISECONDS * 2;
+// Pinned SDK isolation/restoration traverses the model's hierarchy and fragment
+// visibility synchronously. Large-model appearance work needs a bounded allowance
+// beyond the small BEGIN/APPEND messages; authorization checks remain unchanged.
+const MODEL_APPEARANCE_TIMEOUT_MILLISECONDS = 60_000;
 const captureTimingNow = (): number => { try { const value = performance.now(); return Number.isFinite(value) ? value : 0; } catch { return 0; } };
 const captureTimingValue = (value: number, maximum = CAPTURE_TIMING_MAX_MILLISECONDS): number => Number.isFinite(value) ? Math.min(maximum, Math.max(0, Math.round(value))) : 0;
 
@@ -100,7 +104,7 @@ export class ViewerController {
       this.fail(pending.envelope.type === 'LOAD_MODEL' ? 'MODEL_TIMEOUT' : 'REQUEST_TIMEOUT');
     // A discovery page may build the bounded model-wide property index (300s
     // inside the frame). Allow its terminal reply to arrive before failing load.
-    }, pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
+    }, pending.envelope.type === 'READ_PREPARATION_OBJECTS' ? 310_000 : ['START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE'].includes(pending.envelope.type) ? 125_000 : ['CLEAR_ROUTE', 'COMMIT_COMPUTED_PATH', 'SET_PATH_TRANSPARENCY'].includes(pending.envelope.type) ? MODEL_APPEARANCE_TIMEOUT_MILLISECONDS : ['LOAD_MODEL', 'READ_MODEL_OBJECTS', 'READ_SELECTION'].includes(pending.envelope.type) ? 60_000 : pending.envelope.type === 'PICK_POINT' ? 125_000 : 10_000);
   }
 
   private send(type: string, payload: Record<string, unknown>, terminal: string, callbacks: Pick<Pending, 'resolve' | 'reject'> = {}): string {
@@ -351,7 +355,10 @@ export class ViewerController {
     this.clearPending(['SHOW_ROUTE', 'ZOOM_ROUTE', 'CLEAR_ROUTE', 'BEGIN_COMPUTED_PATH', 'APPEND_COMPUTED_PATH', 'COMMIT_COMPUTED_PATH', 'READ_SELECTION', 'SET_PATH_TRANSPARENCY', 'START_MODEL_CAPTURE', 'READ_MODEL_CAPTURE']);
     this.routeRequestId = null;
     const generation = ++this.routeGeneration;
-    this.send('CLEAR_ROUTE', { reason: 'selection' }, 'ROUTE_CLEARED');
+    // BEGIN clears the frame's previous route too. Do not arm its small-message
+    // timer while a preceding whole-model visibility restoration still runs.
+    await this.sendAsync('CLEAR_ROUTE', { reason: 'selection' }, 'ROUTE_CLEARED');
+    if (this.disposed || generation !== this.routeGeneration) return null;
     if (!await this.checkSelection() || this.disposed || generation !== this.routeGeneration) return null;
     const begin = await this.sendAsync('BEGIN_COMPUTED_PATH', { pathId, pointCount: points.length, objectIds }, 'COMPUTED_PATH_UPDATED');
     if (begin.payload.pathId !== pathId || begin.payload.phase !== 'begun' || begin.payload.received !== 0) throw new Error('Computed path acknowledgement mismatch');

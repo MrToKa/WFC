@@ -129,8 +129,16 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
     }
   }, [live, access.action]);
 
+  // A confirmed receipt updates durable storage before React commits the next
+  // render. Sequential batch dispatch must consult that storage and the request
+  // latch, rather than a canStart value captured during the previous request.
+  const canStartNow = useCallback((): boolean => {
+    if (!live() || !latest.current.active || !ownedState.ready || request.current) return false;
+    try { return !readStore().intents.some(item => ownerOf(item) === `${access.accountId}/${access.projectId}`); }
+    catch { return false; }
+  }, [live, ownedState.ready, access.accountId, access.projectId]);
   const start = useCallback(async (input: PendingApplyInput): Promise<boolean> => {
-    if (!live() || !latest.current.active || !ownedState.ready || ownedState.pending || request.current) return false;
+    if (!canStartNow()) return false;
     const ticket = {}; request.current = ticket;
     try {
       const stored = readStore(), owner = `${access.accountId}/${access.projectId}`;
@@ -147,7 +155,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
       if (request.current === ticket) request.current = null;
       return false;
     }
-  }, [live, ownedState.ready, ownedState.pending, access.projectId, access.accountId, execute]);
+  }, [canStartNow, live, access.projectId, access.accountId, execute]);
   const retry = useCallback(async (): Promise<boolean> => {
     if (!live() || !latest.current.active || !ownedState.ready || !ownedState.pending || request.current) return false;
     const ticket = {}; request.current = ticket;
@@ -158,7 +166,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
     const ticket = {}; request.current = ticket;
     return execute(ownedState.pending, ticket, 'close');
   }, [live, ownedState.ready, ownedState.pending, execute]);
-  return { ...ownedState, enabled: allowed, start, retry, close,
+  return { ...ownedState, enabled: allowed, start, retry, close, canStartNow,
     canStart: allowed && access.active && ownedState.ready && !ownedState.pending && !ownedState.busy,
     canRetry: allowed && access.active && ownedState.ready && Boolean(ownedState.pending) && !ownedState.busy };
 }
