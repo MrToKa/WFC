@@ -1,5 +1,50 @@
 # PathFinder local implementation progress
 
+## RESUMED — 20 October 2026, 05:56 UTC
+
+The user explicitly resumed. Heartbeat ACTIVE confirmed through app tool. Root
+verified live40a0304branch/status, allagentscompleted, exactcapacity1runtime, normal
+prep6readbackstill2/5parts60,697,437bytes/nopublication. Source inspection found the
+immutable session's30-minute age budget elapsed during the pause (created05:16UTC).
+Do NOT retry or alter expiredplan/created_at/receipts. Retain its evidence and freeze
+a fresh plan after the pending fingerprint fix is built/upgraded; capture allparts
+afresh within the accepted budget. User informed of this limit and replacement.
+Fingerprint helper tests2PASS; focusedlint/typecheckPASS. Candidate capacity-build2
+PASS, guardedcapacity2upgradePASS: onlyownAPI/web recreated, fresh6,073,257byte
+PGbackup, API907a165b81db/web023d5ac95233, otherruntime/outsidecontainerspreserved.
+Current binding capacity2-source-runtime.private.json in ownb3cwork. One premature
+upgrade invocation refused missingbuildreceiptbeforeanyguardintent/mutation;
+rootwaitedactualbuildcompletionthenexecutednormalupgradeonce. No legacyplanrewrite.
+Browser reloaded; freshdiscovery/plan/capture next. Noqualificationcurrentlyrunning.
+Resume points below are historical; this explicit resume overrides that pause.
+
+## HISTORICAL USER PAUSE — 20 October 2026, 05:23 UTC
+
+The user's latest explicit instruction is **pause**. Do not resume development,
+capture, tests, qualification, publication, builds or upgrades until explicit resume.
+Existing heartbeat `path-finder-purpose-rules-and-model-revisions` is **PAUSED**,
+confirmed by the app tool and saved status. Earlier ACTIVE entries are historical.
+Normal UI **Pause local collection** completed: “Collection paused. Committed parts
+are retained for Resume.” Server readback prep5 retains session
+`26fa640e-c49a-4aa6-aa3b-2c3f0b181817`, revision2, collecting (durable resumable
+state), **2/5parts,60,697,437bytes**, no failure/current aggregate/publication/Apply.
+Part3 was interrupted; do not duplicate or silently resume it.5191 remains running.
+
+Current branch `pf-aalborg-capacity-local-20261020`, HEAD
+`40a0304e4ba957bdca6f0b79bacaf36364f0c906`. Uncommitted owned changes are this
+progress file, `server/pathfinder/geometryTraceEngine.ts` and its new test. The
+fingerprint allowlist repair is source-frozen but **NOT_RUN/NOT_BUILT/NOT_DEPLOYED**.
+All agents finished; no qualification helper/build/test/managed producer started
+or left active. Current authoritative runtime remains capacity1 binding/images.
+Private prep5 readback and needed evidence/backups retained; historical denied
+paths/parents untouched. Original application/5190/resources were not managed.
+
+On explicit resume: inspect live resources/branch/status/agents, preserve the two
+committed parts, test the pending fingerprint repair and plan safe candidate2
+sequencing; finish capture before any ownAPI/web replacement. Then perform actual
+bounded qualification from fresh copied complete inputs; profile128MiB alone is
+not qualification. Existing handoff and report50 retain the remaining scope.
+
 ## Authority and environment
 
 The user explicitly authorized automatic implementation of the remaining stages on 17 October 2026, invoking `prepare-stage-handoff` after each completed stage and using recommended choices for routine questions. The subsequent instruction starts that work now. Historical per-stage stop instructions do not require a fresh confirmation. Final integration into the existing application remains a separate user decision.
@@ -17,12 +62,14 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ### Active capacity qualification — 20 October 2026
 
-- Branch `pf-aalborg-capacity-local-20261020`, inherited handoff HEAD `b5f86a1609a8e2b4187f63cc19dd60690ff5f6e8`; executing `handoffs/PF-Aalborg-full-network-capacity.md`. Capacity source is not yet committed or deployed. Explicit trusted v2 profile is128MiB; legacy default/frozen plans remain32MiB. No real full-input qualification or publication yet.
+- Branch `pf-aalborg-capacity-local-20261020`, inherited handoff HEAD `b5f86a1609a8e2b4187f63cc19dd60690ff5f6e8`; code checkpoint `40a0304e4ba957bdca6f0b79bacaf36364f0c906`; executing `handoffs/PF-Aalborg-full-network-capacity.md`. Explicit trusted v2 profile is128MiB; legacy default/frozen plans remain32MiB. Report50 is a source-verified checkpoint, not actual full-input qualification or engineering acceptance.
 - Root owns runtime/config/parser/implementation pins/docs and all tests/SQL/HTTP/UI. Capacity agent owns shared profile/planner/session/union source; trace agent owns trace-thread source; UI agent owns preparation panel. Source modules frozen; runtime configuration review fixes still in progress. No duplicate capture or producer process started.
 - New private owned work: `pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42`. Source binding1 matches current alias1/API4e3486d4/web5d8ec147 on5191. Existing legacy partial session6cd0c3a7 retained, no retry. No changes to original app/5190/data.
 - Actual checks: PASS166tests across capacity/planner/session/union/trace/panel; PASS33parser/identity tests; PASS7final local capacity environment controls; PASS4preparation integration tests; typecheck/focusedlint PASS. These are source/controlled tests, not real128MiB capacity acceptance.
 - Candidate capacity-build1 PASS. Guarded backup/upgrade capacity1 PASS: ONLY own5191API/web recreated, new images c3ebd1db3419/bd6b05d89a58, explicit128MiB profile selected AFTER exact oldAPI removal; other own/outside containers preserved, backup5,961,943bytes. Current binding `capacity1-source-runtime.private.json` in newb3cwork. Qualification remainsNOT_RUN. LinuxVM MemAvailable13.25GB/free13.26GB observed before upgrade; host freeRAM1.62GB and VM total16.61GB recorded separately, not summed. No legacy plan rewrite or publication.
 - Normal UI reloaded, Routes discovery underway for a fresh v2 plan; root owns this capture. Source harness runner frozen; supervisor20ms external sampling and2GiBhardcontainer/135sprocess watchdog being prepared. Updated existing heartbeat ACTIVE through app tool, scoped to this capacity handoff/liveprogress, no historical R-stage restart or duplicate execution.
+- Fresh normal UI plan session`26fa640e-c49a-4aa6-aa3b-2c3f0b181817`, SHA`0f5c53a4e24b6619734ddfe9536dbb1040266daee17058e2b3edcd917987f65d`, explicitv2/128MiB,330trays/1165leaves/5parts/0exclusions. At05:20–05:21UTC one29,303,274bytepart committed; part2 active. No publication or Apply. Do not duplicate capture or restartAPI/web while active. Browser visible for capture; proof`ui-capacity2.png` showsactual128MiB frozen ceiling. Hostprivate scripts `copy-inputs.mjs` and `qualify-owned.mjs` are prepared but NOT_RUN; they require all5committedparts and create fresh networkless bounded fixtures, then remove only exactownedhelper. Qualification inputs/evidence must stay private.
+- Review follow-up in progress: capacity agent owns ONLY geometryTraceEngine.ts +newtest to include shared capacity module in trace derivation pins. No runtime/tests by agents. Current candidate1 predates this fingerprint-list repair; buildnextcandidate aftersourcefreeze and replaceONLYownAPI/web AFTER captureisquiescent, then use its exactimageforqualification. Root owns this sequencing.
 - Next: finish guards/review; build candidate with legacy configuration, then guard/backup/quiesce and replace ONLY own5191API/web. Select v2 only after own oldAPI removal. Collect fresh frozen v2 plan staging-only, then hardbounded actual union/fitting/trace qualification before normal publication. Host free-memory preflight must be refreshed after test/build processes exit. Keep worker heap/RSS/deadline bounds, no unqualified publication or real Apply.
 
 ### Active suffix follow-up — 20 October 2026

@@ -3,6 +3,14 @@
 Status: **SOURCE_VERIFIED; REAL_FULL_INPUT_QUALIFICATION_IN_PROGRESS**.
 This checkpoint does not establish engineering acceptance or permission for real Apply.
 
+Resume20October05:56UTC: an explicit user pause retained2/5parts/60,697,437bytes,
+but its immutable30-minute session lifetime elapsed. No expired plan or receipt
+was rewritten/reused. Fresh plan/capture follows after candidate2. The final trace
+identity allowlist now pins the capacity helper too;2targeted fingerprint controls,
+focusedlint and TypeScript checks PASS. Candidate2 build/ownedAPIweb upgradePASS;
+API907a165b81db/web023d5ac95233, private6,073,257bytePGbackup. Currentbinding
+capacity2-source-runtime.private.json. OriginalWFC remainscleanmain96e63f13.
+
 The previous32MiB cumulative geometry envelope admitted one29,303,274byte part
 and could not admit the remaining full catalog. This is application protection,
 not an Autodesk account limit or the converted model package size.

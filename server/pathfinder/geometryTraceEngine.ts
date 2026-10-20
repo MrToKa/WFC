@@ -37,7 +37,7 @@ export async function geometryTraceRuntimeFingerprint() {
   const directory = path.dirname(dll), hashes: Record<string, string> = {};
   for (const name of ['PathFinder.ModelRunner.dll', 'PathFinder.Model.dll', 'PathFinder.Core.dll', 'PathFinder.Adapter.dll']) hashes[name] = digest(await readImplementation(path.join(directory, name), 64 * 1024 ** 2));
   const derivation = createHash('sha256');
-  const names = ['./geometryTraceEngine.js', './geometryTraceBuilder.js', './geometryTraceRepository.js', './geometryTraceStorage.js', './geometryTraceWorker.js', './geometryTraceThread.js', './preparationStorage.js', './contracts.js', './matching.js', './policyJson.js', '../../shared/pathfinderGeometryTrace.js', '../../shared/pathfinderPreparation.js', '../../shared/preparationMerge.js', '../../shared/pathfinderPurposePolicy.js', '../../viewer-runtime/capture-evidence.mjs'];
+  const names = ['./geometryTraceEngine.js', './geometryTraceBuilder.js', './geometryTraceRepository.js', './geometryTraceStorage.js', './geometryTraceWorker.js', './geometryTraceThread.js', './preparationStorage.js', './contracts.js', './matching.js', './policyJson.js', '../../shared/pathfinderGeometryTrace.js', '../../shared/pathfinderPreparation.js', '../../shared/pathfinderCapacity.js', '../../shared/preparationMerge.js', '../../shared/pathfinderPurposePolicy.js', '../../viewer-runtime/capture-evidence.mjs'];
   for (const name of names) {
     const bytes = await readImplementation(fileURLToPath(new URL(name, import.meta.url)), 4 * 1024 ** 2);
     derivation.update(name + '\n' + bytes.length + '\n').update(bytes).update('\n');
