@@ -3,7 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { PathFinderError } from './errors.js';
 import { engineResponseSchema, type EngineResponse } from './jobContracts.js';
-import { residentBytes, retainPreparationEngineObservation } from './engineResources.js';
+import { residentBytes, retainPreparationEngineObservation, getEngineRssFailureDetail, type PreparationEngineObservation } from './engineResources.js';
+
+type EngineLifecycle=NonNullable<PreparationEngineObservation['lifecycle']>;
+const observedSignals=new Set(['SIGHUP','SIGINT','SIGQUIT','SIGILL','SIGTRAP','SIGABRT','SIGIOT','SIGBUS','SIGFPE','SIGKILL','SIGUSR1','SIGSEGV','SIGUSR2','SIGPIPE','SIGALRM','SIGTERM','SIGSTKFLT','SIGCHLD','SIGCONT','SIGSTOP','SIGTSTP','SIGTTIN','SIGTTOU','SIGURG','SIGXCPU','SIGXFSZ','SIGVTALRM','SIGPROF','SIGWINCH','SIGIO','SIGPOLL','SIGPWR','SIGSYS','SIGUNUSED','SIGBREAK','SIGLOST','SIGINFO']);
+const observedExitCode=(value:unknown):number|null=>typeof value==='number'&&Number.isInteger(value)&&value>=-2147483648&&value<=2147483647?value:null;
+const observedSignal=(value:unknown):string|null=>value===null||value===undefined?null:typeof value==='string'&&observedSignals.has(value)?value:'OTHER';
 
 async function killTree(pid: number, kill: () => boolean): Promise<void> {
   if (process.platform === 'win32') {
@@ -26,9 +31,12 @@ export async function runEngine(request: Record<string,unknown> & {requestId:str
     const child = spawn('dotnet',[dll],{stdio:['pipe','pipe','pipe'],windowsHide:true,detached:process.platform !== 'win32',env:process.env});
     if (child.pid) observeSpawn?.(child.pid);
     const chunks:Buffer[] = []; let size = 0, errors = 0, stopped = false, closed = false, reason:unknown = null;
+    const checkpoint=(code:unknown,signalCode:unknown):EngineLifecycle['close']=>({elapsedMilliseconds:performance.now()-started,exitCode:observedExitCode(code),signalCode:observedSignal(signalCode)});
+    let refusal:EngineLifecycle['refusal']=null,exit:EngineLifecycle['exit']=null,rssFailure:PreparationEngineObservation['rssFailure'];
     let killing:Promise<void> | null = null;
     const stop = (error:unknown): void => {
       if (stopped || closed) return; stopped = true; reason = error;
+      if(preparation)refusal??=checkpoint(child.exitCode,child.signalCode);
       if (child.pid) killing = killTree(child.pid,() => child.kill('SIGKILL'));
     };
     const abort = ():void => stop(new PathFinderError('CALCULATION_CANCELLED',409,'Calculation was cancelled.'));
@@ -39,23 +47,33 @@ export async function runEngine(request: Record<string,unknown> & {requestId:str
         if (closed) return;
         samples++; maximum = Math.max(maximum, bytes);
         if (bytes > 2 * 1024 ** 3) stop(new PathFinderError('PREPARATION_ENGINE_RSS_LIMIT',413));
-      }).catch(error => { if (!closed && child.exitCode === null && child.signalCode === null) stop(error); }).finally(() => { probing = undefined; });
+      }).catch(error => {
+        try { rssFailure??=getEngineRssFailureDetail(error)??undefined; } catch { /* Diagnostic extraction cannot replace the original refusal. */ }
+        if (!closed && child.exitCode === null && child.signalCode === null) stop(error);
+      }).finally(() => { probing = undefined; });
     };
     const rssTimer = preparation ? setInterval(sample,100) : undefined;
     if (preparation) sample();
     const deadline = setTimeout(() => stop(new PathFinderError('ENGINE_DEADLINE',408,'Calculation exceeded its deadline.')),request.timeoutMilliseconds+1500);
     signal.addEventListener('abort',abort,{once:true});
-    child.on('error',error => {reason = error;});
+    child.on('error',error => {if(preparation)refusal??=checkpoint(child.exitCode,child.signalCode);reason = error;});
+    child.on('exit',(code,signalCode) => {if(preparation)exit=checkpoint(code,signalCode);});
     child.stdin.on('error',error => stop(error));
     child.stdout.on('data',(chunk:Buffer) => {size += chunk.length; if (size > 32*1024*1024) stop(new PathFinderError('ENGINE_OUTPUT_BUDGET',413)); else chunks.push(chunk);});
     child.stderr.on('data',(chunk:Buffer) => {errors += chunk.length; if (errors > 65536) stop(new PathFinderError('ENGINE_ERROR_BUDGET',413));});
-    child.on('close',async code => {
+    child.on('close',async (code,signalCode) => {
+      const close=preparation?checkpoint(code,signalCode):undefined;
       closed = true; clearTimeout(deadline); clearInterval(rssTimer); signal.removeEventListener('abort',abort);
       if (probing) await probing;
-      if (preparation) retainPreparationEngineObservation(request.requestId,{
-        mode:'oneshot',thresholdBytes:2*1024**3,intervalMilliseconds:100,observedMaximumBytes:maximum,
-        samples,wallMilliseconds:performance.now()-started,exactPeak:false,outcome:reason||code!==0?'refused':'completed',
-      });
+      if (preparation) {
+        try {
+          retainPreparationEngineObservation(request.requestId,{
+            mode:'oneshot',thresholdBytes:2*1024**3,intervalMilliseconds:100,observedMaximumBytes:maximum,
+            samples,wallMilliseconds:performance.now()-started,exactPeak:false,outcome:reason||code!==0?'refused':'completed',
+            ...(rssFailure?{rssFailure}:{}),lifecycle:{refusal:refusal??(code!==0?close!:null),exit,close:close!},
+          });
+        } catch { /* An optional diagnostic sink cannot change child settlement. */ }
+      }
       if (killing) await killing;
       if (reason) {reject(reason); return;}
       if (code !== 0 || !size) {reject(new PathFinderError('ENGINE_PROCESS_FAILED',502)); return;}

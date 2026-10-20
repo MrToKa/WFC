@@ -1,99 +1,53 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 20 October 2026, 07:02 UTC
+## Current live checkpoint — 2026-10-20T08:04:27.726Z
 
-07:47UTC source checkpoint: allworker/merge/service/publisher/bytecache edits frozen.
-Actual145focusedunion/merge/session/publisher +31storagechecksPASS; finalfrontend/
-servertypes+focusedlintPASS. Initialservertypesfoundnewtestimplicitany, fixedthen
-affectedtests/types/lint rerunPASS. No C#/limits/auth/frozenplan edits. Task nowrefs
-v2, exacthash/schema/ownedincrementalmerge/canonicalbytes; legacyinline/publicmerge
-duplicate-identical+noinputmutation retained. Finalpublicationverifiedsequential
-trace/cache/projection+same strictperobjectDTO+globalstructure gates beforeSQL.
-Independentstorage/publisher/parserreview no blockers; broaderTask review pending.
-Candidate5 NOT_BUILT, runtimecapacity4 remains; actualfullnewmemorytrialNOT_RUN.
-
-07:44UTC update: trial1 actual full union FAIL exit137/OOMKilled under hard2GiB.
-Lastprogress runner4541.60ms/RSS766,734,336B afterparentload; nofinalsupervisor
-receipt/exactpeak. Ownhelperremoved, all114,186,790B/fivepayloads/evidence retained.
-No publication/Apply. Root integrates reference-only128profile service/publisher,
-new immutable bytecache writer and tests/harness; preparationagent owns Task+merge
-incremental strict parsing/canonicalbytes/tests; capacityagent owns Worker/tests;
-matchingauditor independently reviewed storage/publisher/parser, noblockingfindings.
-Allsource nowfreezing, noactivehelper/capture/build, browserDetails afternormalreload
-freed3D page.31storagechecksPASS; remainingfocusedchecks pending, candidate5 NOT_BUILT.
-Originalruntime/source4 unchanged. Frozen9f8 lifetimeexpiresabout07:44UTC: never
-retime/publishexpiredplan; private qualification mayuseitsimmutableactualinputs,
-then fresh normal discovery/capture required before publication if stale.
-
-07:32UTC update: capacity4 NORMAL capture COMPLETE, all5parts/revision5,
-114,186,790bytes, nofailure/currentaggregateNULL; prep20 and private immutable
-input/evidence copies PASS, all5accepted evidence parts with SQL actor/login/plan
-cross-check. No publication/Apply. UI capture took approximately07:14–07:28UTC;
-console renders timing object arguments only as `Object`, so detailed browser
-phase metrics NOT_CAPTURED (not invented from timestamps). Aftercapture Windows
-freeRAM2.80/3.12GB failed own3GiBreserve preflight1/2. Normal Details navigation
-and page reload disposed unused3D page; preflight3 PASS free8,508,551,168bytes,
-freevirtual9,797,873,664bytes. LinuxVMavailable12,673,458,176bytes is separate,
-not additive; cgroupv2files absent on thisVM (ENOENT), don'tclaim measuredv2peaks.
-Root nowrunning trial1 union in fresh nonce-labeled hard2GiB/1CPU/128pid/networknone
-helper, exact capacity4 API image, noDB/sourcevolume; remaining trials NOT_RUN.
-Only qualification harness source changed since dbba: trace requires full prior
-successful supervision; private host dependency/arrival checks also require
-top-levelPASS. Node syntax/whitespace PASS; actual qualification will verify.
-
-07:15UTC update: fresh normal capacity4 discovery complete, 2965 inventory
-records/438155 endpoint-property records/0 unavailable. Fresh immutable session
-`9f8f7c49-ecce-43e4-9dc7-682aea331aee`, ordered plan
-`7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606`,
-frozen07:14UTC, all330trays/1165leaves/fiveparts/zero blockers. Normal UI Resume
-collection active; root sole executor. Private qualification drivers updated to
-this actual plan and capacity4 binding, PREPARED_NOT_RUN; no full immutable inputs
-copied or qualification/publication/Apply yet. Source-only independent qualification
-review assigned to capacity agent; matching audit §9.2 now records ordinary-trace
-dirty-event design NOT_IMPLEMENTED. Do not restart current API/web/capture.
-
-07:08UTC update: capacity4model's first load ended with genericaccess/resource
-error. Normal temporary current-admin viewer probe then returned descriptor200,
-PFauthorization200,routing-bindings200,entrypointHEAD200; ownsessionrevoked.
-Readonlysessioninspection confirms currentUIis_admintrue, loginunrevokeduntil
-26Oct, modelready/healthy. NormalRefreshPathFinder succeeded; SDKready and
-freshdiscovery nowactive (Findingexacttraynames224/660 at07:08). Thisresolved
-loadattemptdoesnotestablishprecisecause; don'trepeatcredentialchanges/resets.
-Currentimageheap5read-onlyprobe reproduces1,811,939,328byteworkerheaplimit;
-normalHTTP4servedruntimeassetbytes+revalidationPASS. No capture orqualification
-helper yet. Rootsoleexecutor; no model/cable/publication/Apply changes.
-
-- User explicitly resumed; automation ACTIVE. Continue the unfinished capacity
-  handoff, not historical PF-R stages. Root is sole runtime/SQL/HTTP/UI executor;
-  all source agents completed. No capture/job/qualification helper/build/test active.
-- Branch`pf-aalborg-capacity-local-20261020`, HEAD
-  `dbba48a2a6f8aeb55aeee59e69e64d1d74564a15`. Current own5191 runtime is capacity4:
-  API`e2723b737dd184e772fa5a3719aee2fcc14fdb6e5f02e17179971d64c4576ec5`,
-  web`98c739be0772ba8f4e422753ff248c9f18680b96128600182e4f7aa5a8a36e2c`.
-  Authoritative`capacity4-source-runtime.private.json` in ownb3cwork below.
-  Guarded API/web-only upgrade PASS;6,296,236bytePGbackup; other own/outside
-  containers/volumes/networks preserved. Original app/5190/data not managed.
-- Actual96controller/hook/service/resource/http +44bridge tests PASS; current
-  frontend/server typecheck, focusedlint/whitespace PASS. Source checkpoint adds
-  1Hz cosmetic capture progress, lighter capability SQL preserving BOTH fresh
-  checks/alllocks, and safe one-per-capture host/frame count/timing diagnostics.
-- Previous f3d plan (06:41UTC) has0/5parts after actual capture deadline refusal;
-  its stream reached715batches. Older4ff retains4/5parts112,648,588bytes, expired.
-  Preserve all immutable plans/receipts/age; don't retry unchanged or retime.
-- Normal fresh-cookie auth benchmark after4: median16.00ms vs before15.24ms;
-  47,613bytefullversion vs41byteneeded state/health. No measured HTTP speedup is
-  established. Both temporary benchmark sessions normally revoked. No bypass.
-- Browser reloaded after upgrade4; model loading. Next: Routes, fresh normal
-  discovery/plan/capture. UI frame/host debug logs will measure remaining waits;
-  no claim that cosmetic rendering is the whole cause until actual measurement.
-- Private copy/evidence/qualification scripts PREPARED_NOT_RUN, still bind
-  capacity3/f3d; update only to the next actual capacity4 plan before execution.
-  Need all5actualparts then bounded union/reversed-order/fitting/cancel/trace,
-  followed by NORMAL protected publication/trace/proposals; no real Apply.
-  Handoff`PF-Aalborg-full-network-capacity.md`; report50 source checkpoint;
-  audit51 records later automatic-recalculation/UI availability followup.
-- Own work`pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42`.
-  Keep denied historical paths/parents untouched. No push/merge/deployment.
+- Task ACTIVE, user explicitly resumed. Branch `pf-aalborg-capacity-local-20261020`,
+  source checkpoint `3a7a8ef6ced9120df4b48bc3d4f4eb8e8623b0ed`; pending diagnostic-only
+  Engine/Resources changes plus qualifier finally/actual receipts/docs. Root sole
+  runtime/SQL/HTTP/UI/test executor; all source agents frozen/completed, independent
+  diagnostic review found no remaining blockers. No active capture/discovery/helper/build/test.
+- Current own5191 authoritative binding `capacity5-source-runtime.private.json`
+  under `pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42`.
+  API f6b69de4095fb372f3ea7d22b2f7a946f7fbab63fd9a0aa74986e7c4176182a3,
+  web146d42f855a9b6a07ba8b92d77a30642691f9c2ace3a96f39070b396e2f51a7b.
+  Build/guardedAPIweb-onlyupgradePASS,6,407,841BPGbackup; otherown/outside resources preserved.
+- Full normal capture9f8f7c49-ecce-43e4-9dc7-682aea331aee/plan7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606
+  completed114,186,790B/5parts/1165leaves/330trays/1527names; all5evidence verified.
+  This plan EXPIRED after07:44UTC. Never retime/publish it. Exact immutable inputs1
+  and actual actor/evidence sidecar copied privately. No project aggregate published.
+- Old trial1 hard2GiBoom FAIL led to reference-only large-profile ingress,
+  incremental strict parse/merge/exact canonical byte publication; legacy inline,
+  generic no-input-mutation/duplicate replay/C# math/limits unchanged.176uniquechecks
+  PASS(145union/merge/session/publisher+31storage), affected38session rerun PASS;
+  finalfrontend/servertypes/focusedlintPASS. Receipt evidence/aalborg-capacity/memory-source5.json.
+- Actual workload candidate5: trial2unionPASS15.92s/observedtree1.326GB;
+  trial3reversePASS20.91s/1.411GB/exact projection/index/order/countmatch;
+  trial5cancelPASS5.00s/positiveunionworkerjoin+ownerrelease;
+  trial7publisherPASS43.19s/1.782GB; trial6trace(trial7)PASS68.24s/1.357GB,
+  2965objects/1165segments/5evidence/0missing/60indexpages/15diagnosticpages.
+  All helpers removed. Cgroupv2metricsNOT_MEASURED; sampled20msRSS notexactpeak.
+  Current heap is1536old+192young, historical requested512 NOT actually enforced;
+  hardwhole-helper2GiB was retained. Receipt evidence/aalborg-capacity/workload5-actual.json.
+- Fitting needs_review:91validated/141fallbackbends,761validated/149fallbackstraights,
+  1484diagnostics; nothuman/nativeacceptance. Priortrial4 ENGINE_RSS_UNAVAILABLE FAIL
+  precisebranchunknown; trial7 successdoesnotrelabel it. Safe diagnostic-only source
+  now records failure stage/errno/root-state/counters and childrefusal/exit/close;
+  guards/controlflow unchanged.28finaldiagnosticchecks/servertypes/focusedlintPASS,
+  including throwingobserverfailure isolation; engine-observation6.jsonreceipt.
+- Browser Routes/modelready; initial transient prep readdeadline afterupgrade5
+  resolved normalRefresh. ReadonlyPGdiagidle/noblockers, initialcauseunknown.
+  Keep original apps/5190/oldPathFinder/sources/deniedscratchpaths untouched.
+- NEXT: localcheckpoint -> candidate6 build/guarded
+  ownAPIwebupgrade (new wx drivers required) -> bounded publisher control with new
+  diagnostics. Then freshnormal discovery/freeze/capture (do NOT overwrite inputs1
+  or old receipts), protectedpublication/currenttrace/rootmaps/automaticproposals.
+  Last private preparation reader label prep20; use prep21 next.
+  No real Apply/installLengthwrites. Final cable fence baseline cable-fence1:
+  2140all-columnSHA0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155,
+  zeroApplyreceipts. After fullstage technical completion use prepare-stage-handoff
+  then execute useful audit51 followups (truthful point availability/ordinarytrace dirty).
+  Automation staysACTIVE; no routine stopping while useful work remains.
 
 ## RESUMED — 20 October 2026, 05:56 UTC
 

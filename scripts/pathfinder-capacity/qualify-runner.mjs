@@ -155,9 +155,17 @@ async function main() {
     executor = createConfiguredEngineExecutor();
     const publisher = createPreparationPublisher(async (request, signal) => {
       await phase('fitting'); current();
-      const response = preparedUnionResponseSchema.parse(await executor.execute(request, signal));
-      const observed = preparationEngineObservation(request.requestId);
-      if (observed) result.engineObservation = observed;
+      let rawResponse;
+      try { rawResponse = await executor.execute(request, signal); }
+      finally {
+        // Refused runs retain the same safe aggregate observation as successful
+        // ones; never infer their missing sample or child lifecycle branch.
+        try {
+          const observed = preparationEngineObservation(request.requestId);
+          if (observed) result.engineObservation = observed;
+        } catch { result.engineObservationUnavailable = true; }
+      }
+      const response = preparedUnionResponseSchema.parse(rawResponse);
       if (response?.prepared) result.counts.fittingDiagnostics = response.prepared.diagnosticCount;
       result.fitting = { readiness: response.prepared.readiness, counts: response.prepared.counts,
         objectCount: response.prepared.objectCount, segmentCount: response.prepared.segmentCount,

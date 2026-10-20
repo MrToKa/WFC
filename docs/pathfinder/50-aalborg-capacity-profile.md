@@ -5,6 +5,43 @@ This checkpoint does not establish engineering acceptance or permission for real
 
 ## Latest actual checkpoint — 20 October 2026, 07:44 UTC
 
+08:03UTC workload update (local source checkpoint3a7a8ef, actual capacity5image):
+the reference/incremental repair is verified on all114,186,790actualinput bytes.
+Ordinary union PASS15.92s/observedexternal20mswholeNodeRSS1.326GB; reversed arrival
+PASS20.91s/1.411GB and exact projection/index/order/count hashes match. Actual
+2965objects/1165leaves/4531fragments/1,567,516vertices/1,546,617triangles; projection
+114,111,391bytes, traceindex486,272bytes. Union cancellation PASS5.00s, positive
+worker join/storage-owner release (not a C# or trace cancellation claim).
+Publisher-validation/fitting PASS43.19s, sampled process-tree maximum1.782GB;
+individual Node/descendant maxima are separate and must not be added. C# soft
+RSS observation187samples/max1,175,183,360bytes/18.71s. Fitting`needs_review`,
+91validated/141fallbackbends,761validated/149fallbackstraights,0fallbackclearances,
+1484diagnostics, engineeringAcceptedfalse. Trace workload PASS68.24s/observedtree
+maximum1.357GB;2965objects/1165fittedsegments,5captureevidenceparts/0missing,
+60indexpages/15diagnosticpages, fittedexport1,971,913bytes, records16,637,964bytes.
+All five passing helpers positively removed; noDB/network/SQLpublication/Apply.
+Exactreceipts are`evidence/aalborg-capacity/workload5-actual.json`.
+
+An earlier fitting trial4 **FAIL** with`ENGINE_RSS_UNAVAILABLE` after34.77s;
+notOOM/deadline, exact collector branch **NOT_ESTABLISHED**. Trial7 success does
+not relabel that refusal. Diagnostic-only source now retains sanitized collector
+stage/errno/root-state/counts and child refusal/exit/close observations, with the
+existing refusals/thresholds/timers unchanged.22diagnosticchecks/servertypes/lint
+PASS. Independent review then found that throwing optional diagnostic helpers
+could replace an RSS refusal or block settlement; extraction/retention/qualifier
+observers were isolated without changing the original control branches. Final
+28diagnosticchecks/servertypes/lintPASS; independent narrow review found no
+remaining blockers. Receipt`evidence/aalborg-capacity/engine-observation6.json`.
+Candidate6 diagnostic build/runtime NOT_RUN. A transient initial preparation
+read deadline after upgrade5 resolved through normal Refresh; current read-only
+PGactivity shows idleconnections/no blockers. Exact initial cause is unknown.
+
+This qualifies the copied **expired** workload only. A fresh normal frozen plan,
+complete protected capture, final current-authority/SQL publication, normal trace
+and real automatic proposals remain **NOT_RUN**. Real Apply and engineering
+acceptance remain separate human decisions. The source image/heap/sampling scope
+and pre-existing nominal512MiB enforcement defect below remain explicit.
+
 Capacity4 normal capture completed all five parts of immutable session
 `9f8f7c49-ecce-43e4-9dc7-682aea331aee`, plan
 `7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606`:
