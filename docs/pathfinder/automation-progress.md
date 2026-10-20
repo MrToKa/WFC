@@ -1,5 +1,19 @@
 # PathFinder local implementation progress
 
+## PF-U6a qualification / U7 next — 2026-10-20
+
+Read-only baseline reconciliation found heartbeat delivery3b4f722 while this
+chat was idle. Reused exact941-check evidence; added5 identity mutations+19
+catalog cases (58/58 executed,34 overlap), qualified965distinct source checks.
+Only identity test changed;52/53 source paths and all production bytes unchanged.
+Report68a / u6a-qualification-addendum.json. Local server rebuild/scopedlint/diff
+PASS. Current chat Routings Build (2) is active owner; old heartbeat chat idle;
+do not duplicate. No active runtime fixture; noSQL/HTTP/Docker/5191writes.
+ComputerUse initializes/recognizes Brave; no blocked page read through it.
+Actual Aalborg reread remains BLOCKED saved origin policy; no alternate browser,
+CDP, indirect HTTP/model reread. Continue independent U7 after local addendum
+commit and standalone handoff. Root sole actual executor; PreparerPAUSED.
+
 ## PF-U6a — Properties and visible endpoints — VERIFIED SOURCE 2026-10-20
 
 Branchpf-u6a-properties-visible-local-20261020 inherits270ce93; readGitfor
