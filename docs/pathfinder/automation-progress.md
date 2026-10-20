@@ -1,6 +1,6 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T09:26:00Z
+## Current live checkpoint — 2026-10-20T09:43:00Z
 
 LATEST USER STEERING: **Skip MV cables.** Do not resume the all-category finite
 automatic policy or submit all2140 while this instruction applies. Scope the
@@ -8,19 +8,18 @@ diagnostic continuation to exact non-MV cable IDs; preserve original routing
 permissions, category values and cable business rows. No code/product-wide MV
 rule change was requested.
 
-- Current branch `pf-aalborg-endpoint-availability-local-20261020` inherits local
-  `aef9d38f58bf2c188f51105385d731de9c749e31` normal-workflow/handoff checkpoint.
-  Executing independent source-only handoff PF-Aalborg-endpoint-availability.md
-  while the immutable runtime7 selected batch runs. No runtime replacement until
-  terminal selected job + final fence. Prepagent owns serverrepository/new display
-  helper/index/tests; capacityagent clientAPI/PathFinderTab/preparationhook/tests;
-  matchingagent read-onlyreview; root sharedDTO/docs/packaging/allactualexecution.
-  Availability server/client/shared source and tests frozen; independent review
-  found no blocker. Root PASS: shared11tests, frontend+servertypes, scopedlint,
-  serverbuild including compiledrepository/display/sharedimportclosure. Full
-  focused8file suite PASS161/161(0failures), session64910 completedexit0.
-  Runtimebuild/upgrade NOT_RUN. Root prepared owned availability1 drivers plus
-  finalnonMVledger/fence reader; do not execute upgrade before terminal+fence.
+- Current branch `pf-aalborg-endpoint-availability-local-20261020`, source commit
+  `8407e52c815db636cccff2cd46a1efce561df6cf`; runtime/report/handoff checkpoint
+  about to be committed. Availability delivery technically VERIFIED, no user
+  engineeringacceptance. All previous agents completed; no active job/build/helper.
+  Root PASS161focusedchecks, types/lint/serverbuild/compiledimportclosure and
+  independentreview. Owned API/web-only build+upgrade PASS after selectedjob
+  terminal+fence;11,324,209Bbackup; otherown/outsidecontainers/resourcespreserved.
+  Normalbrowser/API PASS437automatic-ready/1042missing/48ambiguouslocations,
+ 2140cables; filter1910; Controlbothendsapproximate/Resolve/manualcoords/pickingready.
+  ColdPath0hiddenprepGET; firstRoutes+warmrefresh6GET/all200; saved128MiBplanready.
+  APIafterUI2510.634/3274.846ms,1,707,893B; no speedup/SQLquerycount claim.
+  A120mapped1/1+filledGhost/originalpurple/yellowlinePASS; ClearopaqueplantPASS.
   Keep calculation allowlist/matching.ts/C# unchanged for display-only work.
 
 - Normal full publication PASS: d8b64b1b/plan6adaeee3, aggregate
@@ -55,30 +54,34 @@ rule change was requested.
   exactlengthledger revalidated against DetailsS7/E5/P10/gap1; sample private
   non-mv-calculation1-result. Scope SQLjoin1808items/0MV. Fence3 at08:55UTC all2140
   columnhash matches baseline/0Apply. Normal7-checkpoint publicreceipt +report52
-  committed aef9d38, fullbatchstillRUNNING_NOT_FINAL.
-- NEXT: implement/review/test independent display/hookchanges; monitor selected
-  non-MV job and finalfence. Runtimebuild/upgrade only after terminal job. Then
-  normalcold/warmUIavailability proof; next useful ordinarytrace-event handoff.
+  committed aef9d38; later finalbatchreceipt non-mv-final2 supersedes runningnote.
+- NEXT: commit technicalavailabilityreceipt/report/handoff, then new inherited
+  local branch for PF-Aalborg-ordinary-trace-event.md and execute immediately.
+  Implement one ordinarycurrenttraceevent in finaltransaction; grantownerseparate;
+  ownedfreshsyntheticDBatomicproof, no realAalborgretrace/authorityrenewal/MV/Apply.
   Never Apply. Privateoutcomesreader lastnon-mv-outcomes7. Appautomation
   updated ACTIVE with latestMVexclusion/currenthandoff before oldbaselineprompt.
-  Availabilitydrivergeneration NOT_RUN; finalreader2PASS. Report53/source1public
-  receipt and non-mv-final2public receipt ready for local sourcecheckpointcommit.
+  Availabilitybuild/upgrade/identity/API/HTTP/UIreceiptsPASS; report53 and runtime1
+  publicreceipt ready. One wholelist CUAcall timedout/kernelreset; bounded normal
+  search then verifiedcontrols; no hiddenstate/SDK bypass. Finalfence5at09:36same
+  2140hash/0Apply; current30returnedproposalsnotstale. Normalgrantdisabled,
+  allcategorypolicypausedcontrol7, previousfiniteauthorityexpired, neverrenewed.
 
 ## Runtime and immutable evidence anchors
 
-- Own5191 binding capacity7-source-runtime.private.json in the private b3c21429
+- Own5191 binding availability1-source-runtime.private.json in the private b3c21429
   work. Owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46, compose
   wfc-pathfinder-local-0cba87606e9b, runtime batched-capture-runtime-20261018-1600,
   DBepoch69f3bee1-298b-48d1-8af9-3ecbea23d975. Verify owner/path/project/ports
   and resources before every runtime mutation. Original apps/5190 unchanged.
-- API84f4c147be8127b798d75e79497903fc4006c048440250527062f7d9e9dd3275,
-  webb87a71bed79131773daecc55d664ca8cc419725163bc44e22f6244f695ab6489;
-  codeb5690038. OwnAPI4GiB/pids256/NODE1536; PG+Minio1GiB/web256MiB unchanged.
-  Latest private database backup6,408,070bytes. No active helper/build/validation.
-- Before availability deployment actual calculation identity PASS
+- APIf1f28ed2ae6caa5700de5394a5ebbfdfb636ed093ee3f058f7b290c0b807d543,
+  web6ec2c072bef4c044ee5179302b98effb24322fe7e0b58effbaea7f8df3ee93ca;
+  code8407e52. OwnAPI4GiB/pids256/NODE1536; PG+Minio1GiB/web256MiB unchanged.
+  Latest private database backup11,324,209bytes. No active helper/build/validation.
+- Before/after availability deployment actual calculation identity unchangedPASS
   4b9fac7d2b045a230c5cbf7ce4aeaea08917a20b3605ee15642a5effff8a74fd;
-  private identity-before-availability1-result. Preserve allowlisted sources/C#;
-  compare after later own deployment, don't relabel changed-identity history.
+  private identity-before/after-availability1-result. Preserve allowlisted sources/C#;
+  futuretraceeventsource changes trace derivationidentity, notcalculationidentity.
 - Actual capacity qualification: new128MiB profile preserves legacy32MiB.
   Trial1OOM FAIL led to reference/incremental repair;176checksPASS.
   Trial4 RSS failure precise cause UNKNOWN. Trial8 exact own-rootZ/exitack race

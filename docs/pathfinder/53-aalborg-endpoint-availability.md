@@ -1,6 +1,6 @@
 # Aalborg — calculation-point availability
 
-20 October 2026. **Source verified; deployment and normal UI checks pending.**
+20 October 2026. **Technical delivery verified in the owned5191 demonstration.**
 Local branch `pf-aalborg-endpoint-availability-local-20261020` inherits
 `aef9d38f58bf2c188f51105385d731de9c749e31`. Changes are confined to the isolated
 worktree. No original application, 5190, calculation mathematics or business
@@ -26,9 +26,9 @@ recovery and account/model fencing remain. No lock or timeout was removed.
 | Scoped lint | PASS |
 | Server build and compiled display/shared import closure | PASS |
 | Independent source review | PASS; reviewer performed no runtime tests |
-| Owned runtime upgrade | NOT_RUN at this source checkpoint |
-| Actual calculation identity after upgrade | NOT_RUN |
-| Normal cold/warm UI and real availability | NOT_RUN |
+| Owned runtime upgrade | PASS, API/web only, 11,324,209-byte database backup; other own/outside resources preserved |
+| Actual calculation identity after upgrade | PASS, unchanged `4b9fac7d2b045a230c5cbf7ce4aeaea08917a20b3605ee15642a5effff8a74fd` |
+| Normal cold/warm UI and real availability | PASS, actual437automatic/1042missing/48ambiguous locations; filter1910; Resolve and manual controls ready |
 
 Exact working-source hashes and test-report hash are recorded in
 `evidence/aalborg-availability/source1.json`. These are working-file bytes at
@@ -50,7 +50,31 @@ projects the original route/design/ledger/settings fields needed by the same
 production ledger validator; the output bound was unchanged. Both were read-only.
 No failed attempt was relabeled PASS.
 
-Next: own5191 API/web-only build, backup and guarded replacement after the now
-terminal job; compare actual calculation identity, existing proposal currentness
-and normal UI behavior. Preserve the normal published aggregate, trace, root
-maps, filled Ghost and Clear. Engineering acceptance remains with the user.
+Runtime source `8407e52c815db636cccff2cd46a1efce561df6cf`, API
+`f1f28ed2ae6caa5700de5394a5ebbfdfb636ed093ee3f058f7b290c0b807d543`, web
+`6ec2c072bef4c044ee5179302b98effb24322fe7e0b58effbaea7f8df3ee93ca`.
+The actual normal state returned2140cables/1527locations. All230cables with both
+points are non-MV; the latest selected job is complete and the30returned proposal
+summaries remain current/unaccepted. Two sequential authenticated no-store reads
+after browser load took2510.634ms/3274.846ms, each1,707,893bytes. These are not
+cold-server or before/after speedup measurements. SQL query counts and the prior
+startup lock holder remain NOT_MEASURED/UNKNOWN.
+
+Actual browser cold Path load made zero hidden preparation HTTP requests.
+First Routes activation and one explicit warm refresh made exactly six normal
+GETs(context/index/session twice), all200, with saved128MiBplan visible and no
+deadline error. A Control cable showed approximate points at both ends,
+independently ambiguous saved-binding labels, enabled Resolve From/To and ready
+manual coordinates/picking. No point was saved. Whole-list browser automation
+timed out once; normal bounded cable search then verified the controls. This is
+not evidence of a calculation failure.
+
+After upgrade A120 again showed1/1drawable segment, its published model-root
+mapping, filled Ghost, originalpurpletray and yellowline. Clear restored the
+opaqueplant/noRoute. Final post-upgrade fence5 at09:36UTC matches all2140columns,
+zeroApply; finite all-category policy remains paused(control7), grantdisabled.
+Machine evidence: `evidence/aalborg-availability/runtime1.json`; screenshots and
+rawbusiness/auth evidence remain private. Existing aggregate/trace retained;
+no recapture, import, seed or real-data Apply. Engineering acceptance remains
+with the user. Next useful independent repair is audit51§9.2 ordinary trace-event
+emission, under the same MV exclusion and isolation.

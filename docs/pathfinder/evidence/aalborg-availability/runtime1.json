@@ -1,0 +1,158 @@
+{
+  "schemaVersion": "wfc.pf.availability-runtime.v1",
+  "status": "PASS",
+  "at": "2026-10-20T09:39:54.749Z",
+  "sourceRevision": "8407e52c815db636cccff2cd46a1efce561df6cf",
+  "images": {
+    "api": "sha256:f1f28ed2ae6caa5700de5394a5ebbfdfb636ed093ee3f058f7b290c0b807d543",
+    "web": "sha256:6ec2c072bef4c044ee5179302b98effb24322fe7e0b58effbaea7f8df3ee93ca"
+  },
+  "apiWebOnly": true,
+  "backup": {
+    "bytes": 11324209,
+    "sha256": "57bb63d6ccb21a026cfa113219d49d602ab4eb79c3dc809f789ce05abbc573dc"
+  },
+  "calculationIdentity": {
+    "before": "4b9fac7d2b045a230c5cbf7ce4aeaea08917a20b3605ee15642a5effff8a74fd",
+    "after": "4b9fac7d2b045a230c5cbf7ce4aeaea08917a20b3605ee15642a5effff8a74fd",
+    "unchanged": true
+  },
+  "normalState": [
+    {
+      "read": 1,
+      "at": "2026-10-20T09:31:43.871Z",
+      "status": 200,
+      "elapsedMilliseconds": 2510.634,
+      "bytes": 1707893,
+      "rawSha256": "6ae77bcc64ae096b5dd93c20b2ec60855485cb277e7a2a2c045ef22e0ffe2996",
+      "locations": 1527,
+      "cables": 2140,
+      "statuses": {
+        "missing": 1042,
+        "ambiguous": 48,
+        "automatic-ready": 437
+      },
+      "bothPoints": 230,
+      "nonMvBoth": 230,
+      "mvBoth": 0,
+      "withoutBothPoints": 1910,
+      "latestSelectedJobComplete": true,
+      "visibleCurrentProposals": 30,
+      "engineeringAccepted": false
+    },
+    {
+      "read": 2,
+      "at": "2026-10-20T09:31:47.168Z",
+      "status": 200,
+      "elapsedMilliseconds": 3274.846200000001,
+      "bytes": 1707893,
+      "rawSha256": "6ae77bcc64ae096b5dd93c20b2ec60855485cb277e7a2a2c045ef22e0ffe2996",
+      "locations": 1527,
+      "cables": 2140,
+      "statuses": {
+        "missing": 1042,
+        "ambiguous": 48,
+        "automatic-ready": 437
+      },
+      "bothPoints": 230,
+      "nonMvBoth": 230,
+      "mvBoth": 0,
+      "withoutBothPoints": 1910,
+      "latestSelectedJobComplete": true,
+      "visibleCurrentProposals": 30,
+      "engineeringAccepted": false
+    }
+  ],
+  "hiddenRoutesReads": 0,
+  "firstRoutesAndWarmRefresh": {
+    "reads": 6,
+    "allGet": true,
+    "all200": true
+  },
+  "sqlQueryCounts": "NOT_MEASURED",
+  "historicalStartupCause": "UNKNOWN",
+  "computerUse": {
+    "actual2140Cables": true,
+    "filter1910WithoutBothPoints": true,
+    "controlCableApproximateBothEnds": true,
+    "resolveBothEnabled": true,
+    "manualInputsAndPickingReady": true,
+    "noEndpointSaved": true,
+    "published128MiBPlanVisible": true,
+    "warmRefreshNoDeadlineError": true,
+    "a120FilledGhostOriginalColourYellowLine": true,
+    "clearOpaquePlantNoRoute": true
+  },
+  "cableFence": {
+    "cables": 2140,
+    "sha256": "0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155",
+    "applyReceipts": 0,
+    "at": "2026-10-20T09:36:05.114Z"
+  },
+  "grantDisabled": true,
+  "allCategoryPolicyPaused": true,
+  "engineeringAccepted": false,
+  "realApply": false,
+  "privateEvidence": [
+    {
+      "name": "ui-availability-cold.ax.txt",
+      "bytes": 354708,
+      "sha256": "9b40a39cdff611c36cfd2e8c6373c07f9a657082a4a172de51056a344cef9718"
+    },
+    {
+      "name": "ui-availability-filtered.ax.txt",
+      "bytes": 340403,
+      "sha256": "273feea11e2fbc563b860894e16e257af265e3e9bbf61f6793907aff53700302"
+    },
+    {
+      "name": "ui-availability-selected.ax.txt",
+      "bytes": 109775,
+      "sha256": "181226c11cd0b353778aafa2de98f7fc21065e2e35e7e0d4f7c48e51c778f386"
+    },
+    {
+      "name": "ui-availability-resolve-final.ax.txt",
+      "bytes": 109627,
+      "sha256": "b5068b6e39086e559f8504fb2b86d258f95adfe3da74ba60b7b85a8a3f152a97"
+    },
+    {
+      "name": "ui-availability-routes-ready.ax.txt",
+      "bytes": 105929,
+      "sha256": "4919d033171e652af93609182ee4a0c3142198b1618da6a712e3aa8d5519a20e"
+    },
+    {
+      "name": "ui-availability-routes-warm.ax.txt",
+      "bytes": 106414,
+      "sha256": "6201e3bb216c6ba8dfc59db95a9e850bdd8ef3be24930693b6d2f234a36ae962"
+    },
+    {
+      "name": "ui-availability-a120.ax.txt",
+      "bytes": 4350,
+      "sha256": "4dd45214a4d3caa8d1f89a81d72db750c0b10a2d59f577c7bb153ac836f342c6"
+    },
+    {
+      "name": "ui-availability-clear.ax.txt",
+      "bytes": 3933,
+      "sha256": "f89c26922dc86ab238acf66dfc87a6cc63e14d64a4ec803dc793a1ec4fdf802b"
+    },
+    {
+      "name": "ui-availability-resolve.png",
+      "bytes": 80450,
+      "sha256": "b6e8c04b844369527da626bbe38773227bc7b90d95c0be21cbc0a59cc40ea86d"
+    },
+    {
+      "name": "ui-availability-a120.png",
+      "bytes": 91735,
+      "sha256": "775f346d6f26775eb3c4dd68a91534bde5fe6323f10863bb49a9ce9d34be6713"
+    },
+    {
+      "name": "ui-availability-clear.png",
+      "bytes": 66224,
+      "sha256": "de27f691bcf01d4f4eac64776d345b626feb5a1922c1f024991e8a8a2f43240c"
+    }
+  ],
+  "limitations": [
+    "Normal state timings are two sequential reads after browser load; no cold-start speedup or SQL query count claim.",
+    "One whole-list browser automation call timed out; bounded normal search then verified the controls.",
+    "Automatic points remain approximate and unconfirmed. Missing and ambiguous locations require manual decisions."
+  ]
+}
