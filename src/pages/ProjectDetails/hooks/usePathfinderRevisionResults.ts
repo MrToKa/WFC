@@ -3,12 +3,14 @@ import {
   fetchRevisionAdmissions, fetchRevisionResultsPage, fetchRevisionResultDetail, RevisionResultsApiError,
   type RevisionAdmissionsPage, type RevisionResultsPage, type RevisionResultDetail,
 } from '@/api/pathfinderRevisionResults';
+import type { PathFinderJob } from '@/api/pathfinder';
 
 type Admission = RevisionAdmissionsPage['admissions'][number];
 type Row = RevisionResultsPage['rows'][number];
 export type RevisionResultsAccess = {
   projectId: string | null; loadedProjectId: string | null; token: string | null; accountId: string | null;
   isAdmin: boolean; active: boolean; contextKey: string; onAuthorityLost?: () => void;
+  jobs?: ReadonlyArray<Pick<PathFinderJob, 'id' | 'status' | 'cancelRequested'>>;
 };
 type State = {
   identity: string; admissions: Admission[]; nextAdmissionsCursor: string | null; admission: Admission | null;
@@ -73,7 +75,13 @@ export function usePathfinderRevisionResults(access: RevisionResultsAccess) {
       if (page.nextCursor !== null && (page.nextCursor === cursor || history.includes(page.nextCursor))) throw new RevisionResultsApiError('INVALID_RESPONSE', null, 'The calculation page cursor could not be verified. Refresh the calculation list.');
       setState(value => ({ ...value, admissions: page.admissions, nextAdmissionsCursor: page.nextCursor, admissionsLoading: false, error: null }));
       // A later admission never retargets the scope already being reviewed.
-      if (!selection.current.admission && page.admissions[0]) await loadPage(page.admissions[0], null, []);
+      if (!selection.current.admission && page.admissions[0]) {
+        // Recent job metadata only guides the first selection. It neither grants
+        // Apply authority nor resets a scope when a later poll updates that list.
+        const knownComplete = page.admissions.find(admission => admission.jobId !== null
+          && callbacks.current.jobs?.some(job => job.id === admission.jobId && job.status === 'complete' && !job.cancelRequested));
+        await loadPage(knownComplete ?? page.admissions[0], null, []);
+      }
     } catch (error) { if (latest.current === identity && !abort.signal.aborted) { setState(value => ({ ...value, admissionsLoading: false })); failure(error); } }
   }, [canRead, access.projectId, access.token, identity, failure, loadPage]);
   useEffect(() => {

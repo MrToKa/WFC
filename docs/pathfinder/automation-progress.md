@@ -1,5 +1,39 @@
 # PathFinder local implementation progress
 
+## Active review discoverability correction — 2026-10-20
+
+User screenshots: exact route/Ghost visible; Reviewblocked and no batchcontrols.
+Inherited newbranch pf-review-discoverability-local-20261020, parent26be0e7.
+RootnormalAPI+readonlySQLdiagnosisPASS: cancelled1981/2140samplecanApplyfalse,
+stalefalse/compatibilitynull; complete1808/1808job230calcsamplecanApplytrue,
+stalefalse/compatibilitynull. Newexternallysubmitted2140job RUNNING1949processed/
+39calculated; rootdidnotsubmit/cancelit. PreserveAPI/worker; WEBONLYupdateplanned.
+Diagnosiskept2140projectcables/Applycount/resourcesexact. NoReview/Applyperformed.
+
+CURRENT STATUS: **TECHNICAL_UI_CORRECTION_PASS / AWAITING_HUMAN_REVIEW**.
+Ownership completed: batch_contracts sixUIcomponent/testfiles32/32PASS;
+preview_diagnosis twohook/testfiles18/18PASS; rootTabintegration5/5selectedPASS,
+docs/evidence/runtime. Types/frontend+backend/scopedlint/diffcheckPASS. Allagents
+androotprocessesjoined; production sourcefrozenbeforebuild. Operator workdirectory:
+pathfinder-engine/.scratch/tray-catalog-344b78b8-6f66-4532-b9f6-0825f889b47c.
+Delivered: alwaysvisiblebatchtoolbarabovepages; exactjobblockreasons; firstknown
+completeuncancelledscope; no pollingretarget; ownedhistoricaljobGET/retry; generic
+authdenialwithoutrows; explicitmanualnonMVIDsonly; noautoReview/Apply/calculation.
+WEB buildPASS15:15:58.263Z closure1277files/94412540bytes. WEBONLYupgradePASS
+15:16:47.863Z, newweb2cab7772, API78536ccd retainedID/start plusPG/Minio unchanged.
+All2153DBcables/2preexistingApplyreceipts unchanged;2activejobsbothbefore/after,
+progressallowed. DBconsistentconcurrentbackup16225946bytes+TOC84447PASS before
+webcontrol; nocoldbackup/newrestoreclaim. Finalreadback15:18:10.104Z health200,
+oldcomplete1808jobproposalcanApplytrue/stalefalse/compatibilitynull,0helpers.
+ExternaloriginalbackendrestartloopchangedStartedAtduringbuild; fullconfigexact,
+norootcontrol. Upgradeoutsidebookend0running/startchanges. Nojobcancel/restart,
+calculation/Review/Apply/originalwrites. Report57 andevidence/review-discoverability/
+actual.json arecurrent; report56 remains historical. ReadliveHEADforlocalcommit.
+Next: humanCtrlF5→Path→completed1808scope→selectreadyrows→explicitReview/Apply;
+handoffs/PF-Review-batch-acceptance.md updated. NewlivebrowservisualcheckBLOCKED,
+userprovidedGhostscreenshotsrecordedonlyasuserfeedback. Preserve5191/backups/
+rollbackimages/evidence/deniedpaths; primaryPreparer+PFautomationstayPAUSED.
+
 ## Resumed review/batch correction — 2026-10-20
 
 User-authorized new scope: fix slow/disappearing proposal preview and add explicit

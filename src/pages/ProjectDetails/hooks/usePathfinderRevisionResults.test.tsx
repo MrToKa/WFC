@@ -66,6 +66,67 @@ describe('owned read-only revision-result pages', () => {
     expect(view.result.current.admission?.id).toBe(admission);
     expect(vi.mocked(fetchRevisionResultsPage).mock.calls.at(-1)?.[2]).toBe(admission);
   });
+  it('initially selects the newest known complete uncancelled job instead of a newer cancelled, running, failed or unknown scope', async () => {
+    const f = fixtures(), choices = [10, 11, 12, 13, 14, 15].map(value => ({ ...f.admissions.admissions[0], id: id(value), jobId: id(value + 100) }));
+    vi.mocked(fetchRevisionAdmissions).mockResolvedValueOnce({ ...f.admissions, admissions: choices });
+    vi.mocked(fetchRevisionResultsPage).mockImplementation(async (_project, _token, selected) => ({ ...f.page, admissionId: selected }));
+    const props: RevisionResultsAccess = { ...access(), jobs: [
+      { id: id(110), status: 'complete', cancelRequested: true },
+      { id: id(111), status: 'running', cancelRequested: false },
+      { id: id(112), status: 'failed', cancelRequested: false },
+      { id: id(114), status: 'complete', cancelRequested: false },
+      { id: id(115), status: 'complete', cancelRequested: false },
+    ] };
+    const view = renderHook(() => usePathfinderRevisionResults(props));
+    await waitFor(() => expect(view.result.current.page?.admissionId).toBe(id(14)));
+    expect(view.result.current.admission?.id).toBe(id(14)); expect(fetchRevisionResultsPage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetchRevisionResultsPage).mock.calls[0][2]).toBe(id(14));
+  });
+  it.each([{ jobs: undefined }, { jobs: [
+    { id: id(110), status: 'complete' as const, cancelRequested: true },
+    { id: id(111), status: 'queued' as const, cancelRequested: false },
+  ] }])('falls back to the newest saved scope when no available job metadata proves a completed uncancelled calculation: %j', async ({ jobs }) => {
+    const f = fixtures(), choices = [10, 11].map(value => ({ ...f.admissions.admissions[0], id: id(value), jobId: id(value + 100) }));
+    vi.mocked(fetchRevisionAdmissions).mockResolvedValueOnce({ ...f.admissions, admissions: choices });
+    vi.mocked(fetchRevisionResultsPage).mockImplementation(async (_project, _token, selected) => ({ ...f.page, admissionId: selected }));
+    const view = renderHook(() => usePathfinderRevisionResults({ ...access(), jobs }));
+    await waitFor(() => expect(view.result.current.page?.admissionId).toBe(id(10)));
+    expect(view.result.current.admission?.id).toBe(id(10)); expect(fetchRevisionResultsPage).toHaveBeenCalledTimes(1);
+  });
+  it('uses the latest job metadata when the initial admission request resolves without restarting it for array changes', async () => {
+    const f = fixtures(), choices = [10, 11].map(value => ({ ...f.admissions.admissions[0], id: id(value), jobId: id(value + 100) }));
+    let finish!: (page: typeof f.admissions) => void;
+    vi.mocked(fetchRevisionAdmissions).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    vi.mocked(fetchRevisionResultsPage).mockImplementation(async (_project, _token, selected) => ({ ...f.page, admissionId: selected }));
+    const props = access(), view = renderHook(value => usePathfinderRevisionResults(value), { initialProps: props });
+    await waitFor(() => expect(fetchRevisionAdmissions).toHaveBeenCalledOnce());
+    const signal = vi.mocked(fetchRevisionAdmissions).mock.calls[0][3];
+    view.rerender({ ...props, jobs: [{ id: id(111), status: 'complete', cancelRequested: false }] });
+    expect(fetchRevisionAdmissions).toHaveBeenCalledOnce(); expect(signal?.aborted).toBe(false);
+    await act(async () => finish({ ...f.admissions, admissions: choices }));
+    await waitFor(() => expect(view.result.current.admission?.id).toBe(id(11)));
+    expect(fetchRevisionResultsPage).toHaveBeenCalledTimes(1);
+  });
+  it('does not retarget an automatic fallback or a later manual choice when polling supplies different job states', async () => {
+    const f = fixtures(), choices = [10, 11].map(value => ({ ...f.admissions.admissions[0], id: id(value), jobId: id(value + 100) }));
+    vi.mocked(fetchRevisionAdmissions).mockResolvedValue({ ...f.admissions, admissions: choices });
+    vi.mocked(fetchRevisionResultsPage).mockImplementation(async (_project, _token, selected) => ({ ...f.page, admissionId: selected }));
+    const props = access(), view = renderHook(value => usePathfinderRevisionResults(value), { initialProps: props });
+    await waitFor(() => expect(view.result.current.admission?.id).toBe(id(10)));
+    const knownComplete: NonNullable<RevisionResultsAccess['jobs']> = [{ id: id(111), status: 'complete', cancelRequested: false }];
+    view.rerender({ ...props, jobs: knownComplete });
+    expect(fetchRevisionAdmissions).toHaveBeenCalledTimes(1); expect(fetchRevisionResultsPage).toHaveBeenCalledTimes(1);
+    expect(view.result.current.admission?.id).toBe(id(10));
+    act(() => view.result.current.selectAdmission(id(11)));
+    await waitFor(() => expect(view.result.current.page?.admissionId).toBe(id(11)));
+    view.rerender({ ...props, jobs: [{ id: id(110), status: 'complete', cancelRequested: false }] });
+    expect(fetchRevisionAdmissions).toHaveBeenCalledTimes(1); expect(fetchRevisionResultsPage).toHaveBeenCalledTimes(2);
+    expect(view.result.current.admission?.id).toBe(id(11));
+    act(() => view.result.current.refresh());
+    await waitFor(() => expect(fetchRevisionAdmissions).toHaveBeenCalledTimes(2));
+    expect(view.result.current.admission?.id).toBe(id(11));
+    expect(vi.mocked(fetchRevisionResultsPage).mock.calls.at(-1)?.[2]).toBe(id(11));
+  });
   it('pages the admission list independently without changing the selected cable scope', async () => {
     const f = fixtures(); vi.mocked(fetchRevisionAdmissions).mockResolvedValueOnce({ ...f.admissions, nextCursor: 'older_calculations' })
       .mockResolvedValueOnce({ ...f.admissions, admissions: [{ ...f.admissions.admissions[0], id: id(11), generation: '6' }] });

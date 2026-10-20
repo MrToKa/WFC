@@ -17,6 +17,7 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [scopeReadiness, setScopeReadiness] = useState<{ ready: boolean; message: string | null }>({ ready: false, message: 'Choose a completed calculation in Cable revision results below.' });
   const [notice, setNotice] = useState<string | null>(null), data = pf.data;
   const pendingApply = usePathfinderPendingApply({
     projectId: pf.preparationAccess?.projectId ?? null, loadedProjectId: pf.preparationAccess?.loadedProjectId ?? null,
@@ -72,6 +73,15 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
   const summary = data?.proposals.find(value => value.id === proposal?.id), stale = proposal?.stale || summary?.stale || false;
   const preferencesMatch = options === undefined || Boolean(options && proposal?.routingPreferences && options.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && options.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach);
   const effectiveCanApply = preferencesMatch && (summary && summary.proposalHash === proposal?.proposalHash ? summary.canApply : proposal?.canApply);
+  const proposalJob = data?.jobs.find(value => value.id === proposal?.jobId);
+  const proposalJobIssue = !proposal || effectiveCanApply ? null : proposalJob?.cancelRequested || proposalJob?.status === 'cancelled'
+    ? 'This calculation was cancelled. Its saved path can be inspected, but cannot be reviewed or applied. Choose a completed calculation in Cable revision results, or calculate non-MV cables again if needed.'
+    : proposalJob && proposalJob.status !== 'complete'
+      ? `This calculation is ${proposalJob.status}. Review and Apply require a completed calculation. Calculate again after a failed job, or wait for the current job to finish.`
+      : !proposalJob ? 'This calculation is outside the recent job list. Its current state could not be confirmed here. Check the calculation state in Cable revision results below.' : null;
+  const nonMvCableIds = (data?.cables ?? []).filter(value => ['LV', 'Control', 'Instrumentation'].includes(value.mto ?? '')).map(value => value.id);
+  const selectedCable = data?.cables.find(value => value.id === selectedCableId);
+  const selectedCategoryAllowed = Boolean(selectedCable && ['LV', 'Control', 'Instrumentation'].includes(selectedCable.mto ?? ''));
   reviewContext.current = JSON.stringify([ownershipKey, active, displayOwned, selectedCableId, data?.activeModel, data?.registryRevision, settingsKey, optionsKey, selectedRevision, proposal?.id, proposal?.proposalHash, proposal?.revisionResultHash, stale, effectiveCanApply]);
   const proposals = (data?.proposals ?? []).filter(value => !selectedCableId || value.cableId === selectedCableId);
   return <section className={styles.result} aria-label="Path Finder calculations">
@@ -91,15 +101,18 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     {pf.preparationAccess ? <PathFinderRecalculationPanel {...pf.preparationAccess} accountId={accountId ?? null} active={active} preferences={options}
       contextKey={JSON.stringify([data?.activeModel, pf.preparationViewerGeneration, options])}
       onChanged={pf.refresh} onAuthorityLost={pf.cancelOperation} /> : null}
-    {pf.preparationAccess ? <PathFinderRevisionResults {...pf.preparationAccess} accountId={accountId??null} active={active} busy={pf.busy || batch.busy}
+    <PathFinderBatchReview batch={batch} disabled={pf.busy || !active || !pendingApply.canStart || !scopeReadiness.ready}
+      disabledReason={!active ? 'Open Path with current administrator access to review results.' : !pendingApply.canStart ? 'Reconcile any pending Apply request before reviewing another result.' : scopeReadiness.message} />
+    {pf.preparationAccess ? <PathFinderRevisionResults {...pf.preparationAccess} accountId={accountId??null} active={active && Boolean(data)} busy={pf.busy || batch.busy}
       contextKey={JSON.stringify([data?.activeModel, data?.registryRevision, settingsKey, optionsKey])}
-      onAuthorityLost={pf.cancelOperation} onOpenProposal={openProposal} batch={batch} cables={data?.cables ?? []} jobs={data?.jobs ?? []} /> : null}
-    <PathFinderBatchReview batch={batch} disabled={pf.busy || !active || !pendingApply.canStart} />
+      onAuthorityLost={pf.cancelOperation} onOpenProposal={openProposal} batch={batch} cables={data?.cables ?? []} jobs={data?.jobs ?? []}
+      readJob={pf.readJob} onScopeReadinessChange={setScopeReadiness} /> : null}
     <Caption1>Calculations use the active model, shared locations, connection gap and allowances from Project Details. Instrumentation follows Control.</Caption1>
     <div className={styles.actions}>
-      <Button disabled={options === null || !data?.artifacts.length || pf.busy || !data.cables.length || data.cables.length > 10000} onClick={() => void (options ? pf.calculate(undefined, true, options) : pf.calculate(undefined, true))}>Calculate all cables</Button>
-      <Button disabled={options === null || !data?.artifacts.length || pf.busy || !selectedCableId} onClick={() => void (options ? pf.calculate([selectedCableId!], true, options) : pf.calculate([selectedCableId!], true))}>Calculate selected cable</Button>
+      <Button disabled={options === null || !data?.artifacts.length || pf.busy || !nonMvCableIds.length || nonMvCableIds.length > 10000} onClick={() => void (options ? pf.calculate(nonMvCableIds, true, options) : pf.calculate(nonMvCableIds, true))}>Calculate non-MV cables</Button>
+      <Button disabled={options === null || !data?.artifacts.length || pf.busy || !selectedCableId || !selectedCategoryAllowed} onClick={() => void (options ? pf.calculate([selectedCableId!], true, options) : pf.calculate([selectedCableId!], true))}>Calculate selected cable</Button>
     </div>
+    <Caption1>Manual calculation includes LV, Control and Instrumentation only. MV and unknown categories are excluded. For cancelled results, choose a completed calculation or calculate non-MV cables again if needed.</Caption1>
     {pf.busy ? <Spinner size="tiny" label="Saving or checking Path Finder data…" /> : null}
     {previewLoading ? <Spinner size="tiny" label="Loading the exact computed path…" /> : null}
     {notice ? <Body1 role="status">{notice}</Body1> : null}
@@ -125,6 +138,7 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       <Body1>{proposal.synthetic ? 'Local synthetic fixture for demonstration.' : 'Review the route and length before applying.'}</Body1>
       {stale ? <Body1 role="alert">This result is outdated. Calculate a new proposal before reviewing or applying it.</Body1> : null}
       <Body1>{proposal.message}</Body1>
+      {proposalJobIssue ? <Body1 role="alert">{proposalJobIssue}</Body1> : null}
       {proposal.routingPreferences ? <Caption1>Calculated with SECONDARY trigger {proposal.routingPreferences.secondaryDistanceMeters} m; vertical approach {proposal.routingPreferences.preferVerticalApproach ? 'preferred' : 'not preferred'}.</Caption1> : <Caption1>The original routing preferences are unavailable.</Caption1>}
       {options !== null && !preferencesMatch ? <Body1 role="alert">This proposal uses different routing preferences. Calculate a new proposal with the current Path values before reviewing or applying.</Body1> : null}
       {proposal.compatibilityIssue ? <Body1 role="alert">{proposal.compatibilityIssue}</Body1> : null}

@@ -10,6 +10,8 @@ import type { BatchReviewController } from './PathFinderBatchReview';
 export type PathFinderRevisionResultsProps = RevisionResultsAccess & {
   onOpenProposal: (proposalId: string) => void | Promise<void>; busy?: boolean;
   batch?: BatchReviewController; cables?: PathFinderCable[]; jobs?: PathFinderJob[];
+  readJob?: (jobId: string) => Promise<PathFinderJob | null>;
+  onScopeReadinessChange?: (value: { ready: boolean; message: string | null }) => void;
 };
 type Model = NonNullable<RevisionResultDetail['row']['result']>['newModel'];
 const unavailable = 'Unavailable';
@@ -76,21 +78,62 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   const latestOwner = useRef(owner); latestOwner.current = owner;
   const generation = useRef(0);
   useEffect(() => { generation.current++; setOpening(false); setOpenError(null); return () => { generation.current++; }; }, [owner]);
-  if (!state.enabled || !props.isAdmin || !props.accountId || !props.token || props.projectId !== props.loadedProjectId) return null;
-  const loading = state.admissionsLoading || state.pageLoading || state.detailLoading;
+  const knownJob = props.jobs?.find(item => item.id === state.admission?.jobId);
+  const knownJobKey = JSON.stringify(knownJob && [knownJob.id, knownJob.status, knownJob.cancelRequested]);
+  const jobOwner = JSON.stringify([props.projectId, props.loadedProjectId, props.accountId, props.token, props.isAdmin,
+    props.active, props.contextKey, state.admission?.id, state.admission?.jobId]);
+  const [jobAttempt, setJobAttempt] = useState(0);
+  const [jobRead, setJobRead] = useState<{ owner: string; value: PathFinderJob | null; loading: boolean; error: boolean }>({ owner: '', value: null, loading: false, error: false });
+  useEffect(() => {
+    let closed = false;
+    const jobId = state.admission?.jobId;
+    if (!state.enabled || !props.active || !jobId || knownJob) {
+      setJobRead({ owner: jobOwner, value: null, loading: false, error: false }); return;
+    }
+    if (!props.readJob) { setJobRead({ owner: jobOwner, value: null, loading: false, error: true }); return; }
+    setJobRead({ owner: jobOwner, value: null, loading: true, error: false });
+    void props.readJob(jobId).then(value => {
+      if (!closed) setJobRead({ owner: jobOwner, value: value?.id === jobId && value.projectId === props.projectId ? value : null,
+        loading: false, error: !value || value.id !== jobId || value.projectId !== props.projectId });
+    }).catch(() => { if (!closed) setJobRead({ owner: jobOwner, value: null, loading: false, error: true }); });
+    return () => { closed = true; };
+    // Polling may replace the jobs array without changing the selected job state.
+    // A missing historical job is read once per owned scope or explicit retry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobOwner, knownJobKey, props.readJob, props.active, state.enabled, jobAttempt]);
+  const ownedJobRead = jobRead.owner === jobOwner ? jobRead : null;
+  const scopeJob = knownJob ?? ownedJobRead?.value;
+  const scopeIssue = !state.enabled ? 'Administrator access is required. Refresh your account before continuing.'
+    : !state.admission ? state.admissionsLoading ? 'Loading calculation scopes…' : 'Choose a completed calculation below. No saved calculation is currently selected.'
+      : !state.admission.jobId ? 'This calculation has no job or applicable output. Choose a completed calculation, or calculate non-MV cables again if needed.'
+        : scopeJob?.cancelRequested || scopeJob?.status === 'cancelled'
+          ? 'This calculation was cancelled. Its saved results can be inspected, but cannot be reviewed or applied. Choose a completed calculation, or calculate non-MV cables again if needed.'
+          : scopeJob && scopeJob.status !== 'complete'
+            ? `This calculation is ${scopeJob.status}. Review and Apply require a completed calculation. Wait for it to finish, or calculate again after a failed job.`
+            : !scopeJob ? ownedJobRead?.loading ? 'Checking the selected calculation state…'
+              : 'The selected calculation state is unavailable. Check it again before selecting results for review.' : null;
+  const scopeReady = Boolean(props.active && state.enabled && scopeJob?.status === 'complete' && !scopeJob.cancelRequested);
+  useEffect(() => { props.onScopeReadinessChange?.({ ready: scopeReady, message: scopeIssue }); }, [props.onScopeReadinessChange, scopeReady, scopeIssue]);
+  if (!props.isAdmin || !props.accountId || !props.token || props.projectId !== props.loadedProjectId) return null;
+  if (!state.enabled) return <section aria-label="Cable revision results" className={styles.result}><h3>Cable revision results</h3>
+    <p role="alert">Administrator access is required. Refresh your account before continuing.</p></section>;
+  const loading = state.admissionsLoading || state.pageLoading || state.detailLoading || Boolean(ownedJobRead?.loading);
   const frozen = !props.active || props.busy || loading || opening;
   const choices = state.admission && !state.admissions.some(value => value.id === state.admission?.id) ? [state.admission, ...state.admissions] : state.admissions;
   const detail = state.detail, row = detail?.row, baseline = row?.baseline, accepted = baseline?.lastAcceptedApply, result = row?.result;
   const candidate = (value: RevisionResultDetail['row']): BatchReviewCandidate | null => {
     const cable = props.cables?.find(item => item.id === value.cableId), output = value.result;
-    const job = props.jobs?.find(item => item.id === state.admission?.jobId);
-    if (job && (job.status !== 'complete' || job.cancelRequested)) return null;
+    if (!scopeReady) return null;
     if (!cable || !['LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '') || value.status !== 'calculated'
       || value.currentness.state !== 'current' || !output?.ledgerHash || !output.routeText || output.designLengthMeters === null) return null;
     return { cableId: value.cableId, cableWriteRevision: value.baseline.currentCable.cableWriteRevision,
       proposalId: output.proposalId, proposalHash: output.proposalHash, revisionResultHash: output.revisionResultSha256,
       tag: value.baseline.currentCable.tag ?? value.cableId, routeText: output.routeText, designLength: output.designLengthMeters };
   };
+  const rowStatus = (value: RevisionResultDetail['row']) => value.status !== 'calculated' ? status(value.status)
+    : !scopeReady ? scopeJob?.cancelRequested || scopeJob?.status === 'cancelled' ? 'Review blocked — cancelled calculation'
+      : scopeJob ? 'Review blocked — incomplete calculation' : 'Review blocked — calculation state unknown'
+      : value.currentness.state !== 'current' ? 'Outdated — review blocked' : status(value.status);
   const selectable = (state.page?.rows ?? []).map(candidate).filter((value): value is BatchReviewCandidate => value !== null);
   const open = async () => {
     if (frozen || !result || !detail?.envelope || !props.isAdmin || !props.accountId || props.projectId !== props.loadedProjectId) return;
@@ -115,6 +158,8 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
     {loading || opening ? <Spinner size="tiny" label={opening ? 'Opening the exact proposal…' : 'Reading cable revision results…'} /> : null}
     {state.error ? <p role="alert">{state.error}</p> : null}
     {openError ? <p role="alert">{openError}</p> : null}
+    {scopeIssue ? <p role="status">{scopeIssue}</p> : null}
+    {state.admission?.jobId && !knownJob && !scopeJob ? <Button disabled={frozen || !props.readJob} onClick={() => setJobAttempt(value => value + 1)}>Check calculation state</Button> : null}
     {!loading && choices.length === 0 ? <p>No saved calculation scopes are available.</p> : null}
     {state.admission ? <>
       <Caption1>{state.admission.total} cables in this immutable scope. {state.admission.jobId ? `Job ${state.admission.jobId}.` : 'This blocked generation has no calculation job.'}</Caption1>
@@ -132,7 +177,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
               checked={props.batch.entries.some(entry => entry.proposalId === value.result?.proposalId)}
               onChange={event => { const selected = candidate(value); if (selected) props.batch!.select(selected, event.target.checked); }} /></td> : null}
             <th scope="row">{text(value.baseline.currentCable.tag)}<br /><Caption1>{text(value.baseline.currentCable.fromLocation)} → {text(value.baseline.currentCable.toLocation)}</Caption1></th>
-            <td>{status(value.status)}<br /><Caption1>Current design: {metres(value.baseline.currentCable.designLength)}<br />New design: {metres(value.result?.designLengthMeters)}<br />Design delta: {signedMetres(value.result?.delta.designLengthMeters)}<br />Geometry delta: {signedMetres(value.result?.delta.rawLengthMeters)}</Caption1>
+            <td>{rowStatus(value)}<br /><Caption1>Current design: {metres(value.baseline.currentCable.designLength)}<br />New design: {metres(value.result?.designLengthMeters)}<br />Design delta: {signedMetres(value.result?.delta.designLengthMeters)}<br />Geometry delta: {signedMetres(value.result?.delta.rawLengthMeters)}</Caption1>
               <p>{value.currentness.state === 'current' ? 'Current inputs' : label(value.currentness.state)}</p>
               {value.result?.reasonCodes.length ? <Caption1>{value.result.reasonCodes.map(label).join('; ')}</Caption1> : null}
             </td>
@@ -146,7 +191,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
       </div>
     </> : null}
     {detail && row && baseline ? <section aria-label="Cable revision detail" className={styles.result} style={{ overflowWrap: 'anywhere' }}>
-      <h4>{text(baseline.currentCable.tag)} — {status(row.status)}</h4>
+      <h4>{text(baseline.currentCable.tag)} — {rowStatus(row)}</h4>
       <p>{row.message}</p>
       {row.currentness.state !== 'current' ? <p role="alert">Currentness: {label(row.currentness.state)}. {row.currentness.reasonCodes.map(label).join('; ')}. Opening a result does not authorize Apply.</p> : null}
       <section aria-label="Current cable at admission"><h5>Current cable at admission</h5>

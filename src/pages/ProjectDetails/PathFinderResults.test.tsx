@@ -4,19 +4,29 @@ import { PathFinderResults } from './PathFinderResults';
 import type { usePathFinder } from './hooks/usePathFinder';
 vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: () => <div>Server recalculation status</div> }));
 vi.mock('./PathFinderRevisionResults', () => ({ PathFinderRevisionResults: ({ onOpenProposal }: { onOpenProposal: (id: string) => void }) =>
-  <button onClick={() => onOpenProposal('50000000-0000-4000-8000-000000000003')}>Open exact proposal in Viewer</button> }));
+  <section aria-label="Mock revision results"><button onClick={() => onOpenProposal('50000000-0000-4000-8000-000000000003')}>Open exact proposal in Viewer</button></section> }));
 beforeEach(() => { sessionStorage.clear(); });
 afterEach(() => { sessionStorage.clear(); });
 describe('calculation production boundary', () => {
   it('does not create jobs from ready data or dependency changes; manual actions remain explicit', () => {
     const calculate = vi.fn(), options = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
-    const pf = { data: { registryRevision: '1', activeModel: { modelVersionId: 'model', selectionRevision: '1' }, settings: {}, artifacts: [{ id: 'artifact' }], cables: [{ id: 'cable', cableWriteRevision: '1', mto: 'Control', fromMatch: { status: 'matched' }, toMatch: { status: 'matched' } }], jobs: [], proposals: [] }, busy: false, calculate, preparationAccess: { projectId: null, loadedProjectId: null, token: null, isAdmin: false } } as unknown as ReturnType<typeof usePathFinder>;
+    const pf = { data: { registryRevision: '1', activeModel: { modelVersionId: 'model', selectionRevision: '1' }, settings: {}, artifacts: [{ id: 'artifact' }], cables: [{ id: 'cable', cableWriteRevision: '1', mto: 'Control', fromMatch: { status: 'matched' }, toMatch: { status: 'matched' } },
+      { id: 'low-voltage', mto: 'LV' }, { id: 'instrument', mto: 'Instrumentation' }, { id: 'medium-voltage', mto: 'MV' }, { id: 'unknown', mto: null }], jobs: [], proposals: [] }, busy: false, calculate, preparationAccess: { projectId: null, loadedProjectId: null, token: null, isAdmin: false } } as unknown as ReturnType<typeof usePathFinder>;
     const view = render(<PathFinderResults pf={pf} selectedCableId="cable" options={options} />);
     expect(calculate).not.toHaveBeenCalled(); expect(screen.getByText('Server recalculation status')).toBeVisible();
     view.rerender(<PathFinderResults pf={{ ...pf, data: { ...pf.data!, registryRevision: '2' } }} selectedCableId="cable" options={options} />);
     expect(calculate).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Calculate all cables' })); expect(calculate).toHaveBeenLastCalledWith(undefined, true, options);
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate non-MV cables' })); expect(calculate).toHaveBeenLastCalledWith(['cable', 'low-voltage', 'instrument'], true, options);
     fireEvent.click(screen.getByRole('button', { name: 'Calculate selected cable' })); expect(calculate).toHaveBeenLastCalledWith(['cable'], true, options);
+    view.rerender(<PathFinderResults pf={pf} selectedCableId="medium-voltage" options={options} />);
+    expect(screen.getByRole('button', { name: 'Calculate selected cable' })).toBeDisabled(); expect(calculate).toHaveBeenCalledTimes(2);
+  });
+  it('shows empty batch Review and Apply controls before the paged selection area', () => {
+    const f = recoveryFixture(); render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={null} accountId={id(2)} options={options} />);
+    const toolbar = screen.getByRole('region', { name: 'Batch review and Apply' }), revision = screen.getByRole('region', { name: 'Mock revision results' });
+    expect(toolbar).toBeVisible(); expect(toolbar.compareDocumentPosition(revision) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Confirm review for selected cables' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed selection' })).toBeDisabled(); expect(f.pf.action).not.toHaveBeenCalled();
   });
 });
 
@@ -57,6 +67,23 @@ async function submitFirstApply(fixture: Fixture) {
 }
 
 describe('exact pending Apply through result display resets', () => {
+  it('explains the selected proposal cancellation separately from engineering acceptance without relaxing review', async () => {
+    const f = recoveryFixture(); f.pf.data.proposals[0].canApply = false;
+    const pf = { ...f.pf, data: { ...f.pf.data, jobs: [{ id: id(7), status: 'cancelled', cancelRequested: true }] } };
+    render(<PathFinderResults pf={pf as unknown as ReturnType<typeof usePathFinder>} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByText(/This calculation was cancelled/)).toBeVisible();
+    expect(screen.getByText('Controlled local fixture.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
+  });
+  it.each(['queued', 'running', 'failed'])('explains an incomplete %s calculation without claiming the model itself needs acceptance', async status => {
+    const f = recoveryFixture(); f.pf.data.proposals[0].canApply = false;
+    const pf = { ...f.pf, data: { ...f.pf.data, jobs: [{ id: id(7), status, cancelRequested: false }] } };
+    render(<PathFinderResults pf={pf as unknown as ReturnType<typeof usePathFinder>} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByText(new RegExp(`This calculation is ${status}`))).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
+  });
   it('keeps the current model appearance while the selected proposal is being read', async () => {
     const f = recoveryFixture(); let finish!: (value: typeof f.pf.data.proposals[0]) => void;
     f.pf.readProposal.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));

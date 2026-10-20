@@ -11,17 +11,18 @@ then let the human review and explicitly apply selected non-MV proposals through
 the new batch controls. Do not treat automated tests as live visual acceptance.
 
 Worktree: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-Branch: `pf-review-batch-preview-local-20261020`, parent
-`efe9fc0b7358ed2397d4850eb770335be676b890`. Read live HEAD/status and agents first;
+Branch: `pf-review-discoverability-local-20261020`, parent
+`26be0e789e279a893da34a9e0d74d646e4e7ed5c`. Read live HEAD/status and agents first;
 the containing local delivery commit follows that parent. Production and test
-bytes are identified in [actual.json](../evidence/review-batch/actual.json).
-Read [report56](../56-review-batch-and-preview-reliability.md),
+bytes are identified in [current actual.json](../evidence/review-discoverability/actual.json).
+Read [report57](../57-review-discoverability.md),
+[report56](../56-review-batch-and-preview-reliability.md),
 [progress](../automation-progress.md), and the still-applicable engineering scope
 in [PF-Aalborg-engineering-review.md](PF-Aalborg-engineering-review.md).
 
 On 20 October, live remote main and the clean original WFC checkout were both
 `96e63f13fdc2b1d30b8f8ff658dd662f25fac104`. Before this delivery commit the local
-branch was 90 ahead/3 behind cached main. No remote CI, push, PR or merge occurred.
+branch was 91 ahead/3 behind cached main. No remote CI, push, PR or merge occurred.
 Do not infer remote acceptance from these local checks.
 
 ## Runtime, authority and preserved behavior
@@ -31,13 +32,19 @@ Do not infer remote acceptance from these local checks.
   `pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600`, Aalborg
   project `1af0f807-7653-40ea-8391-7eea6c54e7d4`.
 - API image is `sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c`;
-  web is `sha256:4f6acddc21724b8c3d62d74bcb810576a4c4d317fb6509c5995cde7c829a5f1c`.
+  web is `sha256:2cab777210ebef28b251378187c326e3febbe2293dc8b38b733e19efe1742f56`.
   Upgrade/final health PASS. Engine identity and all2153database cable rows plus
   2preexisting database Apply receipts unchanged; Aalborg itself has2140cables.
 - Two earlier full2140jobs were explicitly cancelled;0activejobs and412retained
   project proposals were checked. Do not relaunch those jobs or calculate all
   cables merely to inspect this UI. The earlier230calculated results are a
   historical count, not proof that230are currently applicable.
+- A newly observed2140calculation was running during report57; the agent did not
+  submit it, and this diagnosis did not establish the originating actor.
+  The UI correction did not cancel/restart it or control API/PG/MinIO. The final
+  upgrade saw2active jobs globally before/after, allowing natural progress. Read
+  current job states; do not carry that count forward as current. One normal GET
+  from the oldercomplete1808job still hadcanApplytrue/stalefalse after upgrade.
 - Keep strict current-role admin enforcement, protected Viewer bridge, exact
   immutable proposal/revision/dependency/cableWriteRevision guards and idempotency.
   Preserve filled Ghost, original tray colors, yellow path and Clear/restore.
@@ -63,12 +70,22 @@ recovery and exact identity checks before each dispatch. Batches are atomic per
 cable; confirmed partial success survives stop/failure. No real engineering
 Review/Apply was performed during this delivery.
 
-228distinct targeted tests, final frontend/backend typecheck, scoped lint and
-production API/web builds PASS. Do not rerun them merely to prepare another prompt.
-The original build operator's before/after byte-level source closure was
-NOT_MEASURED; the build success, image IDs, actual upgrade engine/data fences and
-source freeze are recorded separately. First upgrade FAIL and later independent
-rollback reconciliation PASS remain immutable, as does the successful case2.
+Report57 adds an always-visible batch toolbar above pages, exact cancellation/
+incomplete/unknown job explanations, initial known-complete selection without
+poll retargeting, historical job-state verification and explicit manual non-MV
+calculation IDs. Empty selection never calls Review/Apply. Ctrl+F5 the browser;
+choose the complete1808scope, inspect/select ready rows and use the visible toolbar.
+
+Current55distinct targeted tests, final frontend/backend typecheck, scoped lint,
+production WEB build and WEBONLY upgrade PASS. API/PG/MinIO IDs/start times stayed
+exact, all2153DBcables/2preexistingApplyreceipts unchanged; no realReview/Apply.
+1277consumed inputs/94412540bytes had before/after source-closure verification.
+New consistent concurrentDBsnapshot16225946bytes passed mountedTOC and finalhash
+readback; it is not a cold dump or new restore drill. Do not rerun checks merely
+for handoff. Historical228checks and the first build's NOT_MEASURED closure are
+recorded at report56's revision; firstupgradeFAIL/reconciliationPASS/case2PASS
+remain immutable. User screenshots show route/Ghost; no new toolbrowservisual
+acceptance is claimed. Exact current scope is in report57 and its receipt.
 
 ## Bounded next actions and acceptance
 
@@ -116,6 +133,8 @@ Apply, push/PR/merge or primary deployment is authorized by this prompt.
 Retain5191, its prior full model archive, both new cold DB dumps, original rollback
 images, and private failure/reconciliation receipts under owned ignored
 `pathfinder-engine/.scratch/tray-catalog-48e496e3-b4b3-4f6f-bc6c-cc595d8da8ad`.
+The newest consistentDBbackup and currentUIrawreceipts are separately retained in
+ownedignored `pathfinder-engine/.scratch/tray-catalog-344b78b8-6f66-4532-b9f6-0825f889b47c`.
 Final readback proved0owned temporary helper containers; no new test stack exists.
 The finalizer initially matched the retainedAPI/web image provenance labels; exact
 runtime IDs corrected classification before any deletion. Do not remove the demo.

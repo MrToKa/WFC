@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PathFinderRevisionResults, type PathFinderRevisionResultsProps } from './PathFinderRevisionResults';
 import { usePathfinderRevisionResults } from './hooks/usePathfinderRevisionResults';
@@ -34,7 +34,9 @@ function fixtures() {
     engineResult: { route: { connectionGapCount: 1, connectionGapLengthMeters: 0.25 } }, dependencies: null });
   return { admissions, page, detail };
 }
-const props = (): PathFinderRevisionResultsProps => ({ projectId: id(1), loadedProjectId: id(1), accountId: id(9), token: 'current-token', isAdmin: true, active: true, contextKey: 'model-A', onOpenProposal: vi.fn() });
+const completeJob = (key = id(3)) => ({ id: key, projectId: id(1), status: 'complete' as const, total: 2140, completed: 2140, cancelRequested: false,
+  failure: null, attempts: 1, createdAt: '2026-10-19T12:00:00Z', updatedAt: '2026-10-19T12:01:00Z' });
+const props = (): PathFinderRevisionResultsProps => ({ projectId: id(1), loadedProjectId: id(1), accountId: id(9), token: 'current-token', isAdmin: true, active: true, contextKey: 'model-A', onOpenProposal: vi.fn(), jobs: [completeJob()] });
 function setup() {
   const f = fixtures();
   const state: ReturnType<typeof usePathfinderRevisionResults> = { identity: 'test-owned-scope', admissions: f.admissions.admissions, nextAdmissionsCursor: f.admissions.nextCursor, admission: f.admissions.admissions[0], page: f.page, detail: f.detail,
@@ -68,7 +70,65 @@ describe('administrator cable revision inspection', () => {
       jobs={[{ id: f.admissions.admissions[0].jobId, status: 'cancelled', cancelRequested: true }] as PathFinderRevisionResultsProps['jobs']} />);
     expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Select ready cables on this page' })).toBeDisabled();
+    expect(screen.getByText(/This calculation was cancelled/)).toBeVisible();
+    expect(screen.getAllByText(/Review blocked — cancelled calculation/).length).toBeGreaterThan(0);
     expect(batch.select).not.toHaveBeenCalled();
+  });
+  it.each(['queued', 'running', 'failed'] as const)('labels %s calculation outputs as blocked instead of ready for review', status => {
+    const { f } = setup(), row = f.page.rows[0], readiness = vi.fn();
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ ...completeJob(), status }]} onScopeReadinessChange={readiness} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByText(new RegExp(`This calculation is ${status}`))).toBeVisible();
+    expect(screen.getAllByText(/Review blocked — incomplete calculation/).length).toBeGreaterThan(0);
+    expect(readiness).toHaveBeenLastCalledWith(expect.objectContaining({ ready: false })); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('checks one historical job outside the recent list before enabling selection and does not repeat it on polling', async () => {
+    const { f } = setup(), row = f.page.rows[0], p = props(); let settle!: (value: ReturnType<typeof completeJob>) => void;
+    const readJob = vi.fn(() => new Promise<ReturnType<typeof completeJob>>(resolve => { settle = resolve; }));
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    const view = render(<PathFinderRevisionResults {...p} batch={batch} jobs={[]} readJob={readJob}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']} />);
+    expect(readJob).toHaveBeenCalledOnce(); expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByText('Checking the selected calculation state…')).toBeVisible();
+    await act(async () => settle(completeJob()));
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeEnabled());
+    view.rerender(<PathFinderRevisionResults {...p} batch={batch} jobs={[]} readJob={readJob}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']} />);
+    expect(readJob).toHaveBeenCalledOnce(); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('keeps unknown historical job state closed until an explicit successful retry', async () => {
+    const { f } = setup(), row = f.page.rows[0];
+    const readJob = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce(completeJob());
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch} jobs={[]} readJob={readJob}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Check calculation state' })).toBeEnabled());
+    expect(screen.getByText(/The selected calculation state is unavailable/)).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Check calculation state' }));
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeEnabled());
+    expect(readJob).toHaveBeenCalledTimes(2); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('drops a late historical job response after changing the owned calculation context', async () => {
+    const { f, state } = setup(), row = f.page.rows[0], p = props(); let settle!: (value: ReturnType<typeof completeJob>) => void;
+    const readJob = vi.fn(() => new Promise<ReturnType<typeof completeJob>>(resolve => { settle = resolve; }));
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    const view = render(<PathFinderRevisionResults {...p} batch={batch} jobs={[]} readJob={readJob}
+      cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']} />);
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, admission: null, page: null, detail: null });
+    view.rerender(<PathFinderRevisionResults {...p} batch={batch} jobs={[]} readJob={readJob} token="different-login" contextKey="different-model" />);
+    await act(async () => settle(completeJob()));
+    expect(screen.queryByRole('checkbox')).toBeNull(); expect(batch.select).not.toHaveBeenCalled();
+    expect(screen.getByText(/No saved calculation is currently selected/)).toBeVisible();
+  });
+  it('shows a safe denied-access explanation without exposing prior rows, private error text or actions', () => {
+    const { state } = setup(); vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, enabled: false, error: 'Private old cable information' });
+    render(<PathFinderRevisionResults {...props()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Administrator access is required. Refresh your account before continuing.');
+    expect(screen.queryByText('C-001')).toBeNull(); expect(screen.queryByText('Private old cable information')).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('button')).toBeNull();
   });
   it('separates edited current cable values from historical accepted geometry and preserves exact server decimal text', () => {
     setup(); const p = props(); render(<PathFinderRevisionResults {...p} />);
