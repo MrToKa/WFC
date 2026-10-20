@@ -1,6 +1,6 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T09:43:00Z
+## Current live checkpoint — 2026-10-20T09:59:00Z
 
 LATEST USER STEERING: **Skip MV cables.** Do not resume the all-category finite
 automatic policy or submit all2140 while this instruction applies. Scope the
@@ -8,10 +8,22 @@ diagnostic continuation to exact non-MV cable IDs; preserve original routing
 permissions, category values and cable business rows. No code/product-wide MV
 rule change was requested.
 
-- Current branch `pf-aalborg-endpoint-availability-local-20261020`, source commit
-  `8407e52c815db636cccff2cd46a1efce561df6cf`; runtime/report/handoff checkpoint
-  about to be committed. Availability delivery technically VERIFIED, no user
-  engineeringacceptance. All previous agents completed; no active job/build/helper.
+- Current branch `pf-aalborg-ordinary-trace-event-local-20261020` inherits
+  availability delivery/handoff4a5548c, source
+  `8407e52c815db636cccff2cd46a1efce561df6cf`. Executing
+  PF-Aalborg-ordinary-trace-event.md immediately under prior userauthority.
+  Repo/unitwriter and integrationmodulewriter both frozen/completed; independent
+  source/launcherreview clear. Rootsole actualtest/runtime/SQL/HTTP/UI executor.
+  Newsource3files: geometryTraceRepository.ts/.test.ts and
+  ordinaryTraceEvent.integration.ts. PASS104checks(93repo/grant/recalc+11contracts),
+  servertypes/build/importclosure/scopedlint. Initial fixtureunsafe-finallylintFAIL
+  corrected/refrozen/finalPASS. Fixturecorpus3objectroot-name mismatch caught
+  BEFOREexecution, corrected5objects(exactroots+STRAIGHTleaves+equipment),2segments.
+  Actual freshDBcontrols/imagebuild/deployment NOT_RUN; no fakefitteddataused.
+  Rootprivate run-trace-event-fixture1.mjs reviewed/syntaxPASS, boundedwait215s/
+  watchdog210s/awaitownedstop/positivePid0,2GiB/1CPU/128pids/readonlyroot/internal
+  ownedbackend, PF_LOCAL_DEMOtrue/newemptyPF_ROOT, DBmarker/zeroConnectionsDROP.
+  Availability technically VERIFIED, no engineeringacceptance. No active job/build/helper.
   Root PASS161focusedchecks, types/lint/serverbuild/compiledimportclosure and
   independentreview. Owned API/web-only build+upgrade PASS after selectedjob
   terminal+fence;11,324,209Bbackup; otherown/outsidecontainers/resourcespreserved.
@@ -55,8 +67,11 @@ rule change was requested.
   non-mv-calculation1-result. Scope SQLjoin1808items/0MV. Fence3 at08:55UTC all2140
   columnhash matches baseline/0Apply. Normal7-checkpoint publicreceipt +report52
   committed aef9d38; later finalbatchreceipt non-mv-final2 supersedes runningnote.
-- NEXT: commit technicalavailabilityreceipt/report/handoff, then new inherited
-  local branch for PF-Aalborg-ordinary-trace-event.md and execute immediately.
+- NEXT: local sourcecheckpointcommit then prepare-trace-event-build1.mjs and
+  build-trace-event1.mjs(newcandidateonly); run5freshownedDBcases sequentially:
+  commit disabled/paused/expired,rollback paused,lost-ack paused. Each ownhelper+
+  DBmustremove/drop afterpositivejoin+markerproof, outputs/receiptsretained. Actual
+ 5191API remains availability1 until freshatomicproof PASS and guardedupgrade.
   Implement one ordinarycurrenttraceevent in finaltransaction; grantownerseparate;
   ownedfreshsyntheticDBatomicproof, no realAalborgretrace/authorityrenewal/MV/Apply.
   Never Apply. Privateoutcomesreader lastnon-mv-outcomes7. Appautomation

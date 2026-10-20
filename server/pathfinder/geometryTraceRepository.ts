@@ -14,6 +14,7 @@ import { geometryTraceFrozenSchema, geometryTraceHash, geometryTraceBytesHash } 
 import { withFittedExportAllowance, discardAdoptedFittedExportReference } from './geometryTraceStorage.js';
 import { runGeometryTraceWorker, runGeometryEvidenceWorker } from './geometryTraceWorker.js';
 import { parsePolicyJson } from './policyJson.js';
+import { markRecalculationDirty } from './recalculationSchema.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Geometry trace evidence is unavailable or changed. Keep the same command to reconcile an uncertain operation.'); };
 export type GeometryTraceAdapters = { getRuntimeFingerprint: () => Promise<GeometryRuntimeFingerprint>; exportFittedTrace: (input: { projectId: string; modelVersionId: string; snapshotId: string; snapshotSha256: string; exportId: string; maxBytes: number }, signal: AbortSignal) => Promise<FittedTraceReference> };
@@ -104,7 +105,23 @@ export function createGeometryTraceRepository(pool: Pool, adapters: GeometryTrac
           for (const page of validated.diagnosticPages) { controller.signal.throwIfAborted(); if(!isGrantPrincipal(who))assertLoginNotExpired(who); const bytes = await readPreparationBlob(projectId, frozen.aggregate.sessionId, page, GEOMETRY_TRACE_LIMITS.pageBytes), rows = parsePolicyJson(bytes, { maxBytes: GEOMETRY_TRACE_LIMITS.pageBytes }) as { order_index: number }[]; if (!Array.isArray(rows) || page.firstIndex !== next || rows.length !== page.rowCount || rows.some((r, i) => r.order_index !== next + i)) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY'); await c.query('INSERT INTO pf_geometry_trace_diagnostics(project_id,trace_id,order_index,message) SELECT $1,$2,x.order_index,x.message FROM jsonb_to_recordset($3::jsonb) AS x(order_index int,message text)', [projectId, frozen.traceId, bytes.toString('utf8')]); next += rows.length; }
           if (next !== manifest.counts.diagnostics) return fail('GEOMETRY_TRACE_INDEX_INTEGRITY');
           await c.query("UPDATE pf_geometry_trace_intents SET state='complete' WHERE project_id=$1 AND id=$2 AND lease_token=$3", [projectId, frozen.traceId, token]);
-          const receipt = geometryTraceReceiptSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: manifest, duplicate: false }); await saveReceipt(c, projectId, who, command, receipt); return receipt;
+          const receipt = geometryTraceReceiptSchema.parse({ schemaVersion: 'wfc.pf.geometry-trace-receipt.v1', trace: manifest, duplicate: false }); await saveReceipt(c, projectId, who, command, receipt);
+          // Managed grants own their separate journaled emitter. Replays above
+          // never reach this genuinely new, ordinary publication boundary.
+          if(!isGrantPrincipal(who)){
+            const selected=(await c.query<{current_aggregate_id:string|null;current_artifact_id:string|null;geometry_revision:string;active_model_version_id:string|null;selection_revision:string;content_fingerprint:string;state:string;health:string}>(`/* geometry-trace:ordinary-current */ SELECT p.current_aggregate_id,p.current_artifact_id,p.geometry_revision::text,
+              s.active_model_version_id,s.selection_revision::text,v.content_fingerprint,v.state,v.health
+              FROM pf_project_preparations p JOIN project_model_selections s ON s.project_id=p.project_id
+              JOIN model_versions v ON v.project_id=s.project_id AND v.id=s.active_model_version_id
+              WHERE p.project_id=$1 FOR SHARE OF p,s,v`,[projectId])).rows;
+            const scope=selected[0],aggregate=frozen.aggregate;
+            if(selected.length===1&&scope.current_aggregate_id===aggregate.id&&scope.current_artifact_id===aggregate.artifactId&&scope.geometry_revision===aggregate.geometryRevision&&scope.active_model_version_id===aggregate.modelVersionId&&scope.selection_revision===aggregate.selectionRevision&&scope.content_fingerprint===aggregate.contentFingerprint&&scope.state==='ready'&&scope.health==='healthy'&&manifest.modelVersionId===aggregate.modelVersionId&&manifest.geometryRevision===aggregate.geometryRevision&&manifest.projection.sha256===aggregate.projection.sha256){
+              // Last SQL mutation: trace, receipt and dirty generation commit or
+              // roll back together under the existing final authority/cancel gates.
+              await markRecalculationDirty(c,{projectId,domain:'geometry',reason:'GEOMETRY_TRACE_PUBLISHED',sourceRevision:manifest.id+':'+manifest.contentSha256});
+            }
+          }
+          return receipt;
         }, controller.signal);
         // Publication is already durable. A cleanup failure cannot undo it or invent a new receipt.
         await discardAdoptedFittedExportReference(validated.transientExport).catch(() => undefined); return receipt;
