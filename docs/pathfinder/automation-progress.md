@@ -16,6 +16,26 @@ Current binding capacity2-source-runtime.private.json in ownb3cwork. One prematu
 upgrade invocation refused missingbuildreceiptbeforeanyguardintent/mutation;
 rootwaitedactualbuildcompletionthenexecutednormalupgradeonce. No legacyplanrewrite.
 Browser reloaded; freshdiscovery/plan/capture next. Noqualificationcurrentlyrunning.
+Freshplan`4ff550aa-7b82-4998-86ae-7d6a5062634f`, SHA`162455b8584a6254d479104241806a5c6be01254c51cf585eb4ce207be8cf6e1`, frozen06:01UTC, all330trays/1165leaves/5parts/zeroexclusions/diagnostics. RootnormalUI captureactivepart1; don'trestartAPI/web orduplicatecapture. CurrentHEADf8f32558d20b978df5d8b22837004136d0a07074. Newtraceharness/runnerrefs/supervisorchanges source-reviewed and syntaxPASS, notexecuted. Privatecopyinputs/evidence/qualifydriverspreparednotrun.
+
+Actual memory observation: ownAPI readonlyprobe actual-worker-heap1/2 shows
+`resourceLimits.maxOldGenerationSizeMb:512` is only nominal: inherited parent
+NODE_OPTIONS1536 gives V8heap_size_limit1,811,939,328bytes (1536MiBold+192MiByoung).
+Changing per-worker env did not alter that. Do not claim a hard512MiB heap. This
+predates the capacity change; no memory guard was widened. Keep configured option,
+existing sampledwholeNodeRSS2GiB and stricter qualificationhardcontainer2GiB.
+Measure and report actual runtime, not nominal config. No unsafeglobalV8flag
+mutation or unrelated workerprocessrewrite is authorized/inprogress. Capacity
+agent read-onlyreviewing this distinction; rootsoleexecutor, no newbuildplanned.
+Review complete: strict512MiBoldspaceenforcementFAIL (inheritedglobalflag), not a
+newlywidenedguard. Probe3 confirms helperCLI--1536/emptyNODE_OPTIONS has the same
+1,811,939,328byteV8heaplimit on pinnedimage/Node24.22.0/V813.6.233.17-node.57.
+Helper and liveAPI have different baseline memory; normalAPIpublication must be
+verified separately. Handoff/report50 now state exact observed scope and open
+strictheapdefect. No globalflagmutation, workerprocessrewrite or guard removal.
+At06:08UTC freshsession4ff550aa has2/5parts,60,697,437bytes, statecollectingrev2;
+no currentaggregate/publication/failure. Browsercapture continuespart3. Allagents
+completed. Qualification tools finalsource/syntaxreviewPASS, actualtrialsNOT_RUN.
 Resume points below are historical; this explicit resume overrides that pause.
 
 ## HISTORICAL USER PAUSE — 20 October 2026, 05:23 UTC

@@ -64,8 +64,13 @@ rows or credentials belong in Git. Old frozen receipts are retained unchanged.
 Qualification uses copied, hash-verified actual parts; fresh private output per
 run; exact candidate image; no source volume or database configuration; network
 none; read-only root;2GiBhard memory+swap ceiling; one CPU;128PIDs;135sprocess
-watchdog and145sexternal container watchdog. Production512MiB worker heap,
-sampled2GiBRSS and120svalidation/10sjoin protections remain. External20ms
+watchdog and145sexternal container watchdog. The configured worker oldspace option
+remains512MiB, but actual ownAPI probes found inherited parentNODE_OPTIONS1536
+overrides it: V8 reports1,811,939,328byteheaplimit (1536MiBold+192MiByoung).
+Per-worker env overrides did not change that; no hard512MiB claim is valid.
+Existing sampled2GiBwholeNodeRSS and120svalidation/10sjoin protections remain;
+qualification independently enforces2GiB for the whole helper container. No actual
+memory bound was enlarged by the capacity patch. External20ms
 process-tree RSS estimates and cgroup observations have different scopes; their
 maxima must not be summed or called exact coincident peaks. Failure retains its
 owned evidence and cannot publish through this networkless validation-only path.

@@ -138,7 +138,7 @@ async function main() {
       result.cancellation = cancellation; result.code = 'EXPECTED_CANCELLATION';
     } finally { clearTimeout(cancelTimer); }
   } else if (values.mode === 'publisher') {
-    const [{ createConfiguredEngineExecutor }, { createPreparationPublisher }, { preparationEngineObservation }] = await Promise.all([
+    const [{ createConfiguredEngineExecutor }, { createPreparationPublisher, preparedUnionResponseSchema }, { preparationEngineObservation }] = await Promise.all([
       fixedModule('server/pathfinder/engineSession.js'), fixedModule('server/pathfinder/preparationPublisher.js'), fixedModule('server/pathfinder/engineResources.js'),
     ]);
     if (process.env.PF_ENGINE_DLL !== '/opt/pathfinder/PathFinder.ModelRunner.dll') fail('QUALIFICATION_ENGINE_CONFIGURATION');
@@ -147,10 +147,13 @@ async function main() {
     executor = createConfiguredEngineExecutor();
     const publisher = createPreparationPublisher(async (request, signal) => {
       await phase('fitting'); current();
-      const response = await executor.execute(request, signal);
+      const response = preparedUnionResponseSchema.parse(await executor.execute(request, signal));
       const observed = preparationEngineObservation(request.requestId);
       if (observed) result.engineObservation = observed;
       if (response?.prepared) result.counts.fittingDiagnostics = response.prepared.diagnosticCount;
+      result.fitting = { readiness: response.prepared.readiness, counts: response.prepared.counts,
+        objectCount: response.prepared.objectCount, segmentCount: response.prepared.segmentCount,
+        diagnosticCount: response.prepared.diagnosticCount, engineeringAccepted: false };
       return response;
     });
     // Deliberately call validation only. publish() would require a SQL principal.
@@ -172,6 +175,8 @@ async function main() {
     result.counts = { ...result.counts, ...output.counts, projectionBytes: projection.length, traceIndexBytes: indexBytes.length };
     result.hashes = { ...result.hashes, projectionSha256: hash(projection), traceIndexSha256: hash(indexBytes), objectOrderSha256: hash(canonicalPurposeJson(actualOrder)) };
     if (result.hashes.projectionSha256 !== output.projection.sha256 || result.hashes.traceIndexSha256 !== output.traceIndex.sha256) fail('QUALIFICATION_OUTPUT_IDENTITY');
+    // Private follow-up only: immutable server-owned refs, never business rows.
+    result.references = { snapshotId: output.projection.payloadRef, projection: output.projection, traceIndex: output.traceIndex, counts: output.counts };
   }
   if (!expectedCancellation) current();
   result.status = 'PASS'; result.code ??= 'COMPLETED';

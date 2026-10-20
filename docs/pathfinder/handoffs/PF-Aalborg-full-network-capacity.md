@@ -1,6 +1,18 @@
 # Aalborg — versioned full-network capacity qualification
 
 Status: **READY — execute immediately under existing sequential local authority**.
+
+Execution amendment20October: actual ownAPI probes show requested512MiB worker
+oldspace is overridden by existing parent1536MiB flag; V8 reports1728MiB total.
+This predates the input-profile patch. Strict512MiB enforcement is **FAIL**, not
+proven by the nominal Worker.resourceLimits object. Keep existing parent/RSS/time/
+join guards; do not remove or mutate global V8 flags as an incidental fix. The
+actual qualification scope is observed1536old/1728total heap, sampled2GiBwholeNode
+RSS, and independent hard2GiB whole-helper memory with no network/DB/publication.
+Report that scope and its API-baseline differences explicitly, never call it
+512MiB qualification. A bounded capacity result cannot resolve that separate
+strict-heap enforcement defect. Normal protected API publication remains a
+separate required check; do not widen API resources or engineering authority.
 Prepared with prepare-stage-handoff after suffix/root technical checkpoint
 `6039f34a08a6c2e42aa2ff41920bd6c74387c96a`. The user subsequently asked whether
 geometry limits can be enlarged; root explained a separately checked128MiB profile.
