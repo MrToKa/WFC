@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Client, Pool, PoolClient } from 'pg';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createConfiguredEngineExecutor, type EngineExecutor } from './engineSession.js';
-import { collectDependencies, geometryHash, hash, verifiedDesignOnlyChange } from './dependencies.js';
+import { collectDependenciesForVersion, geometryHash, hash, verifiedDesignOnlyChange } from './dependencies.js';
 import { readSnapshot } from './storage.js';
 import type { DependencySnapshot, EngineResponse } from './jobContracts.js';
 import type { PathFinderJobs } from './jobs.js';
@@ -51,6 +51,16 @@ export async function readRetainedDesignGeometry(client:Pick<PoolClient,'query'>
 async function fencedJob(client:PoolClient,job:Row):Promise<void> {
   const current = (await client.query<Row>('SELECT * FROM pf_jobs WHERE project_id=$1 AND id=$2 FOR UPDATE',[job.project_id,job.id])).rows[0];
   if (!current || current.owner_token !== job.owner_token || current.state !== 'running' || current.cancel_requested || new Date(current.lease_until).getTime() <= Date.now()) throw new PathFinderError('JOB_FENCED',409);
+}
+/** A newer endpoint assignment supersedes just its overlapping cable item. */
+export async function retireSupersededCableItem(client:PoolClient,job:Row,cableId:string):Promise<boolean>{
+  const authority=await readRecalculationJobAuthority(client,{projectId:job.project_id,jobId:job.id,cableId,lock:true});
+  if(!authority.enrolled||authority.valid)return false;
+  if(authority.code!=='LOCATION_IMPACT_TARGET_SUPERSEDED')throw new PathFinderError(authority.code,409);
+  const changed=await client.query(`UPDATE pf_job_items SET state='blocked',status='stale',message='A newer shared location assignment superseded this cable calculation.'
+    WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND state IN('waiting','running') RETURNING cable_id`,[job.project_id,job.id,cableId]);
+  if(changed.rows.length)await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
+  return true;
 }
 async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineExecutor):Promise<void> {
   const controller = new AbortController(),signal = AbortSignal.any([stopping,controller.signal]);
@@ -123,23 +133,28 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       const item = await authorized(async client => {
         await fencedJob(client,job);
         const value = (await client.query<Row>("SELECT * FROM pf_job_items WHERE project_id=$1 AND job_id=$2 AND state='waiting' ORDER BY cable_id FOR UPDATE LIMIT 1",[job.project_id,job.id])).rows[0];
+        if(value?.dependencies?.schemaVersion==='pathfinder.dependencies.v7'&&await retireSupersededCableItem(client,job,value.cable_id))return {...value,superseded:true};
         if (value) await client.query("UPDATE pf_job_items SET state='running',status='calculating',message='Calculating with the independent PathFinder core.' WHERE project_id=$1 AND job_id=$2 AND cable_id=$3",[job.project_id,job.id,value.cable_id]);
         return value;
       });
       if (!item) break;
+      if(item.superseded)continue;
       const dependencies = item.dependencies as DependencySnapshot;
       let response:EngineResponse,calculationMode = 'calculate',retained:Row|undefined,retainedResult:EngineResponse|undefined;
       const requestId = randomUUID();
       try {
         requireVersionedCalculationScope(dependencies);
         const identity=await calculationEngineIdentity({force:true});
+        let supersededBeforeDispatch=false;
         await authorized(async client => {
           await fencedJob(client,job);
-          const current=await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true,identity);
+          if(dependencies.schemaVersion==='pathfinder.dependencies.v7'&&await retireSupersededCableItem(client,job,item.cable_id)){supersededBeforeDispatch=true;return;}
+          const current=await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true,identity);
           if (!current.dependencies || hash(current.dependencies)!==hash(dependencies))
             throw new PathFinderError('PROPOSAL_STALE',409,'The tray catalog, routing permissions or another calculation input changed. Calculate a fresh proposal.');
-          await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
+          await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         });
+        if(supersededBeforeDispatch)continue;
         await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
         retainedResult = await readRetainedDesignGeometry(pool,job.project_id,item.cable_id,dependencies);
         retained = retainedResult?.route;
@@ -164,9 +179,10 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
       const finalIdentity=await calculationEngineIdentity({force:true});
       await authorized(async client => {
         await fencedJob(client,job);
-        const current = await collectDependencies(client,job.project_id,item.cable_id,dependencies.options,true,finalIdentity);
+        if(dependencies.schemaVersion==='pathfinder.dependencies.v7'&&await retireSupersededCableItem(client,job,item.cable_id))return;
+        const current = await collectDependenciesForVersion(client,job.project_id,item.cable_id,dependencies.options,dependencies.schemaVersion,true,finalIdentity);
         const stale = !current.dependencies || hash(current.dependencies) !== hash(dependencies);
-        await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
+        await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         const status = stale ? 'stale' : response.status, result = {...response,calculationMode};
         const baseline=await readRevisionBaseline(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
         if(!baseline)throw new PathFinderError('REVISION_BASELINE_REQUIRED',409,'Recalculate this historical job to record a current immutable cable baseline.');
@@ -184,7 +200,7 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         const completed = await client.query(`UPDATE pf_job_items SET state='complete',status=$4,message=$5 WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND state='running' RETURNING cable_id`,
         [job.project_id,job.id,item.cable_id,status,stale ? 'Dependencies changed during calculation. Calculate a fresh proposal.' : response.message]);
         if (completed.rows.length) await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
-        await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id});
+        await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
       });
     }
     await authorized(async client => {

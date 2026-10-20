@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import type { z } from 'zod';
 import { PathFinderError } from './errors.js';
-import { collectDependencies, hash, hasSyntheticProof } from './dependencies.js';
+import { collectDependenciesForVersion, hash, hasSyntheticProof } from './dependencies.js';
 import type { PathFinderRepository } from './repository.js';
 import { defaultOptions, type createJobSchema, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
@@ -15,6 +15,8 @@ import { pauseRecalculationForJob, readRecalculationJobAuthority, requireEnrollm
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import { persistRevisionAdmission, verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { isAutomaticEndpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { readProposalApplicability } from './proposalApplicability.js';
+import { cancelLocationImpactForJob } from './locationImpactRepository.js';
 
 type Row = Record<string,any>;
 // The full admission history is separately paginated by Cable revision results.
@@ -27,8 +29,8 @@ export function jobDto(row:Row) {
 }
 export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
   const dependencies = row.dependencies as DependencySnapshot;
-  let current:Awaited<ReturnType<typeof collectDependencies>>|null;
-  try {current=await collectDependencies(client,row.project_id,row.cable_id,dependencies.options);}
+  let current:Awaited<ReturnType<typeof collectDependenciesForVersion>>|null;
+  try {current=await collectDependenciesForVersion(client,row.project_id,row.cable_id,dependencies.options,dependencies.schemaVersion);}
   catch(error){
     // Retained history outlives a deleted live cable. Only this exact missing
     // current-input state is readable as stale; other collection errors remain
@@ -36,11 +38,14 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
     if(error instanceof PathFinderError&&error.code==='CABLE_NOT_FOUND')current=null;
     else throw error;
   }
-  const enrollment=await readRecalculationJobAuthority(client,{projectId:row.project_id,jobId:row.job_id});
+  const enrollment=await readRecalculationJobAuthority(client,{projectId:row.project_id,jobId:row.job_id,cableId:row.cable_id});
   const stale = current===null || !current.dependencies || hash(current.dependencies) !== row.dependency_hash || enrollment.enrolled&&!enrollment.valid;
   const synthetic = await hasSyntheticProof(client,dependencies);
   const result = row.result, route = result.route;
   const revisionResult=await verifyRevisionResultForProposal(client,{projectId:row.project_id,proposalId:row.id,result,dependencies,proposalHash:row.proposal_hash});
+  const applicability=await readProposalApplicability(client,{projectId:row.project_id,jobId:row.job_id,cableId:row.cable_id,
+    proposalId:row.id,dependencyHash:row.dependency_hash,dependencyVersion:dependencies.schemaVersion,
+    jobState:row.job_state,cancelRequested:row.cancel_requested,seal:revisionResult});
   const routingPreferences=proposalRoutingPreferences(dependencies.options);
   let endpointIssue: string | null = null;
   try { requireVersionedCalculationScope(dependencies); }
@@ -51,18 +56,19 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
     ?? (revisionResult ? null : 'The immutable cable baseline and exact length components are unavailable for this historical result. Calculate a fresh proposal.');
   return {schemaVersion:'wfc.pf.proposal.v2',id:row.id,projectId:row.project_id,jobId:row.job_id,cableId:row.cable_id,status:row.status,
     proposalHash:row.proposal_hash,cableWriteRevision:dependencies.cableWriteRevision,stale,synthetic,engineeringAccepted:synthetic,
-    acceptanceScope:synthetic ? 'local-synthetic-fixture' : 'manual-review',canApply:!stale && !compatibilityIssue && !row.cancel_requested && row.status === 'calculated' && route?.success===true && result.design != null && row.job_state === 'complete',
+    acceptanceScope:synthetic ? 'local-synthetic-fixture' : 'manual-review',canApply:!stale && !compatibilityIssue && row.status === 'calculated' && route?.success===true && result.design != null && applicability.applicable,
+    itemApplicability:applicability.evidence,
     compatibilityIssue,routingPreferences,
     message:current===null ? 'The cable no longer exists. This historical result remains available for inspection and cannot be applied.' : stale ? 'Dependencies changed. Calculate a fresh proposal.' : result.message,
-    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : dependencies.schemaVersion === 'pathfinder.dependencies.v6'
+    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : (dependencies.schemaVersion === 'pathfinder.dependencies.v6'||dependencies.schemaVersion === 'pathfinder.dependencies.v7')&&(isAutomaticEndpointCalculationPoint(dependencies.from)||isAutomaticEndpointCalculationPoint(dependencies.to))
       ? 'Automatic model endpoint candidates use approximate bounding-box anchors. Review their positions, route and length before explicit Apply. These endpoints have not been manually confirmed. Native engineering parity has not been performed.'
       : 'Manual review and explicit Apply are required for this exact proposal. Native engineering parity has not been performed.',
     design:result.design ?? null,lengthLedger:result.lengthLedger??null,revisionResultHash:revisionResult?.revisionResultSha256??null,revisionBaselineHash:revisionResult?.baselineHash??null,
     ...(detail?{revisionResult}:{}),route:route ? {...route,pathPoints:undefined,...(detail ? {points:route.pathPoints.map((point:Row) => [point.x,point.y,point.z]),objectIds:[...new Set(route.segmentIds as string[])]} : {})} : null,
     calculationMode:result.calculationMode,
     provenance:{dependencyVersion:dependencies.schemaVersion,dependencyHash:row.dependency_hash,
-      engineIdentity:dependencies.schemaVersion==='pathfinder.dependencies.v5'||dependencies.schemaVersion==='pathfinder.dependencies.v6'?dependencies.engineIdentity:null,
-      ...(dependencies.schemaVersion==='pathfinder.dependencies.v6'?{endpointSources:{
+      engineIdentity:['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(dependencies.schemaVersion)?('engineIdentity' in dependencies?dependencies.engineIdentity:null):null,
+      ...(dependencies.schemaVersion==='pathfinder.dependencies.v6'||dependencies.schemaVersion==='pathfinder.dependencies.v7'?{endpointSources:{
         from:isAutomaticEndpointCalculationPoint(dependencies.from)?'automatic-model-candidate':'confirmed-shared-location',
         to:isAutomaticEndpointCalculationPoint(dependencies.to)?'automatic-model-candidate':'confirmed-shared-location',
       }}:{}),
@@ -78,7 +84,7 @@ async function admissionModelRef(client:PoolClient,projectId:string){
     FROM project_model_selections s JOIN model_versions m ON m.project_id=s.project_id AND m.id=s.active_model_version_id WHERE s.project_id=$1`,[projectId])).rows[0];
   return row??null;
 }
-async function insertCalculationBatch(client:PoolClient,projectId:string,who:OperationPrincipal,batch:DependencyBatch,timeout:number,requestHash:string,bounds:{signal?:AbortSignal;deadline:number},admission:{kind:'manual'|'automatic';generation:string|null}={kind:'manual',generation:null}):Promise<string>{
+export async function insertCalculationBatch(client:PoolClient,projectId:string,who:OperationPrincipal,batch:DependencyBatch,timeout:number,requestHash:string,bounds:{signal?:AbortSignal;deadline:number},admission:{kind:'manual'|'automatic'|'location-impact';generation:string|null}={kind:'manual',generation:null}):Promise<string>{
   const check=()=>{bounds.signal?.throwIfAborted();if(Date.now()>bounds.deadline)throw new PathFinderError('RECALCULATION_COLLECTION_DEADLINE',503);};check();
   const id=randomUUID(),blocked=batch.items.filter(item=>!item.dependencies).length;
   await client.query(`INSERT INTO pf_jobs(id,project_id,requested_by,login_id,login_expires_at,state,total,completed,options,timeout_ms,request_hash,authority_kind,grant_provenance)
@@ -160,6 +166,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
           WHERE project_id=$1 AND id=$2 RETURNING *`,[projectId,jobId])).rows[0];
         if (!row) throw new PathFinderError('JOB_NOT_FOUND',404);
         await pauseRecalculationForJob(client,{projectId,jobId});
+        await cancelLocationImpactForJob(client,{projectId,jobId});
         return jobDto(row);
       });
     },
@@ -177,8 +184,8 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         if (row.proposal_hash !== expectedProposalHash) throw new PathFinderError('PROPOSAL_HASH_CONFLICT',409);
         await calculationEngineIdentity({force:true});
         const frozen=row.dependencies as DependencySnapshot;
-        await collectDependencies(client,projectId,row.cable_id,frozen.options,true);
-        await requireEnrollmentAuthority(client,{projectId,jobId:row.job_id});
+        await collectDependenciesForVersion(client,projectId,row.cable_id,frozen.options,frozen.schemaVersion,true);
+        await requireEnrollmentAuthority(client,{projectId,jobId:row.job_id,cableId:row.cable_id});
         const proposal = await proposalDto(client,row,true);
         if (proposal.stale) throw new PathFinderError('PROPOSAL_STALE',409);
         if (!proposal.canApply) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409,'Only a complete applicable proposal can be confirmed for review.');
@@ -186,7 +193,7 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         if(!sealed||!sealed.ledgerHash)throw new PathFinderError('REVISION_RESULT_REVIEW_REQUIRED',409);
         const reviewId = randomUUID(); await client.query(`INSERT INTO pf_reviews(id,project_id,proposal_id,actor_id,proposal_hash,validation_method,revision_result_sha256,review_login_id,review_dependency_sha256)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[reviewId,projectId,proposalId,who.userId,expectedProposalHash,proposal.synthetic?'synthetic-fixture':'manual-review',sealed.revisionResultSha256,who.loginId,sealed.dependencyHash]);
-        await requireEnrollmentAuthority(client,{projectId,jobId:row.job_id});
+        await requireEnrollmentAuthority(client,{projectId,jobId:row.job_id,cableId:row.cable_id});
         return {reviewId,proposal};
       });
     },

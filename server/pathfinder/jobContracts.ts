@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { revision, uuid, snapshotSchema } from './contracts.js';
 import type { RoutingScope } from './routingScope.js';
-import type { EndpointCalculationPoint, EndpointCalculationPreparation, CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
+import type { EndpointCalculationPoint, EndpointCalculationPreparation, CurrentEndpointCalculationPoint, ScopedEndpointResolution } from './endpointCalculationProvenance.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
 import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
@@ -45,7 +45,12 @@ export type CurrentDependencySnapshot = Omit<ComparisonDependencySnapshot, 'sche
 export type AutomaticDependencySnapshot = Omit<CurrentDependencySnapshot, 'schemaVersion' | 'from' | 'to'> & {
   schemaVersion: 'pathfinder.dependencies.v6'; from: CurrentEndpointCalculationPoint; to: CurrentEndpointCalculationPoint;
 };
-export type CurrentCalculationDependencySnapshot = CurrentDependencySnapshot | AutomaticDependencySnapshot;
+/** Registry observations remain admission/audit data, outside this exact mathematical body. */
+export type ScopedDependencySnapshot = Omit<CurrentDependencySnapshot, 'schemaVersion' | 'registryRevision' | 'from' | 'to'> & {
+  schemaVersion: 'pathfinder.dependencies.v7'; from: CurrentEndpointCalculationPoint; to: CurrentEndpointCalculationPoint;
+  endpointResolution: ScopedEndpointResolution;
+};
+export type CurrentCalculationDependencySnapshot = CurrentDependencySnapshot | AutomaticDependencySnapshot | ScopedDependencySnapshot;
 /** v2/v3/v4 remain historical; current dispatch/Review/Apply require actual implementation provenance. */
 export type DependencySnapshot = HistoricalDependencySnapshot | EndpointDependencySnapshot | ComparisonDependencySnapshot | CurrentCalculationDependencySnapshot;
 const enginePoint = z.object({x:z.number().finite(),y:z.number().finite(),z:z.number().finite()}).strict();

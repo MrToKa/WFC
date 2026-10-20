@@ -7,10 +7,11 @@ import { defaultOptions } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES } from './cableWorkflowProof.js';
 
-const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn() }));
+const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn() }));
 vi.mock('./revisionResultRepository.js', () => ({ verifyRevisionResultForProposal: proof.seal }));
 vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: proof.enrollment }));
 vi.mock('./routingScope.js', () => ({ requireVersionedCalculationScope: proof.scope }));
+vi.mock('./locationImpactRepository.js',()=>({readLocationImpactJobAuthority:proof.scoped}));
 
 type Data = Record<string, any>;
 const id = (n: number) => 'ce000000-0000-4000-8000-' + n.toString(16).padStart(12, '0');
@@ -54,6 +55,7 @@ function fixture() {
   const query = vi.fn(async (sql: string) => {
     if (sql.includes('cable-workflow:proposal-proof')) return { rows: [raw] };
     if (sql.includes('cable-workflow:accepted-proof')) return { rows: [receipt] };
+    if (sql.includes('pathfinder:sealed-item-applicability')) return {rows:[{state:'complete',status:'calculated',dependencies:raw.dependencies,job_state:raw.job_state,cancel_requested:raw.cancel_requested}]};
     throw Error('Unexpected SQL in proof fixture.');
   });
   const client = { query } as unknown as PoolClient;
@@ -62,6 +64,7 @@ function fixture() {
 }
 beforeEach(() => {
   vi.clearAllMocks(); proof.scope.mockImplementation(() => undefined); proof.enrollment.mockResolvedValue({ enrolled: false });
+  proof.scoped.mockResolvedValue({enrolled:true,valid:true,scope:'location-impact'});
 });
 
 describe('cable workflow positive result evidence (synthetic boundaries)', () => {
@@ -103,9 +106,26 @@ describe('cable workflow positive result evidence (synthetic boundaries)', () =>
     const f = fixture(); f.raw.job_state = state;
     expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toMatchObject({ reviewable: false });
   });
+  it.each(['queued','running','complete'])('uses exact sealed v7 item readiness with %s siblings, without a legacy global gate',async state=>{
+    const f=fixture(),{registryRevision:_registry,...body}=f.dependencies as DependencySnapshot&{registryRevision:string};
+    const dependencies={...body,schemaVersion:'pathfinder.dependencies.v7'} as DependencySnapshot;
+    f.raw.dependencies=dependencies;f.raw.dependency_hash=hash(dependencies);f.raw.job_state=state;
+    proof.seal.mockResolvedValue({...f.seal,proposalId,dependencyHash:f.raw.dependency_hash});
+    proof.enrollment.mockResolvedValue({enrolled:true,valid:false,code:'AUTOMATIC_GENERATION_SUPERSEDED'});
+    const result=await f.reader.reviewable(cableId,jobId,proposalId,dependencies);
+    expect(result).toMatchObject({currentness:'current',reviewable:true,itemApplicability:{projectId,jobId,cableId,proposalId,dependencyHash:f.raw.dependency_hash}});
+    expect(proof.enrollment).not.toHaveBeenCalled();expect(proof.scoped).toHaveBeenCalledWith(f.client,{projectId,jobId,cableId,lock:true});
+  });
+  it('refuses independently ready v7 when its exact cable target is superseded',async()=>{
+    const f=fixture(),{registryRevision:_registry,...body}=f.dependencies as DependencySnapshot&{registryRevision:string};
+    const dependencies={...body,schemaVersion:'pathfinder.dependencies.v7'} as DependencySnapshot;f.raw.dependencies=dependencies;f.raw.dependency_hash=hash(dependencies);f.raw.job_state='running';
+    proof.seal.mockResolvedValue({...f.seal,proposalId,dependencyHash:f.raw.dependency_hash});proof.scoped.mockResolvedValue({enrolled:true,valid:false,code:'LOCATION_IMPACT_TARGET_SUPERSEDED'});
+    expect(await f.reader.reviewable(cableId,jobId,proposalId,dependencies)).toMatchObject({currentness:'changed',reviewable:false,itemApplicability:null});
+  });
   it('preserves strict global-registry v5 staleness and checks enrollment once per job', async () => {
     const f = fixture();
-    expect(await f.reader.reviewable(cableId, jobId, proposalId, { ...f.dependencies, registryRevision: '6' })).toMatchObject({ currentness: 'changed', reviewable: false });
+    const changed=structuredClone(f.dependencies);if(!('registryRevision' in changed))throw Error('Expected the legacy fixture.');changed.registryRevision='6';
+    expect(await f.reader.reviewable(cableId, jobId, proposalId, changed)).toMatchObject({ currentness: 'changed', reviewable: false });
     proof.enrollment.mockResolvedValue({ enrolled: true, valid: false, code: 'AUTOMATIC_GENERATION_SUPERSEDED' });
     const first = await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies);
     expect(first).toMatchObject({ currentness: 'changed', reviewable: false, reasonCodes: ['AUTOMATIC_GENERATION_SUPERSEDED'] });
@@ -124,7 +144,7 @@ describe('receipt-backed current accepted cable display', () => {
     const f = fixture(), currentForOptions = vi.fn(async () => f.current);
     expect(await f.reader.accepted(f.cable, currentForOptions)).toBe(true);
     expect(f.current.cableWriteRevision).toBe(afterRevision);
-    expect(currentForOptions).toHaveBeenCalledWith(f.dependencies.options);
+    expect(currentForOptions).toHaveBeenCalledWith(f.dependencies.options,f.dependencies.schemaVersion);
     expect(f.query.mock.calls[0][0]).toContain('ORDER BY r.applied_at DESC,r.id DESC LIMIT 1');
     expect(proof.enrollment).not.toHaveBeenCalled();
   });

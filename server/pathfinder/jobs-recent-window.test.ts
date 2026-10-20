@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 const seams = vi.hoisted(() => ({ collect: vi.fn(), synthetic: vi.fn(), seal: vi.fn(), scope: vi.fn(), engine: vi.fn() }));
-vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectDependencies: seams.collect, hasSyntheticProof: seams.synthetic }));
+vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectDependencies: seams.collect, collectDependenciesForVersion: seams.collect, hasSyntheticProof: seams.synthetic }));
 vi.mock('./revisionResultRepository.js', () => ({ persistRevisionAdmission: vi.fn(), verifyRevisionResultForProposal: seams.seal }));
 vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: async () => ({ enrolled: false }), pauseRecalculationForJob: vi.fn(), requireEnrollmentAuthority: vi.fn() }));
 vi.mock('./routingScope.js', async original => ({ ...await original<typeof import('./routingScope.js')>(), requireVersionedCalculationScope: seams.scope }));
@@ -66,15 +66,15 @@ describe('bounded recent-proposal state preview', () => {
   it('still reads any exact historical proposal outside the preview window with fresh validation', async () => {
     const db = fixture(), row = db.proposals[7], value = await db.jobs.proposal(projectId, who, row.id);
     expect(value).toMatchObject({ id: row.id, canApply: true, stale: false }); expect(value.route?.points).toEqual([[0, 0, 0], [5, 0, 0]]);
-    expect(seams.collect).toHaveBeenCalledExactlyOnceWith(db.client, projectId, row.cable_id, row.dependencies.options);
+    expect(seams.collect).toHaveBeenCalledExactlyOnceWith(db.client, projectId, row.cable_id, row.dependencies.options,row.dependencies.schemaVersion);
     expect(db.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });
 
   it('preserves the independent locked Review path for a proposal outside the state window', async () => {
     const db = fixture(), row = db.proposals[7], reviewed = await db.jobs.review(projectId, who, row.id, row.proposal_hash);
     expect(reviewed.proposal).toMatchObject({ id: row.id, canApply: true, stale: false });
-    expect(seams.collect).toHaveBeenNthCalledWith(1, db.client, projectId, row.cable_id, row.dependencies.options, true);
-    expect(seams.collect).toHaveBeenNthCalledWith(2, db.client, projectId, row.cable_id, row.dependencies.options);
+    expect(seams.collect).toHaveBeenNthCalledWith(1, db.client, projectId, row.cable_id, row.dependencies.options,row.dependencies.schemaVersion, true);
+    expect(seams.collect).toHaveBeenNthCalledWith(2, db.client, projectId, row.cable_id, row.dependencies.options,row.dependencies.schemaVersion);
     expect(seams.engine).toHaveBeenCalledExactlyOnceWith({ force: true });
     expect(db.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO pf_reviews'))).toBe(true);
   });

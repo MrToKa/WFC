@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
 const mocks=vi.hoisted(()=>({collect:vi.fn(),synthetic:vi.fn(),seal:vi.fn(),scope:vi.fn(),engineIdentity:vi.fn()}));
-vi.mock('./dependencies.js',async original=>({...await original<typeof import('./dependencies.js')>(),collectDependencies:mocks.collect,hasSyntheticProof:mocks.synthetic}));
+vi.mock('./dependencies.js',async original=>({...await original<typeof import('./dependencies.js')>(),collectDependencies:mocks.collect,collectDependenciesForVersion:mocks.collect,hasSyntheticProof:mocks.synthetic}));
 vi.mock('./revisionResultRepository.js',()=>({persistRevisionAdmission:vi.fn(),verifyRevisionResultForProposal:mocks.seal}));
 vi.mock('./recalculationRepository.js',()=>({readRecalculationJobAuthority:async()=>({enrolled:false}),pauseRecalculationForJob:vi.fn(),requireEnrollmentAuthority:vi.fn()}));
 vi.mock('./routingScope.js',async original=>({...await original<typeof import('./routingScope.js')>(),requireVersionedCalculationScope:mocks.scope}));
@@ -78,7 +78,7 @@ describe('retained proposal reads after live cable deletion',()=>{
   it('does not apply the read fallback to the independent locked human Review collector',async()=>{
     const db=database();
     await expect(createPathFinderJobs(db.pool,{} as PathFinderRepository).review(projectId,who,proposalId,'a'.repeat(64))).rejects.toMatchObject({code:'CABLE_NOT_FOUND'});
-    expect(mocks.collect).toHaveBeenCalledWith(db.client,projectId,cableId,db.proposal.dependencies.options,true);
+    expect(mocks.collect).toHaveBeenCalledWith(db.client,projectId,cableId,db.proposal.dependencies.options,db.proposal.dependencies.schemaVersion,true);
     expect(db.query.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO pf_reviews'))).toBe(false);expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
 });

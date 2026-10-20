@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { isCanonicalPoint, type CanonicalPoint, type ViewerSelection } from '../../viewer-runtime/protocol.mjs';
 import { endpointPointSchema, type EndpointCurrentScope, type EndpointObjectRef } from '../../shared/pathfinderEndpointBindings';
 import { cableEndpointCommandSchema } from '../../shared/pathfinderCableEndpoints';
-import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
+import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy';
+import { locationImpactCalculationSchema, type LocationImpactCalculation } from '../../shared/pathfinderLocationImpacts';
 import {
   CableEndpointApiError, fetchCableEndpointContext, fetchCableEndpointSelection, saveCableEndpoint, closePendingCableEndpoint,
   type CableEndpointContext, type CableEndpointEnd, type CableEndpointReceipt,
@@ -15,6 +16,7 @@ type Model = Pick<EndpointCurrentScope, 'modelVersionId' | 'selectionRevision' |
 export type CableEndpointSelectionAccess = {
   projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null;
   isAdmin: boolean; active: boolean; cableId: string | null; end: CableEndpointEnd; model: Model | null; preparationKey: string;
+  calculation?: LocationImpactCalculation | null;
   readSelection: () => Promise<ViewerSelection | null>;
   onSaved?: (receipt: CableEndpointReceipt) => void | Promise<void>; onAuthorityLost?: () => void;
 };
@@ -44,8 +46,10 @@ function selectedObject(value: ViewerSelection | null): DisplaySelection | null 
 /** Reusable editor foundation. Reads and explicit shared binding only; no routing/length writes. */
 export function useCableEndpointSelection(access: CableEndpointSelectionAccess) {
   const modelKey = JSON.stringify(access.model);
+  const parsedCalculation = locationImpactCalculationSchema.nullable().safeParse(access.calculation ?? null);
+  const calculationKey = parsedCalculation.success ? canonicalPurposeJson(parsedCalculation.data) : null;
   const account = JSON.stringify([access.projectId, access.loadedProjectId, access.accountId, access.token, access.isAdmin]);
-  const identity = JSON.stringify([account, access.cableId, access.end, access.model, access.preparationKey]);
+  const identity = JSON.stringify([account, access.cableId, access.end, access.model, access.preparationKey, calculationKey]);
   const allowed = Boolean(access.isAdmin && access.token && policyUuidSchema.safeParse(access.accountId).success
     && policyUuidSchema.safeParse(access.projectId).success && access.projectId === access.loadedProjectId);
   const [state, setState] = useState<State>(() => initial(identity));
@@ -156,10 +160,11 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
   const save = useCallback(async (reason: string): Promise<boolean> => {
     const { context, draft, storageReady } = data.current;
     if (!canAct() || !storageReady || !context?.canBind || !context.logicalName || !context.current || !draft) return false;
+    if (calculationKey === null) { update({ error: 'Use valid explicit calculation preferences and timeout before saving.' }); return false; }
     if (!reason.trim() || reason.length > 2048 || /[\u0000-\u001f\u007f-\u009f]/u.test(reason)) { update({ error: 'Enter a nonempty confirmation reason without control characters.' }); return false; }
     const abort = new AbortController(); request.current = abort; update({ busy: true, error: null });
     try {
-      const command = cableEndpointCommandSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idempotencyKey: crypto.randomUUID(),
+      const command = cableEndpointCommandSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: JSON.parse(calculationKey), idempotencyKey: crypto.randomUUID(),
         expectedContextSha256: context.contextSha256, expectedCableWriteRevision: context.cableWriteRevision, expectedLogicalName: context.logicalName,
         expectedRegistryRevision: context.registryRevision, expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null,
         expectedHeadId: context.head?.id ?? null, expectedCurrent: context.current, reason,
@@ -170,7 +175,7 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
       update({ pending: intent }); return await execute(intent, abort);
     } catch (error) { if (live()) { try { update({ pending: readPendingCableEndpoint(owner()), error: error instanceof CableEndpointStorageError ? error.message : storageNotice }); } catch { update({ storageReady: false, error: storageNotice }); } } return false; }
     finally { if (request.current === abort) { request.current = null; update({ busy: false }); } }
-  }, [canAct, update, owner, live, execute]);
+  }, [canAct, update, owner, live, execute, calculationKey]);
   const reconcile = useCallback(async (mode: 'save' | 'close'): Promise<boolean> => {
     if (!canAct() || !data.current.storageReady) return false;
     let pending: PendingCableEndpoint | null; try { pending = readPendingCableEndpoint(owner()); } catch { update({ error: storageNotice }); return false; }
@@ -183,7 +188,7 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
     chooseDisplayedPoint: () => { const display = data.current.displaySelection; return display ? setFixedPoint(display.point, display) : false; },
     refresh: loadContext, save, retry: () => reconcile('save'), closePending: () => reconcile('close'),
     canSelect: allowed && access.active && !current.busy && !current.pending && Boolean(current.context?.canBind),
-    canSave: allowed && access.active && !current.busy && current.storageReady && !current.pending && Boolean(current.context?.canBind && current.draft),
+    canSave: allowed && calculationKey !== null && access.active && !current.busy && current.storageReady && !current.pending && Boolean(current.context?.canBind && current.draft),
     canRetry: allowed && access.active && !current.busy && current.storageReady && Boolean(current.pending) && denied.current !== account,
   };
 }

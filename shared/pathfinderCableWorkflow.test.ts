@@ -25,6 +25,23 @@ const row = (patch: Partial<CableWorkflowRow> = {}): CableWorkflowRow => ({
 const ready = (): CableWorkflowCalculation => calculation({ jobId: id(20), jobStatus: 'complete', itemState: 'complete', outcome: 'calculated',
   currentness: 'current', proposalId: id(21), proposalHash: 'a'.repeat(64), reviewable: true });
 
+describe('explicit sealed v7 item display evidence',()=>{
+  const proof=()=>({schemaVersion:'wfc.pf.sealed-cable-applicability.v1' as const,dependencyVersion:'pathfinder.dependencies.v7' as const,
+    projectId:id(1),jobId:id(20),cableId:id(10),proposalId:id(21),dependencyHash:'b'.repeat(64),scope:'sealed-cable-item' as const});
+  it.each(['queued','running'] as const)('allows a current completed cable under a %s parent only with its own exact proof',jobStatus=>{
+    const value=row({calculation:{...ready(),jobStatus,itemApplicability:proof()}});
+    expect(cableWorkflowRowSchema.safeParse(value).success).toBe(true);expect(classifyCableWorkflow(value).status).toBe('ready-for-review');
+    expect(cableWorkflowRowSchema.safeParse({...value,calculation:{...value.calculation,itemApplicability:null}}).success).toBe(false);
+  });
+  it.each(['projectId','jobId','cableId','proposalId'] as const)('rejects exchanged %s proof ownership',field=>{
+    const value=row({calculation:{...ready(),jobStatus:'running',itemApplicability:{...proof(),[field]:id(999)}}});
+    expect(cableWorkflowRowSchema.safeParse(value).success).toBe(false);
+  });
+  it.each(['cancelled','failed'] as const)('does not make a %s parent reviewable',jobStatus=>{
+    expect(cableWorkflowRowSchema.safeParse(row({calculation:{...ready(),jobStatus,itemApplicability:proof()}})).success).toBe(false);
+  });
+});
+
 describe('initial-fill display decision, never write authority', () => {
   it.each(['LV', 'Control', 'Instrumentation'])('offers only the two truly blank fields as a candidate for %s', mto => {
     for (const routing of [null, '', ' \t\r\n ', '\u00a0']) {

@@ -3,11 +3,11 @@ import type { PoolClient } from 'pg';
 import { PathFinderError } from './errors.js';
 import { normalizeLocation } from './matching.js';
 import { activeModel, latestArtifact } from './repository.js';
-import type { DependencySnapshot, EngineOptions, CurrentDependencySnapshot } from './jobContracts.js';
+import type { DependencySnapshot, EngineOptions, CurrentDependencySnapshot, AutomaticDependencySnapshot, ScopedDependencySnapshot } from './jobContracts.js';
 import { projectRoutingSettings } from './settings.js';
 import { requirePreparedRoutingScope } from './routingScope.js';
 import { readCurrentEndpointBindingContext, readEndpointBindingScope } from './endpointBindingRepository.js';
-import { endpointCalculationPoint, isAutomaticEndpointCalculationPoint, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { endpointCalculationPoint, isAutomaticEndpointCalculationPoint, scopedEndpointResolutionSchema, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
 import { readComparisonDependency } from './revisionComparisonRepository.js';
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
@@ -27,8 +27,9 @@ export function geometryHash(dependencies: DependencySnapshot): string {
   const {schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,routing} = dependencies;
   return hash({schemaVersion,projectId,cableId,cableInputs,model,artifact,options,from,to,engineVersion,
     ...(dependencies.schemaVersion !== 'pathfinder.dependencies.v2' ? {preparation: dependencies.preparation} : {}),
-    ...(['pathfinder.dependencies.v4','pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(dependencies.schemaVersion) ? {comparison: (dependencies as CurrentDependencySnapshot).comparison} : {}),
-    ...(['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(dependencies.schemaVersion) ? {engineIdentity: (dependencies as CurrentDependencySnapshot).engineIdentity} : {}),
+    ...(['pathfinder.dependencies.v4','pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(dependencies.schemaVersion) ? {comparison: (dependencies as CurrentDependencySnapshot).comparison} : {}),
+    ...(['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(dependencies.schemaVersion) ? {engineIdentity: (dependencies as CurrentDependencySnapshot).engineIdentity} : {}),
+    ...(dependencies.schemaVersion === 'pathfinder.dependencies.v7' ? {endpointResolution: dependencies.endpointResolution} : {}),
     routing:routing && {catalogRevision:routing.catalogRevision,routingContentSha256:routing.routingContentSha256,
       routingPolicyRevision:routing.routingPolicyRevision,routingPolicySha256:routing.routingPolicySha256}});
 }
@@ -95,8 +96,28 @@ export function freezeCableDependencies(common:CommonCalculationInputs,cable:Row
   return {status:'ready',message:'Ready for calculation.',cable,dependencies:{...base,schemaVersion:'pathfinder.dependencies.v5',from,to}};
 }
 
-export async function collectDependencies(client: PoolClient, projectId: string, cableId: string, options: EngineOptions, lockCable = false,
-  identity?:CurrentDependencySnapshot['engineIdentity']): Promise<CollectedDependencies> {
+/** A new canonical body, never a field-ignoring comparison of retained v5/v6 hashes. */
+export function freezeScopedCableDependencies(common:CommonCalculationInputs,cable:Row,
+  from:CurrentEndpointCalculationPoint|null,to:CurrentEndpointCalculationPoint|null):CollectedDependencies {
+  const legacy = freezeCableDependencies(common,cable,from,to);
+  if (!legacy.dependencies) return legacy;
+  const {registryRevision:_registry,schemaVersion:_version,...body} = legacy.dependencies as CurrentDependencySnapshot | AutomaticDependencySnapshot;
+  const endpointResolution = scopedEndpointResolutionSchema.safeParse({schemaVersion:'pathfinder.endpoint-resolution.v1',matchingPolicy:'nfc-trim-uppercase-v1',
+    from:{logicalKey:typeof cable.from_location === 'string'?normalizeLocation(cable.from_location):'',locationId:from!.locationId},
+    to:{logicalKey:typeof cable.to_location === 'string'?normalizeLocation(cable.to_location):'',locationId:to!.locationId}});
+  if (!endpointResolution.success) return {dependencies:null,status:'locations_required',message:'Resolve exact logical From and To names before calculating.',cable};
+  const dependencies:ScopedDependencySnapshot = {...body,schemaVersion:'pathfinder.dependencies.v7',from:from!,to:to!,endpointResolution:endpointResolution.data};
+  return {...legacy,dependencies};
+}
+
+/** Legacy versions retain their exact current v5/v6 projection, including registry. */
+export function freezeCableDependenciesForVersion(common:CommonCalculationInputs,cable:Row,
+  from:CurrentEndpointCalculationPoint|null,to:CurrentEndpointCalculationPoint|null,retainedVersion:DependencySnapshot['schemaVersion']):CollectedDependencies {
+  return retainedVersion === 'pathfinder.dependencies.v7' ? freezeScopedCableDependencies(common,cable,from,to) : freezeCableDependencies(common,cable,from,to);
+}
+
+async function collectWithProjection(client: PoolClient, projectId: string, cableId: string, options: EngineOptions, lockCable: boolean,
+  identity:CurrentDependencySnapshot['engineIdentity']|undefined,retainedVersion:DependencySnapshot['schemaVersion']): Promise<CollectedDependencies> {
   const cable = (await client.query<Row>(`SELECT id,from_location,to_location,mto,cable_type_id,cable_write_revision::text,routing,design_length,install_length
     FROM cables WHERE project_id=$1 AND id=$2 ${lockCable ? 'FOR UPDATE' : ''}`,[projectId,cableId])).rows[0];
   if(!cable)throw new PathFinderError('CABLE_NOT_FOUND',404);
@@ -122,12 +143,24 @@ export async function collectDependencies(client: PoolClient, projectId: string,
     return automatic.get(value.id)!;
   };
   const from = await endpoint(cable.from_location),to = await endpoint(cable.to_location);
-  return freezeCableDependencies(common.inputs,cable,from,to);
+  return freezeCableDependenciesForVersion(common.inputs,cable,from,to,retainedVersion);
+}
+
+/** Existing admission/currentness callers remain byte-for-byte legacy by default. */
+export async function collectDependencies(client: PoolClient, projectId: string, cableId: string, options: EngineOptions, lockCable = false,
+  identity?:CurrentDependencySnapshot['engineIdentity']): Promise<CollectedDependencies> {
+  return collectWithProjection(client,projectId,cableId,options,lockCable,identity,'pathfinder.dependencies.v5');
+}
+
+/** Choose by the retained immutable version, never by current UI or global settings. */
+export async function collectDependenciesForVersion(client: PoolClient, projectId: string, cableId: string, options: EngineOptions,
+  retainedVersion:DependencySnapshot['schemaVersion'],lockCable = false,identity?:CurrentDependencySnapshot['engineIdentity']):Promise<CollectedDependencies> {
+  return collectWithProjection(client,projectId,cableId,options,lockCable,identity,retainedVersion);
 }
 
 /** Route reuse is narrower than matching geometry: only changed S/E/P with every other frozen authority equal. */
 export function verifiedDesignOnlyChange(current:DependencySnapshot,previous:DependencySnapshot):boolean {
-  if(!['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(current.schemaVersion)||current.schemaVersion!==previous.schemaVersion)return false;
+  if(!['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(current.schemaVersion)||current.schemaVersion!==previous.schemaVersion)return false;
   const {settings:a,...left}=current,{settings:b,...right}=previous;
   return hash(left)===hash(right)&&a.connectionGap===b.connectionGap
     && [a.secondaryTrayLength,a.endConnectionLength,a.additionalBendingPercent].some((value,n)=>value!==[b.secondaryTrayLength,b.endConnectionLength,b.additionalBendingPercent][n]);

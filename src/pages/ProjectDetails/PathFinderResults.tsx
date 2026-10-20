@@ -10,9 +10,16 @@ import { usePathfinderPendingApply } from './hooks/usePathfinderPendingApply';
 import { usePathfinderBatchReview } from './hooks/usePathfinderBatchReview';
 import { PathFinderBatchReview } from './PathFinderBatchReview';
 import { computedPathObjectIds, proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
+import { sealedCableItemApplicabilitySchema } from '../../../shared/pathfinderItemApplicability';
 
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
+function hasExactItemApplicability(proposal: PathFinderProposal | null, projectId: string | null | undefined) {
+  const proof = sealedCableItemApplicabilitySchema.safeParse(proposal?.itemApplicability);
+  return Boolean(proposal && projectId && proof.success && proposal.provenance?.dependencyVersion === 'pathfinder.dependencies.v7'
+    && proposal.projectId === projectId && proof.data.projectId === projectId && proof.data.jobId === proposal.jobId
+    && proof.data.cableId === proposal.cableId && proof.data.proposalId === proposal.id && proof.data.dependencyHash === proposal.provenance.dependencyHash);
+}
 export function PathFinderResults({ pf, selectedCableId, accountId, active = true, displayOwned = true, claimViewer, options, onBatchBusyChange }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
@@ -39,7 +46,8 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
   const receiveScope = useCallback((value: PathFinderCalculationScope) => {
     const previous = scope.current;
     scope.current = value;
-    if (previous.admissionId === value.admissionId && previous.jobId === value.jobId && previous.ready === value.ready && previous.message === value.message) return;
+    if (previous.admissionId === value.admissionId && previous.jobId === value.jobId && previous.ready === value.ready && previous.message === value.message
+      && previous.wholeJobReady === value.wholeJobReady && previous.jobStatus === value.jobStatus && previous.cancelRequested === value.cancelRequested) return;
     setScopeReadiness(value);
     if (previous.admissionId === value.admissionId && previous.jobId === value.jobId) return;
     endpointRead.current?.abort(); operation.current++;
@@ -108,12 +116,20 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
   };
   const summary = data?.proposals.find(value => value.id === proposal?.id), stale = proposal?.stale || summary?.stale || false;
   const preferencesMatch = options === undefined || Boolean(options && proposal?.routingPreferences && options.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && options.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach);
-  const effectiveCanApply = scopeReadiness.ready && proposal?.jobId === scopeReadiness.jobId && preferencesMatch && (summary && summary.proposalHash === proposal?.proposalHash ? summary.canApply : proposal?.canApply);
   const proposalJob = data?.jobs.find(value => value.id === proposal?.jobId);
-  const proposalJobIssue = !proposal || effectiveCanApply ? null : proposalJob?.cancelRequested || proposalJob?.status === 'cancelled'
+  const checkedJobStatus = proposalJob?.status ?? scopeReadiness.jobStatus;
+  const calculationCancelled = Boolean(proposalJob?.cancelRequested || scopeReadiness.cancelRequested || checkedJobStatus === 'cancelled' || scopeReadiness.jobStatus === 'cancelled');
+  const calculationFailed = proposalJob?.status === 'failed' || scopeReadiness.jobStatus === 'failed';
+  const wholeJobReady = scopeReadiness.wholeJobReady ?? scopeReadiness.ready;
+  const sealedItemReady = ['queued', 'running'].includes(checkedJobStatus ?? '') && hasExactItemApplicability(proposal, pf.preparationAccess?.projectId);
+  const effectiveCanApply = Boolean(proposal && proposal.status === 'calculated' && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && !calculationCancelled
+    && !calculationFailed && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady) && preferencesMatch && !stale && !proposal.compatibilityIssue
+    && proposal.canApply && !(summary && summary.proposalHash === proposal.proposalHash && !summary.canApply));
+  const proposalJobIssue = !proposal || effectiveCanApply ? null : calculationCancelled
     ? 'This calculation was cancelled. Its saved path can be inspected, but cannot be reviewed or applied. Choose a completed calculation in Cable revision results, or calculate non-MV cables again if needed.'
-    : proposalJob && proposalJob.status !== 'complete'
-      ? `This calculation is ${proposalJob.status}. Review and Apply require a completed calculation. Calculate again after a failed job, or wait for the current job to finish.`
+    : calculationFailed ? 'This calculation failed. Its saved path can be inspected, but cannot be reviewed or applied. Calculate again before reviewing the result.'
+    : checkedJobStatus && checkedJobStatus !== 'complete'
+      ? `This calculation is ${checkedJobStatus}. Review and Apply require a completed calculation or this cable's individually sealed, current result. Calculate again after a failed job, or wait for the current job to finish.`
       : !proposalJob && !scopeReadiness.ready ? 'This calculation is outside the recent job list. Its current state could not be confirmed here. Check the calculation state in Cable revision results below.' : null;
   const nonMvCableIds = (data?.cables ?? []).filter(value => ['LV', 'Control', 'Instrumentation'].includes(value.mto ?? '')).map(value => value.id);
   const selectedCable = data?.cables.find(value => value.id === selectedCableId);
@@ -182,7 +198,8 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
       {proposal.provenance ? <details style={{ minWidth: 0, overflowWrap: 'anywhere' }}><summary>Calculation provenance</summary>
         <Caption1>Dependency version: {proposal.provenance.dependencyVersion}; digest: {proposal.provenance.dependencyHash}.</Caption1>
         <Caption1>Recorded engine digest: {proposal.provenance.engineIdentity?.contentSha256 ?? 'Unavailable for this historical result'}.</Caption1>
-        {proposal.provenance.automatic ? <Caption1>Automatic generation: {proposal.provenance.automatic.generation}; authority epoch: {proposal.provenance.automatic.authorityEpoch}; {proposal.provenance.automatic.current ? 'current' : 'no longer current'}{proposal.provenance.automatic.reasonCode ? ` — ${proposal.provenance.automatic.reasonCode.toLowerCase().replaceAll('_', ' ')}` : ''}.</Caption1> : <Caption1>No durable automatic enrollment recorded.</Caption1>}
+        {proposal.provenance.dependencyVersion === 'pathfinder.dependencies.v7' ? <Caption1>Shared location calculation. {hasExactItemApplicability(proposal, pf.preparationAccess?.projectId) ? 'An individually sealed cable result is recorded.' : 'Individual applicability is not confirmed.'} Human review and current server checks are still required.</Caption1>
+          : proposal.provenance.automatic ? <Caption1>Automatic generation: {proposal.provenance.automatic.generation}; authority epoch: {proposal.provenance.automatic.authorityEpoch}; {proposal.provenance.automatic.current ? 'current' : 'no longer current'}{proposal.provenance.automatic.reasonCode ? ` — ${proposal.provenance.automatic.reasonCode.toLowerCase().replaceAll('_', ' ')}` : ''}.</Caption1> : <Caption1>No durable automatic enrollment recorded.</Caption1>}
         <Caption1>These recorded facts do not replace human review or grant Apply authority.</Caption1>
       </details> : <Caption1>Calculation provenance is unavailable for this historical result.</Caption1>}
       {proposal.route ? <><Body1>Geometric length: {proposal.route.lengthMeters} m</Body1><Caption1>From approach: {proposal.route.fromDistanceMeters} m{proposal.route.fromRequiresSecondary ? ' (SECONDARY)' : ''}; To approach: {proposal.route.toDistanceMeters} m{proposal.route.toRequiresSecondary ? ' (SECONDARY)' : ''}</Caption1><Caption1>Connection gaps: {proposal.route.connectionGapCount}; total gap length: {proposal.route.connectionGapLengthMeters} m</Caption1><details><summary>Exact route text</summary><p style={{ overflowWrap: 'anywhere' }}>{proposal.route.routeText}</p></details></> : null}

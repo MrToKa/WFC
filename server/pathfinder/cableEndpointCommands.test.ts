@@ -5,8 +5,9 @@ import { endpointBindingFixture, endpointFixtureId as id } from './endpointBindi
 import { createCableEndpointCommands } from './cableEndpointCommands.js';
 import { endpointBindingHash, confirmEndpointBindingChangeInTransaction, endpointBindingTransaction } from './endpointBindingRepository.js';
 import { cableEndpointContextHashInput, type CableEndpointContext, type CableEndpointCommand } from '../../shared/pathfinderCableEndpoints.js';
-const mocks = vi.hoisted(() => ({ selection: vi.fn() }));
+const mocks = vi.hoisted(() => ({ selection: vi.fn(), append: vi.fn() }));
 vi.mock('./cableEndpointSelection.js', () => ({ readCableEndpointSelection: mocks.selection }));
+vi.mock('./locationImpactRepository.js', () => ({ appendLocationImpactInTransaction: mocks.append }));
 beforeEach(() => vi.resetAllMocks());
 /** Extends the existing mock SQL protocol; all binding mutations still exercise the real transaction/helper. */
 function fixture() {
@@ -181,5 +182,27 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
     await expect(f.save(command, f.cableId, 'from', controller.signal)).rejects.toMatchObject({ code: 'ENDPOINT_COMMIT_OUTCOME_UNKNOWN' });
     expect(f.state.commands.size).toBe(1); expect(f.state.bindings.size).toBe(1); f.who.loginExpiresAt = expiry;
     const recovered = await f.save(command); expect(recovered.duplicate).toBe(true); expect(f.state.bindings.size).toBe(1); expect(f.state.registry).toBe('5');
+  });
+  it('legacy v1 preserves its exact command body without trigger suppression or an implicit calculation impact', async () => {
+    const f = fixture(), command = f.command(await f.read()), receipt = await f.save(command);
+    expect(receipt.locationImpact).toBeUndefined(); expect(mocks.append).not.toHaveBeenCalled(); expect(f.queries.join('\n')).not.toContain('wfc.pathfinder_location_impact');
+    expect(f.state.commands.values().next().value?.request).toMatchObject({ command });
+  });
+  it.each([null, { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 }])('v2 saves one durable impact with exact explicit configuration %j; replay and closure never append another', async calculation => {
+    const f = fixture(), command = { ...f.command(await f.read()), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation };
+    const reference = { id: id(900), status: calculation ? 'pending' : 'blocked', eligibleCables: 2, excludedMvCables: 0, blockedCategoryCables: 0 }; mocks.append.mockResolvedValue(reference);
+    const receipt = await f.save(command as CableEndpointCommand); expect(receipt.locationImpact).toEqual(reference);
+    expect(mocks.append).toHaveBeenCalledExactlyOnceWith(expect.any(Object), expect.objectContaining({ calculation, affectedCableIds: [id(10), id(11)], commandSha256: endpointBindingHash(command) }), expect.any(Function));
+    expect(f.queries.indexOf("SET LOCAL wfc.pathfinder_location_impact='1'")).toBeLessThan(f.queries.findIndex(q => q.startsWith('INSERT INTO pf_locations')));
+    expect((await f.save(command as CableEndpointCommand)).duplicate).toBe(true); await f.close(command as CableEndpointCommand); expect(mocks.append).toHaveBeenCalledTimes(1);
+  });
+  it('rolls binding, aliases and command back if the same-transaction impact append fails', async () => {
+    const f = fixture(), command = { ...f.command(await f.read()), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null };
+    mocks.append.mockRejectedValue(new Error('synthetic outbox failure')); await expect(f.save(command as CableEndpointCommand)).rejects.toThrow('synthetic outbox failure');
+    expect(f.state.bindings.size).toBe(0); expect(f.state.locations.size).toBe(0); expect(f.state.commands.size).toBe(0); expect(f.state.registry).toBe('4');
+  });
+  it('closing an unsaved v2 command appends no impact and a late save stays closed', async () => {
+    const f = fixture(), command = { ...f.command(await f.read()), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null } as CableEndpointCommand;
+    expect((await f.close(command)).status).toBe('closed'); await expect(f.save(command)).rejects.toMatchObject({ code: 'CABLE_ENDPOINT_COMMAND_CLOSED' }); expect(mocks.append).not.toHaveBeenCalled();
   });
 });

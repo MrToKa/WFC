@@ -3,6 +3,7 @@ import { calculationAvailabilitySchema, type CalculationAvailability } from './p
 import { policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
 import { revisionCableSnapshotSchema } from './pathfinderRevisionResults.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
+import { sealedCableItemApplicabilitySchema } from './pathfinderItemApplicability.js';
 
 export const CABLE_WORKFLOW_LIMITS = Object.freeze({ pageSize: 100, maxScan: 200, cursorCharacters: 512, reasonCodes: 64 });
 export const cableWorkflowStatusSchema = z.enum(['needs-routing', 'calculating', 'ready-for-review', 'up-to-date', 'excluded', 'blocked']);
@@ -73,6 +74,7 @@ export const cableWorkflowCalculationSchema = z.object({
   proposalHash: policyHashSchema.nullable(),
   reviewable: z.boolean(),
   acceptedMatchesCurrent: z.boolean(),
+  itemApplicability:sealedCableItemApplicabilitySchema.nullable().optional(),
 }).strict().superRefine((value, context) => {
   if ((value.jobId === null) !== (value.jobStatus === null)
     || (value.proposalId === null) !== (value.proposalHash === null)
@@ -85,9 +87,11 @@ export const cableWorkflowCalculationSchema = z.object({
     context.addIssue({ code: 'custom', message: 'An active cable item cannot already carry a completed or blocked outcome.' });
   if (value.outcome === 'calculated' && value.itemState !== 'complete')
     context.addIssue({ code: 'custom', message: 'A calculated outcome belongs to a completed cable item.' });
-  if (value.reviewable && (value.jobStatus !== 'complete' || value.itemState !== 'complete' || value.outcome !== 'calculated'
+  if (value.reviewable && ((value.jobStatus !== 'complete' && !(value.itemApplicability && ['queued','running'].includes(value.jobStatus??''))) || value.itemState !== 'complete' || value.outcome !== 'calculated'
     || value.currentness !== 'current' || value.proposalId === null))
     context.addIssue({ code: 'custom', message: 'Reviewable display evidence needs a completed current proposal.' });
+  if(value.itemApplicability && (value.itemApplicability.jobId!==value.jobId||value.itemApplicability.proposalId!==value.proposalId))
+    context.addIssue({code:'custom',message:'Sealed item evidence belongs to the exact job and proposal.'});
   if (value.acceptedMatchesCurrent && value.currentness !== 'current')
     context.addIssue({ code: 'custom', message: 'An up-to-date display requires current accepted-result evidence.' });
 });
@@ -99,6 +103,8 @@ export const cableWorkflowRowSchema = z.object({
   to: calculationAvailabilitySchema,
   calculation: cableWorkflowCalculationSchema,
 }).strict().superRefine((value, context) => {
+  if(value.calculation.itemApplicability && (value.calculation.itemApplicability.projectId!==value.projectId||value.calculation.itemApplicability.cableId!==value.cable.id))
+    context.addIssue({code:'custom',message:'Sealed item evidence belongs to the exact project and cable.'});
   if ((value.calculation.reviewable || value.calculation.acceptedMatchesCurrent) && (!value.from.pointAvailable || !value.to.pointAvailable))
     context.addIssue({ code: 'custom', message: 'Current results require evaluated available endpoint evidence.' });
   if (value.calculation.acceptedMatchesCurrent && (!value.cable.routing?.trim() || value.cable.designLength === null))

@@ -5,7 +5,7 @@ import { endpointBindingSchema, type EndpointBinding } from '../../shared/pathfi
 import { ENGINE_IDENTITY_POLICY_VERSIONS, ENGINE_IDENTITY_VERSION, engineIdentityCanonicalBody, type EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { collectDependencyBatchInTransaction } from './dependencyBatch.js';
-import { canonicalJson, collectDependencies, hash } from './dependencies.js';
+import { canonicalJson, collectDependencies, collectDependenciesForVersion, hash } from './dependencies.js';
 import { defaultOptions } from './jobContracts.js';
 
 const mocked = vi.hoisted(() => ({ active: vi.fn(), artifact: vi.fn(), context: vi.fn(), routing: vi.fn(), comparison: vi.fn(), identity: vi.fn(), needed: vi.fn(), automatic: vi.fn() }));
@@ -81,6 +81,27 @@ beforeEach(async () => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('bulk dependency collection, mocked SQL protocol with real freeze/head/alias logic', () => {
+  it('admits explicit scoped batches with exact single-cable v7 parity while retaining registry as separate audit', async () => {
+    const db=fixture(20),input={projectId,options:defaultOptions,dependencyVersion:'pathfinder.dependencies.v7' as const};
+    const first=await collectDependencyBatchInTransaction(db.client,input),single=await collectDependenciesForVersion(db.client,projectId,db.state.cables[0].id,defaultOptions,'pathfinder.dependencies.v7',true);
+    expect(first.items[0].dependencies).toEqual(single.dependencies);expect(first.items).toHaveLength(20);
+    expect(first.items.every(item=>item.dependencies?.schemaVersion==='pathfinder.dependencies.v7'&&!Object.hasOwn(item.dependencies,'registryRevision'))).toBe(true);
+    expect(first.registryRevision).toBe('9');db.state.registry='10';
+    const after=await collectDependencyBatchInTransaction(db.client,input);
+    expect(after.registryRevision).toBe('10');expect(after.items.map(item=>hash(item.dependencies))).toEqual(first.items.map(item=>hash(item.dependencies)));
+    expect(after.items[0].dependencies?.cableInputs.mto).toBe('Instrumentation');
+  });
+  it('changes the v7 body for a relevant shared head while preserving exact aliases across both ends and20cables', async()=>{
+    const db=fixture(20);db.state.aliasRows[1].location_id=locationA;
+    const input={projectId,options:defaultOptions,dependencyVersion:'pathfinder.dependencies.v7' as const},first=await collectDependencyBatchInTransaction(db.client,input);
+    const original=db.state.heads[0].record,{contentSha256:_hash,...body}={...original,id:id(900),bindingRevision:'2',pointProjectMetres:[9,8,7] as [number,number,number]},next={...body,contentSha256:hash(body)};
+    db.state.heads[0]={...db.state.heads[0],binding_id:next.id,binding_revision:next.bindingRevision,record_sha256:next.contentSha256,record:next};db.state.registry='10';
+    const after=await collectDependencyBatchInTransaction(db.client,input);
+    expect(after.items.every((item,at)=>hash(item.dependencies)!==hash(first.items[at].dependencies))).toBe(true);
+    expect(after.items[0].dependencies).toHaveProperty('endpointResolution',{schemaVersion:'pathfinder.endpoint-resolution.v1',matchingPolicy:'nfc-trim-uppercase-v1',
+      from:{logicalKey:'=A-01',locationId:locationA},to:{logicalKey:'=B.02',locationId:locationA}});
+    expect(after.items[0].dependencies?.from).toEqual(after.items[0].dependencies?.to);
+  });
   it('matches single-cable v5 collection exactly while retaining Details gap and Instrumentation input', async () => {
     const db = fixture(), batch = await collectDependencyBatchInTransaction(db.client, { projectId, options: defaultOptions });
     const single = await collectDependencies(db.client, projectId, db.state.cables[0].id, defaultOptions, true);

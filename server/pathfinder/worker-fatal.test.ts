@@ -9,7 +9,7 @@ import {syntheticEngineIdentity} from './calculationFixtures.js';
 
 const seams=vi.hoisted(()=>({claim:vi.fn(),finish:vi.fn(),collect:vi.fn(),authority:vi.fn(),readAuthority:vi.fn(),identity:vi.fn()}));
 vi.mock('./workerScheduling.js',()=>({claimCalculationSlice:seams.claim,finishCalculationSlice:seams.finish}));
-vi.mock('./dependencies.js',()=>({collectDependencies:seams.collect,hash:()=> 'frozen',geometryHash:()=> 'geometry',verifiedDesignOnlyChange:()=>false}));
+vi.mock('./dependencies.js',()=>({collectDependencies:seams.collect,collectDependenciesForVersion:seams.collect,hash:()=> 'frozen',geometryHash:()=> 'geometry',verifiedDesignOnlyChange:()=>false}));
 vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:seams.identity}));
 vi.mock('./recalculationRepository.js',()=>({requireEnrollmentAuthority:seams.authority,readRecalculationJobAuthority:seams.readAuthority}));
 vi.mock('./routingScope.js',()=>({requireVersionedCalculationScope:()=>undefined}));

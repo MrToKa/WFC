@@ -9,7 +9,7 @@ import { cableWorkflowQuerySchema, cableWorkflowDetailQuerySchema, cableWorkflow
 import { calculationAvailabilitySchema, notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../shared/pathfinderCalculationAvailability.js';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { defaultOptions, optionsSchema, type JobPrincipal, type DependencySnapshot } from './jobContracts.js';
-import { collectCommonCalculationInputs, freezeCableDependencies, hash, type CommonCalculationCollection } from './dependencies.js';
+import { collectCommonCalculationInputs, freezeCableDependenciesForVersion, hash, type CommonCalculationCollection } from './dependencies.js';
 import { readCurrentEndpointBindingContext, readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import type { EndpointBindingContext } from '../../shared/pathfinderEndpointBindings.js';
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
@@ -143,11 +143,11 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
   const contextHash = hash({ database: readContext.context, admissionCount: readContext.admission_count, common: common.inputs ?? { status: common.status } });
   return { contextHash, async row(cable: Data): Promise<CableWorkflowRow> {
     check(); const from = endpoint(cable.from_location), to = endpoint(cable.to_location), meta = latest.get(cable.id);
-    const fresh = async (raw: unknown): Promise<DependencySnapshot | null> => {
+    const fresh = async (raw: unknown,version:DependencySnapshot['schemaVersion']): Promise<DependencySnapshot | null> => {
       const options = optionsSchema.safeParse(raw); if (!options.success) return null;
       if (options.data.secondaryDistanceMeters !== preferences.secondaryDistanceMeters || options.data.preferVerticalApproach !== preferences.preferVerticalApproach) return null;
       const coherent = await getCommon(options.data); check();
-      return coherent?.inputs ? freezeCableDependencies(coherent.inputs, cable, from.point, to.point).dependencies : null;
+      return coherent?.inputs ? freezeCableDependenciesForVersion(coherent.inputs, cable, from.point, to.point,version).dependencies : null;
     };
     const rawState = meta?.item_state, itemState = ['waiting', 'running', 'complete', 'blocked'].includes(rawState) ? rawState as CableWorkflowCalculation['itemState'] : null;
     const jobStatus = ['queued', 'running', 'complete', 'cancelled', 'failed'].includes(meta?.job_status) ? meta!.job_status as CableWorkflowCalculation['jobStatus'] : null;
@@ -161,11 +161,13 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
     if (meta?.cancel_requested) reasons.push('CALCULATION_CANCEL_REQUESTED');
     if (jobStatus === 'failed') reasons.push('CALCULATION_FAILED');
     let currentness: CableWorkflowCalculation['currentness'] = meta ? 'unavailable' : 'not-evaluated', reviewable = false;
+    let itemApplicability:CableWorkflowCalculation['itemApplicability']=null;
     if (meta?.proposal_id && status === 'calculated') {
       // Read exact retained options only inside bounded proof; the fresh collector is cached per option set.
       const verified = await proof.verified(cable.id, meta.proposal_id); check();
-      const result = await proof.reviewable(cable.id, meta.job_id, meta.proposal_id, verified ? await fresh(verified.dependencies.options) : null);
+      const result = await proof.reviewable(cable.id, meta.job_id, meta.proposal_id, verified ? await fresh(verified.dependencies.options,verified.dependencies.schemaVersion) : null);
       currentness = result.currentness; reviewable = result.reviewable; reasons.push(...result.reasonCodes);
+      itemApplicability='itemApplicability' in result?result.itemApplicability:null;
     }
     const cableSnapshot = snapshot(cable), accepted = acceptedIds.has(cable.id) && await proof.accepted(cableSnapshot, fresh); check();
     if (accepted) currentness = 'current';
@@ -173,7 +175,7 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
       calculation: { jobId: jobStatus && meta ? meta.job_id : null, jobStatus, itemState: jobStatus ? itemState : null, outcome: status,
         // Historical item/job tables retain status and free-form text, not a structured error code. Never parse private messages into codes.
         reasonCodes: [...new Set(reasons)].slice(0, CABLE_WORKFLOW_LIMITS.reasonCodes), errorCode: null, currentness,
-        proposalId: meta?.proposal_id ?? null, proposalHash: meta?.proposal_hash ?? null, reviewable, acceptedMatchesCurrent: accepted } });
+        proposalId: meta?.proposal_id ?? null, proposalHash: meta?.proposal_hash ?? null, reviewable, acceptedMatchesCurrent: accepted,itemApplicability } });
   } };
 }
 

@@ -2,7 +2,7 @@ import type { PoolClient } from 'pg';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { optionsSchema, type EngineOptions, type CurrentDependencySnapshot } from './jobContracts.js';
-import { collectCommonCalculationInputs, freezeCableDependencies, canonicalJson, type CollectedDependencies } from './dependencies.js';
+import { collectCommonCalculationInputs, freezeCableDependenciesForVersion, canonicalJson, type CollectedDependencies } from './dependencies.js';
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import { readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import { endpointCalculationPoint, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
@@ -17,6 +17,7 @@ const refused = (code:string,status=413):never => {throw new PathFinderError(cod
 export async function collectDependencyBatchInTransaction(client:PoolClient,input:{
   projectId:string;options:EngineOptions;cableIds?:string[];signal?:AbortSignal;
   deadline?:number;engineIdentity?:CurrentDependencySnapshot['engineIdentity'];
+  dependencyVersion?:'pathfinder.dependencies.v7';
 }):Promise<DependencyBatch>{
   const projectId=policyUuidSchema.parse(input.projectId),options=optionsSchema.parse(input.options);
   const deadline=Math.min(input.deadline??Infinity,Date.now()+RECALCULATION_LIMITS.collectionMilliseconds);
@@ -73,6 +74,6 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
     if(!name)return null;const ids=aliases.get(normalizeLocation(name));if(ids?.length!==1)return null;
     const head=heads.get(ids[0]);return head ? head.ready?endpointCalculationPoint(head.binding):null : automatic.get(ids[0])?.point ?? null;
   };
-  for(const cable of cables){check();append(freezeCableDependencies(common.inputs,cable,endpoint(cable.from_location),endpoint(cable.to_location)));}
+  for(const cable of cables){check();append(freezeCableDependenciesForVersion(common.inputs,cable,endpoint(cable.from_location),endpoint(cable.to_location),input.dependencyVersion??'pathfinder.dependencies.v5'));}
   check();return{items,registryRevision:registry,options:common.inputs.options,bytes};
 }

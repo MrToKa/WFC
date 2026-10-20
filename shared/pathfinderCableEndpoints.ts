@@ -4,6 +4,7 @@ import { endpointBindingSchema, endpointBindingReceiptSchema, endpointCurrentSco
   endpointLocationNameSchema, endpointObjectRefSchema, endpointPointSchema } from './pathfinderEndpointBindings.js';
 import { geometryObjectSummarySchema } from './pathfinderGeometryTrace.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
+import { locationImpactCalculationSchema, locationImpactReferenceSchema } from './pathfinderLocationImpacts.js';
 
 export const CABLE_ENDPOINT_LIMITS = Object.freeze({ controlBytes: 65536, responseBytes: 1024 * 1024, projectCables: 10000, impactTextBytes: 8 * 1024 * 1024, reasonCodes: 64 });
 export const cableEndpointEndSchema = z.enum(['from', 'to']);
@@ -48,11 +49,17 @@ const common = { schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v1'), i
   expectedHeadId: policyUuidSchema.nullable(), expectedCurrent: endpointCurrentScopeSchema,
   reason: z.string().min(1).max(2048).refine(value => value.trim().length > 0 && !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
     && [...value].every(character => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff)) };
-export const cableEndpointCommandSchema = z.object({ ...common, selection: z.discriminatedUnion('mode', [
+const selection = z.discriminatedUnion('mode', [
   z.object({ mode: z.literal('object-derived'), sdkObjectId: cableEndpointSdkObjectIdSchema, object: endpointObjectRefSchema }).strict(),
   z.object({ mode: z.literal('fixed-world'), pointProjectMetres: endpointPointSchema, derivation: z.enum(['manual-world-point', 'picked-surface-point']),
     displaySdkObjectId: cableEndpointSdkObjectIdSchema.nullable() }).strict(),
-]) }).strict().refine(value => value.expectedLocationId === null ? value.expectedLocationRevision === null && value.expectedHeadId === null : value.expectedLocationRevision !== null);
+]);
+const locationExpectation = (value: { expectedLocationId: string | null; expectedLocationRevision: string | null; expectedHeadId: string | null }) => value.expectedLocationId === null ? value.expectedLocationRevision === null && value.expectedHeadId === null : value.expectedLocationRevision !== null;
+const legacyCommand = z.object({ ...common, selection }).strict().refine(locationExpectation);
+const impactCommand = z.object({ ...common, schemaVersion: z.literal('wfc.pf.cable-endpoint-command.v2'), selection,
+  calculation: locationImpactCalculationSchema.nullable() }).strict().refine(locationExpectation);
+/** Legacy pending bodies retain their exact v1 shape, without inserted defaults or new authority. */
+export const cableEndpointCommandSchema = z.union([legacyCommand, impactCommand]);
 export type CableEndpointCommand = z.infer<typeof cableEndpointCommandSchema>;
 /** The exact strict command, including its idempotency key, is the pending-command hash input. */
 export function cableEndpointCommandHashInput(value: CableEndpointCommand) { return cableEndpointCommandSchema.parse(value); }
@@ -65,7 +72,7 @@ export const cableEndpointReceiptSchema = z.object({ schemaVersion: z.literal('w
   projectId: policyUuidSchema, actorId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, logicalName: endpointLocationNameSchema,
   idempotencyKey: policyUuidSchema, commandSha256: policyHashSchema, expectedCableWriteRevision: policyRevisionSchema,
   expectedContextSha256: policyHashSchema, locationId: policyUuidSchema, binding: endpointBindingReceiptSchema,
-  impact: cableEndpointImpactSchema, duplicate: z.boolean() }).strict().refine(value => value.binding.projectId === value.projectId && value.binding.locationId === value.locationId);
+  impact: cableEndpointImpactSchema, locationImpact: locationImpactReferenceSchema.optional(), duplicate: z.boolean() }).strict().refine(value => value.binding.projectId === value.projectId && value.binding.locationId === value.locationId);
 export type CableEndpointReceipt = z.infer<typeof cableEndpointReceiptSchema>;
 export const cableEndpointClosedSchema = z.object({ schemaVersion: z.literal('wfc.pf.cable-endpoint-closed.v1'),
   projectId: policyUuidSchema, actorId: policyUuidSchema, cableId: policyUuidSchema, end: cableEndpointEndSchema, idempotencyKey: policyUuidSchema,

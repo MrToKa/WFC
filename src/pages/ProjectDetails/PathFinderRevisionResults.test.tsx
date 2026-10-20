@@ -37,6 +37,11 @@ function fixtures() {
 const completeJob = (key = id(3)) => ({ id: key, projectId: id(1), status: 'complete' as const, total: 2140, completed: 2140, cancelRequested: false,
   failure: null, attempts: 1, createdAt: '2026-10-19T12:00:00Z', updatedAt: '2026-10-19T12:01:00Z' });
 const props = (): PathFinderRevisionResultsProps => ({ projectId: id(1), loadedProjectId: id(1), accountId: id(9), token: 'current-token', isAdmin: true, active: true, contextKey: 'model-A', onOpenProposal: vi.fn(), jobs: [completeJob()] });
+function sealedRow(row: ReturnType<typeof fixtures>['page']['rows'][number]) {
+  return { ...row, itemApplicability: { schemaVersion: 'wfc.pf.sealed-cable-applicability.v1' as const,
+    dependencyVersion: 'pathfinder.dependencies.v7' as const, projectId: id(1), jobId: id(3), cableId: row.cableId,
+    proposalId: row.result!.proposalId, dependencyHash: row.result!.dependencyHash, scope: 'sealed-cable-item' as const } };
+}
 function setup() {
   const f = fixtures();
   const state: ReturnType<typeof usePathfinderRevisionResults> = { identity: 'test-owned-scope', admissions: f.admissions.admissions, nextAdmissionsCursor: f.admissions.nextCursor, admission: f.admissions.admissions[0], page: f.page, detail: f.detail,
@@ -47,6 +52,60 @@ function setup() {
 beforeEach(() => vi.clearAllMocks());
 
 describe('administrator cable revision inspection', () => {
+  it.each(['queued', 'running'] as const)('selects only exact current sealed v7 rows while the parent is %s', status => {
+    const { f, state } = setup(), row = sealedRow(f.page.rows[0]), readiness = vi.fn();
+    const sibling = { ...f.page.rows[0], cableId: id(40), baseline: { ...row.baseline, currentCable: { ...row.baseline.currentCable, id: id(40), tag: 'UNSEALED-SIBLING' } } };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row, sibling] }, detail: { ...f.detail, row } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto: 'Control' }, { id: sibling.cableId, mto: 'LV' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ ...completeJob(), status }]} onScopeReadinessChange={readiness} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Select UNSEALED-SIBLING for review' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Select ready cables on this page' }));
+    expect(batch.select).toHaveBeenCalledOnce(); expect(batch.select).toHaveBeenCalledWith(expect.objectContaining({ cableId: row.cableId }), true);
+    expect(readiness).toHaveBeenLastCalledWith(expect.objectContaining({ admissionId: id(2), jobId: id(3), ready: true, wholeJobReady: false, jobStatus: status, cancelRequested: false }));
+    expect(screen.getByText(/Only individually sealed, current cable results can be reviewed/)).toBeVisible();
+  });
+  it.each(['projectId', 'jobId', 'cableId', 'proposalId', 'dependencyHash'] as const)('refuses a running calculation row with a different proof %s', field => {
+    const { f, state } = setup(), row = sealedRow(f.page.rows[0]);
+    row.itemApplicability = { ...row.itemApplicability, [field]: field === 'dependencyHash' ? hash('6') : id(99) };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row] }, detail: { ...f.detail, row } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ ...completeJob(), status: 'running' }]} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Select ready cables on this page' })).toBeDisabled(); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it.each(['failed', 'cancelled', 'cancellation requested', 'unknown'] as const)('does not let an exact item proof bypass a %s parent', status => {
+    const { f, state } = setup(), row = sealedRow(f.page.rows[0]);
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row] }, detail: { ...f.detail, row } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={status === 'unknown' ? [] : [{ ...completeJob(), status: status === 'cancellation requested' ? 'running' : status, cancelRequested: status === 'cancellation requested' }]} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled(); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('keeps stale sealed items and MV cables excluded from an active calculation', () => {
+    const { f, state } = setup(), row = sealedRow(f.page.rows[0]);
+    const stale = { ...row, currentness: { state: 'changed' as const, reasonCodes: ['CABLE_CHANGED'] } };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [stale] }, detail: { ...f.detail, row: stale } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    const view = render(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ ...completeJob(), status: 'running' }]} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row] }, detail: { ...f.detail, row } });
+    view.rerender(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto: 'MV' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ ...completeJob(), status: 'running' }]} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled(); expect(batch.select).not.toHaveBeenCalled();
+  });
+  it('labels a shared location scope without inventing an automatic generation', () => {
+    const { state } = setup();
+    const admission = { ...state.admission!, kind: 'location-impact' as const, generation: null };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, admission, admissions: [admission] });
+    render(<PathFinderRevisionResults {...props()} />);
+    expect(screen.getByRole('status', { name: 'Selected calculation scope' })).toHaveTextContent('Shared location calculation');
+    expect(screen.getByRole('combobox', { name: 'Calculation scope' })).toHaveTextContent('Shared location calculation');
+    expect(screen.getByRole('combobox', { name: 'Calculation scope' })).not.toHaveTextContent('Generation');
+  });
   it('selects exact ready page rows while excluding MV, stale and blocked cables', () => {
     const { f, state } = setup(), p = props(), row = f.page.rows[0];
     const rows = [row, { ...row, cableId: id(40), baseline: { ...row.baseline, currentCable: { ...row.baseline.currentCable, id: id(40), tag: 'MV-TEST' } } },
@@ -78,12 +137,12 @@ describe('administrator cable revision inspection', () => {
     const { f, state } = setup(), p = props(), changed = vi.fn();
     const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
     const view = render(<PathFinderRevisionResults {...p} batch={batch} onScopeReadinessChange={changed} />);
-    expect(changed).toHaveBeenLastCalledWith({ admissionId: id(2), jobId: id(3), ready: true, message: null });
+    expect(changed).toHaveBeenLastCalledWith({ admissionId: id(2), jobId: id(3), ready: true, message: null, wholeJobReady: true, jobStatus: 'complete', cancelRequested: false });
     expect(screen.getByRole('status', { name: 'Selected calculation scope' })).toHaveTextContent('Status: complete.');
     const admission = { ...f.admissions.admissions[0], id: id(70), jobId: id(71), createdAt: '2026-10-20T08:48:42Z' };
     vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, admission, detail: null, page: { ...f.page, admissionId: admission.id } });
     view.rerender(<PathFinderRevisionResults {...p} batch={batch} jobs={[completeJob(id(71))]} onScopeReadinessChange={changed} />);
-    expect(changed).toHaveBeenLastCalledWith({ admissionId: id(70), jobId: id(71), ready: true, message: null });
+    expect(changed).toHaveBeenLastCalledWith({ admissionId: id(70), jobId: id(71), ready: true, message: null, wholeJobReady: true, jobStatus: 'complete', cancelRequested: false });
     expect(screen.getByRole('status', { name: 'Selected calculation scope' })).toHaveTextContent('2026-10-20T08:48:42Z');
     expect(batch.clearSelection).toHaveBeenCalledOnce(); expect(batch.select).not.toHaveBeenCalled(); expect(p.onOpenProposal).not.toHaveBeenCalled();
     vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, admission: null, detail: null, page: null });
@@ -153,7 +212,7 @@ describe('administrator cable revision inspection', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Administrator access is required. Refresh your account before continuing.');
     expect(screen.queryByText('C-001')).toBeNull(); expect(screen.queryByText('Private old cable information')).toBeNull();
     expect(screen.queryByRole('table')).toBeNull(); expect(screen.queryByRole('button')).toBeNull();
-    expect(changed).toHaveBeenLastCalledWith({ admissionId: null, jobId: null, ready: false, message: 'Administrator access is required. Refresh your account before continuing.' });
+    expect(changed).toHaveBeenLastCalledWith({ admissionId: null, jobId: null, ready: false, message: 'Administrator access is required. Refresh your account before continuing.', wholeJobReady: false, jobStatus: null, cancelRequested: false });
   });
   it('separates edited current cable values from historical accepted geometry and preserves exact server decimal text', () => {
     setup(); const p = props(); render(<PathFinderRevisionResults {...p} />);

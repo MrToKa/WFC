@@ -1,0 +1,294 @@
+{
+  "schemaVersion": "wfc.pf.u3-verification.v1",
+  "observedAt": "2026-10-20T18:18:59.4882702Z",
+  "branch": "pf-u3-scoped-location-recalculation-local-20261020",
+  "parentCommit": "83dd2c3b03d286d7fc29967f630aaf903b586d27",
+  "status": "TECHNICAL_FOUNDATION_PASS",
+  "syntheticChecks": 872,
+  "actualPostgresChecks": 20,
+  "source": [
+    {
+      "file": "server/pathfinder/apply.ts",
+      "sha256": "c7d3c5d95fb5209611470433a79807ddd86f8c012697b88da7f6d41d9c3c0f36"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointCommands.test.ts",
+      "sha256": "adace6036d50697d432a8eab55b2f7d164bbce6d994bada9b49db90cb09abe45"
+    },
+    {
+      "file": "server/pathfinder/cableEndpointCommands.ts",
+      "sha256": "ced78900a37423ef94237d82fca2d67207922bb5097c0c2319e4053b75ee575f"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowProof.test.ts",
+      "sha256": "f98db2109ffb1d8dd02d1626a5dd0a9e4f7fd4d074d5daa9bec99c86151ae952"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowProof.ts",
+      "sha256": "549c1dbc421e1c60746c18759ea750969c4cb0ed523022b93b3d5845f94d7120"
+    },
+    {
+      "file": "server/pathfinder/cableWorkflowRepository.ts",
+      "sha256": "ff321b105503d8c57b5ae87a55259fec87ee9eed13858aaee4a7ff82c26c36a2"
+    },
+    {
+      "file": "server/pathfinder/comparisonCalculationProvenance.test.ts",
+      "sha256": "04281baae3e9b461cc0b7bf1d8b06be102174219e2b81097542826d8b34bd52c"
+    },
+    {
+      "file": "server/pathfinder/comparisonCalculationProvenance.ts",
+      "sha256": "299b9e8f515cd942fb95bccf00d62bd38d46c658244fa4654ecebf980a816493"
+    },
+    {
+      "file": "server/pathfinder/dependencies.test.ts",
+      "sha256": "89925904a641467e7bde64bbf87b736cd734bbaee9a2074e72e57ed7a75ef18a"
+    },
+    {
+      "file": "server/pathfinder/dependencies.ts",
+      "sha256": "43eac12d3619770b8ad8fa55932d3619d481b3814ec651915c4b815129257772"
+    },
+    {
+      "file": "server/pathfinder/dependencyBatch.test.ts",
+      "sha256": "cf750f468417b0b6d6547c256d264a5825735c1e8bbe6225ff199dec9879da32"
+    },
+    {
+      "file": "server/pathfinder/dependencyBatch.ts",
+      "sha256": "0bde414a6d149184c36d3461d52d33b4271a006c207e505bd7a86cc8ff8270f0"
+    },
+    {
+      "file": "server/pathfinder/endpointCalculationProvenance.test.ts",
+      "sha256": "c0be95ee9cdca2f0338ec4fb9d84f324a7cff703dc581b69ca266e7f6ab2ae30"
+    },
+    {
+      "file": "server/pathfinder/endpointCalculationProvenance.ts",
+      "sha256": "622264f1cfa233311d1b26902d5c48e4b5d273262c4585fea371e1d85fa01925"
+    },
+    {
+      "file": "server/pathfinder/jobContracts.ts",
+      "sha256": "815299030c09d4dd17479dbe535bce3fa5b204e607bc2cd0838093e6e7b25d2c"
+    },
+    {
+      "file": "server/pathfinder/jobs-deleted-history.test.ts",
+      "sha256": "1a8ede3d881cdf4552d14de424d65778969432eebe8e5bc577191079c56645cd"
+    },
+    {
+      "file": "server/pathfinder/jobs-recent-window.test.ts",
+      "sha256": "a899bf506a8cdffdc5c0adc255925641d69de7c13edc0877252b4a26c6fbbf3f"
+    },
+    {
+      "file": "server/pathfinder/jobs.ts",
+      "sha256": "8f6ef7ba28a681dd5d1eb062fc852824e7af5bb07c81d119634f2eac395b8909"
+    },
+    {
+      "file": "server/pathfinder/locationImpactAdmission.test.ts",
+      "sha256": "c81cfd953e2c26812cd5e5e4e6aa66151019e78581d911a1160e87ca92f8e532"
+    },
+    {
+      "file": "server/pathfinder/locationImpactAdmission.ts",
+      "sha256": "890e09d9daa2d3a1fc9f8286ef942d53c2b67b61216f5d961f764812d950ebaf"
+    },
+    {
+      "file": "server/pathfinder/locationImpactAuthority.test.ts",
+      "sha256": "4fece38dc4b6622b08d48d192f45ac8d6c0bfd5ef1e63cd7db30e54c5d0cf1ed"
+    },
+    {
+      "file": "server/pathfinder/locationImpactProducer.test.ts",
+      "sha256": "d74edb57fa778326aa6cbb1713d549b3b1b5edf6b25ae9da9e03a2fb6c49cc60"
+    },
+    {
+      "file": "server/pathfinder/locationImpactProducer.ts",
+      "sha256": "1732381596413fdd2baadee19bf20a3226facdfc894befe78d3716226e9166f1"
+    },
+    {
+      "file": "server/pathfinder/locationImpactRepository.test.ts",
+      "sha256": "3956b277a04eca4396ef58c852ef84cfe2e3a04c0a69de9d186ec07dbe46e2a8"
+    },
+    {
+      "file": "server/pathfinder/locationImpactRepository.ts",
+      "sha256": "32285c1dbade896e74271e4a12044c391c001b695167391bb1e3a644f2bead77"
+    },
+    {
+      "file": "server/pathfinder/locationImpactRoutes.test.ts",
+      "sha256": "a53832edd9ac8cbc4c51c9b26087fae5d3807414266c404d1065b33c232b2b85"
+    },
+    {
+      "file": "server/pathfinder/locationImpactRoutes.ts",
+      "sha256": "fc139af654af4ca47e6a920b8baff8a42701e1cd0ee70f398d41978cb71e2d12"
+    },
+    {
+      "file": "server/pathfinder/locationImpactSchema.ts",
+      "sha256": "26e57107de80689a48833f060a70fc6860d9d4181e3a3c8a215da26597c0cd84"
+    },
+    {
+      "file": "server/pathfinder/locationImpactSql.integration.test.ts",
+      "sha256": "544300fb52af6c9ff2434b2d174e58f61f4bdca67e0e0b65355d75155c496605"
+    },
+    {
+      "file": "server/pathfinder/proposalApplicability.test.ts",
+      "sha256": "a433cf5b3b2becc0c048fa7c35d654535c807996afc37f6685a2cb353befb879"
+    },
+    {
+      "file": "server/pathfinder/proposalApplicability.ts",
+      "sha256": "a1fdf88fcfe68c6be425e80466b84e85d16a2f8433b5f1078b5900a3cbcce605"
+    },
+    {
+      "file": "server/pathfinder/recalculationRepository.test.ts",
+      "sha256": "8058ae0711131569c61862f86468e1f6725de92a2c6ec2f5592751d1e74437b8"
+    },
+    {
+      "file": "server/pathfinder/recalculationRepository.ts",
+      "sha256": "e70c86a0d7e940962739bf79a534a625d84e4c7bc560eb1e69f57d98444c32ad"
+    },
+    {
+      "file": "server/pathfinder/recalculationSchema.ts",
+      "sha256": "4b5776a45d08347bd7af03f2988c01bfaad031d45e3fe69ea0715b5070a64a89"
+    },
+    {
+      "file": "server/pathfinder/recalculationScopedDispatch.test.ts",
+      "sha256": "545761fe7e291d445fb272986c73fa91ae28853c59a66bfe581467a6b24a8aeb"
+    },
+    {
+      "file": "server/pathfinder/revisionResultRepository.ts",
+      "sha256": "b1bf461a19570cc60e46195ed66392199200b5248731df5356f45eb40e9470bd"
+    },
+    {
+      "file": "server/pathfinder/revisionResultSchema.ts",
+      "sha256": "72a77430e447822d3dec760769ff216ef7b639abc11af4938645398b1c4ef18c"
+    },
+    {
+      "file": "server/pathfinder/revisionResultSchemaSql.integration.test.ts",
+      "sha256": "55a7178f8d901e4bae983ce413e1d0778aa4be0fa3fc61e2accb9840112aae0c"
+    },
+    {
+      "file": "server/pathfinder/routingScope.ts",
+      "sha256": "b91a4e8fd39e7db386e1a22b592f4185dbe60d629b0b1d0ecd54d36da5dd346d"
+    },
+    {
+      "file": "server/pathfinder/runtime.ts",
+      "sha256": "d6d22e08205b9c73518f874ce049b1f67739c81c7b2bcde84a55320ff2a11222"
+    },
+    {
+      "file": "server/pathfinder/schema.ts",
+      "sha256": "e8fcb160b924133a90c068b4c5eb0330352076fa91c2b84aca6b3e2e48123c2c"
+    },
+    {
+      "file": "server/pathfinder/worker-fatal.test.ts",
+      "sha256": "ca958b92f0213907cb796b05ceb2a88899e1693b6f79b44860b09efe7137be43"
+    },
+    {
+      "file": "server/pathfinder/worker-grant-recovery.test.ts",
+      "sha256": "73c4dba8522ba9d313793edd4f7cfd1d37d5f20c5c33e1ef840baec9776c8aed"
+    },
+    {
+      "file": "server/pathfinder/worker.ts",
+      "sha256": "16edfc401c45a0df646195661dd2a14a7f79e464982588d8e97510323ca20975"
+    },
+    {
+      "file": "server/pathfinder/workerSupersession.test.ts",
+      "sha256": "318e1aa79edbe6df502ed45db5c66d26beba8d6ed1241c3c957738368d17d3ff"
+    },
+    {
+      "file": "server/routes/pathfinderRoutes.ts",
+      "sha256": "00b7eac6b179de074b2fb4b961e0189a00263aec68fa21ba085e0a8dd8b5bef9"
+    },
+    {
+      "file": "shared/pathfinderCableEndpoints.ts",
+      "sha256": "ed46c9ca8108299827c7d7711bcfd298b48164b57b183503bf8702e429aa2032"
+    },
+    {
+      "file": "shared/pathfinderCableWorkflow.test.ts",
+      "sha256": "be1f8cdd9d23f275cf2513f65f39c5087ed34804a45d60d9ee8a582dfb959ab0"
+    },
+    {
+      "file": "shared/pathfinderCableWorkflow.ts",
+      "sha256": "435e9f04563872cd5d6c07f71c983af616948fabaf05b1df15414fa3ae08f7ab"
+    },
+    {
+      "file": "shared/pathfinderItemApplicability.ts",
+      "sha256": "3ae37095bef798ac9b62d190a8f874898949aa52f87aff57d7c3bc933beaf322"
+    },
+    {
+      "file": "shared/pathfinderLocationImpacts.test.ts",
+      "sha256": "5c6b3f1719463dddeb442b7588219d55ebb64ff610889a1730ed3767d83feb2c"
+    },
+    {
+      "file": "shared/pathfinderLocationImpacts.ts",
+      "sha256": "42a867af6aae3db7f732f7158a90cf739c229faab3c6c5732551a362f805b30f"
+    },
+    {
+      "file": "shared/pathfinderRevisionResults.ts",
+      "sha256": "7afa99c0df3738166a8eb2960a526ed311bcb854a9c07af2246c8e3bb6d09150"
+    },
+    {
+      "file": "src/api/pathfinder.ts",
+      "sha256": "9f700ee64829b087dbbbe7079f37c764af032f279659672cd959caffed7d3fac"
+    },
+    {
+      "file": "src/api/pathfinderCableEndpoints.test.ts",
+      "sha256": "267f929886469d0c558181fee455de63642b68792f3620ef8765af793cc60632"
+    },
+    {
+      "file": "src/api/pathfinderCableEndpoints.ts",
+      "sha256": "94b9f077b4228ecc24420a21883295c63ad6eb867aa46e8a0209bba366bed374"
+    },
+    {
+      "file": "src/api/pathfinderLocationImpacts.test.ts",
+      "sha256": "e709d700f431151e19c230f6e39fb680ae14b8afdbc11a03da594ebfb213fec9"
+    },
+    {
+      "file": "src/api/pathfinderLocationImpacts.ts",
+      "sha256": "7b070de72a0ea21eed66f65e8dbbc03186d9d941b81a2c770f61124a0c9b4685"
+    },
+    {
+      "file": "src/hooks/useCableEndpointSelection.test.tsx",
+      "sha256": "6e583afcdf8122094137842a94fbd93de33350eca5b81cd31c3bf70c330b7756"
+    },
+    {
+      "file": "src/hooks/useCableEndpointSelection.ts",
+      "sha256": "05923b553d77f0f9a1da4e5bf0ee8391b4f457946e3b5ebda501f5a86d92f8b7"
+    },
+    {
+      "file": "src/hooks/usePathfinderLocationImpactProgress.test.tsx",
+      "sha256": "178120d704c64b5c7bc5bbbf85fed4065bc1aff1940ebac5eff73aa6c97a3cdb"
+    },
+    {
+      "file": "src/hooks/usePathfinderLocationImpactProgress.ts",
+      "sha256": "89f50ac02b5e76431340da63287963355ff0f54856824006d652d0c21315066e"
+    },
+    {
+      "file": "src/pages/ProjectDetails/PathFinderResults.test.tsx",
+      "sha256": "713624f60fd51e22d7a227d4d95d9548f7f140f4c6bb04241892ee8297c51fd7"
+    },
+    {
+      "file": "src/pages/ProjectDetails/PathFinderResults.tsx",
+      "sha256": "3fb0a81e8f08bc80988f5fa8fc8b5b09d9c8dc2eafa50705407ca353fbb455ea"
+    },
+    {
+      "file": "src/pages/ProjectDetails/PathFinderRevisionResults.test.tsx",
+      "sha256": "a146e549f217c6e8c711b0254f3363c6bab0707af4aa834f2af5eaa7cb6b1277"
+    },
+    {
+      "file": "src/pages/ProjectDetails/PathFinderRevisionResults.tsx",
+      "sha256": "715e72690a23e561e300248c9e617f520197ec8e5d776a30c87927c9978dbf82"
+    }
+  ],
+  "types": "PASS",
+  "lint": "PASS",
+  "receipts": [
+    "u3-tests.json",
+    "u3-test-scope.json",
+    "u3-impacts-sql.json",
+    "u3-revision-migration-sql.json"
+  ],
+  "fixture": {
+    "owner": "56e0f764-000f-4935-946f-8daa2c8ecd23",
+    "containerId": "9f3f1ee6c33ed38c744cb2f0dfdd88671e01957367d68dde0872749c3766b934",
+    "state": "RETIRED",
+    "generatedCredentialsRemoved": true
+  },
+  "runtime5191": "NOT_RUN",
+  "originalRuntimeWrites": false,
+  "realModelCalculations": "NOT_RUN",
+  "nativeParity": "NOT_RUN",
+  "userAcceptance": "NOT_RUN"
+}

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { policyHashSchema, policyRevisionSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
 import { lengthLedgerSchema } from './pathfinderLengthLedger.js';
+import { sealedCableItemApplicabilitySchema } from './pathfinderItemApplicability.js';
 
 export const REVISION_RESULTS_LIMITS = Object.freeze({ pageSize: 100, responseBytes: 32 * 1024 ** 2, pageBytes: 8 * 1024 ** 2,
   detailBytes: 32 * 1024 ** 2, baselineBytes: 65536, envelopeBytes: 131072, admissionBytes: 64 * 1024 ** 2, cables: 10000, chunk: 200 });
@@ -22,7 +23,7 @@ export const revisionBaselineSchema = z.object({ schemaVersion: z.literal('wfc.p
   lastAcceptedApply: revisionAcceptedApplySchema.nullable(), acceptedMatchesCurrent: z.boolean() }).strict()
   .refine(v => !v.acceptedMatchesCurrent || v.lastAcceptedApply !== null);
 export const revisionAdmissionSchema = z.object({ id: policyUuidSchema, projectId: policyUuidSchema, jobId: policyUuidSchema.nullable(),
-  generation: policyRevisionSchema.nullable(), kind: z.enum(['manual', 'automatic']), inputSha256: policyHashSchema,
+  generation: policyRevisionSchema.nullable(), kind: z.enum(['manual', 'automatic', 'location-impact']), inputSha256: policyHashSchema,
   total: z.number().int().min(1).max(REVISION_RESULTS_LIMITS.cables), modelRef: revisionModelRefSchema.nullable(), createdAt: timestamp }).strict()
   .refine(v => v.kind === 'automatic' ? v.generation !== null : v.generation === null && v.jobId !== null);
 export const revisionCurrentnessSchema = z.object({ state: z.enum(['current', 'changed', 'missing', 'unavailable']),
@@ -43,7 +44,9 @@ export const revisionResultEnvelopeSchema = z.object({ schemaVersion: z.literal(
 export const revisionResultRowSchema = z.object({ cableId: policyUuidSchema, baseline: revisionBaselineSchema, baselineHash: policyHashSchema,
   status: z.string().min(1).max(96), message: z.string().max(32768), result: revisionResultSummarySchema.extend({ proposalId: policyUuidSchema,
     proposalHash: policyHashSchema, revisionResultSha256: policyHashSchema, engineResultSha256: policyHashSchema, ledgerHash: policyHashSchema.nullable(), dependencyHash: policyHashSchema }).strict().nullable(),
-  currentness: revisionCurrentnessSchema }).strict().refine(v => v.cableId === v.baseline.currentCable.id);
+  currentness: revisionCurrentnessSchema,itemApplicability:sealedCableItemApplicabilitySchema.nullable().optional() }).strict()
+  .refine(v => v.cableId === v.baseline.currentCable.id && (!v.itemApplicability || v.itemApplicability.cableId===v.cableId
+    && v.itemApplicability.proposalId===v.result?.proposalId && v.itemApplicability.dependencyHash===v.result?.dependencyHash));
 const cursor = z.string().max(512).regex(/^[A-Za-z0-9_-]+$(?![\s\S])/);
 export const revisionAdmissionsPageSchema = z.object({ schemaVersion: z.literal('wfc.pf.revision-admissions-page.v1'), projectId: policyUuidSchema,
   admissions: z.array(revisionAdmissionSchema).max(REVISION_RESULTS_LIMITS.pageSize), nextCursor: cursor.nullable() }).strict()

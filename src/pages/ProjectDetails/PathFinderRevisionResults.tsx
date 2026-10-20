@@ -6,8 +6,10 @@ import type { RevisionResultDetail } from '@/api/pathfinderRevisionResults';
 import type { PathFinderCable, PathFinderJob } from '@/api/pathfinder';
 import type { BatchReviewCandidate } from './hooks/usePathfinderBatchReview';
 import type { BatchReviewController } from './PathFinderBatchReview';
+import { sealedCableItemApplicabilitySchema } from '../../../shared/pathfinderItemApplicability';
 
-export type PathFinderCalculationScope = { admissionId: string | null; jobId: string | null; ready: boolean; message: string | null };
+export type PathFinderCalculationScope = { admissionId: string | null; jobId: string | null; ready: boolean; message: string | null;
+  wholeJobReady?: boolean; jobStatus?: PathFinderJob['status'] | null; cancelRequested?: boolean };
 export type PathFinderRevisionResultsProps = RevisionResultsAccess & {
   onOpenProposal: (proposalId: string, expectedJobId: string) => void | Promise<void>; busy?: boolean;
   batch?: BatchReviewController; cables?: PathFinderCable[]; jobs?: PathFinderJob[];
@@ -25,6 +27,13 @@ const model = (value: Model) => value ? `${value.id} · selection ${value.select
 const status = (value: string) => ({ calculated: 'Ready for review', locations_required: 'Resolve locations', no_path: 'No connected path',
   settings_required: 'Project values required', category_required: 'Cable category required', stale: 'Outdated', invalid_request: 'Review the input',
   deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached' }[value] ?? label(value));
+const calculationLabel = (value: { kind: string; generation: string | null }) => value.kind === 'automatic' ? `Generation ${value.generation}`
+  : value.kind === 'location-impact' ? 'Shared location calculation' : 'Manual calculation';
+function hasExactItemApplicability(row: RevisionResultDetail['row'], projectId: string | null, jobId: string | null | undefined) {
+  const proof = sealedCableItemApplicabilitySchema.safeParse(row.itemApplicability);
+  return Boolean(proof.success && projectId && jobId && row.result && proof.data.projectId === projectId && proof.data.jobId === jobId
+    && proof.data.cableId === row.cableId && proof.data.proposalId === row.result.proposalId && proof.data.dependencyHash === row.result.dependencyHash);
+}
 function gaps(result: unknown): { count: number; metres: number } | null {
   if (!result || typeof result !== 'object' || Array.isArray(result) || !('route' in result)) return null;
   const route = result.route;
@@ -105,19 +114,28 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   const ownedJobRead = jobRead.owner === jobOwner ? jobRead : null;
   const scopeJob = knownJob ?? ownedJobRead?.value;
   const ownsScope = Boolean(state.enabled && props.isAdmin && props.accountId && props.token && props.projectId === props.loadedProjectId);
+  const wholeJobReady = Boolean(props.active && ownsScope && scopeJob?.status === 'complete' && !scopeJob.cancelRequested);
+  const activeParent = Boolean(props.active && ownsScope && scopeJob && ['queued', 'running'].includes(scopeJob.status) && !scopeJob.cancelRequested);
+  const itemReady = (value: RevisionResultDetail['row']) => wholeJobReady || activeParent
+    && hasExactItemApplicability(value, props.projectId, state.admission?.jobId);
+  const scopeReady = wholeJobReady || Boolean(activeParent && [...(state.page?.rows ?? []), ...(state.detail ? [state.detail.row] : [])]
+    .some(value => value.status === 'calculated' && value.currentness.state === 'current' && itemReady(value)));
   const scopeIssue = !ownsScope ? 'Administrator access is required. Refresh your account before continuing.'
     : !state.admission ? state.admissionsLoading ? 'Loading calculation scopes…' : 'Choose a completed calculation below. No saved calculation is currently selected.'
       : !state.admission.jobId ? 'This calculation has no job or applicable output. Choose a completed calculation, or calculate non-MV cables again if needed.'
         : scopeJob?.cancelRequested || scopeJob?.status === 'cancelled'
           ? 'This calculation was cancelled. Its saved results can be inspected, but cannot be reviewed or applied. Choose a completed calculation, or calculate non-MV cables again if needed.'
+          : scopeReady && !wholeJobReady ? `This calculation is ${scopeJob!.status}. Only individually sealed, current cable results can be reviewed while other cables are calculating.`
+          : activeParent ? `This calculation is ${scopeJob!.status}. Review and Apply require a completed calculation or an individually sealed, current cable result.`
           : scopeJob && scopeJob.status !== 'complete'
             ? `This calculation is ${scopeJob.status}. Review and Apply require a completed calculation. Wait for it to finish, or calculate again after a failed job.`
             : !scopeJob ? ownedJobRead?.loading ? 'Checking the selected calculation state…'
               : 'The selected calculation state is unavailable. Check it again before selecting results for review.' : null;
-  const scopeReady = Boolean(props.active && ownsScope && scopeJob?.status === 'complete' && !scopeJob.cancelRequested);
   const scopeAdmissionId = ownsScope ? state.admission?.id ?? null : null, scopeJobId = ownsScope ? state.admission?.jobId ?? null : null;
-  useEffect(() => { props.onScopeReadinessChange?.({ admissionId: scopeAdmissionId, jobId: scopeJobId, ready: scopeReady, message: scopeIssue }); },
-    [props.onScopeReadinessChange, scopeAdmissionId, scopeJobId, scopeReady, scopeIssue]);
+  const scopeJobStatus = ownsScope ? scopeJob?.status ?? null : null, scopeCancelRequested = Boolean(ownsScope && scopeJob?.cancelRequested);
+  useEffect(() => { props.onScopeReadinessChange?.({ admissionId: scopeAdmissionId, jobId: scopeJobId, ready: scopeReady, message: scopeIssue,
+    wholeJobReady, jobStatus: scopeJobStatus, cancelRequested: scopeCancelRequested }); },
+    [props.onScopeReadinessChange, scopeAdmissionId, scopeJobId, scopeReady, scopeIssue, wholeJobReady, scopeJobStatus, scopeCancelRequested]);
   if (!props.isAdmin || !props.accountId || !props.token || props.projectId !== props.loadedProjectId) return null;
   if (!state.enabled) return <section aria-label="Cable revision results" className={styles.result}><h3>Cable revision results</h3>
     <p role="alert">Administrator access is required. Refresh your account before continuing.</p></section>;
@@ -129,7 +147,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
     && detail.envelope?.jobId === state.admission.jobId);
   const candidate = (value: RevisionResultDetail['row']): BatchReviewCandidate | null => {
     const cable = props.cables?.find(item => item.id === value.cableId), output = value.result;
-    if (!scopeReady) return null;
+    if (!itemReady(value)) return null;
     if (!cable || !['LV', 'Control', 'Instrumentation'].includes(cable.mto ?? '') || value.status !== 'calculated'
       || value.currentness.state !== 'current' || !output?.ledgerHash || !output.routeText || output.designLengthMeters === null) return null;
     return { cableId: value.cableId, cableWriteRevision: value.baseline.currentCable.cableWriteRevision,
@@ -137,7 +155,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
       tag: value.baseline.currentCable.tag ?? value.cableId, routeText: output.routeText, designLength: output.designLengthMeters };
   };
   const rowStatus = (value: RevisionResultDetail['row']) => value.status !== 'calculated' ? status(value.status)
-    : !scopeReady ? scopeJob?.cancelRequested || scopeJob?.status === 'cancelled' ? 'Review blocked — cancelled calculation'
+    : !itemReady(value) ? scopeJob?.cancelRequested || scopeJob?.status === 'cancelled' ? 'Review blocked — cancelled calculation'
       : scopeJob ? 'Review blocked — incomplete calculation' : 'Review blocked — calculation state unknown'
       : value.currentness.state !== 'current' ? 'Outdated — review blocked' : status(value.status);
   const selectable = (state.page?.rows ?? []).map(candidate).filter((value): value is BatchReviewCandidate => value !== null);
@@ -155,9 +173,9 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
     <label htmlFor={selectId}>Calculation scope</label>
     <select id={selectId} value={state.admission?.id ?? ''} disabled={frozen || choices.length === 0} onChange={event => state.selectAdmission(event.target.value)} style={{ width: '100%', minWidth: 0 }}>
       {!state.admission ? <option value="">Choose a calculation</option> : null}
-      {choices.map(value => <option key={value.id} value={value.id}>{value.kind === 'automatic' ? `Generation ${value.generation}` : 'Manual calculation'} · {value.createdAt} · {value.total} cables{props.jobs?.find(item => item.id === value.jobId)?.status ? ` · ${label(props.jobs.find(item => item.id === value.jobId)!.status)}` : ''}</option>)}
+      {choices.map(value => <option key={value.id} value={value.id}>{calculationLabel(value)} · {value.createdAt} · {value.total} cables{props.jobs?.find(item => item.id === value.jobId)?.status ? ` · ${label(props.jobs.find(item => item.id === value.jobId)!.status)}` : ''}</option>)}
     </select>
-    {state.admission ? <p role="status" aria-label="Selected calculation scope">Selected calculation: {state.admission.kind === 'automatic' ? `Generation ${state.admission.generation}` : 'Manual calculation'} · {state.admission.createdAt} · {state.admission.total} cables. Status: {scopeJob?.cancelRequested ? 'cancellation requested' : scopeJob ? label(scopeJob.status) : state.admission.jobId ? 'checking calculation state' : 'no calculation job'}.</p> : null}
+    {state.admission ? <p role="status" aria-label="Selected calculation scope">Selected calculation: {calculationLabel(state.admission)} · {state.admission.createdAt} · {state.admission.total} cables. Status: {scopeJob?.cancelRequested ? 'cancellation requested' : scopeJob ? label(scopeJob.status) : state.admission.jobId ? 'checking calculation state' : 'no calculation job'}.</p> : null}
     <div className={styles.actions}>
       <Button disabled={frozen || !state.previousAdmissions} onClick={state.previousAdmissionsPage}>Previous calculations</Button>
       <Button disabled={frozen || !state.nextAdmissionsCursor} onClick={state.nextAdmissions}>More calculations</Button>

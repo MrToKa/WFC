@@ -13,6 +13,7 @@ import { createRevisionResults } from '../pathfinder/revisionResultRepository.js
 import { createPathFinderApplyRecovery } from '../pathfinder/applyRecovery.js';
 import { createCableWorkflowRepository } from '../pathfinder/cableWorkflowRepository.js';
 import { createCableWorkflowReadHandlers } from '../pathfinder/cableWorkflowRoutes.js';
+import { createLocationImpactReadHandlers } from '../pathfinder/locationImpactRoutes.js';
 
 export const pathfinderRouter = Router({mergeParams:true});
 pathfinderRouter.use(requireAdmin,(_req,res,next) => {res.setHeader('Cache-Control','private, no-store'); next();});
@@ -37,6 +38,8 @@ pathfinderRouter.get('/authorization',async(req,res)=>{
 });
 pathfinderRouter.get('/cable-workflow', cableWorkflow.page);
 pathfinderRouter.get('/cable-workflow/:cableId', cableWorkflow.detail);
+pathfinderRouter.get('/location-impacts',(req,res)=>createLocationImpactReadHandlers(getPathFinderRuntime().locationImpacts).list(req,res));
+pathfinderRouter.get('/location-impacts/:impactId',(req,res)=>createLocationImpactReadHandlers(getPathFinderRuntime().locationImpacts).progress(req,res));
 pathfinderRouter.get('/state',async (req,res) => {
   try {const {projectId} = identity(req); res.json({...await repository.state(projectId,principal(req)),...await getPathFinderRuntime().jobs.state(projectId,principal(req))});} catch(error){failure(res,error);}
 });

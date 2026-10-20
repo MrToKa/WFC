@@ -87,6 +87,10 @@ async function verifyReceipt(value: unknown, projectId: string, cableId: string,
       || binding.mode !== command.selection.mode || binding.contentSha256 !== await sha256(endpointBindingContentHashInput(binding))) return invalid();
     if (command.selection.mode === 'object-derived' ? !equal(binding.sourceObject, command.selection.object) || binding.derivation !== 'equipment-bottom-aabb.v1'
       : !equal(binding.pointProjectMetres, command.selection.pointProjectMetres) || binding.derivation !== command.selection.derivation || binding.sourceObject !== null) return invalid();
+    if (command.schemaVersion === 'wfc.pf.cable-endpoint-command.v2'
+      ? !result.locationImpact || result.locationImpact.eligibleCables + result.locationImpact.excludedMvCables + result.locationImpact.blockedCategoryCables !== result.impact.distinctCables
+        || command.calculation === null && result.locationImpact.status !== 'blocked'
+      : result.locationImpact !== undefined) return invalid();
     return result;
 }
 export function saveCableEndpoint(projectId: string, token: string, cableId: string, end: CableEndpointEnd, input: CableEndpointCommand, accountId: string, signal?: AbortSignal): Promise<CableEndpointReceipt> {

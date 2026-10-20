@@ -7,6 +7,7 @@ import { policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderP
 import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger';
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
+import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
 
 const uuid = z.string().uuid(), revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/);
 const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
@@ -23,20 +24,27 @@ const projectSettingsSchema = z.object({ revision, connectionGap: connectionGapS
 const designSchema = z.object({ lengthBeforePercentageMeters: z.string(), unroundedLengthMeters: z.string(), designLengthMeters: z.string() });
 const routingPreferencesSchema = z.object({ secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000), preferVerticalApproach: z.boolean() });
 const proposalProvenanceSchema = z.object({
-  dependencyVersion: z.enum(['pathfinder.dependencies.v1', 'pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6']),
+  dependencyVersion: z.enum(['pathfinder.dependencies.v1', 'pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6','pathfinder.dependencies.v7']),
   dependencyHash: policyHashSchema, engineIdentity: engineIdentitySchema.nullable(),
   automatic: z.object({ generation: policyRevisionSchema, authorityEpoch: policyRevisionSchema, current: z.boolean(), reasonCode: z.string().min(1).max(96).nullable() }).strict().nullable(),
   endpointSources: z.object({from:z.enum(['automatic-model-candidate','confirmed-shared-location']),to:z.enum(['automatic-model-candidate','confirmed-shared-location'])}).strict().optional(),
 }).strict().superRefine((value, context) => {
-  if (['pathfinder.dependencies.v5','pathfinder.dependencies.v6'].includes(value.dependencyVersion) !== (value.engineIdentity !== null)) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
+  if (['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(value.dependencyVersion) !== (value.engineIdentity !== null)) context.addIssue({ code: 'custom', message: 'Engine implementation identity must agree with the dependency version.' });
   if (value.dependencyVersion==='pathfinder.dependencies.v6'
     ? !value.endpointSources || !Object.values(value.endpointSources).includes('automatic-model-candidate')
-    : value.endpointSources!==undefined) context.addIssue({code:'custom',message:'Automatic endpoint provenance must agree with the dependency version.'});
+    : value.dependencyVersion==='pathfinder.dependencies.v7'?!value.endpointSources:value.endpointSources!==undefined) context.addIssue({code:'custom',message:'Automatic endpoint provenance must agree with the dependency version.'});
 });
-const proposalSummarySchema = z.object({ schemaVersion: z.literal('wfc.pf.proposal.v2').optional(), provenance: proposalProvenanceSchema.optional(), id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
+const proposalSummaryObjectSchema = z.object({ schemaVersion: z.literal('wfc.pf.proposal.v2').optional(), provenance: proposalProvenanceSchema.optional(), id: uuid, projectId: uuid, jobId: uuid, cableId: uuid, status: z.string(), proposalHash: z.string().regex(/^[a-f0-9]{64}$/), cableWriteRevision: revision,
   stale: z.boolean(), synthetic: z.boolean(), engineeringAccepted: z.boolean(), acceptanceScope: z.string(), canApply: z.boolean(), compatibilityIssue: z.string().nullable(), message: z.string(), engineeringMessage: z.string(),
   design: designSchema.nullable(),lengthLedger:lengthLedgerSchema.nullable().optional(),revisionResultHash:policyHashSchema.nullable().optional(),revisionBaselineHash:policyHashSchema.nullable().optional(),
-  route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.enum(['calculate', 'design']).optional() });
+  route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.enum(['calculate', 'design']).optional(),
+  itemApplicability:sealedCableItemApplicabilitySchema.nullable().optional() });
+const validateProposalItem=(value:z.infer<typeof proposalSummaryObjectSchema>,context:z.RefinementCtx)=>{
+    const proof=value.itemApplicability;
+    if(proof&&(proof.projectId!==value.projectId||proof.jobId!==value.jobId||proof.cableId!==value.cableId||proof.proposalId!==value.id
+      ||proof.dependencyHash!==value.provenance?.dependencyHash||value.provenance?.dependencyVersion!=='pathfinder.dependencies.v7'))context.addIssue({code:'custom',message:'Sealed item applicability must belong to the exact proposal.'});
+  };
+const proposalSummarySchema=proposalSummaryObjectSchema.superRefine(validateProposalItem);
 const computedRouteSchema = z.object({ success: z.boolean(), message: z.string(), routeText: z.string(), routeCodes: z.array(z.string()), segmentIds: z.array(z.string()),
   points: z.array(point).max(200000), objectIds: z.array(z.string()).max(200000), lengthMeters: z.number().finite(), fromDistanceMeters: z.number().finite(), toDistanceMeters: z.number().finite(), fromRequiresSecondary: z.boolean(), toRequiresSecondary: z.boolean(), connectionGapCount: z.number().int().nonnegative(), connectionGapLengthMeters: z.number().finite() });
 const legacyDisplayEndpointSchema = z.object({ locationId: uuid, bindingRevision: revision, point });
@@ -57,11 +65,11 @@ const proposalDisplayDependenciesSchema = z.union([
   z.object({ schemaVersion: z.literal('pathfinder.dependencies.v2'), ...displayScope, from: legacyDisplayEndpointSchema, to: legacyDisplayEndpointSchema }),
   z.object({ schemaVersion: z.enum(['pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5']), ...displayScope,
     preparation: displayPreparation, from: boundDisplayEndpointSchema, to: boundDisplayEndpointSchema }),
-  z.object({ schemaVersion: z.literal('pathfinder.dependencies.v6'), ...displayScope, preparation: displayPreparation,
+  z.object({ schemaVersion: z.enum(['pathfinder.dependencies.v6','pathfinder.dependencies.v7']), ...displayScope, preparation: displayPreparation,
     from: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]), to: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]) }),
 ]);
-const proposalSchema = proposalSummarySchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional(),revisionResult:revisionResultEnvelopeSchema.nullable().optional(),
-  dependencies: proposalDisplayDependenciesSchema.optional().catch(undefined) });
+const proposalSchema = proposalSummaryObjectSchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional(),revisionResult:revisionResultEnvelopeSchema.nullable().optional(),
+  dependencies: proposalDisplayDependenciesSchema.optional().catch(undefined) }).superRefine(validateProposalItem);
 const diagnosticCount = z.number().int().nonnegative().max(1_000_000).nullable();
 const lookupPlanSchema = z.object({ routeCodes: z.array(z.string().min(2).max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).refine(value => value !== '/SECONDARY')).min(1).max(100), connectionGap: connectionGapSchema, selectionRevision: revision });
 const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('lookup'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),

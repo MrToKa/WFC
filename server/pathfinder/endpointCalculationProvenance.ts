@@ -34,6 +34,15 @@ export const automaticEndpointCalculationPointSchema = z.object({
 }).strict();
 export type AutomaticEndpointCalculationPoint = z.infer<typeof automaticEndpointCalculationPointSchema>;
 export type CurrentEndpointCalculationPoint = EndpointCalculationPoint | AutomaticEndpointCalculationPoint;
+// NFC is applied to the original name before uppercase. Uppercase can itself
+// produce decomposed characters; applying NFC a second time changes that key.
+const scopedLogicalKey = z.string().min(1).max(4096).refine(value => value === value.trim().toUpperCase()
+  && !/[\u0000-\u001f\u007f-\u009f]/u.test(value)
+  && [...value].every(character => character.length !== 1 || character.charCodeAt(0) < 0xd800 || character.charCodeAt(0) > 0xdfff));
+const scopedResolvedEndpoint = z.object({ logicalKey: scopedLogicalKey, locationId: uuid }).strict();
+export const scopedEndpointResolutionSchema = z.object({ schemaVersion: z.literal('pathfinder.endpoint-resolution.v1'),
+  matchingPolicy: z.literal('nfc-trim-uppercase-v1'), from: scopedResolvedEndpoint, to: scopedResolvedEndpoint }).strict();
+export type ScopedEndpointResolution = z.infer<typeof scopedEndpointResolutionSchema>;
 export const isAutomaticEndpointCalculationPoint = (value: CurrentEndpointCalculationPoint): value is AutomaticEndpointCalculationPoint =>
   'kind' in value && value.kind === 'automatic-equipment-anchor';
 export function automaticEndpointContentHash(value: Omit<AutomaticEndpointCalculationPoint, 'contentSha256'>): string {
@@ -52,14 +61,23 @@ export function endpointCalculationPoint(binding: EndpointBinding): EndpointCalc
 export function hasCurrentEndpointCalculationProvenance(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const input = value as Record<string, unknown>;
-  if (!['pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6'].includes(String(input.schemaVersion))) return false;
+  if (!['pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6', 'pathfinder.dependencies.v7'].includes(String(input.schemaVersion))) return false;
   const prep = endpointCalculationPreparationSchema.safeParse(input.preparation);
-  const automatic = input.schemaVersion === 'pathfinder.dependencies.v6';
+  const scoped = input.schemaVersion === 'pathfinder.dependencies.v7', automatic = input.schemaVersion === 'pathfinder.dependencies.v6' || scoped;
   const schema = automatic ? z.union([endpointCalculationPointSchema, automaticEndpointCalculationPointSchema]) : endpointCalculationPointSchema;
   const from = schema.safeParse(input.from);
   const to = schema.safeParse(input.to);
   if (!prep.success || !from.success || !to.success) return false;
-  if (automatic && ![from.data, to.data].some(isAutomaticEndpointCalculationPoint)) return false;
+  if (input.schemaVersion === 'pathfinder.dependencies.v6' && ![from.data, to.data].some(isAutomaticEndpointCalculationPoint)) return false;
+  if (scoped) {
+    const resolution = scopedEndpointResolutionSchema.safeParse(input.endpointResolution), cableInputs = input.cableInputs as { fromLocation?: unknown; toLocation?: unknown } | undefined;
+    const artifact = input.artifact as { sha256?: unknown } | undefined;
+    if (!resolution.success || Object.prototype.hasOwnProperty.call(input, 'registryRevision') || prep.data.projectionSha256 !== artifact?.sha256
+      || typeof cableInputs?.fromLocation !== 'string' || typeof cableInputs?.toLocation !== 'string'
+      || resolution.data.from.logicalKey !== cableInputs.fromLocation.normalize('NFC').trim().toUpperCase()
+      || resolution.data.to.logicalKey !== cableInputs.toLocation.normalize('NFC').trim().toUpperCase()
+      || resolution.data.from.locationId !== from.data.locationId || resolution.data.to.locationId !== to.data.locationId) return false;
+  }
   return [from.data, to.data].every(endpoint =>
     endpoint.aggregateId === prep.data.aggregateId &&
     endpoint.projectionSha256 === prep.data.projectionSha256 &&

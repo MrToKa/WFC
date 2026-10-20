@@ -8,6 +8,7 @@ import type { OperationPrincipal } from './operationAuthority.js';
 import { readGrantJobAuthority } from './grantJobAuthority.js';
 import { PathFinderError } from './errors.js';
 import { markRecalculationDirty } from './recalculationSchema.js';
+import { readLocationImpactJobAuthority } from './locationImpactRepository.js';
 
 type Row = Record<string, any>;
 const hash = (value: unknown): string => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
@@ -80,7 +81,8 @@ export type RecalculationEnrollmentResult={status:'enrolled'|'blocked'|'duplicat
 
 export type RecalculationJobAuthority={enrolled:false}|{enrolled:true;valid:boolean;code:string;generation:string;authorityEpoch:string};
 /** One bounded heartbeat read; `lock` is reserved for caller-owned dispatch/final transactions. */
-export async function readRecalculationJobAuthority(c:Pick<PoolClient,'query'>,input:{projectId:string;jobId:string;lock?:boolean}):Promise<RecalculationJobAuthority>{
+export async function readRecalculationJobAuthority(c:Pick<PoolClient,'query'>,input:{projectId:string;jobId:string;cableId?:string;lock?:boolean}):Promise<RecalculationJobAuthority>{
+  const scoped=await readLocationImpactJobAuthority(c,input);if(scoped)return scoped;
   const grantAuthority=await readGrantJobAuthority(c,input);if(grantAuthority)return grantAuthority;
   let lockedIdentity:{actor_id:string;login_id:string}|undefined,lockedAuthorityValid=true;
   if(input.lock){
@@ -107,7 +109,7 @@ export async function readRecalculationJobAuthority(c:Pick<PoolClient,'query'>,i
   if(!row.is_admin||row.login_user!==row.actor_id||row.revoked_at||row.requested_by!==row.actor_id||row.job_login!==row.login_id||new Date(row.expires_at).getTime()!==new Date(row.login_expires_at).getTime()||Math.min(new Date(row.expires_at).getTime(),new Date(row.authority_expires_at).getTime(),new Date(row.current_expiry).getTime())<=Date.now())return {...base,valid:false,code:'AUTOMATIC_AUTHORITY_EXPIRED'};
   return {...base,valid:true,code:'AUTOMATIC_AUTHORITY_CURRENT'};
 }
-export async function requireEnrollmentAuthority(c:PoolClient,input:{projectId:string;jobId:string}):Promise<void>{const value=await readRecalculationJobAuthority(c,{...input,lock:true});if(value.enrolled&&!value.valid)fail(value.code);}
+export async function requireEnrollmentAuthority(c:PoolClient,input:{projectId:string;jobId:string;cableId?:string}):Promise<void>{const value=await readRecalculationJobAuthority(c,{...input,lock:true});if(value.enrolled&&!value.valid)fail(value.code);}
 
 /** Call LAST after the normal current-admin job cancel UPDATE in the same transaction. */
 export async function pauseRecalculationForJob(c:PoolClient,input:{projectId:string;jobId:string}):Promise<boolean>{

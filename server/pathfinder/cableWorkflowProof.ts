@@ -9,6 +9,7 @@ import { requireVersionedCalculationScope } from './routingScope.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { readRecalculationJobAuthority } from './recalculationRepository.js';
+import { readProposalApplicability } from './proposalApplicability.js';
 
 export const WORKFLOW_PROOF_BYTES = 256 * 1024;
 type Data = Record<string, any>;
@@ -60,6 +61,13 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
       if (!verified || verified.raw.job_id !== jobId) return { currentness: 'unavailable' as const, reviewable: false, reasonCodes: ['PROPOSAL_PROOF_UNAVAILABLE'] };
       if (!current || hash(current) !== verified.raw.dependency_hash)
         return { currentness: 'changed' as const, reviewable: false, reasonCodes: ['PROPOSAL_DEPENDENCIES_CHANGED'] };
+      if(verified.dependencies.schemaVersion==='pathfinder.dependencies.v7'){
+        const applicable=await readProposalApplicability(client,{projectId,jobId,cableId,proposalId,
+          dependencyVersion:verified.dependencies.schemaVersion,dependencyHash:verified.raw.dependency_hash,
+          jobState:verified.raw.job_state,cancelRequested:verified.raw.cancel_requested,seal:verified.seal});check();
+        return {currentness:applicable.applicable?'current' as const:'changed' as const,reviewable:applicable.applicable,
+          reasonCodes:applicable.applicable?[]:['SCOPED_ITEM_NOT_APPLICABLE'],itemApplicability:applicable.evidence};
+      }
       if (!enrollment.has(jobId)) enrollment.set(jobId, readRecalculationJobAuthority(client, { projectId, jobId }));
       const authority = await enrollment.get(jobId)!; check();
       if (authority.enrolled && !authority.valid)
@@ -68,7 +76,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
         reasonCodes: verified.raw.cancel_requested ? ['CALCULATION_CANCEL_REQUESTED'] : [] };
     },
     /** Only a receipt-proven own write can explain the pre/post cable revision difference. */
-    async accepted(cable: CableWorkflowRow['cable'], currentForOptions: (options: unknown) => Promise<DependencySnapshot | null>): Promise<boolean> {
+    async accepted(cable: CableWorkflowRow['cable'], currentForOptions: (options: unknown,version:DependencySnapshot['schemaVersion']) => Promise<DependencySnapshot | null>): Promise<boolean> {
       check(); const receipt = (await client.query<Data>(`/* cable-workflow:accepted-proof */ SELECT r.id,r.project_id,r.cable_id,r.proposal_id,r.actor_id,r.idempotency_key,r.payload_hash,
         CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.before_snapshot ELSE NULL END AS before_snapshot,
         CASE WHEN octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)<=$3 THEN r.after_snapshot ELSE NULL END AS after_snapshot,
@@ -100,7 +108,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
           || provenance.revisionResult?.baselineHash !== seal.baselineHash || provenance.revisionResult?.ledgerHash !== seal.ledgerHash
           || after.routing !== result.route!.routeText || !decimalEqual(after.design_length, result.design!.designLengthMeters)
           || receipt.payload_hash !== hash({ proposalId: raw.id, idempotencyKey: receipt.idempotency_key, reviewId: receipt.review_id, expectedCableWriteRevision: before.cable_write_revision })) return false;
-        const current = await currentForOptions(dependencies.options); check();
+        const current = await currentForOptions(dependencies.options,dependencies.schemaVersion); check();
         // No mutation or general hash exception: restore exactly one proven own-write revision in this local comparison only.
         return current !== null && hash({ ...current, cableWriteRevision: before.cable_write_revision }) === raw.dependency_hash;
       } catch { check(); return false; }

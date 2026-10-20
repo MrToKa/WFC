@@ -5,6 +5,12 @@ const id=(n:number)=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 const preparation={aggregateId:id(1),geometryRevision:'4',captureFrameId:id(2),projectionSha256:'a'.repeat(64)};
 const scope={comparisonId:id(3),comparisonRevision:'7',sourceAggregateId:id(4),targetAggregateId:id(1),decisionSetSha256:'b'.repeat(64),contentSha256:'c'.repeat(64)};
 describe('comparison authority in calculation dependencies',()=>{
+ it('keeps exact target and explicit not-required comparison semantics for v7',()=>{
+  expect(valid({schemaVersion:'pathfinder.dependencies.v7',preparation,comparison:scope})).toBe(true);
+  expect(valid({schemaVersion:'pathfinder.dependencies.v7',preparation,comparison:null})).toBe(true);
+  expect(valid({schemaVersion:'pathfinder.dependencies.v7',preparation})).toBe(false);
+  expect(valid({schemaVersion:'pathfinder.dependencies.v7',preparation,comparison:{...scope,targetAggregateId:id(99)}})).toBe(false);
+ });
  it('keeps the comparison target fence for automatic endpoint dependency v6',()=>{expect(valid({schemaVersion:'pathfinder.dependencies.v6',preparation,comparison:scope})).toBe(true);expect(valid({schemaVersion:'pathfinder.dependencies.v6',preparation,comparison:null})).toBe(true);expect(valid({schemaVersion:'pathfinder.dependencies.v6',preparation,comparison:{...scope,targetAggregateId:id(9)}})).toBe(false);expect(valid({schemaVersion:'pathfinder.dependencies.v6',preparation})).toBe(false);});
  it('distinguishes an explicit not-required scope from an omitted or pending comparison',()=>{expect(valid({schemaVersion:'pathfinder.dependencies.v4',preparation,comparison:null})).toBe(true);expect(valid({schemaVersion:'pathfinder.dependencies.v4',preparation})).toBe(false);expect(valid({schemaVersion:'pathfinder.dependencies.v4',preparation,comparison:undefined})).toBe(false);expect(valid({schemaVersion:'pathfinder.dependencies.v4',preparation,comparison:{readiness:'pending'}})).toBe(false);});
  it('requires exact published target aggregate while keeping historical source distinct',()=>{expect(valid({schemaVersion:'pathfinder.dependencies.v4',preparation,comparison:scope})).toBe(true);expect(valid({schemaVersion:'pathfinder.dependencies.v4',preparation,comparison:{...scope,targetAggregateId:id(9)}})).toBe(false);expect(valid({schemaVersion:'pathfinder.dependencies.v4',preparation,comparison:{...scope,sourceAggregateId:scope.targetAggregateId}})).toBe(false);});

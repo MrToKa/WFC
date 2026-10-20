@@ -26,6 +26,9 @@ import {createManagedProducerControl,type ManagedControlConfiguration} from './m
 import {createProducerQualification} from './producerQualification.js';
 import {createManagedPreparationProducer} from './managedPreparationProducer.js';
 import {createGrantPreparedMaintenance} from './grantPreparedMaintenance.js';
+import { createLocationImpactRepository } from './locationImpactRepository.js';
+import { createLocationImpactProducer } from './locationImpactProducer.js';
+import { locationImpactAdmission } from './locationImpactAdmission.js';
 
 let runtime:ReturnType<typeof createRuntime>|undefined;
 function createRuntime() {
@@ -33,6 +36,8 @@ function createRuntime() {
   const recalculations=createRecalculationRepository(pool,jobs);
   const producer=createRecalculationProducer(recalculations,{beforeTick:createCalculationEngineObserver(pool,()=>worker.failureCode)});
   const grantProducer=createGrantRecalculationProducer(pool,jobs);
+  const locationImpacts=createLocationImpactRepository(pool,{admitInTransaction:locationImpactAdmission});
+  const locationImpactProducer=createLocationImpactProducer(locationImpacts);
   const controlConfiguration=process.env.PF_PRODUCER_CONTROL_KEY?{
     key:process.env.PF_PRODUCER_CONTROL_KEY,owner:process.env.PF_PRODUCER_OWNER,project:process.env.PF_PRODUCER_PROJECT,
     image:process.env.PF_PRODUCER_IMAGE,runtimeInventorySha256:process.env.PF_PRODUCER_RUNTIME_SHA256,
@@ -55,17 +60,18 @@ function createRuntime() {
     qualification:producerQualification,onPrepared:async({candidate,result},signal)=>{
       await preparedMaintenance.onPrepared({candidate:{projectId:candidate.projectId,grant:candidate.grant,...candidate.model},result},signal);
     }});
-  return {registry,jobs,apply,worker,recalculations,producer,grantProducer,managedControl,producerQualification,calculationGrants,producerResources,
+  return {registry,jobs,apply,worker,recalculations,producer,grantProducer,locationImpacts,locationImpactProducer,managedControl,producerQualification,calculationGrants,producerResources,
     preparedMaintenance,managedPreparationProducer,lookups:createPathFinderLookups(pool),previews:createPathFinderPreviews(pool),
     preparations,geometryTraces,revisionComparisons,endpointBindings:createEndpointBindingRepository(pool,createRevisionEndpointAdapters())};
 }
 export function getPathFinderRuntime() {return runtime ??= createRuntime();}
 export async function initializePathFinderRuntime():Promise<void> {
   if (!process.env.PF_ROOT || !process.env.PF_ENGINE_DLL) return;
-  await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();active.managedPreparationProducer.start();active.grantProducer.start();
+  await pathFinderRoot();const active=getPathFinderRuntime();active.worker.start();active.producer.start();active.managedPreparationProducer.start();active.grantProducer.start();active.locationImpactProducer.start();
 }
 export async function stopPathFinderRuntime():Promise<void> {
   await runtime?.managedPreparationProducer.stop();
   runtime?.managedControl.stop();runtime?.producerResources.service.close();
+  await runtime?.locationImpactProducer.stop();
   await runtime?.producer.stop();await runtime?.grantProducer.stop();await runtime?.worker.stop();
 }

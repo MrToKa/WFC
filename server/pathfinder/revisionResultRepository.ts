@@ -13,6 +13,8 @@ import { engineResponseSchema, optionsSchema, type DependencySnapshot, type Engi
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { readRecalculationJobAuthority } from './recalculationRepository.js';
 import { PathFinderError } from './errors.js';
+import { readProposalApplicability } from './proposalApplicability.js';
+import type { SealedCableItemApplicability } from '../../shared/pathfinderItemApplicability.js';
 
 type Row = Record<string, unknown>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The immutable cable revision result is unavailable or inconsistent. Refresh the admission and calculate a new proposal when required.'); };
@@ -30,7 +32,7 @@ const metadata = (row: Row): RevisionAdmission => revisionAdmissionSchema.parse(
 const admissionSelect = `SELECT id,project_id,job_id,generation::text,kind,input_sha256,options,model_ref,total,observed_events,created_at,
   to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at FROM pf_revision_admissions`;
 export type RevisionAdmissionItem = { cable: Row; dependencies: DependencySnapshot | null; status: string; message: string };
-export type RevisionAdmissionInput = { projectId: string; jobId: string | null; generation: string | null; kind: 'manual' | 'automatic'; inputSha256: string;
+export type RevisionAdmissionInput = { projectId: string; jobId: string | null; generation: string | null; kind: 'manual' | 'automatic' | 'location-impact'; inputSha256: string;
   options: EngineOptions; items: RevisionAdmissionItem[]; modelRef?: RevisionModelRef | null };
 
 /** Exact SQL NUMERIC text is required; Number coercion is never an admission fallback. */
@@ -195,16 +197,18 @@ const listOptions = z.object({ cursor: z.string().max(512).regex(/^[A-Za-z0-9_-]
 const cursorSchema = z.object({ createdAt: z.string().datetime({ offset: false }), id: policyUuidSchema }).strict();
 function decodeCursor(raw: string | undefined) { if (!raw) return null; try { const text = Buffer.from(raw, 'base64url').toString('utf8'), value = cursorSchema.parse(JSON.parse(text));
   if (Buffer.from(JSON.stringify(value)).toString('base64url') !== raw) return fail('REVISION_CURSOR_INVALID', 400); return value; } catch { return fail('REVISION_CURSOR_INVALID', 400); } }
-function projection(row: Row, currentness: RevisionCurrentness): RevisionResultRow {
+type CurrentDisplay=RevisionCurrentness&{itemApplicability?:SealedCableItemApplicability|null};
+function projection(row: Row, current: CurrentDisplay): RevisionResultRow {
+  const {itemApplicability,...currentness}=current;
   const baseline = verifiedBaseline(row), envelope = row.record === null || row.record === undefined ? null : verifiedEnvelope({ ...row, ...object(row.sealed_row) });
   const failedWithoutOutput = envelope === null && row.job_state === 'failed', cancelledWithoutOutput = envelope === null && row.job_state === 'cancelled';
   return revisionResultRowSchema.parse({ cableId: row.cable_id, baseline, baselineHash: row.baseline_sha256,
     status: envelope ? row.proposal_status : failedWithoutOutput ? 'failed' : cancelledWithoutOutput ? 'cancelled' : row.item_status ?? row.status,
     message: failedWithoutOutput ? row.job_failure ?? 'The calculation job failed before producing this cable result.' : cancelledWithoutOutput ? 'The calculation job was cancelled before producing this cable result.' : row.item_message ?? row.message,
     result: envelope ? { ...envelope.summary, proposalId: envelope.proposalId, proposalHash: envelope.proposalHash, revisionResultSha256: envelope.revisionResultSha256,
-      engineResultSha256: envelope.engineResultSha256, ledgerHash: envelope.ledgerHash, dependencyHash: envelope.dependencyHash } : null, currentness });
+      engineResultSha256: envelope.engineResultSha256, ledgerHash: envelope.ledgerHash, dependencyHash: envelope.dependencyHash } : null, currentness,...(itemApplicability?{itemApplicability}:{}) });
 }
-const cablePageSql = `SELECT b.*,i.status AS item_status,i.message AS item_message,p.status AS proposal_status,s.record,to_jsonb(s) AS sealed_row,j.state AS job_state,j.failure AS job_failure
+const cablePageSql = `SELECT b.*,i.status AS item_status,i.message AS item_message,p.status AS proposal_status,p.dependencies->>'schemaVersion' AS dependency_version,p.dependency_hash,p.id AS proposal_id,s.record,to_jsonb(s) AS sealed_row,j.state AS job_state,j.failure AS job_failure,j.cancel_requested
  FROM pf_revision_baselines b JOIN pf_revision_admissions a ON a.project_id=b.project_id AND a.id=b.admission_id
  LEFT JOIN pf_jobs j ON j.project_id=a.project_id AND j.id=a.job_id
  LEFT JOIN pf_job_items i ON i.project_id=b.project_id AND i.job_id=a.job_id AND i.cable_id=b.cable_id
@@ -217,14 +221,18 @@ export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage
     const row = (await client.query<Row>(admissionSelect + ' WHERE project_id=$1 AND id=$2', [projectId, policyUuidSchema.parse(admissionId)])).rows[0];
     if (!row) return fail('REVISION_ADMISSION_NOT_FOUND', 404); metadata(row); return row;
   };
-  async function currentPage(client: PoolClient, admission: Row, page: Row[]): Promise<Map<string, RevisionCurrentness>> {
-    const result = new Map<string, RevisionCurrentness>(), ids = page.map(r => String(r.cable_id)); if (!ids.length) return result;
+  async function currentPage(client: PoolClient, admission: Row, page: Row[]): Promise<Map<string, CurrentDisplay>> {
+    const result = new Map<string, CurrentDisplay>(), ids = page.map(r => String(r.cable_id)); if (!ids.length) return result;
     const currentRows = (await client.query<{ id: string; cable_write_revision: string }>('SELECT id,cable_write_revision::text FROM cables WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id', [admission.project_id, ids])).rows;
     const revisions = new Map(currentRows.map(r => [r.id, r.cable_write_revision]));
-    let batch: Awaited<ReturnType<typeof collect>> | null = null, unavailable = 'CURRENT_DEPENDENCIES_UNAVAILABLE';
-    try { if (currentRows.length) batch = await collect(client, { projectId: String(admission.project_id), options: optionsSchema.parse(admission.options), cableIds: currentRows.map(r => r.id) }); }
-    catch (error) { if (!(error instanceof PathFinderError)) throw error; unavailable = error.code; }
-    const items = new Map(batch?.items.map(i => [i.id, i]) ?? []), authority = admission.job_id === null ? null : await readRecalculationJobAuthority(client, { projectId: String(admission.project_id), jobId: String(admission.job_id) });
+    const items=new Map<string,Awaited<ReturnType<typeof collect>>['items'][number]>();let unavailable = 'CURRENT_DEPENDENCIES_UNAVAILABLE';
+    for(const scoped of [false,true]){
+      const selected=currentRows.filter(r=>page.some(row=>row.cable_id===r.id&&(row.dependency_version==='pathfinder.dependencies.v7')===scoped));
+      if(!selected.length)continue;
+      try { const batch=await collect(client,{projectId:String(admission.project_id),options:optionsSchema.parse(admission.options),cableIds:selected.map(r=>r.id),...(scoped?{dependencyVersion:'pathfinder.dependencies.v7' as const}:{})});for(const item of batch.items)items.set(item.id,item); }
+      catch(error){if(!(error instanceof PathFinderError))throw error;unavailable=error.code;}
+    }
+    const authority = admission.job_id === null ? null : await readRecalculationJobAuthority(client, { projectId: String(admission.project_id), jobId: String(admission.job_id) });
     for (const row of page) {
       const id = String(row.cable_id), baseline = verifiedBaseline(row), envelope = object(row.record), current = revisions.get(id);
       if (current === undefined) result.set(id, { state: 'missing', reasonCodes: ['CABLE_NOT_FOUND'] });
@@ -232,8 +240,15 @@ export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage
       else if (authority?.enrolled && !authority.valid) result.set(id, { state: 'changed', reasonCodes: [authority.code ?? 'AUTOMATIC_AUTHORITY_CHANGED'] });
       else if (!envelope) result.set(id, { state: 'unavailable', reasonCodes: ['CALCULATION_OUTPUT_UNAVAILABLE'] });
       else if (!items.get(id)?.dependencies) result.set(id, { state: 'unavailable', reasonCodes: [unavailable] });
-      else result.set(id, { state: revisionResultHash(items.get(id)!.dependencies) === envelope.dependencyHash ? 'current' : 'changed',
-        reasonCodes: revisionResultHash(items.get(id)!.dependencies) === envelope.dependencyHash ? [] : ['CALCULATION_DEPENDENCIES_CHANGED'] });
+      else {
+        const currentHash=revisionResultHash(items.get(id)!.dependencies),equal=currentHash===envelope.dependencyHash;
+        const perCable=admission.job_id!==null&&row.dependency_version==='pathfinder.dependencies.v7'?await readRecalculationJobAuthority(client,{projectId:String(admission.project_id),jobId:String(admission.job_id),cableId:id}):authority;
+        if(perCable?.enrolled&&!perCable.valid){result.set(id,{state:'changed',reasonCodes:[perCable.code]});continue;}
+        const sealed=equal&&row.dependency_version==='pathfinder.dependencies.v7'?verifiedEnvelope({...row,...object(row.sealed_row)}):null;
+        const applicable=sealed?await readProposalApplicability(client,{projectId:String(admission.project_id),jobId:sealed.jobId,cableId:id,proposalId:sealed.proposalId,
+          dependencyVersion:'pathfinder.dependencies.v7',dependencyHash:sealed.dependencyHash,jobState:String(row.job_state),cancelRequested:row.cancel_requested===true,seal:sealed}):null;
+        result.set(id,{state:equal?'current':'changed',reasonCodes:equal?[]:['CALCULATION_DEPENDENCIES_CHANGED'],itemApplicability:applicable?.evidence??null});
+      }
     }
     return result;
   }

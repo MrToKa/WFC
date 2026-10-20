@@ -5,7 +5,7 @@ import {
   CableEndpointApiError, fetchCableEndpointContext, fetchCableEndpointSelection, saveCableEndpoint, closePendingCableEndpoint,
   type CableEndpointContext, type CableEndpointCommand, type CableEndpointReceipt,
 } from '@/api/pathfinderCableEndpoints';
-import { readPendingCableEndpoint } from './cableEndpointPendingStore';
+import { readPendingCableEndpoint, retainPendingCableEndpoint } from './cableEndpointPendingStore';
 import { useCableEndpointSelection, type CableEndpointSelectionAccess } from './useCableEndpointSelection';
 
 vi.mock('@/api/pathfinderCableEndpoints', async original => ({ ...(await original<typeof import('@/api/pathfinderCableEndpoints')>()),
@@ -30,6 +30,7 @@ function receipt(input: CableEndpointCommand, selectedCable = cable, end: 'from'
   return { schemaVersion: 'wfc.pf.cable-endpoint-receipt.v1', projectId: project, actorId: actor, cableId: selectedCable, end, logicalName: input.expectedLogicalName,
     idempotencyKey: input.idempotencyKey, commandSha256: hash, expectedCableWriteRevision: input.expectedCableWriteRevision, expectedContextSha256: input.expectedContextSha256,
     locationId: id(11), duplicate: false, impact: { fromOccurrences: 1, toOccurrences: 1, distinctCables: 1, cableIds: [selectedCable] },
+    ...(input.schemaVersion === 'wfc.pf.cable-endpoint-command.v2' ? { locationImpact: { id: id(80), status: input.calculation === null ? 'blocked' as const : 'pending' as const, eligibleCables: 1, excludedMvCables: 0, blockedCategoryCables: 0 } } : {}),
     binding: { schemaVersion: 'wfc.pf.endpoint-binding-receipt.v1', projectId: project, locationId: id(11), registryRevision: '6', locationRevision: '1', duplicate: false,
       binding: { schemaVersion: 'wfc.pf.endpoint-binding.v1', id: id(10), projectId: project, locationId: id(11), locationRevision: '1', bindingRevision: '1', locationRegistryRevision: '6',
         modelVersionId: current.modelVersionId, aggregateId: current.aggregateId, artifactId: current.artifactId, projectionSha256: current.projectionSha256, captureFrameId: current.captureFrameId,
@@ -105,11 +106,12 @@ describe('persistent owned cable endpoint selection', () => {
     await act(async () => { expect(await view.result.current.save('Hidden save')).toBe(false); }); expect(saveCableEndpoint).not.toHaveBeenCalled();
     view.rerender(props); expect(view.result.current.draft).toEqual(draft); expect(fetchCableEndpointContext).toHaveBeenCalledOnce(); expect(view.result.current.canSave).toBe(true);
   });
-  it.each(['cable', 'end', 'model', 'account'] as const)('discards a late protected selection after its owner changes: %s', async kind => {
+  it.each(['cable', 'end', 'model', 'account', 'preferences'] as const)('discards a late protected selection after its owner changes: %s', async kind => {
     let finish!: (selection: ViewerSelection) => void; const props = { ...access(), readSelection: vi.fn(() => new Promise<ViewerSelection>(resolve => { finish = resolve; })) };
     const view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
     let pending!: Promise<void>; act(() => { pending = view.result.current.selectObject(); });
-    const change = kind === 'cable' ? { cableId: id(50) } : kind === 'end' ? { end: 'to' as const } : kind === 'model' ? { model: { ...props.model!, selectionRevision: '99' } } : { accountId: id(51), token: 'other-account' };
+    const change = kind === 'cable' ? { cableId: id(50) } : kind === 'end' ? { end: 'to' as const } : kind === 'model' ? { model: { ...props.model!, selectionRevision: '99' } }
+      : kind === 'preferences' ? { calculation: { preferences: { secondaryDistanceMeters: 7, preferVerticalApproach: false }, timeoutMilliseconds: 110000 } } : { accountId: id(51), token: 'other-account' };
     view.rerender({ ...props, ...change }); await act(async () => { finish(viewerSelection()); await pending; });
     expect(view.result.current.draft).toBeNull(); expect(fetchCableEndpointSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
   });
@@ -192,6 +194,34 @@ describe('persistent owned cable endpoint selection', () => {
     act(() => { one.result.current.setFixedPoint([1, 2, 3]); two.result.current.setFixedPoint([4, 5, 6]); });
     await act(async () => { await Promise.all([one.result.current.save('One'), two.result.current.save('Two')]); });
     expect(saveCableEndpoint).toHaveBeenCalledOnce(); expect(readPendingCableEndpoint(owner)?.cableId).toBe(cable); expect(two.result.current.pending?.cableId).toBe(cable);
+  });
+  it('retains supplied preferences and timeout exactly in new v2 commands without inventing configuration', async () => {
+    const calculation = { preferences: { secondaryDistanceMeters: 7, preferVerticalApproach: false }, timeoutMilliseconds: 110000 };
+    vi.mocked(saveCableEndpoint).mockRejectedValueOnce(new Error('Lost response'));
+    const view = renderHook(() => useCableEndpointSelection({ ...access(), calculation })); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    act(() => { view.result.current.setFixedPoint([1, 2, 3]); }); await act(async () => { await view.result.current.save('Configured assignment'); });
+    const pending = readPendingCableEndpoint(owner)!; expect(pending.command).toMatchObject({ schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation });
+    expect(vi.mocked(saveCableEndpoint).mock.calls[0][4]).toEqual(pending.command);
+  });
+  it('sends explicit null for absent configuration and refuses invalid configuration instead of guessing engine settings', async () => {
+    const props = access(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    act(() => { view.result.current.setFixedPoint([1, 2, 3]); }); await act(async () => { await view.result.current.save('Unconfigured assignment'); });
+    expect(vi.mocked(saveCableEndpoint).mock.calls[0][4]).toMatchObject({ schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null });
+    expect(view.result.current.receipt?.locationImpact?.status).toBe('blocked');
+    view.rerender({ ...props, calculation: { preferences: { secondaryDistanceMeters: Number.NaN, preferVerticalApproach: true }, timeoutMilliseconds: 60000 } });
+    await waitFor(() => expect(view.result.current.canSelect).toBe(true)); act(() => { view.result.current.setFixedPoint([1, 2, 3]); });
+    expect(view.result.current.canSave).toBe(false); await act(async () => { expect(await view.result.current.save('Invalid configuration')).toBe(false); });
+    expect(saveCableEndpoint).toHaveBeenCalledOnce(); expect(readPendingCableEndpoint(owner)).toBeNull();
+  });
+  it('keeps a retained legacy v1 command unchanged when recovering under configured v2 editor settings', async () => {
+    const current = context(), legacy: CableEndpointCommand = { schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idempotencyKey: id(90), expectedContextSha256: current.contextSha256,
+      expectedCableWriteRevision: current.cableWriteRevision, expectedLogicalName: current.logicalName!, expectedRegistryRevision: current.registryRevision,
+      expectedLocationId: null, expectedLocationRevision: null, expectedHeadId: null, expectedCurrent: current.current!, reason: 'Historical v1 assignment',
+      selection: { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: null } };
+    await retainPendingCableEndpoint(owner, cable, 'from', legacy);
+    const view = renderHook(() => useCableEndpointSelection({ ...access(), calculation: { preferences: { secondaryDistanceMeters: 7, preferVerticalApproach: false }, timeoutMilliseconds: 110000 } }));
+    await waitFor(() => expect(view.result.current.canRetry).toBe(true)); await act(async () => { expect(await view.result.current.retry()).toBe(true); });
+    expect(vi.mocked(saveCableEndpoint).mock.calls[0][4]).toEqual(legacy); expect(vi.mocked(saveCableEndpoint).mock.calls[0][4]).not.toHaveProperty('calculation');
   });
   it('blocks unnamed endpoints and MV instead of assigning an arbitrary model object name', async () => {
     vi.mocked(fetchCableEndpointContext).mockResolvedValueOnce({ ...context(), logicalName: null, logicalKey: null, canBind: false, reasonCodes: ['ENDPOINT_NAME_REQUIRED'] });

@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS pf_revision_baselines (
  FOREIGN KEY(project_id,admission_id) REFERENCES pf_revision_admissions(project_id,id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS pf_revision_baseline_cable ON pf_revision_baselines(project_id,cable_id,admission_id);
+ALTER TABLE pf_revision_admissions DROP CONSTRAINT IF EXISTS pf_revision_admissions_kind_check;
+ALTER TABLE pf_revision_admissions DROP CONSTRAINT IF EXISTS pf_revision_admissions_check;
+DO $$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='pf_revision_admissions'::regclass AND conname='pf_revision_admission_kind_v2') THEN
+  ALTER TABLE pf_revision_admissions ADD CONSTRAINT pf_revision_admission_kind_v2 CHECK(kind IN('manual','automatic','location-impact'));
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='pf_revision_admissions'::regclass AND conname='pf_revision_admission_scope_v2') THEN
+  ALTER TABLE pf_revision_admissions ADD CONSTRAINT pf_revision_admission_scope_v2 CHECK((kind='automatic' AND generation IS NOT NULL) OR (kind IN('manual','location-impact') AND generation IS NULL AND job_id IS NOT NULL));
+ END IF;
+END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS pf_revision_proposal_identity ON pf_proposals(project_id,job_id,cable_id,id);
 CREATE TABLE IF NOT EXISTS pf_revision_results (
  id uuid PRIMARY KEY, project_id uuid NOT NULL, admission_id uuid NOT NULL, job_id uuid NOT NULL, cable_id uuid NOT NULL, proposal_id uuid NOT NULL,

@@ -3,24 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PathFinderResults } from './PathFinderResults';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
+import type { PathFinderProposal } from '@/api/pathfinder';
+const mockScope = vi.hoisted(() => ({ initial: null as import('./PathFinderRevisionResults').PathFinderCalculationScope | null }));
 vi.mock('./pathFinderEndpointVisibility', async original => ({ ...await original<typeof import('./pathFinderEndpointVisibility')>(), proposalEndpointObjectIds: vi.fn(async () => [] as string[]) }));
 vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: () => <div>Server recalculation status</div> }));
 vi.mock('./PathFinderRevisionResults', async () => {
   const { useEffect, useState } = await import('react');
-  type Scope = { admissionId: string; jobId: string; ready: boolean; message: string | null };
+  type Scope = import('./PathFinderRevisionResults').PathFinderCalculationScope;
   return { PathFinderRevisionResults: ({ onOpenProposal, onScopeReadinessChange }: {
     onOpenProposal: (id: string, jobId: string) => void;
     onScopeReadinessChange?: (scope: Scope) => void;
   }) => {
-    const [scope, setScope] = useState<Scope>({ admissionId: id(70), jobId: id(7), ready: true, message: null });
+    const [scope, setScope] = useState<Scope>(mockScope.initial ?? { admissionId: id(70), jobId: id(7), ready: true, message: null });
     useEffect(() => { onScopeReadinessChange?.(scope); }, [scope, onScopeReadinessChange]);
     return <section aria-label="Mock revision results">
-      <button onClick={() => onOpenProposal(id(3), scope.jobId)}>Open exact proposal in Viewer</button>
+      <button onClick={() => { if (scope.jobId) onOpenProposal(id(3), scope.jobId); }}>Open exact proposal in Viewer</button>
       <button onClick={() => setScope({ admissionId: id(71), jobId: id(17), ready: true, message: null })}>Select another completed calculation</button>
     </section>;
   } };
 });
-beforeEach(() => { sessionStorage.clear(); vi.mocked(proposalEndpointObjectIds).mockReset().mockResolvedValue([]); });
+beforeEach(() => { sessionStorage.clear(); mockScope.initial = null; vi.mocked(proposalEndpointObjectIds).mockReset().mockResolvedValue([]); });
 afterEach(() => { sessionStorage.clear(); });
 describe('calculation production boundary', () => {
   it('does not create jobs from ready data or dependency changes; manual actions remain explicit', () => {
@@ -50,7 +52,8 @@ const options = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
 function recoveryFixture() {
   const proposal = { id: id(3), projectId: id(1), jobId: id(7), cableId: id(4), status: 'calculated', proposalHash: 'a'.repeat(64),
     revisionResultHash: 'b'.repeat(64), cableWriteRevision: '9', stale: false, synthetic: true, canApply: true,
-    engineeringAccepted: true, acceptanceScope: 'local-synthetic-fixture', compatibilityIssue: null, message: 'Calculated fixture.',
+    engineeringAccepted: true, acceptanceScope: 'local-synthetic-fixture', compatibilityIssue: null as string | null, message: 'Calculated fixture.',
+    itemApplicability: null as PathFinderProposal['itemApplicability'],
     engineeringMessage: 'Controlled local fixture.', routingPreferences: options, createdAt: '2026-10-19T14:00:00Z',
     design: { lengthBeforePercentageMeters: '6', unroundedLengthMeters: '6.6', designLengthMeters: '7' },
     route: { success: true, points: [[1, 2, 3]], objectIds: ['dbid:23'], lengthMeters: 1, fromDistanceMeters: 0, toDistanceMeters: 0,
@@ -71,6 +74,16 @@ function recoveryFixture() {
 }
 type Fixture = ReturnType<typeof recoveryFixture>;
 const asPf = (pf: Fixture['pf']) => pf as unknown as ReturnType<typeof usePathFinder>;
+function sealedFixture() {
+  const f = recoveryFixture(), base = f.pf.data.proposals[0];
+  const proposal = { ...base, itemApplicability: { schemaVersion: 'wfc.pf.sealed-cable-applicability.v1' as const,
+    dependencyVersion: 'pathfinder.dependencies.v7' as const, projectId: base.projectId, jobId: base.jobId, cableId: base.cableId,
+    proposalId: base.id, dependencyHash: 'c'.repeat(64), scope: 'sealed-cable-item' as const },
+    provenance: { dependencyVersion: 'pathfinder.dependencies.v7' as const, dependencyHash: 'c'.repeat(64), engineIdentity: null, automatic: null } };
+  f.pf.readProposal.mockResolvedValue(proposal);
+  mockScope.initial = { admissionId: id(70), jobId: id(7), ready: false, message: 'Other cables are calculating.', wholeJobReady: false, jobStatus: 'running', cancelRequested: false };
+  return { f, proposal };
+}
 async function submitFirstApply(fixture: Fixture) {
   fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
@@ -82,6 +95,60 @@ async function submitFirstApply(fixture: Fixture) {
 }
 
 describe('exact pending Apply through result display resets', () => {
+  it('reviews a fresh individually sealed v7 result while siblings calculate, without requiring it on the current page or recent list', async () => {
+    const { f, proposal } = sealedFixture();
+    render(<PathFinderResults pf={asPf({ ...f.pf, data: { ...f.pf.data, proposals: [] } })} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeEnabled());
+    fireEvent.click(screen.getByText('Calculation provenance'));
+    expect(screen.getByText(/Shared location calculation\. An individually sealed cable result is recorded/)).toBeVisible();
+    expect(screen.queryByText(/Automatic generation:/)).toBeNull();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+    f.pf.reviewProposal.mockResolvedValueOnce({ reviewId: id(5), proposal });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm proposal review' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply reviewed result' })).toBeEnabled());
+    expect(f.pf.reviewProposal).toHaveBeenCalledWith(proposal); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it.each(['projectId', 'jobId', 'cableId', 'proposalId', 'dependencyHash'] as const)('refuses active-parent item proof with a different %s', async field => {
+    const { f, proposal } = sealedFixture();
+    f.pf.readProposal.mockResolvedValueOnce({ ...proposal, itemApplicability: { ...proposal.itemApplicability, [field]: field === 'dependencyHash' ? 'd'.repeat(64) : id(99) } });
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it.each(['unknown', 'failed', 'cancelled', 'cancellation requested'] as const)('keeps sealed v7 results blocked when the parent is %s', async state => {
+    const { f } = sealedFixture();
+    mockScope.initial = { ...mockScope.initial!, jobStatus: state === 'unknown' ? null : state === 'cancellation requested' ? 'running' : state,
+      cancelRequested: state === 'cancellation requested' };
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
+  });
+  it.each(['failed', 'cancelled', 'cancellation requested'] as const)('preserves a checked %s scope fence when the recent job observation still says running', async state => {
+    const { f } = sealedFixture();
+    mockScope.initial = { ...mockScope.initial!, jobStatus: state === 'cancellation requested' ? 'running' : state,
+      cancelRequested: state === 'cancellation requested' };
+    const pf = { ...f.pf, data: { ...f.pf.data, jobs: [{ id: id(7), status: 'running', cancelRequested: false }] } };
+    render(<PathFinderResults pf={pf as unknown as ReturnType<typeof usePathFinder>} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it.each(['missing proof', 'legacy dependency', 'server refusal', 'stale', 'incompatible'] as const)('does not use an active-parent proof to bypass %s', async issue => {
+    const { f, proposal } = sealedFixture();
+    const detail = { ...proposal, ...(issue === 'missing proof' ? { itemApplicability: null } : {}),
+      ...(issue === 'legacy dependency' ? { provenance: { ...proposal.provenance, dependencyVersion: 'pathfinder.dependencies.v6' } } : {}),
+      ...(issue === 'server refusal' ? { canApply: false } : {}), ...(issue === 'stale' ? { stale: true } : {}),
+      ...(issue === 'incompatible' ? { compatibilityIssue: 'Recalculate this result.' } : {}) };
+    f.pf.readProposal.mockResolvedValueOnce(detail);
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledOnce());
+    expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
   it('keeps the selected completed calculation separate from newer running proposals for the same cable', async () => {
     const f = recoveryFixture(), completed = f.pf.data.proposals[0];
     const running = { ...completed, id: id(33), jobId: id(17), canApply: false };
@@ -187,7 +254,7 @@ describe('exact pending Apply through result display resets', () => {
     const pf = { ...f.pf, data: { ...f.pf.data, jobs: [{ id: id(7), status, cancelRequested: false }] } };
     render(<PathFinderResults pf={pf as unknown as ReturnType<typeof usePathFinder>} selectedCableId={id(4)} accountId={id(2)} options={options} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
-    expect(await screen.findByText(new RegExp(`This calculation is ${status}`))).toBeVisible();
+    expect(await screen.findByText(new RegExp(status === 'failed' ? 'This calculation failed' : `This calculation is ${status}`))).toBeVisible();
     expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled();
   });
   it('keeps the current model appearance while the selected proposal is being read', async () => {

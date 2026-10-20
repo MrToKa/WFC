@@ -13,7 +13,7 @@ import { revisionBaselineSchema, revisionResultEnvelopeSchema } from '../../shar
 const seams = vi.hoisted(() => ({ claim: vi.fn(), acquire: vi.fn(), transaction: vi.fn(), collect: vi.fn(),
   enrollment: vi.fn(), readEnrollment: vi.fn(), identity: vi.fn(), retain: vi.fn(), requireGrant: vi.fn(), baseline: vi.fn(), seal: vi.fn() }));
 vi.mock('./workerScheduling.js', async original => ({ ...await original<typeof import('./workerScheduling.js')>(), claimCalculationSlice: seams.claim }));
-vi.mock('./dependencies.js', () => ({ collectDependencies: seams.collect, hash: () => 'e'.repeat(64),
+vi.mock('./dependencies.js', () => ({ collectDependencies: seams.collect, collectDependenciesForVersion: seams.collect, hash: () => 'e'.repeat(64),
   geometryHash: () => 'f'.repeat(64), verifiedDesignOnlyChange: () => false }));
 vi.mock('./operationAuthority.js', async original => ({ ...await original<typeof import('./operationAuthority.js')>(), operationTransaction: seams.transaction }));
 vi.mock('./grantWorkerAuthority.js', async original => ({ ...await original<typeof import('./grantWorkerAuthority.js')>(), acquireGrantJobExecution: seams.acquire }));

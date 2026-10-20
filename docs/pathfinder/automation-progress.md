@@ -1,5 +1,21 @@
 # PathFinder local implementation progress
 
+## PF-U3 — scoped affected recalculation — VERIFIED 2026-10-20
+
+Branch pf-u3-scoped-location-recalculation-local-20261020, inherited handoff
+83dd2c3b03d286d7fc29967f630aaf903b586d27, U2source69cad721. Read Git for containing
+U3delivery. TECHNICAL_FOUNDATION_PASS892/892checks (872synthetic42files+20actualPG
+2files), frontend/backendtypes, allchangedscopedlint/diffPASS. Report64 and
+u3-actual.json record exactsourcehashes/scope/limits/failuresfixed. All editing
+agentsfrozen; rootsoleactualexecutor. v7scopedcurrentness, atomicimpactoutbox,
+percablelatesttargets, fairtargetedadmission, finiteauthority/restorefences,
+sealeditemready/progress implemented. No cablewrites/engine mathchanges.
+OwnPGfixture56e0f764/container9f3f1ee6 RETIRED; generatedcredentialsremoved.
+No5191/original5180/5190 SQL/HTTPwrite/restart/upgrade/calculation/Review/Apply.
+Next finalizeU4handoff from U3commit, create inheritedbranch and execute conditional
+initialfill +orderedcomparison. New5impacttables mustenter U7/U8backup inventories.
+PF-UautomationACTIVE; PreparerPAUSED. No push/PR/merge/deploy/sourcesedits; preserve
+models/backups/deniedpaths. Historical .pf0-work/.pf2-work unchanged.
 ## PF-U2 — exact cable endpoint selection — VERIFIED 2026-10-20
 
 Branch pf-u2-cable-endpoint-selection-local-20261020, inherited d0da2def;

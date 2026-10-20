@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { CABLE_ENDPOINT_SELECTION_INDEX_SQL } from './cableEndpointSelectionSchema.js';
+import { initializeLocationImpactSchema } from './locationImpactSchema.js';
 import { initializePathFinderJobs } from './jobsSchema.js';
 import { initializePurposePolicySchema } from './policySchema.js';
 import { initializeArtifactRoutingScope } from './routingScope.js';
@@ -139,5 +140,6 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeGrantOperationSchema(pool);
   await initializeProducerResourceSchema(pool);
   await initializeRevisionResultSchema(pool);
+  await initializeLocationImpactSchema(pool);
   await initializeApplyRecoverySchema(pool);
 }

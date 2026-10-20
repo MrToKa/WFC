@@ -81,6 +81,9 @@ CREATE TRIGGER pf_recalculation_project_init AFTER INSERT ON projects FOR EACH R
 CREATE OR REPLACE FUNCTION pf_recalculation_row_event() RETURNS trigger LANGUAGE plpgsql AS $$
  DECLARE b jsonb;a jsonb;pid uuid;changed boolean:=false;kind text;why text;source_value text;BEGIN
  IF TG_OP<>'INSERT' THEN b=to_jsonb(OLD);END IF;IF TG_OP<>'DELETE' THEN a=to_jsonb(NEW);END IF;
+ -- Only the versioned endpoint command owns a same-transaction scoped impact.
+ -- Legacy endpoint writers and every other global dependency retain their events.
+ IF TG_TABLE_NAME IN('pf_project_state','pf_endpoint_binding_heads') AND current_setting('wfc.pathfinder_location_impact',true)='1' THEN RETURN COALESCE(NEW,OLD);END IF;
  pid=COALESCE(a->>'project_id',b->>'project_id')::uuid;
  CASE TG_TABLE_NAME
  WHEN 'projects' THEN pid=COALESCE(a->>'id',b->>'id')::uuid;kind='settings';why='PROJECT_SETTINGS_CHANGED';changed=(b->'connection_gap',b->'secondary_tray_length',b->'end_connection_length',b->'additional_bending_percent') IS DISTINCT FROM (a->'connection_gap',a->'secondary_tray_length',a->'end_connection_length',a->'additional_bending_percent');

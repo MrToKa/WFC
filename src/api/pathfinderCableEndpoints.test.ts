@@ -32,7 +32,8 @@ function receipt(input = command()) {
   return { schemaVersion: 'wfc.pf.cable-endpoint-receipt.v1', projectId: project, actorId: actor, cableId: cable, end: 'from', logicalName: 'LP-001', idempotencyKey: input.idempotencyKey,
     commandSha256: digest(input), expectedCableWriteRevision: input.expectedCableWriteRevision, expectedContextSha256: input.expectedContextSha256, locationId: id(11),
     binding: { schemaVersion: 'wfc.pf.endpoint-binding-receipt.v1', projectId: project, locationId: id(11), registryRevision: '6', locationRevision: '1', binding, duplicate: false },
-    impact: { fromOccurrences: 1, toOccurrences: 1, distinctCables: 1, cableIds: [cable] }, duplicate: false };
+    impact: { fromOccurrences: 1, toOccurrences: 1, distinctCables: 1, cableIds: [cable] },
+    ...(input.schemaVersion === 'wfc.pf.cable-endpoint-command.v2' ? { locationImpact: { id: id(80), status: input.calculation === null ? 'blocked' as const : 'pending' as const, eligibleCables: 1, excludedMvCables: 0, blockedCategoryCables: 0 } } : {}), duplicate: false };
 }
 function closure(input = command()) { return { schemaVersion: 'wfc.pf.cable-endpoint-recovery.v1', status: 'closed', closure: {
   schemaVersion: 'wfc.pf.cable-endpoint-closed.v1', actorId: actor, projectId: project, cableId: cable, end: 'from', idempotencyKey: input.idempotencyKey,
@@ -75,6 +76,23 @@ describe('exact cable endpoint transport and recovery', () => {
     const result = receipt(); result.binding.binding.confirmedBy = id(88); result.binding.binding.reason = 'Historical shared binding';
     result.binding.binding.contentSha256 = digest(endpointBindingContentHashInput(result.binding.binding));
     vi.mocked(fetch).mockResolvedValueOnce(response(result)); await expect(saveCableEndpoint(project, 'token', cable, 'from', command(), actor)).resolves.toEqual(result);
+  });
+  it('seals explicit v2 preferences/timeout while keeping legacy v1 bodies byte-for-byte unchanged', async () => {
+    const legacy = command(), input: CableEndpointCommand = { ...legacy, schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: { preferences: { secondaryDistanceMeters: 7, preferVerticalApproach: false }, timeoutMilliseconds: 110000 } };
+    vi.mocked(fetch).mockResolvedValueOnce(response(receipt(input))).mockResolvedValueOnce(response(receipt(legacy)));
+    await saveCableEndpoint(project, 'token', cable, 'from', input, actor); await saveCableEndpoint(project, 'token', cable, 'from', legacy, actor);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBe(JSON.stringify(input)); expect(vi.mocked(fetch).mock.calls[1][1]?.body).toBe(JSON.stringify(legacy));
+    expect(vi.mocked(fetch).mock.calls[1][1]?.body).not.toContain('calculation');
+  });
+  it('requires a truthful bounded impact reference for v2, including blocked configuration when null', async () => {
+    const input: CableEndpointCommand = { ...command(), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation: null }, valid = receipt(input);
+    vi.mocked(fetch).mockResolvedValueOnce(response(valid)); await expect(saveCableEndpoint(project, 'token', cable, 'from', input, actor)).resolves.toEqual(valid);
+    const { locationImpact: _ref, ...missing } = valid;
+    for (const test of [{ value: missing, body: input }, { value: { ...valid, locationImpact: { ...valid.locationImpact!, status: 'pending' } }, body: input },
+      { value: { ...valid, locationImpact: { ...valid.locationImpact!, eligibleCables: 9 } }, body: input }, { value: { ...receipt(), locationImpact: valid.locationImpact }, body: command() }]) {
+      vi.mocked(fetch).mockResolvedValueOnce(response(test.value));
+      await expect(saveCableEndpoint(project, 'token', cable, 'from', test.body, actor)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
   });
   it('requires the exact retained immutable object reference for an object-derived save', async () => {
     const input = { ...command(), selection: { mode: 'object-derived' as const, sdkObjectId: 44, object: { traceId: id(8), objectRevisionId: id(20), recordSha256: hash } } };

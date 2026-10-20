@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { z } from 'zod';
 import { PathFinderError } from './errors.js';
-import { collectDependencies, hash, hasSyntheticProof } from './dependencies.js';
+import { collectDependenciesForVersion, hash, hasSyntheticProof } from './dependencies.js';
 import { readSnapshot } from './storage.js';
 import type { applySchema, DependencySnapshot, JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
@@ -13,6 +13,7 @@ import { requireEnrollmentAuthority } from './recalculationRepository.js';
 import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { readApplyAbandonment } from './applyRecovery.js';
+import { readProposalApplicability } from './proposalApplicability.js';
 
 type Row = Record<string,any>;
 function receiptDto(row:Row) {
@@ -38,15 +39,18 @@ export function createPathFinderApply(pool:Pool) {
     const dependencies = proposal.dependencies as DependencySnapshot,result = proposal.result;
     if (!proposalRoutingPreferences(dependencies.options)) throw new PathFinderError('PROPOSAL_PREFERENCES_REQUIRED',409,'The original calculation preferences are unavailable. Calculate and review a fresh proposal.');
     requireVersionedCalculationScope(dependencies);
-    if (proposal.status !== 'calculated' || !result.route?.success || !result.design || proposal.job_state !== 'complete' || proposal.cancel_requested) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409);
+    if (proposal.status !== 'calculated' || !result.route?.success || !result.design || proposal.cancel_requested) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409);
     const revisionResult=await verifyRevisionResultForProposal(client,{projectId,proposalId,result,dependencies,proposalHash:proposal.proposal_hash});
+    const applicability=await readProposalApplicability(client,{projectId,jobId:proposal.job_id,cableId:proposal.cable_id,proposalId,
+      dependencyHash:proposal.dependency_hash,dependencyVersion:dependencies.schemaVersion,jobState:proposal.job_state,cancelRequested:proposal.cancel_requested,seal:revisionResult});
+    if(!applicability.applicable)throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409);
     if(!revisionResult||!revisionResult.ledgerHash||review.revision_result_sha256!==revisionResult.revisionResultSha256
       ||review.review_dependency_sha256!==proposal.dependency_hash||review.review_login_id!==who.loginId)throw new PathFinderError('REVISION_RESULT_REVIEW_REQUIRED',409,'Calculate and review a fresh result with its exact cable baseline and length components in the current login.');
     requireCalculationLengthLedger(result,dependencies.settings);
     const synthetic=await hasSyntheticProof(client,dependencies);
     if (!synthetic && review.validation_method!=='manual-review') throw new PathFinderError('MANUAL_REVIEW_REQUIRED',409,'Confirm manual review of this exact proposal before applying it. Historical reviews do not grant manual acceptance.');
     await calculationEngineIdentity({force:true});
-    const current = await collectDependencies(client,projectId,proposal.cable_id,dependencies.options,true);
+    const current = await collectDependenciesForVersion(client,projectId,proposal.cable_id,dependencies.options,dependencies.schemaVersion,true);
     if (!current.dependencies || hash(current.dependencies) !== proposal.dependency_hash || input.expectedCableWriteRevision !== current.cable.cable_write_revision) throw new PathFinderError('PROPOSAL_STALE',409,'The cable or a calculation dependency changed. Recalculate and review.');
     await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
     const length = result.design.designLengthMeters;
@@ -58,7 +62,7 @@ export function createPathFinderApply(pool:Pool) {
     if (compatibilityIssue) throw new PathFinderError('ROUTING_OUTSIDE_WFC_LIMIT',409,compatibilityIssue);
     assertLoginNotExpired(who);
     const before = (await client.query<Row>(`SELECT to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value FROM cables c WHERE c.project_id=$1 AND c.id=$2`,[projectId,proposal.cable_id])).rows[0].value;
-    await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id});
+    await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id,cableId:proposal.cable_id});
     await client.query("SELECT set_config('wfc.pathfinder_apply','1',true)");
     const after = (await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW()
       WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,[projectId,proposal.cable_id,route,length,input.expectedCableWriteRevision])).rows[0]?.value;
@@ -82,7 +86,7 @@ export function createPathFinderApply(pool:Pool) {
     const receipt = (await client.query<Row>(`INSERT INTO pf_apply_receipts(id,project_id,actor_id,idempotency_key,payload_hash,proposal_id,cable_id,before_snapshot,after_snapshot,provenance)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,[randomUUID(),projectId,who.userId,input.idempotencyKey,payloadHash,proposalId,proposal.cable_id,before,after,provenance])).rows[0];
     assertLoginNotExpired(who);
-    await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id});
+    await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id,cableId:proposal.cable_id});
     return {receipt:receiptDto(receipt),duplicate:false};
   });
 }
