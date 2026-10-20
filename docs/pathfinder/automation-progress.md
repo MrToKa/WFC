@@ -1,5 +1,38 @@
 # PathFinder local implementation progress
 
+## Current checkpoint — remaining U7 genuine server chain ACTIVE
+
+- Branch pf-u7-genuine-chain-local-20261021 HEAD1e10ba2d inherits U8 delivery
+  5abbf2db and standalone handoff PF-U7-genuine-server-chain.md. U8 source5191
+  images/healthy demo/backup/proofs preserved, target5192 retired; no new source
+  writes/restarts. Root is the sole actual Docker/SQL/HTTP/process executor.
+- Fresh native fixture a4af1644-c70f-4a6e-8e0f-ec1f82528bda created normally.
+  Frozen bootstrapf693 actual PASS through genuine import/Ready publication/
+  filesystem readback/normal first-admin login+viewer binding, receipt under
+  genuine-import-00b4ad0c-2589-4ddf-b6ab-1e6be0bf9bc9. No fabricated readiness.
+- Frozen fullchain5034 actual FAIL EPERM at first preparation upload; separate
+  cleanupPASS joined producers/worker/pool. Root read-only probes proved exact
+  Windows limitation: directory fs.open('r') PASS, handle.sync() EPERM/fsync.
+  Preserve durability checks; do not ignore EPERM/precreate around them. Details/
+  trays/policy/session may already be committed in that own fixture; no retry.
+  Exact owned-pg container0673d4ee was RETIRED; fixture credentials removed,
+  failed/import/probe evidence retained. No active runtime helper/fixture/session.
+- Next useful independent work: fresh Linux-container harness matching actual
+  API3476333e /app/server/dist +/opt/pathfinder, own new PG and named POSIX data
+  volume, namespace container:exactPGID/127.0.0.1:5432, no Docker socket inside.
+  preview_diagnosis owns NEW ignored Linux bootstrap/chain boundary source;
+  batch_contracts owns NEW ignored root fixture/coordinator; read_performance
+  maps the minimal individually pinned RO source/import closure. No whole
+  workspace/foreignscratch mounts and no product FS guard weakening. Root alone
+  provisions/executes/retires after final source/test/peer freeze. Never edit an
+  executed source or overwrite old failure receipts. Actual Linux chain NOT_RUN.
+- Real Aalborg reread/SDK UI remain BLOCKED by saved origin refusal; synthetic
+  server checks do not bypass it or prove object-derived visibility capture.
+  Native parity/closed-browser producer/human engineering acceptance NOT_RUN.
+  Original5180/5190, originals, sources/ and all historical denied scratch paths
+  untouched. Preparer remains PAUSED; no push/PR/merge. Automatic continuation
+  ACTIVE; do not routine-stop while this independent Linux check is possible.
+
 ## Current checkpoint — PF-U8 operational delivery verified; remaining U7 chain NEXT
 
 - Branch pf-u8-owned-popup-delivery-local-20261021; runtime source ea9848c.
