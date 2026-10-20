@@ -6,6 +6,11 @@ import { useProjectPreparation } from './useProjectPreparation';
 import type { usePathFinder } from './usePathFinder';
 import {completedEvidenceFixture} from '@/test/geometryTraceFixtures';
 import {saveCaptureEvidence} from '@/api/pathfinderGeometryTrace';
+import { bindCompletedCaptureEvidence } from '../../../../viewer-runtime/capture-evidence.mjs';
+vi.mock('../../../../viewer-runtime/capture-evidence.mjs', async original => {
+  const actual = await original<typeof import('../../../../viewer-runtime/capture-evidence.mjs')>();
+  return { ...actual, bindCompletedCaptureEvidence: vi.fn(actual.bindCompletedCaptureEvidence) };
+});
 vi.mock('@/api/pathfinderGeometryTrace',async original=>({...await original<typeof import('@/api/pathfinderGeometryTrace')>(),saveCaptureEvidence:vi.fn()}));
 vi.mock('@/api/pathfinderPreparation', async (original) => ({
   ...(await original<typeof api>()),
@@ -56,6 +61,73 @@ function setup() {
 }
 beforeEach(() => vi.clearAllMocks());
 describe('project preparation lifecycle', () => {
+  it('does not install old evidence commands after the login changes during hashing', async () => {
+    const { pf, committed } = setup(), evidence = await completedEvidenceFixture();
+    let finishHash!: (value: typeof evidence) => void;
+    vi.mocked(bindCompletedCaptureEvidence).mockImplementationOnce(() => new Promise(resolve => { finishHash = resolve; }));
+    vi.mocked(pf.runProjectPreparation).mockImplementation(async (_scope, operation) => operation({ assertCurrent: () => {}, capture: vi.fn().mockResolvedValue({ snapshot: { synthetic: true }, summary: { completedEvidence: evidence } }) } as never));
+    vi.mocked(api.uploadPreparationPart).mockResolvedValue({ schemaVersion: 'wfc.pf.preparation-part-receipt.v1', part: committed, sessionRevision: '2', duplicate: false });
+    vi.mocked(api.savePreparationResolution).mockResolvedValue({} as never);
+    const { result, rerender } = renderHook(({ current }) => useProjectPreparation(current, true), { initialProps: { current: pf } });
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    let collecting!: Promise<void>;
+    act(() => { collecting = result.current.collect(); });
+    await waitFor(() => expect(finishHash).toBeTypeOf('function'));
+    rerender({ current: { ...pf, preparationAccess: { ...pf.preparationAccess, token: 'next-login' } } });
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    await act(async () => { finishHash(evidence); await collecting; });
+    expect(saveCaptureEvidence).not.toHaveBeenCalled();
+    await act(() => result.current.resolve(ids.tray, 'reset', [], 'New login command'));
+    expect(api.savePreparationResolution).toHaveBeenCalledOnce();
+  });
+  it('does not erase the new login exact pending command when an older write finishes late', async () => {
+    const { pf } = setup();
+    let finishOld!: (value: never) => void;
+    vi.mocked(api.savePreparationResolution).mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; })).mockRejectedValueOnce(new TypeError('Lost new login acknowledgement')).mockResolvedValueOnce({} as never);
+    const { result, rerender } = renderHook(({ current }) => useProjectPreparation(current, true), { initialProps: { current: pf } });
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    let oldWrite!: Promise<void>;
+    act(() => { oldWrite = result.current.resolve(ids.tray, 'reset', [], 'Old login command'); });
+    await waitFor(() => expect(api.savePreparationResolution).toHaveBeenCalledOnce());
+    rerender({ current: { ...pf, preparationAccess: { ...pf.preparationAccess, token: 'next-login' } } });
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    await act(() => result.current.resolve(ids.tray, 'reset', [], 'New login command'));
+    const pendingBody = vi.mocked(api.savePreparationResolution).mock.calls[1][2];
+    expect(result.current.unknown).toBe(true);
+    await act(async () => { finishOld({} as never); await oldWrite; });
+    await act(() => result.current.retry());
+    expect(api.savePreparationResolution).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(api.savePreparationResolution).mock.calls[2][2]).toBe(pendingBody);
+    expect(result.current.unknown).toBe(false);
+  });
+  it('distinguishes extraction, part upload and evidence wait without reporting completion early', async () => {
+    const { pf, session, committed } = setup(), evidence = await completedEvidenceFixture();
+    let finishCapture!: (value: never) => void, finishUpload!: (value: never) => void, finishEvidence!: (value: never) => void;
+    const capture = vi.fn(() => new Promise((resolve) => { finishCapture = resolve; }));
+    vi.mocked(pf.runProjectPreparation).mockImplementation(async (_scope, operation) => operation({
+      assertCurrent: () => {}, readSelection: vi.fn(), discover: vi.fn(), capture,
+    } as never));
+    vi.mocked(api.uploadPreparationPart).mockImplementation(() => new Promise((resolve) => { finishUpload = resolve; }));
+    vi.mocked(saveCaptureEvidence).mockImplementation(() => new Promise((resolve) => { finishEvidence = resolve; }));
+    const { result } = renderHook(() => useProjectPreparation(pf, true));
+    await waitFor(() => expect(result.current.session).not.toBeNull());
+    let collecting!: Promise<void>;
+    act(() => { collecting = result.current.collect(); });
+    await waitFor(() => expect(result.current.progress).toContain('Collecting part 1 of 1'));
+    expect(api.uploadPreparationPart).not.toHaveBeenCalled();
+    await act(async () => { finishCapture({ snapshot: { synthetic: true }, summary: { completedEvidence: evidence } } as never); });
+    await waitFor(() => expect(result.current.progress).toContain('Uploading part 1 of 1'));
+    expect(saveCaptureEvidence).not.toHaveBeenCalled();
+    expect(result.current.busy).toBe(true);
+    await act(async () => { finishUpload({ schemaVersion: 'wfc.pf.preparation-part-receipt.v1', part: committed, sessionRevision: '2', duplicate: false } as never); });
+    await waitFor(() => expect(result.current.progress).toContain('Saving capture evidence for part 1 of 1'));
+    expect(result.current.busy).toBe(true);
+    expect(capture).toHaveBeenCalledOnce();
+    vi.mocked(api.fetchPreparationSession).mockResolvedValue({ ...session, state: 'collecting', parts: [committed], coverage: { expectedParts: 1, committedParts: 1, requestedScopeComplete: true, missingPartIds: [] } });
+    await act(async () => { finishEvidence({} as never); await collecting; });
+    expect(result.current.busy).toBe(false);
+    expect(result.current.notice).toContain('Every planned part');
+  });
   it('retains completed evidence after a committed part and retries only its exact unknown evidence upload',async()=>{
     const {pf,session,committed}=setup(),evidence=await completedEvidenceFixture();
     vi.mocked(pf.runProjectPreparation).mockImplementation(async(_scope,operation)=>operation({assertCurrent:()=>{},readSelection:vi.fn(),discover:vi.fn(),capture:vi.fn().mockResolvedValue({snapshot:{synthetic:true},summary:{completedEvidence:evidence}})}));

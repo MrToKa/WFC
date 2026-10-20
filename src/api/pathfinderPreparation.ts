@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
+import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
 import {
   parsePurposeJson,
   policyUuidSchema,
@@ -51,6 +52,8 @@ type Endpoint =
   | { kind: 'context' | 'index' | 'create' | 'resolution' }
   | { kind: 'session' | 'publish' | 'cancel'; sessionId: string }
   | { kind: 'part'; sessionId: string; partId: string };
+/** Server validation is120s; allow bounded upload, admission and commit/response margin. */
+export const PREPARATION_REQUEST_TIMEOUT_MS = 180_000;
 async function request(
   projectId: string,
   token: string,
@@ -99,77 +102,82 @@ async function request(
       method = 'POST';
       break;
   }
-  const encoded = body === undefined ? undefined : JSON.stringify(body);
-  if (
-    encoded !== undefined &&
-    new TextEncoder().encode(encoded).byteLength >
-      (endpoint.kind === 'part'
-        ? PREPARATION_LIMITS.partBytes + 4096
-        : PREPARATION_LIMITS.controlBytes)
-  )
-    throw new PreparationApiError(
-      'PREPARATION_BODY_LIMIT',
-      413,
-      'The preparation exceeds its supported request size.',
-      'refused',
-    );
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/preparations${suffix}`,
-    {
-      method,
-      signal,
-      cache: 'no-store',
-      redirect: 'error',
-      credentials: 'same-origin',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(encoded === undefined ? {} : { 'Content-Type': 'application/json' }),
+  const deadline = pathFinderRequestDeadline(signal, PREPARATION_REQUEST_TIMEOUT_MS, () =>
+    new PreparationApiError('REQUEST_TIMEOUT', null, 'The preparation request timed out. Refresh its status before retrying the saved command.', 'unknown'));
+  try {
+    const encoded = body === undefined ? undefined : JSON.stringify(body);
+    if (
+      encoded !== undefined &&
+      new TextEncoder().encode(encoded).byteLength >
+        (endpoint.kind === 'part'
+          ? PREPARATION_LIMITS.partBytes + 4096
+          : PREPARATION_LIMITS.controlBytes)
+    )
+      throw new PreparationApiError(
+        'PREPARATION_BODY_LIMIT',
+        413,
+        'The preparation exceeds its supported request size.',
+        'refused',
+      );
+    const response = await deadline.wait(() => fetch(
+      `${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/preparations${suffix}`,
+      {
+        method,
+        signal: deadline.signal,
+        cache: 'no-store',
+        redirect: 'error',
+        credentials: 'same-origin',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(encoded === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        ...(encoded === undefined ? {} : { body: encoded }),
       },
-      ...(encoded === undefined ? {} : { body: encoded }),
-    },
-  );
-  const reader = response.body?.getReader();
-  if (!reader) throw new PreparationApiError('INVALID_RESPONSE', response.status);
-  const chunks: Uint8Array[] = [];
-  let bytes = 0;
-  try {
-    for (;;) {
-      const item = await reader.read();
-      if (item.done) break;
-      bytes += item.value.byteLength;
-      if (bytes > PREPARATION_LIMITS.controlBytes)
-        throw new PreparationApiError('PREPARATION_RESPONSE_LIMIT', response.status);
-      chunks.push(item.value);
+    ), late => discardPathFinderBody(late.body));
+    const reader = response.body?.getReader();
+    if (!reader) throw new PreparationApiError('INVALID_RESPONSE', response.status);
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      for (;;) {
+        const item = await deadline.wait(() => reader.read());
+        if (item.done) break;
+        bytes += item.value.byteLength;
+        if (bytes > PREPARATION_LIMITS.controlBytes)
+          throw new PreparationApiError('PREPARATION_RESPONSE_LIMIT', response.status);
+        chunks.push(item.value);
+      }
+    } finally {
+      releasePathFinderReader(reader);
     }
-  } finally {
-    await reader.cancel().catch(() => {});
-    reader.releaseLock();
-  }
-  const joined = new Uint8Array(bytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    joined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  let value: unknown;
-  try {
-    value = parsePurposeJson(new TextDecoder('utf-8', { fatal: true }).decode(joined), {
-      maximumBytes: PREPARATION_LIMITS.controlBytes,
-    });
-  } catch {
-    throw new PreparationApiError('INVALID_RESPONSE', response.status);
-  }
-  if (!response.ok) {
-    const error = preparationErrorSchema.safeParse(value);
-    if (!error.success) throw new PreparationApiError('INVALID_RESPONSE', response.status);
-    throw new PreparationApiError(
-      error.data.code,
-      response.status,
-      error.data.message,
-      error.data.outcome,
-    );
-  }
-  return value;
+    deadline.check();
+    const joined = new Uint8Array(bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      joined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    let value: unknown;
+    try {
+      value = parsePurposeJson(new TextDecoder('utf-8', { fatal: true }).decode(joined), {
+        maximumBytes: PREPARATION_LIMITS.controlBytes,
+      });
+    } catch {
+      throw new PreparationApiError('INVALID_RESPONSE', response.status);
+    }
+    if (!response.ok) {
+      const error = preparationErrorSchema.safeParse(value);
+      if (!error.success) throw new PreparationApiError('INVALID_RESPONSE', response.status);
+      throw new PreparationApiError(
+        error.data.code,
+        response.status,
+        error.data.message,
+        error.data.outcome,
+      );
+    }
+    deadline.check();
+    return value;
+  } finally { deadline.dispose(); }
 }
 const invalid = (): never => {
   throw new PreparationApiError('INVALID_RESPONSE', 502);

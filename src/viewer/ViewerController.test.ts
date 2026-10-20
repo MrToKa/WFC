@@ -3,6 +3,7 @@ import { ViewerController, type ViewerEvent } from './ViewerController';
 import { invalidateViewerLogin } from './loginLifecycle';
 import { webcrypto } from 'node:crypto';
 import * as captureRuntime from '../../viewer-runtime/model-capture.mjs';
+import * as captureInputRuntime from '../../viewer-runtime/capture-input.mjs';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
@@ -70,6 +71,68 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(false);
     await vi.advanceTimersByTimeAsync(10_000);await rejected;
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(true);
+  });
+  it('ends capture at its absolute 315s wall deadline despite continuous progress keepalives', async () => {
+    const s = await loaded(600_000);
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'CANCEL_REQUEST') s.message('REQUEST_CANCELLED', { targetRequestId: value.payload.targetRequestId, outcome: 'cancelled' }, value.requestId, s.identity);
+    });
+    const startedAt = Date.now(), capture = s.c.captureModel({ lookupRouteCodes: ['/BC001'], equipmentNames: [] });
+    const rejected = expect(capture).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
+    let settled = false; void capture.then(() => { settled = true; }, () => { settled = true; });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_MODEL_CAPTURE')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'START_MODEL_CAPTURE')![0];
+    const progress = window.setInterval(() => s.message('MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, phase: 'properties', loaded: 1, total: 2 }, command.requestId, s.identity), 30_000);
+    try {
+      await vi.advanceTimersByTimeAsync(300_000 - (Date.now() - startedAt));
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(14_999); expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1); await rejected;
+      expect(captureInputRuntime.CAPTURE_INPUT_LIMITS.milliseconds).toBe(300_000);
+      expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
+      expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(false);
+      const count = s.events.length;
+      s.message('MODEL_CAPTURE_EVENT', { captureId: command.payload.captureId, index: 0, done: true, eventJson: JSON.stringify({ type: 'complete', captureId: command.payload.captureId }) }, command.requestId, s.identity);
+      expect(s.events).toHaveLength(count);
+    } finally { window.clearInterval(progress); }
+  });
+  it('includes asynchronous input staging in the wall bound and ignores a late staged result', async () => {
+    const s = await loaded(600_000);
+    s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });
+    let resume!: (value: Awaited<ReturnType<typeof captureInputRuntime.planModelCaptureInput>>) => void;
+    const plan = vi.spyOn(captureInputRuntime, 'planModelCaptureInput').mockImplementation(() => new Promise(resolve => { resume = resolve; }));
+    const startedAt = Date.now(), capture = s.c.captureModel({ routeCodes: ['BC001'], allowedCategories: ['Control'], equipmentNames: [] });
+    const rejected = expect(capture).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
+    await vi.waitFor(() => expect(plan).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(315_000 - (Date.now() - startedAt)); await rejected;
+    expect(plan.mock.calls[0][1].signal?.aborted).toBe(true);
+    resume({} as Awaited<ReturnType<typeof captureInputRuntime.planModelCaptureInput>>); await Promise.resolve(); await Promise.resolve();
+    expect(s.send.mock.calls.some(call => call[0].type === 'START_MODEL_CAPTURE')).toBe(false);
+  });
+  it('retains the shorter per-request timeout when capture makes no progress', async () => {
+    const s = await loaded(600_000);
+    s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });
+    const capture = s.c.captureModel({ lookupRouteCodes: ['/BC001'], equipmentNames: [] });
+    const rejected = expect(capture).rejects.toThrow('Viewer request timed out');
+    let settled = false; void capture.then(() => { settled = true; }, () => { settled = true; });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_MODEL_CAPTURE')).toBe(true));
+    await vi.advanceTimersByTimeAsync(124_000); expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_001); await rejected;
+    expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(true);
+  });
+  it('removes the wall timer after successful capture without cancelling a later idle model', async () => {
+    const s = await loaded(600_000);
+    vi.spyOn(captureRuntime, 'createModelCaptureAssembler').mockImplementation(() => ({ accept: vi.fn(), finish: () => ({ synthetic: true }), summary: () => ({}) }));
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'START_MODEL_CAPTURE') s.message('MODEL_CAPTURE_EVENT', { captureId: value.payload.captureId, index: 0, done: true, eventJson: JSON.stringify({ type: 'complete', captureId: value.payload.captureId }) }, value.requestId, s.identity);
+    });
+    await expect(s.c.captureModel({ lookupRouteCodes: ['/BC001'], equipmentNames: [] })).resolves.toMatchObject({ snapshot: { synthetic: true } });
+    const count = s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE' || call[0].type === 'CANCEL_REQUEST').length;
+    await vi.advanceTimersByTimeAsync(315_000);
+    expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE' || call[0].type === 'CANCEL_REQUEST')).toHaveLength(count);
+    expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.filter(event => event.type === 'ERROR')).toHaveLength(0);
   });
   it('freezes independent lookup capture codes without importing planning categories or roots', async () => {
     const s = await loaded(), codes = ['/BC001', '/BC002'];

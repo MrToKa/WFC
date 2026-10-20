@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getApiBaseUrl } from './http';
+import { pathFinderRequestDeadline, discardPathFinderBody, releasePathFinderReader } from './pathfinderRequestDeadline';
 import {
   parsePurposeJson,
   policyUuidSchema,
@@ -52,6 +53,8 @@ type Endpoint =
   | { kind: 'objects' | 'diagnostics'; traceId: string; offset: number }
   | { kind: 'object'; traceId: string; objectRevisionId: string }
   | { kind: 'evidence' | 'read-evidence'; sessionId: string; partId: string };
+/** The trace server lease is150s; retain30s for admission, commit and response. */
+export const GEOMETRY_TRACE_REQUEST_TIMEOUT_MS = 180_000;
 async function request(
   projectId: string,
   token: string,
@@ -100,81 +103,86 @@ async function request(
       method = endpoint.kind === 'evidence' ? 'PUT' : 'GET';
       break;
   }
-  const encoded = body === undefined ? undefined : JSON.stringify(body);
-  if (
-    encoded &&
-    new TextEncoder().encode(encoded).length >
-      (endpoint.kind === 'evidence' ? 4 * 1024 ** 2 + 4096 : 65536)
-  )
-    throw new GeometryTraceApiError(
-      'BODY_LIMIT',
-      413,
-      'Traceability request exceeds its supported size.',
-      'refused',
-    );
-  const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder${suffix}`, {
-    method,
-    signal,
-    cache: 'no-store',
-    redirect: 'error',
-    credentials: 'same-origin',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(encoded ? { 'Content-Type': 'application/json' } : {}),
-    },
-    ...(encoded ? { body: encoded } : {}),
-  });
-  const maximumResponseBytes =
-    endpoint.kind === 'read-evidence'
-      ? 4 * 1024 ** 2 + 4096
-      : endpoint.kind === 'object'
-        ? 512 * 1024 + 65536
-        : endpoint.kind === 'manifest' || endpoint.kind === 'create'
-          ? 256 * 1024 + 65536
-          : 1024 ** 2;
-  const reader = response.body?.getReader();
-  if (!reader) return invalid();
-  let size = 0;
-  const chunks: Uint8Array[] = [];
+  const deadline = pathFinderRequestDeadline(signal, GEOMETRY_TRACE_REQUEST_TIMEOUT_MS, () =>
+    new GeometryTraceApiError('REQUEST_TIMEOUT', null, 'The traceability request timed out. Refresh its status before retrying the saved command.', 'unknown'));
   try {
-    for (;;) {
-      const item = await reader.read();
-      if (item.done) break;
-      size += item.value.length;
-      if (size > maximumResponseBytes) {
-        await reader.cancel();
-        return invalid();
+    const encoded = body === undefined ? undefined : JSON.stringify(body);
+    if (
+      encoded &&
+      new TextEncoder().encode(encoded).length >
+        (endpoint.kind === 'evidence' ? 4 * 1024 ** 2 + 4096 : 65536)
+    )
+      throw new GeometryTraceApiError(
+        'BODY_LIMIT',
+        413,
+        'Traceability request exceeds its supported size.',
+        'refused',
+      );
+    const response = await deadline.wait(() => fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder${suffix}`, {
+      method,
+      signal: deadline.signal,
+      cache: 'no-store',
+      redirect: 'error',
+      credentials: 'same-origin',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(encoded ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(encoded ? { body: encoded } : {}),
+    }), late => discardPathFinderBody(late.body));
+    const maximumResponseBytes =
+      endpoint.kind === 'read-evidence'
+        ? 4 * 1024 ** 2 + 4096
+        : endpoint.kind === 'object'
+          ? 512 * 1024 + 65536
+          : endpoint.kind === 'manifest' || endpoint.kind === 'create'
+            ? 256 * 1024 + 65536
+            : 1024 ** 2;
+    const reader = response.body?.getReader();
+    if (!reader) return invalid();
+    let size = 0;
+    const chunks: Uint8Array[] = [];
+    try {
+      for (;;) {
+        const item = await deadline.wait(() => reader.read());
+        if (item.done) break;
+        size += item.value.length;
+        if (size > maximumResponseBytes) {
+          return invalid();
+        }
+        chunks.push(item.value);
       }
-      chunks.push(item.value);
+    } finally {
+      releasePathFinderReader(reader);
     }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  let value: unknown;
-  try {
-    value = parsePurposeJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes), {
-      maximumBytes: maximumResponseBytes,
-    });
-  } catch {
-    return invalid();
-  }
-  if (!response.ok) {
-    const error = geometryTraceErrorSchema.safeParse(value);
-    if (!error.success) return invalid();
-    throw new GeometryTraceApiError(
-      error.data.code,
-      response.status,
-      error.data.message,
-      error.data.outcome,
-    );
-  }
-  return value;
+    deadline.check();
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    let value: unknown;
+    try {
+      value = parsePurposeJson(new TextDecoder('utf-8', { fatal: true }).decode(bytes), {
+        maximumBytes: maximumResponseBytes,
+      });
+    } catch {
+      return invalid();
+    }
+    if (!response.ok) {
+      const error = geometryTraceErrorSchema.safeParse(value);
+      if (!error.success) return invalid();
+      throw new GeometryTraceApiError(
+        error.data.code,
+        response.status,
+        error.data.message,
+        error.data.outcome,
+      );
+    }
+    deadline.check();
+    return value;
+  } finally { deadline.dispose(); }
 }
 async function verifyManifest(value: unknown, projectId: string, traceId?: string) {
   const parsed = geometryTraceManifestSchema.safeParse(value);

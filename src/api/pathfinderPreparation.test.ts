@@ -5,9 +5,12 @@ import {
   fetchPreparationSession,
   createPreparation,
   verifyPreparationSession,
+  mutatePreparation,
+  PreparationApiError,
+  PREPARATION_REQUEST_TIMEOUT_MS,
 } from './pathfinderPreparation';
 import { preparationFixture, preparationIds as ids } from '../test/preparationFixtures';
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe('strict project preparation transport', () => {
   it('verifies frozen plan and part bindings without accepting foreign sessions or altered plan bytes', async () => {
     const { session } = preparationFixture();
@@ -44,5 +47,73 @@ describe('strict project preparation transport', () => {
     await expect(
       verifyPreparationSession({ ...session, parts: [committed] }, ids.project),
     ).rejects.toThrow();
+  });
+});
+
+describe('bounded preparation request lifetime', () => {
+  const publish = (signal?: AbortSignal) => mutatePreparation(ids.project, 'login', ids.session, 'publish', {
+    schemaVersion: 'wfc.pf.preparation-mutation.v1', expectedSessionRevision: '0', idempotencyKey: ids.actor, reason: 'Synthetic publication control',
+  }, signal);
+
+  it('times out an abort-ignoring mutation fetch with unknown outcome and disposes a late body', async () => {
+    vi.useFakeTimers();
+    let resolveFetch!: (response: Response) => void;
+    const fetch = vi.fn((_url: unknown, _options: RequestInit) => new Promise<Response>(resolve => { resolveFetch = resolve; }));
+    vi.stubGlobal('fetch', fetch);
+    const pending = publish(), refused = expect(pending).rejects.toMatchObject({ code: 'REQUEST_TIMEOUT', status: null, outcome: 'unknown' });
+    await vi.advanceTimersByTimeAsync(PREPARATION_REQUEST_TIMEOUT_MS);
+    await refused;
+    expect(fetch.mock.calls[0][1].signal?.aborted).toBe(true);
+    const cancel = vi.fn(() => new Promise<void>(() => {}));
+    resolveFetch({ body: { cancel } } as unknown as Response);
+    await Promise.resolve(); await Promise.resolve();
+    expect(cancel).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('bounds response-body reads and never awaits a stalled cancel promise', async () => {
+    vi.useFakeTimers();
+    const reader = { read: vi.fn(() => new Promise<ReadableStreamReadResult<Uint8Array>>(() => {})), cancel: vi.fn(() => new Promise<void>(() => {})), releaseLock: vi.fn() };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, body: { getReader: () => reader } } as unknown as Response));
+    const pending = publish(), refused = expect(pending).rejects.toMatchObject({ code: 'REQUEST_TIMEOUT', outcome: 'unknown' });
+    await vi.advanceTimersByTimeAsync(0); expect(reader.read).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(PREPARATION_REQUEST_TIMEOUT_MS); await refused;
+    expect(reader.cancel).toHaveBeenCalledTimes(1); expect(reader.releaseLock).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['fetch', 'body'] as const)('preserves the caller abort reason during %s and removes its listener', async phase => {
+    vi.useFakeTimers();
+    const controller = new AbortController(), reason = new DOMException('Project context changed.', 'AbortError');
+    const add = vi.spyOn(controller.signal, 'addEventListener'), remove = vi.spyOn(controller.signal, 'removeEventListener');
+    const reader = { read: vi.fn(() => new Promise<ReadableStreamReadResult<Uint8Array>>(() => {})), cancel: vi.fn(async () => {}), releaseLock: vi.fn() };
+    const fetch = phase === 'fetch' ? vi.fn(() => new Promise<Response>(() => {})) : vi.fn().mockResolvedValue({ ok: true, status: 200, body: { getReader: () => reader } } as unknown as Response);
+    vi.stubGlobal('fetch', fetch);
+    const pending = fetchPreparationContext(ids.project, 'login', controller.signal), refused = expect(pending).rejects.toBe(reason);
+    await vi.advanceTimersByTimeAsync(0); controller.abort(reason); await refused;
+    expect(remove).toHaveBeenCalledWith('abort', add.mock.calls[0][1]); expect(vi.getTimerCount()).toBe(0);
+    if (phase === 'body') expect(reader.cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an already aborted caller before fetch or timer creation', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController(), reason = new DOMException('Paused.', 'AbortError'); controller.abort(reason);
+    const fetch = vi.fn(); vi.stubGlobal('fetch', fetch);
+    await expect(fetchPreparationContext(ids.project, 'login', controller.signal)).rejects.toBe(reason);
+    expect(fetch).not.toHaveBeenCalled(); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('clears deadline and caller listener on success, preserving definite server refusal semantics', async () => {
+    vi.useFakeTimers();
+    const { context } = preparationFixture(), controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(context))).mockResolvedValueOnce(new Response(JSON.stringify({
+      schemaVersion: 'wfc.pf.preparation-error.v1', code: 'PREPARATION_SCOPE_STALE', message: 'Refresh project preparation.', currentSessionRevision: null, outcome: 'refused',
+    }), { status: 409 }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(fetchPreparationContext(ids.project, 'login', controller.signal)).resolves.toEqual(context);
+    expect(remove).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+    const refusal = publish();
+    await expect(refusal).rejects.toBeInstanceOf(PreparationApiError);
+    await expect(refusal).rejects.toMatchObject({ code: 'PREPARATION_SCOPE_STALE', status: 409, outcome: 'refused' });
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

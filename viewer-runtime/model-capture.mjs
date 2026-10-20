@@ -137,11 +137,12 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   function emit(event) { active(); const bytes = size(event); if (bytes > MODEL_CAPTURE_LIMITS.eventBytes || ++eventCount > eventLimit || (transportBytes += bytes) > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Selected capture exceeds the bounded bridge budget. Reduce network/equipment scope.'); return event; }
   yield emit({ type: 'metadata', captureId: request.captureId, schemaVersion: 'pathfinder.model.capture.events.v1', snapshotHeader: header, scope: lookup ? 'independent-lookup-network' : 'explicit-selected-network', inventoryComplete: false, geometryComplete: false });
   const ids = [tree.getRootId()], seen = new Set(ids), routes = new Map((request.routeCodes ?? []).map(code => [code, []])), equipment = new Map(request.equipmentNames.map(name => [normal(name), { name, ids: new Set() }]));
+  const plannedEquipment = request.preparationSlice ? new Set(request.preparationSlice.equipmentObjectIds) : null;
   tree.enumNodeChildren(tree.getRootId(), id => { active(); if (!Number.isSafeInteger(id) || id < 0) refuse('Invalid SDK object identity.'); if (!seen.has(id)) { seen.add(id); ids.push(id); } if (ids.length > MODEL_CAPTURE_LIMITS.indexedObjects) refuse('Model inventory exceeds the capture indexing budget.'); return false; }, true);
   for (let index = 0; index < ids.length; index++) {
     active(); const id = ids[index], name = tree.getNodeName(id) ?? '', key = routeKey(name);
     if (routes.has(key)) routes.get(key).push(id);
-    if (!request.preparationSlice || request.preparationSlice.equipmentObjectIds.includes(id))
+    if (!plannedEquipment || plannedEquipment.has(id))
       for (const key of modelEquipmentMatchKeys(name)) if (equipment.has(key)) equipment.get(key).ids.add(id);
     if (index % 8192 === 0) { onProgress?.({ phase: 'index', loaded: index, total: ids.length }); await pause(); }
   }
@@ -217,10 +218,13 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     }
   }
   const attemptedPropertyIds = new Set(), returnedPropertyIds = new Set();
-  // A bounded full property scan is required for exact NFC property matching.
-  // SDK fuzzy/substring search cannot establish absence or ambiguity reliably.
-  for (let index = 0; index < ids.length; index += 512) {
-    active(); const batchIds = ids.slice(index, index + 512).filter(id => !request.preparationSlice || selected.has(id));
+  // Full captures retain their full property scan for exact absence/ambiguity.
+  // Frozen preparation slices already identify their selected leaves/endpoints;
+  // coalesce just those IDs in the same SDK order instead of yielding once per
+  // empty inventory batch. Ancestor properties are still checked below.
+  const propertyIds = request.preparationSlice ? ids.filter(id => selected.has(id)) : ids;
+  for (let index = 0; index < propertyIds.length; index += 512) {
+    active(); const batchIds = propertyIds.slice(index, index + 512);
     if (batchIds.length && (equipment.size || batchIds.some(id => selected.has(id)))) {
       batchIds.forEach(id => attemptedPropertyIds.add(id));
       const rows = await sdkCall((success, failure) => model.getBulkProperties(batchIds, { ignoreHidden: false, needsExternalId: true }, success, failure));
@@ -230,12 +234,12 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
         if (!batchIds.includes(row.dbId) || returned.has(row.dbId)) refuse('SDK property batch identity mismatch.'); returned.add(row.dbId); returnedPropertyIds.add(row.dbId);
         const names = [tree.getNodeName(row.dbId) ?? '', ...(row.properties ?? []).filter(value => PROPERTY_NAME.test(value.displayName ?? value.attributeName ?? '')).map(value => String(value.displayValue ?? ''))];
         const matches = unique(names.flatMap(modelEquipmentMatchKeys).filter(name => equipment.has(name)));
-        if (matches.length && (!request.preparationSlice || request.preparationSlice.equipmentObjectIds.includes(row.dbId))) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
+        if (matches.length && (!plannedEquipment || plannedEquipment.has(row.dbId))) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
         if (selected.has(row.dbId)) propertyMap.set(row.dbId, row);
       }
       if (batchIds.some(id => selected.has(id) && !returned.has(id))) refuse('Selected object properties are incomplete.');
     }
-    onProgress?.({ phase: 'properties', loaded: Math.min(index + 512, ids.length), total: ids.length }); await pause();
+    onProgress?.({ phase: 'properties', loaded: Math.min(index + 512, propertyIds.length), total: propertyIds.length }); await pause();
   }
   for (const value of equipment.values()) for (const id of value.ids) select(id, 'object');
   function lineage(id) {

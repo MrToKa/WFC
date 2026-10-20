@@ -52,6 +52,59 @@ test('preparation leaf slices capture exact leaves, authoritative route/shape an
 test('preparation endpoint-only slices need no routing geometry and never invent bindings or native proof',async()=>{
  const result=await collect({},preparationRequest([],[4],['P-001']));assert.deepEqual(result.snapshot.objects.map(object=>object.dbId).sort(),[1,4]);assert.equal(result.summary.counts.fragmentCount,0);assert.equal(result.snapshot.capture.geometryComplete,false);assert.equal(result.summary.engineeringAccepted,false);
 });
+
+test('sparse endpoint-only preparation coalesces selected properties without empty-inventory yields and preserves legacy output',{timeout:20000},async t=>{
+ const sourceUrl=new URL('../model-capture.mjs',import.meta.url),source=await fs.readFile(sourceUrl,'utf8');
+ const compact='const propertyIds = request.preparationSlice ? ids.filter(id => selected.has(id)) : ids;',batch='const batchIds = propertyIds.slice(index, index + 512);';
+ assert.equal(source.split(compact).length,2);assert.equal(source.split(batch).length,2);
+ // Exercise exactly the former property scheduling on the same capture logic;
+ // no second geometry, matching, evidence or assembler implementation is used.
+ const legacySource=source.replace(compact,'const propertyIds = ids;').replace(batch,'const batchIds = propertyIds.slice(index, index + 512).filter(id => !request.preparationSlice || selected.has(id));')
+  .replace(/from '(\.\/[^']+)'/g,(_match,specifier)=>'from '+JSON.stringify(new URL(specifier,sourceUrl).href));
+ const legacy=await import('data:text/javascript;base64,'+Buffer.from(legacySource).toString('base64'));
+ let yields=0;const originalTimeout=globalThis.setTimeout;
+ t.mock.method(globalThis,'setTimeout',(callback,milliseconds,...args)=>{if(milliseconds===0){yields++;queueMicrotask(()=>callback(...args));return 0;}return originalTimeout(callback,milliseconds,...args);});
+ const inventoryCount=131073,equipmentIds=[130000,2,65536],input=preparationRequest([],equipmentIds,equipmentIds.map(id=>'EQ-'+id));
+ const run=async capture=>{
+  const f=fixture(),selected=new Set(equipmentIds),batches=[],progress=[],assembler=createModelCaptureAssembler();
+  f.tree.getNodeName=id=>id===1?'Plant':selected.has(id)?'EQ-'+id:'Unselected '+id;
+  f.tree.getNodeParentId=id=>id===1?0:1;f.tree.getChildCount=id=>id===1?inventoryCount-1:0;
+  f.tree.enumNodeChildren=(id,visit)=>{if(id===1)for(let child=2;child<=inventoryCount;child++)visit(child);};f.tree.enumNodeFragments=()=>{};
+  f.tree.getNodeBox=(id,box)=>box.set([id,0,0,id+1,1,1]);
+  f.model.getBulkProperties=(ids,_options,success)=>{batches.push([...ids]);success(ids.map(dbId=>({dbId,externalId:'external-'+dbId,properties:[{displayCategory:'Equipment',displayName:'Tag',displayValue:'EQ-'+dbId}]})));};
+  f.model.getExternalIdMapping=success=>success(Object.fromEntries([1,...equipmentIds].map(id=>['external-'+id,id])));
+  yields=0;for await(const event of capture({model:f.model},input,{onProgress:value=>progress.push(value)}))assembler.accept(event);
+  return{snapshot:assembler.finish(),summary:assembler.summary(),batches,progress,yields};
+ };
+ const optimized=await run(captureSelectedModel),prior=await run(legacy.captureSelectedModel);
+ assert.deepEqual(optimized.batches,[[2,65536,130000],[1]]);assert.deepEqual(prior.batches,[[2],[65536],[130000],[1]]);
+ assert.equal(optimized.progress.filter(value=>value.phase==='properties').length,1);assert.ok(prior.progress.filter(value=>value.phase==='properties').length>250);
+ assert.ok(optimized.yields<32);assert.ok(prior.yields>250);
+ assert.deepEqual(optimized.snapshot,prior.snapshot);assert.deepEqual(optimized.summary,prior.summary);
+ assert.equal(createHash('sha256').update(JSON.stringify(optimized.snapshot)).digest('hex'),createHash('sha256').update(JSON.stringify(prior.snapshot)).digest('hex'));
+ assert.equal(optimized.summary.scope.indexedObjectCount,inventoryCount);assert.equal(optimized.summary.scope.fullPropertyScan,false);
+ assert.equal(optimized.summary.counts.fragmentCount,0);assert.equal(optimized.summary.completedEvidence.sha256,prior.summary.completedEvidence.sha256);
+});
+
+test('coalesced preparation properties still refuse an omitted selected row',{timeout:5000},async()=>{
+ const f=fixture();f.model.getBulkProperties=(_ids,_options,success)=>success([]);
+ await assert.rejects(async()=>{for await(const _event of captureSelectedModel({model:f.model},preparationRequest([],[4],['P-001']))){}},/Selected object properties are incomplete/);
+});
+
+test('coalesced preparation property callbacks retain cancellation and the inherited deadline',async t=>{
+ await t.test('cancelled pending SDK callback cannot complete the capture',{timeout:5000},async()=>{
+  const f=fixture(),abort=new AbortController();let callback,ready;
+  const waiting=new Promise(resolve=>{ready=resolve;});
+  f.model.getBulkProperties=(ids,_options,success)=>{callback=()=>success(ids.map(dbId=>({dbId,properties:[]})));ready();};
+  const pending=(async()=>{for await(const _event of captureSelectedModel({model:f.model},preparationRequest([],[4],['P-001']),{signal:abort.signal})){} })();
+  const rejected=assert.rejects(pending,{name:'AbortError'});await waiting;abort.abort();await rejected;callback();
+ });
+ await t.test('SDK success after the original300s ceiling is refused',{timeout:5000},async sub=>{
+  const f=fixture();let now=1000000;sub.mock.method(Date,'now',()=>now);
+  f.model.getBulkProperties=(ids,_options,success)=>{now+=300001;success(ids.map(dbId=>({dbId,properties:[]})));};
+  await assert.rejects(async()=>{for await(const _event of captureSelectedModel({model:f.model},preparationRequest([],[4],['P-001']),{startedAt:1000000})){}},/deadline exceeded/);
+ });
+});
 test('capture model equipment accepts one leading slash and retains exact/alternative ambiguity with raw names intact',async()=>{
  const f=fixture(),original=f.tree.getNodeName;f.tree.getNodeName=id=>id===4?'/=A001':id===5?'=A001':original(id);f.properties.clear();
  const input={...request,equipmentNames:['=A001','/=A001','A001','=A1','=A001/']},assembler=createModelCaptureAssembler();

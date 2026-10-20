@@ -1,7 +1,7 @@
 import { FRAME_PATH, MAX_PATH_POINTS, MAX_PATH_CHUNK_POINTS, isCanonicalPoint, validateEnvelope, type BridgeEnvelope, type ComputedPath, type PickedPoint, type ViewerModelObjectsPage, type ViewerSelection, type ModelCaptureRequest, type ModelCaptureProgress } from '../../viewer-runtime/protocol.mjs';
 import { createModelCaptureAssembler } from '../../viewer-runtime/model-capture.mjs';
 import { bindCompletedCaptureEvidence,verifyCompletedCaptureEvidence,type CompletedModelCaptureSummary } from '../../viewer-runtime/capture-evidence.mjs';
-import { planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
+import { CAPTURE_INPUT_LIMITS, planModelCaptureInput, validateModelCaptureInputAck, validateModelCaptureInputScope, type ModelCaptureInputDescriptor } from '../../viewer-runtime/capture-input.mjs';
 import { validatePreparationDiscoveryRequest, validatePreparationDiscoveryPage, type PreparationDiscoveryRequest, type PreparationDiscoveryPage } from '../../viewer-runtime/preparation-input.mjs';
 import { watchViewerLogin } from './loginLifecycle';
 import { sessionBase, viewerRequest, ViewerAccessError, type ViewerSession, type ModelSelection } from './sessionApi';
@@ -19,6 +19,10 @@ export type ViewerOptions = {
 };
 const uuid = () => crypto.randomUUID();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// Starts at captureModel entry, including authorization, input staging and output
+// assembly. The frame retains its own 300s limit; this adds only the existing
+// 15s access-check/transport allowance and is never renewed by progress replies.
+const CAPTURE_WALL_MILLISECONDS = CAPTURE_INPUT_LIMITS.milliseconds + 15_000;
 
 /** One controller owns one iframe, login, project and current load. */
 export class ViewerController {
@@ -403,28 +407,47 @@ export class ViewerController {
 
   async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<{ snapshot: unknown; summary: CompletedModelCaptureSummary }> {
     if (this.disposed || !this.loaded) throw new Error('Model is not ready');
+    const deadlineAt = Date.now() + CAPTURE_WALL_MILLISECONDS;
     const input:ModelCaptureRequest = JSON.parse(JSON.stringify(request));
     this.clear('selection'); const generation = this.routeGeneration;
     const operation = new AbortController(); this.captureInputAbort = operation;
     const abort = () => { operation.abort(); for (const pending of [...this.pending.values()]) if (['START_MODEL_CAPTURE','READ_MODEL_CAPTURE'].includes(pending.envelope.type) && !this.disposed) this.cancel(pending.envelope.requestId); };
     options.signal?.addEventListener('abort',abort,{once:true}); if (options.signal?.aborted) abort();
     const { instanceId, modelVersionId, loadId } = this;
+    const deadlineError = new ViewerAccessError('EXTRACTION_FAILED', 0);
+    let deadlineExpired = false, rejectDeadline!: (error: Error) => void;
+    const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
+    // A synchronous boundary may detect expiry before the first awaited race.
+    // Keep that rejection observed without allowing any late SDK work to resume.
+    void deadline.catch(() => {});
+    const expire = () => {
+      if (deadlineExpired) return;
+      deadlineExpired = true;
+      rejectDeadline(deadlineError);
+      abort();
+    };
+    const wallTimer = window.setTimeout(expire, Math.max(0, deadlineAt - Date.now()));
     const current = () => {
+      if (deadlineExpired || Date.now() >= deadlineAt) { expire(); throw deadlineError; }
       if (this.disposed || operation.signal.aborted || options.isCurrent?.() === false || generation !== this.routeGeneration || instanceId !== this.instanceId || modelVersionId !== this.modelVersionId || loadId !== this.loadId)
         throw new DOMException('Model capture cancelled.', 'AbortError');
     };
+    const bounded = async <T,>(invoke: () => Promise<T>): Promise<T> => {
+      current(); const value = await Promise.race([invoke(), deadline]); current(); return value;
+    };
     try {
-      if (!await this.checkSelection()) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
+      current();
+      if (!await bounded(() => this.checkSelection())) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
       if (!modelVersionId || !loadId) throw new Error('Model capture identity is unavailable');
       const captureId = uuid(); let responses = 0, descriptor: ModelCaptureInputDescriptor | undefined, frozenRequest: ModelCaptureRequest | undefined;
       const round = async (type: string, payload: Record<string, unknown>, terminal: string) => {
         current(); if (++responses > 3000) throw new Error('Model capture exceeded its bounded response budget');
-        const value = await this.sendAsync(type, payload, terminal); current(); return value;
+        const value = await bounded(() => this.sendAsync(type, payload, terminal)); current(); return value;
       };
       let reply: ViewerEvent;
       if (input.lookupRouteCodes) reply = await round('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
       else {
-        const plan = await planModelCaptureInput(input, { captureId, envelopeIdentity: { instanceId, projectId: this.options.projectId, modelVersionId, loadId }, signal: operation.signal }); current();
+        const plan = await bounded(() => planModelCaptureInput(input, { captureId, envelopeIdentity: { instanceId, projectId: this.options.projectId, modelVersionId, loadId }, signal: operation.signal })); current();
         descriptor = plan.descriptor; frozenRequest = plan.request;
         const acknowledged = (event: ViewerEvent, received: number) => {
           const ack = event.payload, ready = received === plan.descriptor.equipmentNameCount;
@@ -459,12 +482,12 @@ export class ViewerController {
                 (frozenRequest.preparationSlice ? !equal(scope.preparationSlice,frozenRequest.preparationSlice) : frozenRequest.routeRules ? !equal(scope.routeRules, frozenRequest.routeRules) : !equal(scope.routeCodes, frozenRequest.routeCodes?.map(code => '/' + code)) || !equal(scope.allowedCategories, frozenRequest.allowedCategories)))
               throw new Error('Completed model capture request summary mismatch');
           }
-          if (!await this.checkSelection()) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
+          if (!await bounded(() => this.checkSelection())) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
           if(summary.completedEvidence){
             const evidence=summary.completedEvidence;
-            if(!await verifyCompletedCaptureEvidence(evidence)||evidence.binding.loadId!==loadId||evidence.binding.captureId!==captureId||evidence.binding.projectId!==this.options.projectId||evidence.binding.modelVersionId!==modelVersionId)throw new Error('Completed capture evidence binding mismatch');
+            if(!await bounded(() => verifyCompletedCaptureEvidence(evidence))||evidence.binding.loadId!==loadId||evidence.binding.captureId!==captureId||evidence.binding.projectId!==this.options.projectId||evidence.binding.modelVersionId!==modelVersionId)throw new Error('Completed capture evidence binding mismatch');
             const slice=input.preparationSlice;if(slice&&(evidence.binding.sessionId!==slice.sessionId||evidence.binding.partId!==slice.partId||evidence.binding.planSha256!==slice.planSha256||evidence.binding.coordinateFrameId!==slice.coordinateFrameId))throw new Error('Completed preparation evidence binding mismatch');
-            summary.completedEvidence=await bindCompletedCaptureEvidence(evidence,{selectionRevision:String(this.selectionRevision),partPayloadSha256:null});current();
+            summary.completedEvidence=await bounded(() => bindCompletedCaptureEvidence(evidence,{selectionRevision:String(this.selectionRevision),partPayloadSha256:null}));current();
           }else if(input.preparationSlice)throw new Error('Completed preparation capture evidence is missing');
           return { snapshot, summary };
         }
@@ -472,8 +495,8 @@ export class ViewerController {
         reply = await round('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
       }
       throw new Error('Model capture exceeded its bounded event budget');
-    } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw error; }
-    finally { options.signal?.removeEventListener('abort',abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
+    } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw deadlineExpired ? deadlineError : error; }
+    finally { window.clearTimeout(wallTimer); options.signal?.removeEventListener('abort',abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
   }
 
   clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {

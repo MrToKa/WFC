@@ -196,6 +196,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
                 ? null
                 : reloadRequired(error)
                   ? 'Reload the protected model, then repeat discovery or Resume the frozen preparation. Committed parts are retained.'
+                  : error instanceof Error && 'code' in error && error.code === 'EXTRACTION_FAILED'
+                    ? 'Model extraction stopped within its safety limits. Committed parts are retained; check the model scope before resuming.'
                   : error instanceof Error
                     ? error.message
                     : 'Project preparation could not be completed.',
@@ -206,8 +208,8 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           }));
         }
       } finally {
-        protectedRun.current = false;
         if (currentAbort.current === abort) {
+          protectedRun.current = false;
           currentAbort.current = null;
           busyRef.current = false;
         }
@@ -238,6 +240,9 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           await savePreparationResolution(access.projectId!, access.token!, command.body, signal);
           break;
         case 'part':{
+          const part = stateRef.current.session?.plan.partPlan.find((value) => value.partId === command.partId);
+          const label = part ? `part ${part.partIndex + 1} of ${stateRef.current.session!.plan.partPlan.length}` : 'the captured part';
+          update((value) => ({ ...value, progress: `Uploading ${label}. Committed parts are retained.` }));
           const receipt=await uploadPreparationPart(
             access.projectId!,
             access.token!,
@@ -246,14 +251,18 @@ export function useProjectPreparation(pf: PF, active: boolean) {
             command.body,
             signal,
           );
+          assertCurrent(signal);
           if(command.completedEvidence){
+            update((value) => ({ ...value, progress: `Saving capture evidence for ${label}.` }));
             const evidence=await bindCompletedCaptureEvidence(command.completedEvidence,{selectionRevision:command.completedEvidence.binding.selectionRevision,partPayloadSha256:receipt.part.payloadSha256});
+            assertCurrent(signal);
             pending.current={kind:'evidence',sessionId:command.sessionId,partId:command.partId,body:{sessionPlanSha256:command.body.sessionPlanSha256,payloadSha256:receipt.part.payloadSha256,evidence}};
             await saveCaptureEvidence(access.projectId!,access.token!,command.sessionId,command.partId,command.body.sessionPlanSha256,receipt.part.payloadSha256,evidence,signal);
           }
           sessionId = command.sessionId;
           break;}
         case 'evidence':
+          update((value) => ({ ...value, progress: 'Saving the exact pending capture evidence. Committed geometry is retained.' }));
           await saveCaptureEvidence(access.projectId!,access.token!,command.sessionId,command.partId,command.body.sessionPlanSha256,command.body.payloadSha256,command.body.evidence,signal);sessionId=command.sessionId;break;
         case 'publish':
         case 'cancel':
@@ -269,11 +278,12 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           break;
       }
       // A confirmed mutation remains confirmed even if the subsequent status read fails.
-      pending.current = null;
       assertCurrent();
+      pending.current = null;
       update((value) => ({
         ...value,
         unknown: false,
+        progress: 'Refreshing preparation status after the confirmed command.',
         notice: 'Command confirmed. Refreshing current preparation status.',
       }));
       const fresh = await readCurrent(signal, sessionId);

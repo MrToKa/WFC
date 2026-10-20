@@ -2,6 +2,31 @@
 
 ## RESUMED — 20 October 2026, 05:56 UTC
 
+At06:24UTC session4ff550aa reached4/5parts/revision4 with112,648,588bytes,
+then final equipment-only capture refused with actual UI`EXTRACTION_FAILED`.
+No fifth payload, aggregate, publication or Apply. Raw AX/screenshot/prep12 retained
+privately in ownb3cwork. Exact refusal subcause is not exposed; don't infer a
+geometry or300s cause from the generic code. Source review identified sparse
+preparation property batches yielding across the entire438155object inventory,
+host capture timers renewable indefinitely by progress, and HTTP/body waits with
+no deadline. Narrow repairs in progress: preparation agent owns capture module
++focusednode-test; matching agent owns ViewerController+tests; capacity agent owns
+two API clients/shareddeadlinehelper+tests; root owns phase labels/hooktest/docs
+and ALL execution. No runtime restart or capture retry while source changes are
+in progress. Four parts preserved; immutable session age may expire before next
+attempt, requiring fresh normal discovery/plan, never a timestamp rewrite.
+Current code checkpointd2a2726f0f6047986e6b729dcde487cdd33a29c7. Qualification NOT_RUN.
+Repairs source-frozen and independently reviewed. Actual84capture/bridge/input
+checks PASS with current separately built isolated ModelRunner (initial stale
+defaultDLL failure retained as such). Final61client/controller/hook tests PASS,
+including absolute capture/transport deadlines and old-login continuation fences.
+The first controller test run's unhandled rejection was repaired by lazy promise
+invocation; final rerun has no unhandled errors. Typecheck/lint/whitespace PASS
+before the last two hook regressions; final current frontend typecheck pending.
+Next: commit source checkpoint, buildcandidate3, guarded ONLYown5191API/web upgrade,
+then fresh discovery/plan/capture (4ff immutable30m age nowelapsed). Preserve4ff
+four parts; no timestamps/receipts changed. Actualqualification stillNOT_RUN.
+
 The user explicitly resumed. Heartbeat ACTIVE confirmed through app tool. Root
 verified live40a0304branch/status, allagentscompleted, exactcapacity1runtime, normal
 prep6readbackstill2/5parts60,697,437bytes/nopublication. Source inspection found the

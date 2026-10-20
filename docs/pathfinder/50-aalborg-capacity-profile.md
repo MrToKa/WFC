@@ -3,6 +3,24 @@
 Status: **SOURCE_VERIFIED; REAL_FULL_INPUT_QUALIFICATION_IN_PROGRESS**.
 This checkpoint does not establish engineering acceptance or permission for real Apply.
 
+20October06:24UTC actual capture checkpoint: session4ff550aa retained4/5parts,
+112,648,588bytes, all1165routing leaves across those four parts. The final
+equipment-only part refused with generic`EXTRACTION_FAILED`; no subcause was
+exposed and no publication occurred. Source review found a preparation-only
+sparse property schedule repeatedly yielding over the complete438155object
+inventory. A narrow coalescing optimization preserves selected IDs, original SDK
+order, property completeness, complete snapshot/summary/evidence hashes and
+all geometry/limits. Hostabsolute315s capture deadline (unchanged300s frame),
+bounded180s HTTP/body waits and phase-specific progress are being verified.
+These repairs have not yet been deployed or qualified on the full model.
+
+Actual capture/bridge/input84checks PASS with separately built current ModelRunner
+in ownb3cwork. Initial run83PASS/1FAIL used the stale default local Release DLL
+(lookupRouteCodes absent); no source relaxation, test suppression or expected
+regeneration. Current isolated C# build0warnings/0errors. Host controller first
+41assertions passed but one unhandled rejection made that runFAIL; lazy promise
+invocation repair awaits rerun. Later exact final results supersede this checkpoint.
+
 Resume20October05:56UTC: an explicit user pause retained2/5parts/60,697,437bytes,
 but its immutable30-minute session lifetime elapsed. No expired plan or receipt
 was rewritten/reused. Fresh plan/capture follows after candidate2. The final trace
