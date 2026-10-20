@@ -11,12 +11,15 @@ import { principalTransaction, requestPrincipal as principal } from '../pathfind
 import { previewSchema } from '../pathfinder/previews.js';
 import { createRevisionResults } from '../pathfinder/revisionResultRepository.js';
 import { createPathFinderApplyRecovery } from '../pathfinder/applyRecovery.js';
+import { createCableWorkflowRepository } from '../pathfinder/cableWorkflowRepository.js';
+import { createCableWorkflowReadHandlers } from '../pathfinder/cableWorkflowRoutes.js';
 
 export const pathfinderRouter = Router({mergeParams:true});
 pathfinderRouter.use(requireAdmin,(_req,res,next) => {res.setHeader('Cache-Control','private, no-store'); next();});
 const repository = createPathFinderRepository(pool);
 const revisionResults = createRevisionResults(pool);
 const recoverApply = createPathFinderApplyRecovery(pool);
+const cableWorkflow = createCableWorkflowReadHandlers(createCableWorkflowRepository(pool));
 const revisionAdmissionsQuery=z.object({cursor:z.string().min(1).max(512).optional(),limit:z.coerce.number().int().min(1).max(100).optional()}).strict();
 const revisionCablesQuery=z.object({afterCableId:uuid.optional(),limit:z.coerce.number().int().min(1).max(100).optional()}).strict();
 function identity(req: Request): {projectId:string;actorId:string} {
@@ -32,6 +35,8 @@ function failure(res: Response,error: unknown): void {
 pathfinderRouter.get('/authorization',async(req,res)=>{
   try {const {projectId}=identity(req);await principalTransaction(pool,projectId,principal(req),async()=>undefined);res.status(204).end();}catch(error){failure(res,error);}
 });
+pathfinderRouter.get('/cable-workflow', cableWorkflow.page);
+pathfinderRouter.get('/cable-workflow/:cableId', cableWorkflow.detail);
 pathfinderRouter.get('/state',async (req,res) => {
   try {const {projectId} = identity(req); res.json({...await repository.state(projectId,principal(req)),...await getPathFinderRuntime().jobs.state(projectId,principal(req))});} catch(error){failure(res,error);}
 });

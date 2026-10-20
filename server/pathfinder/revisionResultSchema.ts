@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS pf_revision_baselines (
  PRIMARY KEY(project_id,admission_id,cable_id), CHECK((baseline#>>'{currentCable,id}'=cable_id::text) IS TRUE),
  FOREIGN KEY(project_id,admission_id) REFERENCES pf_revision_admissions(project_id,id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS pf_revision_baseline_cable ON pf_revision_baselines(project_id,cable_id,admission_id);
 CREATE UNIQUE INDEX IF NOT EXISTS pf_revision_proposal_identity ON pf_proposals(project_id,job_id,cable_id,id);
 CREATE TABLE IF NOT EXISTS pf_revision_results (
  id uuid PRIMARY KEY, project_id uuid NOT NULL, admission_id uuid NOT NULL, job_id uuid NOT NULL, cable_id uuid NOT NULL, proposal_id uuid NOT NULL,

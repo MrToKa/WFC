@@ -1,9 +1,28 @@
 # PathFinder local implementation progress
 
+## PF-U1 — bounded cable diagnostics — VERIFIED 2026-10-20
+
+Branch pf-u1-cable-diagnostics-local-20261020, inherited handoff HEAD
+5f0119a7939e0e144cfec13966103207a81fc580 (U0 delivery72df1d5).
+Root confirmed branch/status; only preserved .pf0-work/.pf2-work untracked.
+Ownership: batch_contracts new server diagnostics/query contracts+route;
+preview_diagnosis new client/hook/list; read_performance independent read-only
+proof/auth/pagination review; root docs/integration/evidence and sole runtime
+executor. TECHNICAL_FOUNDATION_PASS:212/212checks11files (206synthetic+6actual
+PG16read/auth/cursor/metadata slice, engineering adapters explicitly mocked).
+Final types/lint/diffPASS; report62/u1-tests.json retain scope/failures/limits.
+Own temporaryPG ownercbc1a2b3 retired; credentialsremoved; no5191/5180/5190
+SQL/HTTPwrite/restart/update/calc/Review/Apply/initialfill. Code adds onlyGETs,
+normal-init index, new readclient/hook/list; Tabintegration waitsU5. Limits
+200scan/100matches/10000admissions/256KiBproof/15s; nofullstatepolling.
+Next: local deliverycommit, finalize/commitU2handoff and execute newinheritedU2
+branch immediately. PF-U automation ACTIVE; Preparer PAUSED. Original5180/5190
+and working data untouched. Historical denied paths retained; no prune.
+
 ## PF-U0 — verified contracts — 2026-10-20
 
 TECHNICAL_CONTRACTS_PASS on pf-u0-cable-workflow-contracts-local-20261020,
-parent57a203ae; read Git for containing local commit. Final source hashes match
+delivery72df1d5, parent57a203ae; handoff5f0119a. Final source hashes match
 u0-contracts.json; actual prior-stage 47/47 synthetic checks, scoped lint,
 frontend/backend types and diff PASS. No need to rerun unchanged contract bytes.
 Root resumed from durable checkpoint; no other active agent at entry. U1 mapper
@@ -11,7 +30,7 @@ is read-only; root owns docs/handoff/integration. Runtime unchanged; no SQL/HTTP
 Review/Apply or initial fill. Preparer PAUSED. Original5180/5190/sources untouched.
 DirectSECONDARY answer is settled in plan60/handoffU0: D<F OR D<T, strict; no
 fixed maximum; ceil((D+E)*(1+P/100)), no S/gap. Automation ACTIVE on PF-U only.
-Next: local U0 commit; prepare/execute PF-U1 complete bounded diagnostics/list.
+U0 commit and U1 handoff complete; PF-U1 bounded diagnostics/list now active.
 Historical .pf0-work/.pf2-work and denied paths retained. Remote/CI NOT_RUN.
 ## Selected calculation / proposal ownership correction — 2026-10-20
 
