@@ -26,6 +26,52 @@ before the last two hook regressions; final current frontend typecheck pending.
 Next: commit source checkpoint, buildcandidate3, guarded ONLYown5191API/web upgrade,
 then fresh discovery/plan/capture (4ff immutable30m age nowelapsed). Preserve4ff
 four parts; no timestamps/receipts changed. Actualqualification stillNOT_RUN.
+Sourcecheckpoint0bd116d7c833a37453edca056bb75dd1a1582db0 committed locally.
+Finalcurrentfrontendtypecheck/focusedhooklint PASS; previousserver/typechecklint
+PASS. Candidate3buildPASS and guarded ownAPI/web upgradePASS at06:33UTC:
+API67d63e06f09d/web94266b672c25, fresh6,185,613bytePGbackup, otherown/outside
+containers/volumes/networks preserved. Currentbindingcapacity3-source-runtime.
+UserUIreloaded, protectedmodelloadinprogress, Routesselected. No newcapture,
+publication/Apply/helper/producer currentlyactive. Rootsoleexecutor.
+New normal UI discovery completed; fresh planf3d6d230-8300-49c3-a898-58ac23af655b,
+SHA8c62461294a5778aa400848214ee281672744f66117dcb2c2934101affc74d14,
+frozen06:41UTC,330/330trays/1165leaves/5parts/0exclusions/diagnostics.
+Normalcollection activepart1. Don'trestartAPI/web or duplicatecapture.
+Privatepreparedcopy/evidence/qualificationdrivers now bind EXACTLY this plan and
+capacity3; NOT_RUN. NormalHTTP4runtimeassets sourcebyte/hash/cachepolicyPASS.
+Read-only currentimageheap4probe matches observed1,811,939,328byteworkerheap,
+nominal512MiBoldoptionnotactuallyenforced. Newsourceaudit51 records normal
+publish→trace→match→currentauthority→proposals sequence and remainingstatus/scheduler
+sourcecaveats; no runtime success claimed. Old4ff/26fa/evidence untouched.
+At06:47UTC freshf3dfirstpart was actually refused near the capturewall deadline,
+0/5parts, sessionstillplannedrev0 (prep16), no publication/Apply. UIstream had
+reached715data batches. Do not retry unchanged. Capture host deadline now settles
+instead of remaining busy. Generic code does not establish sole cause.
+Root measured normal temporary cookie-auth session then revoked ONLYthat session:
+12HTTPauthorization calls median15.24ms,range9.18–21.56ms. Exactownmodel fullversion
+JSON47,613bytes (manifest46,502) versus needed state/health41bytes; readonlySQL
+size/timing retained. One initial probe JS quoting error refused before session
+creation or data mutation; corrected probe completed normally. Projection saving
+is proven, wholecapture bottleneck/speedup NOTproved. Narrowservicefix preserves
+bothfreshchecks/joins/locks/currentadmin; service/resource/http36testsPASS.
+Nextcandidate4adds safe bounded one-per-capture host/frame timing diagnostics
+(counts/durations only) to locate remaining wait; rootownsbridge, matchingagent
+ownscontroller/usePathFinder/tests, prepagentservicefilesfrozen. No runtime
+restart/capture/helper currentlyactive; source+review/tests/build4 next. Keep
+f3d/4ff oldinputs unchanged. Qualification remainsNOT_RUN.
+Allcandidate4sources nowfrozen/independentlyreviewed. Actual96controller/hook/
+service/resource/http tests +44bridge tests PASS. Initialserverlint rejected
+TSoverloads; refactoredsharedauthorizeRow+separatefull/capabilitywrappers instead
+of suppression. Finalcombinedtypecheck/lint currentlyrunning (toolsession95309).
+Cosmetic capture progress now1HzperRun acrossall3capturepaths+frameprogress;
+actualmessages/assembly/auth/terminalupdates remainunchanged. Safeone-percapture
+host/frame timing callbacks containonly boundedcounts/durations/allowlistedoutcome.
+Candidate4build/upgrade scripts PREPARED_NOT_RUN; rootmustwaitstaticresults then
+localsourcecheckpoint/build4/guardedownAPIwebupgrade/normalauthaftermeasurement,
+freshnormalplan/capture (f3dwillnotberetimed). Readonlysourceaudit51 preparedfor
+nextusefulfollowup, no implementation or runtimeclaims inthatdoc. Allagentsdone.
+Finalcombinedfrontend+servertypecheck/focusedlint/whitespace PASS at06:59UTC.
+Proceedwithlocalcheckpointthenbuild4. Runtime remainscapacity3untilguardedupgrade.
 
 The user explicitly resumed. Heartbeat ACTIVE confirmed through app tool. Root
 verified live40a0304branch/status, allagentscompleted, exactcapacity1runtime, normal

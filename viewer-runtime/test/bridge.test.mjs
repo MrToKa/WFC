@@ -52,6 +52,30 @@ function fixture(options = {}) {
   return { bridge, send, sent, messages, init, loaded, facts, fetches, loads, states, listeners, window, handle };
 }
 
+test('capture timing emits one bounded aggregate without identities or model values', async () => {
+  const f = fixture(), observations = [];
+  f.window.console = { debug: (...value) => observations.push(value) };
+  await f.loaded(); const captureId = uuid(19);
+  f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['PRIVATE-TRAY'], allowedCategories: ['LV'], equipmentNames: ['PRIVATE-EQUIPMENT'] }); await turn();
+  assert.equal(observations.length, 0);
+  f.send('READ_MODEL_CAPTURE', { captureId, index: 1 }); await turn();
+  assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, 2); assert.equal(observations.length, 1);
+  const [label, timing] = observations[0]; assert.equal(label, 'WFC capture frame timing'); assert.equal(timing.outcome, 'completed');
+  assert.equal(timing.commandCount, 2); assert.equal(timing.authorizationCalls, 4); assert.equal(timing.adapterCalls, 2);
+  for (const [key, value] of Object.entries(timing)) if (typeof value === 'number') assert.ok(Number.isFinite(value) && value >= 0 && value <= 3_600_000, key);
+  const encoded = JSON.stringify(observations); for (const forbidden of [captureId, uuid(1), uuid(2), 'PRIVATE-TRAY', 'PRIVATE-EQUIPMENT', 'contentFingerprint', 'cookieSecret']) assert.equal(encoded.includes(forbidden), false);
+  f.bridge.dispose(); assert.equal(observations.length, 1);
+});
+test('capture timing logging cannot change success or stopped cleanup', async () => {
+  for (const stop of [false, true]) {
+    const f = fixture(); let calls = 0; f.window.console = { debug: () => { calls++; throw Error('Broken diagnostic sink'); } };
+    await f.loaded(); const captureId = uuid(18);
+    f.send('START_MODEL_CAPTURE', { captureId, routeCodes: ['BC1'], allowedCategories: ['LV'], equipmentNames: [] }); await turn();
+    if (stop) f.bridge.dispose(); else { f.send('READ_MODEL_CAPTURE', { captureId, index: 1 }); await turn(); }
+    assert.equal(calls, 1); assert.equal(f.messages('MODEL_CAPTURE_EVENT').length, stop ? 1 : 2); f.bridge.dispose(); assert.equal(calls, 1);
+  }
+});
+
 test('preparation exact discovery is current-admin authorized before and after SDK work, cancellation suppresses a late page',async()=>{
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128};
  for(const cancel of [false,true]){

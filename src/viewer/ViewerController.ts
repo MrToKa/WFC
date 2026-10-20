@@ -13,9 +13,18 @@ export type ViewerLoadSnapshot = Readonly<{
   selectionRevision: number; ready: boolean;
 }>;
 export type ViewerEvent = { type: string; payload: Record<string, unknown>; requestId?: string; identity?: ViewerEventIdentity };
+/** Aggregate diagnostics only: no capture identity, model data or raw error text. */
+export type ViewerCaptureTiming = Readonly<{
+  outcome: 'completed' | 'refused' | 'cancelled' | 'deadline';
+  wallMs: number; roundCount: number; inputChunkCount: number; eventCount: number;
+  roundWaitMs: number; maxRoundWaitMs: number;
+  initialSelectionMs: number; finalSelectionMs: number;
+  planningMs: number; assemblyMs: number; evidenceHashMs: number;
+}>;
 export type ViewerOptions = {
   container: HTMLElement; projectId: string; token: string;
   onEvent: (event: ViewerEvent) => void;
+  onCaptureTiming?: (timing: ViewerCaptureTiming) => void | Promise<void>;
 };
 const uuid = () => crypto.randomUUID();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -23,6 +32,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 // assembly. The frame retains its own 300s limit; this adds only the existing
 // 15s access-check/transport allowance and is never renewed by progress replies.
 const CAPTURE_WALL_MILLISECONDS = CAPTURE_INPUT_LIMITS.milliseconds + 15_000;
+const CAPTURE_TIMING_MAX_MILLISECONDS = CAPTURE_WALL_MILLISECONDS * 2;
+const captureTimingNow = (): number => { try { const value = performance.now(); return Number.isFinite(value) ? value : 0; } catch { return 0; } };
+const captureTimingValue = (value: number, maximum = CAPTURE_TIMING_MAX_MILLISECONDS): number => Number.isFinite(value) ? Math.min(maximum, Math.max(0, Math.round(value))) : 0;
 
 /** One controller owns one iframe, login, project and current load. */
 export class ViewerController {
@@ -406,97 +418,132 @@ export class ViewerController {
   }
 
   async captureModel(request: ModelCaptureRequest, onProgress: (progress: ModelCaptureProgress) => void = () => {}, options: {signal?:AbortSignal;isCurrent?:()=>boolean} = {}): Promise<{ snapshot: unknown; summary: CompletedModelCaptureSummary }> {
-    if (this.disposed || !this.loaded) throw new Error('Model is not ready');
+    const timingStartedAt = captureTimingNow();
     const deadlineAt = Date.now() + CAPTURE_WALL_MILLISECONDS;
-    const input:ModelCaptureRequest = JSON.parse(JSON.stringify(request));
-    this.clear('selection'); const generation = this.routeGeneration;
-    const operation = new AbortController(); this.captureInputAbort = operation;
-    const abort = () => { operation.abort(); for (const pending of [...this.pending.values()]) if (['START_MODEL_CAPTURE','READ_MODEL_CAPTURE'].includes(pending.envelope.type) && !this.disposed) this.cancel(pending.envelope.requestId); };
-    options.signal?.addEventListener('abort',abort,{once:true}); if (options.signal?.aborted) abort();
-    const { instanceId, modelVersionId, loadId } = this;
-    const deadlineError = new ViewerAccessError('EXTRACTION_FAILED', 0);
-    let deadlineExpired = false, rejectDeadline!: (error: Error) => void;
-    const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
-    // A synchronous boundary may detect expiry before the first awaited race.
-    // Keep that rejection observed without allowing any late SDK work to resume.
-    void deadline.catch(() => {});
-    const expire = () => {
-      if (deadlineExpired) return;
-      deadlineExpired = true;
-      rejectDeadline(deadlineError);
-      abort();
+    const timing = { roundCount: 0, inputChunkCount: 0, eventCount: 0, roundWaitMs: 0, maxRoundWaitMs: 0,
+      initialSelectionMs: 0, finalSelectionMs: 0, planningMs: 0, assemblyMs: 0, evidenceHashMs: 0 };
+    type Phase = 'initialSelectionMs' | 'finalSelectionMs' | 'planningMs' | 'assemblyMs' | 'evidenceHashMs';
+    const elapsed = (start: number) => { const value = captureTimingNow() - start; return Number.isFinite(value) ? Math.min(CAPTURE_TIMING_MAX_MILLISECONDS, Math.max(0, value)) : 0; };
+    const measure = async <T,>(phase: Phase, invoke: () => Promise<T>): Promise<T> => {
+      const start = captureTimingNow(); try { return await invoke(); } finally { timing[phase] += elapsed(start); }
     };
-    const wallTimer = window.setTimeout(expire, Math.max(0, deadlineAt - Date.now()));
-    const current = () => {
-      if (deadlineExpired || Date.now() >= deadlineAt) { expire(); throw deadlineError; }
-      if (this.disposed || operation.signal.aborted || options.isCurrent?.() === false || generation !== this.routeGeneration || instanceId !== this.instanceId || modelVersionId !== this.modelVersionId || loadId !== this.loadId)
-        throw new DOMException('Model capture cancelled.', 'AbortError');
+    const measureSync = <T,>(phase: Phase, invoke: () => T): T => {
+      const start = captureTimingNow(); try { return invoke(); } finally { timing[phase] += elapsed(start); }
     };
-    const bounded = async <T,>(invoke: () => Promise<T>): Promise<T> => {
-      current(); const value = await Promise.race([invoke(), deadline]); current(); return value;
-    };
+    let outcome: ViewerCaptureTiming['outcome'] = 'refused';
     try {
-      current();
-      if (!await bounded(() => this.checkSelection())) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
-      if (!modelVersionId || !loadId) throw new Error('Model capture identity is unavailable');
-      const captureId = uuid(); let responses = 0, descriptor: ModelCaptureInputDescriptor | undefined, frozenRequest: ModelCaptureRequest | undefined;
-      const round = async (type: string, payload: Record<string, unknown>, terminal: string) => {
-        current(); if (++responses > 3000) throw new Error('Model capture exceeded its bounded response budget');
-        const value = await bounded(() => this.sendAsync(type, payload, terminal)); current(); return value;
+      if (this.disposed || !this.loaded) throw new Error('Model is not ready');
+      const input:ModelCaptureRequest = measureSync('planningMs', () => JSON.parse(JSON.stringify(request)));
+      this.clear('selection'); const generation = this.routeGeneration;
+      const operation = new AbortController(); this.captureInputAbort = operation;
+      const abort = () => { operation.abort(); for (const pending of [...this.pending.values()]) if (['START_MODEL_CAPTURE','READ_MODEL_CAPTURE'].includes(pending.envelope.type) && !this.disposed) this.cancel(pending.envelope.requestId); };
+      options.signal?.addEventListener('abort',abort,{once:true}); if (options.signal?.aborted) abort();
+      const { instanceId, modelVersionId, loadId } = this;
+      const deadlineError = new ViewerAccessError('EXTRACTION_FAILED', 0);
+      let deadlineExpired = false, rejectDeadline!: (error: Error) => void;
+      const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
+      // A synchronous boundary may detect expiry before the first awaited race.
+      // Keep that rejection observed without allowing any late SDK work to resume.
+      void deadline.catch(() => {});
+      const expire = () => {
+        if (deadlineExpired) return;
+        deadlineExpired = true;
+        outcome = 'deadline';
+        rejectDeadline(deadlineError);
+        abort();
       };
-      let reply: ViewerEvent;
-      if (input.lookupRouteCodes) reply = await round('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
-      else {
-        const plan = await bounded(() => planModelCaptureInput(input, { captureId, envelopeIdentity: { instanceId, projectId: this.options.projectId, modelVersionId, loadId }, signal: operation.signal })); current();
-        descriptor = plan.descriptor; frozenRequest = plan.request;
-        const acknowledged = (event: ViewerEvent, received: number) => {
-          const ack = event.payload, ready = received === plan.descriptor.equipmentNameCount;
-          if (!validateModelCaptureInputAck(ack) || ack.captureId !== captureId || ack.receivedNameCount !== received || ack.phase !== (ready ? 'ready' : 'receiving') ||
-              ack.scopeSha256 !== (ready ? plan.descriptor.scopeSha256 : null) || ack.equipmentNamesSha256 !== (ready ? plan.descriptor.equipmentNamesSha256 : null))
-            throw new Error('Model capture input acknowledgement mismatch');
-        };
-        acknowledged(await round('START_MODEL_CAPTURE', plan.startPayload, 'MODEL_CAPTURE_INPUT_ACK'), 0);
-        for (const chunk of plan.chunks) {
-          acknowledged(await round('READ_MODEL_CAPTURE', { ...chunk }, 'MODEL_CAPTURE_INPUT_ACK'), chunk.equipmentOffset + chunk.equipmentNames.length);
-          onProgress({ index: responses - 1, type: 'input' });
-        }
-        reply = await round('READ_MODEL_CAPTURE', { captureId, index: 0 }, 'MODEL_CAPTURE_EVENT');
-      }
-      const assembler = createModelCaptureAssembler({ eventLimit: 3000 - (descriptor ? 1 + descriptor.chunkCount : 0) });
-      for (let index = 0; index < 3000; index++) {
+      const wallTimer = window.setTimeout(expire, Math.max(0, deadlineAt - Date.now()));
+      const current = () => {
+        if (deadlineExpired || Date.now() >= deadlineAt) { expire(); throw deadlineError; }
+        if (this.disposed || operation.signal.aborted || options.isCurrent?.() === false || generation !== this.routeGeneration || instanceId !== this.instanceId || modelVersionId !== this.modelVersionId || loadId !== this.loadId)
+          throw new DOMException('Model capture cancelled.', 'AbortError');
+      };
+      const bounded = async <T,>(invoke: () => Promise<T>): Promise<T> => {
+        current(); const value = await Promise.race([invoke(), deadline]); current(); return value;
+      };
+      try {
         current();
-        const event: unknown = JSON.parse(String(reply.payload.eventJson));
-        assembler.accept(event);
-        const eventRecord = event as Record<string, unknown>;
-        onProgress({ index, type: String(eventRecord.type), ...(typeof eventRecord.objectCount === 'number' ? { objectCount: eventRecord.objectCount } : {}) });
-        if (reply.payload.done === true) {
-          if (eventRecord.type !== 'complete') throw new Error('Model capture ended without a complete receipt');
-          const snapshot = assembler.finish(), summary = assembler.summary();
-          if (descriptor) {
-            const inputScope = (snapshot as { capture?: { inputScope?: unknown } }).capture?.inputScope;
-            if (!validateModelCaptureInputScope(inputScope) || Object.entries(descriptor).some(([key, value]) => inputScope[key as keyof typeof inputScope] !== value))
-              throw new Error('Completed model capture input scope mismatch');
-            const scope = summary.scope as Record<string, unknown> | undefined;
-            const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-            if (!scope || !frozenRequest || !equal(scope.equipmentNames, frozenRequest.equipmentNames) || !equal(scope.inputScope, inputScope) ||
-                (frozenRequest.preparationSlice ? !equal(scope.preparationSlice,frozenRequest.preparationSlice) : frozenRequest.routeRules ? !equal(scope.routeRules, frozenRequest.routeRules) : !equal(scope.routeCodes, frozenRequest.routeCodes?.map(code => '/' + code)) || !equal(scope.allowedCategories, frozenRequest.allowedCategories)))
-              throw new Error('Completed model capture request summary mismatch');
+        if (!await measure('initialSelectionMs', () => bounded(() => this.checkSelection()))) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
+        if (!modelVersionId || !loadId) throw new Error('Model capture identity is unavailable');
+        const captureId = uuid(); let responses = 0, descriptor: ModelCaptureInputDescriptor | undefined, frozenRequest: ModelCaptureRequest | undefined;
+        const round = async (type: string, payload: Record<string, unknown>, terminal: string) => {
+          current(); if (++responses > 3000) throw new Error('Model capture exceeded its bounded response budget');
+          timing.roundCount++;
+          const start = captureTimingNow();
+          try { const value = await bounded(() => this.sendAsync(type, payload, terminal)); current(); return value; }
+          finally { const duration = elapsed(start); timing.roundWaitMs += duration; timing.maxRoundWaitMs = Math.max(timing.maxRoundWaitMs, duration); }
+        };
+        let reply: ViewerEvent;
+        if (input.lookupRouteCodes) reply = await round('START_MODEL_CAPTURE', { captureId, ...input }, 'MODEL_CAPTURE_EVENT');
+        else {
+          const plan = await measure('planningMs', () => bounded(() => planModelCaptureInput(input, { captureId, envelopeIdentity: { instanceId, projectId: this.options.projectId, modelVersionId, loadId }, signal: operation.signal }))); current();
+          descriptor = plan.descriptor; frozenRequest = plan.request;
+          const acknowledged = (event: ViewerEvent, received: number) => {
+            const ack = event.payload, ready = received === plan.descriptor.equipmentNameCount;
+            if (!validateModelCaptureInputAck(ack) || ack.captureId !== captureId || ack.receivedNameCount !== received || ack.phase !== (ready ? 'ready' : 'receiving') ||
+                ack.scopeSha256 !== (ready ? plan.descriptor.scopeSha256 : null) || ack.equipmentNamesSha256 !== (ready ? plan.descriptor.equipmentNamesSha256 : null))
+              throw new Error('Model capture input acknowledgement mismatch');
+          };
+          acknowledged(await round('START_MODEL_CAPTURE', plan.startPayload, 'MODEL_CAPTURE_INPUT_ACK'), 0);
+          for (const chunk of plan.chunks) {
+            timing.inputChunkCount++;
+            acknowledged(await round('READ_MODEL_CAPTURE', { ...chunk }, 'MODEL_CAPTURE_INPUT_ACK'), chunk.equipmentOffset + chunk.equipmentNames.length);
+            onProgress({ index: responses - 1, type: 'input' });
           }
-          if (!await bounded(() => this.checkSelection())) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
-          if(summary.completedEvidence){
-            const evidence=summary.completedEvidence;
-            if(!await bounded(() => verifyCompletedCaptureEvidence(evidence))||evidence.binding.loadId!==loadId||evidence.binding.captureId!==captureId||evidence.binding.projectId!==this.options.projectId||evidence.binding.modelVersionId!==modelVersionId)throw new Error('Completed capture evidence binding mismatch');
-            const slice=input.preparationSlice;if(slice&&(evidence.binding.sessionId!==slice.sessionId||evidence.binding.partId!==slice.partId||evidence.binding.planSha256!==slice.planSha256||evidence.binding.coordinateFrameId!==slice.coordinateFrameId))throw new Error('Completed preparation evidence binding mismatch');
-            summary.completedEvidence=await bounded(() => bindCompletedCaptureEvidence(evidence,{selectionRevision:String(this.selectionRevision),partPayloadSha256:null}));current();
-          }else if(input.preparationSlice)throw new Error('Completed preparation capture evidence is missing');
-          return { snapshot, summary };
+          reply = await round('READ_MODEL_CAPTURE', { captureId, index: 0 }, 'MODEL_CAPTURE_EVENT');
         }
-        if (eventRecord.type === 'complete') throw new Error('Model capture completion mismatch');
-        reply = await round('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
-      }
-      throw new Error('Model capture exceeded its bounded event budget');
-    } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw deadlineExpired ? deadlineError : error; }
-    finally { window.clearTimeout(wallTimer); options.signal?.removeEventListener('abort',abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
+        const assembler = createModelCaptureAssembler({ eventLimit: 3000 - (descriptor ? 1 + descriptor.chunkCount : 0) });
+        for (let index = 0; index < 3000; index++) {
+          current();
+          const event: unknown = measureSync('assemblyMs', () => { const value: unknown = JSON.parse(String(reply.payload.eventJson)); assembler.accept(value); return value; });
+          timing.eventCount++;
+          const eventRecord = event as Record<string, unknown>;
+          onProgress({ index, type: String(eventRecord.type), ...(typeof eventRecord.objectCount === 'number' ? { objectCount: eventRecord.objectCount } : {}) });
+          if (reply.payload.done === true) {
+            if (eventRecord.type !== 'complete') throw new Error('Model capture ended without a complete receipt');
+            const { snapshot, summary } = measureSync('assemblyMs', () => {
+              const snapshot = assembler.finish(), summary = assembler.summary();
+              if (descriptor) {
+                const inputScope = (snapshot as { capture?: { inputScope?: unknown } }).capture?.inputScope;
+                if (!validateModelCaptureInputScope(inputScope) || Object.entries(descriptor).some(([key, value]) => inputScope[key as keyof typeof inputScope] !== value))
+                  throw new Error('Completed model capture input scope mismatch');
+                const scope = summary.scope as Record<string, unknown> | undefined;
+                const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+                if (!scope || !frozenRequest || !equal(scope.equipmentNames, frozenRequest.equipmentNames) || !equal(scope.inputScope, inputScope) ||
+                    (frozenRequest.preparationSlice ? !equal(scope.preparationSlice,frozenRequest.preparationSlice) : frozenRequest.routeRules ? !equal(scope.routeRules, frozenRequest.routeRules) : !equal(scope.routeCodes, frozenRequest.routeCodes?.map(code => '/' + code)) || !equal(scope.allowedCategories, frozenRequest.allowedCategories)))
+                  throw new Error('Completed model capture request summary mismatch');
+              }
+              return { snapshot, summary };
+            });
+            if (!await measure('finalSelectionMs', () => bounded(() => this.checkSelection()))) throw new DOMException('Model capture cancelled.', 'AbortError'); current();
+            if(summary.completedEvidence){
+              const evidence=summary.completedEvidence;
+              if(!await measure('evidenceHashMs', () => bounded(() => verifyCompletedCaptureEvidence(evidence)))||evidence.binding.loadId!==loadId||evidence.binding.captureId!==captureId||evidence.binding.projectId!==this.options.projectId||evidence.binding.modelVersionId!==modelVersionId)throw new Error('Completed capture evidence binding mismatch');
+              const slice=input.preparationSlice;if(slice&&(evidence.binding.sessionId!==slice.sessionId||evidence.binding.partId!==slice.partId||evidence.binding.planSha256!==slice.planSha256||evidence.binding.coordinateFrameId!==slice.coordinateFrameId))throw new Error('Completed preparation evidence binding mismatch');
+              summary.completedEvidence=await measure('evidenceHashMs', () => bounded(() => bindCompletedCaptureEvidence(evidence,{selectionRevision:String(this.selectionRevision),partPayloadSha256:null})));current();
+            }else if(input.preparationSlice)throw new Error('Completed preparation capture evidence is missing');
+            outcome = 'completed';
+            return { snapshot, summary };
+          }
+          if (eventRecord.type === 'complete') throw new Error('Model capture completion mismatch');
+          reply = await round('READ_MODEL_CAPTURE', { captureId, index: index + 1 }, 'MODEL_CAPTURE_EVENT');
+        }
+        throw new Error('Model capture exceeded its bounded event budget');
+      } catch (error) { if (!this.disposed && generation === this.routeGeneration) this.clear('user'); throw deadlineExpired ? deadlineError : error; }
+      finally { window.clearTimeout(wallTimer); options.signal?.removeEventListener('abort',abort); if (this.captureInputAbort === operation) this.captureInputAbort = null; }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') outcome = 'cancelled';
+      throw error;
+    } finally {
+      // Never let diagnostics alter a capture result, including asynchronous or
+      // throwing sinks. Values are bounded elapsed times, not CPU/acceptance claims.
+      const result: ViewerCaptureTiming = Object.freeze({ outcome, wallMs: captureTimingValue(elapsed(timingStartedAt)),
+        roundCount: captureTimingValue(timing.roundCount, 3000), inputChunkCount: captureTimingValue(timing.inputChunkCount, 3000), eventCount: captureTimingValue(timing.eventCount, 3000),
+        roundWaitMs: captureTimingValue(timing.roundWaitMs), maxRoundWaitMs: captureTimingValue(timing.maxRoundWaitMs),
+        initialSelectionMs: captureTimingValue(timing.initialSelectionMs), finalSelectionMs: captureTimingValue(timing.finalSelectionMs),
+        planningMs: captureTimingValue(timing.planningMs), assemblyMs: captureTimingValue(timing.assemblyMs), evidenceHashMs: captureTimingValue(timing.evidenceHashMs) });
+      try { void Promise.resolve(this.options.onCaptureTiming?.(result)).catch(() => {}); } catch { /* Optional diagnostics are isolated from the operation. */ }
+    }
   }
 
   clear(reason: 'user' | 'empty' | 'selection' | 'model-change' | 'logout' = 'user'): string {

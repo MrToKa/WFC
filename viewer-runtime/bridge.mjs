@@ -50,12 +50,30 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
   }
   function releaseCapture(scope, abort = false) {
     if (!scope) return;
+    const firstClose = !scope.closed;
     clearTimeout(scope.timer); scope.closed = true;
     if (captureScope === scope) captureScope = undefined;
+    const timing = scope.timing;
+    try { if (firstClose) { const logged = window.console?.debug?.('WFC capture frame timing', {
+      schemaVersion: 'wfc.capture.frame-timing.v1', outcome: abort ? 'stopped' : 'completed',
+      wallMilliseconds: elapsed(scope.startedAt), commandCount: timing.commandCount,
+      authorizationCalls: timing.authorizationCalls, authorizationMilliseconds: timing.authorizationMilliseconds,
+      adapterCalls: timing.adapterCalls, adapterMilliseconds: timing.adapterMilliseconds,
+      pendingAuthorizationCalls: timing.pendingAuthorizationCalls, pendingAdapterCalls: timing.pendingAdapterCalls,
+      interpretation: 'Cumulative operation waits may overlap; pending calls are not included in completed durations.',
+    }); void Promise.resolve(logged).catch(() => {}); } } catch { /* Diagnostics never change capture outcome or cleanup. */ }
     if (abort) scope.controller.abort();
   }
+  const elapsed = started => { const value = Date.now() - started; return Number.isFinite(value) ? Math.min(3_600_000, Math.max(0, value)) : 0; };
+  async function measuredCapture(scope, phase, work) {
+    const timing = scope.timing, started = Date.now(), calls = phase + 'Calls', pending = 'pending' + phase[0].toUpperCase() + phase.slice(1) + 'Calls';
+    timing[calls]++; timing[pending]++;
+    try { return await work(); }
+    finally { timing[phase + 'Milliseconds'] = Math.min(3_600_000, timing[phase + 'Milliseconds'] + elapsed(started)); timing[pending]--; }
+  }
   function beginCapture(command) {
-    const scope = { captureId: command.payload.captureId, startedAt: Date.now(), controller: new AbortController(), installed: false, closed: false, timer: null };
+    const scope = { captureId: command.payload.captureId, startedAt: Date.now(), controller: new AbortController(), installed: false, closed: false, timer: null,
+      timing: { commandCount: 0, authorizationCalls: 0, authorizationMilliseconds: 0, adapterCalls: 0, adapterMilliseconds: 0, pendingAuthorizationCalls: 0, pendingAdapterCalls: 0 } };
     scope.timer = setTimeout(() => {
       const owned = captureScope === scope;
       for (const entry of requests.values()) if (entry.captureScope === scope && entry.status === 'pending') error(entry.command, failure('EXTRACTION_FAILED'));
@@ -142,7 +160,8 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
     const live = () => !disposed && !signal.aborted && identityMatches(command) && requests.get(command.requestId)?.status === 'pending';
     try {
       if (capturing) { checkCapture(ownedCapture); if (ownedCapture.captureId !== command.payload.captureId) throw failure('EXTRACTION_FAILED'); }
-      await requirePathFinder(command, signal);
+      if (capturing) { ownedCapture.timing.commandCount++; await measuredCapture(ownedCapture, 'authorization', () => requirePathFinder(command, signal)); }
+      else await requirePathFinder(command, signal);
       if (command.type === 'READ_PREPARATION_OBJECTS' && requests.size > 4000) throw failure('CAPTURE_RELOAD_REQUIRED');
       if (capturing) checkCapture(ownedCapture);
       if (!live()) return;
@@ -152,9 +171,9 @@ export function createRuntimeBridge({ window, bootstrap, adapter, fetchImpl = wi
         if (command.type === 'START_MODEL_CAPTURE' && requests.size > 1091) throw failure('CAPTURE_RELOAD_REQUIRED');
         if (command.type === 'START_MODEL_CAPTURE') { stopRoute(command.requestId); captureScope = ownedCapture; ownedCapture.installed = true; }
         const progress = value => { if (live()) emit(command, 'MODEL_CAPTURE_PROGRESS', { captureId: command.payload.captureId, ...value }); };
-        const result = command.type === 'START_MODEL_CAPTURE' ? await handle.startModelCapture(command.payload, signal, progress, { startedAt: ownedCapture.startedAt }) : await handle.readModelCapture(command.payload, signal, progress);
+        const result = await measuredCapture(ownedCapture, 'adapter', () => command.type === 'START_MODEL_CAPTURE' ? handle.startModelCapture(command.payload, signal, progress, { startedAt: ownedCapture.startedAt }) : handle.readModelCapture(command.payload, signal, progress));
         checkCapture(ownedCapture);
-        await requirePathFinder(command, signal);
+        await measuredCapture(ownedCapture, 'authorization', () => requirePathFinder(command, signal));
         checkCapture(ownedCapture);
         if (!live()) return;
         const terminal = isStagedModelCaptureStart(command.payload) || command.type === 'READ_MODEL_CAPTURE' && isModelCaptureInputAppend(command.payload) ? 'MODEL_CAPTURE_INPUT_ACK' : 'MODEL_CAPTURE_EVENT';

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ViewerController, type ViewerEvent } from './ViewerController';
+import { ViewerController, type ViewerEvent, type ViewerOptions, type ViewerCaptureTiming } from './ViewerController';
 import { invalidateViewerLogin } from './loginLifecycle';
 import { webcrypto } from 'node:crypto';
 import * as captureRuntime from '../../viewer-runtime/model-capture.mjs';
@@ -10,10 +10,10 @@ const versionId = '22222222-2222-4222-8222-222222222222';
 let controllers: ViewerController[];
 beforeEach(() => { controllers = []; vi.stubGlobal('crypto', webcrypto); vi.useFakeTimers(); });
 afterEach(() => { controllers.forEach(c => c.dispose()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); document.body.replaceChildren(); });
-function setup(token = 'login-a') {
+function setup(token = 'login-a', onCaptureTiming?: ViewerOptions['onCaptureTiming']) {
   const container = document.createElement('div'); document.body.append(container);
   const events: ViewerEvent[] = [];
-  const c = new ViewerController({ container, projectId, token, onEvent: e => events.push(e) });
+  const c = new ViewerController({ container, projectId, token, onEvent: e => events.push(e), onCaptureTiming });
   controllers.push(c);
   const send = vi.spyOn(c.iframe.contentWindow!, 'postMessage');
   const message = (type: string, payload: Record<string, unknown>, requestId: string = crypto.randomUUID(), extra: Record<string, unknown> = {}, source: MessageEventSource | null = c.iframe.contentWindow, origin = location.origin) => {
@@ -32,8 +32,8 @@ function setup(token = 'login-a') {
 }
 
 describe('PathFinder protected Viewer capabilities', () => {
-  async function loaded(sessionDuration = 300_000) {
-    const s = setup(); s.ready();
+  async function loaded(sessionDuration = 300_000, onCaptureTiming?: ViewerOptions['onCaptureTiming']) {
+    const s = setup('login-a', onCaptureTiming); s.ready();
     let session: Record<string, unknown>;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, options) => {
       if (options?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -73,7 +73,7 @@ describe('PathFinder protected Viewer capabilities', () => {
     expect(s.events.some(event=>event.type==='ERROR'&&event.payload.code==='REQUEST_TIMEOUT')).toBe(true);
   });
   it('ends capture at its absolute 315s wall deadline despite continuous progress keepalives', async () => {
-    const s = await loaded(600_000);
+    const timing = vi.fn(), s = await loaded(600_000, timing);
     s.send.mockImplementation(value => {
       if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
       if (value.type === 'CANCEL_REQUEST') s.message('REQUEST_CANCELLED', { targetRequestId: value.payload.targetRequestId, outcome: 'cancelled' }, value.requestId, s.identity);
@@ -92,6 +92,7 @@ describe('PathFinder protected Viewer capabilities', () => {
       expect(captureInputRuntime.CAPTURE_INPUT_LIMITS.milliseconds).toBe(300_000);
       expect(s.send.mock.calls.some(call => call[0].type === 'CANCEL_REQUEST' && call[0].payload.targetRequestId === command.requestId)).toBe(true);
       expect(s.events.some(event => event.type === 'ERROR' && event.payload.code === 'REQUEST_TIMEOUT')).toBe(false);
+      expect(timing).toHaveBeenCalledOnce(); expect(timing.mock.calls[0][0]).toMatchObject({ outcome: 'deadline', roundCount: 1, eventCount: 0 });
       const count = s.events.length;
       s.message('MODEL_CAPTURE_EVENT', { captureId: command.payload.captureId, index: 0, done: true, eventJson: JSON.stringify({ type: 'complete', captureId: command.payload.captureId }) }, command.requestId, s.identity);
       expect(s.events).toHaveLength(count);
@@ -133,6 +134,61 @@ describe('PathFinder protected Viewer capabilities', () => {
     await vi.advanceTimersByTimeAsync(315_000);
     expect(s.send.mock.calls.filter(call => call[0].type === 'CLEAR_ROUTE' || call[0].type === 'CANCEL_REQUEST')).toHaveLength(count);
     expect(s.c.getLoadSnapshot()?.ready).toBe(true); expect(s.events.filter(event => event.type === 'ERROR')).toHaveLength(0);
+  });
+  it('reports one bounded aggregate on success with measured round waits and no identity or payload fields', async () => {
+    const timing = vi.fn(), s = await loaded(600_000, timing);
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now());
+    vi.spyOn(captureRuntime, 'createModelCaptureAssembler').mockImplementation(() => ({ accept: vi.fn(), finish: () => ({ privateModelData: 'DO-NOT-LOG' }), summary: () => ({}) }));
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'START_MODEL_CAPTURE' || value.type === 'READ_MODEL_CAPTURE') {
+        const index = value.type === 'START_MODEL_CAPTURE' ? 0 : 1;
+        window.setTimeout(() => s.message('MODEL_CAPTURE_EVENT', { captureId: value.payload.captureId, index, done: index === 1,
+          eventJson: JSON.stringify({ type: index === 0 ? 'metadata' : 'complete', captureId: value.payload.captureId }) }, value.requestId, s.identity), index === 0 ? 5 : 7);
+      }
+    });
+    const capture = s.c.captureModel({ lookupRouteCodes: ['/PRIVATE-TRAY'], equipmentNames: [] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.send.mock.calls.some(call => call[0].type === 'START_MODEL_CAPTURE')).toBe(true);
+    await vi.advanceTimersByTimeAsync(12);
+    await expect(capture).resolves.toMatchObject({ snapshot: { privateModelData: 'DO-NOT-LOG' } });
+    expect(timing).toHaveBeenCalledOnce(); const value: ViewerCaptureTiming = timing.mock.calls[0][0];
+    expect(value).toMatchObject({ outcome: 'completed', roundCount: 2, inputChunkCount: 0, eventCount: 2, roundWaitMs: 12, maxRoundWaitMs: 7, wallMs: 12 });
+    expect(Object.keys(value).sort()).toEqual(['outcome', 'wallMs', 'roundCount', 'inputChunkCount', 'eventCount', 'roundWaitMs', 'maxRoundWaitMs', 'initialSelectionMs', 'finalSelectionMs', 'planningMs', 'assemblyMs', 'evidenceHashMs'].sort());
+    for (const [key, number] of Object.entries(value)) if (key !== 'outcome') { expect(Number.isFinite(number)).toBe(true); expect(number).toBeGreaterThanOrEqual(0); expect(number).toBeLessThanOrEqual(630_000); }
+    expect(Object.isFrozen(value)).toBe(true);
+    for (const secret of [projectId, versionId, '/PRIVATE-TRAY', 'DO-NOT-LOG', s.identity.loadId]) expect(JSON.stringify(value)).not.toContain(secret);
+    await vi.advanceTimersByTimeAsync(315_000); expect(timing).toHaveBeenCalledOnce();
+  });
+  it('reports a refusal without raw frame error text and isolates a throwing diagnostic callback', async () => {
+    const values: ViewerCaptureTiming[] = [], s = await loaded(600_000, value => { values.push(value); throw new Error('PRIVATE-SINK-ERROR'); });
+    s.send.mockImplementation(value => {
+      if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity);
+      if (value.type === 'START_MODEL_CAPTURE') s.message('ERROR', { code: 'EXTRACTION_FAILED', message: 'PRIVATE-FRAME-ERROR', retryable: false, operation: 'START_MODEL_CAPTURE' }, value.requestId, s.identity);
+    });
+    await expect(s.c.captureModel({ lookupRouteCodes: ['/PRIVATE-TRAY'], equipmentNames: [] })).rejects.toMatchObject({ code: 'EXTRACTION_FAILED' });
+    expect(values).toHaveLength(1); expect(values[0]).toMatchObject({ outcome: 'refused', roundCount: 1, eventCount: 0 });
+    expect(JSON.stringify(values)).not.toContain('PRIVATE');
+  });
+  it('reports cancellation once even after a late capture reply', async () => {
+    const timing = vi.fn(), s = await loaded(600_000, timing), abort = new AbortController();
+    s.send.mockImplementation(value => { if (value.type === 'CLEAR_ROUTE') s.message('ROUTE_CLEARED', {}, value.requestId, s.identity); });
+    const capture = s.c.captureModel({ lookupRouteCodes: ['/PRIVATE-TRAY'], equipmentNames: [] }, () => {}, { signal: abort.signal });
+    const rejected = expect(capture).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(s.send.mock.calls.some(call => call[0].type === 'START_MODEL_CAPTURE')).toBe(true));
+    const command = s.send.mock.calls.find(call => call[0].type === 'START_MODEL_CAPTURE')![0];
+    abort.abort(); await rejected;
+    expect(timing).toHaveBeenCalledOnce(); expect(timing.mock.calls[0][0]).toMatchObject({ outcome: 'cancelled', roundCount: 1, eventCount: 0 });
+    s.message('MODEL_CAPTURE_EVENT', { captureId: command.payload.captureId, index: 0, done: true, eventJson: JSON.stringify({ type: 'complete' }) }, command.requestId, s.identity);
+    expect(timing).toHaveBeenCalledOnce();
+  });
+  it('reports early not-ready refusal and observes a rejected asynchronous diagnostic callback', async () => {
+    const timing = vi.fn().mockRejectedValue(new Error('PRIVATE-ASYNC-SINK-ERROR')), s = setup('login-a', timing);
+    vi.spyOn(performance, 'now').mockReturnValue(Number.NaN);
+    await expect(s.c.captureModel({ lookupRouteCodes: ['/PRIVATE-TRAY'], equipmentNames: [] })).rejects.toThrow('Model is not ready');
+    await Promise.resolve();
+    expect(timing).toHaveBeenCalledOnce(); expect(timing.mock.calls[0][0]).toMatchObject({ outcome: 'refused', wallMs: 0, roundCount: 0, eventCount: 0 });
+    for (const [key, value] of Object.entries(timing.mock.calls[0][0])) if (key !== 'outcome') expect(Number.isFinite(value)).toBe(true);
   });
   it('freezes independent lookup capture codes without importing planning categories or roots', async () => {
     const s = await loaded(), codes = ['/BC001', '/BC002'];

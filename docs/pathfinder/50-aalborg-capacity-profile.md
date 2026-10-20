@@ -14,6 +14,22 @@ all geometry/limits. Hostabsolute315s capture deadline (unchanged300s frame),
 bounded180s HTTP/body waits and phase-specific progress are being verified.
 These repairs have not yet been deployed or qualified on the full model.
 
+Later source checkpoint0bd116d deployed as capacity3: actual84capture/bridge/input
+and61client/controller/hook checks PASS; final typecheck/lint PASS. Fresh planf3d
+froze330trays/1165leaves/5parts at06:41UTC, but its first part reached the execution
+deadline before upload (0committed, UI715data batches); no union/fit/publication
+or Apply. This is a real refusal, not full-input qualification. The initial
+47,613byte model-version JSON includes46,502byte manifest while capability checks
+need41bytes of state/health. A normal cookie-auth benchmark measured12HTTP calls,
+median15.24ms/range9.18–21.56ms; that alone does not establish the whole bottleneck.
+The source now preserves both fresh authorization checks and all locks while
+projecting only those capability fields. Separately, capture progress had caused
+a React state update per output event; cosmetic progress now updates at most1Hz,
+without dropping geometry/protocol events, errors or terminal state changes.
+Safe single aggregate host/frame timings will measure remaining waits after the
+next owned build. Actual96client/hook/service/resource/http tests and44bridge
+tests PASS; latest typecheck/lint and capacity4 build/runtime remain pending.
+
 Actual capture/bridge/input84checks PASS with separately built current ModelRunner
 in ownb3cwork. Initial run83PASS/1FAIL used the stale default local Release DLL
 (lookupRouteCodes absent); no source relaxation, test suppression or expected

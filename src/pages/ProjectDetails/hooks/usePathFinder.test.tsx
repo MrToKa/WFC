@@ -30,6 +30,71 @@ beforeEach(() => {
 });
 afterEach(() => { document.body.replaceChildren(); });
 describe('PathFinder scope and shared-location orchestration', () => {
+  it.each(['model', 'lookup', 'project'] as const)('coalesces only %s capture progress across both callback sources while terminal updates and captured data remain immediate', async kind => {
+    let now = 0, finish!: (value: { snapshot: unknown; summary: Record<string, unknown> }) => void;
+    let progress!: (value: { index: number; type: string }) => void;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    facts.capture.mockImplementationOnce((_request, onProgress) => { progress = onProgress; return new Promise(resolve => { finish = resolve; }); });
+    vi.mocked(pathFinderRequest).mockResolvedValue({ jobId: locationId });
+    const captured = { snapshot: { retained: 'all original captured data' }, summary: {} };
+    const { result, unmount } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    try {
+      await waitFor(() => expect(facts.events.length).toBe(1));
+      act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+      let pending!: Promise<unknown>;
+      const request = { routeCodes: ['BC1'], allowedCategories: ['Control'] as ('Control')[], equipmentNames: ['EQ-001'] };
+      act(() => {
+        pending = kind === 'model' ? result.current.prepareModel(request) : kind === 'lookup' ? result.current.startLookup('/BC1', false)
+          : result.current.runProjectPreparation({ modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) }, viewer => viewer.capture(request));
+      });
+      await waitFor(() => expect(facts.capture).toHaveBeenCalledOnce());
+      const prefix = kind === 'model' ? 'Preparing the selected model' : kind === 'lookup' ? 'Reading lookup geometry' : 'Collecting project geometry';
+      act(() => progress({ index: 0, type: 'object-part' }));
+      expect(result.current.viewerMessage).toBe(`${prefix}: 1 data batches…`);
+      now = 900;
+      act(() => { for (let index = 1; index <= 50; index++) progress({ index, type: 'object-part' }); });
+      expect(result.current.viewerMessage).toBe(`${prefix}: 1 data batches…`);
+      now = 999;
+      act(() => facts.events[0]({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'properties', loaded: 222, total: 777 } }));
+      expect(result.current.viewerMessage).toBe(`${prefix}: 1 data batches…`);
+      now = 1000;
+      act(() => facts.events[0]({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'properties', loaded: 222, total: 777 } }));
+      expect(result.current.viewerMessage).toBe('Preparing equipment candidates: 222 / 777…');
+      act(() => progress({ index: 999, type: 'object-part' }));
+      expect(result.current.viewerMessage).toBe('Preparing equipment candidates: 222 / 777…');
+      now = 1001;
+      act(() => facts.events[0]({ type: 'MODEL_LOADED', payload: {} }));
+      expect(result.current.viewerMessage).toBe('The active model is ready.');
+      now = 1002;
+      act(() => facts.events[0]({ type: 'ERROR', payload: { code: 'EXTRACTION_FAILED', operation: 'START_MODEL_CAPTURE' } }));
+      expect(result.current.error).toContain('could not be completed within its limits');
+      expect(result.current.viewerPhase).toBe('ready');
+      now = 2000;
+      act(() => progress({ index: 999, type: 'object-part' }));
+      expect(result.current.viewerMessage).toBe(`${prefix}: 1000 data batches…`);
+      await act(async () => { finish(captured); if (kind === 'project') expect(await pending).toEqual(captured); else await pending; });
+      expect(result.current.viewerMessage).toBe('The active model is ready.'); expect(result.current.busy).toBe(false);
+      if (kind !== 'project') expect(pathFinderRequest).toHaveBeenCalledWith(projectId, 'token', kind === 'model' ? '/artifacts' : '/lookups', 'POST', expect.objectContaining({ snapshot: captured.snapshot }), expect.any(AbortSignal));
+      else expect(pathFinderRequest).not.toHaveBeenCalled();
+    } finally { unmount(); clock.mockRestore(); }
+  });
+  it('does not share cosmetic progress timestamps or late progress across login runs', async () => {
+    let now = 0; const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const { result, rerender, unmount } = renderHook(({ token }) => usePathFinder({ projectId, loadedProjectId: projectId, token, isAdmin: true, container }), { initialProps: { token: 'first-login' } });
+    try {
+      await waitFor(() => expect(facts.events.length).toBe(1));
+      const oldEvent = facts.events[0];
+      act(() => oldEvent({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'geometry', loaded: 1, total: 9 } }));
+      expect(result.current.viewerMessage).toBe('Preparing routing geometry: 1 / 9…');
+      now = 100; rerender({ token: 'second-login' });
+      await waitFor(() => expect(facts.events.length).toBe(2));
+      act(() => facts.events[1]({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'properties', loaded: 2, total: 9 } }));
+      expect(result.current.viewerMessage).toBe('Preparing equipment candidates: 2 / 9…');
+      now = 2000;
+      act(() => oldEvent({ type: 'MODEL_CAPTURE_PROGRESS', payload: { phase: 'geometry', loaded: 8, total: 9 } }));
+      expect(result.current.viewerMessage).toBe('Preparing equipment candidates: 2 / 9…');
+    } finally { unmount(); clock.mockRestore(); }
+  });
   it('refuses attributing the loaded viewer to another model, fingerprint or selection before any protected command',async()=>{
     const {result}=renderHook(()=>usePathFinder({projectId,loadedProjectId:projectId,token:'token',isAdmin:true,container}));
     await waitFor(()=>expect(result.current.data).not.toBeNull());
