@@ -1,6 +1,47 @@
 # PathFinder local implementation progress
 
-## Current checkpoint — remaining U7 genuine server chain ACTIVE
+## Current checkpoint — genuine U7 synthetic server chain PASS; real SDK/UI BLOCKED
+
+- Branch pf-u7-genuine-chain-local-20261021, qualification checkpoint442c981;
+  product source ea9848c and owned5191 API3476333e/webd7bb72be unchanged.
+  Report71 + evidence/cable-workflow/u7-genuine-server-chain-actual.json contain
+  exact source/DLL/module hashes, actual scope, failures and limitations.
+- Fresh597b6afc completed genuine import→Ready/readback/login→2part preparation→
+  C#trace→atomic pairSave→shared impact/admission→real worker/seal→default initial
+  fill→receipt-backed current diagnostics. Outer/phase exit0+PASS, both server
+  cleanupPASS, exact PG/volume retirementPASS,32evidence files/400239bytes hashed
+  and independently reviewed. Direct0.5/E5/P10→6.05ceil7 and /SECONDARY written
+  only to blankLV; existingControl123/manual route, all install lengths and MV
+  preserved. Exact replay no duplicate; Instrumentation eligible queued job
+  cancelled withoutwrite. Audit proof preserves engineeringAccepted:false/
+  nativeParity:not-performed; no fabricated human Review.
+- Final frozen coordinator-v6 720354a6 (85pureguards), bootstrap58ec03ff
+  (50boundaryguards), diagnostic-v4dce6be40 (29pureguards), failed-fixture exact
+  retirement-v2e926 (30pureguards). Syntax/lint/independent review PASS in their
+  separate scopes; do not add overlapping historical counts or edit sources.
+- Prior failures retained: Windows fsyncEPERM, firstLinux anonymous parentvolume
+  +nestedbounds, retiredafabpreflightlabel refusal, unknown earlyb0db error,
+  trace66c101/3c189 (diagnostic cap 250,000 bytes) and784984 actualPOLICY_MISMATCH. Actual
+  C#routeCode '/U7' truncated fixture '/U7_ROUTE_A'. Only new synthetic names
+  changed to U701/U702 under unchanged coreparser; no expectedPF0 regeneration.
+- Final23:25Z Docker observation: owned5191 API/web healthy,0syntheticcontainers/
+  namedvolumes. Original WFC clean main96e63f13; remoteexact96e63, no branch/PR.
+  Original backend restarted externally during two scopes; same image/config,
+  no control actions issued by root. Source5191/originals/5190 received no writes
+  or restarts from this qualification. Keep demo/archive/privateproofs; denied
+  historicalpaths/.pf0-work/.pf2-work untouched. Preparer5180 remains PAUSED.
+- No active helper/test session or useful independent implementation remains.
+  Real Aalborg reread +SDK/property/visibility/ModelBrowser popup checks remain
+  BLOCKED by saved origin refusal. No alternative surface/indirectreread bypass.
+  Humanengineering/ReviewApply/nativeparity/active-enginecancel/MinIOwire remain
+  NOT_RUN by this slice. Next handoff is legitimate real-browser acceptance only
+  after external access changes. Existing heartbeat
+  path-finder-purpose-rules-and-model-revisions is now PAUSED through the app
+  tool; name/rule/target preserved and checkpoint appended. No real mappings/
+  Save/Review/Apply or grants invented by root. Standalone pending handoff:
+  docs/pathfinder/handoffs/PF-U7-local-browser-acceptance.md.
+
+## Historical checkpoint — remaining U7 genuine server chain ACTIVE
 
 - Branch pf-u7-genuine-chain-local-20261021 HEAD1e10ba2d inherits U8 delivery
   5abbf2db and standalone handoff PF-U7-genuine-server-chain.md. U8 source5191
