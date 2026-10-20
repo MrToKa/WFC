@@ -1,5 +1,97 @@
 # PathFinder local implementation progress
 
+## Current checkpoint — PF-U8 operational delivery verified; remaining U7 chain NEXT
+
+- Branch pf-u8-owned-popup-delivery-local-20261021; runtime source ea9848c.
+  Owned5191 API3476333e/webd7bb72be now carry the requested Needs routing popup:
+  Assign From/To drafts, atomic Save, selected Calculate routing, protected Show/
+  Hide and conditional both-empty initial fill. Report70 + public u8 receipt.
+- Fresh f301 backup/126-table restore/build/API-web-only update PASS. Five model
+  versions and PF artifacts byte audits PASS. Registry/cables/jobs/proposals/
+  grants/auth and120oldtables exact; five old control histories retain every old
+  row, with only1/1/5/1/3 startup appends. Five scheduler states changed by the
+  exact current-engine observer. Separate frozen transition-v2 fc5e13ea actual
+  files-only qualification PASS; root exact2canonicalconstraint review recorded.
+  Original strict/raw DATA FAIL and dataEquality:false remain unchanged.
+- Exact new5192 retirement c809dfee actual PASS: target06913518/48e1dd28 has0
+  containers/volumes/networks. Source5191/outside identities/config preserved.
+  Keep source/archive/private companion/raw proofs; all old failures/locks and
+  historical denied children/parents,.pf0-work/.pf2-work untouched. No prune.
+- No active runtime helper/fixture/session. Root remains sole runtime/SQL/HTTP
+  executor. Agents completed source ownership and retain all frozen files.
+  Do not reuse failed operators/attempts or edit their executed source files.
+- Real Aalborg reread and popup/SDK/UI acceptance BLOCKED by saved origin refusal;
+  no alternate-surface/indirect reread bypass. No real Save/Review/Apply performed.
+  Managed producer requalification/native parity/human acceptance NOT_RUN.
+  Original5180/5190 and checkouts untouched; Preparer remains PAUSED; no push/PR/merge.
+- NEXT immediately: local U8 report/evidence commit, prepare-stage-handoff for
+  remaining genuine U7 fixed-world server chain, new inherited local branch,
+  fresh owned-pg fixture. Frozen bootstrap f693 +chain5034,37pureguards/source
+  review PASS; actual import→preparation→trace→pairSave→impact admission→C#seal→
+  defaultinitialfill→live diagnostics/cancel NOT_RUN. Require process exit0 AND
+  receiptPASS AND separatecleanupPASS. Never fabricate Ready/collector/seal.
+  SDK object/property/visibility remains a separate blocked gate. Automatic
+  continuation stays ACTIVE while this useful independent work remains.
+
+## Historical PF-U8 — owned5191 popup updated; data qualification attempts
+
+- Branch pf-u8-owned-popup-delivery-local-20261021, source ea9848c.
+  Root is the sole runtime/SQL/HTTP executor. U7 atomic popup source is included.
+- Fresh operation f3012712-9f45-40ad-a199-140c79052b69: backup PASS;
+  restore PASS for126tables with exact source-to-target before-fence proof and
+  strictly qualified3-table session/installation fencing. Target5192 remains
+  API/web-off verified-quarantine, owner06913518-dd3d-4ca0-8e39-02edf461ba63,
+  project wfc-pathfinder-local-48e1dd28dd04. Preserve source5191 explicitly.
+- Build PASS; update PASS, only owned5191 API/web replaced, both healthy.
+  API3476333e9163d1f251f0eb5ddee67d4fe776af6c73e4f3c57e1ebd85ca443166;
+  webd7bb72be7953f6d11b4dffff3d6df1ac0e8e1d03cb37d8dc35a85aca1f43d0d8.
+  Producer qualification NOT_QUALIFIED_AFTER_NEW_BUILD; no new grant configured.
+- Strict post-update validation completed FAIL with the explicit migration
+  qualification code:134tables versus126, registry/artifact hashes equal,
+  full model audits PASS. Source API/web resumed healthy. Do not rerun it.
+  First independent migration qualifier f5a3f93a-f6bf-4057-b907-4afbb02e7a6b
+  failed HELPER_RESPONSE_INVALID before a comparison proof; bounded cleanup PASS,
+  source resumed healthy, strict failure/phase lock preserved. Diagnose source
+  and retain the failed attempt; no blind retry or fabricated validate.pass.
+  Its generated helper syntax failure was reproduced and corrected separately.
+  V2 bffc1fcb-00f1-4abf-9479-7be7c7d1d8be executed all126oldtables with4actual
+  client fences, noOOM and helper exit0. DATA comparison FAIL in six background
+  control tables (not cable/model tables). Overall attempt also FAIL because
+  assigned author changed the frozen operator after root launch. Exact executed
+  e3497af2 source is retained separately; original was not restored to conceal it.
+  All helpers removed; source resumed healthy. No retry/retire/acceptance.
+  Investigate exact engine-observer/grant transition versus cold archive;
+  preserve strict and v1/v2 attempt locks/results. Do not assume every delta safe.
+  Files-only current API engine identity PASS ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d.
+  First frozen startup-control qualifier ee26dd81 executed once and FAILed
+  CONTROL_UNEXPECTED_STATE_FIELD after126post/120exact and old-history checksPASS.
+  It incorrectly restricted observer dirty/reset fields to the enrolled project;
+  exact source pf_recalculation_dirty applies them to every observed project.
+  Its proof remains <operation>/startup-control-transition.private.json.
+  read_performance is authoring separately named startup-control-transition-v2;
+  batch_contracts reviews; do not edit executed files or overwrite receipts.
+  preview_diagnosis owns new ignored exact5192 retirement guard in
+  u8-exact-retirement-b5123bc3-4567-4d27-b49d-91975681b781, NOT_RUN/blocked until
+  genuine transitionPASS plus root exact two-constraint technical review.
+  Root prepared u8-run-transition-proof.mjs forv1; a new output/name is needed
+  forv2. The frozen next genuine fixed-world synthetic server-chain source
+  5034a811 with bootstrapf693 is independently reviewed,37pureguardsPASS but
+  actualNOT_RUN; wait forU8 resource guards before creating its fresh fixture.
+  Full private archive/companion/raw captures
+  are under pathfinder-engine/.scratch/cable-workflow-u8-f3012712-9f45-40ad-a199-140c79052b69.
+  Original5180/5190 and original checkout remain untouched.
+- Expected additive schema differences require separate genuine migration DATA
+  qualification; never invent strict validate.pass or remove its failure lock.
+  read_performance owns ignored migration proof/retirement source, batch_contracts
+  reviews it. preview_diagnosis owns ignored genuine synthetic import-chain source.
+  No other actual fixtures while current operation's resource guards run.
+- Browser-origin policy refusal persists. Real Aalborg reread/UI/picking and
+  engineering acceptance BLOCKED/NOT_RUN, independent of operational archive proof.
+  Full genuine import-to-engine/initial-fill chain NOT_RUN. Preparer5180 PAUSED.
+- Next: finish strict validation, qualify migration differences honestly, retire
+  ONLY newly owned5192 fixture if proven, record report70 and local commit;
+  generate and execute next useful independent handoff. No push/PR/merge.
+
 ## PF-U8 — actual resource-spool capacity corrected — ACTIVE 2026-10-21
 
 V2 source commit415cadf. Fresh operation8bba13b7-fb41-4310-bb26-072f15ec8b92
