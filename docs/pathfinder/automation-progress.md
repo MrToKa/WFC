@@ -1,17 +1,33 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T08:04:27.726Z
+## Current live checkpoint — 2026-10-20T08:25:00Z
 
 - Task ACTIVE, user explicitly resumed. Branch `pf-aalborg-capacity-local-20261020`,
-  source checkpoint `3a7a8ef6ced9120df4b48bc3d4f4eb8e8623b0ed`; pending diagnostic-only
-  Engine/Resources changes plus qualifier finally/actual receipts/docs. Root sole
-  runtime/SQL/HTTP/UI/test executor; all source agents frozen/completed, independent
-  diagnostic review found no remaining blockers. No active capture/discovery/helper/build/test.
-- Current own5191 authoritative binding `capacity5-source-runtime.private.json`
+  source checkpoint `d56dce2d2da8b10da851a5e251adca67cea0e0b3`; diagnostics and
+  actual workload receipts are committed locally. Root sole
+  runtime/SQL/HTTP/UI/test executor; all source agents frozen/completed, two independent
+  source reviews found no blocking terminal-root repair issue. PASS70 focused engine/resource
+  tests, server types, focused lint and whitespace. Receipt engine-terminal7.json.
+  Final test-file modification08:23:48UTC preceded suite start08:24:02UTC.
+  Trial8 completedFAIL,
+  helperremoved; no capture/discovery/build/test/helper. Currentruntime6 is running.
+  Source repair complete, pending local commit/build7: exact Linux terminal-root
+  reconciliation only, <=1000ms within unchanged deadline, prior samples,
+  acknowledged exit/close0/null, positive owned group ESRCH and strict response.
+- Current own5191 authoritative binding `capacity6-source-runtime.private.json`
   under `pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42`.
-  API f6b69de4095fb372f3ea7d22b2f7a946f7fbab63fd9a0aa74986e7c4176182a3,
-  web146d42f855a9b6a07ba8b92d77a30642691f9c2ace3a96f39070b396e2f51a7b.
-  Build/guardedAPIweb-onlyupgradePASS,6,407,841BPGbackup; otherown/outside resources preserved.
+  API3fb5bca1b28b2024f90b31f1ddf06098c7652a051127053c4901edbe4eca1524,
+  web7b4505ea4211878dde9055425ef0167b2b26c3fc198581708285a7a65c707aeb.
+  Build/guardedAPIweb-onlyupgradePASS,6,407,954BPGbackup; otherown/outside resources preserved.
+  Privatebindingreaders/qualifier binding6; preflight5PASS Windowsfree9.577GB,
+  LinuxVMavailable12.836GB (separate). Trial9 NOT_RUN; cannot trace failedtrial8.
+  Trial8 actualfailure nowdiagnosed:230goodRSSsamples/max1,180,282,880B, then
+  root-rss(noVmRSS), errnoNULL, ownrootstatuspresentZ, retainedCount1/statusRead1.
+  Refusal elapsed23127.293ms with no exitack; exit0/signalnull23127.948ms, close0
+  23128.044ms. Kernelterminal-root vs exitack race, notOOM/deadline/mathfailure.
+  Oldertrial4precisecause remainsunknown. Repair will require exactterminalproof,
+  priorvalidsamples, boundedack/grace withinunchangeddeadline, positivegroupgone
+  and originalstrictresultvalidation; nozeroRSS/activeerrorfallback/guardwidening.
 - Full normal capture9f8f7c49-ecce-43e4-9dc7-682aea331aee/plan7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606
   completed114,186,790B/5parts/1165leaves/330trays/1527names; all5evidence verified.
   This plan EXPIRED after07:44UTC. Never retime/publish it. Exact immutable inputs1
@@ -35,12 +51,11 @@
   now records failure stage/errno/root-state/counters and childrefusal/exit/close;
   guards/controlflow unchanged.28finaldiagnosticchecks/servertypes/focusedlintPASS,
   including throwingobserverfailure isolation; engine-observation6.jsonreceipt.
-- Browser Routes/modelready; initial transient prep readdeadline afterupgrade5
+- Browser on Details and reloaded to release unused3D memory; initial transient prep readdeadline afterupgrade5
   resolved normalRefresh. ReadonlyPGdiagidle/noblockers, initialcauseunknown.
   Keep original apps/5190/oldPathFinder/sources/deniedscratchpaths untouched.
-- NEXT: localcheckpoint -> candidate6 build/guarded
-  ownAPIwebupgrade (new wx drivers required) -> bounded publisher control with new
-  diagnostics. Then freshnormal discovery/freeze/capture (do NOT overwrite inputs1
+- NEXT: local source checkpoint -> candidate7 build/upgrade/control and actual publisher+trace
+  qualification. Then freshnormal discovery/freeze/capture (do NOT overwrite inputs1
   or old receipts), protectedpublication/currenttrace/rootmaps/automaticproposals.
   Last private preparation reader label prep20; use prep21 next.
   No real Apply/installLengthwrites. Final cable fence baseline cable-fence1:

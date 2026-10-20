@@ -87,6 +87,7 @@ export async function residentBytes(pid: number): Promise<number> {
 export type PreparationEngineObservation = { mode: 'oneshot'; thresholdBytes: number; intervalMilliseconds: number;
   observedMaximumBytes: number; samples: number; wallMilliseconds: number; exactPeak: false; outcome: 'completed' | 'refused';
   rssFailure?: RssFailureDetail;
+  rssTerminalReconciled?: boolean;
   lifecycle?: {
     refusal: { elapsedMilliseconds: number; exitCode: number | null; signalCode: string | null } | null;
     exit: { elapsedMilliseconds: number; exitCode: number | null; signalCode: string | null } | null;

@@ -3,7 +3,35 @@
 Status: **SOURCE_VERIFIED; REAL_FULL_INPUT_QUALIFICATION_IN_PROGRESS**.
 This checkpoint does not establish engineering acceptance or permission for real Apply.
 
-## Latest actual checkpoint — 20 October 2026, 07:44 UTC
+## Terminal-root repair — 20 October 2026, 08:25 UTC
+
+Candidate6 build and owned API/web-only upgrade PASS; backup6,407,954bytes,
+other own/outside resources preserved. Actual trial8 fitting FAIL with
+ENGINE_RSS_UNAVAILABLE, without OOM or deadline. This time the safe observation
+identifies the precise branch:230 valid RSS samples (maximum1,180,282,880bytes),
+then own root status Z with no VmRSS, errno null and no retained descendants.
+The refusal preceded Node's exit acknowledgement by0.655ms; exit and close
+subsequently acknowledged code0/null signal. This proves the observed terminal
+root acknowledgement race for trial8 only; trial4's exact cause remains unknown.
+Helper8 was removed and its immutable failure evidence retained.
+
+The narrow repair defers only that trusted Linux preparation case for at most
+1000ms within the unchanged original deadline, with prior valid samples.
+Acceptance requires raw exit/close0, null signals, the same owned PID, positive
+process-group absence through ESRCH and original nonempty UTF8/schema/request-ID
+validation. Cancellation/deadline/budget or unproven metadata still refuses and
+joins cleanup; no zero-byte RSS sample is invented. Optional diagnostic metadata
+records reconciliation only after strict result validation. Sampling remains a
+soft observation, not proof of an exact peak or unseen process history. Publisher
+count and final authorization/SQL gates remain separate and unchanged.
+
+PASS70 focused engine/resource tests, server TypeScript, focused lint and
+whitespace. Two independent source reviews found no blocking issue. Receipt:
+`evidence/aalborg-capacity/engine-terminal7.json`. Candidate7 build, actual workload
+and fresh protected publication remain NOT_RUN at this source checkpoint.
+No C# mathematics, resource limits, authentication or real cable values changed.
+
+## Earlier actual checkpoint — 20 October 2026, 07:44 UTC
 
 08:03UTC workload update (local source checkpoint3a7a8ef, actual capacity5image):
 the reference/incremental repair is verified on all114,186,790actualinput bytes.

@@ -116,6 +116,7 @@ describe('preparation process-tree soft RSS observations', () => {
     value.observedMaximumBytes = 999;
     expect(preparationEngineObservation('resource-test-0')).toBeNull();
     expect(preparationEngineObservation('resource-test-16')?.observedMaximumBytes).toBe(100);
+    expect(preparationEngineObservation('resource-test-16')).not.toHaveProperty('rssTerminalReconciled');
     expect(Object.isFrozen(preparationEngineObservation('resource-test-16'))).toBe(true);
   });
   it('detaches and freezes optional refusal and lifecycle metadata without changing legacy observations', async () => {
@@ -123,11 +124,12 @@ describe('preparation process-tree soft RSS observations', () => {
     const error = await refused(residentBytes(20)), detail = getEngineRssFailureDetail(error)!;
     const value = { mode: 'oneshot' as const, thresholdBytes: 2 * 1024 ** 3, intervalMilliseconds: 100,
       observedMaximumBytes: 100, samples: 3, wallMilliseconds: 200, exactPeak: false as const, outcome: 'refused' as const,
-      rssFailure: { ...detail }, lifecycle: { refusal: { elapsedMilliseconds: 190, exitCode: null as number | null, signalCode: null as string | null }, exit: null, close: { elapsedMilliseconds: 200, exitCode: 1, signalCode: null } } };
+      rssFailure: { ...detail }, rssTerminalReconciled: true, lifecycle: { refusal: { elapsedMilliseconds: 190, exitCode: null as number | null, signalCode: null as string | null }, exit: null, close: { elapsedMilliseconds: 200, exitCode: 1, signalCode: null } } };
     retainPreparationEngineObservation('resource-optional-metadata', value);
     value.rssFailure.enumeratedCount = 999; value.lifecycle.refusal.exitCode = 99; value.lifecycle.close.elapsedMilliseconds = 999;
     const saved = preparationEngineObservation('resource-optional-metadata')!;
     expect(saved.rssFailure?.enumeratedCount).toBe(1); expect(saved.lifecycle?.refusal?.exitCode).toBeNull(); expect(saved.lifecycle?.close.elapsedMilliseconds).toBe(200);
+    expect(saved.rssTerminalReconciled).toBe(true);
     expect(Object.isFrozen(saved.rssFailure)).toBe(true); expect(Object.isFrozen(saved.lifecycle)).toBe(true); expect(Object.isFrozen(saved.lifecycle?.refusal)).toBe(true); expect(Object.isFrozen(saved.lifecycle?.close)).toBe(true);
     expect(JSON.stringify(saved)).not.toMatch(/private|command|filename|environment/);
   });
