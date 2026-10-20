@@ -1,5 +1,22 @@
 # PathFinder local implementation progress
 
+## PF-U8 — actual resource-spool capacity corrected — ACTIVE 2026-10-21
+
+V2 source commit415cadf. Fresh operation8bba13b7-fb41-4310-bb26-072f15ec8b92
+first raw capture PASS126tables/287820560privatebytes, then audit-models FAILED.
+Root diagnosis PROVED helper /tmp64MiB cannot hold four233991168byte resources
+or old80715776byte resource; all5audit failures were STORAGE_UNAVAILABLE from
+STORAGE_EXHAUSTED, not integrity failures. Direct unchanged largestresource
+verification with320MiBtemp PASS233991168bytes+SHA. Helpermemory1GiB unchanged.
+SourceAPI/web resumedhealthy; actualsourcehealth flags/data untouched. Do NOT
+retry either begun failedoperation. Rootonly changed newv2 operator temp bound
+to320MiB with headroom; coreSDK/viewer/geometrylimits unchanged. Next NEW operation
+withfreshsourcebaseline; alltrackedDockercontext frozen throughbuild. Qualified
+v2controls219/219(155runtime/fence+64provider/operator), actualsourcecapture and
+singlelargestresourceproof recordedprivately. Models/archives/failedreceipts kept.
+Read olderU8sections as history. No5191upgradeyet; original5180/5190 untouched;
+actualAalborgreread/UI stillBLOCKED; fullgenuineenginechainNOT_RUN.
+
 ## PF-U8 — streaming backup v2 correction — ACTIVE 2026-10-21
 
 Current branch pf-u8-owned-popup-delivery-local-20261021 HEAD39c735c plus

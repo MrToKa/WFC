@@ -19,7 +19,9 @@ const SHA = /^[a-f0-9]{64}$/, UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{1
 const PHASES = ['backup', 'restore', 'build', 'update', 'validate', 'retire'];
 const BOUNDS = Object.freeze({ operationTimeoutMs: 7_200_000, commandTimeoutMs: 3_600_000, requestTimeoutMs: 180_000,
   helperTimeoutMs: 300_000, helperMemoryBytes: 1024 ** 3, pidsLimit: 128, nanoCpus: 2_000_000_000,
-  tmpBytes: 64 * 1024 ** 2, archiveOutputBytes: 32 * 1024 ** 3, archiveOwnership: 'preserve-posix' });
+  // The actual largest model property resource is233991168bytes. Verified
+  // reads spool one resource at a time;320MiB provides bounded headroom.
+  tmpBytes: 320 * 1024 ** 2, archiveOutputBytes: 32 * 1024 ** 3, archiveOwnership: 'preserve-posix' });
 const need = (condition, code) => { if (!condition) throw Object.assign(Error(code), { code }); };
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const canonical = value => value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value)
