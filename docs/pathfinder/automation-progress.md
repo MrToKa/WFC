@@ -1,5 +1,30 @@
 # PathFinder local implementation progress
 
+## Active From/To visibility delivery — 2026-10-20
+
+New inheritedbranchpf-path-endpoints-visible-local-20261020,parent0166c88.
+UserrequestedFrom/Toequipobjectsretainedwithpath. Deliveredsource: optionalclient
+visualprovenanceprojection+boundedverifiedendpointresolver, foregrounduniononly;
+proposal/standalonepreview+UI-onlymodel-scopedpickedIDs; exactpathpoints/math/
+protocol/auth/Ghost/Clearpreserved. RootResults+docs/runtime; batchagentAPI/helper;
+read_performancePreview+frozenweboperators; allsourcewritersfinished.
+CURRENT STATUS: **TECHNICAL_ENDPOINT_VISIBILITY_PASS / AWAITING_HUMAN_REVIEW**.
+Checks71PASS(44helper/API+14Results+8Preview+4Tabintegration+1actualreference
+offline replay),types/lint/diffPASS. SourcefrozenbeforeWEBbuildPASS15:37:34.627Z,
+closure1280files/94459479bytes. WEBONLYupgradePASS15:39:00.210Z; newwebcf8f9bc5,
+API78536ccd retained exactID/starttime plusPG/Minio/volumes/networks/outsideconfig.
+Globaljobs3→2naturalprogress; noAPIcontrol/cancel/newcalc/Review/Apply/locationedit.
+All2153DBcables/2preexistingApplyreceipts andengineidentityunchanged. Concurrent
+consistentDBbackup17970330bytes+TOC84447PASS; finalreadback15:39:54.338Z health200,
+0helpers. Actualreferenceproductionreplayproved2endpoints/7foreground,pointsexact;
+livebrowservisualNOT_RUN(savedtooloriginrefusalunchanged). Allrootprocessesjoined.
+Ownedprivateworkpathfinder-engine/.scratch/tray-catalog-466d4ef7-a66c-476a-ad0b-8038ea4fe4b3.
+Report58recordsfailuresandlimits; noactualcalc/Review/Apply/locationschanged.
+Report58+evidence/path-endpoint-visibility/actual.json recordfailures/limits/current
+sourcehashes. ReadliveHEADforlocalcommit. Next:humanCtrlF5→viewactualpath/endpoints;
+updatedacceptancehandoff; no independent implementation remains inthisrequest.
+Nooriginal/5190controls,nopublish; primaryPreparer/PFautomationstayPAUSED.
+
 ## Active review discoverability correction — 2026-10-20
 
 User screenshots: exact route/Ghost visible; Reviewblocked and no batchcontrols.

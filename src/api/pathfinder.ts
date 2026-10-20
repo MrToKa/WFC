@@ -39,7 +39,29 @@ const proposalSummarySchema = z.object({ schemaVersion: z.literal('wfc.pf.propos
   route: z.unknown().nullable(), routingPreferences: routingPreferencesSchema.nullable(), createdAt: z.string(), calculationMode: z.enum(['calculate', 'design']).optional() });
 const computedRouteSchema = z.object({ success: z.boolean(), message: z.string(), routeText: z.string(), routeCodes: z.array(z.string()), segmentIds: z.array(z.string()),
   points: z.array(point).max(200000), objectIds: z.array(z.string()).max(200000), lengthMeters: z.number().finite(), fromDistanceMeters: z.number().finite(), toDistanceMeters: z.number().finite(), fromRequiresSecondary: z.boolean(), toRequiresSecondary: z.boolean(), connectionGapCount: z.number().int().nonnegative(), connectionGapLengthMeters: z.number().finite() });
-const proposalSchema = proposalSummarySchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional(),revisionResult:revisionResultEnvelopeSchema.nullable().optional() });
+const legacyDisplayEndpointSchema = z.object({ locationId: uuid, bindingRevision: revision, point });
+const boundDisplayEndpointSchema = legacyDisplayEndpointSchema.extend({ locationRevision: revision, bindingId: uuid,
+  bindingContentSha256: policyHashSchema, mode: z.enum(['fixed-world', 'object-derived', 'object-attached']),
+  captureFrameId: uuid, qualifiedProjectFrameId: uuid.nullable(), aggregateId: uuid, projectionSha256: policyHashSchema,
+  sourceObjectRevisionId: uuid.nullable(), migrationDecisionId: uuid.nullable() });
+const automaticDisplayEndpointSchema = z.object({ kind: z.literal('automatic-equipment-anchor'), locationId: uuid, locationRevision: revision,
+  point, modelVersionId: uuid, artifactId: uuid, aggregateId: uuid, captureFrameId: uuid, projectionSha256: policyHashSchema,
+  traceId: uuid, sourceObjectRevisionId: uuid, sourceObjectId: z.string().max(16).regex(/^dbid:(?:0|[1-9][0-9]*)(?![\s\S])/),
+  sourceObjectRecordSha256: policyHashSchema, contentSha256: policyHashSchema });
+const displayScope = { projectId: uuid, model: z.object({ id: uuid, selectionRevision: revision, contentFingerprint: policyHashSchema }),
+  artifact: z.object({ id: uuid, sha256: policyHashSchema }) };
+const displayPreparation = z.object({ aggregateId: uuid, captureFrameId: uuid, projectionSha256: policyHashSchema });
+// This is a display-only projection of metadata already returned by proposal GET.
+// Optional malformed/historical evidence never prevents reading the calculation itself.
+const proposalDisplayDependenciesSchema = z.union([
+  z.object({ schemaVersion: z.literal('pathfinder.dependencies.v2'), ...displayScope, from: legacyDisplayEndpointSchema, to: legacyDisplayEndpointSchema }),
+  z.object({ schemaVersion: z.enum(['pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5']), ...displayScope,
+    preparation: displayPreparation, from: boundDisplayEndpointSchema, to: boundDisplayEndpointSchema }),
+  z.object({ schemaVersion: z.literal('pathfinder.dependencies.v6'), ...displayScope, preparation: displayPreparation,
+    from: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]), to: z.union([automaticDisplayEndpointSchema, boundDisplayEndpointSchema]) }),
+]);
+const proposalSchema = proposalSummarySchema.extend({ route: computedRouteSchema.nullable(), effectiveCategory: z.string().nullable().optional(),revisionResult:revisionResultEnvelopeSchema.nullable().optional(),
+  dependencies: proposalDisplayDependenciesSchema.optional().catch(undefined) });
 const diagnosticCount = z.number().int().nonnegative().max(1_000_000).nullable();
 const lookupPlanSchema = z.object({ routeCodes: z.array(z.string().min(2).max(256).regex(/^\/[A-Z0-9][A-Z0-9_.-]*$/).refine(value => value !== '/SECONDARY')).min(1).max(100), connectionGap: connectionGapSchema, selectionRevision: revision });
 const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('lookup'), status: z.enum(['queued', 'running', 'complete', 'cancelled', 'failed']), total: z.literal(1), completed: z.number().int().min(0).max(1), createdAt: z.string(), updatedAt: z.string(), failure: z.string().nullable(),

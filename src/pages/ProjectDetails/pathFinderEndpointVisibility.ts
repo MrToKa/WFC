@@ -1,0 +1,110 @@
+import type { PathFinderPreview, PathFinderProposal, PathFinderState } from '@/api/pathfinder';
+import { EndpointBindingApiError, fetchEndpointBinding } from '@/api/pathfinderEndpointBindings';
+import { GeometryTraceApiError, fetchGeometryObjectRevision } from '@/api/pathfinderGeometryTrace';
+import { canonicalPurposeJson } from '../../../shared/pathfinderPurposePolicy';
+
+export const ENDPOINT_VISIBILITY_DEADLINE_MS = 10_000;
+const dbId = (value: string): number | null => {
+  if (!/^dbid:[1-9][0-9]*(?![\s\S])/.test(value)) return null;
+  const id = Number(value.slice(5)); return Number.isInteger(id) && id <= 2147483647 ? id : null;
+};
+const samePoint = (left: readonly number[], right: readonly number[]) => left.length === 3 && right.length === 3 && left.every((value, index) => value === right[index]);
+const uniqueIds = (values: readonly string[]) => [...new Set(values.filter(value => dbId(value) !== null))];
+
+/** The existing protected bridge retains its exact 512-object budget. Never truncate a route to add equipment. */
+export function computedPathObjectIds(routeIds: readonly string[], endpointIds: readonly string[]): number[] | null {
+  const ids = uniqueIds([...routeIds, ...endpointIds]); return ids.length > 512 ? null : ids.map(value => dbId(value)!);
+}
+
+function legacyEndpointObjectId(state: PathFinderState, locationId: string, bindingRevision: string, point: readonly number[]): string | null {
+  const matches = state.locations.filter(value => value.id === locationId), binding = matches.length === 1 ? matches[0].binding : null;
+  return binding && binding.status === 'confirmed' && binding.modelVersionId === state.activeModel.modelVersionId
+    && binding.revision === bindingRevision && samePoint(binding.point, point) && binding.objectId && dbId(binding.objectId) !== null ? binding.objectId : null;
+}
+
+/** Preview results already carry resolved version-local object IDs. Explicit coordinates do not imply an object. */
+export function previewEndpointObjectIds(preview: PathFinderPreview, state: PathFinderState): string[] {
+  const artifact = state.artifacts[0];
+  if (preview.projectId !== state.projectId || preview.status !== 'complete' || !preview.result || preview.result.stale
+    || !state.activeModel.modelVersionId || preview.input.expectedSelectionRevision !== state.activeModel.selectionRevision
+    || !artifact || artifact.id !== preview.input.artifactId || artifact.modelVersionId !== state.activeModel.modelVersionId) return [];
+  return uniqueIds([preview.result.from, preview.result.to].flatMap(endpoint => {
+    if (endpoint.source === 'equipment-bottom-aabb') return endpoint.objectId ? [endpoint.objectId] : [];
+    if (endpoint.source !== 'shared-location' || !endpoint.locationId || endpoint.bindingRevision === null) return [];
+    const found = legacyEndpointObjectId(state, endpoint.locationId, endpoint.bindingRevision, endpoint.point); return found ? [found] : [];
+  }));
+}
+
+async function digest(value: unknown): Promise<string> {
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalPurposeJson(value))))]
+    .map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+const authFailure = (error: unknown) => (error instanceof EndpointBindingApiError || error instanceof GeometryTraceApiError)
+  && [401, 403].includes(error.status ?? 0);
+
+/** Resolve display foreground only. This never changes endpoints, calculations or approval. */
+export async function proposalEndpointObjectIds(proposal: PathFinderProposal, state: PathFinderState,
+  access: { projectId: string; token: string }, signal?: AbortSignal): Promise<string[]> {
+  signal?.throwIfAborted();
+  const evidence = proposal.dependencies, active = state.activeModel, artifact = state.artifacts[0];
+  if (!evidence || !access.token || proposal.stale || proposal.projectId !== state.projectId || access.projectId !== state.projectId
+    || evidence.projectId !== state.projectId || !active.modelVersionId || evidence.model.id !== active.modelVersionId
+    || evidence.model.selectionRevision !== active.selectionRevision || evidence.model.contentFingerprint !== active.contentFingerprint
+    || !artifact || artifact.id !== evidence.artifact.id || artifact.modelVersionId !== active.modelVersionId
+    || artifact.snapshotSha256 !== evidence.artifact.sha256) return [];
+  if (evidence.schemaVersion === 'pathfinder.dependencies.v2') return uniqueIds([evidence.from, evidence.to].flatMap(endpoint => {
+    const found = legacyEndpointObjectId(state, endpoint.locationId, endpoint.bindingRevision, endpoint.point); return found ? [found] : [];
+  }));
+  const preparation = evidence.preparation;
+  if (preparation.projectionSha256 !== evidence.artifact.sha256) return [];
+  const controller = new AbortController(), stop = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', stop, { once: true });
+  const deadline = setTimeout(() => controller.abort(new DOMException('Endpoint display lookup timed out.', 'TimeoutError')), ENDPOINT_VISIBILITY_DEADLINE_MS);
+  const results: string[] = [];
+  try {
+    for (const endpoint of [evidence.from, evidence.to]) {
+      signal?.throwIfAborted();
+      if (endpoint.aggregateId !== preparation.aggregateId || endpoint.captureFrameId !== preparation.captureFrameId
+        || endpoint.projectionSha256 !== preparation.projectionSha256) continue;
+      if ('kind' in endpoint) {
+        if (endpoint.modelVersionId === active.modelVersionId && endpoint.artifactId === artifact.id && dbId(endpoint.sourceObjectId) !== null)
+          results.push(endpoint.sourceObjectId);
+        continue;
+      }
+      // A manually entered fixed point has no equipment identity to infer.
+      if (!endpoint.sourceObjectRevisionId || controller.signal.aborted) continue;
+      try {
+        const context = await fetchEndpointBinding(access.projectId, access.token, endpoint.locationId, controller.signal);
+        controller.signal.throwIfAborted(); signal?.throwIfAborted();
+        const head = context.head, current = context.current;
+        if (!context.readiness.calculationReady || context.projectId !== state.projectId || context.locationId !== endpoint.locationId
+          || !current || current.modelVersionId !== active.modelVersionId || current.selectionRevision !== active.selectionRevision
+          || current.contentFingerprint !== active.contentFingerprint || current.artifactId !== artifact.id
+          || current.aggregateId !== preparation.aggregateId || current.captureFrameId !== preparation.captureFrameId
+          || current.projectionSha256 !== preparation.projectionSha256
+          || !head || head.id !== endpoint.bindingId || head.contentSha256 !== endpoint.bindingContentSha256
+          || head.bindingRevision !== endpoint.bindingRevision || head.locationRevision !== endpoint.locationRevision
+          || head.projectId !== state.projectId || head.locationId !== endpoint.locationId || head.status !== 'confirmed'
+          || head.mode !== endpoint.mode || head.modelVersionId !== active.modelVersionId || head.artifactId !== artifact.id
+          || head.aggregateId !== preparation.aggregateId || head.captureFrameId !== preparation.captureFrameId
+          || head.projectionSha256 !== preparation.projectionSha256 || !samePoint(head.pointProjectMetres, endpoint.point)
+          || head.qualifiedProjectFrameId !== endpoint.qualifiedProjectFrameId || head.sourceDecisionId !== endpoint.migrationDecisionId
+          || !head.sourceObject || head.sourceObject.objectRevisionId !== endpoint.sourceObjectRevisionId
+          || current.traceId !== null && head.sourceObject.traceId !== current.traceId) continue;
+        const object = await fetchGeometryObjectRevision(access.projectId, access.token, head.sourceObject.traceId, head.sourceObject.objectRevisionId, controller.signal);
+        controller.signal.throwIfAborted(); signal?.throwIfAborted();
+        if (object.projectId !== state.projectId || object.modelVersionId !== active.modelVersionId || object.id !== head.sourceObject.objectRevisionId
+          || object.traceId !== head.sourceObject.traceId || object.aggregateId !== preparation.aggregateId
+          || object.coordinates.captureFrameId !== preparation.captureFrameId || object.provenance.projectionSha256 !== preparation.projectionSha256
+          || object.provenance.contentFingerprint !== active.contentFingerprint || await digest(object) !== head.sourceObject.recordSha256) continue;
+        controller.signal.throwIfAborted(); signal?.throwIfAborted();
+        const id = dbId(object.identity.objectId);
+        if (id !== null && (object.identity.dbId === null || object.identity.dbId === id)) results.push(object.identity.objectId);
+      } catch (error) {
+        if (authFailure(error)) throw error;
+        signal?.throwIfAborted(); // Missing or timed-out visual evidence does not invalidate the calculation.
+      }
+    }
+    signal?.throwIfAborted(); return uniqueIds(results);
+  } finally { clearTimeout(deadline); signal?.removeEventListener('abort', stop); }
+}

@@ -9,6 +9,7 @@ import { PathFinderRevisionResults } from './PathFinderRevisionResults';
 import { usePathfinderPendingApply } from './hooks/usePathfinderPendingApply';
 import { usePathfinderBatchReview } from './hooks/usePathfinderBatchReview';
 import { PathFinderBatchReview } from './PathFinderBatchReview';
+import { computedPathObjectIds, proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
 
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
@@ -31,30 +32,48 @@ export function PathFinderResults({ pf, selectedCableId, accountId, active = tru
     readProposal: pf.readProposal, reviewProposal: pf.reviewProposal, pendingApply, onApplied: pf.refresh,
   });
   useEffect(() => { onBatchBusyChange?.(batch.busy); return () => onBatchBusyChange?.(false); }, [batch.busy, onBatchBusyChange]);
-  const operation = useRef(0), reviewContext = useRef('');
-  useEffect(() => { operation.current++; setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { operation.current++; }; }, [ownershipKey, selectedCableId, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
-  useEffect(() => { operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { operation.current++; }; }, [active]);
-  useEffect(() => { if (!displayOwned) { operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); } }, [displayOwned]);
+  const operation = useRef(0), reviewContext = useRef(''), endpointRead = useRef<AbortController | null>(null);
+  useEffect(() => { endpointRead.current?.abort(); operation.current++; setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { endpointRead.current?.abort(); operation.current++; }; }, [ownershipKey, selectedCableId, data?.activeModel.modelVersionId, data?.activeModel.selectionRevision]);
+  useEffect(() => { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); return () => { endpointRead.current?.abort(); operation.current++; }; }, [active]);
+  useEffect(() => { if (!displayOwned) { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(false); setNotice(null); } }, [displayOwned]);
   const optionsKey = JSON.stringify(options);
-  useEffect(() => { operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setNotice(null); }, [optionsKey]);
+  useEffect(() => { endpointRead.current?.abort(); operation.current++; setReviewId(null); setPathDisplayed(false); setApplied(false); setNotice(null); }, [optionsKey]);
   const selectedRevision = data?.cables.find(cable => cable.id === proposal?.cableId)?.cableWriteRevision;
   const settingsKey = JSON.stringify(data?.settings);
-  useEffect(() => { setReviewId(null); setApplied(false); setNotice(null); }, [data?.registryRevision, data?.activeModel.selectionRevision, settingsKey, selectedRevision]);
+  const dependencyNotice = useRef<{ proposalId: string | null; key: string } | null>(null);
+  useEffect(() => {
+    const proposalId = proposal?.id ?? null, key = JSON.stringify([data?.registryRevision, data?.activeModel.selectionRevision, settingsKey, selectedRevision]);
+    const previous = dependencyNotice.current; dependencyNotice.current = { proposalId, key };
+    // The first proposal read also resolves selectedRevision. Preserve a notice
+    // from that same read, and do not race a newly confirmed review. Opening a
+    // different proposal already resets review state synchronously above.
+    if (previous?.proposalId === proposalId && previous.key !== key) { setReviewId(null); setApplied(false); setNotice(null); }
+  }, [data?.registryRevision, data?.activeModel.selectionRevision, settingsKey, selectedRevision, proposal?.id]);
   const openProposal = async (id: string) => {
     if (!active) return;
     const currentDisplay = claimViewer?.() ?? (() => true);
     const current = ++operation.current;
+    endpointRead.current?.abort(); const controller = new AbortController(); endpointRead.current = controller;
     setNotice(null); setProposal(null); setReviewId(null); setPathDisplayed(false); setApplied(false); setPreviewLoading(true);
     try {
       const detail = await pf.readProposal(id); if (!detail || operation.current !== current || !currentDisplay()) return; setProposal(detail);
       if (!detail.route?.success || detail.route.points.length < 1) { pf.clear(); setNotice('This proposal has no drawable path. Its diagnostic is shown below.'); return; }
       if (detail.route.points.length > MAX_PATH_POINTS) { setNotice('This exact path exceeds the viewer point budget. The result is retained without truncation.'); return; }
-      const objectIds = [...new Set(detail.route.objectIds.filter(value => /^dbid:[1-9][0-9]*$/.test(value)).map(value => Number(value.slice(5))))];
-      if (objectIds.length > 512) { setNotice('This path exceeds the viewer object budget. The result is retained without truncation.'); return; }
+      const access = pf.preparationAccess;
+      const endpointIds = data && access?.projectId && access.token
+        ? await proposalEndpointObjectIds(detail, data, { projectId: access.projectId, token: access.token }, controller.signal) : [];
+      if (controller.signal.aborted || operation.current !== current || !currentDisplay()) return;
+      const objectIds = computedPathObjectIds(detail.route.objectIds, endpointIds);
+      if (!objectIds) { setNotice('This path and its From/To objects exceed the viewer object budget. The result is retained without truncation.'); return; }
       const displayed = await pf.showPath({ pathId: detail.id, points: detail.route.points, objectIds });
       if (operation.current !== current || !currentDisplay()) return;
       if (displayed) setPathDisplayed(true); else setNotice('The proposal is available below. Load the active model and reopen it to view the exact path before confirming review.');
-    } finally { if (operation.current === current) setPreviewLoading(false); }
+    } catch (error) {
+      if (controller.signal.aborted || operation.current !== current || !currentDisplay()) return;
+      const status = error && typeof error === 'object' && 'status' in error ? error.status : null;
+      if (status === 401 || status === 403) { pf.refresh(); setNotice('Current administrator access is required to show the From/To objects.'); }
+      else setNotice('The From/To objects could not be checked. Open the path again.');
+    } finally { if (endpointRead.current === controller) endpointRead.current = null; if (operation.current === current) setPreviewLoading(false); }
   };
   const confirmReview = async () => {
     if (!active || !displayOwned || !proposal || !pathDisplayed || !effectiveCanApply || stale || pf.busy || !pendingApply.canStart) return;

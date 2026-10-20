@@ -2,10 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PathFinderResults } from './PathFinderResults';
 import type { usePathFinder } from './hooks/usePathFinder';
+import { proposalEndpointObjectIds } from './pathFinderEndpointVisibility';
+vi.mock('./pathFinderEndpointVisibility', async original => ({ ...await original<typeof import('./pathFinderEndpointVisibility')>(), proposalEndpointObjectIds: vi.fn(async () => [] as string[]) }));
 vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: () => <div>Server recalculation status</div> }));
 vi.mock('./PathFinderRevisionResults', () => ({ PathFinderRevisionResults: ({ onOpenProposal }: { onOpenProposal: (id: string) => void }) =>
   <section aria-label="Mock revision results"><button onClick={() => onOpenProposal('50000000-0000-4000-8000-000000000003')}>Open exact proposal in Viewer</button></section> }));
-beforeEach(() => { sessionStorage.clear(); });
+beforeEach(() => { sessionStorage.clear(); vi.mocked(proposalEndpointObjectIds).mockReset().mockResolvedValue([]); });
 afterEach(() => { sessionStorage.clear(); });
 describe('calculation production boundary', () => {
   it('does not create jobs from ready data or dependency changes; manual actions remain explicit', () => {
@@ -67,6 +69,34 @@ async function submitFirstApply(fixture: Fixture) {
 }
 
 describe('exact pending Apply through result display resets', () => {
+  it('keeps verified From/To objects with the route without changing exact points or cable values', async () => {
+    const f = recoveryFixture(); vi.mocked(proposalEndpointObjectIds).mockResolvedValue(['dbid:44', 'dbid:45', 'dbid:23']);
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(f.pf.showPath).toHaveBeenCalledWith({ pathId: id(3), points: f.pf.data.proposals[0].route.points, objectIds: [23, 44, 45] }));
+    expect(f.pf.calculate).not.toHaveBeenCalled(); expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('aborts endpoint reads and ignores their late objects when the selected cable changes', async () => {
+    const f = recoveryFixture(); let finish!: (value: string[]) => void;
+    vi.mocked(proposalEndpointObjectIds).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    await waitFor(() => expect(proposalEndpointObjectIds).toHaveBeenCalledOnce());
+    const signal = vi.mocked(proposalEndpointObjectIds).mock.calls[0][3]!;
+    view.rerender(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(22)} accountId={id(2)} options={options} />);
+    expect(signal.aborted).toBe(true); finish(['dbid:44']);
+    await waitFor(() => expect(screen.queryByText('Loading the exact computed path…')).toBeNull());
+    expect(f.pf.showPath).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled();
+  });
+  it('refuses an oversized route plus endpoint union without truncating the displayed path', async () => {
+    const f = recoveryFixture(), detail = { ...f.pf.data.proposals[0], route: { ...f.pf.data.proposals[0].route,
+      objectIds: Array.from({ length: 512 }, (_, index) => `dbid:${index + 1}`) } };
+    f.pf.readProposal.mockResolvedValueOnce(detail); vi.mocked(proposalEndpointObjectIds).mockResolvedValue(['dbid:600']);
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} accountId={id(2)} options={options} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
+    expect(await screen.findByText(/This path and its From\/To objects exceed the viewer object budget/)).toBeVisible();
+    expect(f.pf.showPath).not.toHaveBeenCalled(); expect(screen.getByRole('button', { name: 'Confirm proposal review' })).toBeDisabled();
+  });
   it('explains the selected proposal cancellation separately from engineering acceptance without relaxing review', async () => {
     const f = recoveryFixture(); f.pf.data.proposals[0].canApply = false;
     const pf = { ...f.pf, data: { ...f.pf.data, jobs: [{ id: id(7), status: 'cancelled', cancelRequested: true }] } };

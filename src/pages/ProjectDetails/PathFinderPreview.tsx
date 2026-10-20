@@ -1,13 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { Body1, Button, Caption1, Field, Input, Spinner } from '@fluentui/react-components';
-import type { PathFinderPreferences, PathFinderPreview as Preview, PathFinderPreviewInput } from '@/api/pathfinder';
+import type { PathFinderPreferences, PathFinderPreview as Preview, PathFinderPreviewInput, PathFinderState } from '@/api/pathfinder';
 import { isCanonicalPoint, MAX_PATH_POINTS, type CanonicalPoint } from '../../../viewer-runtime/protocol.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
+import { computedPathObjectIds, previewEndpointObjectIds } from './pathFinderEndpointVisibility';
 
 type Endpoint = { name: string; coordinates: [string, string, string] };
+type EndpointSelection = { objectId: string; modelScope: string };
+type PreviewDisplayRun = { jobId: string; modelScope: string | null; endpointObjectIds: string[] };
 type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; displayOwned: boolean; claimViewer: () => () => boolean; options: PathFinderPreferences | null; onInputChange: () => void; onEndpointNamesChange: (names: string[]) => void };
 const emptyEndpoint = (): Endpoint => ({ name: '', coordinates: ['', '', ''] });
+function modelScope(state: PathFinderState | null): string | null {
+  if (!state) return null;
+  const model = state.activeModel;
+  return model.modelVersionId && model.selectionRevision && model.contentFingerprint
+    ? JSON.stringify([state.projectId, model.modelVersionId, model.selectionRevision, model.contentFingerprint]) : null;
+}
 function endpointInput(value: Endpoint): { name: string; point?: CanonicalPoint } | null {
   const name = value.name.trim(); if (name.length > 500) return null;
   if (value.coordinates.every(coordinate => !coordinate.trim())) return name ? { name } : null;
@@ -19,21 +28,26 @@ function endpointInput(value: Endpoint): { name: string; point?: CanonicalPoint 
 export function PathFinderPreview({ pf, active, displayOwned, claimViewer, options, onInputChange, onEndpointNamesChange }: Props) {
   const styles = useRoutingsViewerStyles(), latest = useRef(pf); latest.current = pf;
   const generation = useRef(0), displayGuard = useRef<() => boolean>(() => false);
+  const endpointSelections = useRef<{ from: EndpointSelection | null; to: EndpointSelection | null }>({ from: null, to: null });
+  const displayRun = useRef<PreviewDisplayRun | null>(null), activeModelScope = modelScope(pf.data);
   const [from, setFrom] = useState<Endpoint>(emptyEndpoint), [to, setTo] = useState<Endpoint>(emptyEndpoint), [category, setCategory] = useState<PathFinderPreviewInput['category']>('LV');
   const [jobId, setJobId] = useState<string | null>(null), [preview, setPreview] = useState<Preview | null>(null), [working, setWorking] = useState(false), [cancelRequested, setCancelRequested] = useState(false), [notice, setNotice] = useState<string | null>(null);
   const dependencyKey = JSON.stringify([pf.data?.activeModel, pf.data?.registryRevision, pf.data?.settings, pf.data?.artifacts.map(artifact => artifact.id), options]);
   useEffect(() => { onEndpointNamesChange([...new Set([from.name.trim(), to.name.trim()].filter(Boolean))]); }, [from.name, to.name, onEndpointNamesChange]);
-  useEffect(() => { generation.current++; setJobId(null); setPreview(null); setWorking(false); setCancelRequested(false); setNotice(null); return () => { generation.current++; }; }, [active, dependencyKey]);
-  useEffect(() => { if (!displayOwned) { generation.current++; setJobId(null); setPreview(null); setWorking(false); setNotice(null); } }, [displayOwned]);
-  const invalidate = () => { generation.current++; setJobId(null); setPreview(null); setWorking(false); setCancelRequested(false); setNotice(null); };
-  const setEndpoint = (side: 'from' | 'to', value: Endpoint) => { onInputChange(); invalidate(); (side === 'from' ? setFrom : setTo)(value); };
+  useEffect(() => { endpointSelections.current = { from: null, to: null }; displayRun.current = null; }, [activeModelScope]);
+  useEffect(() => { generation.current++; displayRun.current = null; setJobId(null); setPreview(null); setWorking(false); setCancelRequested(false); setNotice(null); return () => { generation.current++; }; }, [active, dependencyKey]);
+  useEffect(() => { if (!displayOwned) { generation.current++; displayRun.current = null; setJobId(null); setPreview(null); setWorking(false); setNotice(null); } }, [displayOwned]);
+  const invalidate = () => { generation.current++; displayRun.current = null; setJobId(null); setPreview(null); setWorking(false); setCancelRequested(false); setNotice(null); };
+  const setEndpoint = (side: 'from' | 'to', value: Endpoint, selection: EndpointSelection | null = null) => { endpointSelections.current[side] = selection; onInputChange(); invalidate(); (side === 'from' ? setFrom : setTo)(value); };
   const assignSelection = async (side: 'from' | 'to') => {
-    if (!active || pf.busy || working) return;
+    if (!active || pf.busy || working || !activeModelScope) return;
     const current = ++generation.current; setWorking(true); setNotice(null);
     try {
-      const selection = await pf.readSelection(); if (generation.current !== current) return;
+      const selection = await pf.readSelection(); if (generation.current !== current || modelScope(latest.current.data) !== activeModelScope) return;
       if (selection?.objects.length !== 1 || !selection.objects[0].bottomCentre) { setNotice('Select exactly one model object with geometry for this endpoint.'); return; }
-      const object = selection.objects[0]; setEndpoint(side, { name: object.name, coordinates: object.bottomCentre!.map(String) as Endpoint['coordinates'] });
+      const object = selection.objects[0];
+      const objectId = Number.isInteger(object.objectId) && object.objectId > 0 && object.objectId <= 2147483647 ? `dbid:${object.objectId}` : null;
+      setEndpoint(side, { name: object.name, coordinates: object.bottomCentre!.map(String) as Endpoint['coordinates'] }, objectId ? { objectId, modelScope: activeModelScope } : null);
       setNotice(`${side === 'from' ? 'From' : 'To'} uses the selected object’s bounding-box bottom centre. Confirm the point before calculating.`);
     } finally { if (generation.current === current) setWorking(false); }
   };
@@ -41,10 +55,18 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
     if (!active || !options || pf.busy) return;
     const fromInput = endpointInput(from), toInput = endpointInput(to);
     if (!input && (!fromInput || !toInput)) return;
+    // Selected SDK IDs are display evidence only; the calculation still receives the exact point input.
+    const previousRun = displayRun.current;
+    const selectedIds = input
+      ? previousRun && preview && previousRun.jobId === preview.id && previousRun.modelScope === activeModelScope ? previousRun.endpointObjectIds : []
+      : Object.values(endpointSelections.current).flatMap(selection => selection && selection.modelScope === activeModelScope ? [selection.objectId] : []);
     const current = ++generation.current; displayGuard.current = claimViewer(); setPreview(null); setJobId(null); setWorking(true); setCancelRequested(false); setNotice(null);
+    displayRun.current = null;
     try {
       const id = await pf.startPreview(input ?? { from: fromInput!, to: toInput!, category, reverse: false, ...options });
-      if (generation.current === current && displayGuard.current() && id) setJobId(id);
+      if (generation.current === current && displayGuard.current() && id && modelScope(latest.current.data) === activeModelScope) {
+        displayRun.current = { jobId: id, modelScope: activeModelScope, endpointObjectIds: selectedIds }; setJobId(id);
+      }
     } finally { if (generation.current === current) setWorking(false); }
   };
   useEffect(() => {
@@ -53,15 +75,18 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
     const poll = async () => {
       const result = await latest.current.readPreview(jobId);
       if (closed || current !== generation.current || !displayGuard.current()) return;
-      if (!result) { setJobId(null); setNotice('The path preview could not be read. Refresh access and calculate again.'); return; }
+      if (!result || result.id !== jobId) { setJobId(null); setNotice('The path preview could not be read. Refresh access and calculate again.'); return; }
       setPreview(result);
       if (result.status === 'queued' || result.status === 'running') { timer = setTimeout(() => void poll(), 1500); return; }
       if (result.result?.stale) { setNotice('The model, locations or project values changed. Calculate a fresh path.'); return; }
       const route = result.result?.route;
       if (result.status !== 'complete' || !route?.success) return;
       if (route.points.length < 1 || route.points.length > MAX_PATH_POINTS) { setNotice('The exact path exceeds the viewer point budget. Its result is retained without truncation.'); return; }
-      const objectIds = [...new Set(route.objectIds.filter(value => /^dbid:[1-9][0-9]*$/.test(value)).map(value => Number(value.slice(5))))];
-      if (objectIds.length > 512) { setNotice('The exact path exceeds the viewer object budget. Its result is retained without truncation.'); return; }
+      const state = latest.current.data, run = displayRun.current;
+      const selectedIds = run?.jobId === result.id && run.modelScope === modelScope(state) ? run.endpointObjectIds : [];
+      const endpointIds = state ? previewEndpointObjectIds(result, state) : [];
+      const objectIds = computedPathObjectIds(route.objectIds, [...endpointIds, ...selectedIds]);
+      if (!objectIds) { setNotice('The exact path exceeds the viewer object budget. Its result is retained without truncation.'); return; }
       setWorking(true);
       try {
         const displayed = await latest.current.showPath({ pathId: result.id, points: route.points, objectIds });

@@ -11,18 +11,19 @@ then let the human review and explicitly apply selected non-MV proposals through
 the new batch controls. Do not treat automated tests as live visual acceptance.
 
 Worktree: `C:/Users/todor.chankov/source/WFC-pathfinder-local`.
-Branch: `pf-review-discoverability-local-20261020`, parent
-`26be0e789e279a893da34a9e0d74d646e4e7ed5c`. Read live HEAD/status and agents first;
+Branch: `pf-path-endpoints-visible-local-20261020`, parent
+`0166c8828458f35e676627bebe9a3f93cb2c903c`. Read live HEAD/status and agents first;
 the containing local delivery commit follows that parent. Production and test
-bytes are identified in [current actual.json](../evidence/review-discoverability/actual.json).
-Read [report57](../57-review-discoverability.md),
+bytes are identified in [current actual.json](../evidence/path-endpoint-visibility/actual.json).
+Read [report58](../58-path-endpoint-visibility.md),
+[report57](../57-review-discoverability.md),
 [report56](../56-review-batch-and-preview-reliability.md),
 [progress](../automation-progress.md), and the still-applicable engineering scope
 in [PF-Aalborg-engineering-review.md](PF-Aalborg-engineering-review.md).
 
 On 20 October, live remote main and the clean original WFC checkout were both
 `96e63f13fdc2b1d30b8f8ff658dd662f25fac104`. Before this delivery commit the local
-branch was 91 ahead/3 behind cached main. No remote CI, push, PR or merge occurred.
+branch was 92 ahead/3 behind cached main. No remote CI, push, PR or merge occurred.
 Do not infer remote acceptance from these local checks.
 
 ## Runtime, authority and preserved behavior
@@ -32,7 +33,7 @@ Do not infer remote acceptance from these local checks.
   `pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600`, Aalborg
   project `1af0f807-7653-40ea-8391-7eea6c54e7d4`.
 - API image is `sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c`;
-  web is `sha256:2cab777210ebef28b251378187c326e3febbe2293dc8b38b733e19efe1742f56`.
+  web is `sha256:cf8f9bc50b7ccccdfcb009dc28908c91aa2c61e8b6bcd169f0330424ba0de397`.
   Upgrade/final health PASS. Engine identity and all2153database cable rows plus
   2preexisting database Apply receipts unchanged; Aalborg itself has2140cables.
 - Two earlier full2140jobs were explicitly cancelled;0activejobs and412retained
@@ -76,7 +77,7 @@ poll retargeting, historical job-state verification and explicit manual non-MV
 calculation IDs. Empty selection never calls Review/Apply. Ctrl+F5 the browser;
 choose the complete1808scope, inspect/select ready rows and use the visible toolbar.
 
-Current55distinct targeted tests, final frontend/backend typecheck, scoped lint,
+Report57 verified55distinct targeted tests, final frontend/backend typecheck, scoped lint,
 production WEB build and WEBONLY upgrade PASS. API/PG/MinIO IDs/start times stayed
 exact, all2153DBcables/2preexistingApplyreceipts unchanged; no realReview/Apply.
 1277consumed inputs/94412540bytes had before/after source-closure verification.
@@ -85,7 +86,22 @@ readback; it is not a cold dump or new restore drill. Do not rerun checks merely
 for handoff. Historical228checks and the first build's NOT_MEASURED closure are
 recorded at report56's revision; firstupgradeFAIL/reconciliationPASS/case2PASS
 remain immutable. User screenshots show route/Ghost; no new toolbrowservisual
-acceptance is claimed. Exact current scope is in report57 and its receipt.
+acceptance is claimed. That historical scope is in report57 and its receipt.
+
+Report58 supersedes the above verification revision for the From/To visual change:
+71distinct targeted tests/types/lint/WEBbuild/WEBONLYupgradePASS. Optional current
+display provenance and bounded confirmed-object reads retain linked From/To
+equipment in the foreground alongside exact route objects. Explicit selected
+equipment IDs stay UI-only and model/job-scoped. Manual coordinate-only points
+have no object to infer. Original colors/materials, Ghost/Clear and all path points,
+lengths, calculation requests, server guards and bridge limits remain unchanged.
+This affects proposal and standalone Path, not ordered lookup/separateRoutings.
+Real converted reference replay passed2endpoints/7foreground/exactpoints; this
+does not establish a new live browser render or engineering acceptance. Current
+sourceclosure1280inputs andconsistentDBbackup17970330bytes+TOCpassed. CoreAPI/
+PG/MinioIDs+starts and2153cables/2Applyreceipts unchanged; jobs3→2naturally without
+APIcontrol/cancellation. Read current states instead of carrying these counts
+forward. Report58 retains intermediate test/harness failures and final PASS.
 
 ## Bounded next actions and acceptance
 
@@ -102,6 +118,11 @@ acceptance is claimed. Exact current scope is in report57 and its receipt.
    Zoom works, and Clear restores the full model. Capture actual errors and
    bounded timings; do not call the exact disappearance issue reproduced without
    observing it. Reload protected model should recover a genuine failed session.
+   Also verify From/To equipment remains visible with native colors/materials for
+   real linked endpoints and explicit Use selection as From/To. Name/coordinate
+   edits or model changes must drop stale selected-object references; do not infer
+   nearby objects for coordinate-only points. This is visual only, never a new
+   endpoint confirmation or length calculation.
 3. Inspect checkboxes and selected route/design information across pages. Changing
    calculation must clear unprocessed selections; MV and known cancelled/incomplete
    jobs cannot be selected. Current dependency and server eligibility still govern
@@ -135,6 +156,8 @@ images, and private failure/reconciliation receipts under owned ignored
 `pathfinder-engine/.scratch/tray-catalog-48e496e3-b4b3-4f6f-bc6c-cc595d8da8ad`.
 The newest consistentDBbackup and currentUIrawreceipts are separately retained in
 ownedignored `pathfinder-engine/.scratch/tray-catalog-344b78b8-6f66-4532-b9f6-0825f889b47c`.
+Endpoint visibility's newest backup/readbacks/private replay are separately in
+ownedignored `pathfinder-engine/.scratch/tray-catalog-466d4ef7-a66c-476a-ad0b-8038ea4fe4b3`.
 Final readback proved0owned temporary helper containers; no new test stack exists.
 The finalizer initially matched the retainedAPI/web image provenance labels; exact
 runtime IDs corrected classification before any deletion. Do not remove the demo.

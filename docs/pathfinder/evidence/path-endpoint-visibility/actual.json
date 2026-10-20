@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "wfc.pathfinder.endpoint-visibility.actual.v1",
+  "at": "2026-10-20T15:39:54.338Z",
+  "worktree": "C:/Users/todor.chankov/source/WFC-pathfinder-local",
+  "branch": "pf-path-endpoints-visible-local-20261020",
+  "baseCommit": "0166c8828458f35e676627bebe9a3f93cb2c903c",
+  "revisionScope": "Working source file bytes; containing commit read from Git. Production sources frozen before build.",
+  "sourceSha256": {
+    "src/api/pathfinder.ts": "f1391b548db99e2860987b6162e9025b616242e5b91604a50c7c66bc60fe3d40",
+    "src/pages/ProjectDetails/pathFinderEndpointVisibility.ts": "80ef2d7c34f616eb886d7814719defe909c6b7fe8bf2f1ef5e2463e842546a5e",
+    "src/pages/ProjectDetails/pathFinderEndpointVisibility.test.ts": "328aaf9a7961c69d233321864c7cd1caba93919215bdb0e7b0e29b501a937b86",
+    "src/pages/ProjectDetails/PathFinderResults.tsx": "1726284c23538827852cf5e4bab67d667bf8e2d81ca6f20b8190d156312af4e9",
+    "src/pages/ProjectDetails/PathFinderResults.test.tsx": "937a68175504b5f3712133a01d8f97b30c6f27284254d2490d05cc2f56ea8143",
+    "src/pages/ProjectDetails/PathFinderPreview.tsx": "0a58fc7e89c6e004def28da0891f0fac383743e89fb341eef4cb49eb3fc4de9e",
+    "src/pages/ProjectDetails/PathFinderPreview.test.tsx": "540630dda0e4a21770833e4d730092ab315b3a9bd786cd87de7afa202ab6680e"
+  },
+  "references": {
+    "normalAdminGetStatus": "PASS",
+    "actualCurrentConvertedModel": true,
+    "endpoints": 2,
+    "uniqueEndpointObjects": 2,
+    "resourcesPreserved": true,
+    "productionReplayStatus": "PASS",
+    "replayForegroundCount": 7,
+    "exactPathPointsUnchanged": true,
+    "scope": "Offline replay of normal API readbacks through production parser and visual helper, not a live browser screenshot."
+  },
+  "checks": {
+    "targetedTests": {
+      "status": "PASS",
+      "distinctTests": 71,
+      "helperAndApi": 44,
+      "proposalResults": 14,
+      "standalonePreview": 8,
+      "affectedTabIntegration": 4,
+      "actualReferenceOfflineReplay": 1
+    },
+    "typecheck": "PASS",
+    "scopedEslint": "PASS",
+    "diffCheck": "PASS",
+    "operatorSyntaxAndEquivalence": "PASS",
+    "failuresRetained": [
+      "First Results run13/14: first proposal read cleared foreground-budget notice; invalidation narrowed.",
+      "Second Results run13/14: pending recovery wait timed out; isolated unchanged-source rerun passed. Final full14/14 passed after conditional review-state cleanup; no timeout increased.",
+      "Initial private replay failed before tests because the Node guard module required a file URL in Vitest; private harness corrected, replay1/1PASS."
+    ],
+    "liveBrowserRender": "NOT_RUN",
+    "reason": "Saved browser-tool origin denial from previous delivery; no bypass attempted.",
+    "nativeParity": "NOT_RUN",
+    "humanEngineeringAcceptance": "NOT_RUN"
+  },
+  "build": {
+    "status": "PASS",
+    "at": "2026-10-20T15:37:34.627Z",
+    "operatorSha256": "9d473c78dca9b5667839442e15519d6b1765c5102ef5ebc60e3c79174b54b465",
+    "webImage": "sha256:cf8f9bc50b7ccccdfcb009dc28908c91aa2c61e8b6bcd169f0330424ba0de397",
+    "apiUntouched": true,
+    "sourceClosure": {
+      "status": "PASS",
+      "scope": "explicit-consumed-web-build-inputs.v1",
+      "files": 1280,
+      "totalBytes": 94459479,
+      "sha256": "0a1761a94fe0187537694f947762fb7cffdc240cff55e6ad49a629f42123794a"
+    },
+    "outsideConfigurationPreserved": true,
+    "outsideRunningStateChanges": [
+      {
+        "id": "f65cc58eea401f9c80de3be44342c3a6157f48fd6468a4d5a6b3df8ceeaac427",
+        "name": "/wfc-app-backend-1",
+        "beforeRunning": true,
+        "afterRunning": true,
+        "beforeStartedAt": "2026-10-20T15:36:00.219141017Z",
+        "afterStartedAt": "2026-10-20T15:37:00.801026771Z"
+      }
+    ]
+  },
+  "upgrade": {
+    "status": "PASS",
+    "at": "2026-10-20T15:39:00.210Z",
+    "operatorSha256": "da1fbd0c5eb983ea3df50802727137e0c918843418e54e783d6188bdba6a8d11",
+    "webOnly": true,
+    "webImage": "sha256:cf8f9bc50b7ccccdfcb009dc28908c91aa2c61e8b6bcd169f0330424ba0de397",
+    "apiImage": "sha256:78536ccdf8050ccd732f383d09da56456e3fc9b10d9312568238577eea976f9c",
+    "apiContainerUnchanged": true,
+    "postgresAndMinioUnchanged": true,
+    "allDatabaseCables": 2153,
+    "allDatabaseCableRowsUnchanged": true,
+    "preexistingDatabaseApplyReceipts": 2,
+    "applyCountUnchanged": true,
+    "engineIdentityUnchanged": true,
+    "activeJobsBefore": 3,
+    "activeJobsAfter": 2,
+    "jobProgressAllowed": true,
+    "outsideConfigurationPreserved": true,
+    "outsideRunningStateChanges": [],
+    "databaseBackup": {
+      "path": "ui-database/database.dump",
+      "bytes": 17970330,
+      "sha256": "01ddc648bbca62f9e993dc3a3e4bc83cdd409173912775254723e2fddfa454bc",
+      "private": true,
+      "method": "Concurrent consistent snapshot while calculations continue",
+      "toc": {
+        "status": "PASS",
+        "method": "pg_restore-list-mounted-file",
+        "tocBytes": 84447,
+        "tocSha256": "4f227d326f06cfcac3006248a0ad5b8c90ab74cad26eb00938f3f4862a98a4e5"
+      }
+    },
+    "databaseRestoreDrill": "NOT_RUN"
+  },
+  "finalReadback": {
+    "healthStatus": 200,
+    "exactRuntimeResources": true,
+    "ownedTemporaryHelperContainers": 0,
+    "dumpBytesAndHashReverified": true
+  },
+  "boundaries": {
+    "serverOrCSharpOrProtocolChanged": false,
+    "calculationRequestChanged": false,
+    "pathPointsChanged": false,
+    "locationsChanged": false,
+    "newCalculationSubmitted": false,
+    "jobCancelled": false,
+    "realReviewApplyPerformed": false,
+    "original5180Controlled": false,
+    "old5190Controlled": false,
+    "pushPrMergePerformed": false,
+    "primaryPreparerOrPfAutomationResumed": false,
+    "deniedHistoricalPathsUntouched": true
+  },
+  "retained": "5191 demonstration, required model archives, prior DB dumps/rollback images, newest consistent DB snapshot and private evidence; no disposable test stack exists.",
+  "limitations": [
+    "Foreground preserves original materials, including intrinsic transparency; it does not force native transparent equipment opaque.",
+    "Coordinate-only points without a model reference have no equipment object to infer. Ordered lookup and separate Routings viewer are unchanged.",
+    "71targeted tests and converted reference replay do not prove live browser rendering or engineering acceptance."
+  ]
+}
