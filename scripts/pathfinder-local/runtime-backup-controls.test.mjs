@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
-import {artifactAudit,databaseDumpHelperConfiguration,assertDatabaseDumpHelperMounts} from './runtime-lib.mjs';
+import os from 'node:os';
+import { createHash } from 'node:crypto';
+import {artifactAudit,databaseDumpHelperConfiguration,assertDatabaseDumpHelperMounts,ROOT,backup,restore,validateInventoryProvider,
+  captureInventoryWithProvider,validateRestoreInventoryProvider,validateBackupInventoryContract,contained} from './runtime-lib.mjs';
 
 const imageId='sha256:'+'a'.repeat(64),state={owner:'ab6bca4b-bb14-4fc2-bb75-bb10bb089b20',project:'wfc-pathfinder-local-abcdef123456',images:{api:'sha256:'+'b'.repeat(64)}},postgres={image:imageId};
 const image=(volumes={'/var/lib/postgresql':{}})=>({Id:imageId,Os:'linux',Config:{Volumes:volumes}});
@@ -74,11 +77,12 @@ test('forged missing, duplicate or unknown declared target set cannot authorize 
 const runtimeSource = await fs.readFile(new URL('./runtime-lib.mjs', import.meta.url), 'utf8');
 const restoreSource = runtimeSource.slice(runtimeSource.indexOf('export async function restore(')).replace(/^export /, '');
 assert.ok(restoreSource.startsWith('async function restore('));
-function restoreHarness({ observerError = null, validationError = null, startError = null } = {}) {
+function restoreHarness({ observerError = null, validationError = null, startError = null, version = 1, captureError = null } = {}) {
   const calls = [], saved = [], target = { runtime: path.resolve('synthetic-u8-target'), owner: '10000000-0000-4000-8000-000000000001',
     project: 'wfc-pathfinder-local-abcdef123456', port: 5192, images: {}, status: 'initialized' };
   const inventory = { businessSha256: 'a'.repeat(64), registrySha256: 'b'.repeat(64) }, artifacts = { sha256: 'c'.repeat(64) };
-  const manifest = { backupId: '10000000-0000-4000-8000-000000000002', inventory, artifacts,
+  const manifest = { schemaVersion: version, ...(version === 2 ? { inventoryModule: { path: 'losslessInventory.mjs', sha256: 'a'.repeat(64), bytes: 24 } } : {}),
+    backupId: '10000000-0000-4000-8000-000000000002', inventory, artifacts,
     images: ['api', 'web', 'postgres', 'minio'].map((role, at) => ({ role, id: 'sha256:' + String(at + 1).repeat(64), archive: role + '-image.tar' })),
     files: ['minio', 'staging', 'pathfinder'].map(role => ({ path: role + '.wfcops', sha256: 'd'.repeat(64) })) };
   const failure = code => { throw Object.assign(new Error(code), { code }); };
@@ -86,6 +90,8 @@ function restoreHarness({ observerError = null, validationError = null, startErr
     path, ROOT: path.resolve('synthetic-repository'), Date, JSON, Object, Buffer,
     fail: failure, digest: () => 'e'.repeat(64), randomBytes: bytes => Buffer.alloc(bytes, 7),
     requireColdObserver: observer => { calls.push('check-observer'); if (observer !== undefined && typeof observer !== 'function') failure('PF_COLD_OBSERVER_INVALID'); },
+    validateInventoryProvider: async provider => { calls.push('check-provider'); return provider ?? null; },
+    validateRestoreInventoryProvider: (manifest, provider) => { calls.push('check-restore-provider'); return validateRestoreInventoryProvider(manifest, provider); },
     verifyBackup: async () => { calls.push('verify-backup'); return { directory: path.resolve('synthetic-backup'), manifest }; },
     assertCanonicalPath: async () => { calls.push('check-path'); },
     fs: { readFile: async () => Buffer.from(JSON.stringify({ format: 'WFC-PF-LOCAL-PRIVATE', schemaVersion: 1, backupId: manifest.backupId,
@@ -105,6 +111,10 @@ function restoreHarness({ observerError = null, validationError = null, startErr
     helper: async (_state, args) => { calls.push(['helper', args]); return { status: 'PASS' }; },
     waitStorage: async () => { calls.push('wait-storage'); },
     operation: async (_state, name) => { calls.push(['operation', name]); return name === 'inventory' ? inventory : { status: 'PASS' }; },
+    runtimeInventory: async (provider, phase) => {
+      if (!provider) { calls.push(['operation', 'inventory']); return inventory; }
+      calls.push(['provider-capture', phase]); if (captureError) throw captureError; return inventory;
+    },
     artifactAudit: async () => { calls.push('artifact-audit'); return artifacts; },
     validateRestoredInventory: () => { calls.push('validate-before-fence'); if (validationError) throw validationError; },
     validateRestoreFencing: () => { calls.push('validate-fencing'); return { status: 'PASS' }; },
@@ -159,4 +169,155 @@ test('historical activation failure still quarantines rather than yielding a fal
   const refusal = Error('synthetic startup refusal'), fixture = restoreHarness({ startError: refusal });
   await assert.rejects(() => fixture.restore({ backup: 'synthetic', privateConfig: 'synthetic.private.json' }), error => error === refusal);
   assert.equal(fixture.target.status, 'failed-quarantine'); assert.equal(fixture.saved.at(-1).status, 'failed-quarantine');
+});
+
+const digestCanonical = value => createHash('sha256').update(canonicalJson(value)).digest('hex');
+function canonicalJson(value) { return value === null || typeof value !== 'object' ? JSON.stringify(value) : Array.isArray(value)
+  ? '[' + value.map(canonicalJson).join(',') + ']' : '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonicalJson(value[key])).join(',') + '}'; }
+function syntheticV2(sha256 = 'a'.repeat(64)) {
+  const tables = ['pf_proposals', 'viewer_login_bindings', 'viewer_resource_sessions'].map(table => ({ table, rows: table === 'pf_proposals' ? 1034 : 0,
+    sha256: table === 'pf_proposals' ? 'c'.repeat(64) : digestCanonical([]), transientSessions: table !== 'pf_proposals',
+    hashBasis: table === 'pf_proposals' ? 'postgresql-jsonb-text-framed.v1' : 'legacy-canonical-json-array.v1' }));
+  return { schemaVersion: 2, command: 'inventory', status: 'PASS', algorithm: 'wfc.pf.raw-table-legacy-fence.v1', moduleSha256: sha256, tables,
+    businessSha256: digestCanonical(tables.filter(row => !row.transientSessions)), registrySha256: digestCanonical([]) };
+}
+function v2Manifest() {
+  const inventoryModule = { path: 'losslessInventory.mjs', bytes: 24, sha256: 'a'.repeat(64) };
+  return { schemaVersion: 2, profile: 'cold-pg-minio-staging-pathfinder-v2', inventory: syntheticV2(), inventoryModule,
+    files: [...Array.from({ length: 8 }, (_, index) => ({ path: 'synthetic-' + index, bytes: 1, sha256: 'c'.repeat(64) })), { ...inventoryModule }] };
+}
+test('V2 manifest is an explicit nine-member profile with the qualified helper embedded', () => {
+  assert.equal(validateBackupInventoryContract(v2Manifest()), true);
+  assert.equal(validateBackupInventoryContract({ schemaVersion: 1, profile: 'cold-pg-minio-staging-pathfinder-v1', files: Array(8).fill({}) }), false);
+});
+for (const change of ['profile', 'version', 'missing-member', 'extra-member', 'missing-helper', 'bad-helper-hash', 'bad-helper-path', 'bad-helper-size',
+  'extra-helper-field', 'module-envelope-mismatch', 'file-pin-mismatch', 'legacy-envelope'])
+  test('V2 member/algorithm pin refuses ' + change, () => {
+    const manifest = v2Manifest();
+    if (change === 'profile') manifest.profile = 'cold-pg-minio-staging-pathfinder-v1';
+    if (change === 'version') manifest.schemaVersion = 3;
+    if (change === 'missing-member') manifest.files.pop();
+    if (change === 'extra-member') manifest.files.push({ path: 'unclaimed' });
+    if (change === 'missing-helper') delete manifest.inventoryModule;
+    if (change === 'bad-helper-hash') manifest.inventoryModule.sha256 = 'not-sha';
+    if (change === 'bad-helper-path') manifest.inventoryModule.path = '../other.mjs';
+    if (change === 'bad-helper-size') manifest.inventoryModule.bytes = 2 * 1024 ** 2 + 1;
+    if (change === 'extra-helper-field') manifest.inventoryModule.executable = true;
+    if (change === 'module-envelope-mismatch') manifest.inventory.moduleSha256 = 'b'.repeat(64);
+    if (change === 'file-pin-mismatch') manifest.files.at(-1).bytes++;
+    if (change === 'legacy-envelope') manifest.inventory.schemaVersion = 1;
+    assert.throws(() => validateBackupInventoryContract(manifest));
+  });
+test('a legacy profile cannot silently acquire a V2 provider or reserved embedded helper', () => {
+  assert.throws(() => validateRestoreInventoryProvider({ schemaVersion: 1 }, { sha256: 'a'.repeat(64) }), { code: 'PF_LEGACY_BACKUP_PROVIDER_REFUSED' });
+  assert.throws(() => validateBackupInventoryContract({ schemaVersion: 1, profile: 'cold-pg-minio-staging-pathfinder-v1', files: Array(8).fill({}), inventoryModule: {} }));
+});
+for (const provider of [undefined, null, {}, { bytes: 25, sha256: 'a'.repeat(64) }, { bytes: 24, sha256: 'b'.repeat(64) }])
+  test('V2 restore refuses absent/substituted provider before target initialization: ' + String(provider?.sha256), async () => {
+    const fixture = restoreHarness({ version: 2 });
+    await assert.rejects(fixture.restore({ backup: 'synthetic', privateConfig: 'synthetic.private.json', activate: false, inventoryProvider: provider }),
+      { code: 'PF_RESTORE_INVENTORY_PROVIDER_REQUIRED' });
+    assert.equal(fixture.calls.some(value => Array.isArray(value) && value[0] === 'init'), false); assert.deepEqual(fixture.saved, []);
+  });
+test('V2 actual restore body uses only the explicit provider for both inventory phases and retains API-off ordering', async () => {
+  const fixture = restoreHarness({ version: 2 }), provider = { sha256: 'a'.repeat(64), bytes: 24 };
+  const result = await fixture.restore({ backup: 'synthetic', privateConfig: 'synthetic.private.json', activate: false, inventoryProvider: provider });
+  assert.equal(result.activated, false);
+  assert.deepEqual(fixture.calls.filter(value => Array.isArray(value) && value[0] === 'provider-capture').map(value => value[1]), ['restore-before-fence', 'restore-after-fence']);
+  assert.equal(fixture.calls.some(value => Array.isArray(value) && value[0] === 'operation' && value[1] === 'inventory'), false);
+  assert.ok(fixture.calls.indexOf('check-restore-provider') < fixture.calls.findIndex(value => Array.isArray(value) && value[0] === 'init'));
+  assert.equal(fixture.calls.includes('start-api-web'), false);
+});
+test('V2 provider refusal quarantines target and never starts API/web or attempts fencing', async () => {
+  const refusal = Object.assign(Error('synthetic invalid V2 inventory'), { code: 'PF_INVENTORY_PROVIDER_RESULT_INVALID' });
+  const fixture = restoreHarness({ version: 2, captureError: refusal });
+  await assert.rejects(fixture.restore({ backup: 'synthetic', privateConfig: 'synthetic.private.json', activate: false,
+    inventoryProvider: { sha256: 'a'.repeat(64), bytes: 24 } }), error => error === refusal);
+  assert.equal(fixture.target.status, 'failed-quarantine'); assert.equal(fixture.calls.includes('validate-fencing'), false); assert.equal(fixture.calls.includes('start-api-web'), false);
+});
+for (const provider of [null, {}, [], 'provider', { modulePath: 'relative.mjs', sha256: 'a'.repeat(64), capture() {} },
+  { modulePath: path.resolve('synthetic.mjs'), sha256: 'bad-hash', capture() {} }])
+  test('invalid provider fails actual backup/restore functions before any filesystem/runtime collaborators', async () => {
+    await assert.rejects(backup(null, 'unused', 'unused', { inventoryProvider: provider }), { code: 'PF_INVENTORY_PROVIDER_INVALID' });
+    await assert.rejects(restore({ inventoryProvider: provider }), { code: 'PF_INVENTORY_PROVIDER_INVALID' });
+  });
+test('qualified provider module and returned V2 scope are SHA-bound and detached from subsequent callback mutation', async () => {
+  const directory = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'wfc-pf-provider-unit-'))), modulePath = path.join(directory, 'qualified.mjs');
+  const raw = 'export const syntheticInventoryUnit = true;\n', sha256 = createHash('sha256').update(raw).digest('hex');
+  const scope = { ...state, format: 'WFC-PF-LOCAL', schemaVersion: 1, root: ROOT, runtime: path.join(ROOT, 'pathfinder-engine/.scratch/synthetic-provider-unit'),
+    port: 5192, envSha256: 'f'.repeat(64), tags: { api: 'wfc-pathfinder-api:ab6bca4bbb14-unit', web: 'wfc-pathfinder-web:ab6bca4bbb14-unit' } };
+  try {
+    await fs.writeFile(modulePath, raw, { flag: 'wx' }); let observed, value = syntheticV2(sha256), calls = 0;
+    const provider = await validateInventoryProvider({ modulePath, sha256, capture: async observation => { calls++; observed = observation; return value; } });
+    assert.equal(Object.isFrozen(provider), true); assert.equal(provider.bytes, Buffer.byteLength(raw));
+    const accepted = await captureInventoryWithProvider(provider, 'backup-before-audit', scope, '10000000-0000-4000-8000-000000000002');
+    assert.equal(Object.isFrozen(observed), true); assert.deepEqual(Object.keys(observed).sort(), ['apiImage', 'backupId', 'moduleSha256', 'owner', 'phase', 'port', 'project', 'runtime']);
+    assert.equal(observed.moduleSha256, sha256); assert.equal(observed.owner, scope.owner); assert.equal(calls, 1);
+    value.tables[0].rows = 7; assert.equal(accepted.tables[0].rows, 1034);
+    value = syntheticV2('e'.repeat(64)); await assert.rejects(captureInventoryWithProvider(provider, 'restore-before-fence', scope, observed.backupId), { code: 'PF_INVENTORY_PROVIDER_RESULT_INVALID' });
+    value = { schemaVersion: 1, command: 'inventory', status: 'PASS', tables: [], businessSha256: digestCanonical([]), registrySha256: digestCanonical([]) };
+    await assert.rejects(captureInventoryWithProvider(provider, 'restore-after-fence', scope, observed.backupId), { code: 'PF_INVENTORY_PROVIDER_RESULT_INVALID' });
+    await fs.writeFile(modulePath, raw + '// changed\n');
+    await assert.rejects(validateInventoryProvider({ modulePath, sha256, capture() {} }), { code: 'PF_INVENTORY_PROVIDER_MODULE_CHANGED' });
+    const captured = calls; await assert.rejects(captureInventoryWithProvider(provider, 'backup-after-audit', scope, observed.backupId), { code: 'PF_INVENTORY_PROVIDER_MODULE_CHANGED' }); assert.equal(calls, captured);
+  } finally { await fs.unlink(modulePath); await fs.rmdir(directory); }
+});
+
+// Actual backup function body, closed collaborators only. This proves ordering
+// and version dispatch, not a database capture or a real archive qualification.
+const backupSource = runtimeSource.slice(runtimeSource.indexOf('export async function backup('), runtimeSource.indexOf('/** Pure version/member boundary;'))
+  .replace(/^export /, '');
+function backupHarness({ providerRefusal = null } = {}) {
+  const calls = [], rawModule = Buffer.from('// synthetic qualified module\n'), moduleSha = createHash('sha256').update(rawModule).digest('hex');
+  const provider = { modulePath: path.resolve('synthetic-qualified.mjs'), sha256: moduleSha, bytes: rawModule.length, capture() {} };
+  const scope = { owner: state.owner, project: state.project, runtime: path.resolve('synthetic-source'), images: state.images };
+  const resources = { containers: ['api', 'web', 'postgres', 'minio'].map((role, at) => ({ role, id: 'synthetic-' + role, image: 'sha256:' + String(at + 1).repeat(64), running: true })) };
+  const legacy = { businessSha256: 'a'.repeat(64), registrySha256: 'b'.repeat(64) }; let manifest;
+  const sandbox = {
+    path, JSON, Object, Buffer, Date, requireColdObserver() {}, validateInventoryProvider: async value => { calls.push('check-provider'); return value ? provider : null; },
+    contained, ROOT, fail: code => { throw Object.assign(Error(code), { code }); },
+    ownership: async () => resources, createDocker: async () => ({}), safeNew: async () => { calls.push('new-backup'); },
+    assertCanonicalPath: async () => {}, readSettings: async () => ({}), randomUUID: () => '10000000-0000-4000-8000-000000000002',
+    fs: { readFile: async () => rawModule, writeFile: async (filename, value) => {
+      calls.push(['write', path.basename(filename)]); if (path.basename(filename) === 'manifest.json') manifest = JSON.parse(value);
+    } }, digest: bytes => createHash('sha256').update(bytes).digest('hex'),
+    hashFile: async filename => path.basename(filename) === 'losslessInventory.mjs' ? { bytes: rawModule.length, sha256: moduleSha } : { bytes: 12, sha256: 'd'.repeat(64) },
+    writePrivateJson: async () => { calls.push('private-companion'); }, boundedStop: async (_docker, item) => { calls.push(['stop', item.role]); },
+    command: async args => { calls.push(['command', ...args.slice(0, 3)]); return Buffer.from(args.includes('psql') ? '0' : ''); },
+    runtimeInventory: async (value, phase) => { calls.push(['inventory', phase, Boolean(value)]); if (providerRefusal) throw providerRefusal;
+      return value ? syntheticV2(moduleSha) : legacy;
+    },
+    operation: async (_state, name) => { calls.push(['operation', name]); return { status: 'PASS' }; },
+    artifactAudit: async () => ({ status: 'PASS', sha256: 'e'.repeat(64) }),
+    validateRestoredInventory: () => { calls.push('exact-v2-pre-post-audit'); },
+    observeColdRuntime: async (_observer, phase) => { calls.push(phase); }, verifyDatabaseDump: async () => ({ status: 'PASS' }),
+    helper: async (_state, args) => { calls.push(['helper', args]); return { status: 'PASS', sha256: 'f'.repeat(64) }; }, mount: (...values) => values,
+    jsonCommand: async () => [{ Os: 'linux', Architecture: 'amd64' }], verifyImageArchive: async () => {},
+    resume: async () => { calls.push('resume-original'); },
+    verifyBackup: async () => { calls.push('verify-backup'); validateBackupInventoryContract(manifest); return { status: 'PASS', manifest }; },
+  };
+  return { backup: new vm.Script('(' + backupSource + ')', { filename: 'actual-runtime-backup-isolated.mjs' }).runInNewContext(sandbox), calls, scope, provider,
+    target: path.join(ROOT, 'pathfinder-engine/.scratch/synthetic-new-backup'), companion: path.join(ROOT, 'pathfinder-engine/.scratch/synthetic-companion.private.json') };
+}
+for (const version of [1, 2]) test('actual backup body preserves V' + version + ' dispatch and cold ordering with the exact member count', async () => {
+  const fixture = backupHarness(), result = await fixture.backup(fixture.scope, fixture.target, fixture.companion,
+    version === 2 ? { inventoryProvider: fixture.provider } : {});
+  assert.equal(result.status, 'PASS'); assert.equal(result.manifest.schemaVersion, version); assert.equal(result.manifest.files.length, version === 2 ? 9 : 8);
+  assert.deepEqual(fixture.calls.filter(value => Array.isArray(value) && value[0] === 'inventory').map(value => value.slice(1)),
+    [['backup-before-audit', version === 2], ['backup-after-audit', version === 2]]);
+  assert.ok(fixture.calls.findIndex(value => Array.isArray(value) && value[0] === 'stop' && value[1] === 'api') <
+    fixture.calls.findIndex(value => Array.isArray(value) && value[0] === 'inventory'));
+  assert.ok(fixture.calls.indexOf('backup-before-dump') < fixture.calls.findIndex(value => Array.isArray(value) && value[0] === 'command' && value[1] === 'exec' && value[3] === 'pg_dump'));
+  assert.equal(fixture.calls.filter(value => value === 'resume-original').length, 2);
+  if (version === 2) {
+    assert.ok(fixture.calls.findIndex(value => Array.isArray(value) && value[0] === 'write' && value[1] === 'losslessInventory.mjs') < fixture.calls.findIndex(value => Array.isArray(value) && value[0] === 'stop'));
+    assert.equal(fixture.calls.includes('exact-v2-pre-post-audit'), true);
+  } else { assert.equal(Object.hasOwn(result.manifest, 'inventoryModule'), false); assert.equal(fixture.calls.includes('exact-v2-pre-post-audit'), false); }
+});
+test('actual V2 backup body resumes source after invalid capture without dumping, archiving or writing completion', async () => {
+  const refusal = Object.assign(Error('synthetic invalid envelope'), { code: 'PF_INVENTORY_PROVIDER_RESULT_INVALID' }), fixture = backupHarness({ providerRefusal: refusal });
+  await assert.rejects(fixture.backup(fixture.scope, fixture.target, fixture.companion, { inventoryProvider: fixture.provider }), error => error === refusal);
+  assert.equal(fixture.calls.filter(value => value === 'resume-original').length, 1);
+  assert.equal(fixture.calls.some(value => Array.isArray(value) && value[0] === 'command' && (value.includes('pg_dump') || value.includes('save'))), false);
+  assert.equal(fixture.calls.some(value => Array.isArray(value) && value[0] === 'write' && ['manifest.json', 'complete.json'].includes(value[1])), false);
 });

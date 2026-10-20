@@ -12,15 +12,30 @@ const exact = (value, keys) => plain(value) && Object.keys(value).length === key
 const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000;
 const same = (a, b) => canonical(a) === canonical(b);
 function inventory(value, refuse = fail) {
-  if (!plain(value) || value.schemaVersion !== 1 || value.command !== 'inventory' || value.status !== 'PASS' || !Array.isArray(value.tables) || value.tables.length > 500) refuse();
+  const version2 = value?.schemaVersion === 2;
+  if (!plain(value) || ![1, 2].includes(value.schemaVersion) || value.command !== 'inventory' || value.status !== 'PASS' || !Array.isArray(value.tables) || value.tables.length > 500) refuse();
+  if (version2 && (!exact(value, ['schemaVersion', 'command', 'status', 'algorithm', 'moduleSha256', 'tables', 'businessSha256', 'registrySha256']) ||
+    value.algorithm !== 'wfc.pf.raw-table-legacy-fence.v1' || !HASH.test(value.moduleSha256 ?? ''))) refuse();
   const map = new Map(); let previous = '';
   for (const row of value.tables) {
-    if (!exact(row, ['table', 'rows', 'sha256', 'transientSessions']) || typeof row.table !== 'string' || !/^[a-z0-9_]+$(?![\s\S])/.test(row.table) || row.table <= previous || !count(row.rows) || typeof row.sha256 !== 'string' || !HASH.test(row.sha256) ||
+    if (!exact(row, ['table', 'rows', 'sha256', 'transientSessions', ...(version2 ? ['hashBasis'] : [])]) || typeof row.table !== 'string' || !/^[a-z0-9_]+$(?![\s\S])/.test(row.table) || row.table <= previous || !count(row.rows) || typeof row.sha256 !== 'string' || !HASH.test(row.sha256) ||
       row.transientSessions !== ['viewer_resource_sessions', 'viewer_login_bindings'].includes(row.table)) refuse();
+    if (version2 && (row.table.length > 63 || row.hashBasis !== (Object.hasOwn(COLUMNS, row.table) ? 'legacy-canonical-json-array.v1' : 'postgresql-jsonb-text-framed.v1'))) refuse();
     previous = row.table; map.set(row.table, row);
   }
   if (value.businessSha256 !== hash(value.tables.filter(row => !row.transientSessions)) || value.registrySha256 !== hash(value.tables.filter(row => row.table.startsWith('model_') || row.table === 'project_model_selections'))) refuse();
   return map;
+}
+/** Validates only the declared envelope and aggregate pins, never the database.
+ * V2 is explicitly mixed-basis: three bounded historical fence projections,
+ * raw PostgreSQL text for every other table. It is not a V1 compatibility cast. */
+export function validateInventoryEnvelope(value) {
+  inventory(value, () => { throw Object.assign(Error('RESTORE_INVENTORY_INVALID'), { code: 'RESTORE_INVENTORY_INVALID' }); });
+  return value;
+}
+function sameInventoryAlgorithm(before, after, refuse = fail) {
+  if (before.schemaVersion !== after.schemaVersion || before.schemaVersion === 2 &&
+    (before.algorithm !== after.algorithm || before.moduleSha256 !== after.moduleSha256)) refuse();
 }
 const pin = value => exact(value, ['rows', 'sha256']) && count(value.rows) && HASH.test(value.sha256 ?? '');
 
@@ -30,10 +45,12 @@ const pin = value => exact(value, ['rows', 'sha256']) && count(value.rows) && HA
 export function validateRestoredInventory(sourceInventory, restoredInventory) {
   const refuse = () => { throw Object.assign(new Error('RESTORE_INVENTORY_MISMATCH'), { code: 'RESTORE_INVENTORY_MISMATCH' }); };
   const source = inventory(sourceInventory, refuse), restored = inventory(restoredInventory, refuse);
+  sameInventoryAlgorithm(sourceInventory, restoredInventory, refuse);
   if (!source.has('viewer_resource_sessions') || !source.has('viewer_login_bindings') || source.size !== restored.size) refuse();
   for (const [table, original] of source) if (!same(original, restored.get(table))) refuse();
-  return Object.freeze({ schemaVersion: 'wfc.restore-inventory-validation.v1', status: 'PASS', tablesChecked: source.size,
-    authenticationTablesChecked: 2, fullInventorySha256: hash(sourceInventory.tables) });
+  return Object.freeze({ schemaVersion: sourceInventory.schemaVersion === 2 ? 'wfc.restore-inventory-validation.v2' : 'wfc.restore-inventory-validation.v1', status: 'PASS', tablesChecked: source.size,
+    authenticationTablesChecked: 2, fullInventorySha256: hash(sourceInventory.tables),
+    ...(sourceInventory.schemaVersion === 2 ? { inventoryAlgorithm: sourceInventory.algorithm, moduleSha256: sourceInventory.moduleSha256 } : {}) });
 }
 
 /** Full table closure, with only exact pins from the trusted same-transaction
@@ -42,6 +59,7 @@ export function validateRestoreFencing(beforeInventory, afterInventory, receipt,
   if (!UUID.test(targetId ?? '') || receipt?.schemaVersion !== 1 || receipt.command !== 'fence-restored' || receipt.status !== 'PASS' || receipt.targetId !== targetId ||
     receipt.activeRestoredBindings !== 0 || receipt.loginRowsDeleted !== 0 || receipt.requiresFreshJwtSigningSecret !== true || !count(receipt.sessionsRevoked) || !count(receipt.durableLoginTombstones)) fail();
   const before = inventory(beforeInventory), after = inventory(afterInventory), delta = receipt.fencingDelta;
+  sameInventoryAlgorithm(beforeInventory, afterInventory);
   if (before.size !== after.size || !exact(delta, ['schemaVersion', 'targetId', 'tables', 'installation']) || delta.schemaVersion !== 'wfc.restore-fencing-delta.v1' || delta.targetId !== targetId || !Array.isArray(delta.tables)) fail();
   const installation = delta.installation;
   if (!exact(installation, ['present', 'rotated', 'previousEpoch', 'currentEpoch', 'fencedActiveLeases', 'fencedQuarantinedLeases', 'leaseRowsUnchanged']) ||
@@ -70,6 +88,7 @@ export function validateRestoreFencing(beforeInventory, afterInventory, receipt,
     const fresh = after.get(table); if (!fresh || old.transientSessions !== fresh.transientSessions || !proofs.has(table) && !same(old, fresh)) fail();
   }
   if (beforeInventory.registrySha256 !== afterInventory.registrySha256) fail();
-  return Object.freeze({ schemaVersion: 'wfc.restore-fencing-validation.v1', status: 'PASS', targetId, tablesChecked: before.size,
-    qualifiedTables: proofs.size, installationEpochRotated: hasInstallation, unjoinedLeaseRowsPreserved: true });
+  return Object.freeze({ schemaVersion: beforeInventory.schemaVersion === 2 ? 'wfc.restore-fencing-validation.v2' : 'wfc.restore-fencing-validation.v1', status: 'PASS', targetId, tablesChecked: before.size,
+    qualifiedTables: proofs.size, installationEpochRotated: hasInstallation, unjoinedLeaseRowsPreserved: true,
+    ...(beforeInventory.schemaVersion === 2 ? { inventoryAlgorithm: beforeInventory.algorithm, moduleSha256: beforeInventory.moduleSha256 } : {}) });
 }

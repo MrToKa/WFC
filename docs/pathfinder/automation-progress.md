@@ -1,5 +1,27 @@
 # PathFinder local implementation progress
 
+## PF-U8 — streaming backup v2 correction — ACTIVE 2026-10-21
+
+Current branch pf-u8-owned-popup-delivery-local-20261021 HEAD39c735c plus
+uncommitted v2 correction; root activeowner. Old one-shot operation
+pathfinder-engine/.scratch/cable-workflow-u8-b7a9e2b5-c733-486a-ac75-039e00c9654f
+backup FAILED before archive/coldobserver: oldCLI inventory128MiB table limit.
+Read-only diagnosis:126tables,257780278rawbytes; pf_proposals1034rows/
+136846014bytes/maxrow169767. Boundedcleanup PASS; API/web resumed healthy, PG/
+MinIO never stopped. No update/datawrites/Apply. Do NOT retry old operation.
+Root NEW raw-inventory-provider.mjs +owned-update-v2.mjs/tests now frozen;
+64/64 tests and lints PASS, independentreview approvesfreshinit/backup/restore.
+Preview runtime-lib/restore-fencing+tests frozen155/155PASS: v2profile9members embeds
+qualified module, nonfence rawSQL hashes +3boundedlegacyfence hashes;v1 unchanged.
+Batch owns NEW providerpuretests; noSQL/runtime. Migration validator stagedONLY
+in ignoredscratch u8-migration-source-f9cb826f-702d-4b19-b208-79d95c0b1571,
+23mock/fsPASS+peerreview; actualSQLNOT_RUN. Use onlyfor poststartup additive
+schema investigation if strictvalidationfails; neverrelaxrestoreexactness.
+Next create NEW operation/sourcebaseline, backup/restore
+thenAPI/web-onlyupdate; no oldphase retry or code edits duringpinnedDockercontext.
+Source5191 originalimages/configpreserved; originals5180/5190 unchanged.
+ActualAalborgreread/UIBLOCKED; fullgenuineenginechain NOT_RUN; PreparerPAUSED.
+
 ## PF-U8 — owned5191 backup and popup delivery — ACTIVE 2026-10-21
 
 Branch pf-u8-owned-popup-delivery-local-20261021 inherits U7delivery71907dc and

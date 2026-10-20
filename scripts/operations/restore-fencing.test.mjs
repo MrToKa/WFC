@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { validateRestoreFencing, validateRestoredInventory } from './restore-fencing.mjs';
+import { validateRestoreFencing, validateRestoredInventory, validateInventoryEnvelope } from './restore-fencing.mjs';
 import { ROOT, retire, validateRuntimeRestoreFencingRecord } from '../pathfinder-local/runtime-lib.mjs';
 
 const id = n => `da800000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -147,4 +147,77 @@ test('a loose fencing flag or altered raw receipt is insufficient for retirement
 });
 test('the 5191 demonstration remains protected even if it has a historical restore marker', async () => {
   await assert.rejects(retire({ project: 'wfc-pathfinder-local-abcdef123456', port: 5191, status: 'running', restore: { inventoriesEqual: true, fencingValidated: true } }), /PF_VERIFIED_RESTORE_FIXTURE_REQUIRED/);
+});
+
+// Synthetic envelope/proof tests only: raw non-fence hashes are deliberately
+// distinct from the legacy algorithm; these tests never read a live database.
+function version2Inventory(value) {
+  const tables = value.tables.map(row => ({ ...row, hashBasis: Object.hasOwn(columns, row.table)
+    ? 'legacy-canonical-json-array.v1' : 'postgresql-jsonb-text-framed.v1',
+    sha256: Object.hasOwn(columns, row.table) ? row.sha256 : hash(['synthetic-raw-text-basis', row.sha256]) }));
+  return { schemaVersion: 2, command: 'inventory', status: 'PASS', algorithm: 'wfc.pf.raw-table-legacy-fence.v1', moduleSha256: 'd'.repeat(64), tables,
+    businessSha256: hash(tables.filter(row => !row.transientSessions)), registrySha256: hash(tables.filter(row => row.table.startsWith('model_') || row.table === 'project_model_selections')) };
+}
+function repinVersion2(value) {
+  value.businessSha256 = hash(value.tables.filter(row => !row.transientSessions));
+  value.registrySha256 = hash(value.tables.filter(row => row.table.startsWith('model_') || row.table === 'project_model_selections'));
+  return value;
+}
+test('V2 explicitly validates raw non-fence pins and exact historical fence bases without reinterpreting V1', () => {
+  const f = fixture(), source = version2Inventory(f.beforeInventory);
+  assert.equal(validateInventoryEnvelope(source), source);
+  const before = validateRestoredInventory(source, structuredClone(source));
+  assert.equal(before.schemaVersion, 'wfc.restore-inventory-validation.v2'); assert.equal(before.moduleSha256, source.moduleSha256);
+  assert.equal(before.inventoryAlgorithm, source.algorithm); assert.equal(before.tablesChecked, source.tables.length);
+  const after = version2Inventory(f.afterInventory), fenced = validateRestoreFencing(source, after, f.receipt, id(2));
+  assert.equal(fenced.schemaVersion, 'wfc.restore-fencing-validation.v2'); assert.equal(fenced.qualifiedTables, 3); assert.equal(fenced.unjoinedLeaseRowsPreserved, true);
+  assert.notEqual(source.tables.find(row => row.table === 'cables').sha256, f.beforeInventory.tables.find(row => row.table === 'cables').sha256);
+});
+for (const change of ['algorithm', 'module', 'missing-module', 'extra-header', 'extra-row', 'legacy-business', 'raw-session', 'raw-installation',
+  'unknown-basis', 'mixed-missing-basis', 'bad-count', 'bad-hash', 'classification', 'order', 'duplicate', 'aggregate', 'over-limit'])
+  test('V2 malformed or ambiguous inventory refuses ' + change, () => {
+    const f = fixture(), changed = version2Inventory(f.beforeInventory);
+    if (change === 'algorithm') changed.algorithm = 'legacy-v1-with-larger-budget';
+    if (change === 'module') changed.moduleSha256 = 'not-a-hash';
+    if (change === 'missing-module') delete changed.moduleSha256;
+    if (change === 'extra-header') changed.ignoreOtherTables = true;
+    if (change === 'extra-row') changed.tables[0].ignoreColumns = true;
+    if (change === 'legacy-business') changed.tables.find(row => row.table === 'cables').hashBasis = 'legacy-canonical-json-array.v1';
+    if (change === 'raw-session') changed.tables.find(row => row.table === 'viewer_resource_sessions').hashBasis = 'postgresql-jsonb-text-framed.v1';
+    if (change === 'raw-installation') changed.tables.find(row => row.table === 'pf_installation_state').hashBasis = 'postgresql-jsonb-text-framed.v1';
+    if (change === 'unknown-basis') changed.tables[0].hashBasis = 'whatever';
+    if (change === 'mixed-missing-basis') delete changed.tables[0].hashBasis;
+    if (change === 'bad-count') changed.tables[0].rows = 1_000_001;
+    if (change === 'bad-hash') changed.tables[0].sha256 = 'not-a-hash';
+    if (change === 'classification') changed.tables[0].transientSessions = true;
+    if (change === 'order') changed.tables.reverse();
+    if (change === 'duplicate') changed.tables.splice(1, 0, structuredClone(changed.tables[0]));
+    if (change === 'over-limit') changed.tables = Array.from({ length: 501 }, () => changed.tables[0]);
+    repinVersion2(changed); if (change === 'aggregate') changed.businessSha256 = 'a'.repeat(64);
+    assert.throws(() => validateInventoryEnvelope(changed), { code: 'RESTORE_INVENTORY_INVALID' });
+    assert.throws(() => validateRestoredInventory(version2Inventory(f.beforeInventory), changed), { code: 'RESTORE_INVENTORY_MISMATCH' });
+  });
+test('V2 module substitution and cross-version equality cannot authorize a restore or fence', () => {
+  const f = fixture(), before = version2Inventory(f.beforeInventory), after = version2Inventory(f.afterInventory);
+  const different = structuredClone(before); different.moduleSha256 = 'a'.repeat(64);
+  assert.throws(() => validateRestoredInventory(before, different), { code: 'RESTORE_INVENTORY_MISMATCH' });
+  after.moduleSha256 = different.moduleSha256;
+  assert.throws(() => validateRestoreFencing(before, after, f.receipt, id(2)), { code: 'RESTORE_FENCING_DELTA_INVALID' });
+  assert.throws(() => validateRestoredInventory(f.beforeInventory, before), { code: 'RESTORE_INVENTORY_MISMATCH' });
+  assert.throws(() => validateRestoreFencing(f.beforeInventory, version2Inventory(f.afterInventory), f.receipt, id(2)), { code: 'RESTORE_FENCING_DELTA_INVALID' });
+});
+for (const table of ['cables', 'model_versions', 'pf_calculation_grant_leases', 'viewer_login_bindings'])
+  test('V2 retains exact protected table closure for ' + table, () => {
+    const f = fixture(), before = version2Inventory(f.beforeInventory), after = version2Inventory(f.afterInventory);
+    after.tables.find(row => row.table === table).sha256 = 'c'.repeat(64); repinVersion2(after);
+    assert.throws(() => validateRestoreFencing(before, after, f.receipt, id(2)), { code: 'RESTORE_FENCING_DELTA_INVALID' });
+  });
+test('V2 retirement receipt remains independently revalidated and cannot suppress its algorithm pin', () => {
+  const f = runtimeFixture(); f.record.beforeInventory = version2Inventory(f.record.beforeInventory); f.record.afterInventory = version2Inventory(f.record.afterInventory);
+  f.record.validation = validateRestoreFencing(f.record.beforeInventory, f.record.afterInventory, f.record.receipt, f.state.owner);
+  f.state.restore.fencingValidation = f.record.validation;
+  const raw = Buffer.from(JSON.stringify(f.record)); f.state.restore.fencingRecordSha256 = bytesHash(raw);
+  assert.equal(validateRuntimeRestoreFencingRecord(f.state, raw).schemaVersion, 'wfc.restore-fencing-validation.v2');
+  f.record.beforeInventory.moduleSha256 = 'b'.repeat(64); const changed = Buffer.from(JSON.stringify(f.record)); f.state.restore.fencingRecordSha256 = bytesHash(changed);
+  assert.throws(() => validateRuntimeRestoreFencingRecord(f.state, changed), { code: 'RESTORE_FENCING_DELTA_INVALID' });
 });

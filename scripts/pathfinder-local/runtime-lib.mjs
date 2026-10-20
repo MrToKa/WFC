@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { createDocker, command, jsonCommand, writePrivateJson } from '../operations/docker.mjs';
 import { assertCanonicalPath, hashFile } from '../operations/archives.mjs';
 import { verifyImageArchive } from '../operations/manifest.mjs';
-import { validateRestoreFencing, validateRestoredInventory } from '../operations/restore-fencing.mjs';
+import { validateRestoreFencing, validateRestoredInventory, validateInventoryEnvelope } from '../operations/restore-fencing.mjs';
 import {createProducerProfile,assertProducerContainer} from '../pathfinder-background/container-profile.mjs';
 import { assertProducerEnvironment } from './producer-environment.mjs';
 import {localCapacityProfile,assertCapacityEnvironment,capacityProfileTransition,LEGACY_CAPACITY_PROFILE} from './capacity-environment.mjs';
@@ -396,25 +396,70 @@ export async function observeColdRuntime(observer, phase, state, backupId) {
     owner: state.owner, project: state.project, port: Number(state.port), apiImage: state.images.api });
   await observer(observation);
 }
-/** @param {{observeCold?:ColdObserver}} [options] */
-export async function backup(state, directory, privateConfig, { observeCold } = {}) {
+/** A trusted local provider, never an archive-supplied function or CLI option.
+ * Its module is archived for offline readers; its host capture callback remains
+ * explicit operator code and must independently prove the raw table contents. */
+export async function validateInventoryProvider(provider) {
+  if (provider === undefined) return null;
+  if (!provider || typeof provider !== 'object' || Array.isArray(provider) || ![Object.prototype, null].includes(Object.getPrototypeOf(provider)) ||
+    Object.keys(provider).sort().join() !== 'capture,modulePath,sha256' || typeof provider.capture !== 'function' || typeof provider.modulePath !== 'string' ||
+    !path.isAbsolute(provider.modulePath) || path.resolve(provider.modulePath) !== provider.modulePath || !SHA.test(provider.sha256 ?? '')) fail('PF_INVENTORY_PROVIDER_INVALID');
+  await assertCanonicalPath(provider.modulePath);
+  const stat = await fs.stat(provider.modulePath); if (!stat.isFile() || stat.size < 1 || stat.size > 2 * 1024 ** 2) fail('PF_INVENTORY_PROVIDER_MODULE_INVALID');
+  const raw = await fs.readFile(provider.modulePath); if (digest(raw) !== provider.sha256) fail('PF_INVENTORY_PROVIDER_MODULE_CHANGED');
+  return Object.freeze({ modulePath: provider.modulePath, sha256: provider.sha256, capture: provider.capture, bytes: raw.length });
+}
+export async function captureInventoryWithProvider(provider, phase, state, backupId) {
+  if (!provider || !['backup-before-audit', 'backup-after-audit', 'restore-before-fence', 'restore-after-fence'].includes(phase) ||
+    !UUID.test(backupId ?? '') || !SHA.test(provider.sha256 ?? '') || typeof provider.capture !== 'function') fail('PF_INVENTORY_PROVIDER_INVALID');
+  validateState(state, state.runtime); if (!/^sha256:[a-f0-9]{64}$(?![\s\S])/.test(state.images?.api ?? '')) fail('PF_INVENTORY_PROVIDER_IMAGE_INVALID');
+  await assertCanonicalPath(provider.modulePath); if ((await hashFile(provider.modulePath)).sha256 !== provider.sha256) fail('PF_INVENTORY_PROVIDER_MODULE_CHANGED');
+  const observation = Object.freeze({ phase, backupId, runtime: state.runtime, owner: state.owner, project: state.project, port: Number(state.port),
+    apiImage: state.images.api, moduleSha256: provider.sha256 });
+  const value = await provider.capture(observation);
+  try { validateInventoryEnvelope(value); validateRestoredInventory(value, value); } catch { fail('PF_INVENTORY_PROVIDER_RESULT_INVALID'); }
+  if (value.schemaVersion !== 2 || value.moduleSha256 !== provider.sha256) fail('PF_INVENTORY_PROVIDER_RESULT_INVALID');
+  // The envelope is small and has only scalar table pins. Detach it from the
+  // callback so later trusted-host activity cannot alter an accepted receipt.
+  return JSON.parse(JSON.stringify(value));
+}
+export function validateRestoreInventoryProvider(manifest, provider) {
+  if (manifest.schemaVersion === 1) { if (provider) fail('PF_LEGACY_BACKUP_PROVIDER_REFUSED'); return; }
+  if (manifest.schemaVersion !== 2 || !provider || provider.sha256 !== manifest.inventoryModule?.sha256 ||
+    provider.bytes !== manifest.inventoryModule?.bytes) fail('PF_RESTORE_INVENTORY_PROVIDER_REQUIRED');
+}
+const runtimeInventory = async (provider, phase, state, backupId, settings) => provider
+  ? await captureInventoryWithProvider(provider, phase, state, backupId) : await operation(state, 'inventory', settings);
+/** @param {{observeCold?:ColdObserver,inventoryProvider?:{modulePath:string,sha256:string,capture:Function}}} [options] */
+export async function backup(state, directory, privateConfig, { observeCold, inventoryProvider } = {}) {
   requireColdObserver(observeCold);
+  const provider = await validateInventoryProvider(inventoryProvider);
   const target = path.resolve(directory), privatePath = path.resolve(privateConfig); if (!contained(path.join(ROOT, 'pathfinder-engine/.scratch'), target) || contained(target, privatePath)) fail('PF_BACKUP_DESTINATION_INVALID');
   const resources = await ownership(state), docker = await createDocker(); if (resources.containers.filter(item => ['api', 'web', 'minio', 'postgres'].includes(item.role)).length !== 4 || !resources.containers.find(item => item.role === 'postgres')?.running) fail('PF_COMPLETE_STACK_REQUIRED');
   await safeNew(target); await assertCanonicalPath(path.dirname(privatePath), { directory: true }); const settings = await readSettings(state), backupId = randomUUID();
+  let inventoryModule;
+  if (provider) {
+    const raw = await fs.readFile(provider.modulePath); if (digest(raw) !== provider.sha256) fail('PF_INVENTORY_PROVIDER_MODULE_CHANGED');
+    await fs.writeFile(path.join(target, 'losslessInventory.mjs'), raw, { flag: 'wx', mode: 0o600 });
+    inventoryModule = { path: 'losslessInventory.mjs', ...await hashFile(path.join(target, 'losslessInventory.mjs')) };
+  }
   await writePrivateJson(privatePath, { format: 'WFC-PF-LOCAL-PRIVATE', schemaVersion: 1, backupId, settings, ...(state.demo ? { demo: state.demo, credentials: JSON.parse(await fs.readFile(path.join(state.runtime, 'demo.private.json'), 'utf8')) } : {}), ...(state.syntheticDemo ? { syntheticDemo: state.syntheticDemo } : {}) });
   let completed = false, failure;
   try {
     for (const role of ['web', 'api']) await boundedStop(docker, resources.containers.find(item => item.role === role));
     const pg = resources.containers.find(item => item.role === 'postgres');
     const fence = (await command(['exec', pg.id, 'psql', '--no-password', '--no-psqlrc', '--tuples-only', '--no-align', '-U', 'pf_local', '-d', 'wfc_pathfinder_local', '-c', "SELECT COUNT(*) FROM pg_stat_activity WHERE datname=current_database() AND backend_type='client backend' AND pid<>pg_backend_pid()"])).toString().trim(); if (fence !== '0') fail('PF_EXTERNAL_DATABASE_WRITER');
-    const inventory = await operation(state, 'inventory'), audit = await operation(state, 'audit-models'), artifacts = await artifactAudit(state);
-    const inventoryAfter = await operation(state, 'inventory'); if (inventory.businessSha256 !== inventoryAfter.businessSha256 || inventory.registrySha256 !== inventoryAfter.registrySha256) fail('PF_BACKUP_DATABASE_CHANGED');
+    const inventory = await runtimeInventory(provider, 'backup-before-audit', state, backupId), audit = await operation(state, 'audit-models'), artifacts = await artifactAudit(state);
+    const inventoryAfter = await runtimeInventory(provider, 'backup-after-audit', state, backupId);
+    if (provider) validateRestoredInventory(inventory, inventoryAfter);
+    if (inventory.businessSha256 !== inventoryAfter.businessSha256 || inventory.registrySha256 !== inventoryAfter.registrySha256) fail('PF_BACKUP_DATABASE_CHANGED');
     await boundedStop(docker, resources.containers.find(item => item.role === 'minio'));
     await observeColdRuntime(observeCold, 'backup-before-dump', state, backupId);
     await command(['exec', pg.id, 'pg_dump', '--no-password', '--format=custom', '--no-owner', '--no-acl', '-U', 'pf_local', '-d', 'wfc_pathfinder_local'], { output: path.join(target, 'database.dump') });
     const databaseDumpVerification = await verifyDatabaseDump(state, target);
-    const manifest = { format: 'WFC-PF-LOCAL-BACKUP', schemaVersion: 1, profile: 'cold-pg-minio-staging-pathfinder-v1', backupId, createdAt: new Date().toISOString(), sourceProject: state.project, sourceOwner: state.owner, inventory, artifacts, modelAudit: audit, databaseDumpVerification, files: [], images: [] };
+    const manifest = { format: 'WFC-PF-LOCAL-BACKUP', schemaVersion: provider ? 2 : 1, profile: provider ? 'cold-pg-minio-staging-pathfinder-v2' : 'cold-pg-minio-staging-pathfinder-v1',
+      backupId, createdAt: new Date().toISOString(), sourceProject: state.project, sourceOwner: state.owner, inventory, artifacts, modelAudit: audit, databaseDumpVerification,
+      ...(provider ? { inventoryModule } : {}), files: [], images: [] };
     for (const role of ['minio', 'staging', 'pathfinder']) {
       const captured = await helper(state, ['node', 'scripts/operations/archives.mjs', 'capture', '/source', '/backup/' + role + '.wfcops'], { mounts: [mount(state.project + '_' + role, '/source', true, 'volume'), mount(target, '/backup', false)] });
       const verified = await helper(state, ['node', 'scripts/operations/archives.mjs', 'verify', '/backup/' + role + '.wfcops', captured.sha256], { mounts: [mount(target, '/backup')] }); if (verified.status !== 'PASS') fail('PF_BACKUP_ARCHIVE_FAILED');
@@ -423,7 +468,7 @@ export async function backup(state, directory, privateConfig, { observeCold } = 
       const id = resources.containers.find(item => item.role === role).image, image = (await jsonCommand(['image', 'inspect', id]))[0], record = { role, id, os: image.Os, architecture: image.Architecture, exportMode: 'id-only', archive: role + '-image.tar' };
       await command(['image', 'save', '--output', path.join(target, record.archive), id]); await verifyImageArchive(path.join(target, record.archive), record); manifest.images.push(record);
     }
-    for (const filename of ['database.dump', 'minio.wfcops', 'staging.wfcops', 'pathfinder.wfcops', ...manifest.images.map(item => item.archive)]) manifest.files.push({ path: filename, ...await hashFile(path.join(target, filename)) });
+    for (const filename of ['database.dump', 'minio.wfcops', 'staging.wfcops', 'pathfinder.wfcops', ...manifest.images.map(item => item.archive), ...(provider ? ['losslessInventory.mjs'] : [])]) manifest.files.push({ path: filename, ...await hashFile(path.join(target, filename)) });
     await resume(state, resources.containers);
     await fs.writeFile(path.join(target, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
     await fs.writeFile(path.join(target, 'complete.json'), JSON.stringify({ format: manifest.format, backupId, manifest: await hashFile(path.join(target, 'manifest.json')) }) + '\n', { flag: 'wx', mode: 0o600 });
@@ -431,11 +476,25 @@ export async function backup(state, directory, privateConfig, { observeCold } = 
   } catch (error) { failure = error.code ?? 'PF_BACKUP_FAILED'; throw error; }
   finally { await resume(state, resources.containers); await fs.writeFile(path.join(target, 'resume.json'), JSON.stringify({ completed, failure, restoredOriginalRunningState: true, at: new Date().toISOString() }) + '\n', { flag: 'wx', mode: 0o600 }); }
 }
+/** Pure version/member boundary; archive file/image bytes are verified separately. */
+export function validateBackupInventoryContract(manifest) {
+  const version2 = manifest?.schemaVersion === 2;
+  if (!manifest || ![1, 2].includes(manifest.schemaVersion) || manifest.profile !== (version2 ? 'cold-pg-minio-staging-pathfinder-v2' : 'cold-pg-minio-staging-pathfinder-v1') ||
+    !Array.isArray(manifest.files) || manifest.files.length !== (version2 ? 9 : 8)) fail('PF_BACKUP_INVALID');
+  if (!version2) { if (Object.hasOwn(manifest, 'inventoryModule')) fail('PF_BACKUP_INVENTORY_MODULE_INVALID'); return false; }
+  try { validateInventoryEnvelope(manifest.inventory); validateRestoredInventory(manifest.inventory, manifest.inventory); } catch { fail('PF_BACKUP_INVENTORY_INVALID'); }
+  const module = manifest.inventoryModule;
+  if (manifest.inventory.schemaVersion !== 2 || !module || typeof module !== 'object' || Array.isArray(module) || Object.keys(module).sort().join() !== 'bytes,path,sha256' ||
+    module.path !== 'losslessInventory.mjs' || !Number.isSafeInteger(module.bytes) || module.bytes < 1 || module.bytes > 2 * 1024 ** 2 || !SHA.test(module.sha256 ?? '') ||
+    module.sha256 !== manifest.inventory.moduleSha256 || canonical(manifest.files.find(item => item.path === module.path)) !== canonical(module)) fail('PF_BACKUP_INVENTORY_MODULE_INVALID');
+  return true;
+}
 export async function verifyBackup(directory) {
   const target = path.resolve(directory); await assertCanonicalPath(target, { directory: true }); const markerRaw = await fs.readFile(path.join(target, 'complete.json')), raw = await fs.readFile(path.join(target, 'manifest.json')); if (markerRaw.length > 4096 || raw.length > 64 * 1024 ** 2) fail('PF_BACKUP_MANIFEST_LIMIT');
-  const marker = JSON.parse(markerRaw), manifest = JSON.parse(raw); if (manifest.format !== 'WFC-PF-LOCAL-BACKUP' || manifest.schemaVersion !== 1 || manifest.profile !== 'cold-pg-minio-staging-pathfinder-v1' || !UUID.test(manifest.backupId ?? '') || marker.format !== manifest.format || marker.backupId !== manifest.backupId || canonical(marker.manifest) !== canonical(await hashFile(path.join(target, 'manifest.json'))) || !Array.isArray(manifest.files) || manifest.files.length !== 8 || !Array.isArray(manifest.images) || manifest.images.length !== 4) fail('PF_BACKUP_INVALID');
+  const marker = JSON.parse(markerRaw), manifest = JSON.parse(raw), version2 = validateBackupInventoryContract(manifest);
+  if (manifest.format !== 'WFC-PF-LOCAL-BACKUP' || !UUID.test(manifest.backupId ?? '') || marker.format !== manifest.format || marker.backupId !== manifest.backupId || canonical(marker.manifest) !== canonical(await hashFile(path.join(target, 'manifest.json'))) || !Array.isArray(manifest.images) || manifest.images.length !== 4) fail('PF_BACKUP_INVALID');
   if (!PROJECT.test(manifest.sourceProject ?? '') || !UUID.test(manifest.sourceOwner ?? '') || !SHA.test(manifest.inventory?.businessSha256 ?? '') || !SHA.test(manifest.inventory?.registrySha256 ?? '') || !SHA.test(manifest.artifacts?.sha256 ?? '') || manifest.images.map(image => image.role).sort().join() !== 'api,minio,postgres,web') fail('PF_BACKUP_INVALID');
-  const expected = ['database.dump', 'minio.wfcops', 'staging.wfcops', 'pathfinder.wfcops', 'api-image.tar', 'web-image.tar', 'postgres-image.tar', 'minio-image.tar'];
+  const expected = ['database.dump', 'minio.wfcops', 'staging.wfcops', 'pathfinder.wfcops', 'api-image.tar', 'web-image.tar', 'postgres-image.tar', 'minio-image.tar', ...(version2 ? ['losslessInventory.mjs'] : [])];
   if (manifest.files.map(item => item.path).sort().join() !== expected.sort().join()) fail('PF_BACKUP_MEMBERS_INVALID');
   for (const item of manifest.files) if (!SHA.test(item.sha256 ?? '') || canonical(await hashFile(path.join(target, item.path))) !== canonical({ bytes: item.bytes, sha256: item.sha256 })) fail('PF_BACKUP_FILE_CHANGED');
   for (const image of manifest.images) { if (!['api', 'web', 'postgres', 'minio'].includes(image.role) || image.archive !== image.role + '-image.tar') fail('PF_BACKUP_IMAGE_INVALID'); await verifyImageArchive(path.join(target, image.archive), image); }
@@ -444,11 +503,13 @@ export async function verifyBackup(directory) {
 /** activate:false retains a successfully verified, fenced target in quarantine;
  * PostgreSQL/storage may run, but this restore never starts API/web. This is an
  * operator foundation only, not proof of U8 delivery or browser acceptance.
- * @param {{backup?:string,privateConfig?:string,runtime?:string,port?:number|string,observeCold?:ColdObserver,activate?:boolean}} [options] */
-export async function restore({ backup: source, privateConfig, runtime, port = 5191, observeCold, activate = true } = {}) {
+ * @param {{backup?:string,privateConfig?:string,runtime?:string,port?:number|string,observeCold?:ColdObserver,activate?:boolean,inventoryProvider?:{modulePath:string,sha256:string,capture:Function}}} [options] */
+export async function restore({ backup: source, privateConfig, runtime, port = 5191, observeCold, activate = true, inventoryProvider } = {}) {
   if (typeof activate !== 'boolean') fail('PF_RESTORE_ACTIVATION_INVALID');
   requireColdObserver(observeCold);
-  const verified = await verifyBackup(source), manifest = verified.manifest; await assertCanonicalPath(privateConfig); const privateBytes = await fs.readFile(privateConfig); if (privateBytes.length > 1024 ** 2) fail('PF_PRIVATE_CONFIG_LIMIT'); const config = JSON.parse(privateBytes);
+  const provider = await validateInventoryProvider(inventoryProvider);
+  const verified = await verifyBackup(source), manifest = verified.manifest; validateRestoreInventoryProvider(manifest, provider);
+  await assertCanonicalPath(privateConfig); const privateBytes = await fs.readFile(privateConfig); if (privateBytes.length > 1024 ** 2) fail('PF_PRIVATE_CONFIG_LIMIT'); const config = JSON.parse(privateBytes);
   if (config.format !== 'WFC-PF-LOCAL-PRIVATE' || config.schemaVersion !== 1 || config.backupId !== manifest.backupId) fail('PF_PRIVATE_CONFIG_INVALID');
   const token = randomBytes(6).toString('hex'), state = await init({ runtime: runtime ?? path.join(ROOT, 'pathfinder-engine/.scratch/pathfinder-local-restore-' + token), project: 'wfc-pathfinder-local-' + token, port });
   await ownership(state, { fresh: true }); await freePort(state.port); state.images = Object.fromEntries(manifest.images.filter(item => ['api', 'web'].includes(item.role)).map(item => [item.role, item.id]));
@@ -466,11 +527,11 @@ export async function restore({ backup: source, privateConfig, runtime, port = 5
     for (;;) { try { await command(['exec', pg.id, 'pg_isready', '-U', 'pf_local', '-d', 'wfc_pathfinder_local']); break; } catch { if (Date.now() > deadline) fail('PF_RESTORE_DATABASE_TIMEOUT'); await sleep(500); } }
     await command(['exec', '-i', pg.id, 'pg_restore', '--exit-on-error', '--no-owner', '--no-acl', '-U', 'pf_local', '-d', 'wfc_pathfinder_local'], { input: path.join(verified.directory, 'database.dump') });
     await waitStorage(state); await operation(state, 'audit-models', settings);
-    const inventory = await operation(state, 'inventory', settings), artifacts = await artifactAudit(state);
+    const inventory = await runtimeInventory(provider, 'restore-before-fence', state, manifest.backupId, settings), artifacts = await artifactAudit(state);
     validateRestoredInventory(manifest.inventory, inventory);
     if (inventory.businessSha256 !== manifest.inventory.businessSha256 || inventory.registrySha256 !== manifest.inventory.registrySha256 || artifacts.sha256 !== manifest.artifacts.sha256) fail('PF_RESTORE_DATA_MISMATCH');
     await observeColdRuntime(observeCold, 'restore-before-fence', state, manifest.backupId);
-    const fenced = await operation(state, 'fence-restored', settings), after = await operation(state, 'inventory', settings);
+    const fenced = await operation(state, 'fence-restored', settings), after = await runtimeInventory(provider, 'restore-after-fence', state, manifest.backupId, settings);
     const fencingValidation = validateRestoreFencing(inventory, after, fenced, state.owner);
     const fencingRecord = JSON.stringify({ format: 'WFC-PF-RESTORE-FENCING', schemaVersion: 1, owner: state.owner, project: state.project, runtime: state.runtime, port: state.port, backupId: manifest.backupId,
       beforeInventory: inventory, afterInventory: after, receipt: fenced, validation: fencingValidation }) + '\n';
