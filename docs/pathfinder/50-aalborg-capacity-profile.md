@@ -5,6 +5,18 @@ This checkpoint does not establish engineering acceptance or permission for real
 
 ## Terminal-root repair — 20 October 2026, 08:25 UTC
 
+08:29UTC actual update: candidate7 build/owned API+web upgrade PASS,6,408,070-byte
+private database backup. Same4GiB API/other resource ceilings preserved; other own
+and outside containers preserved. Actual trial10 publisher/fitting PASS36.15s,
+sampled tree maximum1,803,091,968bytes. The exact root-Z race occurred and was
+reconciled after acknowledged clean exit/group absence/strict output:187 real
+samples, maximum1,176,158,208bytes, rssTerminalReconciled=true. Actual same-image
+trial11 trace PASS67.36s, sampled tree maximum1,344,507,904bytes;2965objects,
+1165fitted segments,5capture-evidence parts,0missing,60index/15diagnostic pages.
+Both disposable helpers removed; noSQL publication or Apply. New immutable
+receipt `evidence/aalborg-capacity/workload7-actual.json` records exact image,
+scope and sampling/heap limitations. Fresh normal protected workflow follows.
+
 Candidate6 build and owned API/web-only upgrade PASS; backup6,407,954bytes,
 other own/outside resources preserved. Actual trial8 fitting FAIL with
 ENGINE_RSS_UNAVAILABLE, without OOM or deadline. This time the safe observation

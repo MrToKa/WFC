@@ -1,26 +1,31 @@
 # PathFinder local implementation progress
 
-## Current live checkpoint — 2026-10-20T08:25:00Z
+## Current live checkpoint — 2026-10-20T08:27:00Z
 
 - Task ACTIVE, user explicitly resumed. Branch `pf-aalborg-capacity-local-20261020`,
-  source checkpoint `d56dce2d2da8b10da851a5e251adca67cea0e0b3`; diagnostics and
+  source checkpoint `b5690038c63b2fcfbc7e3457cbee709739829160`; terminal repair and
   actual workload receipts are committed locally. Root sole
   runtime/SQL/HTTP/UI/test executor; all source agents frozen/completed, two independent
   source reviews found no blocking terminal-root repair issue. PASS70 focused engine/resource
   tests, server types, focused lint and whitespace. Receipt engine-terminal7.json.
   Final test-file modification08:23:48UTC preceded suite start08:24:02UTC.
   Trial8 completedFAIL,
-  helperremoved; no capture/discovery/build/test/helper. Currentruntime6 is running.
-  Source repair complete, pending local commit/build7: exact Linux terminal-root
+  helperremoved; trial10 publisher PASS36.15s; actual exact Z-root race reconciledtrue,
+  187realRSSsamples/max1,176,158,208B, originalstrictresult/countsPASS.
+  Trial11 same-image trace PASS67.36s,2965objects/1165segments/5evidence/0missing,
+  observedtree1,344,507,904B; bothhelpers10/11removed. No active heavyexecutor.
+  Exact workload7-actual.json receipt recorded; fresh normal UI preparation next.
+  Currentruntime7 is running; build/guardedAPIweb-onlyupgradePASS.
+  Source repair complete: exact Linux terminal-root
   reconciliation only, <=1000ms within unchanged deadline, prior samples,
   acknowledged exit/close0/null, positive owned group ESRCH and strict response.
-- Current own5191 authoritative binding `capacity6-source-runtime.private.json`
+- Current own5191 authoritative binding `capacity7-source-runtime.private.json`
   under `pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42`.
-  API3fb5bca1b28b2024f90b31f1ddf06098c7652a051127053c4901edbe4eca1524,
-  web7b4505ea4211878dde9055425ef0167b2b26c3fc198581708285a7a65c707aeb.
-  Build/guardedAPIweb-onlyupgradePASS,6,407,954BPGbackup; otherown/outside resources preserved.
-  Privatebindingreaders/qualifier binding6; preflight5PASS Windowsfree9.577GB,
-  LinuxVMavailable12.836GB (separate). Trial9 NOT_RUN; cannot trace failedtrial8.
+  API84f4c147be8127b798d75e79497903fc4006c048440250527062f7d9e9dd3275,
+  webb87a71bed79131773daecc55d664ca8cc419725163bc44e22f6244f695ab6489.
+  Build/guardedAPIweb-onlyupgradePASS,6,408,070BPGbackup; otherown/outside resources preserved.
+  Privatebindingreaders/qualifier binding7; preflight6PASS Windowsfree8.748GB,
+  LinuxVMavailable12.991GB (separate). Trial9 NOT_RUN; cannot trace failedtrial8.
   Trial8 actualfailure nowdiagnosed:230goodRSSsamples/max1,180,282,880B, then
   root-rss(noVmRSS), errnoNULL, ownrootstatuspresentZ, retainedCount1/statusRead1.
   Refusal elapsed23127.293ms with no exitack; exit0/signalnull23127.948ms, close0
@@ -54,8 +59,7 @@
 - Browser on Details and reloaded to release unused3D memory; initial transient prep readdeadline afterupgrade5
   resolved normalRefresh. ReadonlyPGdiagidle/noblockers, initialcauseunknown.
   Keep original apps/5190/oldPathFinder/sources/deniedscratchpaths untouched.
-- NEXT: local source checkpoint -> candidate7 build/upgrade/control and actual publisher+trace
-  qualification. Then freshnormal discovery/freeze/capture (do NOT overwrite inputs1
+- NEXT: freshnormal discovery/freeze/capture (do NOT overwrite inputs1
   or old receipts), protectedpublication/currenttrace/rootmaps/automaticproposals.
   Last private preparation reader label prep20; use prep21 next.
   No real Apply/installLengthwrites. Final cable fence baseline cable-fence1:
