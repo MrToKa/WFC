@@ -11,6 +11,7 @@ import { verifyImageArchive } from '../operations/manifest.mjs';
 import { validateRestoreFencing, validateRestoredInventory } from '../operations/restore-fencing.mjs';
 import {createProducerProfile,assertProducerContainer} from '../pathfinder-background/container-profile.mjs';
 import { assertProducerEnvironment } from './producer-environment.mjs';
+import {localCapacityProfile,assertCapacityEnvironment,capacityProfileTransition,LEGACY_CAPACITY_PROFILE} from './capacity-environment.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const DEFAULT_RUNTIME = path.join(ROOT, 'pathfinder-engine/.scratch/pathfinder-local');
@@ -58,6 +59,7 @@ const stateFile = state => path.join(state.runtime, 'runtime-state.json');
 export async function save(state) { validateState(state, state.runtime); await fs.writeFile(stateFile(state), JSON.stringify(state, null, 2) + '\n', { mode: 0o600 }); }
 function envText(state, settings) {
   const values = { PF_PROJECT: state.project, PF_OWNER: state.owner, PF_HTTP_PORT: state.port, PF_API_IMAGE: settings.apiImage ?? state.tags.api, PF_WEB_IMAGE: settings.webImage ?? state.tags.web, PF_POSTGRES_IMAGE: settings.postgresImage ?? 'postgres:18@sha256:9a2e0383c38afd52cff14eeefe2b806fcde406b317002cd13ce513d309942751', PF_MINIO_IMAGE: settings.minioImage ?? 'minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e', PF_DATABASE_PASSWORD: settings.databasePassword, PF_STORAGE_PASSWORD: settings.storagePassword, PF_JWT_SECRET: settings.jwtSecret };
+  if(settings.capacityProfile!==undefined)values.PF_PREPARATION_CAPACITY_PROFILE=localCapacityProfile(settings.capacityProfile);
   if(settings.producer){
     const p=settings.producer;
     if(!SHA.test(p.key??'')||p.owner!==state.owner||p.project!==state.project||!/^sha256:[a-f0-9]{64}$/.test(p.image??'')||!SHA.test(p.runtimeInventorySha256??'')||p.expectedSha256!==undefined&&!SHA.test(p.expectedSha256)||p.qualifyProject!==undefined&&!UUID.test(p.qualifyProject))fail('PF_PRODUCER_CONFIG_INVALID');
@@ -78,6 +80,7 @@ export async function readSettings(state) {
   const raw = await fs.readFile(path.join(state.runtime, 'runtime.env'), 'utf8'); if (digest(raw) !== state.envSha256) fail('PF_PRIVATE_ENV_CHANGED');
   const env = Object.fromEntries(raw.trim().split('\n').map(line => { const at = line.indexOf('='); return [line.slice(0, at), line.slice(at + 1)]; }));
   const settings = { databasePassword: env.PF_DATABASE_PASSWORD, storagePassword: env.PF_STORAGE_PASSWORD, jwtSecret: env.PF_JWT_SECRET, apiImage: env.PF_API_IMAGE, webImage: env.PF_WEB_IMAGE, postgresImage: env.PF_POSTGRES_IMAGE, minioImage: env.PF_MINIO_IMAGE };
+  if(Object.hasOwn(env,'PF_PREPARATION_CAPACITY_PROFILE'))settings.capacityProfile=localCapacityProfile(env.PF_PREPARATION_CAPACITY_PROFILE);
   if(env.PF_PRODUCER_CONTROL_KEY)settings.producer={key:env.PF_PRODUCER_CONTROL_KEY,owner:env.PF_PRODUCER_OWNER,project:env.PF_PRODUCER_PROJECT,image:env.PF_PRODUCER_IMAGE,runtimeInventorySha256:env.PF_PRODUCER_RUNTIME_SHA256,
     ...(env.PF_PRODUCER_QUALIFICATION_SHA256?{expectedSha256:env.PF_PRODUCER_QUALIFICATION_SHA256}:{}),...(env.PF_PRODUCER_QUALIFY_PROJECT?{qualifyProject:env.PF_PRODUCER_QUALIFY_PROJECT}:{})};
   if (envText(state, settings) !== raw) fail('PF_PRIVATE_ENV_INVALID'); return settings;
@@ -87,6 +90,14 @@ export async function configureManagedProducer(state,producer){
   validateState(state,state.runtime);await configuration(state);await ownership(state);
   const settings=await readSettings(state);await writeEnv(state,{...settings,producer:producer??undefined},{replace:true});await save(state);
   return{configured:Boolean(producer),owner:state.owner,project:state.project};
+}
+/** Explicit local trial selection; legacy env files and default remain unchanged. */
+export async function configurePreparationCapacityProfile(state,profile){
+  const selected=localCapacityProfile(profile);validateState(state,state.runtime);await configuration(state);const resources=await ownership(state);
+  const settings=await readSettings(state),transition=capacityProfileTransition(settings.capacityProfile,selected,resources.containers.some(item=>item.role==='api'));
+  if(!transition.changed)return{profile:selected,owner:state.owner,project:state.project};
+  await writeEnv(state,{...settings,capacityProfile:selected===LEGACY_CAPACITY_PROFILE?undefined:selected},{replace:true});await save(state);
+  return{profile:selected,owner:state.owner,project:state.project};
 }
 export async function load(runtime = DEFAULT_RUNTIME) {
   const location = path.resolve(runtime); await assertCanonicalPath(location, { directory: true });
@@ -118,6 +129,7 @@ export async function configuration(state) {
   for (const [name, volume] of Object.entries(value.volumes)) if (volume.external || !owned(volume.labels, state) || volume.name !== `${state.project}_${name}` || volume.driver_opts) fail('PF_COMPOSE_VOLUME_UNSAFE');
   const env = value.services.api.environment;
   assertProducerEnvironment(env, settings.producer);
+  assertCapacityEnvironment(env,settings.capacityProfile);
   if (!/^postgresql:\/\/pf_local:[a-f0-9]{64}@postgres:5432\/wfc_pathfinder_local$/.test(env.DATABASE_URL ?? '') || env.MINIO_ENDPOINT !== 'minio' || env.PF_ROOT !== '/var/lib/wfc/pathfinder' || env.PF_ENGINE_DLL !== '/opt/pathfinder/PathFinder.ModelRunner.dll') fail('PF_COMPOSE_ENDPOINT_UNSAFE');
   if (Number(value.services.api.mem_limit) !== 4 * 1024 ** 3 || value.services.api.pids_limit !== 256 || env.NODE_OPTIONS !== '--max-old-space-size=1536' || Number(value.services.postgres.mem_limit) !== 1024 ** 3 || Number(value.services.minio.mem_limit) !== 1024 ** 3 || Number(value.services.web.mem_limit) !== 256 * 1024 ** 2) fail('PF_RESOURCE_CEILINGS_CHANGED');
   return { status: 'PASS', project: state.project, origin: `http://127.0.0.1:${state.port}`, services: ROLES, volumes: VOLUMES, privateBackend: true, publishedPorts: [state.port] };
@@ -142,6 +154,7 @@ export async function ownership(state, { fresh = false } = {}) {
     if (item.Mounts.length !== expectedMounts.length || expectedMounts.some(([name, destination]) => !item.Mounts.some(value => value.Name === state.project + '_' + name && value.Destination === destination && value.RW))) fail('PF_MOUNT_BINDING_CHANGED');
     const env = Object.fromEntries(item.Config.Env.map(value => { const at = value.indexOf('='); return [value.slice(0, at), value.slice(at + 1)]; }));
     if (role === 'api') assertProducerEnvironment(item.Config.Env, settings.producer);
+    if (role === 'api') assertCapacityEnvironment(item.Config.Env,settings.capacityProfile);
     if (role === 'api' && (env.DATABASE_URL !== `postgresql://pf_local:${settings.databasePassword}@postgres:5432/wfc_pathfinder_local` || env.MINIO_ENDPOINT !== 'minio' || env.MINIO_SECRET_KEY !== settings.storagePassword || env.PF_ROOT !== '/var/lib/wfc/pathfinder')) fail('PF_ENDPOINT_BINDING_CHANGED');
     const ports = Object.values(item.HostConfig.PortBindings ?? {}).flat();
     if (role === 'web' ? ports.length !== 1 || ports[0].HostIp !== '127.0.0.1' || Number(ports[0].HostPort) !== state.port : ports.length !== 0) fail('PF_CONTAINER_PORT_CHANGED');

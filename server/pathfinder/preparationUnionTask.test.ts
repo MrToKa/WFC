@@ -6,6 +6,7 @@ import {canonicalPurposeJson} from '../../shared/pathfinderPurposePolicy.js';
 import {buildPreparationPlan} from './preparationPlans.js';
 import type {ComputationalSnapshot} from './contracts.js';
 import {executePreparationUnionTask,preparationUnionInputSchema,preparationUnionMessageSchema,checkPreparationUnionInputBytes,type PreparationUnionTaskStorage} from './preparationUnionTask.js';
+import {LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE,preparationCapacity} from '../../shared/pathfinderCapacity.js';
 const uuid=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const matrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
 function fixture(){
@@ -23,7 +24,7 @@ function fixture(){
 describe('isolated preparation union geometry task',()=>{
  it('uses the exact frozen plan and strict snapshot, canonicalizes member keys while retaining every array order, and returns only references',async()=>{
   const{input,storage}=fixture(),result=await executePreparationUnionTask(input,storage);expect(Object.keys(result).sort()).toEqual(['counts','projection','snapshotId','traceIndex']);expect(result.counts).toEqual({objects:3,physicalLeaves:1,fragments:1,vertices:3,triangles:1});expect(result.projection.payloadRef).toBe(input.snapshotId);
-  expect(storage.storePreparationBlob).toHaveBeenCalledTimes(2);expect(storage.storePreparationBlob).toHaveBeenNthCalledWith(1,input.plan.projectId,input.plan.id,input.snapshotId,expect.any(Object),256*1024**2);
+  expect(storage.storePreparationBlob).toHaveBeenCalledTimes(2);expect(storage.storePreparationBlob).toHaveBeenNthCalledWith(1,input.plan.projectId,input.plan.id,input.snapshotId,expect.any(Object),32*1024**2);
   const value=vi.mocked(storage.storeSnapshot).mock.calls[0][1] as ComputationalSnapshot;expect(value.objects.map(object=>object.id)).toEqual(['dbid:1','dbid:2','dbid:3']);expect(value.objects[2].fragments[0].triangleIndices).toEqual([0,1,2]);expect(JSON.stringify(value)).toBe(canonicalPurposeJson(value));expect(value.capture.geometryComplete).toBe(false);expect(value.capture.sourceLinkVerified).toBe(false);
  });
  it.each(['mask','nonfinite','missing','native-proof'] as const)('rejects %s data before storing any projection',async kind=>{
@@ -41,6 +42,36 @@ describe('isolated preparation union geometry task',()=>{
   expect(preparationUnionMessageSchema.safeParse({schemaVersion:'wfc.pf.preparation-union-message.v1',requestId:input.requestId,type:'error',code:'private-path-secret'}).success).toBe(false);
  });
  it('bounds the effective preload input independently of the unchanged 256MiB hard union limit',()=>{
-  expect(()=>checkPreparationUnionInputBytes({},[{payload:{text:'x'.repeat(32*1024**2)}}])).toThrow('PREPARATION_UNION_LIMIT');expect(()=>checkPreparationUnionInputBytes({text:'x'.repeat(16*1024**2)},[])).toThrow('PREPARATION_UNION_LIMIT');
+  const plan={limitsProfile:LEGACY_PREPARATION_CAPACITY_PROFILE};
+  expect(()=>checkPreparationUnionInputBytes(plan,[{payload:{text:'x'.repeat(32*1024**2)}}])).toThrow('PREPARATION_UNION_LIMIT');expect(()=>checkPreparationUnionInputBytes({...plan,text:'x'.repeat(16*1024**2)},[])).toThrow('PREPARATION_UNION_LIMIT');
+ });
+ it.each([LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE])('accounts exact cumulative input boundary for frozen %s without enlarging transport or geometry limits',profile=>{
+  // Synthetic byte accounting only: no large model is allocated or claimed to fit the worker heap.
+  const actual=Buffer.byteLength.bind(Buffer),maximum=preparationCapacity(profile).validationInputBytes;
+  const bytes=vi.spyOn(Buffer,'byteLength').mockImplementation((value,encoding)=>typeof value==='string'&&value==='{"counted":1}'?maximum:typeof value==='string'&&value==='{"counted":2}'?1:actual(value,encoding));
+  try{
+   expect(()=>checkPreparationUnionInputBytes({limitsProfile:profile},[{payload:{counted:1}}])).not.toThrow();
+   expect(()=>checkPreparationUnionInputBytes({limitsProfile:profile},[{payload:{counted:1}},{payload:{counted:2}}])).toThrow('PREPARATION_UNION_LIMIT');
+  }finally{bytes.mockRestore();}
+ });
+ it('admits above legacy input only for the explicit larger frozen profile, failing closed on missing evidence',()=>{
+  const actual=Buffer.byteLength.bind(Buffer),bytes=vi.spyOn(Buffer,'byteLength').mockImplementation((value,encoding)=>typeof value==='string'&&value==='{"counted":1}'?32*1024**2+1:actual(value,encoding));
+  try{
+   expect(()=>checkPreparationUnionInputBytes({limitsProfile:LEGACY_PREPARATION_CAPACITY_PROFILE},[{payload:{counted:1}}])).toThrow('PREPARATION_UNION_LIMIT');
+   expect(()=>checkPreparationUnionInputBytes({limitsProfile:LARGE_PREPARATION_CAPACITY_PROFILE},[{payload:{counted:1}}])).not.toThrow();
+   for(const plan of [{},{limitsProfile:'unlimited'},null])expect(()=>checkPreparationUnionInputBytes(plan,[])).toThrow('PREPARATION_UNION_LIMIT');
+  }finally{bytes.mockRestore();}
+ });
+ it('refuses a profile substitution under an old ordered plan hash before writing any geometry',async()=>{
+  const{input,storage}=fixture();input.plan.limitsProfile=LARGE_PREPARATION_CAPACITY_PROFILE;
+  await expect(executePreparationUnionTask(input,storage)).rejects.toThrow('PREPARATION_UNION_INVALID');
+  expect(storage.storePreparationBlob).not.toHaveBeenCalled();expect(storage.storeSnapshot).not.toHaveBeenCalled();
+ });
+ it('binds larger projection storage to the explicit freshly hashed plan and returns the same geometric output',async()=>{
+  const{input,storage}=fixture();input.plan.limitsProfile=LARGE_PREPARATION_CAPACITY_PROFILE;
+  const{orderedPlanSha256:_old,...body}=input.plan;input.plan.orderedPlanSha256=createHash('sha256').update(canonicalPurposeJson(body)).digest('hex');
+  const result=await executePreparationUnionTask(input,storage);
+  expect(result.counts).toEqual({objects:3,physicalLeaves:1,fragments:1,vertices:3,triangles:1});
+  expect(storage.storePreparationBlob).toHaveBeenNthCalledWith(1,input.plan.projectId,input.plan.id,input.snapshotId,expect.any(Object),128*1024**2);
  });
 });

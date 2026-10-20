@@ -4,7 +4,7 @@ export const POLICY_BODY_BYTES = 1024 * 1024;
 
 /** Reject duplicate decoded members before JSON.parse can discard evidence. */
 export function parsePolicyJson(bytes: Buffer, { maxBytes = POLICY_BODY_BYTES }: { maxBytes?: number } = {}): unknown {
-  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 90 * 1024 * 1024) throw new PathFinderError('INVALID_JSON_LIMIT', 500);
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > 128 * 1024 * 1024) throw new PathFinderError('INVALID_JSON_LIMIT', 500);
   if (bytes.length > maxBytes) throw new PathFinderError('POLICY_BODY_TOO_LARGE', 413, 'The request exceeds the upload limit.');
   let text: string;
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }

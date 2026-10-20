@@ -2,7 +2,9 @@ import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { z } from 'zod';
 import { policyUuidSchema as uuid, policyHashSchema as hash, canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 import { GEOMETRY_TRACE_LIMITS, fittedTraceReferenceSchema, geometryTraceManifestSchema } from '../../shared/pathfinderGeometryTrace.js';
-import { buildGeometryTrace, geometryTraceFrozenSchema, objectRevisionId } from './geometryTraceBuilder.js';
+import { preparationCapacity } from '../../shared/pathfinderCapacity.js';
+import { preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
+import { buildGeometryTrace, geometryTraceFrozenSchema, geometryTraceHash, objectRevisionId } from './geometryTraceBuilder.js';
 import type { PreparationTraceIndex } from '../../shared/preparationMerge.js';
 import { parsePolicyJson } from './policyJson.js';
 import { snapshotSchema } from './contracts.js';
@@ -29,10 +31,14 @@ const traceIndexSchema = z.object({ schemaVersion: z.literal('wfc.pf.preparation
 export async function executeGeometryTraceThread(input: GeometryTraceThreadInput, storage: GeometryTraceThreadStorage): Promise<GeometryTraceThreadResult> {
   const read = (ref: Blob, limit: number) => storage.readPreparationBlob(input.projectId, input.sessionId, ref, limit);
   const frozen = geometryTraceFrozenSchema.parse(parsePolicyJson(await read(input.frozenBlob, GEOMETRY_TRACE_LIMITS.frozenBytes), { maxBytes: GEOMETRY_TRACE_LIMITS.frozenBytes }));
-  if (frozen.traceId !== input.traceId || frozen.exportId !== input.exportId || frozen.aggregate.projectId !== input.projectId || frozen.aggregate.sessionId !== input.sessionId || frozen.aggregate.projection.bytes > 32 * 1024 ** 2 || frozen.aggregate.traceIndex.bytes > 16 * 1024 ** 2) throw Error('GEOMETRY_TRACE_BUILD_LIMIT');
+  // The capacity belongs to the server-frozen, hashed plan. Neither the worker
+  // envelope nor an export/client request can select a larger projection bound.
+  if (frozen.aggregate.orderedPlanSha256 !== frozen.plan.orderedPlanSha256 || geometryTraceHash(preparationPlanHashInput(frozen.plan)) !== frozen.plan.orderedPlanSha256) throw Error('GEOMETRY_TRACE_BUILD_INVALID');
+  const projectionInputBytes = preparationCapacity(frozen.plan.limitsProfile).projectionInputBytes;
+  if (frozen.traceId !== input.traceId || frozen.exportId !== input.exportId || frozen.aggregate.projectId !== input.projectId || frozen.aggregate.sessionId !== input.sessionId || frozen.aggregate.projection.bytes > projectionInputBytes || frozen.aggregate.traceIndex.bytes > 16 * 1024 ** 2) throw Error('GEOMETRY_TRACE_BUILD_LIMIT');
   const exported = await storage.readFittedExport(input.exportId, input.exportReference);
   const fittedBlob = await storage.adoptFittedExport(input.projectId, input.sessionId, frozen.fittedBlobId, exported);
-  const snapshot = parsePolicyJson(await read(frozen.aggregate.projection, 32 * 1024 ** 2), { maxBytes: 32 * 1024 ** 2 });
+  const snapshot = parsePolicyJson(await read(frozen.aggregate.projection, projectionInputBytes), { maxBytes: projectionInputBytes });
   const traceIndex = traceIndexSchema.parse(parsePolicyJson(await read(frozen.aggregate.traceIndex, 16 * 1024 ** 2), { maxBytes: 16 * 1024 ** 2 })) as PreparationTraceIndex;
   for (const e of frozen.evidence) await read(e.blob, GEOMETRY_TRACE_LIMITS.evidenceBytes);
   const built = buildGeometryTrace({ ...frozen, snapshot, traceIndex, fitted: exported.payload, fittedBlob });

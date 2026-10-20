@@ -1,4 +1,5 @@
 import { pool } from '../db.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacityProfileSchema } from '../../shared/pathfinderCapacity.js';
 import { createPathFinderRepository } from './repository.js';
 import { createPathFinderJobs } from './jobs.js';
 import { createPathFinderApply } from './apply.js';
@@ -44,7 +45,9 @@ function createRuntime() {
   const calculationGrants=createCalculationGrantRepository(pool,{afterCommand:applyCalculationGrantCommand,producerStatus:producerQualification.producerStatus});
   const viewer=getViewerRuntime(),producerResourceService=createProducerResourceService({pool});
   const producerResources={service:producerResourceService,storage:viewer.storage,run:viewer.run.bind(viewer),resource:viewer.resource.bind(viewer)};
-  const preparations=createPreparationService(pool,createPreparationPublisher(worker.executePreparation)),
+  const preparations=createPreparationService(pool,createPreparationPublisher(worker.executePreparation),{
+      capacityProfile:preparationCapacityProfileSchema.parse(process.env.PF_PREPARATION_CAPACITY_PROFILE??LEGACY_PREPARATION_CAPACITY_PROFILE),
+    }),
     geometryTraces=createGeometryTraceRepository(pool,createGeometryTraceEngine(worker.executePreparation)),
     revisionComparisons=createRevisionComparisonRepository(pool);
   const preparedMaintenance=createGrantPreparedMaintenance(pool,{traces:geometryTraces,comparisons:revisionComparisons});

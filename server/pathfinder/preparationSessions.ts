@@ -9,6 +9,8 @@ import { calculationGrantProvenanceSchema, type CalculationGrantProvenance } fro
 import { PathFinderError } from './errors.js';
 import { readPreparationContext, readPreparationState, equalPreparationScope, buildPreparationPlan, preparationDigest } from './preparationPlans.js';
 import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } from './preparationStorage.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
+import { preparationPlanSchema, preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Project preparation requires a refresh or an explicit routing decision.'); };
 const terminal = new Set(['published', 'failed', 'cancelled', 'stale']);
@@ -79,7 +81,10 @@ export async function initializePreparationSchema(pool: Pool) {
 type SessionRow = { grant_provenance: CalculationGrantProvenance | null; validation_grant_provenance: CalculationGrantProvenance | null; id: string; project_id: string; plan: PreparationPlan; state: PreparationSession['state']; revision: string; actor_id: string; login_id: string; created_at: Date; updated_at: Date; failure: unknown; published_aggregate_id: string | null; validation_token: string | null; validation_key: string | null; validation_sha256: string | null; validation_expires_at: Date | null; validation_command: unknown; validation_actor_id: string | null; validation_login_id: string | null };
 async function sessionRow(c: PoolClient, projectId: string, id: string): Promise<SessionRow> {
   policyUuidSchema.parse(id);
-  const row = (await c.query<SessionRow>('SELECT *,revision::text FROM pf_preparation_sessions WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, id])).rows[0]; if (!row) return fail('PREPARATION_SESSION_NOT_FOUND', 404); return row;
+  const row = (await c.query<SessionRow>('SELECT *,revision::text FROM pf_preparation_sessions WHERE project_id=$1 AND id=$2 FOR UPDATE', [projectId, id])).rows[0]; if (!row) return fail('PREPARATION_SESSION_NOT_FOUND', 404);
+  const plan = preparationPlanSchema.parse(row.plan);
+  if (plan.id !== row.id || plan.projectId !== row.project_id || preparationDigest(preparationPlanHashInput(plan)) !== plan.orderedPlanSha256) return fail('PREPARATION_PLAN_INTEGRITY');
+  return { ...row, plan };
 }
 async function sessionView(c: PoolClient, row: SessionRow): Promise<PreparationSession> {
   const parts = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_preparation_parts WHERE project_id=$1 AND session_id=$2 ORDER BY part_index', [row.project_id, row.id])).rows.map(r => preparationPartSchema.parse(r.receipt));
@@ -123,7 +128,9 @@ export type PreparationAdapters = {
   publish: (client: PoolClient, input: { session: PreparationSession; plan: PreparationPlan; aggregateId: string; geometryRevision: string; validation: PreparationValidation; principal: OperationPrincipal }) => Promise<{ artifactId: string; registryRevision: string }>;
 };
 
-export function createPreparationService(pool: Pool, adapters: PreparationAdapters) {
+/** This configuration is supplied by server construction, never preparation request data. */
+export function createPreparationService(pool: Pool, adapters: PreparationAdapters, options: { capacityProfile?: PreparationCapacityProfile } = {}) {
+  const { capacityProfile } = z.object({ capacityProfile: preparationCapacityProfileSchema.default(LEGACY_PREPARATION_CAPACITY_PROFILE) }).strict().parse(options);
   const running = new Map<string, AbortController>();
   const guarded = async <T>(projectId: string, who: OperationPrincipal, id: string, operation: (c: PoolClient, row: SessionRow) => Promise<T>) => {
     const result = await preparationTransaction(pool, projectId, who, async c => { const row = await sessionRow(c, projectId, id); if (!await current(c, row, who)) return { stale: true as const }; return { value: await operation(c, row), stale: false as const }; });
@@ -139,7 +146,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const replay = await priorCommand(c, projectId, who, input.idempotencyKey, 'create', sha) as { sessionId: string } | undefined;
         if (replay) return sessionView(c, await sessionRow(c, projectId, replay.sessionId));
         if (Number((await c.query<{ count: string }>('SELECT count(*)::text FROM pf_preparation_sessions WHERE project_id=$1', [projectId])).rows[0].count) >= 128) return fail('PREPARATION_SESSION_RETENTION_LIMIT', 413);
-        const context = await readPreparationContext(c, projectId), plan = buildPreparationPlan(context, input);
+        const context = await readPreparationContext(c, projectId), plan = buildPreparationPlan(context, input, undefined, capacityProfile);
         await c.query("INSERT INTO pf_preparation_sessions(id,project_id,plan,state,actor_id,login_id,grant_provenance) VALUES($1,$2,$3,'planned',$4,$5,$6)", [plan.id, projectId, plan, who.userId, who.loginId ?? null, isGrantPrincipal(who)?grantProvenance(who):null]);
         await commandReceipt(c, projectId, who, input.idempotencyKey, 'create', sha, { sessionId: plan.id });
         return sessionView(c, await sessionRow(c, projectId, plan.id));
@@ -184,7 +191,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         if (!adapters.validatePart) return fail('PREPARATION_PART_VALIDATOR_REQUIRED', 503);
         if (payload.objects.length > PREPARATION_LIMITS.closurePerPart || payload.model.projectId !== projectId || payload.model.modelVersionId !== row.plan.modelVersionId || payload.model.contentSha256 !== row.plan.contentFingerprint) return fail('PREPARATION_PART_SCOPE');
         const stagedBytes = (await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0);
-        if (!prior && stagedBytes + encodePreparationPayload(payload).length > PREPARATION_LIMITS.validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (!prior && stagedBytes + encodePreparationPayload(payload).length > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
         return { admitted: { part, plan: row.plan, payload, revision: row.revision } };
       });
       if ('replay' in admission && admission.replay) return admission.replay;
@@ -195,7 +202,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const prior = (await c.query<{ receipt: unknown }>('SELECT receipt FROM pf_preparation_parts WHERE session_id=$1 AND part_id=$2', [id, partId])).rows[0];
         if (prior) { const part = preparationPartSchema.parse(prior.receipt); if (part.payloadSha256 !== blob.sha256 || part.payloadBytes !== blob.bytes) return fail('PART_IDENTITY_CONFLICT'); await readPreparationBlob(projectId, id, partBlob(part)); return partReceipt(part,row.revision,true); }
         if (!['planned', 'collecting'].includes(row.state)) return fail('PREPARATION_STATE_CONFLICT');
-        if ((await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0) + blob.bytes > PREPARATION_LIMITS.validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if ((await sessionView(c, row)).parts.reduce((sum, part) => sum + part.payloadBytes, 0) + blob.bytes > preparationCapacity(row.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
         const payload = admitted.payload, counts = { objects: payload.objects.length, physicalLeaves: payload.objects.filter(o => o.geometryRole === 'routing-leaf').length, fragments: 0, vertices: 0, triangles: 0 };
         for (const object of payload.objects) for (const fragment of object.fragments) { counts.fragments++; counts.vertices += fragment.vertices.length; counts.triangles += fragment.triangleIndices.length / 3; }
         const part = preparationPartSchema.parse({ schemaVersion: isGrantPrincipal(who)?'wfc.pf.preparation-part.v2':'wfc.pf.preparation-part.v1', sessionId: id, partId, partIndex: admitted.part.partIndex, sessionPlanSha256: row.plan.orderedPlanSha256, modelVersionId: row.plan.modelVersionId, contentFingerprint: row.plan.contentFingerprint, coordinateFrameId: row.plan.coordinateFrameId, scopeSha256: admitted.part.scopeSha256, payloadEncoding: 'pathfinder.model.snapshot.v1-json-utf8', payloadRef: blob.payloadRef, payloadSha256: blob.sha256, payloadBytes: blob.bytes, counts, coverage: { partScopeComplete: true, missingObjectIds: [], ambiguousObjectIds: [] }, producer: { level: isGrantPrincipal(who)?'B':'A', adapterVersion: payload.capture.adapterVersion, sourceKind: payload.capture.sourceKind, ...(isGrantPrincipal(who)?{grant:grantProvenance(who)}:{}) }, completedAt: new Date().toISOString() });
@@ -217,7 +224,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         if (terminal.has(row.state) || !retry && row.revision !== command.expectedSessionRevision) return fail('PREPARATION_STATE_CONFLICT');
         if (row.state === 'validating' && row.validation_expires_at && new Date(row.validation_expires_at).getTime() > Date.now()) return fail(retry ? 'PREPARATION_VALIDATION_IN_PROGRESS' : 'PREPARATION_VALIDATION_BUSY', retry ? 503 : 409);
         const session = await sessionView(c, row); if (!session.coverage.requestedScopeComplete) return fail('PREPARATION_PARTS_INCOMPLETE');
-        if (session.parts.reduce((sum, part) => sum + part.payloadBytes, 0) > PREPARATION_LIMITS.validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
+        if (session.parts.reduce((sum, part) => sum + part.payloadBytes, 0) > preparationCapacity(session.plan.limitsProfile).validationInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
         const token = randomUUID(); await transition(c, row, who, 'validating', retry ? 'validation-recovery' : command.reason);
         const expiresAt = new Date(Date.now() + PREPARATION_LIMITS.validationMilliseconds + 10000);
         await c.query('UPDATE pf_preparation_sessions SET validation_token=$2,validation_key=$3,validation_sha256=$4,validation_expires_at=$5,validation_command=$6,validation_actor_id=$7,validation_login_id=$8,validation_grant_provenance=$9 WHERE id=$1', [id, token, command.idempotencyKey, sha, expiresAt, command, who.userId, who.loginId ?? null, isGrantPrincipal(who)?grantProvenance(who):null]);
@@ -234,6 +241,7 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
         const parts = [];
         for (const part of session.parts) { controller.signal.throwIfAborted(); const bytes = await readPreparationBlob(projectId, id, partBlob(part)); parts.push({ partId: part.partId, payload: snapshotSchema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) }); }
         const validation = validationSchema.parse(await adapters.validateUnion(session.plan, parts, controller.signal)); controller.signal.throwIfAborted();
+        if (validation.projection.bytes > preparationCapacity(session.plan.limitsProfile).projectionInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
         finalPublicationStarted = true;
         return await preparationTransaction(pool, projectId, who, async c => {
           const replay = await priorCommand(c, projectId, who, command.idempotencyKey, 'publish', sha); if (replay) return preparationPublicationSchema.parse({ ...replay as object, duplicate: true });

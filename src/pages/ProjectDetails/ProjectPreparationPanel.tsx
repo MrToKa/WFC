@@ -3,7 +3,8 @@ import { Body1, Button, Caption1, Field, Spinner, Textarea } from '@fluentui/rea
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { routingPurposeDisplayLabels } from '@/components/RoutingPurposePolicyCard';
-import { PREPARATION_LIMITS, type PreparationScope } from '../../../shared/pathfinderPreparation';
+import type { PreparationScope } from '../../../shared/pathfinderPreparation';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity } from '../../../shared/pathfinderCapacity';
 import {GeometryTracePanel} from './GeometryTracePanel';
 import { ModelRevisionChangesPanel } from './ModelRevisionChangesPanel';
 
@@ -78,6 +79,10 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
     plan.selectionRevision === context.scope.selectionRevision
     ? plan : null;
   const currentPlanScope = Boolean(context && planForCurrentModel && sameScope(planForCurrentModel, context.scope));
+  const captureCeilingMiB = preparationCapacity(plan?.limitsProfile ?? LEGACY_PREPARATION_CAPACITY_PROFILE)
+    .validationInputBytes / 1024 / 1024;
+  const captureCeilingLabel = !plan ? 'Legacy preparation capture ceiling'
+    : currentPlanScope ? 'Current frozen plan capture ceiling' : 'Saved frozen plan capture ceiling';
   const publishedPlan = Boolean(context?.currentAggregate && planForCurrentModel &&
     context.currentAggregate.sessionId === session?.id &&
     context.currentAggregate.orderedPlanSha256 === planForCurrentModel.orderedPlanSha256);
@@ -121,10 +126,13 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
   return (
     <section aria-label="Project tray purposes preparation">
       <h3>Project tray purposes</h3>
-      <p>
-        Complete staged captures are limited to{' '}
-        {PREPARATION_LIMITS.validationInputBytes / 1024 / 1024} MiB for validation. Committed parts
-        remain available when collection is paused or refused.
+      <p aria-label="Preparation capture ceiling">
+        {captureCeilingLabel}: complete staged captures are limited to{' '}
+        {captureCeilingMiB} MiB for validation.
+        {plan && !currentPlanScope
+          ? ' This saved limit belongs to its frozen plan and does not establish the limit of a replacement plan.'
+          : null}
+        {' '}Committed parts remain available when collection is paused or refused.
       </p>
       <Body1>
         Discover exact model candidates for the project tray catalog. Routing categories come from

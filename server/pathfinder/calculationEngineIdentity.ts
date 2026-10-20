@@ -88,12 +88,12 @@ export function calculationProjectionFiles(): ProjectionFile[] {
   const extension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
   const names = ['calculationEngineIdentity', 'dependencies', 'dependencyBatch', 'settings', 'jobContracts',
     'endpointCalculationProvenance', 'comparisonCalculationProvenance', 'routingScope', 'worker', 'previews', 'engineSession', 'lengthLedger',
-    'automaticEndpointCandidates', 'matching'];
+    'automaticEndpointCandidates', 'matching', 'policyJson'];
   return [
     ...names.map(name => ({ name: './' + name + '.js', filename: fileURLToPath(new URL('./' + name + extension, import.meta.url)) })),
     { name: '../../shared/pathfinderEngineIdentity.js', filename: fileURLToPath(new URL('../../shared/pathfinderEngineIdentity' + extension, import.meta.url)) },
     { name: '../../shared/pathfinderLengthLedger.js', filename: fileURLToPath(new URL('../../shared/pathfinderLengthLedger' + extension, import.meta.url)) },
-    ...['pathfinderPurposePolicy','pathfinderPreparation','pathfinderGeometryTrace','pathfinderEndpointBindings'].map(name=>({name:'../../shared/'+name+'.js',filename:fileURLToPath(new URL('../../shared/'+name+extension,import.meta.url))})),
+    ...['pathfinderPurposePolicy','pathfinderPreparation','pathfinderCapacity','pathfinderGeometryTrace','pathfinderEndpointBindings'].map(name=>({name:'../../shared/'+name+'.js',filename:fileURLToPath(new URL('../../shared/'+name+extension,import.meta.url))})),
     {name:'../../viewer-runtime/equipment-names.mjs',filename:fileURLToPath(new URL('../../viewer-runtime/equipment-names.mjs',import.meta.url))},
   ];
 }

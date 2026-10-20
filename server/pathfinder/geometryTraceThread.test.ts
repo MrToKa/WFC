@@ -2,8 +2,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
-import { geometryTraceBytesHash } from './geometryTraceBuilder.js';
-import { executeGeometryTraceThread, executeGeometryEvidenceThread, type GeometryTraceThreadStorage, type GeometryTraceThreadInput } from './geometryTraceThread.js';
+import { LARGE_PREPARATION_CAPACITY_PROFILE, LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity } from '../../shared/pathfinderCapacity.js';
+import { preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
+import { geometryTraceBytesHash, geometryTraceHash } from './geometryTraceBuilder.js';
+import { executeGeometryTraceThread, executeGeometryEvidenceThread, geometryTraceThreadInputSchema, type GeometryTraceThreadStorage, type GeometryTraceThreadInput } from './geometryTraceThread.js';
 import { createCompletedCaptureEvidence, type CompletedCaptureEvidence } from '../../viewer-runtime/capture-evidence.mjs';
 const id = (n: number) => `c1000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const encode = (value: unknown) => Buffer.from(canonicalPurposeJson(value));
@@ -14,14 +16,66 @@ function fixture() {
   f.aggregate.traceIndex = { schemaVersion: 'wfc.pf.preparation-trace-index.v1', ...put(f.aggregate.traceIndex.payloadRef, f.traceIndex) };
   const frozen = { traceId: f.traceId, exportId: f.fitted.exportId, fittedBlobId: f.fittedBlob.payloadRef, recordsBlobId: f.recordsBlobId, frozenBlobId: id(80), aggregate: f.aggregate, plan: f.plan, runtimeFingerprint: f.runtimeFingerprint, evidence: [], declaredLengths: f.declaredLengths, createdAt: f.createdAt, createdBy: f.createdBy };
   const input: GeometryTraceThreadInput = { schemaVersion: 'wfc.pf.geometry-trace-thread.v1', requestId: id(90), projectId: f.aggregate.projectId, sessionId: f.aggregate.sessionId, traceId: f.traceId, exportId: f.fitted.exportId, frozenBlob: put(frozen.frozenBlobId, frozen), storageLockBuffer: new SharedArrayBuffer(4) };
-  const exportBytes = Buffer.from(JSON.stringify(f.fitted)); const reference = { schemaVersion: 'wfc.pf.fitted-trace-reference.v1' as const, exportId: f.fitted.exportId, sha256: geometryTraceBytesHash(exportBytes), bytes: exportBytes.length, counts: f.fitted.counts, engine: f.fitted.engine, rulesSha256: f.fitted.rulesSha256, snapshotSha256: f.fitted.snapshotSha256, preparedKey: f.fitted.preparedKey };
+  let exportBytes = Buffer.from(JSON.stringify(f.fitted)); let reference = { schemaVersion: 'wfc.pf.fitted-trace-reference.v1' as const, exportId: f.fitted.exportId, sha256: geometryTraceBytesHash(exportBytes), bytes: exportBytes.length, counts: f.fitted.counts, engine: f.fitted.engine, rulesSha256: f.fitted.rulesSha256, snapshotSha256: f.fitted.snapshotSha256, preparedKey: f.fitted.preparedKey };
+  const refreshFittedExport = () => { exportBytes = Buffer.from(JSON.stringify(f.fitted)); reference = { ...reference, sha256: geometryTraceBytesHash(exportBytes), bytes: exportBytes.length, snapshotSha256: f.fitted.snapshotSha256 }; };
   const storage: GeometryTraceThreadStorage = { readPreparationBlob: vi.fn(async (_p, _s, ref, limit) => { const b = bytes.get(ref.payloadRef); if (!b || b.length !== ref.bytes || b.length > limit || geometryTraceBytesHash(b) !== ref.sha256) throw Error('integrity'); return Buffer.from(b); }), storePreparationBlob: vi.fn(async (_p, _s, target, value, limit) => { const ref = put(target, value); if (ref.bytes > limit) throw Error('limit'); return ref; }), readFittedExport: vi.fn(async () => ({ bytes: exportBytes, payload: f.fitted, reference })), adoptFittedExport: vi.fn(async (_p, _s, target, value) => { bytes.set(target, value.bytes); return { payloadRef: target, sha256: reference.sha256, bytes: reference.bytes }; }) };
-  return { f, bytes, put, frozen, input, storage };
+  return { f, bytes, put, frozen, input, storage, refreshFittedExport };
 }
 describe('off-thread geometry trace task', () => {
   it('adopts exact full fitted output and emits only immutable references/oneMiBpages while retaining2051warnings', async () => { const f = fixture(), result = await executeGeometryTraceThread(f.input, f.storage), manifest = JSON.parse(f.bytes.get(result.manifest.payloadRef)!.toString()), records = JSON.parse(f.bytes.get(result.objectRecords.payloadRef)!.toString()); expect(result.objectCount).toBe(3); expect(result.diagnosticCount).toBe(2051); expect(result.diagnosticPages.reduce((n, p) => n + p.rowCount, 0)).toBe(2051); expect(result.indexPages.every(p => p.bytes <= 1024 ** 2 && p.rowCount <= 50)).toBe(true); expect(manifest.diagnostics).toHaveLength(32); expect(manifest.diagnosticsTruncated).toBe(true); expect(manifest.fullDiagnostics).toEqual(result.fittedTrace); expect(records[0].geometry.fitted.geometricLengthMetres).toBe(7); expect(records[1].geometry.fitted.geometricLengthRoundTrip).toBe('1.7320508075688772'); expect(records[0].coordinates.qualifiedProjectFrame).toBe(null); expect(result).not.toHaveProperty('records'); expect(result).not.toHaveProperty('snapshot'); });
   it.each(['foreign', 'oversize', 'tamper'] as const)('refuses %s frozen references before producing index files', async kind => { const f = fixture(); if (kind === 'foreign') f.input.projectId = id(99); if (kind === 'oversize') { f.frozen.aggregate.projection.bytes = 32 * 1024 ** 2 + 1; f.input.frozenBlob = f.put(f.frozen.frozenBlobId, f.frozen); } if (kind === 'tamper') f.bytes.set(f.input.frozenBlob.payloadRef, Buffer.from('{}')); await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toBeDefined(); expect(f.storage.storePreparationBlob).not.toHaveBeenCalled(); });
   it('never acknowledges a failed immutable record write', async () => { const f = fixture(); vi.mocked(f.storage.storePreparationBlob).mockRejectedValue(Error('quota')); await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toThrow('quota'); });
+});
+
+describe('trace projection capacity is selected only by the frozen plan', () => {
+  const freeze = (f: ReturnType<typeof fixture>) => { f.input.frozenBlob = f.put(f.frozen.frozenBlobId, f.frozen); };
+  const selectLargeProfile = (f: ReturnType<typeof fixture>) => {
+    f.frozen.plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE;
+    f.frozen.plan.orderedPlanSha256 = geometryTraceHash(preparationPlanHashInput(f.frozen.plan));
+    f.frozen.aggregate.orderedPlanSha256 = f.frozen.plan.orderedPlanSha256;
+    freeze(f);
+  };
+  it('keeps a legacy plan at 32MiB and refuses before reading/adopting fitted output', async () => {
+    const f = fixture(); expect(f.frozen.plan.limitsProfile).toBe(LEGACY_PREPARATION_CAPACITY_PROFILE);
+    f.frozen.aggregate.projection.bytes = 32 * 1024 ** 2 + 1; freeze(f);
+    await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_LIMIT');
+    expect(f.storage.readFittedExport).not.toHaveBeenCalled(); expect(f.storage.storePreparationBlob).not.toHaveBeenCalled();
+  });
+  it('reads and parses a valid greater-than-32MiB v2 projection while retaining distinct output bounds', async () => {
+    const f = fixture(), projectionBytes = Buffer.concat([encode(f.f.snapshot), Buffer.alloc(32 * 1024 ** 2, 0x20)]);
+    // Padding changes only encoded input size; the complete JSON geometry and
+    // all identities remain validated by the actual parser and trace builder.
+    f.bytes.set(f.frozen.aggregate.projection.payloadRef, projectionBytes);
+    f.frozen.aggregate.projection = { ...f.frozen.aggregate.projection, bytes: projectionBytes.length, sha256: geometryTraceBytesHash(projectionBytes) };
+    f.f.fitted.snapshotSha256 = f.frozen.aggregate.projection.sha256; f.refreshFittedExport(); selectLargeProfile(f);
+    const result = await executeGeometryTraceThread(f.input, f.storage);
+    expect(result.objectCount).toBe(3); expect(projectionBytes.length).toBeGreaterThan(32 * 1024 ** 2);
+    expect(projectionBytes.length).toBeLessThan(128 * 1024 ** 2);
+    expect(f.storage.readPreparationBlob).toHaveBeenCalledWith(f.input.projectId, f.input.sessionId, f.frozen.aggregate.projection, preparationCapacity(LARGE_PREPARATION_CAPACITY_PROFILE).projectionInputBytes);
+    expect(f.storage.readPreparationBlob).toHaveBeenCalledWith(f.input.projectId, f.input.sessionId, f.frozen.aggregate.traceIndex, 16 * 1024 ** 2);
+    expect(f.storage.storePreparationBlob).toHaveBeenCalledWith(f.input.projectId, f.input.sessionId, f.frozen.recordsBlobId, expect.any(Array), 32 * 1024 ** 2);
+    expect(result.fittedTrace.bytes).toBeLessThanOrEqual(32 * 1024 ** 2);
+  }, 20_000);
+  it('refuses a v2 projection above 128MiB before any projection read or output adoption', async () => {
+    const f = fixture(); selectLargeProfile(f); f.frozen.aggregate.projection.bytes = 128 * 1024 ** 2 + 1; freeze(f);
+    await expect(executeGeometryTraceThread(f.input, f.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_LIMIT');
+    expect(f.storage.readFittedExport).not.toHaveBeenCalled(); expect(f.storage.readPreparationBlob).toHaveBeenCalledTimes(1);
+    expect(f.storage.storePreparationBlob).not.toHaveBeenCalled();
+  });
+  it('rejects an unknown frozen profile and a profile changed without immutable hash agreement', async () => {
+    const unknown = fixture(); Object.assign(unknown.frozen.plan, { limitsProfile: 'wfc.pf.unbounded.v99' }); freeze(unknown);
+    await expect(executeGeometryTraceThread(unknown.input, unknown.storage)).rejects.toBeDefined(); expect(unknown.storage.readFittedExport).not.toHaveBeenCalled();
+    const changed = fixture(); changed.frozen.plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE; freeze(changed);
+    await expect(executeGeometryTraceThread(changed.input, changed.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_INVALID'); expect(changed.storage.readFittedExport).not.toHaveBeenCalled();
+    const mismatch = fixture(); mismatch.frozen.plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE;
+    mismatch.frozen.plan.orderedPlanSha256 = geometryTraceHash(preparationPlanHashInput(mismatch.frozen.plan)); freeze(mismatch);
+    await expect(executeGeometryTraceThread(mismatch.input, mismatch.storage)).rejects.toThrow('GEOMETRY_TRACE_BUILD_INVALID'); expect(mismatch.storage.readFittedExport).not.toHaveBeenCalled();
+  });
+  it('rejects profile and byte-limit smuggling in the worker envelope', () => {
+    const f = fixture();
+    expect(geometryTraceThreadInputSchema.safeParse({ ...f.input, limitsProfile: LARGE_PREPARATION_CAPACITY_PROFILE }).success).toBe(false);
+    expect(geometryTraceThreadInputSchema.safeParse({ ...f.input, projectionInputBytes: 128 * 1024 ** 2 }).success).toBe(false);
+  });
 });
 const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 async function evidenceFixture() {

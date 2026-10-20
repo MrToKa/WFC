@@ -15,6 +15,16 @@ The user explicitly authorized automatic implementation of the remaining stages 
 
 ## Current execution — PF-R0 and sequential PF-R delivery
 
+### Active capacity qualification — 20 October 2026
+
+- Branch `pf-aalborg-capacity-local-20261020`, inherited handoff HEAD `b5f86a1609a8e2b4187f63cc19dd60690ff5f6e8`; executing `handoffs/PF-Aalborg-full-network-capacity.md`. Capacity source is not yet committed or deployed. Explicit trusted v2 profile is128MiB; legacy default/frozen plans remain32MiB. No real full-input qualification or publication yet.
+- Root owns runtime/config/parser/implementation pins/docs and all tests/SQL/HTTP/UI. Capacity agent owns shared profile/planner/session/union source; trace agent owns trace-thread source; UI agent owns preparation panel. Source modules frozen; runtime configuration review fixes still in progress. No duplicate capture or producer process started.
+- New private owned work: `pathfinder-engine/.scratch/tray-catalog-b3c21429-ed9c-4491-bbea-3daf3df38c42`. Source binding1 matches current alias1/API4e3486d4/web5d8ec147 on5191. Existing legacy partial session6cd0c3a7 retained, no retry. No changes to original app/5190/data.
+- Actual checks: PASS166tests across capacity/planner/session/union/trace/panel; PASS33parser/identity tests; PASS7final local capacity environment controls; PASS4preparation integration tests; typecheck/focusedlint PASS. These are source/controlled tests, not real128MiB capacity acceptance.
+- Candidate capacity-build1 PASS. Guarded backup/upgrade capacity1 PASS: ONLY own5191API/web recreated, new images c3ebd1db3419/bd6b05d89a58, explicit128MiB profile selected AFTER exact oldAPI removal; other own/outside containers preserved, backup5,961,943bytes. Current binding `capacity1-source-runtime.private.json` in newb3cwork. Qualification remainsNOT_RUN. LinuxVM MemAvailable13.25GB/free13.26GB observed before upgrade; host freeRAM1.62GB and VM total16.61GB recorded separately, not summed. No legacy plan rewrite or publication.
+- Normal UI reloaded, Routes discovery underway for a fresh v2 plan; root owns this capture. Source harness runner frozen; supervisor20ms external sampling and2GiBhardcontainer/135sprocess watchdog being prepared. Updated existing heartbeat ACTIVE through app tool, scoped to this capacity handoff/liveprogress, no historical R-stage restart or duplicate execution.
+- Next: finish guards/review; build candidate with legacy configuration, then guard/backup/quiesce and replace ONLY own5191API/web. Select v2 only after own oldAPI removal. Collect fresh frozen v2 plan staging-only, then hardbounded actual union/fitting/trace qualification before normal publication. Host free-memory preflight must be refreshed after test/build processes exit. Keep worker heap/RSS/deadline bounds, no unqualified publication or real Apply.
+
 ### Active suffix follow-up — 20 October 2026
 
 - Branch pf-aalborg-tray-suffix-local-20261020 inherits f084f6f0595678d0edc537d8b46b6c3a2f957e24. User explicitly supplied alternate suffix hint instead of exclusion. Root verified all214inventorypart hashes and PDB identities: actual model names have trailing x without hyphen; two distinct roots, each2terminalgeometryowners,9/7fragments; no overlap with existing328tray leaves.

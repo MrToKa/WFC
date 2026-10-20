@@ -5,6 +5,7 @@ import { useProjectPreparation } from './hooks/useProjectPreparation';
 import { preparationFixture } from '@/test/preparationFixtures';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { ModelRevisionChangesPanel } from './ModelRevisionChangesPanel';
+import { LARGE_PREPARATION_CAPACITY_PROFILE, LEGACY_PREPARATION_CAPACITY_PROFILE } from '../../../shared/pathfinderCapacity';
 vi.mock('./ModelRevisionChangesPanel', () => ({
   ModelRevisionChangesPanel: vi.fn((props: { isAdmin: boolean }) =>
     props.isAdmin ? <section aria-label="Model revision changes integration" /> : null,
@@ -48,6 +49,55 @@ function setup() {
 }
 beforeEach(() => vi.clearAllMocks());
 describe('project preparation review', () => {
+  it.each([
+    [LEGACY_PREPARATION_CAPACITY_PROFILE, 32],
+    [LARGE_PREPARATION_CAPACITY_PROFILE, 128],
+  ])('uses the current frozen %s profile for the displayed capture ceiling', (limitsProfile, ceilingMiB) => {
+    const { state, pf } = setup();
+    vi.mocked(useProjectPreparation).mockReturnValue({
+      ...state,
+      session: { ...state.session, plan: { ...state.session.plan, limitsProfile },
+        coverage: { ...state.session.coverage, committedParts: 3, expectedParts: 9 } },
+    } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const ceiling = screen.getByLabelText('Preparation capture ceiling');
+    expect(ceiling).toHaveTextContent(`Current frozen plan capture ceiling: complete staged captures are limited to ${ceilingMiB} MiB for validation.`);
+    expect(ceiling).toHaveTextContent('Committed parts remain available when collection is paused or refused.');
+    expect(ceiling).not.toHaveTextContent(/qualified|accepted|replacement plan/);
+    expect(screen.getByText(/3 of 9 parts committed/)).toBeVisible();
+    expect(screen.getByText(/partial captures never become the current network/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Validate and publish complete network' })).toBeDisabled();
+    expect(state.collect).not.toHaveBeenCalled(); expect(state.publish).not.toHaveBeenCalled();
+  });
+  it('shows the legacy ceiling before any preparation plan is frozen', () => {
+    const { state, pf } = setup();
+    vi.mocked(useProjectPreparation).mockReturnValue({
+      ...state, session: null,
+    } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const ceiling = screen.getByLabelText('Preparation capture ceiling');
+    expect(ceiling).toHaveTextContent('Legacy preparation capture ceiling: complete staged captures are limited to 32 MiB for validation.');
+    expect(ceiling).not.toHaveTextContent(/128 MiB|Current frozen|Saved frozen|qualified|accepted/);
+    expect(state.freezePlan).not.toHaveBeenCalled();
+  });
+  it.each([
+    [LEGACY_PREPARATION_CAPACITY_PROFILE, 32],
+    [LARGE_PREPARATION_CAPACITY_PROFILE, 128],
+  ])('labels a historical frozen %s ceiling without assigning it to a replacement plan', (limitsProfile, ceilingMiB) => {
+    const { state, pf } = setup();
+    vi.mocked(useProjectPreparation).mockReturnValue({
+      ...state,
+      context: { ...state.context, scope: { ...state.context.scope, catalogRevision: '2' } },
+      session: { ...state.session, plan: { ...state.session.plan, limitsProfile } },
+    } as unknown as ReturnType<typeof useProjectPreparation>);
+    render(<ProjectPreparationPanel pf={pf} active />);
+    const ceiling = screen.getByLabelText('Preparation capture ceiling');
+    expect(ceiling).toHaveTextContent(`Saved frozen plan capture ceiling: complete staged captures are limited to ${ceilingMiB} MiB for validation.`);
+    expect(ceiling).toHaveTextContent('This saved limit belongs to its frozen plan and does not establish the limit of a replacement plan.');
+    expect(ceiling).not.toHaveTextContent(/Current frozen|qualified|accepted/);
+    expect(screen.getByText(/Historical frozen plan: 1 selected roots/)).toBeVisible();
+    expect(state.discover).not.toHaveBeenCalled(); expect(state.freezePlan).not.toHaveBeenCalled();
+  });
   it('places comparison beside traceability using strict admin access and current generation without a model-selection callback', () => {
     const { state, pf } = setup();
     pf.preparationAccess = {

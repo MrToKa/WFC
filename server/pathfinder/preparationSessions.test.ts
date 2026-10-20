@@ -20,6 +20,7 @@ import { createPreparationService, preparationTransaction, PREPARATION_SQL_BOUND
 import { PathFinderError } from './errors.js';
 import type { ComputationalSnapshot } from './contracts.js';
 import type { PreparationCreate, PreparationContext } from '../../shared/pathfinderPreparation.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const who = { userId: id(8), loginId: id(9), loginExpiresAt: Date.now() + 600000 };
 const client = { query: vi.fn(async (sql: string, p: any[] = []) => {
@@ -48,8 +49,15 @@ beforeEach(() => {
   input = { schemaVersion: 'wfc.pf.preparation-create.v1', expected: context.scope, idempotencyKey: id(3), discovery: { schemaVersion: 'wfc.pf.discovery-report.v1', modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '1', matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v1', complete: true, propertyScan: null, objects: [{ objectId: 'dbid:3', parentId: null, name: '/B001', hasGeometry: true, isPhysicalLeaf: true, orderIndex: 0 }], trays: [{ projectTrayId: id(10), candidateRootObjectIds: ['dbid:3'] }], endpointCandidates: [] } };
   adapters = { validatePart: vi.fn((_plan, _part, value) => value), validateUnion: vi.fn(async () => ({ projection: { schemaVersion: 'pathfinder.model.snapshot.v1', payloadRef: id(11), sha256: 'd'.repeat(64), bytes: 100 }, traceIndex: { schemaVersion: 'wfc.pf.preparation-trace.v1', payloadRef: id(12), sha256: 'e'.repeat(64), bytes: 100 }, counts: { objects: 1, physicalLeaves: 1, fragments: 0, vertices: 0, triangles: 0 }, engineVersion: 'unchanged-canonical-engine', rulesVersion: 'unchanged-rules', diagnostics: [], publicationData: { privateBoundReference: id(11) } })), publish: vi.fn(async () => ({ artifactId: id(13), registryRevision: '5' })) };
 });
-const service = () => createPreparationService({} as Pool, adapters);
+const service = (capacityProfile?: PreparationCapacityProfile) => createPreparationService({} as Pool, adapters, capacityProfile === undefined ? {} : { capacityProfile });
 async function collected(s = service()) { const session = await s.create(id(1), who, input), part = session.plan.partPlan[0]; await s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, payload(id(1))); return { s, session: await s.get(id(1), who, session.id), part }; }
+async function multipartCollected(capacityProfile: PreparationCapacityProfile, leaves = 513) {
+  input.discovery.objects = [{ objectId: 'dbid:1', parentId: null, name: '/B001', hasGeometry: false, isPhysicalLeaf: false, orderIndex: 0 }, ...Array.from({ length: leaves }, (_, index) => ({ objectId: 'dbid:' + (index + 3), parentId: 'dbid:1', name: 'Part ' + index, hasGeometry: true, isPhysicalLeaf: true, orderIndex: index + 1 }))];
+  input.discovery.trays[0].candidateRootObjectIds = ['dbid:1'];
+  const result = await collected(service(capacityProfile));
+  expect(result.session.plan.partPlan.length).toBeGreaterThan(1);
+  return result;
+}
 const command = (revision: string) => ({ schemaVersion: 'wfc.pf.preparation-mutation.v1', expectedSessionRevision: revision, idempotencyKey: id(20), reason: 'Synthetic publication' });
 describe('bounded preparation SQL with real authority transaction and mocked pg transport', () => {
   function transport(errorAt?: string, code = '55P03') {
@@ -108,6 +116,71 @@ describe('bounded preparation SQL with real authority transaction and mocked pg 
   });
 });
 describe('durable whole-network preparation lifecycle with mocked transactions and storage', () => {
+  it('selects capacity only from validated service construction and rejects caller profile injection', async () => {
+    const legacy = await service().create(id(1), who, input);
+    expect(legacy.plan.limitsProfile).toBe(LEGACY_PREPARATION_CAPACITY_PROFILE);
+    const large = await service(LARGE_PREPARATION_CAPACITY_PROFILE).create(id(1), who, { ...input, idempotencyKey: id(30) });
+    expect(large.plan.limitsProfile).toBe(LARGE_PREPARATION_CAPACITY_PROFILE);
+    await expect(service().create(id(1), who, { ...input, idempotencyKey: id(31), limitsProfile: LARGE_PREPARATION_CAPACITY_PROFILE })).rejects.toThrow();
+    for (const capacityProfile of ['', 'unlimited']) expect(() => createPreparationService({} as Pool, adapters, { capacityProfile: capacityProfile as PreparationCapacityProfile })).toThrow();
+  });
+  it('preserves the original frozen profile on create replay even after trusted configuration changes', async () => {
+    const legacy = await service().create(id(1), who, input);
+    const replay = await service(LARGE_PREPARATION_CAPACITY_PROFILE).create(id(1), who, input);
+    expect(replay.id).toBe(legacy.id); expect(replay.plan).toEqual(legacy.plan);
+    expect(replay.plan.limitsProfile).toBe(LEGACY_PREPARATION_CAPACITY_PROFILE);
+    expect(fake.rows.size).toBe(1);
+  });
+  it('refuses a substituted stored capacity profile under the historical plan hash', async () => {
+    const session = await service().create(id(1), who, input);
+    fake.rows.get(session.id).plan.limitsProfile = LARGE_PREPARATION_CAPACITY_PROFILE;
+    await expect(service(LARGE_PREPARATION_CAPACITY_PROFILE).get(id(1), who, session.id)).rejects.toMatchObject({ code: 'PREPARATION_PLAN_INTEGRITY' });
+    expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(fake.aggregates).toHaveLength(0);
+  });
+  it.each([LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE])('uses frozen %s for cumulative upload admission across multiple planned parts', async profile => {
+    // Mocked receipt byte accounting exercises admission; this is not a real large-model memory claim.
+    const { s, session, part } = await multipartCollected(profile);
+    fake.parts.get(part.partId).payloadBytes = 32 * 1024 ** 2;
+    const next = session.plan.partPlan[1];
+    const uploading = s.upload(id(1), who, session.id, next.partId, session.plan.orderedPlanSha256, payload(id(1)));
+    if (profile === LEGACY_PREPARATION_CAPACITY_PROFILE) {
+      await expect(uploading).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 });
+      expect(fake.parts.size).toBe(1); expect(fake.blobs.size).toBe(1);
+    } else {
+      expect((await uploading).part.partId).toBe(next.partId);
+      expect(fake.parts.size).toBe(2); expect(fake.blobs.size).toBe(2);
+    }
+    expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(fake.aggregates).toHaveLength(0);
+  });
+  it('retains the legacy publication limit after a restart configured for the larger profile', async () => {
+    const { session, part } = await collected(); fake.parts.get(part.partId).payloadBytes = 32 * 1024 ** 2 + 1;
+    await expect(service(LARGE_PREPARATION_CAPACITY_PROFILE).publish(id(1), who, session.id, command(session.sessionRevision))).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 });
+    expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(fake.rows.get(session.id).state).toBe('collecting');
+  });
+  it('refuses cumulative input above128MiB before loading parts or invoking a larger-profile union', async () => {
+    const { s, session, part } = await multipartCollected(LARGE_PREPARATION_CAPACITY_PROFILE, 1025);
+    expect(session.plan.partPlan.length).toBeGreaterThanOrEqual(3);
+    const first = fake.parts.get(part.partId);
+    for (const planned of session.plan.partPlan) fake.parts.set(planned.partId, { ...structuredClone(first), partId: planned.partId, partIndex: planned.partIndex, scopeSha256: planned.scopeSha256, payloadBytes: planned.partIndex < 2 ? 64 * 1024 ** 2 : 1 });
+    await expect(s.publish(id(1), who, session.id, command(session.sessionRevision))).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 });
+    expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(fake.rows.get(session.id).state).toBe('collecting'); expect(fake.aggregates).toHaveLength(0);
+  });
+  it.each([LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE])('binds projection readback capacity to frozen %s before publication', async profile => {
+    const { s, session } = await collected(service(profile));
+    const validation = await adapters.validateUnion(session.plan, [], new AbortController().signal);
+    adapters.validateUnion = vi.fn(async () => ({ ...validation, projection: { ...validation.projection, bytes: 32 * 1024 ** 2 + 1 } }));
+    const publishing = s.publish(id(1), who, session.id, command(session.sessionRevision));
+    if (profile === LEGACY_PREPARATION_CAPACITY_PROFILE) {
+      await expect(publishing).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 }); expect(adapters.publish).not.toHaveBeenCalled(); expect(fake.aggregates).toHaveLength(0);
+    } else { expect((await publishing).aggregate.projection.bytes).toBe(32 * 1024 ** 2 + 1); expect(adapters.publish).toHaveBeenCalledTimes(1); }
+  });
+  it('refuses a larger-profile projection above128MiB before final publication', async () => {
+    const { s, session } = await collected(service(LARGE_PREPARATION_CAPACITY_PROFILE));
+    const validation = await adapters.validateUnion(session.plan, [], new AbortController().signal);
+    adapters.validateUnion = vi.fn(async () => ({ ...validation, projection: { ...validation.projection, bytes: 128 * 1024 ** 2 + 1 } }));
+    await expect(s.publish(id(1), who, session.id, command(session.sessionRevision))).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 });
+    expect(adapters.publish).not.toHaveBeenCalled(); expect(fake.aggregates).toHaveLength(0); expect(fake.rows.get(session.id).state).toBe('failed');
+  });
   it('creates once on exact replay and refuses a different request under the same key', async () => { const s = service(), first = await s.create(id(1), who, input); expect((await s.create(id(1), who, input)).id).toBe(first.id); expect(fake.rows.size).toBe(1); await expect(s.create(id(1), who, { ...input, discovery: { ...input.discovery, complete: false } })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' }); });
   it('fsync-backed committed part replay cannot advance revision or publish a partial artifact', async () => { const { s, session, part } = await collected(); const result = await s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, payload(id(1))); expect(result.duplicate).toBe(true); expect(result.sessionRevision).toBe(session.sessionRevision); expect(fake.aggregates).toHaveLength(0); expect(adapters.publish).not.toHaveBeenCalled(); });
   it('historical part replay survives own publication and later scope changes under fresh authority', async () => { const { s, session, part } = await collected(); await s.publish(id(1), who, session.id, command(session.sessionRevision)); fake.context.scope.locationRegistryRevision = '5'; fake.context.scope.catalogRevision = '9'; const result = await s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, payload(id(1))); expect(result.duplicate).toBe(true); expect(fake.rows.get(session.id).state).toBe('published'); expect(fake.parts.size).toBe(1); fake.authorized = false; await expect(s.upload(id(1), who, session.id, part.partId, session.plan.orderedPlanSha256, payload(id(1)))).rejects.toMatchObject({ code: 'ADMIN_REQUIRED' }); });

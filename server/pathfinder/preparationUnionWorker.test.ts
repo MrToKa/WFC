@@ -6,8 +6,9 @@ import type {PreparationPlan} from '../../shared/pathfinderPreparation.js';
 import type {ComputationalSnapshot} from './contracts.js';
 import {createPreparationUnionRunner,type PreparationUnionThread} from './preparationUnionWorker.js';
 import {preparationUnionPolicy} from './preparationUnionTask.js';
+import {LEGACY_PREPARATION_CAPACITY_PROFILE,LARGE_PREPARATION_CAPACITY_PROFILE} from '../../shared/pathfinderCapacity.js';
 const uuid=(n:number)=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-const plan={id:uuid(1)} as PreparationPlan,parts=[{partId:uuid(2),payload:{} as ComputationalSnapshot}];
+const plan={id:uuid(1),limitsProfile:LEGACY_PREPARATION_CAPACITY_PROFILE} as PreparationPlan,parts=[{partId:uuid(2),payload:{} as ComputationalSnapshot}];
 afterEach(()=>vi.useRealTimers());
 function fixture(){
  let joined!:()=>void,options!:WorkerOptions,rss=1000;
@@ -19,6 +20,18 @@ function fixture(){
 }
 const turn=async()=>{await Promise.resolve();await Promise.resolve();await Promise.resolve();};
 describe('bounded off-thread preparation union lifecycle',()=>{
+ it('keeps the same memory, watchdog and join fences for the explicit larger profile',async()=>{
+  const f=fixture(),done=f.run({...plan,limitsProfile:LARGE_PREPARATION_CAPACITY_PROFILE},parts,new AbortController().signal);
+  await turn();expect(f.options.workerData.plan.limitsProfile).toBe(LARGE_PREPARATION_CAPACITY_PROFILE);
+  expect(f.options.resourceLimits).toEqual({maxOldGenerationSizeMb:512});
+  expect(preparationUnionPolicy).toMatchObject({milliseconds:120000,rssBytes:2*1024**3,rssIntervalMilliseconds:100,joinMilliseconds:10000});
+  f.worker.emit('message',f.result());expect(f.release).not.toHaveBeenCalled();f.join();await done;
+ });
+ it('refuses a missing or unknown frozen profile before spawning a worker',async()=>{
+  const f=fixture();
+  for(const value of [undefined,'unlimited'])await expect(f.run({...plan,limitsProfile:value} as PreparationPlan,parts,new AbortController().signal)).rejects.toMatchObject({code:'PREPARATION_UNION_LIMIT'});
+  expect(f.spawn).not.toHaveBeenCalled();expect(f.target).not.toHaveBeenCalled();
+ });
  it('uses fixed admission, 512MiB V8 old space, shared quota lock, and returns references only after termination joins',async()=>{
   const f=fixture(),done=f.run(plan,parts,new AbortController().signal);await turn();expect(f.options.resourceLimits).toEqual({maxOldGenerationSizeMb:512});expect(f.options.execArgv).toEqual([]);expect(f.options.workerData.storageLockBuffer).toBeInstanceOf(SharedArrayBuffer);
   let settled=false;void done.then(()=>{settled=true;});f.worker.emit('message',f.result());await turn();expect(f.worker.terminate).toHaveBeenCalledTimes(1);expect(settled).toBe(false);expect(f.release).not.toHaveBeenCalled();f.join();await expect(done).resolves.toEqual(f.result().result);expect(f.release).toHaveBeenCalledExactlyOnceWith(99);

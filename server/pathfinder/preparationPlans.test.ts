@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildPreparationPlan, equalPreparationScope, preparationDigest } from './preparationPlans.js';
 import { preparationContextSchema, preparationCreateSchema, preparationPlanSchema, preparationPlanHashInput, type PreparationContext, type PreparationCreate } from '../../shared/pathfinderPreparation.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const object = (n: number, parent: number | null, name: string, geometry = false) => ({ objectId: 'dbid:' + n, parentId: parent === null ? null : 'dbid:' + parent, name, hasGeometry: geometry, isPhysicalLeaf: geometry, orderIndex: n });
@@ -11,6 +12,28 @@ export function preparationFixture() {
   return { context, input };
 }
 describe('server-owned routing preparation plan', () => {
+  it('defaults to legacy capacity and hashes a separately constructed larger frozen profile without changing geometry or scope', () => {
+    const { context, input } = preparationFixture();
+    const legacy = buildPreparationPlan(context, input, id(50));
+    const large = buildPreparationPlan(context, input, id(50), LARGE_PREPARATION_CAPACITY_PROFILE);
+    expect(legacy.limitsProfile).toBe(LEGACY_PREPARATION_CAPACITY_PROFILE);
+    expect(large.limitsProfile).toBe(LARGE_PREPARATION_CAPACITY_PROFILE);
+    expect(large.orderedPlanSha256).not.toBe(legacy.orderedPlanSha256);
+    expect(preparationDigest(preparationPlanHashInput({ ...legacy, limitsProfile: LARGE_PREPARATION_CAPACITY_PROFILE }))).not.toBe(legacy.orderedPlanSha256);
+    expect(large.requestedScope).toEqual(legacy.requestedScope);
+    expect(large.partPlan).toEqual(legacy.partPlan.map((part, index) => ({ ...part, partId: large.partPlan[index].partId })));
+    expect(large.objectManifest).toEqual(legacy.objectManifest);
+    expect(large.objectOrder).toEqual(legacy.objectOrder);
+    expect(legacy.orderedPlanSha256).toBe(preparationDigest(preparationPlanHashInput(legacy)));
+    expect(large.orderedPlanSha256).toBe(preparationDigest(preparationPlanHashInput(large)));
+  });
+  it('rejects unknown server profiles and never accepts profile selection in a create request', () => {
+    const { context, input } = preparationFixture();
+    expect(() => buildPreparationPlan(context, input, id(50), 'unlimited' as PreparationCapacityProfile)).toThrow();
+    expect(preparationCreateSchema.safeParse({ ...input, limitsProfile: LARGE_PREPARATION_CAPACITY_PROFILE }).success).toBe(false);
+    const plan = buildPreparationPlan(context, input);
+    for (const profile of [undefined, 'unlimited']) expect(preparationPlanSchema.safeParse({ ...plan, limitsProfile: profile }).success).toBe(false);
+  });
   it('retains historical exact-name policy evidence and hashes the explicit adapter policy separately', () => {
     const { context, input } = preparationFixture();
     const legacy = buildPreparationPlan(context, input, id(50));

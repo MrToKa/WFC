@@ -5,6 +5,7 @@ import { PREPARATION_LIMITS, preparationContextSchema, preparationPlanSchema, pr
 import { readRoutingCatalog } from './catalog.js';
 import { readRoutingPolicyScope } from './purposePolicy.js';
 import { PathFinderError } from './errors.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 
 export const preparationDigest = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The project preparation changed or requires a routing decision. Refresh and try again.'); };
@@ -54,7 +55,8 @@ export async function readPreparationContext(c: PoolClient, projectId: string): 
   return preparationContextSchema.parse({ schemaVersion: currentAggregate?.schemaVersion==='wfc.pf.geometry-aggregate.v2'?'wfc.pf.preparation-context.v2':'wfc.pf.preparation-context.v1', projectId, scope, trays, endpointNames, resolutions, diagnostics: catalog.diagnostics, currentAggregate });
 }
 
-export function buildPreparationPlan(context: PreparationContext, input: PreparationCreate, id: string = randomUUID()): PreparationPlan {
+export function buildPreparationPlan(context: PreparationContext, input: PreparationCreate, id: string = randomUUID(), capacityProfile: PreparationCapacityProfile = LEGACY_PREPARATION_CAPACITY_PROFILE): PreparationPlan {
+  const limitsProfile = preparationCapacityProfileSchema.parse(capacityProfile);
   const started = performance.now(); let work = 0;
   const budget = () => { if (++work > PREPARATION_LIMITS.planWork || performance.now() - started > PREPARATION_LIMITS.planMilliseconds) return fail('PREPARATION_PLAN_WORK_LIMIT', 413); };
   if (!equalPreparationScope(context.scope, input.expected)) return fail('PREPARATION_SCOPE_STALE');
@@ -139,6 +141,6 @@ export function buildPreparationPlan(context: PreparationContext, input: Prepara
   const requestedScope = { scopeKind: 'server-requested-project-routing-and-endpoints' as const, wholePlantGeometry: false as const, trays, endpointNames: context.endpointNames, endpointEvidence, excludedProjectTrayIds: excluded, orderedPhysicalLeafIds: physicalLeaves, orderedEquipmentObjectIds: equipmentIds, scopeSha256: '0'.repeat(64) };
   const { scopeSha256: _scopeHash, ...scopeInput } = requestedScope;
   requestedScope.scopeSha256 = preparationDigest(scopeInput);
-  const partial = { schemaVersion: 'wfc.pf.preparation-plan.v1' as const, id, projectId: context.projectId, ...context.scope, coordinateFrameId: preparationFrameId(context.projectId, context.scope.modelVersionId, context.scope.contentFingerprint), matchingPolicyVersion: discovery.matchingPolicyVersion, partitionAlgorithmVersion: 'wfc.pf.ordered-partition.v1' as const, limitsProfile: 'wfc.pf.current-bounded-capture-and-model.v1' as const, requestedScope, partPlan, objectManifest: ordered, objectOrder: ordered.map(o => toDbId(o.objectId)), diagnostics, orderedPlanSha256: '0'.repeat(64) };
+  const partial = { schemaVersion: 'wfc.pf.preparation-plan.v1' as const, id, projectId: context.projectId, ...context.scope, coordinateFrameId: preparationFrameId(context.projectId, context.scope.modelVersionId, context.scope.contentFingerprint), matchingPolicyVersion: discovery.matchingPolicyVersion, partitionAlgorithmVersion: 'wfc.pf.ordered-partition.v1' as const, limitsProfile, requestedScope, partPlan, objectManifest: ordered, objectOrder: ordered.map(o => toDbId(o.objectId)), diagnostics, orderedPlanSha256: '0'.repeat(64) };
   const plan = preparationPlanSchema.parse(partial); plan.orderedPlanSha256 = preparationDigest(preparationPlanHashInput(plan)); return plan;
 }
