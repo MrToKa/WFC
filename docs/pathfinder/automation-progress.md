@@ -26,6 +26,39 @@
   workspace/foreignscratch mounts and no product FS guard weakening. Root alone
   provisions/executes/retires after final source/test/peer freeze. Never edit an
   executed source or overwrite old failure receipts. Actual Linux chain NOT_RUN.
+- First Linux coordinator875d actual FAIL before PG start: image-declared VOLUME
+  /var/lib/postgresql created a fresh anonymous parent volume while only its
+  data child was tmpfs. Exact mount guard correctly refused it. Nested Docker
+  bounds then refused extraction (DOCKER_BOUNDS_SCOPE_INVALID); cleanup remains
+  UNCONFIRMED. Own run75a4fce6/created PG217b90fc/own named volume + derived
+  anonymous7c36d742 remain for exact retirement; no import/preparation ran.
+  Root actual inspect is private and preserved. New coordinator-v2 source will
+  mount the parent tmpfs and reuse an active bounded scope; new peer review and
+  fresh fixture required. Original875d and all failure receipts stay immutable.
+- Exact old75a4 retirement-v2e926 actual RETIRED after30pureguards/peer review:
+  only unstarted PG217b90fc + anonymous7c36d742 + own named PF volume removed.
+  Old FAIL/source/evidence preserved. First retireafab preflight correctly stopped
+  before mutation because Docker's exact built-in anonymous marker was not empty;
+  new e926 pins the actual two-volume metadata and exact marker.
+- New coordinator-v2680b/61purecontrols freshb0db actual FAIL LINUX_PHASE_FAILED
+  before import evidence; TCP/currentDB/marker PASS, extraction PASS absentEvidence,
+  cleanup PASS removed own PG/volume, outside preservation PASS. Raw early helper
+  error was not retained by v2; do not invent its cause or rerun the fixture.
+  New v3 authoring adds private raw-result/error preservation and read-only
+  image-node1000 ownership/path/access preflight. Image source chowns volume root
+  to node; capless root mismatch is an inference to verify, not a proven failure.
+  No production durability/authority guard changes. All executed sources frozen.
+- Coordinator-v3b05/84purecontrols fresh66c101 actual preflight PASS UID/GID1000,
+  zero capabilities, owned volume/config/paths accessible; genuine Linux import
+  PASS. Actual preparation/trace phase then FAIL GEOMETRY_TRACE_BUILD_INVALID
+  (thread type:error), not an inherited execArgv error: production explicitly
+  uses execArgv:[] and the independent bounded pure reproduction confirms it.
+  21private evidence files retained; both server cleanup receipts PASS; root
+  PG/volume retirement PASS; outside identities preserved (external state-only
+  observations changed). No full-chain/initial-fill PASS. All old sources frozen.
+  Next useful work: NEW diagnostic chain-v2 with per-step/read-only own trace
+  failure evidence, NEW coordinator-v4 mount pin; locate concrete schema/error
+  before any correction. No production guard weakening or fixture reuse.
 - Real Aalborg reread/SDK UI remain BLOCKED by saved origin refusal; synthetic
   server checks do not bypass it or prove object-derived visibility capture.
   Native parity/closed-browser producer/human engineering acceptance NOT_RUN.
