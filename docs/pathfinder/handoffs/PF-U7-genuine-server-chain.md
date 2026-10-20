@@ -6,6 +6,17 @@ verification gap; it is not a new product stage or permission to deploy elsewher
 Create a new inherited local branch `pf-u7-genuine-chain-local-20261021` after
 inspecting current branch/HEAD/status and agents. Do not duplicate active work.
 
+Execution amendment at357c37b: that branch now exists. One fresh native fixture
+a4af1644 passed genuine bootstrap but fullchain5034 failed EPERM at preparation
+directory fsync; root separately proved fs.open PASS / handle.sync EPERM on
+Windows. Cleanup passed and the exact fixture was retired. Do not repeat those
+commands/artifacts. Keep the production durability guard. Continue the same
+production server sequence through a NEW reviewed Linux-container coordinator,
+current API3476333e compiled modules/DLL and fresh own POSIX data volume/PG
+namespace. Read current automation-progress.md and authors' exact frozen source
+contracts first. Steps below describe the server assertions; the original
+native launcher is superseded by this measured platform correction.
+
 ## Baseline and exact boundaries
 
 U8 operational delivery commit `5abbf2db9315224b8f40b860fdada7306a44591c` on
