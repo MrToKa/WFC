@@ -8,6 +8,7 @@ import type { ViewerModelObject } from '../../../viewer-runtime/protocol.mjs';
 import { fetchEndpointBinding, fetchEndpointBindingHistory, saveEndpointBinding } from '@/api/pathfinderEndpointBindings';
 import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
 import { PENDING_APPLY_STORAGE_KEY } from './hooks/usePathfinderPendingApply';
+import { calculationAvailabilitySchema, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 vi.mock('@/api/pathfinderEndpointBindings', async original => ({ ...await original<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn(), fetchEndpointBindingHistory: vi.fn(), saveEndpointBinding: vi.fn() }));
 
 vi.mock('./hooks/usePathFinder', () => ({ usePathFinder: vi.fn() }));
@@ -71,6 +72,54 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('shows automatic point availability independently of saved bindings and filters only missing calculation points', async () => {
+    const user = userEvent.setup(), automaticId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    const confirmed = calculationAvailabilitySchema.parse({ status: 'confirmed-ready', pointAvailable: true, source: 'confirmed-shared-location', approximate: false, candidateObjectIds: [], reasonCode: null, engineeringAccepted: false });
+    const automatic = calculationAvailabilitySchema.parse({ status: 'automatic-ready', pointAvailable: true, source: 'automatic-model-candidate', approximate: true, candidateObjectIds: ['dbid:44'], reasonCode: null, engineeringAccepted: false });
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data,
+      locations: [{ ...pf.data.locations[0], calculationAvailability: confirmed }, { id: automaticId, name: 'EQ-002', aliases: [], revision: '1', binding: null, calculationAvailability: automatic }],
+      cables: [{ ...pf.data.cables[0], toMatch: { status: 'missing', locationId: automaticId, candidates: [] } }, pf.data.cables[1]],
+    } }); mount();
+    await user.click(screen.getByRole('button', { name: /=CABLE-1From:/ }));
+    const selected = within(screen.getByTestId('pathfinder-selected-cable'));
+    expect(selected.getByText('To: EQ-002 — Automatic model point (approximate, unconfirmed)')).toBeVisible();
+    expect(selected.getByText('To saved binding: missing')).toBeVisible(); expect(selected.getByText('From saved binding: matched')).toBeVisible();
+    expect(screen.getByText(/Point availability does not guarantee a route or authorize Apply/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Resolve From' })).toBeEnabled(); expect(screen.getByRole('button', { name: 'Resolve To' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Resolve To' })); expect(screen.getByRole('textbox', { name: 'Location name' })).toHaveValue('EQ-002');
+    await user.click(screen.getByRole('checkbox', { name: 'Without a calculation point' }));
+    const list = within(screen.getByRole('list', { name: 'Path Finder cables' }));
+    expect(list.queryByRole('button', { name: /=CABLE-1From:/ })).toBeNull(); expect(list.getByRole('button', { name: /=CABLE-2From:/ })).toBeVisible();
+    expect(pf.calculate).not.toHaveBeenCalled(); expect(saveEndpointBinding).not.toHaveBeenCalled();
+  });
+  it('fails closed on absent legacy availability even when old binding labels say matched', async () => {
+    const user = userEvent.setup(), matched = pf.data.cables[0].fromMatch;
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, cables: [{ ...pf.data.cables[0], toMatch: matched }] } }); mount();
+    await user.click(screen.getByRole('checkbox', { name: 'Without a calculation point' }));
+    const row = within(screen.getByRole('list', { name: 'Path Finder cables' })).getByRole('button', { name: /=CABLE-1From:/ });
+    expect(row).toHaveTextContent('From: Calculation point not evaluated; To: Calculation point not evaluated');
+    expect(row).toHaveTextContent('Saved bindings — From: matched; To: matched');
+  });
+  it('does not borrow an available point from an ambiguous alias candidate with no unique location ID', async () => {
+    const user = userEvent.setup(), availability = calculationAvailabilitySchema.parse({ status: 'automatic-ready', pointAvailable: true, source: 'automatic-model-candidate', approximate: true, candidateObjectIds: ['dbid:44'], reasonCode: null, engineeringAccepted: false });
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data,
+      locations: [{ ...pf.data.locations[0], calculationAvailability: availability }],
+      cables: [{ ...pf.data.cables[0], fromMatch: { status: 'ambiguous', locationId: null, candidates: [locationId, locationId] }, toMatch: pf.data.cables[0].fromMatch }],
+    } }); mount(); await user.click(screen.getByRole('checkbox', { name: 'Without a calculation point' }));
+    const row = within(screen.getByRole('list', { name: 'Path Finder cables' })).getByRole('button', { name: /=CABLE-1From:/ });
+    expect(row).toHaveTextContent('From: Calculation point not evaluated; To: Automatic model point (approximate, unconfirmed)');
+    expect(row).toHaveTextContent('Saved bindings — From: ambiguous; To: matched');
+  });
+  it('keeps blocked point evidence visible with explicit manual-resolution labels', async () => {
+    const user = userEvent.setup();
+    const blocked: [CalculationAvailability['status'], string][] = [['missing', 'No model point found'], ['ambiguous', 'Multiple model points; resolve manually'], ['saved-binding-required', 'Saved binding needs confirmation'], ['object-unverified', 'Model point is unverified'], ['preparation-required', 'Current preparation required'], ['not-evaluated', 'Calculation point not evaluated']];
+    const locations = blocked.map(([status], index) => ({ id: `cccccccc-cccc-4ccc-8ccc-${String(index).padStart(12, '0')}`, name: 'EQ-' + index, aliases: [], revision: '1', binding: null,
+      calculationAvailability: calculationAvailabilitySchema.parse({ status, pointAvailable: false, source: null, approximate: false, candidateObjectIds: [], reasonCode: 'POINT_REVIEW_REQUIRED', engineeringAccepted: false }) }));
+    const cables = locations.map((location, index) => ({ ...pf.data.cables[0], id: location.id, cableId: index, tag: '=BLOCKED-' + index, fromMatch: { status: 'missing' as const, locationId: location.id, candidates: [] }, toMatch: { status: 'missing' as const, locationId: location.id, candidates: [] } }));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, locations, cables } }); mount(); await user.click(screen.getByRole('checkbox', { name: 'Without a calculation point' }));
+    const list = within(screen.getByRole('list', { name: 'Path Finder cables' })); expect(list.getAllByRole('button')).toHaveLength(blocked.length);
+    for (const [index, [, label]] of blocked.entries()) expect(list.getByRole('button', { name: new RegExp('=BLOCKED-' + index + 'From:') })).toHaveTextContent('From: ' + label + '; To: ' + label);
+  });
   it('retains an unknown atomic endpoint command across tool changes and locks shared location selection until reconciliation', async () => {
     const user = userEvent.setup(); vi.mocked(saveEndpointBinding).mockRejectedValueOnce(new TypeError('Lost save acknowledgement')); mount();
     await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Resolve From' }));

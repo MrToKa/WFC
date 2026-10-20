@@ -3,13 +3,16 @@ import type { Pool, PoolClient } from 'pg';
 import type { z } from 'zod';
 import type { artifactSchema, bindLocationSchema, createLocationSchema, LocationDto } from './contracts.js';
 import { PathFinderError } from './errors.js';
-import { matchLocation, normalizeLocation, objectMatchNames, validateSnapshotStructure } from './matching.js';
+import { normalizeLocation, objectMatchNames, validateSnapshotStructure } from './matching.js';
 import { storeSnapshot } from './storage.js';
 import type { JobPrincipal } from './jobContracts.js';
 import { principalTransaction } from './auth.js';
 export { transaction } from './transactions.js';
 import { bindingAuditState, locationAuditState, recordLocationEvent } from './audit.js';
 import { readCurrentEndpointBindingContext, readEndpointBindingHeads } from './endpointBindingRepository.js';
+import {createDisplayLocationMatchIndex} from './displayLocationMatchIndex.js';
+import {readDisplayEndpointAvailability} from './displayEndpointAvailability.js';
+import {RECALCULATION_LIMITS} from '../../shared/pathfinderRecalculation.js';
 
 type Row = Record<string, any>;
 export async function requireTransactionalAdmin(client: PoolClient, actorId: string): Promise<void> {
@@ -60,7 +63,7 @@ export async function latestArtifact(client: PoolClient, projectId: string, mode
   }
   return (await client.query<Row>("SELECT * FROM pf_artifacts WHERE project_id=$1 AND model_version_id=$2 AND purpose='planning' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId,modelVersionId])).rows[0] ?? null;
 }
-async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null): Promise<LocationDto[]> {
+async function locations(client: PoolClient, projectId: string, modelId: string | null, artifactId: string | null) {
   const context = await readCurrentEndpointBindingContext(client, projectId);
   const heads = await readEndpointBindingHeads(client, projectId, context);
   const rows = await client.query<Row>(`SELECT l.id,l.name,l.revision::text,
@@ -71,7 +74,7 @@ async function locations(client: PoolClient, projectId: string, modelId: string 
       ORDER BY (b.model_version_id=$2) DESC,b.confirmed_at DESC LIMIT 1) b ON TRUE
     LEFT JOIN pf_location_matches m ON m.project_id=l.project_id AND m.location_id=l.id AND m.model_version_id=$2
     WHERE l.project_id=$1 ORDER BY l.name,l.id`,[projectId,modelId]);
-  return rows.rows.map(row => {
+  const list:LocationDto[]=rows.rows.map(row => {
     const head = heads.get(row.id);
     const binding: LocationDto['binding'] = head ? {
       modelVersionId: head.binding.modelVersionId, revision: head.binding.bindingRevision,
@@ -85,26 +88,31 @@ async function locations(client: PoolClient, projectId: string, modelId: string 
     } : null;
     return {id:row.id,name:row.name,aliases:row.aliases,revision:row.revision,
     ...(row.matching_status ? {matching:{status:row.matching_status,candidateObjectIds:row.candidate_object_ids}} : {}),binding}; });
+  return{list,current:context,heads};
 }
 export function createPathFinderRepository(pool: Pool) {
   return {
     pool,
     async state(projectId: string, who: JobPrincipal) {
       return registryTransaction(pool,projectId,who,async client => {
+        const displayDeadline=Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
         const model = await activeModel(client,projectId), artifact = await latestArtifact(client,projectId,model.active_model_version_id);
         const registry = await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1',[projectId]);
         const setting = (await client.query<Row>('SELECT pf_settings_revision::text,connection_gap::text,secondary_tray_length::text,end_connection_length::text,additional_bending_percent::text FROM projects WHERE id=$1',[projectId])).rows[0];
-        const list = await locations(client,projectId,model.active_model_version_id,artifact?.id ?? null);
         const cables = await client.query<Row>(`SELECT id,cable_id,tag,from_location,to_location,mto,routing,design_length,install_length,cable_write_revision::text
           FROM cables WHERE project_id=$1 ORDER BY cable_id,id LIMIT 100001`,[projectId]);
         if (cables.rows.length > 100000) throw new PathFinderError('PROJECT_CABLE_BUDGET',413);
+        const read=await locations(client,projectId,model.active_model_version_id,artifact?.id??null),index=createDisplayLocationMatchIndex(read.list),used=new Set<string>();
+        if(read.current&&(read.current.modelVersionId!==model.active_model_version_id||read.current.selectionRevision!==model.selection_revision||read.current.contentFingerprint!==model.content_fingerprint))throw new PathFinderError('DISPLAY_ENDPOINT_CONTEXT_INTEGRITY',409);
+        for(const cable of cables.rows)for(const name of [cable.from_location,cable.to_location])for(const id of index.candidateLocationIds(name))used.add(id);
+        const availability=await readDisplayEndpointAvailability(client,{projectId,current:read.current,heads:read.heads,locations:read.list,locationIds:[...used],deadline:displayDeadline});
         return {schemaVersion:1,projectId,registryRevision:registry.rows[0].registry_revision,
           activeModel:{modelVersionId:model.active_model_version_id,selectionRevision:model.selection_revision,contentFingerprint:model.content_fingerprint ?? null},
           settings:{revision:setting.pf_settings_revision,connectionGap:setting.connection_gap,secondaryTrayLength:setting.secondary_tray_length,endConnectionLength:setting.end_connection_length,additionalBendingPercent:setting.additional_bending_percent},
           cables:cables.rows.map(cable => ({id:cable.id,cableId:cable.cable_id,tag:cable.tag,fromLocation:cable.from_location,toLocation:cable.to_location,mto:cable.mto,
             routing:cable.routing,designLength:cable.design_length,installLength:cable.install_length,cableWriteRevision:cable.cable_write_revision,
-            fromMatch:matchLocation(cable.from_location,list,Boolean(model.active_model_version_id)),toMatch:matchLocation(cable.to_location,list,Boolean(model.active_model_version_id))})),
-          locations:list,artifacts:artifact ? [{id:artifact.id,modelVersionId:artifact.model_version_id,snapshotSha256:artifact.snapshot_sha256,objectCount:artifact.object_count,
+            fromMatch:index.match(cable.from_location,Boolean(model.active_model_version_id)),toMatch:index.match(cable.to_location,Boolean(model.active_model_version_id))})),
+          locations:read.list.map(location=>({...location,calculationAvailability:availability.get(location.id)!})),artifacts:artifact ? [{id:artifact.id,modelVersionId:artifact.model_version_id,snapshotSha256:artifact.snapshot_sha256,objectCount:artifact.object_count,
             engineeringAccepted:false,readiness:'needs_review',capture:artifact.capture,coordinates:artifact.coordinates,createdAt:artifact.created_at}] : [],jobs:[],proposals:[]};
       });
     },
@@ -212,7 +220,7 @@ export function createPathFinderRepository(pool: Pool) {
           }
         }
         if (artifact) {
-          const list = await locations(client,projectId,model.active_model_version_id,artifact.id);
+          const {list} = await locations(client,projectId,model.active_model_version_id,artifact.id);
           for (const location of list) {
             if (location.binding && (location.binding.modelVersionId === model.active_model_version_id && location.binding.source === 'manual' || location.binding.status === 'confirmed')) continue;
             const names = [...new Set([location.name,...location.aliases].map(normalizeLocation))];

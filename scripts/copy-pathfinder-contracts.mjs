@@ -30,6 +30,7 @@ copied.push({ name, sha256: expected });
 await import(new URL('../server/dist/server/pathfinder/preparationPublisher.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/geometryTraceRepository.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/endpointBindingRepository.js', import.meta.url).href);
+await import(new URL('../server/dist/server/pathfinder/repository.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/revisionComparisonRepository.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/revisionComparisonEndpointAdapter.js', import.meta.url).href);
 await import(new URL('../server/dist/server/pathfinder/recalculationRepository.js', import.meta.url).href);

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchPathFinderState, fetchPathFinderProposal, fetchPathFinderLookup, fetchPathFinderLookupPlan, fetchPathFinderPreview, pathFinderRequest } from './pathfinder';
 import { createHash } from 'node:crypto';
 import { ENGINE_IDENTITY_POLICY_VERSIONS, ENGINE_IDENTITY_VERSION, engineIdentityCanonicalBody } from '../../shared/pathfinderEngineIdentity';
+import { notEvaluatedCalculationAvailability } from '../../shared/pathfinderCalculationAvailability';
 
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', cableId = '33333333-3333-4333-8333-333333333333';
 afterEach(() => vi.restoreAllMocks());
@@ -24,6 +25,32 @@ function recordedProposal(dependencyVersion: string) {
       ...(dependencyVersion==='pathfinder.dependencies.v6'?{endpointSources:{from:'automatic-model-candidate',to:'confirmed-shared-location'}}:{}) } };
 }
 describe('PathFinder API contract', () => {
+  it('retains confirmed and approximate automatic point availability separately from legacy bindings without granting acceptance', async () => {
+    const automatic = { status: 'automatic-ready', pointAvailable: true, source: 'automatic-model-candidate', approximate: true, candidateObjectIds: ['dbid:23'], reasonCode: null, engineeringAccepted: false };
+    const confirmed = { status: 'confirmed-ready', pointAvailable: true, source: 'confirmed-shared-location', approximate: false, candidateObjectIds: [], reasonCode: null, engineeringAccepted: false };
+    const base = { id: modelId, name: 'EQ-001', aliases: [], revision: '1', binding: null };
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ ...state(), locations: [{ ...base, calculationAvailability: automatic }, { ...base, id: cableId, calculationAvailability: confirmed }] }));
+    const result = await fetchPathFinderState(projectId, 'token');
+    expect(result.locations[0].calculationAvailability).toEqual(automatic); expect(result.locations[0].binding).toBeNull();
+    expect(result.locations[1].calculationAvailability).toEqual(confirmed);
+    fetch.mockResolvedValueOnce(Response.json({ ...state(), locations: [base] }));
+    const legacy = await fetchPathFinderState(projectId, 'token'); expect(legacy.locations[0].calculationAvailability).toBeUndefined();
+    expect(notEvaluatedCalculationAvailability().pointAvailable).toBe(false);
+  });
+  it('rejects malformed, contradictory or promoted calculation-point evidence instead of silently dropping it', async () => {
+    const automatic = { status: 'automatic-ready', pointAvailable: true, source: 'automatic-model-candidate', approximate: true, candidateObjectIds: ['dbid:23'], reasonCode: null, engineeringAccepted: false };
+    const fetch = vi.spyOn(globalThis, 'fetch');
+    for (const availability of [null, { ...automatic, status: 'future-ready' }, { ...automatic, pointAvailable: false },
+      { ...automatic, source: 'confirmed-shared-location' }, { ...automatic, approximate: false }, { ...automatic, engineeringAccepted: true },
+      { ...automatic, candidateObjectIds: [] }, { ...automatic, candidateObjectIds: ['dbid:23', 'dbid:23'] }, { ...automatic, candidateObjectIds: [23] },
+      { ...automatic, candidateObjectIds: Array.from({ length: 2049 }, (_, index) => 'dbid:' + index) }, { ...automatic, reasonCode: 'UNVERIFIED' },
+      { ...automatic, point: [1, 2, 3] }, { ...automatic, status: 'confirmed-ready', source: 'confirmed-shared-location' },
+      { ...automatic, status: 'missing', pointAvailable: false, source: null, approximate: false },
+    ]) {
+      fetch.mockResolvedValueOnce(Response.json({ ...state(), locations: [{ id: modelId, name: 'EQ-001', aliases: [], revision: '1', binding: null, calculationAvailability: availability }] }));
+      await expect(fetchPathFinderState(projectId, 'token')).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    }
+  });
   it('retains validated recorded input provenance after reload without granting completeness', async () => {
     const inputScope = { schemaVersion: 'wfc.capture.input.v1', equipmentNameCount: 1527, chunkCount: 6, inputUtf8Bytes: 70438,
       scopeSha256: 'a'.repeat(64), equipmentNamesSha256: 'b'.repeat(64),

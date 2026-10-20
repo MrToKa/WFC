@@ -7,6 +7,7 @@ import type { usePathFinder } from './usePathFinder';
 import {completedEvidenceFixture} from '@/test/geometryTraceFixtures';
 import {saveCaptureEvidence} from '@/api/pathfinderGeometryTrace';
 import { bindCompletedCaptureEvidence } from '../../../../viewer-runtime/capture-evidence.mjs';
+import type { PathFinderState } from '@/api/pathfinder';
 vi.mock('../../../../viewer-runtime/capture-evidence.mjs', async original => {
   const actual = await original<typeof import('../../../../viewer-runtime/capture-evidence.mjs')>();
   return { ...actual, bindCompletedCaptureEvidence: vi.fn(actual.bindCompletedCaptureEvidence) };
@@ -60,7 +61,88 @@ function setup() {
   return { ...fixture, pf };
 }
 beforeEach(() => vi.clearAllMocks());
+function withModel(pf: ReturnType<typeof usePathFinder>, scope: ReturnType<typeof preparationFixture>['context']['scope']) {
+  const data: PathFinderState = { schemaVersion: 1, projectId: ids.project, registryRevision: scope.locationRegistryRevision,
+    activeModel: { modelVersionId: scope.modelVersionId, selectionRevision: scope.selectionRevision, contentFingerprint: scope.contentFingerprint },
+    settings: { revision: '1', connectionGap: '1', secondaryTrayLength: '7', endConnectionLength: '5', additionalBendingPercent: '10' },
+    cables: [], locations: [], artifacts: [], jobs: [], proposals: [] };
+  return { ...pf, data };
+}
 describe('project preparation lifecycle', () => {
+  it('defers cold hidden controls until first Routes activation, then retains loaded controls across switches without 3D readiness', async () => {
+    const { pf, context } = setup(), cold = { ...pf, viewerPhase: 'error' as const };
+    const { result, rerender } = renderHook(({ active }) => useProjectPreparation(cold, active), { initialProps: { active: false } });
+    expect(api.fetchPreparationContext).not.toHaveBeenCalled(); expect(api.fetchPreparationIndex).not.toHaveBeenCalled(); expect(api.fetchPreparationSession).not.toHaveBeenCalled();
+    rerender({ active: true }); await waitFor(() => expect(result.current.context).toEqual(context));
+    expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1); expect(api.fetchPreparationIndex).toHaveBeenCalledTimes(1);
+    rerender({ active: false }); expect(result.current.context).toEqual(context); expect(result.current.canMutate).toBe(false);
+    rerender({ active: true }); expect(result.current.context).toEqual(context); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1);
+    await act(() => result.current.refresh()); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(2); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
+  });
+  it('permits explicit hidden refresh and does not repeat its reads on first activation', async () => {
+    const { pf } = setup();
+    const { result, rerender } = renderHook(({ active }) => useProjectPreparation(pf, active), { initialProps: { active: false } });
+    await act(() => result.current.refresh()); expect(result.current.session?.id).toBe(ids.session);
+    rerender({ active: true }); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1); expect(api.fetchPreparationIndex).toHaveBeenCalledTimes(1);
+  });
+  it('retains the durable exact reconciliation command across tool switches and retries without a ready viewer', async () => {
+    const { pf, session } = setup(), command = { schemaVersion: 'wfc.pf.preparation-mutation.v1' as const, expectedSessionRevision: '2', idempotencyKey: ids.login, reason: 'Recover retained validation' };
+    vi.mocked(api.fetchPreparationSession).mockResolvedValue({ ...session, state: 'validating', recovery: { command, actorId: ids.actor, loginId: ids.login, expiresAt: '2026-10-21T00:00:00Z' } });
+    vi.mocked(api.mutatePreparation).mockRejectedValueOnce(new api.PreparationApiError('PREPARATION_VALIDATION_IN_PROGRESS', 503, 'Validation still running', 'unknown'));
+    const cold = { ...pf, viewerPhase: 'error' as const };
+    const { result, rerender } = renderHook(({ active }) => useProjectPreparation(cold, active), { initialProps: { active: false } });
+    expect(api.fetchPreparationContext).not.toHaveBeenCalled(); rerender({ active: true }); await waitFor(() => expect(result.current.unknown).toBe(true));
+    rerender({ active: false }); expect(result.current.publishPending).toBe(true); expect(result.current.unknown).toBe(true);
+    await act(() => result.current.retry()); expect(vi.mocked(api.mutatePreparation).mock.calls[0][4]).toBe(command);
+    rerender({ active: true }); expect(result.current.unknown).toBe(true); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1); expect(pf.runProjectPreparation).not.toHaveBeenCalled();
+  });
+  it('pauses protected collection on leaving Routes while retaining the frozen session for Resume', async () => {
+    const { pf } = setup();
+    vi.mocked(pf.runProjectPreparation).mockImplementation(async (_scope, operation, signal) => operation({ assertCurrent: () => {}, capture: () => new Promise((_resolve, reject) => {
+      signal!.addEventListener('abort', () => reject(new DOMException('Paused', 'AbortError')), { once: true });
+    }) } as never));
+    const { result, rerender } = renderHook(({ active }) => useProjectPreparation(pf, active), { initialProps: { active: true } });
+    await waitFor(() => expect(result.current.session).not.toBeNull()); let collecting!: Promise<void>;
+    act(() => { collecting = result.current.collect(); }); await waitFor(() => expect(result.current.progress).toContain('Collecting part'));
+    const reads = vi.mocked(api.fetchPreparationContext).mock.calls.length; rerender({ active: false }); await act(async () => { await collecting; });
+    expect(result.current.session?.id).toBe(ids.session); expect(result.current.notice).toContain('Collection paused'); expect(result.current.unknown).toBe(false);
+    expect(api.uploadPreparationPart).not.toHaveBeenCalled(); rerender({ active: true }); expect(result.current.session?.id).toBe(ids.session); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(reads);
+  });
+  it('resets lazy initialization for a new login and refuses reads after access loss', async () => {
+    const { pf } = setup();
+    const { result, rerender } = renderHook(({ current, active }) => useProjectPreparation(current, active), { initialProps: { current: pf, active: false } });
+    rerender({ current: { ...pf, preparationAccess: { ...pf.preparationAccess, token: 'next-login' } }, active: false });
+    expect(api.fetchPreparationContext).not.toHaveBeenCalled();
+    const next = { ...pf, preparationAccess: { ...pf.preparationAccess, token: 'next-login' } };
+    rerender({ current: next, active: true }); await waitFor(() => expect(result.current.context).not.toBeNull());
+    expect(api.fetchPreparationContext).toHaveBeenCalledWith(ids.project, 'next-login', expect.any(AbortSignal));
+    rerender({ current: { ...next, preparationAccess: { ...next.preparationAccess, isAdmin: false } }, active: true });
+    expect(result.current.enabled).toBe(false); expect(result.current.context).toBeNull(); await act(() => result.current.refresh()); expect(api.fetchPreparationContext).toHaveBeenCalledTimes(1);
+  });
+  it.each(['context', 'session'] as const)('fences a changed model after the awaited %s read without accepting old control evidence', async stage => {
+    const { pf, context, session } = setup(), original = withModel(pf, context.scope);
+    let finish!: () => void;
+    if (stage === 'context') vi.mocked(api.fetchPreparationContext).mockReturnValueOnce(new Promise(resolve => { finish = () => resolve(context); }));
+    else vi.mocked(api.fetchPreparationSession).mockReturnValueOnce(new Promise(resolve => { finish = () => resolve(session); }));
+    const { result, rerender } = renderHook(({ current }) => useProjectPreparation(current, true), { initialProps: { current: original } });
+    if (stage === 'session') await waitFor(() => expect(api.fetchPreparationSession).toHaveBeenCalled());
+    rerender({ current: withModel(pf, { ...context.scope, modelVersionId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', selectionRevision: '99', contentFingerprint: 'f'.repeat(64) }) });
+    await act(async () => { finish(); }); await waitFor(() => expect(result.current.conflict).toBe(true));
+    expect(result.current.context).toBeNull(); expect(result.current.session).toBeNull(); expect(result.current.error).toContain('active model changed');
+    expect(result.current.unknown).toBe(false); expect(result.current.canMutate).toBe(false);
+  });
+  it('keeps an exact unknown mutation through a locally stale display read until authoritative reconciliation', async () => {
+    const { pf, context } = setup(), original = withModel(pf, context.scope);
+    vi.mocked(api.savePreparationResolution).mockRejectedValueOnce(new TypeError('Lost acknowledgement'))
+      .mockRejectedValueOnce(new api.PreparationApiError('PREPARATION_SCOPE_STALE', 409, 'Authoritative stale command refusal', 'refused'));
+    const { result, rerender } = renderHook(({ current, active }) => useProjectPreparation(current, active), { initialProps: { current: original, active: true } });
+    await waitFor(() => expect(result.current.context).not.toBeNull()); await act(() => result.current.resolve(ids.tray, 'exclude', [], 'Reviewed routing decision'));
+    const command = vi.mocked(api.savePreparationResolution).mock.calls[0][2]; expect(result.current.unknown).toBe(true);
+    const changed = withModel(pf, { ...context.scope, selectionRevision: '99' }); rerender({ current: changed, active: false });
+    await act(() => result.current.refresh()); expect(result.current.conflict).toBe(true); expect(result.current.unknown).toBe(true);
+    await act(() => result.current.retry()); expect(vi.mocked(api.savePreparationResolution).mock.calls[1][2]).toBe(command); expect(result.current.unknown).toBe(false);
+    expect(result.current.conflict).toBe(true); expect(api.savePreparationResolution).toHaveBeenCalledTimes(2);
+  });
   it('does not install old evidence commands after the login changes during hashing', async () => {
     const { pf, committed } = setup(), evidence = await completedEvidenceFixture();
     let finishHash!: (value: typeof evidence) => void;

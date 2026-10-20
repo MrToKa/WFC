@@ -75,7 +75,8 @@ describe('automatic candidate eligibility and ambiguity',()=>{
   });
   it('keeps an old automatic binding stale in project state and never promotes it during candidate matching',async()=>{
     const db=database({projectMode:true,legacyAutomatic:true,rows:[candidate('replacement')]});
-    expect((await db.repo.state(projectId,who)).locations[0].binding).toMatchObject({source:'automatic',revision:'7',point:[9,8,7],status:'stale'});
+    const before=await db.repo.state(projectId,who);expect(before.locations[0].binding).toMatchObject({source:'automatic',revision:'7',point:[9,8,7],status:'stale'});
+    expect(before.locations[0].calculationAvailability).toMatchObject({status:'not-evaluated',pointAvailable:false,reasonCode:'LOCATION_NOT_IN_CABLE_SCOPE'});
     expect((await db.match()).matchedLocations).toBe(0);
     expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,'unverified',JSON.stringify(['replacement'])]}]);
     expect((await db.repo.state(projectId,who)).locations[0].binding).toMatchObject({source:'automatic',revision:'7',point:[9,8,7],status:'stale'});

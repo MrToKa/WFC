@@ -73,6 +73,7 @@ const reloadRequired = (error: unknown) =>
       'code' in error &&
       error.code === 'CAPTURE_RELOAD_REQUIRED',
   );
+class PreparationDisplayScopeError extends Error {}
 
 export function useProjectPreparation(pf: PF, active: boolean) {
   const access = pf.preparationAccess;
@@ -97,6 +98,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     busyRef = useRef(false),
     pending = useRef<Pending | null>(null);
   const protectedRun = useRef(false);
+  const initialReadIdentity = useRef<string | null>(null);
   const cancelPending = useRef<Extract<Pending, { kind: 'publish' | 'cancel' }> | null>(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const cancelInFlight = useRef(false);
@@ -122,16 +124,28 @@ export function useProjectPreparation(pf: PF, active: boolean) {
   const readCurrent = useCallback(
     async (signal?: AbortSignal, sessionId?: string) => {
       assertCurrent(signal);
+      // Explicit refresh/recovery can initialize controls before Routes is shown.
+      initialReadIdentity.current = identity;
       const [context, index] = await Promise.all([
         fetchPreparationContext(access.projectId!, access.token!, signal),
         fetchPreparationIndex(access.projectId!, access.token!, signal),
       ]);
       assertCurrent(signal);
+      const assertModelScope = () => {
+        const model = latestPf.current.data?.activeModel;
+        if (model && (model.modelVersionId !== context.scope.modelVersionId ||
+            model.selectionRevision !== context.scope.selectionRevision ||
+            model.contentFingerprint !== context.scope.contentFingerprint))
+          throw new PreparationDisplayScopeError(
+            'The active model changed. Refresh Path Finder and preparation before continuing.');
+      };
+      assertModelScope();
       const id = sessionId ?? stateRef.current.session?.id ?? index.sessions[0]?.id;
       const session = id
         ? await fetchPreparationSession(access.projectId!, access.token!, id, signal)
         : null;
       assertCurrent(signal);
+      assertModelScope();
       if (session?.state === 'validating' && session.recovery && !pending.current) {
         pending.current = {
           kind: 'publish',
@@ -156,7 +170,7 @@ export function useProjectPreparation(pf: PF, active: boolean) {
       }));
       return { context, index, session };
     },
-    [access?.projectId, access?.token, assertCurrent, update],
+    [access?.projectId, access?.token, assertCurrent, identity, update],
   );
   const operate = useCallback(
     async (operation: (signal: AbortSignal) => Promise<void>) => {
@@ -174,6 +188,11 @@ export function useProjectPreparation(pf: PF, active: boolean) {
           latestPf.current.cancelOperation();
           latestPf.current.refresh();
           update(() => ({ ...initial(identity), error: error.message, conflict: true }));
+        } else if (error instanceof PreparationDisplayScopeError) {
+          // A display read cannot establish the commit outcome of an earlier
+          // mutation. Retain its exact command for protected reconciliation.
+          update((value) => ({ ...value, conflict: true,
+            unknown: Boolean(pending.current) || value.unknown, error: error.message }));
         } else if (
           pending.current &&
           (!((error instanceof PreparationApiError||error instanceof GeometryTraceApiError)) || error.outcome === 'unknown')
@@ -307,17 +326,21 @@ export function useProjectPreparation(pf: PF, active: boolean) {
     pending.current = null;
     busyRef.current = false;
     currentAbort.current?.abort();
+    initialReadIdentity.current = null;
     setState(initial(identity));
-    if (enabled)
-      void operate(async (signal) => {
-        update((value) => ({ ...value, loading: true }));
-        await readCurrent(signal);
-      });
     return () => {
       mounted.current = false;
       currentAbort.current?.abort();
     };
   }, [identity, enabled, operate, readCurrent, update]);
+  useEffect(() => {
+    if (!enabled || !active || initialReadIdentity.current === identity) return;
+    initialReadIdentity.current = identity;
+    void operate(async (signal) => {
+      update((value) => ({ ...value, loading: true }));
+      await readCurrent(signal);
+    });
+  }, [active, enabled, identity, operate, readCurrent, update]);
   useEffect(() => {
     if (!active && protectedRun.current) currentAbort.current?.abort();
   }, [active]);

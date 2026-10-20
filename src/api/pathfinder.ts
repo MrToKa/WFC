@@ -6,12 +6,14 @@ import { engineIdentitySchema } from '../../shared/pathfinderEngineIdentity';
 import { policyHashSchema, policyRevisionSchema } from '../../shared/pathfinderPurposePolicy';
 import { lengthLedgerSchema } from '../../shared/pathfinderLengthLedger';
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
+import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
 
 const uuid = z.string().uuid(), revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/);
 const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
 const captureProvenance = z.object({ inputScope: z.custom<ModelCaptureInputScope>(value => validateModelCaptureInputScope(value)).optional() }).passthrough();
 const match = z.object({ status: z.enum(['matched', 'missing', 'ambiguous', 'stale']), locationId: uuid.nullable(), candidates: z.array(z.string().max(2048)) });
 const location = z.object({ id: uuid, name: z.string(), aliases: z.array(z.string()), revision,
+  calculationAvailability: calculationAvailabilitySchema.optional(),
   matching: z.object({ status: z.enum(['missing', 'ambiguous', 'unverified']), candidateObjectIds: z.array(z.string()) }).optional(),
   binding: z.object({ modelVersionId: uuid, revision, point, objectId: z.string().nullable(), externalId: z.string().nullable(), source: z.enum(['manual', 'automatic']), status: z.enum(['confirmed', 'stale']), derivation: z.enum(['manual-world-point', 'picked-surface-point', 'equipment-bottom-aabb']).optional(), coordinateFrame: z.literal('canonical-world-metres').optional() }).nullable() });
 const numeric = z.union([z.string(), z.number().finite()]).nullable();

@@ -38,7 +38,14 @@ Normal selected joba29cd4c2-2d86-4ee0-9cbb-5bc598552781 started08:48:42UTC:
 1808non-MV(LV257,Control345,Instrumentation1206),332MVexcluded. Read-only job-item
 join independently proves0MV. At08:56:55UTC:1578locations_required,54calculated,
 1running,175waiting;54actual proposals have successful routes, design values and
-ledgers in calculate mode. Final counts and final cable fence are **NOT_RUN**.
+ledgers in calculate mode. This was the observation at the original checkpoint.
+**Final verification at09:25UTC PASS:**1808items complete,230calculated and
+1578locations_required;0MV. All230 fresh calculate ledgers validated against
+Details, all routes successful/loadedFromDisktrue. Final fence4 matches the
+unchanged2140-columnhash above,0Apply/0reviews. See
+`evidence/aalborg-capacity/non-mv-final2.json` and report53. The first final-reader
+attempt exceeded32MiB and was refused; the second used an exact smaller field
+projection under the unchanged bound. Neither query wrote business data.
 Do not restart, replace or upgrade this runtime until that bounded selected job
 settles. Do not resume an all-category policy while skip-MV steering applies.
 

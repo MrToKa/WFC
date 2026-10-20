@@ -11,6 +11,7 @@ import { PathFinderRoutes } from './PathFinderRoutes';
 import { PathFinderPreview } from './PathFinderPreview';
 import { EndpointBindingPanel } from './EndpointBindingPanel';
 import { PathFinderCalculationGrantPanel } from './PathFinderCalculationGrantPanel';
+import { notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 
 const useStyles = makeStyles({
   heading: { margin: 0, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightSemibold },
@@ -27,6 +28,17 @@ type Draft = { locationId: string | null; name: string };
 const emptyDraft = (): Draft => ({locationId: null, name: ''});
 const normalized = (value: string) => value.normalize('NFC').trim().toUpperCase();
 const cableLabel = (cable: PathFinderCable) => cable.tag || cable.cableId;
+const noCalculationPoint = notEvaluatedCalculationAvailability();
+const pointLabels: Record<CalculationAvailability['status'], string> = {
+  'confirmed-ready': 'Confirmed calculation point',
+  'automatic-ready': 'Automatic model point (approximate, unconfirmed)',
+  missing: 'No model point found',
+  ambiguous: 'Multiple model points; resolve manually',
+  'saved-binding-required': 'Saved binding needs confirmation',
+  'object-unverified': 'Model point is unverified',
+  'preparation-required': 'Current preparation required',
+  'not-evaluated': 'Calculation point not evaluated',
+};
 
 /** Keep all hooks and the protected frame unmounted when administrator access is absent. */
 export function PathFinderTab(props: Props) {
@@ -64,7 +76,11 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
     restoreView(); setLocalError(null); setMode(next);
   };
   const artifact = data?.artifacts[0];
-  const rows = (data?.cables ?? []).filter(cable => (!onlyProblems || cable.fromMatch.status !== 'matched' || cable.toMatch.status !== 'matched') && `${cableLabel(cable)} ${cable.fromLocation ?? ''} ${cable.toLocation ?? ''}`.toUpperCase().includes(search.toUpperCase()));
+  const locationPoints = new Map((data?.locations ?? []).map(location => [location.id, location.calculationAvailability ?? noCalculationPoint]));
+  // Use the server's unique location match only; a name/alias collision must not
+  // borrow a point from one of its candidates. Legacy binding labels are separate.
+  const endpointPoint = (match: PathFinderCable['fromMatch']) => match.locationId ? locationPoints.get(match.locationId) ?? noCalculationPoint : noCalculationPoint;
+  const rows = (data?.cables ?? []).filter(cable => (!onlyProblems || !endpointPoint(cable.fromMatch).pointAvailable || !endpointPoint(cable.toMatch).pointAvailable) && `${cableLabel(cable)} ${cable.fromLocation ?? ''} ${cable.toLocation ?? ''}`.toUpperCase().includes(search.toUpperCase()));
   const fillLocation = (location: PathFinderLocation | undefined, name = '') => {
     pf.cancelPicking(); setDraft({locationId: location?.id ?? null, name: location?.name ?? name});
     setNotice(null); setLocalError(null);
@@ -162,17 +178,20 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Button disabled={!active || pf.busy} onClick={() => void pf.matchAll()}>Match all locations</Button>
         </div>
         <Field label="Search cables"><Input aria-label="Search Path Finder cables" value={search} onChange={(_, value) => setSearch(value.value)} /></Field>
-        <label><input type="checkbox" checked={onlyProblems} onChange={event => setOnlyProblems(event.target.checked)} /> Show unresolved endpoints</label>
+        <label><input type="checkbox" checked={onlyProblems} onChange={event => setOnlyProblems(event.target.checked)} /> Without a calculation point</label>
+        <Caption1>Automatic model points are approximate and unconfirmed. Point availability does not guarantee a route or authorize Apply.</Caption1>
         <Caption1>{rows.length} of {data?.cables.length ?? 0} cables</Caption1>
         <ul className={styles.cableList} aria-label="Path Finder cables">
           {rows.map(cable => <li key={cable.id}><Button className={styles.cableRow} appearance={selectedCableId === cable.id ? 'secondary' : 'subtle'} aria-pressed={selectedCableId === cable.id} data-cable-id={cable.id} onClick={() => { setSelectedCableId(cable.id); setNotice(null); }}>
-            <span className={extra.row}><span>{cableLabel(cable)}</span><Caption1>From: {cable.fromMatch.status}; To: {cable.toMatch.status}</Caption1></span>
+            <span className={extra.row}><span>{cableLabel(cable)}</span><Caption1>From: {pointLabels[endpointPoint(cable.fromMatch).status]}; To: {pointLabels[endpointPoint(cable.toMatch).status]}</Caption1><Caption1>Saved bindings — From: {cable.fromMatch.status}; To: {cable.toMatch.status}</Caption1></span>
           </Button></li>)}
         </ul>
         {selected ? <div className={extra.form} data-testid="pathfinder-selected-cable">
           <Body1>Selected: {cableLabel(selected)}</Body1>
-          <Body1>From: {selected.fromLocation || 'Not set'} — {selected.fromMatch.status}</Body1>
-          <Body1>To: {selected.toLocation || 'Not set'} — {selected.toMatch.status}</Body1>
+          <Body1>From: {selected.fromLocation || 'Not set'} — {pointLabels[endpointPoint(selected.fromMatch).status]}</Body1>
+          <Caption1>From saved binding: {selected.fromMatch.status}</Caption1>
+          <Body1>To: {selected.toLocation || 'Not set'} — {pointLabels[endpointPoint(selected.toMatch).status]}</Body1>
+          <Caption1>To saved binding: {selected.toMatch.status}</Caption1>
           <Body1>Category: {selected.mto || 'Not set'}{selected.mto === 'Instrumentation' ? ' (uses Control rules)' : ''}</Body1>
           {!selected.fromLocation?.trim() || !selected.toLocation?.trim() ? <Body1>Set an explicit From/To name before resolving a blank endpoint. <a href={`/projects/${projectId}/cables/${selected.id}`}>Edit cable endpoints</a></Body1> : null}
           {!selected.mto || !['MV', 'LV', 'Control', 'Instrumentation'].includes(selected.mto) ? <Body1>Choose a supported category before calculation. <a href={`/projects/${projectId}/cables/${selected.id}`}>Edit cable category</a></Body1> : null}
