@@ -1,5 +1,19 @@
 # PathFinder local implementation progress
 
+## PF-U2 — exact cable endpoint selection — VERIFIED 2026-10-20
+
+Branch pf-u2-cable-endpoint-selection-local-20261020, inherited d0da2def;
+read Git for containing delivery commit. TECHNICAL_FOUNDATION_PASS258/258checks
+(240synthetic/8files +18actualPG/2files); final frontend/backendtypes,lint,diffPASS.
+Report63 and evidence/cable-workflow/u2-actual.json record sourcehashes/limits.
+Exact SDKlookup/sharedatomicbinding/durablecommandrecovery implemented; no UI
+Tabmount/recalc/cablewrite yet. Root alone ran actualPG; agents source-only.
+Own fixture4327e6ad/container5ea2d613 retired; generatedcredentialsremoved.
+No5191/original5180/5190 SQL/HTTPwrite/restart/upgrade/Review/Apply/initialfill.
+Original WFC cleanmain96e63f13, cachedorigin/main same; liveremote/CI NOT_RUN.
+Next finalizeU3handoff from committedU2 then create inheritedU3branch and execute
+scopedcurrentness/affectedjobs/lightprogress. PF-UautomationACTIVE; PreparerPAUSED.
+Preserve backups/models/.pf0-work/.pf2-work and denied historicalpaths.
 ## PF-U1 — bounded cable diagnostics — VERIFIED 2026-10-20
 
 Branch pf-u1-cable-diagnostics-local-20261020, inherited handoff HEAD
@@ -15,8 +29,8 @@ Own temporaryPG ownercbc1a2b3 retired; credentialsremoved; no5191/5180/5190
 SQL/HTTPwrite/restart/update/calc/Review/Apply/initialfill. Code adds onlyGETs,
 normal-init index, new readclient/hook/list; Tabintegration waitsU5. Limits
 200scan/100matches/10000admissions/256KiBproof/15s; nofullstatepolling.
-Next: local deliverycommit, finalize/commitU2handoff and execute newinheritedU2
-branch immediately. PF-U automation ACTIVE; Preparer PAUSED. Original5180/5190
+Delivery610da52 and final U2handoff d0da2de committed; inherited U2 branch active.
+PF-U automation ACTIVE; Preparer PAUSED. Original5180/5190
 and working data untouched. Historical denied paths retained; no prune.
 
 ## PF-U0 — verified contracts — 2026-10-20

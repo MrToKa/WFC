@@ -32,7 +32,7 @@ export async function endpointBindingTransaction<T>(pool: Pool, projectId: strin
     const exists = (await c.query('SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE', [projectId])).rows.length === 1;
     const user = (await c.query<{ is_admin: boolean }>('SELECT is_admin FROM users WHERE id=$1 FOR SHARE', [who.userId])).rows[0];
     if (!user) return fail('LOGIN_REVOKED', 401); if (!user.is_admin) return fail('ADMIN_REQUIRED', 403); await requireCurrentLogin(c, who); if (!exists) return fail('PROJECT_NOT_FOUND', 404);
-    signal?.throwIfAborted(); const result = await operation(c); signal?.throwIfAborted(); assertLoginNotExpired(who); commitStarted = true; await c.query('COMMIT'); return result;
+    signal?.throwIfAborted(); const result = await operation(c); signal?.throwIfAborted(); assertLoginNotExpired(who); commitStarted = true; await c.query('COMMIT'); signal?.throwIfAborted(); assertLoginNotExpired(who); return result;
   } catch (error) {
     discard = commitStarted; try { await c.query('ROLLBACK'); } catch { discard = true; }
     if (commitStarted) return fail('ENDPOINT_COMMIT_OUTCOME_UNKNOWN', 503);
@@ -205,6 +205,18 @@ async function commitBinding(c: PoolClient, pid: string, who: JobPrincipal, loca
   return endpointBindingReceiptSchema.parse({ schemaVersion: 'wfc.pf.endpoint-binding-receipt.v1', projectId: pid, locationId, registryRevision: nextRegistry, locationRevision, binding, duplicate: false });
 }
 
+/** Caller owns the authorized project transaction and its command ledger. Never opens a nested transaction. */
+export async function confirmEndpointBindingChangeInTransaction(c: PoolClient, pid: string, who: JobPrincipal, locationId: string, raw: unknown, signal?: AbortSignal) {
+  policyUuidSchema.parse(pid); policyUuidSchema.parse(locationId); assertLoginNotExpired(who); signal?.throwIfAborted();
+  const input = endpointBindingWriteSchema.parse(raw);
+  const revision = await registry(c, pid, input.expectedRegistryRevision), before = await checkLocation(c, pid, locationId, input.expectedLocationRevision, input.expectedHeadId), current = await readCurrentEndpointBindingContext(c, pid); assertScope(current, input);
+  let proposal: BindingProposal;
+  if (input.mode === 'object-attached') return fail('ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE');
+  if (input.mode === 'fixed-world') { if (input.provenanceObject) await objectEvidence(c, pid, current, input.provenanceObject); proposal = { mode: input.mode, pointProjectMetres: input.pointProjectMetres, derivation: input.derivation, sourceObject: input.provenanceObject, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null }; }
+  else { const object = await objectEvidence(c, pid, current, input.object); if (object.geometry.role !== 'object' || !object.geometry.equipmentAnchor) return fail('ENDPOINT_EQUIPMENT_ANCHOR_REQUIRED'); const point = deriveEquipmentBottomAnchor(object.geometry.bounds); if (canonicalPurposeJson(point) !== canonicalPurposeJson(object.geometry.equipmentAnchor.pointMetres)) return fail('ENDPOINT_OBJECT_ANCHOR_INTEGRITY'); proposal = { mode: input.mode, pointProjectMetres: point, derivation: ENDPOINT_ANCHOR_RULE, sourceObject: input.object, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null }; }
+  return commitBinding(c, pid, who, locationId, input.location, current, before, revision, input.reason, proposal, signal);
+}
+
 export interface EndpointBindingAdapters {
   evaluateMigration?: (client: PoolClient, source: EndpointBinding, target: EndpointCurrentScope, command: z.infer<typeof endpointMigrationWriteSchema>) => Promise<EndpointMigrationEvaluation>;
   validateMigrationDecision?: (client: PoolClient, decision: z.infer<typeof endpointMigrationDecisionSchema>, signal?: AbortSignal) => Promise<void>;
@@ -221,12 +233,7 @@ export function createEndpointBindingRepository(pool: Pool, adapters: EndpointBi
     await authorize(pid, who); policyUuidSchema.parse(locationId); const input = endpointBindingWriteSchema.parse(raw), command = { locationId, input };
     return tx(pid, who, async c => {
       const old = await oldCommand(c, pid, who, input.idempotencyKey, 'confirm', command); if (old) return endpointBindingReceiptSchema.parse({ ...old as object, duplicate: true });
-      const revision = await registry(c, pid, input.expectedRegistryRevision), before = await checkLocation(c, pid, locationId, input.expectedLocationRevision, input.expectedHeadId), current = await readCurrentEndpointBindingContext(c, pid); assertScope(current, input);
-      let proposal: BindingProposal;
-      if (input.mode === 'object-attached') return fail('ENDPOINT_ATTACHMENT_EVIDENCE_UNAVAILABLE');
-      if (input.mode === 'fixed-world') { if (input.provenanceObject) await objectEvidence(c, pid, current, input.provenanceObject); proposal = { mode: input.mode, pointProjectMetres: input.pointProjectMetres, derivation: input.derivation, sourceObject: input.provenanceObject, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null }; }
-      else { const object = await objectEvidence(c, pid, current, input.object); if (object.geometry.role !== 'object' || !object.geometry.equipmentAnchor) return fail('ENDPOINT_EQUIPMENT_ANCHOR_REQUIRED'); const point = deriveEquipmentBottomAnchor(object.geometry.bounds); if (canonicalPurposeJson(point) !== canonicalPurposeJson(object.geometry.equipmentAnchor.pointMetres)) return fail('ENDPOINT_OBJECT_ANCHOR_INTEGRITY'); proposal = { mode: input.mode, pointProjectMetres: point, derivation: ENDPOINT_ANCHOR_RULE, sourceObject: input.object, attachment: null, qualifiedProjectFrameId: null, sourceDecisionId: null }; }
-      const receipt = await commitBinding(c, pid, who, locationId, input.location, current, before, revision, input.reason, proposal, signal); await saveCommand(c, pid, who, input.idempotencyKey, 'confirm', command, receipt); return receipt;
+      const receipt = await confirmEndpointBindingChangeInTransaction(c, pid, who, locationId, input, signal); await saveCommand(c, pid, who, input.idempotencyKey, 'confirm', command, receipt); return receipt;
     }, signal);
   }
   async function list(pid: string, who: JobPrincipal, raw: { offset?: number; limit?: number } = {}) { return tx(pid, who, async c => {
