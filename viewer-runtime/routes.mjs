@@ -28,11 +28,27 @@ export function createRouteController(viewer, { signal } = {}) {
   let generation = 0;
   const profileCache = new Map();
   let ghostState;
+  let baselineVisibilityUnknown = false;
   let inventoryIds;
   const invalidBindings = () => Object.assign(new Error('The published tray-root mapping is invalid for this loaded model.'), { code: 'ROUTING_BINDINGS_INVALID' });
+  const visibilityUnavailable = cause => Object.assign(new Error('The pre-route SDK display visibility could not be restored. Reload the model before preparing automatic endpoints.'), { code: 'PREPARATION_VISIBILITY_UNAVAILABLE', ...(cause === undefined ? {} : { cause }) });
+
+  function captureVisibility() {
+    const manager = model.visibilityManager;
+    if (typeof manager?.getDefaultVisibility !== 'function' || typeof manager?.getVisibility !== 'function' || typeof manager?.setVisibility !== 'function') return null;
+    try {
+      const defaultVisible = manager.getDefaultVisibility(), states = manager.getVisibility();
+      if (typeof defaultVisible !== 'boolean' || !Array.isArray(states) || states.length > 1000000 || states.some(entry => !Array.isArray(entry) || entry.length !== 2 || !Number.isSafeInteger(entry[0]) || entry[0] < 0 || entry[0] > 2147483647 || typeof entry[1] !== 'boolean')) return null;
+      return { manager, defaultVisible, states: states.map(entry => [...entry]) };
+    } catch { return null; }
+  }
 
   function captureGhostState() {
-    if (!ghostState) ghostState = { preference: viewer.prefs?.get('ghosting'), renderPass: viewer.impl.showGhosting, materials: new Map() };
+    if (!ghostState) {
+      const visibility = captureVisibility();
+      if (!visibility) baselineVisibilityUnknown = true;
+      ghostState = { preference: viewer.prefs?.get('ghosting'), renderPass: viewer.impl.showGhosting, materials: new Map(), visibility };
+    }
     const materials = [viewer.impl.fadeMaterial, ...(viewer.impl.fadeMaterial?.variants || [])].filter(Boolean);
     for (const material of materials) if (!ghostState.materials.has(material)) ghostState.materials.set(material, material.opacity);
   }
@@ -51,10 +67,20 @@ export function createRouteController(viewer, { signal } = {}) {
 
   function restoreGhostContext() {
     if (!ghostState) return;
-    const previous = ghostState; ghostState = undefined;
-    for (const [material, opacity] of previous.materials) material.opacity = opacity;
-    if (typeof previous.preference === 'boolean') viewer.setGhosting(previous.preference);
-    if (typeof previous.renderPass === 'boolean') viewer.impl.toggleGhosting(previous.renderPass);
+    const previous = ghostState; let firstError, failed = false;
+    const attempt = work => { try { work(); return true; } catch (error) { failed = true; baselineVisibilityUnknown = true; firstError ??= error; return false; } };
+    if (!previous.visibilityRestored && attempt(() => {
+      if (!previous.visibility) viewer.isolate([], model); // Legacy display fallback is never endpoint evidence.
+      else {
+        if (model.visibilityManager !== previous.visibility.manager) throw visibilityUnavailable();
+        previous.visibility.manager.setVisibility(previous.visibility.defaultVisible, previous.visibility.states.map(entry => [...entry]));
+      }
+    })) previous.visibilityRestored = true;
+    for (const [material, opacity] of previous.materials) if (attempt(() => { material.opacity = opacity; })) previous.materials.delete(material);
+    if (!previous.preferenceRestored && attempt(() => { if (typeof previous.preference === 'boolean') viewer.setGhosting(previous.preference); })) previous.preferenceRestored = true;
+    if (!previous.renderPassRestored && attempt(() => { if (typeof previous.renderPass === 'boolean') viewer.impl.toggleGhosting(previous.renderPass); })) previous.renderPassRestored = true;
+    if (previous.visibilityRestored && !previous.materials.size && previous.preferenceRestored && previous.renderPassRestored) ghostState = undefined;
+    if (failed) throw visibilityUnavailable(firstError);
   }
 
   function active(ticket) {
@@ -193,12 +219,22 @@ export function createRouteController(viewer, { signal } = {}) {
   function clearRoute() {
     generation++;
     removeOverlay();
-    viewer.isolate([], model);
     restoreGhostContext();
     viewer.clearSelection();
     routeIds = [];
     viewer.fitToView();
     viewer.impl.invalidate(true, true, true);
+  }
+
+  function prepareForVisibilityObservation() {
+    active();
+    if (viewer.model !== model) throw visibilityUnavailable();
+    generation++; // Pending route reads must not commit isolation after observation starts.
+    try { if (ghostState || routeIds.length || overlayMeshes.length || overlayResources.length) clearRoute(); }
+    catch (error) { baselineVisibilityUnknown = true; throw visibilityUnavailable(error); }
+    // Manual Clear may already have used the historical show-all fallback.
+    // Only a fresh controller can recover the missing pre-route evidence.
+    if (baselineVisibilityUnknown) throw visibilityUnavailable();
   }
 
   async function validateRootOwnership(tree, roots, ticket) {
@@ -269,10 +305,12 @@ export function createRouteController(viewer, { signal } = {}) {
   function fitRoute() { if (routeIds.length) viewer.fitToView(routeIds, model); }
   function dispose() {
     if (disposed) return;
-    disposed = true; generation++; removeOverlay();
-    if (ghostState) viewer.isolate([], model);
-    restoreGhostContext();
-    routeIds = []; profileCache.clear(); nameIndex = null; inventoryIds = undefined;
+    disposed = true; generation++;
+    try { removeOverlay(); }
+    finally {
+      try { restoreGhostContext(); }
+      finally { routeIds = []; profileCache.clear(); nameIndex = null; inventoryIds = undefined; }
+    }
   }
-  return { prepareIndex: indexNames, showRoute, clearRoute, fitRoute, dispose };
+  return { prepareIndex: indexNames, showRoute, clearRoute, fitRoute, prepareForVisibilityObservation, dispose };
 }

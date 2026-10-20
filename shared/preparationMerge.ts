@@ -1,5 +1,5 @@
 import type { ComputationalSnapshot, SnapshotObject } from '../server/pathfinder/contracts.js';
-import type { PreparationPlan } from './pathfinderPreparation.js';
+import { equipmentEligibilitySchema, type PreparationPlan } from './pathfinderPreparation.js';
 import type { ModelCaptureRequest } from '../viewer-runtime/protocol.mjs';
 import { validatePreparationSlice } from '../viewer-runtime/preparation-input.mjs';
 
@@ -36,7 +36,7 @@ export interface PreparationTraceIndex { schemaVersion:'wfc.pf.preparation-trace
 /** Derive transport evidence from the server's immutable part; it grants no authority. */
 export function preparationCaptureRequest(plan:PreparationPlan,partId:string):ModelCaptureRequest {
   const part=plan.partPlan.find(value=>value.partId===partId);if(!part)refuse('PART_NOT_PLANNED');
-  const preparationSlice={schemaVersion:'wfc.pf.viewer-slice.v1' as const,sessionId:plan.id,partId,planSha256:plan.orderedPlanSha256,coordinateFrameId:plan.coordinateFrameId,objects:clone(part.objects),equipmentObjectIds:part.equipmentObjectIds.map(numericId)};
+  const preparationSlice={schemaVersion:'wfc.pf.viewer-slice.v1' as const,sessionId:plan.id,partId,planSha256:plan.orderedPlanSha256,coordinateFrameId:plan.coordinateFrameId,objects:clone(part.objects),equipmentObjectIds:part.equipmentObjectIds.map(numericId),...(plan.requestedScope?.endpointVisibility?{endpointVisibility:clone(plan.requestedScope.endpointVisibility)}:{})};
   if(!validatePreparationSlice(preparationSlice))refuse('PART_TRANSPORT_BUDGET');
   return {preparationSlice,equipmentNames:[...part.equipmentNames]};
 }
@@ -64,6 +64,10 @@ function validatePart(plan:PreparationPlan,part:PartPlan,payload:ComputationalSn
       if(!source.isPhysicalLeaf||!source.hasGeometry||object.routeName!==leaf.routeName||object.shapeName!==leaf.shapeName||object.routeBoundaryId!==undefined||object.categoryAssignmentSource!=='explicit-planning'||!same(object.allowedCategories,leaf.allowedCategories)||!object.fragments.length)refuse('PART_POLICY_MISMATCH');
     }else if(object.categoryAssignmentSource!=='unassigned'||object.allowedCategories.length||object.fragments.length||object.routeName!==undefined||object.shapeName!==undefined||object.routeBoundaryId!==undefined)refuse('PART_ROLE_MISMATCH');
     if(!Array.isArray(object.properties)||object.properties.length>1024)refuse('PART_PROPERTY_BUDGET');
+    const eligibility=object.equipmentEligibility;
+    if(plan.matchingPolicyVersion==='wfc.pf.project-exact-candidates.v3'&&role==='object'){
+      if(!equipmentEligibilitySchema.safeParse(eligibility).success||!plan.requestedScope.endpointVisibility||eligibility!.visibilityScopeSha256!==plan.requestedScope.endpointVisibility.contentSha256||source.hasGeometry&&eligibility!.fragmentCount===0)refuse('PART_ENDPOINT_VISIBILITY_MISMATCH');
+    }else if(eligibility!==undefined)refuse('PART_ENDPOINT_VISIBILITY_MISMATCH');
     byId.set(object.id,object);
     for(const fragment of object.fragments){
       if(fragments.has(fragment.id)||fragment.transformAlreadyApplied!==true||fragment.fragmentToWorldMetres!==null&&!affine(fragment.fragmentToWorldMetres)||!Array.isArray(fragment.vertices)||fragment.vertices.length<3||!Array.isArray(fragment.triangleIndices)||fragment.triangleIndices.length<3||fragment.triangleIndices.length%3!==0)refuse('PART_FRAGMENT_INVALID');
@@ -77,6 +81,7 @@ function validatePart(plan:PreparationPlan,part:PartPlan,payload:ComputationalSn
     const chain:string[]=[],visited=new Set<string>();let current:SnapshotObject|undefined=object;
     while(current){if(visited.has(current.id)||chain.length>=PREPARATION_MERGE_LIMITS.depth)refuse('PART_HIERARCHY_INVALID');visited.add(current.id);chain.push(current.name);if(current.parentId!==null&&current.parentId!==undefined&&!byId.has(current.parentId))refuse('PART_PARENT_MISSING');current=current.parentId?byId.get(current.parentId):undefined;if(current?.geometryRole==='routing-leaf')refuse('PART_HIERARCHY_INVALID');}
     if(!same(chain,object.leafToRootNames))refuse('PART_HIERARCHY_NAMES');
+    if(object.equipmentEligibility&&object.equipmentEligibility.checkedAncestorCount!==chain.length)refuse('PART_ENDPOINT_VISIBILITY_MISMATCH');
     const leaf=leaves.get(object.id);if(leaf&&!visited.has('dbid:'+leaf.rootObjectId))refuse('PART_ROOT_MISMATCH');
   }
   countGeometry(snapshot.objects);
@@ -89,7 +94,7 @@ function countGeometry(objects:SnapshotObject[]):PreparationGeometryCounts {
   if(counts.objects>PREPARATION_MERGE_LIMITS.objects||counts.fragments>PREPARATION_MERGE_LIMITS.fragments||counts.vertices>PREPARATION_MERGE_LIMITS.vertices||counts.triangles>PREPARATION_MERGE_LIMITS.triangles)refuse('GEOMETRY_UNION_BUDGET');
   return counts;
 }
-const sharedIdentity=(object:SnapshotObject):unknown=>{const {bounds:_bounds,geometryRole:_role,...identity}=object;return identity;};
+const sharedIdentity=(object:SnapshotObject):unknown=>{const {bounds:_bounds,geometryRole:_role,equipmentEligibility:_eligibility,...identity}=object;return identity;};
 
 export type PreparationMergeResult={snapshot:ComputationalSnapshot;traceIndex:PreparationTraceIndex;counts:PreparationGeometryCounts};
 /** Exclusively owned, already strict-schema-parsed parts, supplied in frozen order.
@@ -115,7 +120,7 @@ function createMerge(plan:PreparationPlan,owned:boolean):{addPart:(partId:string
       if(!prior)objects.set(object.id,object);
       else{
         if(prior.geometryRole==='routing-leaf'||object.geometryRole==='routing-leaf'||!same(sharedIdentity(prior),sharedIdentity(object)))refuse('OBJECT_IDENTITY_CONFLICT');
-        if(prior.geometryRole==='object'&&object.geometryRole==='object'&&!same(prior.bounds,object.bounds))refuse('ENDPOINT_BOUNDS_CONFLICT');
+        if(prior.geometryRole==='object'&&object.geometryRole==='object'&&(!same(prior.bounds,object.bounds)||!same(prior.equipmentEligibility,object.equipmentEligibility)))refuse('ENDPOINT_BOUNDS_CONFLICT');
         if(object.geometryRole==='object')objects.set(object.id,object);
       }
     }

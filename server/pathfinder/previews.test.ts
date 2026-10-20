@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe,expect,it,vi } from 'vitest';
 import type { Pool, PoolClient } from 'pg';
+import { readAutomaticNamedEndpointCandidate, type AutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
 import { collectPreviewDependencies,createPathFinderPreviews,previewEngineRequest,previewResultDto,previewSchema,type PreviewInput } from './previews.js';
 import type { EngineResponse,JobPrincipal } from './jobContracts.js';
 import { snapshotObject } from './contracts.js';
@@ -29,13 +30,20 @@ vi.mock('./endpointBindingRepository.js',()=>({
       contentSha256:'e'.repeat(64),mode:'fixed-world',captureFrameId:who.loginId,qualifiedProjectFrameId:null,aggregateId:who.userId,projectionSha256:'b'.repeat(64),sourceObject:null,sourceDecisionId:null}};
   }),
 }));
+// Retained geometry/visibility closure is exercised in automaticEndpointCandidates.test;
+// this unit suite checks that the preview boundary delegates to that exact reader.
+vi.mock('./automaticEndpointCandidates.js',()=>({readAutomaticNamedEndpointCandidate:vi.fn(async(client:PoolClient)=>{
+  const value=client as unknown as {endpointObjects:Array<Record<string,unknown>>;endpointCandidateStatus?:AutomaticNamedEndpointCandidate['status']};
+  const rows=value.endpointObjects,status=value.endpointCandidateStatus??(rows.length===1?'automatic-ready':rows.length?'ambiguous':'missing');
+  return {status,candidateObjectIds:rows.map(row=>row.object_id),point:status==='automatic-ready'?rows[0].anchor:null,objectId:status==='automatic-ready'?rows[0].object_id:null};
+})}));
 
 const projectId='11111111-1111-4111-8111-111111111111',modelId='22222222-2222-4222-8222-222222222222',artifactId='33333333-3333-4333-8333-333333333333';
 const who:JobPrincipal={userId:'44444444-4444-4444-8444-444444444444',loginId:'55555555-5555-4555-8555-555555555555',loginExpiresAt:Date.now()+3_600_000};
 const settings={connection_gap:'1',secondary_tray_length:'5',end_connection_length:'6',additional_bending_percent:'10',pf_settings_revision:'7'};
 const input=():PreviewInput=>({from:{name:'From',point:[0,0,.5]},to:{name:'To',point:[10,0,.5]},category:'Instrumentation',reverse:false,
   artifactId,expectedSelectionRevision:'3',expectedSettingsRevision:'7',expectedRegistryRevision:'4',secondaryDistanceMeters:2,preferVerticalApproach:true});
-function database(options:{admin?:boolean;settings?:typeof settings;registry?:string;artifact?:string;modelState?:string;health?:string;aliases?:Array<Record<string,unknown>>;objects?:Array<Record<string,unknown>>;duplicate?:string;job?:Record<string,unknown>;stored?:Record<string,unknown>;proposal?:Record<string,unknown>;review?:Record<string,unknown>}={}) {
+function database(options:{admin?:boolean;settings?:typeof settings;registry?:string;artifact?:string;modelState?:string;health?:string;aliases?:Array<Record<string,unknown>>;objects?:Array<Record<string,unknown>>;candidateStatus?:AutomaticNamedEndpointCandidate['status'];duplicate?:string;job?:Record<string,unknown>;stored?:Record<string,unknown>;proposal?:Record<string,unknown>;review?:Record<string,unknown>}={}) {
   const query=vi.fn(async (sql:string,_parameters?:unknown[])=>{
     if (sql==='SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE') return {rows:[{id:projectId}]};
     if (sql.startsWith('SELECT is_admin')) return {rows:[{is_admin:options.admin!==false}]};
@@ -56,7 +64,7 @@ function database(options:{admin?:boolean;settings?:typeof settings;registry?:st
     if (sql.startsWith('SELECT * FROM pf_reviews')) return {rows:options.review ? [options.review] : []};
     return {rows:[]};
   });
-  const client={query,release:vi.fn(),endpointAliases:options.aliases??[]};return {query,client:client as unknown as PoolClient,pool:{connect:vi.fn(async()=>client)} as unknown as Pool};
+  const client={query,release:vi.fn(),endpointAliases:options.aliases??[],endpointObjects:options.objects??[],endpointCandidateStatus:options.candidateStatus};return {query,client:client as unknown as PoolClient,pool:{connect:vi.fn(async()=>client)} as unknown as Pool};
 }
 const response:EngineResponse={schemaVersion:'pathfinder.model.response.v1',requestId:projectId,status:'calculated',message:'Path found.',engineeringAccepted:false,effectiveCategory:'Control',
   design:{lengthBeforePercentageMeters:'16',unroundedLengthMeters:'17.6',designLengthMeters:'18'},route:{success:true,message:'Path found.',routeText:'/BC1',routeCodes:['BC1'],segmentIds:['dbid:12','dbid:12'],
@@ -136,8 +144,15 @@ describe('standalone Path preview contract and dependency boundary',()=>{
     await expect(collectPreviewDependencies(database({aliases:[{id:artifactId,revision:'9',...alias}],objects:[{object_id:'dbid:11',anchor:[1,2,3]}]}).client,projectId,{...input(),from:{name:'Alias'}})).rejects.toMatchObject({code:'PREVIEW_LOCATION_STALE'});
   });
   it('resolves one exact prepared equipment bottom anchor, preserving its object identity',async()=>{
-    const result=await collectPreviewDependencies(database({objects:[{object_id:'dbid:11',anchor:[1,2,3]}]}).client,projectId,{...input(),from:{name:' Equipment '}});
+    const db=database({objects:[{object_id:'dbid:11',anchor:[1,2,3]}]}),result=await collectPreviewDependencies(db.client,projectId,{...input(),from:{name:' Equipment '}});
     expect(result.from).toMatchObject({point:[1,2,3],objectId:'dbid:11',source:'equipment-bottom-aabb'});
+    expect(readAutomaticNamedEndpointCandidate).toHaveBeenCalledWith(db.client,expect.objectContaining({projectId,name:' Equipment ',current:expect.objectContaining({artifactId})}));
+    expect(db.query.mock.calls.some(([sql])=>sql.includes('FROM pf_model_objects'))).toBe(false);
+  });
+  it.each(['preparation-required','object-unverified'] as const)('asks to prepare again for %s evidence without using a weaker object-name query',async candidateStatus=>{
+    const db=database({candidateStatus,objects:[{object_id:'dbid:11',anchor:[1,2,3]}]});
+    await expect(collectPreviewDependencies(db.client,projectId,{...input(),from:{name:'Equipment'}})).rejects.toMatchObject({code:'ENDPOINT_PREPARATION_REQUIRED'});
+    expect(db.query.mock.calls.some(([sql])=>sql.includes('FROM pf_model_objects'))).toBe(false);
   });
   it.each([{objects:[],code:'PREVIEW_LOCATION_MISSING'},{objects:[{object_id:'1'},{object_id:'2'}],code:'PREVIEW_LOCATION_AMBIGUOUS'}])('fails closed for unresolved endpoint $code',async({code,objects})=>{
     await expect(collectPreviewDependencies(database({objects}).client,projectId,{...input(),from:{name:'Name'}})).rejects.toMatchObject({code});

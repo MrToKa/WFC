@@ -196,7 +196,14 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         finally { currentCapture.reading = false; operationSignal?.removeEventListener('abort', abort); }
       }
       function captureIterator(state, request, eventLimit = CAPTURE_INPUT_LIMITS.responses) {
+        prepareForEndpointVisibility();
         return captureSelectedModel(viewer, { ...request, projectId: descriptor.projectId, modelVersionId: descriptor.modelVersionId, contentFingerprint: descriptor.contentFingerprint,loadId:descriptor.loadId }, { signal: AbortSignal.any([signal, state.controller.signal].filter(Boolean)), startedAt: state.startedAt, eventLimit, onProgress(progress) { if (capture === state) state.onProgress?.(progress); } });
+      }
+      function prepareForEndpointVisibility() {
+        // Restore only our route appearance. Ghost/isolation must not become an
+        // automatic endpoint exclusion, and a failed restoration must refuse.
+        routes.prepareForVisibilityObservation(); legacyPath = false;
+        pathfinder.prepareForVisibilityObservation(); computedPath = false;
       }
       async function inputAck(state, request, operationSignal) {
         if (capture !== state || state.reading || state.iterator) throw safeError('EXTRACTION_FAILED');
@@ -236,7 +243,10 @@ export function createViewerAdapter({ window, container, onEvidence = () => {} }
         fitRoute() { if (computedPath) pathfinder.fit(); else routes.fitRoute(); },
         showComputedPath(value) { if (legacyPath) routes.clearRoute(); legacyPath = false; const result = pathfinder.showPath(value); computedPath = true; return result; },
         readModelObjects: pathfinder.readObjects,
-        readPreparationObjects: pathfinder.readPreparationObjects,
+        readPreparationObjects(request, operationSignal) {
+          active(operationSignal); prepareForEndpointVisibility();
+          return pathfinder.readPreparationObjects(request, operationSignal);
+        },
         readSelection: pathfinder.readSelection,
         setPathTransparency: pathfinder.setTransparency,
         pickPoint: pathfinder.pickPoint,

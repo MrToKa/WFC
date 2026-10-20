@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { collectPreparationDiscovery } from './collectPreparationDiscovery';
+import { preparationEquipmentNameBatches } from '../../../../shared/collectPreparationDiscovery';
+import { PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS } from '../../../../viewer-runtime/preparation-input.mjs';
 import { preparationFixture, preparationIds as ids } from '../../../test/preparationFixtures';
 import type { ProjectPreparationViewer } from './usePathFinder';
 import type {
   PreparationDiscoveryPage,
   PreparationDiscoveryRequest,
 } from '../../../../viewer-runtime/preparation-input.mjs';
+const visibilityScope={schemaVersion:'wfc.pf.sdk-display-visibility.v1' as const,basis:'sdk-display-before-pf-appearance' as const,contentSha256:'a'.repeat(64)};
 function viewer(
   options: { incomplete?: boolean; conflicting?: boolean; endpoints?: boolean } = {},
 ) {
@@ -55,7 +58,8 @@ function viewer(
         names: request.names,
         rootObjectId: request.rootObjectId,
         cursor: request.cursor,
-        matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2',
+        matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+        visibilityScope,
         indexedObjectCount: 10,
         propertyScan:
           request.mode === 'equipment'
@@ -82,6 +86,40 @@ function viewer(
   };
 }
 describe('complete exact preparation discovery', () => {
+  it('freezes the first SDK baseline visibility scope into every following page and the complete report',async()=>{
+    const {context}=preparationFixture(),io=viewer();context.endpointNames=['EQ-01'];
+    const result=await collectPreparationDiscovery(context,io);
+    expect(io.discover.mock.calls[0][0]).not.toHaveProperty('visibilityScope');
+    for(const [request] of io.discover.mock.calls.slice(1))expect(request.visibilityScope).toEqual(visibilityScope);
+    expect(result.visibilityScope).toEqual(visibilityScope);expect(result.matchingPolicyVersion).toBe('wfc.pf.project-exact-candidates.v3');
+  });
+  it('packs all1527 exact endpoint names into a few UTF8-bounded query scopes without truncating candidates',async()=>{
+    const {context}=preparationFixture(),io=viewer();context.trays=[];
+    context.endpointNames=Array.from({length:1527},(_,index)=>`=F1=SECTION${String(index).padStart(4,'0')}=EQ001`);
+    const groups=preparationEquipmentNameBatches(context.endpointNames);expect(groups.length).toBeGreaterThan(1);expect(groups.length).toBeLessThan(10);
+    expect(groups.flat()).toEqual(context.endpointNames);for(const group of groups)expect(new TextEncoder().encode(JSON.stringify(group)).length).toBeLessThanOrEqual(PREPARATION_VIEWER_LIMITS.equipmentNameBytes);
+    const result=await collectPreparationDiscovery(context,io),requests=io.discover.mock.calls.map(([request])=>request).filter(request=>request.mode==='equipment');
+    expect(requests).toHaveLength(groups.length);expect(requests.flatMap(request=>request.names)).toEqual(context.endpointNames);
+    expect(result.endpointCandidates).toHaveLength(1527);expect(result.endpointCandidates.every(candidate=>candidate.objectIds.join()==='dbid:9')).toBe(true);
+    expect(result.complete).toBe(true);
+  });
+  it('counts escaped and multibyte name bytes exactly rather than assuming32 names or UTF16 size',()=>{
+    const names=Array.from({length:200},(_,index)=>`界${'"\\'.repeat(30)}${index}`),groups=preparationEquipmentNameBatches(names);
+    expect(groups.flat()).toEqual(names);expect(groups.length).toBeGreaterThan(1);
+    for(const group of groups)expect(new TextEncoder().encode(JSON.stringify(group)).length).toBeLessThanOrEqual(8192);
+    expect(()=>preparationEquipmentNameBatches(['X'.repeat(257)])).toThrow('protected discovery limits');
+    expect(()=>preparationEquipmentNameBatches(['DUPLICATE','DUPLICATE'])).toThrow('exact discovery scope');
+  });
+  it('refuses a display visibility mutation between pages instead of publishing stale uniqueness',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;let pages=0;
+    io.discover.mockImplementation(async request=>{const page=await original(request);return ++pages===2?{...page,visibilityScope:{...visibilityScope,contentSha256:'b'.repeat(64)}}:page;});
+    await expect(collectPreparationDiscovery(context,io)).rejects.toThrow('visibility changed');
+  });
+  it('refuses a page without v3 visibility evidence, even if it claims complete property coverage',async()=>{
+    const {context}=preparationFixture(),io=viewer(),original=io.discover.getMockImplementation()!;
+    io.discover.mockImplementation(async request=>{const page=await original(request);delete(page as Partial<PreparationDiscoveryPage>).visibilityScope;return page;});
+    await expect(collectPreparationDiscovery(context,io)).rejects.toThrow('inconsistent discovery coverage');
+  });
   it.each([false, true])(
     'queries exact raw and authoritative route alternatives and retains ambiguity=%s',
     async (both) => {
@@ -132,7 +170,8 @@ describe('complete exact preparation discovery', () => {
           names: request.names,
           rootObjectId: request.rootObjectId,
           cursor: request.cursor,
-          matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2',
+          matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+          visibilityScope,
           indexedObjectCount: records.length,
           propertyScan: null,
           objects: records
@@ -222,7 +261,8 @@ describe('complete exact preparation discovery', () => {
       names: request.names,
       rootObjectId: null,
       cursor: 0,
-      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2',
+      matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+      visibilityScope,
       indexedObjectCount: 10,
       propertyScan: null,
       objects: [],

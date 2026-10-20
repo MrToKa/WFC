@@ -36,6 +36,20 @@ function referencesFor(input:ReturnType<typeof twoPartFixture>['input']){
  return{bytes,parts};
 }
 describe('isolated preparation union geometry task',()=>{
+ it.each(['wfc.protected-selected-capture.v1','wfc.project-preparation-aggregate.v1'])('the owned parser preserves visible SDK metadata for the exact %s converted envelope without a full reparse',adapterVersion=>{
+  const {input}=fixture(),snapshot=structuredClone(input.parts[0].payload) as ComputationalSnapshot,object=snapshot.objects[0];
+  snapshot.capture.adapterVersion=adapterVersion;object.geometryRole='object';
+  object.equipmentEligibility={schemaVersion:'wfc.pf.equipment-eligibility.v1',matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScopeSha256:'a'.repeat(64),visibility:'visible',checkedAncestorCount:1,fragmentStatus:'geometry-free-node-bounds',fragmentCount:0};
+  const expected=snapshotSchema.parse(snapshot),actual=parseOwnedPreparationSnapshot(snapshot);
+  expect(actual).toEqual(expected);expect(actual.objects[0].nativeHidden).toBeNull();expect(actual.capture.planningVisibilityKnown).toBe(false);
+ });
+ it.each(['source','adapter','native-visible','explicit-null','inventoryComplete','geometryComplete','unitsVerified','transformsVerified','planningVisibilityKnown','sourceLinkVerified'] as const)('the owned parser applies full display envelope guards for %s before fitting/storage',kind=>{
+  const {input}=fixture(),snapshot=structuredClone(input.parts[0].payload) as ComputationalSnapshot,object=snapshot.objects[0];object.geometryRole='object';
+  object.equipmentEligibility={schemaVersion:'wfc.pf.equipment-eligibility.v1',matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScopeSha256:'a'.repeat(64),visibility:'visible',checkedAncestorCount:1,fragmentStatus:'geometry-free-node-bounds',fragmentCount:0};
+  if(kind==='source')snapshot.capture.sourceKind='synthetic';else if(kind==='adapter')snapshot.capture.adapterVersion='custom-adapter';
+  else if(kind==='native-visible')object.nativeHidden=false;else if(kind==='explicit-null')Object.assign(object,{equipmentEligibility:null});else snapshot.capture[kind]=true;
+  expect(snapshotSchema.safeParse(snapshot).success).toBe(false);expect(()=>parseOwnedPreparationSnapshot(snapshot)).toThrow();
+ });
  it('uses the exact frozen plan and strict snapshot, canonicalizes member keys while retaining every array order, and returns only references',async()=>{
   const{input,storage}=fixture(),result=await executePreparationUnionTask(input,storage);expect(Object.keys(result).sort()).toEqual(['counts','projection','snapshotId','traceIndex']);expect(result.counts).toEqual({objects:3,physicalLeaves:1,fragments:1,vertices:3,triangles:1});expect(result.projection.payloadRef).toBe(input.snapshotId);
   expect(storage.storePreparationBlob).toHaveBeenCalledTimes(2);expect(storage.storePreparationBlob).toHaveBeenNthCalledWith(1,input.plan.projectId,input.plan.id,input.snapshotId,expect.any(Object),32*1024**2);

@@ -25,7 +25,7 @@ export const automaticEndpointCalculationPointSchema = z.object({
   sourceObjectRevisionId: uuid, sourceObjectId: z.string().regex(/^dbid:(?:0|[1-9][0-9]*)$/).max(16)
     .refine(value => Number(value.slice(5)) <= 2147483647),
   sourceObjectRecordSha256: hash, orderedPlanSha256: hash, matchingEvidenceSha256: hash,
-  matchingPolicyVersion: z.enum(['wfc.pf.project-exact-candidates.v1', 'wfc.pf.project-exact-candidates.v2']),
+  matchingPolicyVersion: z.enum(['wfc.pf.project-exact-candidates.v1', 'wfc.pf.project-exact-candidates.v2', 'wfc.pf.project-exact-candidates.v3']),
   matchedNames: z.array(z.string().min(1).max(500).refine(value => value === value.normalize('NFC').trim().toUpperCase() &&
     !/[\u0000-\u001f\u007f-\u009f]/u.test(value))).min(1).max(4096)
     .refine(values => values.every((value, index) => index === 0 || values[index - 1] < value)),

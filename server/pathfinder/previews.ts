@@ -19,6 +19,7 @@ import type { ComparisonCalculationScope } from './comparisonCalculationProvenan
 import { calculationEngineIdentity } from './calculationEngineIdentity.js';
 import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { directSecondaryPolicyForScope, requireDirectSecondaryStrategy } from './directSecondaryStrategy.js';
+import { readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
 
 const name = z.string().trim().max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
 export const previewEndpointSchema = z.object({ name, point: point.optional() }).strict().refine(value=>Boolean(value.name || value.point),'Enter an endpoint name or choose an explicit point.');
@@ -52,11 +53,13 @@ async function resolveEndpoint(client:PoolClient,projectId:string,current:Endpoi
     const binding = endpointCalculationPoint(resolved.binding);
     return {name:input.name,point:binding.point,source:'shared-location',objectId:null,locationId:binding.locationId,bindingRevision:binding.bindingRevision,binding};
   }
-  const objects=(await client.query<Row>(`SELECT object_id,anchor FROM pf_model_objects WHERE project_id=$1 AND artifact_id=$2
-    AND geometry_role='object' AND visibility<>'hidden' AND match_names ? $3 ORDER BY object_id LIMIT 2`,[projectId,artifactId,normalizeLocation(input.name)])).rows;
-  if (objects.length!==1) throw new PathFinderError(objects.length ? 'PREVIEW_LOCATION_AMBIGUOUS' : 'PREVIEW_LOCATION_MISSING',409,
-    `${objects.length ? 'Multiple prepared objects match' : 'No prepared object matches'} ${input.name}. Choose a model point or save a shared location.`);
-  return {name:input.name,point:point.parse(objects[0].anchor),source:'equipment-bottom-aabb',objectId:objects[0].object_id,locationId:null,bindingRevision:null,binding:null};
+  const candidate=await readAutomaticNamedEndpointCandidate(client,{projectId,current,name:input.name});
+  if(candidate.status==='preparation-required'||candidate.status==='object-unverified')
+    throw new PathFinderError('ENDPOINT_PREPARATION_REQUIRED',409,'Prepare the current model again with visible equipment Properties before calculating named endpoints. You can also choose an explicit point or confirm a shared location.');
+  if(candidate.status!=='automatic-ready'||!candidate.point||!candidate.objectId)
+    throw new PathFinderError(candidate.status==='ambiguous'?'PREVIEW_LOCATION_AMBIGUOUS':'PREVIEW_LOCATION_MISSING',409,
+      `${candidate.status==='ambiguous'?'Multiple visible prepared objects match':'No visible prepared object matches'} ${input.name}. Choose a model point or save a shared location.`);
+  return {name:input.name,point:candidate.point,source:'equipment-bottom-aabb',objectId:candidate.objectId,locationId:null,bindingRevision:null,binding:null};
 }
 
 /** The same project lock as normal PF work protects authority and all mutable dependencies until commit. */

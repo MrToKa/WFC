@@ -35,8 +35,8 @@ export function projectCatalogRows(source:CatalogSourceTray[]):{rows:CatalogRow[
     return {projectTrayId:tray.id,rawName:tray.name,nameKey,rawPurpose:tray.purpose,purposeKey,dimensionsMm:{width:dimension(tray.width_mm),height:dimension(tray.height_mm),declaredLength:dimension(tray.length_mm)}};
   });
   if(purposes.size>PURPOSE_POLICY_LIMITS.purposes)fail('CATALOG_PURPOSE_LIMIT',413);
-  for(const [name,group]of [...names].sort(([a],[b])=>compare(a,b)))if(group.length>1)diagnostics.push({code:'TRAY_NAME_COLLISION',projectTrayIds:group,message:'Multiple project trays share the same case-sensitive normalized name.'});
-  for(const [purpose,group]of [...purposes].sort(([a],[b])=>compare(a,b)))if(group.raw.size>1)diagnostics.push({code:'PURPOSE_NORMALIZATION_COLLISION',projectTrayIds:group.ids,message:'Distinct raw purpose spellings share the same normalized key.'});
+  for(const [,group]of [...names].sort(([a],[b])=>compare(a,b)))if(group.length>1)diagnostics.push({code:'TRAY_NAME_COLLISION',projectTrayIds:group,message:'Multiple project trays share the same case-sensitive normalized name.'});
+  for(const [,group]of [...purposes].sort(([a],[b])=>compare(a,b)))if(group.raw.size>1)diagnostics.push({code:'PURPOSE_NORMALIZATION_COLLISION',projectTrayIds:group.ids,message:'Distinct raw purpose spellings share the same normalized key.'});
   diagnostics.sort((a,b)=>compare(a.code,b.code)||compare(a.projectTrayIds.join(','),b.projectTrayIds.join(',')));
   if(diagnostics.length>PURPOSE_POLICY_LIMITS.catalogRows)fail('CATALOG_DIAGNOSTIC_LIMIT',413);
   return {rows,diagnostics};

@@ -18,6 +18,7 @@ const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const observed = <T>(value: T) => ({ status: 'observed' as const, value, api: 'synthetic managed workflow fixture', reason: null });
 const derived = <T>(value: T) => ({ status: 'derived' as const, value, api: 'synthetic normalization', reason: null });
 const missing = { status: 'unavailable' as const, value: null, api: 'synthetic', reason: 'SDK_VALUE_UNAVAILABLE' };
+const visibilityScope = { schemaVersion: 'wfc.pf.sdk-display-visibility.v1' as const, basis: 'sdk-display-before-pf-appearance' as const, contentSha256: '9'.repeat(64) };
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(yes => { resolve = yes; }); return { promise, resolve }; };
 
 function fixture() {
@@ -46,7 +47,7 @@ function fixture() {
     assertCurrent: vi.fn(() => { if (flags.closed) throw Error('driver is closed'); }),
     discover: vi.fn(async (request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage> => ({ schemaVersion: 'wfc.pf.viewer-discovery.v1',
       mode: request.mode, names: request.names, rootObjectId: request.rootObjectId, cursor: request.cursor,
-      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v2', indexedObjectCount: flags.ambiguous ? 2 : 1, propertyScan: null,
+      matchingPolicyVersion: 'wfc.pf.project-exact-candidates.v3', visibilityScope, indexedObjectCount: flags.ambiguous ? 2 : 1, propertyScan: null,
       objects: (flags.ambiguous ? [3, 4] : [3]).map((objectId, orderIndex) => ({ objectId, parentId: null, name: '/B001', hasGeometry: true, isPhysicalLeaf: true,
         orderIndex, matchedNames: request.mode === 'names' ? [...request.names] : [] })), nextCursor: null, complete: true })),
     capture: vi.fn(async (request: ModelCaptureRequest) => {

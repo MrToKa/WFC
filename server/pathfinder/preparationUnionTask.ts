@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { canonicalPurposeJson, policyUuidSchema, policyHashSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { PREPARATION_LIMITS, preparationPlanSchema, preparationCountsSchema } from '../../shared/pathfinderPreparation.js';
 import { createOwnedPreparationMerge } from '../../shared/preparationMerge.js';
-import { snapshotSchema, snapshotObject, type ComputationalSnapshot } from './contracts.js';
+import { snapshotSchema, snapshotObject, hasValidEquipmentEligibilityEnvelope, type ComputationalSnapshot } from './contracts.js';
 import { validateSnapshotStructure } from './matching.js';
 import { preparationCapacity, preparationCapacityProfileSchema } from '../../shared/pathfinderCapacity.js';
 import { preparationPlanHashInput, type PreparationPlan } from '../../shared/pathfinderPreparation.js';
@@ -59,15 +59,18 @@ export function checkPreparationUnionInputBytes(plan:unknown,parts:unknown):'inl
  return mode;
 }
 
-const snapshotHeaderSchema=snapshotSchema.omit({objects:true});
+const snapshotHeaderSchema=snapshotSchema.innerType().omit({objects:true});
 const snapshotObjectSlots=z.array(z.unknown()).min(1).max(PREPARATION_LIMITS.objects);
+function requireEquipmentEligibilityEnvelope(snapshot:ComputationalSnapshot):void {
+ if(!hasValidEquipmentEligibilityEnvelope(snapshot))throw new z.ZodError([{code:z.ZodIssueCode.custom,path:['capture'],message:'Equipment display eligibility has an unsupported capture envelope.'}]);
+}
 /** Parse the existing strict DTO one object at a time, retaining its transformations.
  * Only freshly decoded, privately owned reference inputs may relinquish raw slots. */
 export function parseOwnedPreparationSnapshot(value:unknown):ComputationalSnapshot {
  if(!value||typeof value!=='object'||Array.isArray(value))return snapshotSchema.parse(value);
  const {objects,...header}=value as Record<string,unknown>,parsedHeader=snapshotHeaderSchema.parse(header),slots=snapshotObjectSlots.parse(objects);
  for(let index=0;index<slots.length;index++){slots[index]=snapshotObject.parse(slots[index]);(objects as unknown[])[index]=undefined;}
- return {...parsedHeader,objects:slots as ComputationalSnapshot['objects']};
+ const parsed={...parsedHeader,objects:slots as ComputationalSnapshot['objects']};requireEquipmentEligibilityEnvelope(parsed);return parsed;
 }
 /** Strict snapshot members have fixed nonnumeric keys. Reorder these owned records
  * in place; geometry arrays and binary64 values are never copied or reordered. */
@@ -104,7 +107,7 @@ export async function executePreparationUnionTask(input:PreparationUnionTaskInpu
  if(!merged.counts.physicalLeaves)throw new Error('PREPARATION_UNION_INVALID');
  // Each object/header was parsed strictly once. The merge changes only trusted
  // aggregate proof fields and finite ancestor boxes; no full-geometry reparse.
- const snapshot=merged.snapshot;canonicalizeOwned(snapshot);
+ const snapshot=merged.snapshot;requireEquipmentEligibilityEnvelope(snapshot);canonicalizeOwned(snapshot);
  validateSnapshotStructure(snapshot);
  // Count/fsync the private projection before creating its computation-cache copy.
  // Thus every new snapshot has quota-accounted backing even if a later step fails.

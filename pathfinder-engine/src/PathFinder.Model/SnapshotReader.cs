@@ -24,7 +24,14 @@ public static class SnapshotReader
         limits ??= new();
         cancellation.ThrowIfCancellationRequested();
         if (bytes.Length == 0 || bytes.Length > limits.MaximumBytes) throw new ArgumentException("Snapshot byte budget exceeded.");
-        using (var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64 })) RejectDuplicates(document.RootElement, cancellation);
+        using (var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64 }))
+        {
+            RejectDuplicates(document.RootElement, cancellation);
+            if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("objects", out var objects) && objects.ValueKind == JsonValueKind.Array)
+                foreach (var item in objects.EnumerateArray())
+                    if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("equipmentEligibility", out var eligibility) && eligibility.ValueKind == JsonValueKind.Null)
+                        throw new ArgumentException("Optional equipment display eligibility must be absent or a complete record, never null.");
+        }
         var snapshot = JsonSerializer.Deserialize<ModelSnapshot>(bytes.Span, JsonOptions) ?? throw new ArgumentException("Snapshot cannot be null.");
         Validate(snapshot, limits, cancellation);
         return snapshot;
@@ -95,6 +102,18 @@ public static class SnapshotReader
             if (item.DbId is { } dbId && (dbId < 0 || !dbIds.Add(dbId))) throw new ArgumentException("Invalid/duplicate version-local dbId.");
             Text(item.Name, "object.name", 2048, true);
             if (item.GeometryRole is not ("hierarchy" or "object" or "routing-leaf")) throw new ArgumentException("Unknown object geometry role.");
+            if (item.EquipmentEligibility is { } eligibility)
+            {
+                if (lookup || item.GeometryRole != "object" || item.NativeHidden is not null || item.PlanningExcluded
+                    || capture.SourceKind != "converted" || capture.AdapterVersion is not ("wfc.protected-selected-capture.v1" or "wfc.project-preparation-aggregate.v1")
+                    || capture.InventoryComplete || capture.GeometryComplete || capture.UnitsVerified || capture.TransformsVerified || capture.PlanningVisibilityKnown || capture.SourceLinkVerified
+                    || eligibility.SchemaVersion != "wfc.pf.equipment-eligibility.v1" || eligibility.MatchingPolicyVersion != "wfc.pf.project-exact-candidates.v3"
+                    || eligibility.Visibility != "visible" || eligibility.CheckedAncestorCount is < 1 or > 512
+                    || eligibility.FragmentCount is < 0 or > 1000000
+                    || (eligibility.FragmentStatus == "all-visible" ? eligibility.FragmentCount < 1 : eligibility.FragmentStatus != "geometry-free-node-bounds" || eligibility.FragmentCount != 0))
+                    throw new ArgumentException("Automatic equipment display eligibility is invalid or claims unsupported proof.");
+                Hash(eligibility.VisibilityScopeSha256);
+            }
             if (item.RouteName is not null) Text(item.RouteName, "routeName", 2048, true);
             if (item.RouteBoundaryId is not null)
             {
@@ -162,6 +181,20 @@ public static class SnapshotReader
             throw new ArgumentException("A routing-leaf cannot be the parent of another inventory object.");
         _ = Visibility(snapshot, limits, cancellation); // Validates parents/cycles before any fitting or cache write.
         var byId = snapshot.Objects.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        var endpointScopes = snapshot.Objects.Where(item => item.EquipmentEligibility is not null).Select(item => item.EquipmentEligibility!.VisibilityScopeSha256).Distinct(StringComparer.Ordinal).ToArray();
+        if (endpointScopes.Length > 1) throw new ArgumentException("Equipment display eligibility scopes disagree within one capture.");
+        foreach (var item in snapshot.Objects.Where(item => item.EquipmentEligibility is not null))
+        {
+            var current = item; int ancestors = 1;
+            while (current.ParentId is not null)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                if (!byId.TryGetValue(current.ParentId, out var parent)) throw new ArgumentException("Equipment display eligibility hierarchy is incomplete.");
+                current = parent; ancestors++;
+            }
+            if (ancestors != item.EquipmentEligibility!.CheckedAncestorCount || ancestors != item.LeafToRootNames.Length)
+                throw new ArgumentException("Equipment display eligibility ancestor evidence disagrees with captured hierarchy.");
+        }
         foreach (var item in snapshot.Objects.Where(item => lookup || item.RouteBoundaryId is not null))
         {
             var chainNames = new List<string>(); var current = item; bool found = false;

@@ -8,12 +8,18 @@ import { syntheticStraightSnapshot } from './syntheticFixture.js';
 import { geometryTraceFixture } from './geometryTraceFixtures.js';
 import { runCandidateEligibilityIntegration } from './candidateEligibilityIntegration.js';
 import { EventEmitter } from 'node:events';
+import { readAutomaticEndpointCandidates, type AutomaticEndpointCandidateResult } from './automaticEndpointCandidates.js';
+
+vi.mock('./automaticEndpointCandidates.js',()=>({readAutomaticEndpointCandidates:vi.fn(async(client:unknown,input:{locationIds:string[]})=>{
+  const state=client as {verifiedCandidate?:AutomaticEndpointCandidateResult};
+  return new Map(input.locationIds.map(id=>[id,state.verifiedCandidate??{status:'preparation-required',candidateObjectIds:[],point:null}]));
+})}));
 
 const projectId='11111111-1111-4111-8111-111111111111',modelId='22222222-2222-4222-8222-222222222222',artifactId='33333333-3333-4333-8333-333333333333',locationId='44444444-4444-4444-8444-444444444444';
 const who:JobPrincipal={userId:'55555555-5555-4555-8555-555555555555',loginId:'66666666-6666-4666-8666-666666666666',loginExpiresAt:Date.now()+3600000};
 type Candidate={object_id:string;visibility:'visible'|'hidden'|'unknown';anchor:number[];external_id:null};
 const candidate=(id:string,visibility:Candidate['visibility']='visible'):Candidate=>({object_id:id,visibility,anchor:[1,2,3],external_id:null});
-function database(options:{rows?:Candidate[];manual?:boolean;legacyAutomatic?:boolean;projectMode?:boolean;admin?:boolean;revoked?:boolean;registry?:string;model?:string|null}={}) {
+function database(options:{rows?:Candidate[];manual?:boolean;legacyAutomatic?:boolean;projectMode?:boolean;admin?:boolean;revoked?:boolean;registry?:string;model?:string|null;verifiedCandidate?:AutomaticEndpointCandidateResult}={}) {
   const aggregate=options.projectMode?{...geometryTraceFixture().aggregate,projectId,modelVersionId:modelId,artifactId}:null;
   const writes:{kind:'binding'|'match';values:unknown[]}[]=[],release=vi.fn();
   const query=vi.fn(async(sql:string,values:unknown[]=[])=>{
@@ -43,7 +49,7 @@ function database(options:{rows?:Candidate[];manual?:boolean;legacyAutomatic?:bo
     if (sql.startsWith('UPDATE pf_project_state SET')) return {rows:[{registry_revision:'2'}]};
     throw Error('Unexpected test query: '+sql);
   });
-  const pool={connect:vi.fn(async()=>({query,release}))} as unknown as Pool;
+  const pool={connect:vi.fn(async()=>({query,release,verifiedCandidate:options.verifiedCandidate}))} as unknown as Pool;
   const repo=createPathFinderRepository(pool);
   return {query,writes,pool,release,repo,match:()=>repo.match(projectId,who,'1')};
 }
@@ -67,18 +73,36 @@ describe('automatic candidate eligibility and ambiguity',()=>{
     const db=database({manual:true,rows:[candidate('replacement')]});expect((await db.match()).matchedLocations).toBe(0);expect(db.writes).toEqual([]);expect(db.query.mock.calls.some(([sql])=>sql.includes('FROM pf_model_objects'))).toBe(false);
   });
   it('records a sole visible project-mode candidate as unverified without creating binding authority or bumping the registry',async()=>{
-    const db=database({projectMode:true,rows:[candidate('visible')]});
+    const db=database({projectMode:true,rows:[candidate('visible')],verifiedCandidate:{status:'automatic-ready',candidateObjectIds:['dbid:5'],point:null}});
     expect(await db.match()).toEqual({createdLocations:0,matchedLocations:0,registryRevision:'1'});
-    expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,'unverified',JSON.stringify(['visible'])]}]);
+    expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,'unverified',JSON.stringify(['dbid:5'])]}]);
+    expect(readAutomaticEndpointCandidates).toHaveBeenCalledWith(expect.anything(),expect.objectContaining({projectId,locationIds:[locationId]}));
+    expect(db.query.mock.calls.some(([sql])=>sql.startsWith('SELECT * FROM pf_model_objects'))).toBe(false);
     expect(db.query.mock.calls.find(([sql])=>sql.startsWith('SELECT current_aggregate_id FROM pf_project_preparations'))?.[1]).toEqual([projectId]);
     expect(db.query.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO pf_location_bindings')||sql.startsWith('INSERT INTO pf_endpoint_binding_')||sql.startsWith('INSERT INTO pf_location_events')||sql.startsWith('UPDATE pf_project_state'))).toBe(false);
   });
+  it('requires preparation again before saving misleading matches from old unknown display evidence',async()=>{
+    const db=database({projectMode:true,rows:[candidate('unknown','unknown')]});
+    await expect(db.match()).rejects.toMatchObject({code:'ENDPOINT_PREPARATION_REQUIRED'});
+    expect(db.writes).toEqual([]);expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+    expect(db.query.mock.calls.some(([sql])=>sql.startsWith('SELECT * FROM pf_model_objects'))).toBe(false);
+  });
+  it('keeps a confirmed manual location usable even when automatic preparation must be repeated',async()=>{
+    const db=database({projectMode:true,manual:true});
+    expect((await db.match()).matchedLocations).toBe(0);expect(db.writes).toEqual([]);
+  });
+  it.each(['ambiguous','object-unverified','missing'] as const)('records verified project %s status without inventing confirmed binding authority',async status=>{
+    const candidateObjectIds=status==='missing'?[]:['dbid:5','dbid:6'];
+    const db=database({projectMode:true,verifiedCandidate:{status,candidateObjectIds,point:null}});
+    expect((await db.match()).matchedLocations).toBe(0);
+    expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,status==='object-unverified'?'unverified':status,JSON.stringify(candidateObjectIds)]}]);
+  });
   it('keeps an old automatic binding stale in project state and never promotes it during candidate matching',async()=>{
-    const db=database({projectMode:true,legacyAutomatic:true,rows:[candidate('replacement')]});
+    const db=database({projectMode:true,legacyAutomatic:true,rows:[candidate('replacement')],verifiedCandidate:{status:'saved-binding-required',candidateObjectIds:[],point:null}});
     const before=await db.repo.state(projectId,who);expect(before.locations[0].binding).toMatchObject({source:'automatic',revision:'7',point:[9,8,7],status:'stale'});
     expect(before.locations[0].calculationAvailability).toMatchObject({status:'not-evaluated',pointAvailable:false,reasonCode:'LOCATION_NOT_IN_CABLE_SCOPE'});
     expect((await db.match()).matchedLocations).toBe(0);
-    expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,'unverified',JSON.stringify(['replacement'])]}]);
+    expect(db.writes).toEqual([{kind:'match',values:[projectId,locationId,modelId,'unverified',JSON.stringify([])]}]);
     expect((await db.repo.state(projectId,who)).locations[0].binding).toMatchObject({source:'automatic',revision:'7',point:[9,8,7],status:'stale'});
     expect(db.query.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO pf_location_bindings')||sql.startsWith('INSERT INTO pf_endpoint_binding_'))).toBe(false);
   });

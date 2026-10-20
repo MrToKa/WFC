@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import type { ComputationalSnapshot, LocationDto, SnapshotObject } from './contracts.js';
-import { artifactSchema, bindLocationSchema } from './contracts.js';
+import { artifactSchema, bindLocationSchema, snapshotSchema } from './contracts.js';
 import { matchLocation, normalizeLocation, objectMatchNames, validateSnapshotStructure } from './matching.js';
 
 const id = '11111111-1111-4111-8111-111111111111';
@@ -36,6 +36,16 @@ describe('PathFinder project location matching',() => {
   it('exposes ambiguous object candidates for unresolved locations',() => expect(matchLocation('=A01',[location({binding:null,matching:{status:'ambiguous',candidateObjectIds:['a','b']}})],true)).toMatchObject({status:'ambiguous',candidates:['a','b']}));
   it('recognizes only explicit property labels',() => {
     expect(objectMatchNames(object({properties:[{category:'x',name:'Tag',value:'=B01'},{category:'x',name:'Description',value:'=C01'}]}))).toEqual(['=A01','=B01']);
+  });
+  it('uses all human scalar property labels only with explicit v3 eligibility and keeps native visibility unknown',() => {
+    const value = object({nativeHidden:null,properties:[{category:'Project data',name:'Supply reference',value:'/=B001'},{category:'SDK',name:'__child__',value:'=HIDDEN'}],
+      equipmentEligibility:{schemaVersion:'wfc.pf.equipment-eligibility.v1',matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScopeSha256:'a'.repeat(64),visibility:'visible',checkedAncestorCount:1,fragmentStatus:'geometry-free-node-bounds',fragmentCount:0}});
+    expect(objectMatchNames(value)).toEqual(['=A01','/=B001','=B001']);
+    const simulated=snapshot([value]);
+    simulated.capture={...simulated.capture,sourceKind:'converted',adapterVersion:'wfc.protected-selected-capture.v1',inventoryComplete:false,geometryComplete:false,unitsVerified:false,transformsVerified:false,planningVisibilityKnown:false,sourceLinkVerified:false};
+    expect(snapshotSchema.safeParse(simulated).success).toBe(true);expect(validateSnapshotStructure(simulated).get(value.id)).toBe('unknown');
+    delete value.equipmentEligibility;
+    expect(objectMatchNames(value)).toEqual(['=A01']);
   });
   it('indexes a single leading slash on model evidence while preserving strict project alias identity',() => {
     expect(objectMatchNames(object({name:' /=a001 ',properties:[{category:'x',name:'Tag',value:'/cafe\u0301'}]}))).toEqual(['/=A001','=A001','/CAF\u00c9','CAF\u00c9']);

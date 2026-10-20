@@ -45,6 +45,21 @@ describe('server-owned routing preparation plan', () => {
     expect(preparationPlanSchema.parse(legacy)).toEqual(legacy);
     expect(preparationPlanSchema.safeParse({ ...current, matchingPolicyVersion: 'unknown' }).success).toBe(false);
   });
+  it('freezes v3 SDK display scope in both plan and scope hashes without inserting it into historical contracts', () => {
+    const {context,input}=preparationFixture(),historical=buildPreparationPlan(context,input,id(50));
+    expect(historical.requestedScope).not.toHaveProperty('endpointVisibility');
+    const visibilityScope={schemaVersion:'wfc.pf.sdk-display-visibility.v1' as const,basis:'sdk-display-before-pf-appearance' as const,contentSha256:'d'.repeat(64)};
+    input.discovery.matchingPolicyVersion='wfc.pf.project-exact-candidates.v3';
+    expect(preparationCreateSchema.safeParse(input).success).toBe(false);
+    input.discovery.visibilityScope=visibilityScope;
+    const parsed=preparationCreateSchema.parse(input),plan=buildPreparationPlan(context,parsed,id(50));
+    expect(plan.requestedScope.endpointVisibility).toEqual(visibilityScope);
+    expect(plan.requestedScope.scopeSha256).not.toBe(historical.requestedScope.scopeSha256);
+    expect(plan.orderedPlanSha256).not.toBe(historical.orderedPlanSha256);
+    expect(preparationPlanSchema.safeParse({...plan,requestedScope:{...plan.requestedScope,endpointVisibility:undefined}}).success).toBe(false);
+    parsed.discovery.matchingPolicyVersion='wfc.pf.project-exact-candidates.v2';
+    expect(preparationCreateSchema.safeParse(parsed).success).toBe(false);
+  });
   it('freezes exact scope, server category masks, ancestry and a verifiable plan hash', () => {
     const { context, input } = preparationFixture(), plan = buildPreparationPlan(context, input, id(4));
     expect(preparationPlanSchema.parse(plan)).toEqual(plan);

@@ -11,9 +11,28 @@ import type {
   PreparationDiscoveryObject,
   PreparationDiscoveryPage,
   PreparationDiscoveryRequest,
+  PreparationEndpointVisibility,
 } from '../viewer-runtime/preparation-input.mjs';
-import { PREPARATION_MATCHING_POLICY } from '../viewer-runtime/preparation-input.mjs';
+import { PREPARATION_MATCHING_POLICY, PREPARATION_VIEWER_LIMITS, validatePreparationDiscoveryPage, validatePreparationDiscoveryRequest } from '../viewer-runtime/preparation-input.mjs';
 export type PreparationDiscoveryReader = { discover(request: PreparationDiscoveryRequest): Promise<PreparationDiscoveryPage>; assertCurrent(): void };
+
+/** Bound both echoed request names and one fully matching object inside 24KiB.
+ * Keep query-scoped exact names; never retain the model's unrelated properties.
+ */
+export function preparationEquipmentNameBatches(names: readonly string[]): string[][] {
+  if(names.length>PREPARATION_VIEWER_LIMITS.equipmentNames||new Set(names).size!==names.length)throw new Error('Project endpoint names exceed the supported exact discovery scope.');
+  const groups:string[][]=[],encoder=new TextEncoder();let group:string[]=[],bytes=2;
+  for(const name of names){
+    if(!validatePreparationDiscoveryRequest({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:[name],rootObjectId:null,cursor:0,limit:1}))
+      throw new Error('A project endpoint name is outside the protected discovery limits.');
+    const size=encoder.encode(JSON.stringify(name)).length;
+    if(group.length&&(group.length>=PREPARATION_VIEWER_LIMITS.equipmentNames||bytes+1+size>PREPARATION_VIEWER_LIMITS.equipmentNameBytes)){
+      groups.push(group);group=[];bytes=2;
+    }
+    bytes+=size+(group.length?1:0);group.push(name);
+  }
+  if(group.length)groups.push(group);return groups;
+}
 
 /** Exact complete pagination; no candidate, scope or policy is inferred from a first match. */
 export async function collectPreparationDiscovery<T extends PreparationDiscoveryReader>(
@@ -27,6 +46,7 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
     endpointMatches = new Map<string, number[]>();
   let inventoryCount: number | null = null,
     equipmentProof: PreparationDiscovery['propertyScan'] = null;
+  let visibilityScope:PreparationEndpointVisibility|null=null;
   const add = (object: PreparationDiscoveryObject) => {
     const prior = objects.get(object.objectId);
     const { matchedNames: _matched, ...identity } = object;
@@ -67,10 +87,11 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
         rootObjectId,
         cursor,
         limit: 128,
+        ...(visibilityScope?{visibilityScope}:{}),
       });
       viewer.assertCurrent();
       if (
-        page.mode !== mode ||
+        !validatePreparationDiscoveryPage(page) || page.mode !== mode ||
         page.rootObjectId !== rootObjectId ||
         page.cursor !== cursor ||
         JSON.stringify(page.names) !== JSON.stringify(names) ||
@@ -81,6 +102,9 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
         throw new Error(
           'The model returned inconsistent discovery coverage. Reload and try again.',
         );
+      if(visibilityScope&&canonicalPurposeJson(visibilityScope)!==canonicalPurposeJson(page.visibilityScope))
+        throw new Error('The model display visibility changed during discovery. Discover again before freezing a plan.');
+      visibilityScope=page.visibilityScope;
       if (inventoryCount !== null && inventoryCount !== page.indexedObjectCount)
         throw new Error('The model inventory changed during discovery.');
       inventoryCount = page.indexedObjectCount;
@@ -135,10 +159,11 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
     progress(`Reading candidate coverage: ${index + 1} of ${roots.length} roots.`);
     await pages('subtree', [], roots[index], () => {});
   }
-  for (let offset = 0; offset < context.endpointNames.length; offset += 32) {
-    const batch = context.endpointNames.slice(offset, offset + 32);
+  let endpointOffset=0;
+  for (const batch of preparationEquipmentNameBatches(context.endpointNames)) {
+    endpointOffset+=batch.length;
     progress(
-      `Finding project endpoints: ${Math.min(offset + batch.length, context.endpointNames.length)} of ${context.endpointNames.length}.`,
+      `Finding project endpoints: ${endpointOffset} of ${context.endpointNames.length}.`,
     );
     for (const name of batch) endpointMatches.set(name, []);
     await pages('equipment', batch, null, (page) => {
@@ -180,12 +205,14 @@ export async function collectPreparationDiscovery<T extends PreparationDiscovery
       .sort((left, right) => objects.get(left)!.orderIndex - objects.get(right)!.orderIndex)
       .map((value) => `dbid:${value}`);
   const proof = equipmentProof as PreparationDiscovery['propertyScan'];
+  if(!visibilityScope)throw new Error('No project tray or endpoint names are available for discovery.');
   return {
     schemaVersion: 'wfc.pf.discovery-report.v1',
     modelVersionId: context.scope.modelVersionId,
     contentFingerprint: context.scope.contentFingerprint,
     selectionRevision: context.scope.selectionRevision,
     matchingPolicyVersion: PREPARATION_MATCHING_POLICY,
+    visibilityScope,
     complete: proof === null || proof.complete,
     propertyScan: proof,
     objects: ordered.map(({ matchedNames: _names, ...object }) => ({

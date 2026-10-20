@@ -1,6 +1,6 @@
 import type { ComputationalSnapshot, LocationDto, LocationMatch, SnapshotObject } from './contracts.js';
 import { PathFinderError } from './errors.js';
-import { modelEquipmentMatchKeys } from '../../viewer-runtime/equipment-names.mjs';
+import { humanScalarPropertyValues, modelEquipmentMatchKeys } from '../../viewer-runtime/equipment-names.mjs';
 
 /** Exact project identity; preserve punctuation, leading zeroes and display spelling. */
 export function normalizeLocation(value: string): string {
@@ -16,7 +16,10 @@ export function matchLocation(value: string | null, locations: LocationDto[], ha
   return { status: location.binding?.status === 'confirmed' && hasActiveModel ? 'matched' : 'stale', locationId: location.id, candidates: [location.id] };
 }
 export function objectMatchNames(object: SnapshotObject): string[] {
-  return [...new Set([object.name, ...object.properties.filter(property => /^(tag|name|equipment[ _-]?tag|equipment[ _-]?name|location)$/i.test(property.name)).map(property => property.value)]
+  const properties = object.equipmentEligibility?.matchingPolicyVersion === 'wfc.pf.project-exact-candidates.v3'
+    ? humanScalarPropertyValues(object.properties)
+    : object.properties.filter(property => /^(tag|name|equipment[ _-]?tag|equipment[ _-]?name|location)$/i.test(property.name)).map(property => property.value);
+  return [...new Set([object.name, ...properties]
     .flatMap(modelEquipmentMatchKeys))];
 }
 export function validateSnapshotStructure(snapshot: ComputationalSnapshot): Map<string, 'visible' | 'hidden' | 'unknown'> {

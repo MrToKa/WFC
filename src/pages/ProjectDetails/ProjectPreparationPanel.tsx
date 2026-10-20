@@ -139,6 +139,11 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
         the saved administrator permissions in Details.
       </Body1>
       <Caption1>
+        From/To matching searches Model tree names and readable property values. Hidden objects
+        and objects below a hidden parent are excluded. Discovery restores the model appearance
+        before Path Finder highlighting; changing visibility requires a fresh preparation.
+      </Caption1>
+      <Caption1>
         Manual resolutions confirm physical ownership. They do not grant routing permissions.
         Published preparation covers the requested project scope; it does not claim whole-plant or
         native engineering acceptance.
@@ -160,7 +165,9 @@ export function ProjectPreparationPanel({ pf, active, onBusyChange }: Props) {
             {' '}These are saved candidate counts, not confirmed shared locations or calculated cables.
           </p>
           <p>
-            {plan.matchingPolicyVersion === 'wfc.pf.project-exact-candidates.v2'
+            {plan.matchingPolicyVersion === 'wfc.pf.project-exact-candidates.v3'
+              ? 'Matching policy v3: Model tree names and readable properties, with recorded visible-object checks. One model-only leading slash is allowed; other identifier characters remain significant.'
+              : plan.matchingPolicyVersion === 'wfc.pf.project-exact-candidates.v2'
               ? 'Matching policy v2: equipment identifiers allow one leading slash present only in the model. Tray names retain exact matching; all other equipment identifier characters remain significant.'
               : 'Historical matching policy v1: discover again and freeze a new plan to use model-only leading-slash matching. Opening this saved plan does not rerun discovery.'}
           </p>

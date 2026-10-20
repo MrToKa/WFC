@@ -20,10 +20,11 @@ function fixture() {
   const THREE = { Vector3, Box3, BufferGeometry: Geometry, SphereGeometry, BufferAttribute: class { constructor(array, itemSize) { Object.assign(this, { array, itemSize }); } }, MeshBasicMaterial: Material, Mesh, DoubleSide: 2 };
   const canvas = new EventTarget(); canvas.getBoundingClientRect = () => ({ left: 10, top: 20 });
   const tree = { getRootId: () => 1, getNodeName: id => ({ 1: 'MODEL', 2: '=CAB-001', 3: '=CAB-002' })[id], getNodeParentId: id => id === 1 ? 0 : 1,
-    enumNodeChildren(id, fn) { for (const child of [1, 2, 3]) if (fn(child)) break; }, enumNodeFragments(id, fn) { if (id !== 1) fn(id); } };
+    isNodeHidden: () => false, isNodeOff: () => false, getChildCount: id => id === 1 ? 2 : 0,
+    enumNodeChildren(id, fn) { if (id === 1) for (const child of [2, 3]) if (fn(child)) break; }, enumNodeFragments(id, fn) { if (id !== 1) fn(id); } };
   const originalMaterial = new Material({ color: 0x32a852, opacity: 0.8, transparent: true, depthWrite: false, originModelId: 7, _sharedBy: [7] });
   const fragmentMaterials = new Map(Array.from({ length: 4 }, (_, id) => [id, originalMaterial]));
-  const fragments = { getWorldBounds(id, box) { box.expandByPoint(new Vector3(id, 2, 3)); box.expandByPoint(new Vector3(id + 1, 4, 5)); }, getCount: () => 4, getMaterial: id => fragmentMaterials.get(id), setMaterial: (id, material) => fragmentMaterials.set(id, material) };
+  const fragments = { isFragVisible: () => true, getWorldBounds(id, box) { box.expandByPoint(new Vector3(id, 2, 3)); box.expandByPoint(new Vector3(id + 1, 4, 5)); }, getCount: () => 4, getMaterial: id => fragmentMaterials.get(id), setMaterial: (id, material) => fragmentMaterials.set(id, material) };
   const model = { id: 7, unconsolidated: 0, unconsolidate() { this.unconsolidated++; }, getUnitScale: () => 0.001, getUpVector: () => [0, 0, 1], getGlobalOffset: () => ({ x: 1000000.123456, y: -2000000.654321, z: 3000 }),
     getObjectTree: success => success(tree), getExternalIdMapping: success => success({ externalA: 2, externalB: 3 }), getFragmentList: () => fragments,
     getProperties: (id, success) => success({ properties: [{ displayName: 'Tag', displayValue: tree.getNodeName(id) }] }) };
@@ -73,24 +74,25 @@ test('preparation property discovery retains every property-only candidate and e
   assert.equal(calls,1);assert.equal(first.propertyScan.complete,!omitted);assert.equal(first.propertyScan.omittedObjectCount,omitted?1:0);assert.deepEqual([...first.objects,...(second?.objects??[])].map(x=>x.objectId),omitted?[2]:[2,3]);f.controller.dispose();
  }
 });
-test('preparation equipment indexes one complete SDK pass across different name batches and pages',async()=>{
+test('preparation equipment caches only one complete query scope and reuses identical query pages',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
  f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:dbId===1?[]:dbId===2?[{displayName:'Equipment Tag',displayValue:' p-001 '},{displayName:'Location',displayValue:'Cafe\u0301'}]:[{attributeName:'equipment_name',displayValue:'P-002'}]})));};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:1};
  const first=await f.controller.readPreparationObjects(request);
+ await f.controller.readPreparationObjects(request);assert.equal(calls,1);
  const second=await f.controller.readPreparationObjects({...request,names:['P-002']});
  const third=await f.controller.readPreparationObjects({...request,names:['Caf\u00e9','p-001','P-001']});
- assert.equal(calls,1);assert.deepEqual(first.objects.map(x=>x.objectId),[2]);assert.deepEqual(second.objects.map(x=>x.objectId),[3]);
+ assert.equal(calls,3);assert.deepEqual(first.objects.map(x=>x.objectId),[2]);assert.deepEqual(second.objects.map(x=>x.objectId),[3]);
  assert.deepEqual(third.objects[0].matchedNames,['Caf\u00e9','p-001','P-001']);assert.deepEqual(second.propertyScan,first.propertyScan);assert.deepEqual(third.propertyScan,first.propertyScan);
  for(const name of ['P-01','P-001-extra','P-00'])assert.deepEqual((await f.controller.readPreparationObjects({...request,names:[name]})).objects,[]);
- assert.equal(calls,1);f.controller.dispose();
+ assert.equal(calls,6);f.controller.dispose();
 });
 test('preparation cached equipment coverage retains omissions and never matches an omitted row by its node name',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
  f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.filter(dbId=>dbId!==3).map(dbId=>({dbId,properties:dbId===2?[{displayName:'Tag',displayValue:'P-001'}]:[]})));};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:128};
  const first=await f.controller.readPreparationObjects(request),second=await f.controller.readPreparationObjects({...request,names:['=CAB-002']});
- assert.equal(calls,1);assert.deepEqual(second.objects,[]);assert.deepEqual(second.propertyScan,first.propertyScan);assert.deepEqual(first.propertyScan,{attemptedObjectCount:3,returnedObjectCount:2,omittedObjectCount:1,complete:false});f.controller.dispose();
+ assert.equal(calls,2);assert.deepEqual(second.objects,[]);assert.deepEqual(second.propertyScan,first.propertyScan);assert.deepEqual(first.propertyScan,{attemptedObjectCount:3,returnedObjectCount:2,omittedObjectCount:1,complete:false});f.controller.dispose();
 });
 test('preparation equipment accepts one model leading slash without changing project queries or tray matching',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;f.tree.getNodeName=id=>({1:'Plant',2:'/=A001',3:'//=A001'})[id];let calls=0;
@@ -98,18 +100,18 @@ test('preparation equipment accepts one model leading slash without changing pro
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['=A001','/=A001'],rootObjectId:null,cursor:0,limit:128};
  const result=await f.controller.readPreparationObjects(request);assert.deepEqual(result.names,request.names);assert.deepEqual(result.objects.map(x=>[x.objectId,x.matchedNames]),[[2,['=A001','/=A001']]]);
  for(const name of ['A001','=A1','=A001/','=A001/PART'])assert.deepEqual((await f.controller.readPreparationObjects({...request,names:[name]})).objects,[]);
- assert.deepEqual((await f.controller.readPreparationObjects({...request,mode:'names',names:['=A001']})).objects,[]);assert.equal(calls,1);f.controller.dispose();
+ assert.deepEqual((await f.controller.readPreparationObjects({...request,mode:'names',names:['=A001']})).objects,[]);assert.equal(calls,5);f.controller.dispose();
 });
 test('preparation equipment retains all exact and slash-decorated property candidates instead of choosing one',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;
  f.model.getBulkProperties=(ids,_options,success)=>success(ids.map(dbId=>({dbId,properties:dbId===1?[]:[{displayName:'Tag',displayValue:dbId===2?'/=A001':'=A001'},{displayName:'Description',displayValue:'/=IGNORED'}]})));
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['=A001','=IGNORED'],rootObjectId:null,cursor:0,limit:128},result=await f.controller.readPreparationObjects(request);
- assert.deepEqual(result.objects.map(x=>[x.objectId,x.matchedNames]),[[2,['=A001']],[3,['=A001']]]);assert.equal(result.propertyScan.complete,true);f.controller.dispose();
+ assert.deepEqual(result.objects.map(x=>[x.objectId,x.matchedNames]),[[2,['=A001','=IGNORED']],[3,['=A001','=IGNORED']]]);assert.equal(result.propertyScan.complete,true);f.controller.dispose();
 });
 test('preparation failed equipment builds are cleared rather than reused for another name batch',async()=>{
  for(const invalid of ['duplicate','oversized-value','oversized-row']){
   const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
-  f.model.getBulkProperties=(ids,_options,success)=>{calls++;const rows=ids.map(dbId=>({dbId,properties:[{displayName:'Tag',displayValue:'P-001'}]}));if(calls===1){if(invalid==='duplicate')rows[1]=rows[0];else if(invalid==='oversized-value')rows[0].properties[0].displayValue='x'.repeat(65537);else rows[0].properties=Array(4097).fill({displayName:'Tag',displayValue:'P-001'});}success(rows);};
+  f.model.getBulkProperties=(ids,_options,success)=>{calls++;const rows=ids.map(dbId=>({dbId,properties:[{displayName:'Tag',displayValue:'P-001'}]}));if(calls===1){if(invalid==='duplicate')rows[1]=rows[0];else if(invalid==='oversized-value')rows[0].properties[0].displayValue=' '.repeat(65537)+'P-001';else rows[0].properties=Array(4097).fill({displayName:'Tag',displayValue:'P-001'});}success(rows);};
   const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['P-001'],rootObjectId:null,cursor:0,limit:128};
   await assert.rejects(()=>f.controller.readPreparationObjects(request),{code:'EXTRACTION_FAILED'});
   const recovered=await f.controller.readPreparationObjects({...request,names:['p-001']});assert.equal(calls,2);assert.equal(recovered.objects.length,3);assert.equal(recovered.propertyScan.complete,true);f.controller.dispose();
@@ -121,7 +123,7 @@ test('preparation equipment scans a real-shaped wide structural row without char
  f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:dbId===1?[...childLinks,{displayName:'Name',displayValue:'/=A001'}]:[{displayName:'Tag',displayValue:dbId===2?'P-001':'P-002'}]})));};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['=A001'],rootObjectId:null,cursor:0,limit:128};
  const first=await f.controller.readPreparationObjects(request),second=await f.controller.readPreparationObjects({...request,names:['P-002']});
- assert.deepEqual(first.objects.map(value=>value.objectId),[1]);assert.deepEqual(second.objects.map(value=>value.objectId),[3]);assert.deepEqual(first.propertyScan,{attemptedObjectCount:3,returnedObjectCount:3,omittedObjectCount:0,complete:true});assert.equal(calls,1);f.controller.dispose();
+ assert.deepEqual(first.objects.map(value=>value.objectId),[1]);assert.deepEqual(second.objects.map(value=>value.objectId),[3]);assert.deepEqual(first.propertyScan,{attemptedObjectCount:3,returnedObjectCount:3,omittedObjectCount:0,complete:true});assert.equal(calls,2);f.controller.dispose();
 });
 test('preparation equipment cancellation discards the unfinished index and ignores its late SDK callback',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0,late,started;
@@ -129,7 +131,7 @@ test('preparation equipment cancellation discards the unfinished index and ignor
  f.model.getBulkProperties=(ids,_options,success)=>{calls++;if(calls===1){late=()=>success(ids.map(dbId=>({dbId,properties:[{displayName:'Tag',displayValue:'STALE'}]})));started();}else success(ids.map(dbId=>({dbId,properties:[{displayName:'Tag',displayValue:'CURRENT'}]})));};
  const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['STALE'],rootObjectId:null,cursor:0,limit:128},abort=new AbortController();
  const pending=f.controller.readPreparationObjects(request,abort.signal);await began;abort.abort();await assert.rejects(pending,{name:'AbortError'});late();
- const recovered=await f.controller.readPreparationObjects({...request,names:['CURRENT']});assert.equal(calls,2);assert.equal(recovered.objects.length,3);assert.deepEqual((await f.controller.readPreparationObjects(request)).objects,[]);assert.equal(calls,2);f.controller.dispose();
+ const recovered=await f.controller.readPreparationObjects({...request,names:['CURRENT']});assert.equal(calls,2);assert.equal(recovered.objects.length,3);assert.deepEqual((await f.controller.readPreparationObjects(request)).objects,[]);assert.equal(calls,3);f.controller.dispose();
 });
 test('preparation equipment cache is scoped to the active model and disposed controller',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;let calls=0;
@@ -138,6 +140,43 @@ test('preparation equipment cache is scoped to the active model and disposed con
  await f.controller.readPreparationObjects(request);f.viewer.model={...f.model};await assert.rejects(()=>f.controller.readPreparationObjects(request),{code:'MODEL_SELECTION_CHANGED'});f.viewer.model=f.model;
  await f.controller.readPreparationObjects(request);assert.equal(calls,2);f.controller.dispose();await assert.rejects(()=>f.controller.readPreparationObjects(request),{name:'AbortError'});assert.equal(calls,2);
  const next=createPathFinderController(f.viewer,{window:{THREE:{}}});await next.readPreparationObjects(request);assert.equal(calls,3);next.dispose();
+});
+test('preparation searches arbitrary own scalar human properties and excludes hidden/internal values',async()=>{
+ const f=fixture();f.model.getBulkProperties=(ids,_options,success)=>success(ids.map(dbId=>({dbId,properties:dbId===2?[{displayName:'ACS functional designation',displayValue:'/=CUSTOM'},{displayName:'Number',displayValue:42},{displayName:'Boolean',displayValue:true},{displayName:'Tag',displayValue:'SECRET',hidden:true},{displayCategory:'__child__',displayName:'Tag',displayValue:'CHILD'},{displayName:'Description',displayValue:'x'.repeat(100000)}]:[]})));
+ const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['=CUSTOM','42','true','SECRET','CHILD'],rootObjectId:null,cursor:0,limit:128});assert.deepEqual(page.objects.map(value=>[value.objectId,value.matchedNames]),[[2,['=CUSTOM','42','true']]]);assert.equal(page.propertyScan.complete,true);f.controller.dispose();
+});
+test('query cached duplicate postings are re-filtered against fresh display visibility on every page',async()=>{
+ const f=fixture(),hidden=new Set();let calls=0;f.tree.isNodeHidden=id=>hidden.has(id);f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:dbId===1?[]:[{displayName:'Any custom label',displayValue:'EQ'}]})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['EQ'],rootObjectId:null,cursor:0,limit:128},first=await f.controller.readPreparationObjects(request);assert.deepEqual(first.objects.map(value=>value.objectId),[2,3]);hidden.add(2);
+ const second=await f.controller.readPreparationObjects(request);assert.deepEqual(second.objects.map(value=>value.objectId),[3]);assert.notEqual(first.visibilityScope.contentSha256,second.visibilityScope.contentSha256);assert.equal(calls,1);
+ await assert.rejects(()=>f.controller.readPreparationObjects({...request,visibilityScope:first.visibilityScope}),{code:'PREPARATION_VISIBILITY_CHANGED'});hidden.delete(2);const shown=await f.controller.readPreparationObjects({...request,visibilityScope:first.visibilityScope});assert.deepEqual(shown.objects.map(value=>value.objectId),[2,3]);assert.equal(calls,1);f.controller.dispose();
+});
+test('visibility mutation while SDK properties are read refuses a completed discovery',async()=>{
+ const f=fixture(),hidden=new Set();f.tree.isNodeHidden=id=>hidden.has(id);f.model.getBulkProperties=(ids,_options,success)=>{hidden.add(2);success(ids.map(dbId=>({dbId,properties:[{displayName:'Tag',displayValue:'EQ'}]})));};
+ await assert.rejects(()=>f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['EQ'],rootObjectId:null,cursor:0,limit:128}),{code:'PREPARATION_VISIBILITY_CHANGED'});f.controller.dispose();
+});
+test('missing or partially visible fragment geometry never becomes an automatic endpoint',async()=>{
+ const f=fixture();f.model.getBulkProperties=(ids,_options,success)=>success(ids.map(dbId=>({dbId,properties:dbId===2?[{displayName:'Tag',displayValue:'EQ'}]:[]})));f.tree.enumNodeFragments=(id,visit)=>{if(id===2){visit(2);visit(3);}};f.fragments.isFragVisible=id=>id!==3;
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['EQ'],rootObjectId:null,cursor:0,limit:128};assert.deepEqual((await f.controller.readPreparationObjects(request)).objects,[]);delete f.fragments.isFragVisible;await assert.rejects(()=>f.controller.readPreparationObjects(request),{code:'PREPARATION_VISIBILITY_UNAVAILABLE'});f.controller.dispose();
+});
+test('PF Ghost is restored before visibility discovery while actual user-hidden objects remain excluded',async()=>{
+ const f=fixture(),hidden=new Set([3]);f.tree.isNodeHidden=id=>hidden.has(id)||(f.viewer.isolated?.length>0&&id!==1&&!f.viewer.isolated.includes(id));f.model.getBulkProperties=(ids,_options,success)=>success(ids.map(dbId=>({dbId,properties:dbId===1?[]:[{displayName:'Tag',displayValue:'EQ'}]})));
+ f.controller.showPath({points:[[1000,-2000,3],[1001,-2000,3]],objectIds:[2]});assert.ok(f.meshes.length);const page=await f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['EQ'],rootObjectId:null,cursor:0,limit:128});assert.deepEqual(page.objects.map(value=>value.objectId),[2]);assert.equal(f.meshes.length,0);assert.equal(f.viewer.impl.fadeMaterial.opacity,.15);assert.deepEqual(f.model.visibilityManager.states,[[3,false]]);f.controller.dispose();
+});
+test('failed PF visibility restore refuses observation and remains retryable without a false property scan',async()=>{
+ const f=fixture();let calls=0;f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:[]})));};f.controller.showPath({points:[[1000,-2000,3]],objectIds:[2]});const restore=f.model.visibilityManager.setVisibility;f.model.visibilityManager.setVisibility=()=>{throw Error('SDK restore failed');};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['=CAB-001'],rootObjectId:null,cursor:0,limit:128};await assert.rejects(()=>f.controller.readPreparationObjects(request),{code:'APPEARANCE_RESTORE_FAILED'});assert.equal(calls,0);f.model.visibilityManager.setVisibility=restore;assert.deepEqual((await f.controller.readPreparationObjects(request)).objects.map(value=>value.objectId),[2]);f.controller.dispose();
+});
+test('a pre-PF baseline without exact visibility restoration stays unknown even after legacy Clear',async()=>{
+ const f=fixture();delete f.model.visibilityManager.getVisibility;f.controller.showPath({points:[[1000,-2000,3]],objectIds:[2]});assert.throws(()=>f.controller.prepareForVisibilityObservation(),{code:'PREPARATION_VISIBILITY_UNAVAILABLE'});f.controller.clear();assert.throws(()=>f.controller.prepareForVisibilityObservation(),{code:'PREPARATION_VISIBILITY_UNAVAILABLE'});f.controller.dispose();
+});
+test('query-scoped equipment discovery handles438155 SDKrows without retaining unrelated property postings',{timeout:30000},async t=>{
+ const f=fixture(),count=438155,fragmentCount=664556;let calls=0,fragmentReads=0;const originalTimeout=globalThis.setTimeout;
+ t.mock.method(globalThis,'setTimeout',(callback,milliseconds,...args)=>{if(milliseconds===0)return setImmediate(callback,...args);return originalTimeout(callback,milliseconds,...args);});
+ f.tree.getNodeName=id=>id===1?'Plant':'Equipment '+id;f.tree.getNodeParentId=id=>id===1?0:1;f.tree.getChildCount=id=>id===1?count-1:0;f.tree.enumNodeChildren=(id,visit)=>{if(id===1)for(let child=2;child<=count;child++)visit(child);};f.tree.enumNodeFragments=(id,visit)=>{if(id===count)visit(0);};f.fragments.getCount=()=>fragmentCount;f.fragments.isFragVisible=()=>{fragmentReads++;return true;};
+ f.model.getBulkProperties=(ids,_options,success)=>{calls++;success(ids.map(dbId=>({dbId,properties:Array.from({length:8},(_,index)=>({displayName:'Custom scalar '+index,displayValue:dbId===count&&index===0?'TARGET':'Unrelated '+dbId+':'+index}))})));};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'equipment',names:['TARGET'],rootObjectId:null,cursor:0,limit:128},started=performance.now(),before=process.memoryUsage().rss,first=await f.controller.readPreparationObjects(request);assert.deepEqual(first.objects.map(value=>value.objectId),[count]);assert.equal(first.propertyScan.returnedObjectCount,count);assert.equal(first.propertyScan.complete,true);assert.equal(calls,Math.ceil(count/512));
+ const second=await f.controller.readPreparationObjects({...request,visibilityScope:first.visibilityScope});assert.deepEqual(second.objects.map(value=>value.objectId),[count]);assert.equal(calls,Math.ceil(count/512));assert.equal(fragmentReads,fragmentCount*4);t.diagnostic(JSON.stringify({scope:'synthetic-source-capacity-zero-delay-yields-accelerated-not-real-SDK',rows:count,scalarValues:count*8,fragmentVisibilitySlots:fragmentCount,sdkPropertyCalls:calls,queryMatches:1,milliseconds:Math.round(performance.now()-started),rssDeltaBytes:process.memoryUsage().rss-before}));f.controller.dispose();
 });
 test('preparation cancelled discovery cannot complete',async()=>{
  const f=fixture();f.tree.getChildCount=id=>id===1?2:0;const abort=new AbortController();abort.abort();await assert.rejects(()=>f.controller.readPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'subtree',names:[],rootObjectId:1,cursor:0,limit:128},abort.signal),{name:'AbortError'});f.controller.dispose();

@@ -400,7 +400,8 @@ export class ViewerController {
       const reply = await new Promise<ViewerEvent>((resolve,reject) => { try { requestId = this.send('READ_PREPARATION_OBJECTS', input as unknown as Record<string,unknown>, 'PREPARATION_OBJECTS',{resolve,reject}); } catch(error) { reject(error); } });
       current();
       const page = reply.payload;
-      if (!validatePreparationDiscoveryPage(page) || page.mode !== input.mode || page.rootObjectId !== input.rootObjectId || page.cursor !== input.cursor || JSON.stringify(page.names) !== JSON.stringify(input.names) || page.objects.length > input.limit) throw new Error('Project discovery acknowledgement mismatch');
+      if (!validatePreparationDiscoveryPage(page) || page.mode !== input.mode || page.rootObjectId !== input.rootObjectId || page.cursor !== input.cursor || JSON.stringify(page.names) !== JSON.stringify(input.names) || page.objects.length > input.limit
+        || input.visibilityScope&&page.visibilityScope.contentSha256!==input.visibilityScope.contentSha256) throw new Error('Project discovery acknowledgement mismatch');
       if (!await this.checkSelection()) throw new DOMException('Project discovery cancelled.','AbortError'); current();
       return page;
     } finally { options.signal?.removeEventListener('abort',abort); }

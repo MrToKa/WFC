@@ -88,14 +88,14 @@ export function calculationProjectionFiles(): ProjectionFile[] {
   const extension = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
   const names = ['calculationEngineIdentity', 'dependencies', 'dependencyBatch', 'settings', 'jobContracts',
     'endpointCalculationProvenance', 'comparisonCalculationProvenance', 'routingScope', 'worker', 'previews', 'engineSession', 'lengthLedger',
-    'automaticEndpointCandidates', 'matching', 'policyJson', 'directSecondaryStrategy'];
+    'automaticEndpointCandidates', 'matching', 'policyJson', 'directSecondaryStrategy', 'contracts', 'preparationUnionTask'];
   return [
     ...names.map(name => ({ name: './' + name + '.js', filename: fileURLToPath(new URL('./' + name + extension, import.meta.url)) })),
     { name: '../../shared/pathfinderEngineIdentity.js', filename: fileURLToPath(new URL('../../shared/pathfinderEngineIdentity' + extension, import.meta.url)) },
     { name: '../../shared/pathfinderLengthLedger.js', filename: fileURLToPath(new URL('../../shared/pathfinderLengthLedger' + extension, import.meta.url)) },
     { name: '../../shared/pathfinderDirectSecondary.js', filename: fileURLToPath(new URL('../../shared/pathfinderDirectSecondary' + extension, import.meta.url)) },
-    ...['pathfinderPurposePolicy','pathfinderPreparation','pathfinderCapacity','pathfinderGeometryTrace','pathfinderEndpointBindings'].map(name=>({name:'../../shared/'+name+'.js',filename:fileURLToPath(new URL('../../shared/'+name+extension,import.meta.url))})),
-    {name:'../../viewer-runtime/equipment-names.mjs',filename:fileURLToPath(new URL('../../viewer-runtime/equipment-names.mjs',import.meta.url))},
+    ...['pathfinderPurposePolicy','pathfinderPreparation','pathfinderCapacity','pathfinderGeometryTrace','pathfinderEndpointBindings','preparationMerge'].map(name=>({name:'../../shared/'+name+'.js',filename:fileURLToPath(new URL('../../shared/'+name+extension,import.meta.url))})),
+    ...['equipment-names.mjs','display-visibility.mjs','preparation-input.mjs','pathfinder.mjs','model-capture.mjs'].map(name=>({name:'../../viewer-runtime/'+name,filename:fileURLToPath(new URL('../../viewer-runtime/'+name,import.meta.url))})),
   ];
 }
 const configured = createCalculationEngineIdentityReader({

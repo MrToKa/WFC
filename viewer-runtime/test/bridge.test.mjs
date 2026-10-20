@@ -8,6 +8,7 @@ const uuid = index => `00000000-0000-4000-8000-${String(index).padStart(12, '0')
 const turn = async () => { await new Promise(resolve => setImmediate(resolve)); await new Promise(resolve => setImmediate(resolve)); };
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const routingBindings = (overrides = {}) => ({ schemaVersion: 'wfc.viewer.routing-bindings.v1', modelVersionId: uuid(3), contentFingerprint: 'b'.repeat(64), selectionRevision: '12', aggregateId: null, bindings: [], ...overrides });
+const preparationVisibilityScope = { schemaVersion: 'wfc.pf.sdk-display-visibility.v1', basis: 'sdk-display-before-pf-appearance', contentSha256: 'a'.repeat(64) };
 
 function fixture(options = {}) {
   const sent = [], fetches = [], loads = [], listeners = new Set(), states = [];
@@ -22,7 +23,7 @@ function fixture(options = {}) {
     showComputedPath(value) { facts.computedPath = structuredClone(value); },
     pickPoint: options.pickPoint ?? (async () => ({ objectId: 23, point: [1, 2, 3], derivation: 'picked-surface-point' })),
     readModelObjects: options.readModelObjects ?? (async ({ cursor, query }) => ({ cursor, nextCursor: null, complete: true, query, coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
-    readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
+    readPreparationObjects: options.readPreparationObjects ?? (async request => ({schemaVersion:request.schemaVersion,mode:request.mode,names:request.names,rootObjectId:request.rootObjectId,cursor:request.cursor,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScope:{...preparationVisibilityScope},indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true})),
     readSelection: options.readSelection ?? (async () => ({ coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] })),
     setPathTransparency: options.setPathTransparency ?? (async (percent, _signal, beforeCommit) => { await beforeCommit(); facts.transparency = percent; }),
     startModelCapture: options.startModelCapture ?? (async ({ captureId }) => ({ captureId, index: 0, done: false, eventJson: JSON.stringify({ type: 'metadata', captureId }) })),
@@ -77,12 +78,12 @@ test('capture timing logging cannot change success or stopped cleanup', async ()
 });
 
 test('preparation exact discovery is current-admin authorized before and after SDK work, cancellation suppresses a late page',async()=>{
- const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128};
+ const request={schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128,visibilityScope:{...preparationVisibilityScope}};
  for(const cancel of [false,true]){
   const waiting=deferred(),f=fixture({readPreparationObjects:()=>waiting.promise});await f.loaded();const command=f.send('READ_PREPARATION_OBJECTS',request);await turn();
   if(cancel)f.send('CANCEL_REQUEST',{targetRequestId:command.requestId});
-  waiting.resolve({schemaVersion:request.schemaVersion,mode:'names',names:request.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true});await turn();
-  assert.equal(f.messages('PREPARATION_OBJECTS').length,cancel?0:1);const auth=f.fetches.filter(value=>value.url.endsWith('/pathfinder-authorization'));assert.equal(auth.length,2);if(cancel)assert.equal(auth.at(-1).init.signal.aborted,true);f.bridge.dispose();
+  waiting.resolve({schemaVersion:request.schemaVersion,mode:'names',names:request.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScope:{...preparationVisibilityScope},indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true});await turn();
+  assert.equal(f.messages('PREPARATION_OBJECTS').length,cancel?0:1);if(!cancel){assert.equal(f.messages('PREPARATION_OBJECTS')[0].payload.matchingPolicyVersion,'wfc.pf.project-exact-candidates.v3');assert.deepEqual(f.messages('PREPARATION_OBJECTS')[0].payload.visibilityScope,request.visibilityScope);}const auth=f.fetches.filter(value=>value.url.endsWith('/pathfinder-authorization'));assert.equal(auth.length,2);if(cancel)assert.equal(auth.at(-1).init.signal.aborted,true);f.bridge.dispose();
  }
 });
 

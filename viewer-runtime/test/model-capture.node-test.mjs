@@ -7,6 +7,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { captureSelectedModel, createModelCaptureAssembler, MODEL_CAPTURE_LIMITS } from '../model-capture.mjs';
 import { planModelCaptureInput } from '../capture-input.mjs';
+import { captureDisplayVisibility } from '../display-visibility.mjs';
 
 class Matrix {
   constructor(double = false) { this.elements = double ? new Float64Array(16) : new Float32Array(16); this.makeScale(1, 1, 1); }
@@ -34,7 +35,7 @@ function fixture({ ambiguous = true, nonfinite = false, indices = [0, 1, 2], emp
     getNodeBox(id, box) { if (id === 4 && emptyEndpoint) box.set([2000, 3000, 4000, 2100, 3100, 4100]); },
   };
   const geometry = { vertices: [[0, 0, 0], [1000, 0, 0], [0, 1000, nonfinite ? NaN : 0]], indices };
-  const fragments = { isFragVisible: id => !hiddenFragments.includes(id), getGeometry: () => geometry, getWorldMatrix(_id, value) { value.makeScale(1, 1, 1); value.elements[12] = worldOffset; }, getOriginalWorldMatrix(_id, value) { value.makeScale(1, 1, 1); }, getWorldBounds(id, value) { value.min = new Vector(2000 + id, 3000, 4000); value.max = new Vector(2100 + id, 3100, 4100); } };
+  const fragments = { getCount: () => 7, isFragVisible: id => !hiddenFragments.includes(id), getGeometry: () => geometry, getWorldMatrix(_id, value) { value.makeScale(1, 1, 1); value.elements[12] = worldOffset; }, getOriginalWorldMatrix(_id, value) { value.makeScale(1, 1, 1); }, getWorldBounds(id, value) { value.min = new Vector(2000 + id, 3000, 4000); value.max = new Vector(2100 + id, 3100, 4100); } };
   const model = { getObjectTree: success => success(tree), getFragmentList: () => fragments, getUnitScale: () => 0.001, getUnitString: () => 'mm', getUpVector: () => [0, 0, 1], getGlobalOffset: () => new Vector(rawOffset, 0, 0), getData: () => ({}), getBulkProperties: (ids, _options, success) => success(ids.map(dbId => ({ dbId, externalId: 'external-' + dbId, properties: properties.get(dbId) ?? [] }))), getExternalIdMapping: success => success(Object.fromEntries([...names.keys()].map(id => ['external-' + id, id]))) };
   globalThis.Autodesk = { Viewing: { Private: { LmvMatrix4: Matrix, enumMeshVertices: (geo, visit) => geo.vertices.forEach((value, index) => visit(new Vector(...value), null, null, index)), enumMeshTriangles: (geo, visit) => { for (let index = 0; index < geo.indices.length; index += 3) visit(null, null, null, ...geo.indices.slice(index, index + 3)); } } } };
   globalThis.THREE = { Vector3: Vector, Box3: Box }; globalThis.LMV_VIEWER_VERSION = '7.130.0';
@@ -45,6 +46,26 @@ const ruleRequest = rules => { const { routeCodes: _codes, allowedCategories: _c
 const rule = (objectIds, allowedCategories, id = '44444444-4444-4444-8444-444444444444') => ({ id, objectIds, allowedCategories });
 const lookupRequest = (lookupRouteCodes = ['/BC001']) => { const { routeCodes: _codes, allowedCategories: _categories, ...identity } = request; return { ...identity, equipmentNames: [], lookupRouteCodes }; };
 const preparationRequest=(objects=[{objectId:3,rootObjectId:2,projectTrayId:'44444444-4444-4444-8444-444444444444',routeName:'/TRAY-01',shapeName:'STRAIGHT',allowedCategories:['LV']}],equipmentObjectIds=[],equipmentNames=[])=>({captureId:request.captureId,projectId:request.projectId,modelVersionId:request.modelVersionId,contentFingerprint:request.contentFingerprint,preparationSlice:{schemaVersion:'wfc.pf.viewer-slice.v1',sessionId:'55555555-5555-4555-8555-555555555555',partId:'66666666-6666-4666-8666-666666666666',planSha256:'b'.repeat(64),coordinateFrameId:'77777777-7777-4777-8777-777777777777',objects,equipmentObjectIds},equipmentNames});
+async function visiblePreparation(f,input=preparationRequest([],[4],['P-001'])) { const observed=await captureDisplayVisibility({model:f.model},f.tree,[1,2,3,4,5,6]);return {...input,preparationSlice:{...input.preparationSlice,endpointVisibility:observed.scope}}; }
+test('v3 automatic endpoint preserves all visible custom scalar properties and exact eligibility through capture assembly',async()=>{
+ const f=fixture();f.properties.set(4,[{displayName:'ACS functional code',displayValue:'P-001'},{displayName:'Tag',displayValue:'SECRET',hidden:true},{displayCategory:'__child__',displayName:'Tag',displayValue:'INTERNAL'},{displayName:'Number',displayValue:42},{displayName:'Description',displayValue:'x'.repeat(100000)}]);
+ const input=await visiblePreparation(f),assembler=createModelCaptureAssembler();for await(const event of captureSelectedModel({model:f.model},input))assembler.accept(event);const snapshot=assembler.finish(),object=snapshot.objects.find(value=>value.dbId===4);
+ assert.deepEqual(object.properties.map(value=>value.value),['P-001','42']);assert.deepEqual(object.equipmentEligibility,{schemaVersion:'wfc.pf.equipment-eligibility.v1',matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScopeSha256:input.preparationSlice.endpointVisibility.contentSha256,visibility:'visible',checkedAncestorCount:2,fragmentStatus:'all-visible',fragmentCount:1});assert.equal(object.nativeHidden,null);assert.equal(snapshot.capture.planningVisibilityKnown,false);
+});
+test('v3 geometry-free endpoints retain verified node bounds with zero fragments',async()=>{
+ const f=fixture({emptyEndpoint:true}),input=await visiblePreparation(f),assembler=createModelCaptureAssembler();for await(const event of captureSelectedModel({model:f.model},input))assembler.accept(event);const proof=assembler.finish().objects.find(value=>value.dbId===4).equipmentEligibility;assert.equal(proof.fragmentStatus,'geometry-free-node-bounds');assert.equal(proof.fragmentCount,0);
+});
+test('v3 planned hidden or partially hidden equipment is refused rather than silently published missing',async()=>{
+ for(const options of [{hiddenIds:[4]},{hiddenIds:[1]},{offIds:[4]},{hiddenFragments:[4]}]){const f=fixture(options),input=await visiblePreparation(f);await assert.rejects(async()=>{for await(const _event of captureSelectedModel({model:f.model},input)){}},/hidden or its display geometry/);}
+});
+test('v3 frozen visibility rejects mutations before and during object capture',async()=>{
+ const f=fixture(),input=await visiblePreparation(f);f.tree.isNodeHidden=id=>id===5;await assert.rejects(async()=>{for await(const _event of captureSelectedModel({model:f.model},input)){}},/visibility changed/);
+ f.tree.isNodeHidden=()=>false;let changed=false;await assert.rejects(async()=>{for await(const event of captureSelectedModel({model:f.model},input)){if(event.type==='object-part'&&!changed){changed=true;f.tree.isNodeOff=id=>id===5;}}},/visibility changed during capture/);
+});
+test('v3 assembler refuses a forged display scope, ancestor count or missing endpoint proof',async()=>{
+ const f=fixture(),input=await visiblePreparation(f),events=[];for await(const event of captureSelectedModel({model:f.model},input))events.push(event);
+ for(const change of ['scope','ancestors','missing']){const assembler=createModelCaptureAssembler();assert.throws(()=>{for(const original of events){const event=structuredClone(original);if(event.type==='object-part'&&event.objectId==='dbid:4'){const value=JSON.parse(event.text);if(change==='scope')value.equipmentEligibility.visibilityScopeSha256='f'.repeat(64);else if(change==='ancestors')value.equipmentEligibility.checkedAncestorCount=1;else delete value.equipmentEligibility;event.text=JSON.stringify(value);}assembler.accept(event);}},/eligibility|automatic endpoint/);}
+});
 test('preparation leaf slices capture exact leaves, authoritative route/shape and only concrete endpoint candidates',async()=>{
  const input=preparationRequest(undefined,[4],['P-001']),result=await collect({},input),leaf=result.snapshot.objects.find(object=>object.dbId===3);
  assert.equal(leaf.routeName,'/TRAY-01');assert.equal(leaf.shapeName,'STRAIGHT');assert.equal(leaf.routeBoundaryId,undefined);assert.deepEqual(leaf.allowedCategories,['LV']);assert.ok(result.snapshot.objects.some(object=>object.dbId===4));assert.ok(!result.snapshot.objects.some(object=>object.dbId===5));assert.deepEqual(result.summary.scope.preparationSlice,input.preparationSlice);
@@ -79,7 +100,8 @@ test('sparse endpoint-only preparation coalesces selected properties without emp
  const optimized=await run(captureSelectedModel),prior=await run(legacy.captureSelectedModel);
  assert.deepEqual(optimized.batches,[[2,65536,130000],[1]]);assert.deepEqual(prior.batches,[[2],[65536],[130000],[1]]);
  assert.equal(optimized.progress.filter(value=>value.phase==='properties').length,1);assert.ok(prior.progress.filter(value=>value.phase==='properties').length>250);
- assert.ok(optimized.yields<32);assert.ok(prior.yields>250);
+ // Fresh complete display visibility adds bounded full-inventory observations.
+ assert.ok(optimized.yields<96);assert.ok(prior.yields>250);
  assert.deepEqual(optimized.snapshot,prior.snapshot);assert.deepEqual(optimized.summary,prior.summary);
  assert.equal(createHash('sha256').update(JSON.stringify(optimized.snapshot)).digest('hex'),createHash('sha256').update(JSON.stringify(prior.snapshot)).digest('hex'));
  assert.equal(optimized.summary.scope.indexedObjectCount,inventoryCount);assert.equal(optimized.summary.scope.fullPropertyScan,false);
@@ -115,12 +137,12 @@ test('capture model equipment accepts one leading slash and retains exact/altern
  for(const name of ['A001','=A1','=A001/'])assert.equal(summary.equipmentMatches.find(value=>value.name===name).status,'missing');
  assert.equal(snapshot.objects.find(object=>object.dbId===4).name,'/=A001');assert.equal(snapshot.objects.find(object=>object.dbId===5).name,'=A001');
 });
-test('capture equipment property slash adapter applies only to explicit labels, never repeated slash or punctuation removal',async()=>{
+test('capture equipment property slash adapter accepts arbitrary human labels without punctuation removal',async()=>{
  const f=fixture();f.properties.set(4,[{displayName:'Equipment Tag',displayValue:'/=A001'},{displayName:'Description',displayValue:'/=IGNORED'}]);f.properties.set(5,[{displayName:'Tag',displayValue:'//=A001'}]);f.properties.set(6,[]);
  const input={...request,equipmentNames:['=A001','=IGNORED','A001']},assembler=createModelCaptureAssembler();
  for await(const event of captureSelectedModel({model:f.model},input))assembler.accept(event);
  const summary=assembler.summary();assert.deepEqual(summary.equipmentMatches.find(value=>value.name==='=A001').candidateObjectIds,['dbid:4']);
- for(const name of ['=IGNORED','A001'])assert.equal(summary.equipmentMatches.find(value=>value.name===name).status,'missing');
+ assert.equal(summary.equipmentMatches.find(value=>value.name==='=IGNORED').status,'candidate');assert.equal(summary.equipmentMatches.find(value=>value.name==='A001').status,'missing');
  assert.ok(!assembler.finish().objects.some(object=>object.dbId===5));
 });
 test('planned equipment slice captures only its explicit candidate even when the same model name matches another part',async()=>{
@@ -274,7 +296,7 @@ test('raw millimetre offsets beyond1e9 remain valid when canonical metres fit th
   assert.ok(snapshot.coordinates.globalOffsetMetres[0] > 3000000);
   assert.ok(snapshot.objects.find(value => value.dbId === 3).fragments[0].vertices[0][0] < 1e9);
 });
-test('cyclic hierarchy is refused', async () => { await assert.rejects(() => collect({ malformedParent: true }), /Cyclic SDK parent/); });
+test('cyclic hierarchy is refused', async () => { await assert.rejects(() => collect({ malformedParent: true }), /Cyclic SDK parent|Complete current SDK display visibility/); });
 test('cancellation after metadata aborts traversal and model replacement invalidates capture', async () => {
   const value = fixture(), controller = new AbortController(), viewer = { model: value.model }, iterator = captureSelectedModel(viewer, request, { signal: controller.signal });
   assert.equal((await iterator.next()).value.type, 'metadata'); controller.abort(); await assert.rejects(() => iterator.next(), { name: 'AbortError' });
@@ -315,9 +337,18 @@ test('canonical capture JSON rejects duplicate object members and unexpected obj
 });
 test('legacy, selected-boundary and independent lookup SDK captures cross the strict C# model-worker boundary', async () => {
   const staged = await stagedRequest(['P-001']);
-  for (const captureRequest of [request, ruleRequest([rule([2], ['LV'])]), lookupRequest(), staged.input]) {
+  const visible = await visiblePreparation(fixture(), preparationRequest(undefined,[4],['P-001']));
+  for (const [captureRequest,aggregate] of [[request,false], [ruleRequest([rule([2], ['LV'])]),false], [lookupRequest(),false], [staged.input,false], [visible,false], [visible,true]]) {
     const lookup = Boolean(captureRequest.lookupRouteCodes);
-    const { snapshot } = await collect({ lookupNames: lookup }, captureRequest), root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), scratch = path.join(root, 'pathfinder-engine/.scratch/protected-capture-interop-' + randomUUID()), snapshotId = randomUUID();
+    let { snapshot } = await collect({ lookupNames: lookup }, captureRequest);
+    if(aggregate){
+      const {tsImport}=await import('tsx/esm/api'),{mergePreparationParts}=await tsImport('../../shared/preparationMerge.ts',import.meta.url),slice=captureRequest.preparationSlice;
+      const objectManifest=[...snapshot.objects].sort((a,b)=>a.dbId-b.dbId).map((object,index)=>({objectId:object.id,parentId:object.parentId,name:object.name,hasGeometry:object.geometryRole==='routing-leaf'||(object.equipmentEligibility?.fragmentCount??0)>0,isPhysicalLeaf:object.geometryRole==='routing-leaf',orderIndex:index}));
+      const part={partId:slice.partId,partIndex:0,objects:slice.objects,physicalLeafIds:slice.objects.map(object=>'dbid:'+object.objectId),equipmentObjectIds:slice.equipmentObjectIds.map(id=>'dbid:'+id),ancestorObjectIds:snapshot.objects.filter(object=>object.geometryRole==='hierarchy').map(object=>object.id),equipmentNames:captureRequest.equipmentNames,scopeSha256:'b'.repeat(64)};
+      const plan={id:slice.sessionId,projectId:request.projectId,modelVersionId:request.modelVersionId,contentFingerprint:request.contentFingerprint,coordinateFrameId:slice.coordinateFrameId,orderedPlanSha256:slice.planSha256,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',requestedScope:{endpointVisibility:slice.endpointVisibility},objectManifest,objectOrder:objectManifest.map(object=>Number(object.objectId.slice(5))),partPlan:[part]};
+      const proof=snapshot.objects.find(object=>object.dbId===4).equipmentEligibility;snapshot=mergePreparationParts(plan,[{partId:part.partId,payload:snapshot}]).snapshot;assert.equal(snapshot.capture.adapterVersion,'wfc.project-preparation-aggregate.v1');assert.deepEqual(snapshot.objects.find(object=>object.dbId===4).equipmentEligibility,proof);
+    }
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..'), scratch = path.join(root, 'pathfinder-engine/.scratch/protected-capture-interop-' + randomUUID()), snapshotId = randomUUID();
     await fs.mkdir(path.join(scratch, 'snapshots'), { recursive: true });
     try {
       const bytes = Buffer.from(JSON.stringify(snapshot)); await fs.writeFile(path.join(scratch, 'snapshots', snapshotId + '.json'), bytes, { flag: 'wx' });

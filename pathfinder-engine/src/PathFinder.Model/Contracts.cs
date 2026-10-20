@@ -107,6 +107,19 @@ public sealed record SnapshotObject
     public required SnapshotBounds Bounds { get; init; }
     public required SnapshotFragment[] Fragments { get; init; }
     public SnapshotFace[]? FaceExtents { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public EquipmentEligibility? EquipmentEligibility { get; init; }
+}
+// Current SDK display evidence is not native visibility or engineering approval.
+public sealed record EquipmentEligibility
+{
+    public required string SchemaVersion { get; init; }
+    public required string MatchingPolicyVersion { get; init; }
+    public required string VisibilityScopeSha256 { get; init; }
+    public required string Visibility { get; init; }
+    public required int CheckedAncestorCount { get; init; }
+    public required string FragmentStatus { get; init; }
+    public required int FragmentCount { get; init; }
 }
 
 public sealed record ModelLimits

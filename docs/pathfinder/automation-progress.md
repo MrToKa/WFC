@@ -1,5 +1,24 @@
 # PathFinder local implementation progress
 
+## PF-U6a — Properties and visible endpoints — VERIFIED SOURCE 2026-10-20
+
+Branchpf-u6a-properties-visible-local-20261020 inherits270ce93; readGitfor
+containingcommit. TECHNICAL_SOURCE_PASS941distinctchecks:514TS/19files,265Viewer
+Node,159currentstageCSharp(sourcehashesreverified),3moduleclosure;canonical11PASS.
+Earlier108SDK/378server overlapfinals, notadded. Types/scopedlint/diff/localserver
+buildPASS; compiled32projection+4DLLidentityreadPASS.53changedsourcehashesfrozen.
+Report68/u6a-actual.json bindscope/limits/failures. EarlierNode258/259fixedonly
+obsoletebridgev2fixture; no productionguardrelaxation. Oldfailedreceiptsretained.
+Heartbeat finalizedindependentworkafterRoutingsBuild(2)idle; allwritersfrozen
+andprocessesjoined. NoSQL/HTTP/Docker/runtimewrite/newPG/browserattempt.
+ActualAalborgrereadBLOCKEDsavedoriginrefusal; userrequiresrereadbeforerealmodel
+functionalchecks. Noalternatebrowser/CDP/indirectreread. RealUI/realmodel/native
+parity/humanacceptanceNOT_RUN. Existing5191/original5180/5190 unchanged; no
+Review/Apply/initialfill. PreparerPAUSED. Models/backups/deniedpaths/.pf0/.pf2
+preserved. Newownscratch u6a-finalization-3f7a3248-e01e-424b-bcb0-88779094e0dd
+containsfrozenhashmanifest; currentCSharpDLLretainedforU7. NextlocalcommitU6a,
+prepare/executeindependentU7genuine-syntheticengine/SQLchain; keeprealmodelgate.
+
 ## PF-U6 — direct SECONDARY — VERIFIED 2026-10-20
 
 Branch pf-u6-direct-secondary-local-20261020 inherits final U6handoff85bfc2bd /

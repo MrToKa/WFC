@@ -1,7 +1,7 @@
 import path from 'node:path';
 import ts from 'typescript';
 
-export const RUNTIME_FILES = Object.freeze(['index.html', 'runtime.css', 'runtime.mjs', 'producer.html', 'producer-frame.mjs', 'producer-host.html', 'producer-host.mjs', 'adapter.mjs', 'bridge.mjs', 'protocol.mjs', 'routes.mjs', 'route-geometry.mjs', 'equipment-names.mjs', 'routing-bindings.mjs', 'pathfinder.mjs', 'model-capture.mjs', 'capture-input.mjs', 'preparation-input.mjs', 'capture-evidence.mjs']);
+export const RUNTIME_FILES = Object.freeze(['index.html', 'runtime.css', 'runtime.mjs', 'producer.html', 'producer-frame.mjs', 'producer-host.html', 'producer-host.mjs', 'adapter.mjs', 'bridge.mjs', 'protocol.mjs', 'routes.mjs', 'route-geometry.mjs', 'equipment-names.mjs', 'display-visibility.mjs', 'routing-bindings.mjs', 'pathfinder.mjs', 'model-capture.mjs', 'capture-input.mjs', 'preparation-input.mjs', 'capture-evidence.mjs']);
 const refuse = code => { throw new Error(code); };
 
 /** Check only explicitly deployed first-party modules. Vendor SDK bytes retain

@@ -4,9 +4,11 @@ import { invalidateViewerLogin } from './loginLifecycle';
 import { webcrypto } from 'node:crypto';
 import * as captureRuntime from '../../viewer-runtime/model-capture.mjs';
 import * as captureInputRuntime from '../../viewer-runtime/capture-input.mjs';
+import { PREPARATION_MATCHING_POLICY } from '../../viewer-runtime/preparation-input.mjs';
 
 const projectId = '11111111-1111-4111-8111-111111111111';
 const versionId = '22222222-2222-4222-8222-222222222222';
+const discoveryVisibility={schemaVersion:'wfc.pf.sdk-display-visibility.v1' as const,basis:'sdk-display-before-pf-appearance' as const,contentSha256:'a'.repeat(64)};
 let controllers: ViewerController[];
 beforeEach(() => { controllers = []; vi.stubGlobal('crypto', webcrypto); vi.useFakeTimers(); });
 afterEach(() => { controllers.forEach(c => c.dispose()); vi.runOnlyPendingTimers(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); document.body.replaceChildren(); });
@@ -53,10 +55,19 @@ describe('PathFinder protected Viewer capabilities', () => {
   }
   it('preparation discovery freezes exact scope, validates echoed scope and rechecks the current model',async()=>{
     const s=await loaded(),request={schemaVersion:'wfc.pf.viewer-discovery.v1' as const,mode:'names' as const,names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128};
-    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:value.payload.names,rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
+    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:value.payload.names,rootObjectId:null,cursor:0,matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope:discoveryVisibility,indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
     const reading=s.c.discoverPreparationObjects(request);request.names[0]='CHANGED';expect((await reading).names).toEqual(['TRAY-001']);
-    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:['WRONG'],rootObjectId:null,cursor:0,matchingPolicyVersion:'wfc.pf.project-exact-candidates.v2',indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
+    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'names',names:['WRONG'],rootObjectId:null,cursor:0,matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope:discoveryVisibility,indexedObjectCount:1,propertyScan:null,objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
     await expect(s.c.discoverPreparationObjects(request)).rejects.toThrow('acknowledgement mismatch');
+  });
+  it('rejects changed discovery visibility evidence while retaining the exact detached expected scope',async()=>{
+    const s=await loaded(),request={schemaVersion:'wfc.pf.viewer-discovery.v1' as const,mode:'equipment' as const,names:['EQ1'],rootObjectId:null,cursor:0,limit:128,visibilityScope:{...discoveryVisibility}};
+    s.send.mockImplementation(value=>{if(value.type==='READ_PREPARATION_OBJECTS')s.message('PREPARATION_OBJECTS',{schemaVersion:request.schemaVersion,mode:'equipment',names:value.payload.names,rootObjectId:null,cursor:0,
+      matchingPolicyVersion:PREPARATION_MATCHING_POLICY,visibilityScope:{...discoveryVisibility,contentSha256:'b'.repeat(64)},indexedObjectCount:1,
+      propertyScan:{attemptedObjectCount:1,returnedObjectCount:1,omittedObjectCount:0,complete:true},objects:[],nextCursor:null,complete:true},value.requestId,s.identity);});
+    const pending=s.c.discoverPreparationObjects(request);request.visibilityScope.contentSha256='b'.repeat(64);
+    await expect(pending).rejects.toThrow('acknowledgement mismatch');
+    expect(s.send.mock.calls.find(([message])=>message.type==='READ_PREPARATION_OBJECTS')?.[0].payload.visibilityScope).toEqual(discoveryVisibility);
   });
   it('preparation discovery and capture abort pending bridge work without returning late model data',async()=>{
     const s=await loaded(),abort=new AbortController(),reading=s.c.discoverPreparationObjects({schemaVersion:'wfc.pf.viewer-discovery.v1',mode:'names',names:['TRAY-001'],rootObjectId:null,cursor:0,limit:128},{signal:abort.signal});

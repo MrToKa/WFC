@@ -62,6 +62,16 @@ describe('whole preparation union',()=>{
   const{plan,parts}=fixture(),endpoint=parts[0].payload.objects.find(object=>object.id==='dbid:2')!;plan.partPlan[0].equipmentObjectIds=['dbid:2'];plan.partPlan[0].ancestorObjectIds=['dbid:1'];endpoint.geometryRole='object';endpoint.bounds={minimum:[99999999,0,-1],maximum:[100000004,2,1]};
   const merged=mergePreparationParts(plan,parts),result=merged.snapshot.objects.find(object=>object.id==='dbid:2')!;expect(result.geometryRole).toBe('object');expect(result.bounds).toEqual(endpoint.bounds);expect(merged.snapshot.objects[0].bounds).toEqual(endpoint.bounds);
  });
+ it('preserves v3 visible eligibility when another part captures the same equipment only as an ancestor stub',()=>{
+  const{plan,parts}=fixture(),endpoint=parts[0].payload.objects.find(object=>object.id==='dbid:2')!;
+  const endpointVisibility={schemaVersion:'wfc.pf.sdk-display-visibility.v1' as const,basis:'sdk-display-before-pf-appearance' as const,contentSha256:'a'.repeat(64)};
+  plan.matchingPolicyVersion='wfc.pf.project-exact-candidates.v3';plan.requestedScope={endpointVisibility} as PreparationPlan['requestedScope'];
+  plan.partPlan[0].equipmentObjectIds=['dbid:2'];plan.partPlan[0].ancestorObjectIds=['dbid:1'];endpoint.geometryRole='object';
+  endpoint.equipmentEligibility={schemaVersion:'wfc.pf.equipment-eligibility.v1',matchingPolicyVersion:'wfc.pf.project-exact-candidates.v3',visibilityScopeSha256:endpointVisibility.contentSha256,visibility:'visible',checkedAncestorCount:2,fragmentStatus:'all-visible',fragmentCount:2};
+  const merged=mergePreparationParts(plan,parts),result=merged.snapshot.objects.find(object=>object.id==='dbid:2')!;
+  expect(result.geometryRole).toBe('object');expect(result.equipmentEligibility).toEqual(endpoint.equipmentEligibility);
+  expect(result.nativeHidden).toBeNull();expect(parts[1].payload.objects.find(object=>object.id==='dbid:2')).not.toHaveProperty('equipmentEligibility');
+ });
  it('rejects differing immutable ancestor properties and enforces the monotonic validation deadline',()=>{
   const{plan,parts}=fixture();parts[1].payload.objects[1].properties=[{category:'Source',name:'Changed',value:'yes'}];expect(()=>mergePreparationParts(plan,parts)).toThrow();parts[1].payload.objects[1].properties=[];
   const now=vi.spyOn(performance,'now');let ticks=0;now.mockImplementation(()=>++ticks*120001);try{expect(()=>mergePreparationParts(plan,parts)).toThrowError(expect.objectContaining({code:'PREPARATION_VALIDATION_TIMEOUT'}));}finally{now.mockRestore();}

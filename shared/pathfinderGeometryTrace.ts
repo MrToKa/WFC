@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { equipmentEligibilitySchema } from './pathfinderPreparation.js';
 import { calculationGrantProvenanceSchema } from './pathfinderCalculationGrant.js';
 import { canonicalPurposeJson, policyHashSchema as hash, policyUuidSchema as uuid, policyRevisionSchema as revision, routingCategoriesSchema, purposeKeySchema } from './pathfinderPurposePolicy.js';
 
@@ -34,7 +35,7 @@ export const geometryObjectRevisionV1Schema = z.object({
   schemaVersion: z.literal('wfc.pf.object-revision.v1'), id: uuid, traceId: uuid, projectId: uuid, modelVersionId: uuid, aggregateId: uuid,
   identity: z.object({ objectId: short, dbId: z.number().int().nonnegative().max(2147483647).nullable(), externalId: text.nullable(), logicalObjectId: z.null(), sourceDocumentId: z.null(), sourceInstancePath: z.null(), stableExportEntityId: z.null(), basis: z.literal('version-local-only') }).strict(),
   catalog: z.object({ projectTrayId: uuid.nullable(), rootObjectId: short.nullable(), rawName: text.nullable(), purposeKey: purposeKeySchema.nullable(), allowedCategories: routingCategoriesSchema, routing }).strict(),
-  historicalModel: z.object({ name: text, leafToRootNames: z.array(text).max(512), properties: z.array(z.object({ category: text, name: text, value: text }).strict()).max(1024), observedModelPurposes: z.array(text).max(1024) }).strict(),
+  historicalModel: z.object({ name: text, leafToRootNames: z.array(text).max(512), properties: z.array(z.object({ category: text, name: text, value: text }).strict()).max(1024), observedModelPurposes: z.array(text).max(1024), equipmentEligibility: equipmentEligibilitySchema.optional() }).strict(),
   coordinates: z.object({ schemaVersion: z.literal('wfc.pf.coordinate-frame-evidence.v1'), captureFrameId: uuid, qualifiedProjectFrame: z.null(), vertexFrame: z.literal('canonical-world-metres'), sourceUnits: z.string().min(1).max(64), metresPerSourceUnit: z.number().finite().positive().nullable(), sourceToWorldMetres: matrix.nullable(), displayToWorldMetres: matrix, globalOffsetMetres: geometryPointSchema, objectLocalToProjectMetres: z.null(), transformsAlreadyApplied: z.literal(true), qualificationReason: z.literal('capture-frame-is-not-cross-revision-engineering-qualification') }).strict(),
   geometry: z.object({ role, bounds, mesh: z.object({ projection: blob, objectId: short, sha256: hash, fragments: count }).strict(), fitted: fittedTraceSegmentSchema.nullable(), equipmentAnchor: z.object({ pointMetres: geometryPointSchema, derivation: z.literal('equipment-bottom-aabb'), approximate: z.literal(true) }).strict().nullable() }).strict(),
   signatures: z.object({ policyVersion: z.literal(GEOMETRY_SIGNATURE_POLICY), identityEvidenceSha256: hash, worldRepresentationSha256: hash, intrinsicShapeSha256: z.null(), placementSha256: z.null(), portsSha256: hash.nullable(), policySha256: hash }).strict(),

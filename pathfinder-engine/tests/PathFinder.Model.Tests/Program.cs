@@ -14,6 +14,12 @@ internal static class Program
         try
         {
             var root = args.Length > 0 ? Path.GetFullPath(args[0]) : FindRoot();
+            if (args.Contains("--equipment-eligibility", StringComparer.Ordinal))
+            {
+                EquipmentEligibilityTests.Run(Fixture(), Check, (name, action) => Reject(name, action));
+                Console.WriteLine(JsonSerializer.Serialize(new { scope = "sdk-display-equipment-eligibility-synthetic-only", status = Failures.Count == 0 ? "PASS" : "FAIL", checks = Checks, failures = Failures }));
+                return Failures.Count == 0 ? 0 : 1;
+            }
             var scratch = Path.Combine(root, "pathfinder-engine/.scratch/model-tests-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(scratch);
             var watch = Stopwatch.StartNew();

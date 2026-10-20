@@ -1,14 +1,14 @@
 // Protected-runtime capture only. Importing this module does not read SDK globals.
 // The parent application uses only the pure assembler and the bounded bridge.
 import { validateModelCaptureInputDescriptor, validateModelCaptureInputScope, modelCaptureScopeBytes, CAPTURE_INPUT_LIMITS } from './capture-input.mjs';
-import { validatePreparationSlice } from './preparation-input.mjs';
+import { validatePreparationSlice, validatePreparationVisibilityScope } from './preparation-input.mjs';
 import { createCompletedCaptureEvidence, validateCompletedCaptureEvidence, CAPTURE_EVIDENCE_LIMITS } from './capture-evidence.mjs';
-import { modelEquipmentMatchKeys } from './equipment-names.mjs';
+import { modelEquipmentMatchKeys, humanScalarPropertyValues } from './equipment-names.mjs';
+import { captureDisplayVisibility, sameDisplayVisibility } from './display-visibility.mjs';
 export const MODEL_CAPTURE_LIMITS = Object.freeze({ eventBytes: 24 * 1024, totalBytes: 64 * 1024 ** 2, events: 3000, indexedObjects: 1000000, objects: 4096, fragments: 100000, vertices: 5000000, triangles: 5000000, depth: 512, properties: 1024, milliseconds: 300000 });
 const encoder = new TextEncoder();
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const HASH = /^[a-f0-9]{64}$/;
-const PROPERTY_NAME = /^(tag|name|equipment[ _-]?tag|equipment[ _-]?name|location)$/i;
 const pause = () => new Promise(resolve => setTimeout(resolve, 0));
 const refuse = message => { throw new Error(message); };
 const normal = value => String(value).normalize('NFC').trim().toUpperCase();
@@ -23,6 +23,7 @@ const bounds = () => ({ minimum: [Infinity, Infinity, Infinity], maximum: [-Infi
 const expand = (box, p) => { for (let axis = 0; axis < 3; axis++) { box.minimum[axis] = Math.min(box.minimum[axis], p[axis]); box.maximum[axis] = Math.max(box.maximum[axis], p[axis]); } };
 const validBounds = value => value?.minimum?.length === 3 && value?.maximum?.length === 3 && value.minimum.every((number, axis) => Number.isFinite(number) && Number.isFinite(value.maximum[axis]) && number <= value.maximum[axis]);
 const unique = values => [...new Set(values)];
+const ownData = (value, key) => Object.getOwnPropertyDescriptor(value, key)?.value;
 // These are validated canonical tokens returned by the pinned C# lookup-plan.
 // Logical owner parsing deliberately remains in RouteNameResolver/RouteCodeParser.
 const lookupCodes = value => Array.isArray(value) && value.length > 0 && value.length <= 100 && value.every(code => typeof code === 'string' && code.length <= 256 && /^\/[A-Z0-9][A-Z0-9_.-]*$/.test(code) && code !== '/SECONDARY');
@@ -40,9 +41,13 @@ function validateHeader(header) {
 }
 function validateObject(object, lookup = false) {
   const required = ['id', 'parentId', 'dbId', 'name', 'geometryRole', 'leafToRootNames', 'properties', 'nativeHidden', 'planningExcluded', 'categoryAssignmentSource', 'allowedCategories', 'bounds', 'fragments'];
-  const allowed = new Set([...required, 'externalId', 'routeName', 'shapeName', 'routeBoundaryId']);
+  const allowed = new Set([...required, 'externalId', 'routeName', 'shapeName', 'routeBoundaryId', 'equipmentEligibility']);
   if (!object || typeof object !== 'object' || Array.isArray(object) || required.some(key => !Object.hasOwn(object, key)) || Object.keys(object).some(key => !allowed.has(key)) || !Number.isSafeInteger(object.dbId) || object.dbId < 0 || object.dbId > 2147483647 || object.id !== 'dbid:' + object.dbId || object.parentId !== null && !/^dbid:[0-9]+$/.test(object.parentId ?? '') || !['hierarchy', 'object', 'routing-leaf'].includes(object.geometryRole) || object.nativeHidden !== null || object.planningExcluded !== false) refuse('Invalid physical/hierarchy captured object.');
   text(object.name); if (object.externalId !== undefined && (!text(object.externalId, 1024).length)) refuse('Invalid external identity.');
+  if (object.equipmentEligibility !== undefined) {
+    const value = object.equipmentEligibility;
+    if (!keys(value, ['schemaVersion','matchingPolicyVersion','visibilityScopeSha256','visibility','checkedAncestorCount','fragmentStatus','fragmentCount']) || value.schemaVersion !== 'wfc.pf.equipment-eligibility.v1' || value.matchingPolicyVersion !== 'wfc.pf.project-exact-candidates.v3' || !HASH.test(value.visibilityScopeSha256 ?? '') || value.visibility !== 'visible' || !Number.isSafeInteger(value.checkedAncestorCount) || value.checkedAncestorCount < 1 || value.checkedAncestorCount > MODEL_CAPTURE_LIMITS.depth || !Number.isSafeInteger(value.fragmentCount) || value.fragmentCount < 0 || value.fragmentCount > MODEL_CAPTURE_LIMITS.indexedObjects || (value.fragmentStatus === 'all-visible' ? value.fragmentCount < 1 : value.fragmentStatus !== 'geometry-free-node-bounds' || value.fragmentCount !== 0) || object.geometryRole !== 'object' || lookup) refuse('Invalid automatic endpoint display eligibility.');
+  }
   if (!Array.isArray(object.leafToRootNames) || !object.leafToRootNames.length || object.leafToRootNames.length > MODEL_CAPTURE_LIMITS.depth || object.leafToRootNames[0] !== object.name) refuse('Invalid leaf-to-root capture names.'); object.leafToRootNames.forEach(value => text(value));
   if (!Array.isArray(object.properties) || object.properties.length > MODEL_CAPTURE_LIMITS.properties) refuse('Invalid selected property count.');
   for (const property of object.properties) { if (!keys(property, ['category', 'name', 'value'])) refuse('Invalid captured property.'); text(property.category, 512); text(property.name, 512); text(property.value); }
@@ -139,11 +144,17 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   const ids = [tree.getRootId()], seen = new Set(ids), routes = new Map((request.routeCodes ?? []).map(code => [code, []])), equipment = new Map(request.equipmentNames.map(name => [normal(name), { name, ids: new Set() }]));
   const plannedEquipment = request.preparationSlice ? new Set(request.preparationSlice.equipmentObjectIds) : null;
   tree.enumNodeChildren(tree.getRootId(), id => { active(); if (!Number.isSafeInteger(id) || id < 0) refuse('Invalid SDK object identity.'); if (!seen.has(id)) { seen.add(id); ids.push(id); } if (ids.length > MODEL_CAPTURE_LIMITS.indexedObjects) refuse('Model inventory exceeds the capture indexing budget.'); return false; }, true);
+  const expectedVisibility = request.preparationSlice?.endpointVisibility;
+  if (expectedVisibility !== undefined && !validatePreparationVisibilityScope(expectedVisibility)) refuse('Invalid frozen endpoint visibility scope.');
+  const visibility = expectedVisibility || equipment.size ? await captureDisplayVisibility(viewer, tree, ids, { check: active, pause }) : null;
+  if (expectedVisibility && !sameDisplayVisibility(expectedVisibility, visibility.scope)) refuse('Endpoint display visibility changed; prepare the model again.');
   for (let index = 0; index < ids.length; index++) {
     active(); const id = ids[index], name = tree.getNodeName(id) ?? '', key = routeKey(name);
     if (routes.has(key)) routes.get(key).push(id);
-    if (!plannedEquipment || plannedEquipment.has(id))
-      for (const key of modelEquipmentMatchKeys(name)) if (equipment.has(key)) equipment.get(key).ids.add(id);
+    if (!plannedEquipment || plannedEquipment.has(id)) {
+      const matched = modelEquipmentMatchKeys(name).filter(key => equipment.has(key));
+      if (matched.length && visibility?.equipmentEligibility(id)) for (const key of matched) equipment.get(key).ids.add(id);
+    }
     if (index % 8192 === 0) { onProgress?.({ phase: 'index', loaded: index, total: ids.length }); await pause(); }
   }
   const selected = new Map(), diagnostics = [], propertyMap = new Map();
@@ -214,7 +225,9 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     }
     for (const id of request.preparationSlice.equipmentObjectIds) {
       if (!seen.has(id)) refuse('A planned endpoint is not in the selected model.');
-      select(id, 'object');
+      const eligibility = visibility?.equipmentEligibility(id);
+      if (expectedVisibility && !eligibility) refuse('A planned endpoint is hidden or its display geometry is not wholly verified; prepare again.');
+      const record = select(id, 'object'); if (expectedVisibility) record.equipmentEligibility = eligibility;
     }
   }
   const attemptedPropertyIds = new Set(), returnedPropertyIds = new Set();
@@ -232,9 +245,9 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
       const returned = new Set();
       for (const row of rows) {
         if (!batchIds.includes(row.dbId) || returned.has(row.dbId)) refuse('SDK property batch identity mismatch.'); returned.add(row.dbId); returnedPropertyIds.add(row.dbId);
-        const names = [tree.getNodeName(row.dbId) ?? '', ...(row.properties ?? []).filter(value => PROPERTY_NAME.test(value.displayName ?? value.attributeName ?? '')).map(value => String(value.displayValue ?? ''))];
+        const names = [tree.getNodeName(row.dbId) ?? '', ...humanScalarPropertyValues(row.properties)];
         const matches = unique(names.flatMap(modelEquipmentMatchKeys).filter(name => equipment.has(name)));
-        if (matches.length && (!plannedEquipment || plannedEquipment.has(row.dbId))) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
+        if (matches.length && (!plannedEquipment || plannedEquipment.has(row.dbId)) && visibility?.equipmentEligibility(row.dbId)) { select(row.dbId, 'object'); for (const name of matches) equipment.get(name).ids.add(row.dbId); }
         if (selected.has(row.dbId)) propertyMap.set(row.dbId, row);
       }
       if (batchIds.some(id => selected.has(id) && !returned.has(id))) refuse('Selected object properties are incomplete.');
@@ -304,7 +317,12 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
       evidence.fragments.push({ objectId: 'dbid:' + record.id, fragmentId, original: Array.from(original.elements), display: Array.from(world.elements), canonical: Array.from(canonicalMatrix.elements) });
     }
     if (record.role === 'routing-leaf' && !fragments.length) refuse('A selected routing leaf has no triangle geometry.');
-    const props = propertyMap.get(record.id), properties = (props?.properties ?? []).map(value => ({ category: text(String(value.displayCategory ?? ''), 512), name: text(String(value.displayName ?? value.attributeName ?? ''), 512), value: text(String(value.displayValue ?? '')) }));
+    const props = propertyMap.get(record.id), properties = (props?.properties ?? []).flatMap(value => humanScalarPropertyValues([value]).flatMap(scalar => {
+      const relevant = modelEquipmentMatchKeys(scalar).some(key => equipment.has(key));
+      const category = String(ownData(value, 'displayCategory') ?? ''), name = String(ownData(value, 'displayName') ?? ownData(value, 'attributeName') ?? '');
+      if (!relevant && (scalar.length > 2048 || category.length > 512 || name.length > 512 || /[\u0000-\u001f\u007f-\u009f]/u.test(scalar + category + name))) return [];
+      return [{ category: text(category, 512), name: text(name, 512), value: text(scalar) }];
+    }));
     if (properties.length > MODEL_CAPTURE_LIMITS.properties) refuse('Selected property budget exceeded.');
     const external = unique([...(externalIds.get(record.id) ?? []), ...(props?.externalId ? [text(props.externalId, 1024)] : [])]);
     if (external.length > 1) diagnostics.push({ code: 'ambiguous_external_identity', objectId: 'dbid:' + record.id, candidates: external });
@@ -313,6 +331,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
     if (!validBounds(actualBounds)) refuse('Captured hierarchy has no selected descendant bounds.');
     for (const parent of chain.slice(1)) { if (!selectedAncestorBounds.has(parent)) selectedAncestorBounds.set(parent, bounds()); expand(selectedAncestorBounds.get(parent), actualBounds.minimum); expand(selectedAncestorBounds.get(parent), actualBounds.maximum); }
     const object = { id: 'dbid:' + record.id, parentId: chain[1] !== undefined ? 'dbid:' + chain[1] : null, ...(external.length === 1 ? { externalId: external[0] } : {}), dbId: record.id, name: text(tree.getNodeName(record.id) ?? ''), geometryRole: record.role, leafToRootNames: chain.map(id => text(tree.getNodeName(id) ?? '')), properties, nativeHidden: null, planningExcluded: false, ...(!lookup && record.role === 'routing-leaf' ? record.routeBoundaryId !== undefined ? { routeBoundaryId: 'dbid:' + record.routeBoundaryId } : { routeName: [...record.routeNames][0], shapeName: record.shapeName ?? text(tree.getNodeName(record.id) ?? '') } : {}), categoryAssignmentSource: record.role === 'routing-leaf' ? lookup ? 'lookup-all-categories' : 'explicit-planning' : 'unassigned', allowedCategories: record.role === 'routing-leaf' ? [...(record.allowedCategories ?? request.allowedCategories)] : [], bounds: actualBounds, fragments };
+    if (record.equipmentEligibility) object.equipmentEligibility = record.equipmentEligibility;
     const body = serialize(object); snapshotBytes += encoder.encode(body).length; if (snapshotBytes > MODEL_CAPTURE_LIMITS.totalBytes) refuse('Selected computational snapshot exceeds64MiB. Reduce scope.');
     for (const event of textParts('object-part', request.captureId, object.id, body)) yield emit(event);
     objectCount++; onProgress?.({ phase: 'geometry', loaded: objectCount, total: selected.size }); await pause();
@@ -325,6 +344,7 @@ export async function* captureSelectedModel(viewer, input, { signal, onProgress,
   const slice=request.preparationSlice;
   summary.completedEvidence=await createCompletedCaptureEvidence({schemaVersion:'wfc.pf.completed-capture-evidence.v1',binding:{projectId:request.projectId,modelVersionId:request.modelVersionId,contentFingerprint:request.contentFingerprint,selectionRevision:null,loadId:input.loadId??null,captureId:request.captureId,sessionId:slice?.sessionId??null,partId:slice?.partId??null,planSha256:slice?.planSha256??null,coordinateFrameId:slice?.coordinateFrameId??null,partPayloadSha256:null},observations:{sdkVersion:evidence.sdkVersion,matrixPrecision:'binary64',sourceUnitLabel:observation('observed',sourceUnits,'model.getUnitString'),metresPerDisplayUnit:observation('observed',scale,'model.getUnitScale'),upVector:observation('observed',up,'model.getUpVector'),globalOffsetDisplayUnits:observedOffset==null?observation('unavailable',null,'model.getGlobalOffset/model.getData.globalOffset','SDK_OFFSET_UNAVAILABLE'):observation('observed',offset,'model.getGlobalOffset/model.getData.globalOffset'),globalOffsetMetres:observedOffset==null?observation('unavailable',null,'offset * model.getUnitScale','SDK_OFFSET_UNAVAILABLE'):observation('derived',evidence.globalOffsetMetres,'offset * model.getUnitScale'),displayToWorldMetres:observation('derived',evidence.displayToWorldMetres,'scale plus global offset',observedOffset==null?'MISSING_OFFSET_DEFAULT_ZERO_NOT_VERIFIED':null),legacySourceToWorldMetres:observation('derived',Array.from(sourceToWorld.elements),'scale-only legacy sourceToWorldMetres','SOURCE_PLACEMENT_NOT_ESTABLISHED'),modelTransform:evidence.modelTransform?observation('observed',evidence.modelTransform,'model.getModelTransform'):observation('unavailable',null,'model.getModelTransform','SDK_MODEL_TRANSFORM_UNAVAILABLE'),placementTransform:evidence.placementTransform?observation('observed',evidence.placementTransform,'model.getPlacementTransform'):observation('unavailable',null,'model.getPlacementTransform','SDK_PLACEMENT_TRANSFORM_UNAVAILABLE'),objectLocalFrame:null,sourceDocumentId:null,sourceInstancePath:null,stableExportEntityId:null},fragments:evidence.fragments.map(fragment=>({objectId:fragment.objectId,fragmentId:'fragment:'+fragment.fragmentId,originalWorldMatrix:observation('observed',fragment.original,'fragmentList.getOriginalWorldMatrix'),displayWorldMatrix:observation('observed',fragment.display,'fragmentList.getWorldMatrix'),canonicalMatrix:observation('derived',fragment.canonical,'displayToWorldMetres * sdkFragmentWorldMatrix'),transformAlreadyApplied:true})),diagnostics:['SOURCE_PLACEMENT_NOT_ESTABLISHED','OBJECT_LOCAL_FRAME_UNAVAILABLE','SOURCE_DOCUMENT_ID_UNAVAILABLE','SOURCE_INSTANCE_PATH_UNAVAILABLE','STABLE_EXPORT_ENTITY_ID_UNAVAILABLE',...(observedOffset==null?['SDK_OFFSET_UNAVAILABLE']:[])]});
   active();
+  if (visibility && !sameDisplayVisibility(visibility.scope, (await visibility.refresh()).scope)) refuse('Endpoint display visibility changed during capture; prepare again.');
   for (const event of textParts('summary-part', request.captureId, null, serialize(summary))) yield emit(event);
   yield emit({ type: 'complete', captureId: request.captureId, objectCount, fragmentCount, vertexCount, triangleCount, engineeringAccepted: false });
 }
@@ -360,13 +380,17 @@ export function createModelCaptureAssembler({ eventLimit = MODEL_CAPTURE_LIMITS.
       if (event.type === 'complete') {
         if (current || !summaryDone || !keys(event, ['type', 'captureId', 'objectCount', 'fragmentCount', 'vertexCount', 'triangleCount', 'engineeringAccepted']) || event.engineeringAccepted !== false || event.objectCount !== objects.length || !objects.length || summary?.engineeringAccepted !== false || summary?.counts?.objectCount !== objects.length) refuse('Incomplete capture cannot become a computational snapshot.');
         const counts = { fragmentCount: 0, vertexCount: 0, triangleCount: 0 }, fragmentIds = new Set(), byId = new Map(objects.map(object => [object.id, object]));
+        const endpointSlice = summary?.scope?.preparationSlice, endpointVisibility = endpointSlice?.endpointVisibility;
+        if (endpointVisibility && (!validatePreparationSlice(endpointSlice) || !validatePreparationVisibilityScope(endpointVisibility))) refuse('Invalid completed endpoint visibility scope.');
         for (const object of objects) {
           const chain = [], visited = new Set(); let node = object;
           while (node) { if (visited.has(node.id) || chain.length >= MODEL_CAPTURE_LIMITS.depth) refuse('Cyclic or over-depth captured hierarchy.'); visited.add(node.id); chain.push(node.name); if (node.parentId !== null && (!byId.has(node.parentId) || byId.get(node.parentId).geometryRole === 'routing-leaf')) refuse('Missing or physical-leaf captured parent.'); node = node.parentId === null ? null : byId.get(node.parentId); }
           if (serialize(chain) !== serialize(object.leafToRootNames)) refuse('Captured hierarchy names disagree with parents.');
+          if (object.equipmentEligibility && (!endpointVisibility || object.equipmentEligibility.visibilityScopeSha256 !== endpointVisibility.contentSha256 || object.equipmentEligibility.checkedAncestorCount !== chain.length || !endpointSlice.equipmentObjectIds.includes(object.dbId))) refuse('Endpoint display eligibility does not match its frozen scope or ancestor closure.');
           if (object.routeBoundaryId !== undefined && !visited.has(object.routeBoundaryId)) refuse('Selected route boundary is not an ancestor of its physical leaf.');
           for (const fragment of object.fragments) { if (fragmentIds.has(fragment.id)) refuse('Duplicate captured physical fragment.'); fragmentIds.add(fragment.id); counts.fragmentCount++; counts.vertexCount += fragment.vertices.length; counts.triangleCount += fragment.triangleIndices.length / 3; }
         }
+        if (endpointVisibility && endpointSlice.equipmentObjectIds.some(id => !byId.get('dbid:' + id)?.equipmentEligibility)) refuse('A frozen automatic endpoint has no complete display eligibility.');
         if (counts.fragmentCount > MODEL_CAPTURE_LIMITS.fragments || counts.vertexCount > MODEL_CAPTURE_LIMITS.vertices || counts.triangleCount > MODEL_CAPTURE_LIMITS.triangles) refuse('Captured geometry total budget exceeded.');
         for (const key of Object.keys(counts)) if (counts[key] !== event[key] || counts[key] !== summary.counts[key]) refuse('Capture count closure differs.');
         if(summary.completedEvidence!==undefined){

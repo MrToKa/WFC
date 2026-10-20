@@ -13,6 +13,7 @@ import { readCurrentEndpointBindingContext, readEndpointBindingHeads } from './e
 import {createDisplayLocationMatchIndex} from './displayLocationMatchIndex.js';
 import {readDisplayEndpointAvailability} from './displayEndpointAvailability.js';
 import {RECALCULATION_LIMITS} from '../../shared/pathfinderRecalculation.js';
+import { readAutomaticEndpointCandidates, type AutomaticEndpointCandidateResult } from './automaticEndpointCandidates.js';
 
 type Row = Record<string, any>;
 export async function requireTransactionalAdmin(client: PoolClient, actorId: string): Promise<void> {
@@ -221,15 +222,25 @@ export function createPathFinderRepository(pool: Pool) {
         }
         if (artifact) {
           const {list} = await locations(client,projectId,model.active_model_version_id,artifact.id);
-          for (const location of list) {
-            if (location.binding && (location.binding.modelVersionId === model.active_model_version_id && location.binding.source === 'manual' || location.binding.status === 'confirmed')) continue;
+          const unresolved=list.filter(location=>!(location.binding&&(location.binding.modelVersionId===model.active_model_version_id&&location.binding.source==='manual'||location.binding.status==='confirmed')));
+          let verifiedCandidates:Map<string,AutomaticEndpointCandidateResult>|null=null;
+          if(suggestionsOnly&&unresolved.length){
+            const current=await readCurrentEndpointBindingContext(client,projectId);
+            if(!current||current.artifactId!==artifact.id||current.modelVersionId!==model.active_model_version_id)
+              throw new PathFinderError('ENDPOINT_PREPARATION_REQUIRED',409,'Prepare the current model again with visible equipment Properties before matching.');
+            verifiedCandidates=await readAutomaticEndpointCandidates(client,{projectId,current,locationIds:unresolved.map(location=>location.id)});
+            if(unresolved.some(location=>!verifiedCandidates?.has(location.id)||verifiedCandidates.get(location.id)?.status==='preparation-required'))
+              throw new PathFinderError('ENDPOINT_PREPARATION_REQUIRED',409,'Prepare the current model again with visible equipment Properties before matching.');
+          }
+          for (const location of unresolved) {
             const names = [...new Set([location.name,...location.aliases].map(normalizeLocation))];
-            const candidates = await client.query<Row>(`SELECT * FROM pf_model_objects WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object'
+            const verified=verifiedCandidates?.get(location.id);
+            const candidates:{rows:Row[]} = suggestionsOnly?{rows:(verified?.candidateObjectIds??[]).map(object_id=>({object_id}))}:await client.query<Row>(`SELECT * FROM pf_model_objects WHERE project_id=$1 AND artifact_id=$2 AND geometry_role='object'
               AND visibility<>'hidden' AND match_names ?| $3::text[] ORDER BY object_id LIMIT 3`,[projectId,artifact.id,names]);
             if (suggestionsOnly || candidates.rows.length !== 1 || candidates.rows[0].visibility !== 'visible') {
               await client.query(`INSERT INTO pf_location_matches(project_id,location_id,model_version_id,status,candidate_object_ids) VALUES($1,$2,$3,$4,$5)
                 ON CONFLICT(project_id,location_id,model_version_id) DO UPDATE SET status=EXCLUDED.status,candidate_object_ids=EXCLUDED.candidate_object_ids`,
-              [projectId,location.id,model.active_model_version_id,candidates.rows.length > 1 ? 'ambiguous' : candidates.rows.length ? 'unverified' : 'missing',JSON.stringify(candidates.rows.map(row => row.object_id))]);
+              [projectId,location.id,model.active_model_version_id,suggestionsOnly?(verified?.status==='ambiguous'?'ambiguous':verified?.status==='missing'?'missing':'unverified'):candidates.rows.length > 1 ? 'ambiguous' : candidates.rows.length ? 'unverified' : 'missing',JSON.stringify(candidates.rows.map(row => row.object_id))]);
               continue;
             }
             const object = candidates.rows[0]; bound++;

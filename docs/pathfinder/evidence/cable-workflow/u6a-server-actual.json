@@ -1,0 +1,389 @@
+{
+  "schemaVersion": "wfc.pf.u6a-server-checks.v1",
+  "observedAt": "2026-10-20T20:14:32.004Z",
+  "branch": "pf-u6a-properties-visible-local-20261020",
+  "baseRevision": "270ce934cadb00a23698616609304ae2cab25b41",
+  "scope": "Synthetic source/schema tests and mocked server reads only. Uncommitted U6a owned source; no runtime, database, HTTP, Docker, browser, native parity or human acceptance.",
+  "sourceHashes": [
+    {
+      "path": "shared/pathfinderPreparation.ts",
+      "sha256": "a7721f5a204c6f8f08bc78984739001ece07e0a2217f678be788ea768973d8f5"
+    },
+    {
+      "path": "shared/pathfinderGeometryTrace.ts",
+      "sha256": "b0b308ce25880cc7e06267d30fc751de386f8c83380ad4e2ba1b0e4ca6b068ca"
+    },
+    {
+      "path": "shared/preparationMerge.ts",
+      "sha256": "f1bc1bacee734746cdbe447e0a447e58c656461f253dac32dabc7d8822af4571"
+    },
+    {
+      "path": "shared/preparationMerge.test.ts",
+      "sha256": "35cf897abb8fbb67f6d50df7b551fb2827bd1034d535679cc63a01ea5cf99c27"
+    },
+    {
+      "path": "shared/pathfinderEquipmentVisibility.test.ts",
+      "sha256": "147f6a093662273df3f4e9cd65e92fed32267ce6b25279bcf950834a0d39af5b"
+    },
+    {
+      "path": "server/pathfinder/contracts.ts",
+      "sha256": "934279116667dc7178bb5f177cc33d6a6fd0bdff63088b2edd7b67d25956b00d"
+    },
+    {
+      "path": "server/pathfinder/matching.ts",
+      "sha256": "fc6dff91b7c87396938e4c2deb3a7ce49014a731be628e701a33477e9f8be67f"
+    },
+    {
+      "path": "server/pathfinder/matching.test.ts",
+      "sha256": "20cae69281aa3e649b6e7a191b434e70ffd6b1b802b644273f18f876a1b1efdf"
+    },
+    {
+      "path": "server/pathfinder/automaticEndpointCandidates.ts",
+      "sha256": "862eccbf62844fcb54a1c3795b619a618e5d3940b4bce7fc8285253ba9bbdbe7"
+    },
+    {
+      "path": "server/pathfinder/automaticEndpointCandidates.test.ts",
+      "sha256": "b3e8cf905e85a3e1511e4531c0d6a65ff7421d36740e4745d08ea0b078a6ae14"
+    },
+    {
+      "path": "server/pathfinder/preparationPlans.ts",
+      "sha256": "946693fcd6f9da3dd35ee9de5c8ae60793da9a0b091d19884d59c99d25ca14ec"
+    },
+    {
+      "path": "server/pathfinder/preparationPlans.test.ts",
+      "sha256": "f9607f39f574dac8ca234ebd487e95d32d474850b5882dd8e83c221e0a085d6e"
+    },
+    {
+      "path": "server/pathfinder/geometryTraceBuilder.ts",
+      "sha256": "9be689215ea63bef1799e141b3e98d097a059cbfa267ffdbb8b375c5b4e41528"
+    },
+    {
+      "path": "server/pathfinder/endpointCalculationProvenance.ts",
+      "sha256": "f1d22ebdfd2c33f7d985fb7e7ddea72b392a32713ee34a14d08f94bd72e8c00f"
+    },
+    {
+      "path": "server/pathfinder/previews.ts",
+      "sha256": "3426e8719c41b4c6c394908620bc4d7192ff62af50c5d291279fa04610506d71"
+    },
+    {
+      "path": "server/pathfinder/previews.test.ts",
+      "sha256": "a34222caab2eb2c06c06aced7c0e8e2d6d9e097f72c9af22d460d96a842d594e"
+    },
+    {
+      "path": "server/pathfinder/repository.ts",
+      "sha256": "224eab59d005243837265fe54acc7a67c882aa4817b31a81065fe9e0e4d3e51b"
+    },
+    {
+      "path": "server/pathfinder/repository-match.test.ts",
+      "sha256": "730a7e67816ce182b49ca0692b55049a9fd22cca0d0e50c7df266a31a97bdbd8"
+    },
+    {
+      "path": "server/pathfinder/preparationUnionTask.ts",
+      "sha256": "68c6db3ade4ebbf1ef0d5572889dcf73a62e0e2e6a34eec0a03e572dbcad0a0c"
+    },
+    {
+      "path": "server/pathfinder/preparationUnionTask.test.ts",
+      "sha256": "1f2b4a03d6c34e260f96252e243761b00afdd731ee77696fcd04cd24d408fe77"
+    }
+  ],
+  "checks": [
+    {
+      "command": "npx vitest run shared/pathfinderEquipmentVisibility.test.ts shared/preparationMerge.test.ts server/pathfinder/automaticEndpointCandidates.test.ts server/pathfinder/matching.test.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/geometryTraceBuilder.test.ts server/pathfinder/endpointCalculationProvenance.test.ts server/pathfinder/previews.test.ts server/pathfinder/repository-match.test.ts server/pathfinder/repository-state.test.ts server/pathfinder/displayEndpointAvailability.test.ts server/pathfinder/displayLocationMatchIndex.test.ts server/pathfinder/preparationPublisher.test.ts server/pathfinder/preparationUnionTask.test.ts --maxWorkers=1 --no-file-parallelism",
+      "status": "PASS",
+      "passed": 378,
+      "failed": 0,
+      "files": [
+        {
+          "path": "shared/pathfinderEquipmentVisibility.test.ts",
+          "passed": 31
+        },
+        {
+          "path": "shared/preparationMerge.test.ts",
+          "passed": 29
+        },
+        {
+          "path": "server/pathfinder/automaticEndpointCandidates.test.ts",
+          "passed": 43
+        },
+        {
+          "path": "server/pathfinder/matching.test.ts",
+          "passed": 23
+        },
+        {
+          "path": "server/pathfinder/preparationPlans.test.ts",
+          "passed": 30
+        },
+        {
+          "path": "server/pathfinder/geometryTraceBuilder.test.ts",
+          "passed": 28
+        },
+        {
+          "path": "server/pathfinder/endpointCalculationProvenance.test.ts",
+          "passed": 38
+        },
+        {
+          "path": "server/pathfinder/previews.test.ts",
+          "passed": 33
+        },
+        {
+          "path": "server/pathfinder/repository-match.test.ts",
+          "passed": 21
+        },
+        {
+          "path": "server/pathfinder/repository-state.test.ts",
+          "passed": 8
+        },
+        {
+          "path": "server/pathfinder/displayEndpointAvailability.test.ts",
+          "passed": 32
+        },
+        {
+          "path": "server/pathfinder/displayLocationMatchIndex.test.ts",
+          "passed": 3
+        },
+        {
+          "path": "server/pathfinder/preparationPublisher.test.ts",
+          "passed": 20
+        },
+        {
+          "path": "server/pathfinder/preparationUnionTask.test.ts",
+          "passed": 39
+        }
+      ],
+      "runStart": "2026-10-20T23:13:26 local console clock",
+      "durationSeconds": 9.59
+    },
+    {
+      "command": "npx tsc --noEmit -p server/tsconfig.json",
+      "status": "PASS",
+      "exitCode": 0,
+      "detail": "Final run after snapshot-level contextual refinement and zero-copy owned/final-union checks."
+    },
+    {
+      "command": "npx eslint shared/pathfinderPreparation.ts shared/pathfinderGeometryTrace.ts shared/preparationMerge.ts shared/preparationMerge.test.ts shared/pathfinderEquipmentVisibility.test.ts server/pathfinder/contracts.ts server/pathfinder/matching.ts server/pathfinder/matching.test.ts server/pathfinder/automaticEndpointCandidates.ts server/pathfinder/automaticEndpointCandidates.test.ts server/pathfinder/preparationPlans.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/geometryTraceBuilder.ts server/pathfinder/endpointCalculationProvenance.ts server/pathfinder/previews.ts server/pathfinder/previews.test.ts server/pathfinder/repository.ts server/pathfinder/repository-match.test.ts server/pathfinder/preparationUnionTask.ts server/pathfinder/preparationUnionTask.test.ts --max-warnings=0",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "command": "git diff --check -- shared/pathfinderPreparation.ts shared/pathfinderGeometryTrace.ts shared/preparationMerge.ts shared/preparationMerge.test.ts shared/pathfinderEquipmentVisibility.test.ts server/pathfinder/contracts.ts server/pathfinder/matching.ts server/pathfinder/matching.test.ts server/pathfinder/automaticEndpointCandidates.ts server/pathfinder/automaticEndpointCandidates.test.ts server/pathfinder/preparationPlans.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/geometryTraceBuilder.ts server/pathfinder/endpointCalculationProvenance.ts server/pathfinder/previews.ts server/pathfinder/previews.test.ts server/pathfinder/repository.ts server/pathfinder/repository-match.test.ts server/pathfinder/preparationUnionTask.ts server/pathfinder/preparationUnionTask.test.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "detail": "All20 owned source/test paths checked; only configured line-ending normalization warnings."
+    }
+  ],
+  "resolvedIntermediateFailures": [
+    {
+      "command": "npx tsc --noEmit -p server/tsconfig.json",
+      "status": "RESOLVED",
+      "detail": "Initial owned fixture policy inferred only v3 and nullable anchor narrowing; fixed explicit historical policy union and checked-anchor assertion. Concurrent managedPreparationWorkflow SDK fixture v2 was reported to its writer and later final types passed."
+    },
+    {
+      "command": "npx tsc --noEmit -p server/tsconfig.json",
+      "status": "RESOLVED",
+      "detail": "Expanded repository suggestion rows lacked legacy visibility/anchor/external_id union typing. Explicit rows:Row[] restored the existing branch contract without weakening runtime proof."
+    }
+  ],
+  "coverage": [
+    "New v3 requires explicit frozen SDK baseline visibility scope; historical fields stay absent.",
+    "Snapshot-to-planned-part-to-union-to-immutable-geometry-trace preserves and hashes equipment eligibility without upgrading nativeHidden/planning proofs.",
+    "Custom own Properties and tree names preserve exact engineering identity; SDK technical metadata is excluded.",
+    "All candidate records are verified before ambiguity; known-hidden candidates are removed and unknown/missing proof cannot form a false unique.",
+    "Current cable auto, standalone named Path and current-aggregate Match use the same verified source/object reader.",
+    "Named Path shortlist is bounded to 20000 plus one refusal sentinel; no LIMIT2-first shortcut or invented shared location.",
+    "Explicit manual points and confirmed shared/manual heads remain independent of the automatic v3 preparation gate.",
+    "Current project matches remain suggestions; no additional calculation or write authority.",
+    "Proof-bearing snapshot API, owned streaming parse and final union enforce the same exact converted selected/aggregate adapter envelope; all six native/completeness claims stay false and nativeHidden stays null.",
+    "Explicit null proof and unsupported source/adapter/native-visible/completeness flags are refused without a second mesh-sized graph clone."
+  ],
+  "limitations": [
+    "No actual SQL, HTTP, Docker, runtime, browser, converted-model acceptance or engineering acceptance.",
+    "Preview and repository integration unit tests stub the verified reader; its strict source/object proof closure is exercised separately in automaticEndpointCandidates.test.ts.",
+    "Legacy no-aggregate native-visible matching semantics are intentionally preserved; native-unknown legacy objects still do not auto-bind.",
+    "Root owns final combined engine identity, C# metadata and runtime closure qualification."
+  ],
+  "priorObservations": [
+    {
+      "observedAt": "2026-10-20T20:06:45.697Z",
+      "sourceHashes": [
+        {
+          "path": "shared/pathfinderPreparation.ts",
+          "sha256": "a7721f5a204c6f8f08bc78984739001ece07e0a2217f678be788ea768973d8f5"
+        },
+        {
+          "path": "shared/pathfinderGeometryTrace.ts",
+          "sha256": "b0b308ce25880cc7e06267d30fc751de386f8c83380ad4e2ba1b0e4ca6b068ca"
+        },
+        {
+          "path": "shared/preparationMerge.ts",
+          "sha256": "f1bc1bacee734746cdbe447e0a447e58c656461f253dac32dabc7d8822af4571"
+        },
+        {
+          "path": "shared/preparationMerge.test.ts",
+          "sha256": "35cf897abb8fbb67f6d50df7b551fb2827bd1034d535679cc63a01ea5cf99c27"
+        },
+        {
+          "path": "shared/pathfinderEquipmentVisibility.test.ts",
+          "sha256": "06bd7229a81ea25c1750b8cefd96a0e6b276778f304b7d6284c85eadf9709bf6"
+        },
+        {
+          "path": "server/pathfinder/contracts.ts",
+          "sha256": "c75d8966c6662b8c3960fcc1077ddd74aebcb2938257cafbf5e23c71a4be1f31"
+        },
+        {
+          "path": "server/pathfinder/matching.ts",
+          "sha256": "fc6dff91b7c87396938e4c2deb3a7ce49014a731be628e701a33477e9f8be67f"
+        },
+        {
+          "path": "server/pathfinder/matching.test.ts",
+          "sha256": "7f8c650d80cf7e4f48e92c6e6246428fda5382e57d849b81a96e63ad7637392f"
+        },
+        {
+          "path": "server/pathfinder/automaticEndpointCandidates.ts",
+          "sha256": "862eccbf62844fcb54a1c3795b619a618e5d3940b4bce7fc8285253ba9bbdbe7"
+        },
+        {
+          "path": "server/pathfinder/automaticEndpointCandidates.test.ts",
+          "sha256": "3f1943128626a28f7863866776eba008af5853a861ab28e3d64f06830280f20e"
+        },
+        {
+          "path": "server/pathfinder/preparationPlans.ts",
+          "sha256": "946693fcd6f9da3dd35ee9de5c8ae60793da9a0b091d19884d59c99d25ca14ec"
+        },
+        {
+          "path": "server/pathfinder/preparationPlans.test.ts",
+          "sha256": "f9607f39f574dac8ca234ebd487e95d32d474850b5882dd8e83c221e0a085d6e"
+        },
+        {
+          "path": "server/pathfinder/geometryTraceBuilder.ts",
+          "sha256": "9be689215ea63bef1799e141b3e98d097a059cbfa267ffdbb8b375c5b4e41528"
+        },
+        {
+          "path": "server/pathfinder/endpointCalculationProvenance.ts",
+          "sha256": "f1d22ebdfd2c33f7d985fb7e7ddea72b392a32713ee34a14d08f94bd72e8c00f"
+        },
+        {
+          "path": "server/pathfinder/previews.ts",
+          "sha256": "3426e8719c41b4c6c394908620bc4d7192ff62af50c5d291279fa04610506d71"
+        },
+        {
+          "path": "server/pathfinder/previews.test.ts",
+          "sha256": "a34222caab2eb2c06c06aced7c0e8e2d6d9e097f72c9af22d460d96a842d594e"
+        },
+        {
+          "path": "server/pathfinder/repository.ts",
+          "sha256": "224eab59d005243837265fe54acc7a67c882aa4817b31a81065fe9e0e4d3e51b"
+        },
+        {
+          "path": "server/pathfinder/repository-match.test.ts",
+          "sha256": "730a7e67816ce182b49ca0692b55049a9fd22cca0d0e50c7df266a31a97bdbd8"
+        }
+      ],
+      "checks": [
+        {
+          "command": "npx vitest run shared/pathfinderEquipmentVisibility.test.ts shared/preparationMerge.test.ts server/pathfinder/automaticEndpointCandidates.test.ts server/pathfinder/matching.test.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/geometryTraceBuilder.test.ts server/pathfinder/endpointCalculationProvenance.test.ts server/pathfinder/previews.test.ts server/pathfinder/repository-match.test.ts server/pathfinder/repository-state.test.ts server/pathfinder/displayEndpointAvailability.test.ts server/pathfinder/displayLocationMatchIndex.test.ts server/pathfinder/preparationPublisher.test.ts server/pathfinder/preparationUnionTask.test.ts --maxWorkers=1 --no-file-parallelism",
+          "status": "PASS",
+          "passed": 354,
+          "failed": 0,
+          "files": [
+            {
+              "path": "shared/pathfinderEquipmentVisibility.test.ts",
+              "passed": 19
+            },
+            {
+              "path": "shared/preparationMerge.test.ts",
+              "passed": 29
+            },
+            {
+              "path": "server/pathfinder/automaticEndpointCandidates.test.ts",
+              "passed": 43
+            },
+            {
+              "path": "server/pathfinder/matching.test.ts",
+              "passed": 23
+            },
+            {
+              "path": "server/pathfinder/preparationPlans.test.ts",
+              "passed": 30
+            },
+            {
+              "path": "server/pathfinder/geometryTraceBuilder.test.ts",
+              "passed": 28
+            },
+            {
+              "path": "server/pathfinder/endpointCalculationProvenance.test.ts",
+              "passed": 38
+            },
+            {
+              "path": "server/pathfinder/previews.test.ts",
+              "passed": 33
+            },
+            {
+              "path": "server/pathfinder/repository-match.test.ts",
+              "passed": 21
+            },
+            {
+              "path": "server/pathfinder/repository-state.test.ts",
+              "passed": 8
+            },
+            {
+              "path": "server/pathfinder/displayEndpointAvailability.test.ts",
+              "passed": 32
+            },
+            {
+              "path": "server/pathfinder/displayLocationMatchIndex.test.ts",
+              "passed": 3
+            },
+            {
+              "path": "server/pathfinder/preparationPublisher.test.ts",
+              "passed": 20
+            },
+            {
+              "path": "server/pathfinder/preparationUnionTask.test.ts",
+              "passed": 27
+            }
+          ],
+          "runStart": "2026-10-20T23:04:33 local console clock",
+          "durationSeconds": 7.29
+        },
+        {
+          "command": "npx tsc --noEmit -p server/tsconfig.json",
+          "status": "PASS",
+          "exitCode": 0,
+          "detail": "Final run completed after repository row-union narrowing."
+        },
+        {
+          "command": "npx eslint shared/pathfinderPreparation.ts shared/pathfinderGeometryTrace.ts shared/preparationMerge.ts shared/preparationMerge.test.ts shared/pathfinderEquipmentVisibility.test.ts server/pathfinder/contracts.ts server/pathfinder/matching.ts server/pathfinder/matching.test.ts server/pathfinder/automaticEndpointCandidates.ts server/pathfinder/automaticEndpointCandidates.test.ts server/pathfinder/preparationPlans.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/geometryTraceBuilder.ts server/pathfinder/endpointCalculationProvenance.ts server/pathfinder/previews.ts server/pathfinder/previews.test.ts server/pathfinder/repository.ts server/pathfinder/repository-match.test.ts --max-warnings=0",
+          "status": "PASS",
+          "exitCode": 0
+        },
+        {
+          "command": "git diff --check -- shared/pathfinderPreparation.ts shared/pathfinderGeometryTrace.ts shared/preparationMerge.ts shared/pathfinderEquipmentVisibility.test.ts server/pathfinder/contracts.ts server/pathfinder/matching.ts server/pathfinder/matching.test.ts server/pathfinder/automaticEndpointCandidates.ts server/pathfinder/automaticEndpointCandidates.test.ts server/pathfinder/preparationPlans.ts server/pathfinder/preparationPlans.test.ts server/pathfinder/geometryTraceBuilder.ts server/pathfinder/endpointCalculationProvenance.ts server/pathfinder/previews.ts server/pathfinder/previews.test.ts server/pathfinder/repository.ts server/pathfinder/repository-match.test.ts",
+          "status": "PASS",
+          "exitCode": 0,
+          "detail": "Actual scoped command excluded shared/preparationMerge.test.ts; root aggregate diff check is the final whole-change check. Git emitted only configured line-ending normalization warnings."
+        }
+      ],
+      "detail": "Earlier354/14 PASS preceded the final strict capture-envelope/owned-parser alignment; retained for audit, not the final source qualification."
+    }
+  ],
+  "reviewFindings": [
+    {
+      "scope": "independent C# source review",
+      "finding": "Initial metadata guard rejected the actual merged aggregate adapter.",
+      "status": "RESOLVED_IN_PEER_SOURCE",
+      "detail": "Peer aligned C# to exact converted selected/aggregate adapter allowlist; TS was aligned and final378 source tests passed."
+    },
+    {
+      "scope": "independent C# source review",
+      "finding": "Explicit optional equipmentEligibility:null normalized to absence.",
+      "status": "RESOLVED_IN_PEER_SOURCE",
+      "detail": "Peer added JSON-boundary explicit-null refusal; TS optional schema already refuses null."
+    },
+    {
+      "scope": "independent C# source review",
+      "finding": "Missing equipment parent could cause unhandled KeyNotFoundException.",
+      "status": "RESOLVED_IN_PEER_SOURCE",
+      "detail": "Peer added TryGetValue validation failure; agent did not execute C# tests or runtime."
+    }
+  ]
+}

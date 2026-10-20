@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { equipmentEligibilitySchema } from '../../shared/pathfinderPreparation.js';
 
 export const uuid = z.string().uuid().transform(value => value.toLowerCase());
 export const revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/).refine(value => BigInt(value) <= 9223372036854775807n);
@@ -45,18 +46,21 @@ export const snapshotObject = z.object({
   dbId: z.number().int().nonnegative().max(2_147_483_647).nullable().optional(), name: text,
   geometryRole: z.enum(['hierarchy', 'object', 'routing-leaf']), leafToRootNames: z.array(text).min(1).max(512),
   properties: z.array(z.object({ category: text, name: text, value: text }).strict()).max(1024),
+  equipmentEligibility: equipmentEligibilitySchema.optional(),
   nativeHidden: z.boolean().nullable(), planningExcluded: z.boolean(), routeName: text.nullable().optional(), shapeName: text.nullable().optional(), routeBoundaryId: identity.optional(),
   categoryAssignmentSource: z.enum(['unassigned', 'explicit-planning', 'native-reference-selection', 'synthetic', 'lookup-all-categories']),
   allowedCategories: z.array(z.enum(['MV', 'LV', 'Control'])).max(3), bounds,
   fragments: z.array(fragment).max(100_000),
   faceExtents: z.array(z.object({ face: z.enum(['MinX', 'MaxX', 'MinY', 'MaxY', 'MinZ', 'MaxZ']), bounds, sampleCount: z.number().int().nonnegative() }).strict()).max(6).nullable().optional(),
 }).strict().superRefine((value,ctx)=>{
+  if (value.equipmentEligibility && (value.geometryRole !== 'object' || value.nativeHidden !== null || value.planningExcluded))
+    ctx.addIssue({code:z.ZodIssueCode.custom,message:'Display eligibility belongs only to an equipment object without contradictory native/planning exclusion.'});
   if (value.routeBoundaryId!==undefined && (value.geometryRole!=='routing-leaf' || value.routeName!==undefined || value.shapeName!==undefined))
     ctx.addIssue({code:z.ZodIssueCode.custom,message:'A route boundary belongs only to a routing leaf and cannot compete with explicit route or shape names.'});
   if (value.categoryAssignmentSource==='lookup-all-categories' && (value.geometryRole!=='routing-leaf' || value.allowedCategories.length!==3 || !['MV','LV','Control'].every(category=>value.allowedCategories.includes(category as 'MV'|'LV'|'Control'))))
     ctx.addIssue({code:z.ZodIssueCode.custom,message:'Lookup geometry must carry all three categories independently of planning rules.'});
 });
-export const snapshotSchema = z.object({
+const snapshotShapeSchema = z.object({
   schemaVersion: z.literal('pathfinder.model.snapshot.v1'),
   model: z.object({ projectId: identity, modelVersionId: identity, contentSha256: hash, sourceContentSha256: hash.nullable().optional() }).strict(),
   capture: z.object({ adapterVersion: z.string().min(1).max(256), sourceKind: z.enum(['converted', 'native', 'synthetic']),
@@ -72,6 +76,24 @@ export const snapshotSchema = z.object({
     globalOffsetMetres: point, displayToWorldMetres: matrix }).strict(),
   objects: z.array(snapshotObject).min(1).max(1_000_000),
 }).strict();
+/** Reused by the owned streaming parser after its strict header/object reads;
+ * checking this context must not allocate another mesh-sized snapshot graph. */
+export function hasValidEquipmentEligibilityEnvelope(value: Pick<z.infer<typeof snapshotShapeSchema>, 'capture' | 'objects'>): boolean {
+  let hasEligibility = false;
+  for (const object of value.objects) if (object.equipmentEligibility) {
+    hasEligibility = true;
+    if (object.geometryRole !== 'object' || object.nativeHidden !== null || object.planningExcluded) return false;
+  }
+  if (!hasEligibility) return true;
+  const capture = value.capture;
+  return capture.sourceKind === 'converted' && ['wfc.protected-selected-capture.v1', 'wfc.project-preparation-aggregate.v1'].includes(capture.adapterVersion) &&
+    capture.lookupRouteCodes === undefined && !capture.inventoryComplete && !capture.geometryComplete && !capture.unitsVerified &&
+    !capture.transformsVerified && !capture.planningVisibilityKnown && !capture.sourceLinkVerified;
+}
+export const snapshotSchema = snapshotShapeSchema.superRefine((value, ctx) => {
+  if (!hasValidEquipmentEligibilityEnvelope(value))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['capture'],message:'SDK display eligibility requires a converted selected or aggregate capture without native or completeness claims.'});
+});
 export type ComputationalSnapshot = z.infer<typeof snapshotSchema>;
 export type SnapshotObject = z.infer<typeof snapshotObject>;
 const locationName = z.string().trim().min(1).max(500).regex(/^[^\u0000-\u001f\u007f-\u009f]*$/u);
