@@ -106,14 +106,22 @@ async function main() {
     expectedEquipmentObjects: plan.requestedScope.orderedEquipmentObjectIds.length };
   result.hashes = { manifestSha256: hash(manifestBytes), orderedPlanSha256: plan.orderedPlanSha256, orderedScopeSha256: scopeSha256,
     orderedReceiptSha256: hash(canonicalPurposeJson(receipts.map(r => ({ partId: r.partId, partIndex: r.partIndex, payloadRef: r.payloadRef, bytes: r.payloadBytes, sha256: r.payloadSha256 })))) };
-  current(); await phase('parent-load');
+  const referencesOnly = plan.limitsProfile === 'wfc.pf.bounded-128m-capture-and-model.v2';
+  result.inputMode = referencesOnly ? 'immutable-references' : 'legacy-inline';
+  current(); await phase(referencesOnly ? 'reference-stage' : 'parent-load');
   const parts = [];
-  // Same parent parse/Zod-copy sequence as production preparationSessions.publish.
+  // Mirror production: the larger profile passes immutable server references;
+  // the worker performs every strict DTO/hash/scope check on its private lane.
+  // Preserve legacy inline admission for its unchanged frozen profile.
   // No read source volume or original checkout is mounted by this runner.
   for (const receipt of receipts) {
     current();
     const data = await bytes(INPUT + '/' + receipt.payloadRef + '.json', PREPARATION_LIMITS.partBytes, { bytes: receipt.payloadBytes, sha256: receipt.payloadSha256 });
-    parts.push({ partId: receipt.partId, payload: snapshotSchema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))) });
+    if (referencesOnly) {
+      const saved = await storage.storePreparationBytes(plan.projectId,plan.id,receipt.payloadRef,data,PREPARATION_LIMITS.partBytes);
+      if (saved.bytes !== receipt.payloadBytes || saved.sha256 !== receipt.payloadSha256) fail('QUALIFICATION_PART_IDENTITY');
+      parts.push({ partId:receipt.partId,reference:{payloadRef:saved.payloadRef,sha256:saved.sha256,bytes:saved.bytes} });
+    } else parts.push({ partId: receipt.partId, payload: snapshotSchema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))) });
   }
   if (values.reverse) parts.reverse();
   current(); await phase('runner');

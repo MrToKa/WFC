@@ -3,11 +3,11 @@ import { z } from 'zod';
 import { policyHashSchema, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { PREPARATION_LIMITS, type PreparationPlan } from '../../shared/pathfinderPreparation.js';
 import { validatePreparationPart } from '../../shared/preparationMerge.js';
-import { snapshotSchema } from './contracts.js';
+import { parseOwnedPreparationSnapshot } from './preparationUnionTask.js';
 import { PathFinderError } from './errors.js';
 import { validateSnapshotStructure, objectMatchNames } from './matching.js';
 import type { EngineExecutor } from './engineSession.js';
-import type { PreparationAdapters } from './preparationSessions.js';
+import type { PreparationAdapters, PreparationValidation } from './preparationSessions.js';
 import { readPreparationBlob } from './preparationStorage.js';
 import { readSnapshot } from './storage.js';
 import { runPreparationUnion } from './preparationUnionWorker.js';
@@ -33,6 +33,19 @@ export const preparedUnionResponseSchema = z.object({
 const publicationSchema = z.object({ snapshotId: policyUuidSchema,
   sha256: policyHashSchema, bytes: z.number().int().positive().max(PREPARATION_LIMITS.unionBytes) }).strict();
 const refuse = (code: string): never => { throw new PathFinderError(code, 409); };
+
+async function verifiedPublicationSnapshot(plan: PreparationPlan, validation: PreparationValidation, owned: z.infer<typeof publicationSchema>) {
+  // Authenticate every immutable representation, but do not retain three full
+  // buffers or a second full Zod graph across the publication transaction.
+  const bytes = await (async () => {
+    await readPreparationBlob(plan.projectId, plan.id, validation.traceIndex, PREPARATION_LIMITS.unionBytes);
+    const cache = await readSnapshot(owned.snapshotId, owned.sha256);
+    const projection = await readPreparationBlob(plan.projectId, plan.id, validation.projection, PREPARATION_LIMITS.unionBytes);
+    if (!cache.equals(projection)) return refuse('PREPARATION_PROJECTION_INTEGRITY');
+    return cache;
+  })();
+  return parseOwnedPreparationSnapshot(JSON.parse(bytes.toString('utf8')));
+}
 
 /** Only server-owned immutable references cross the validation/publication boundary. */
 export function createPreparationPublisher(execute: EngineExecutor['execute']): PreparationAdapters {
@@ -62,13 +75,7 @@ export function createPreparationPublisher(execute: EngineExecutor['execute']): 
       const owned = publicationSchema.parse(validation.publicationData);
       if (owned.snapshotId !== validation.projection.payloadRef || owned.sha256 !== validation.projection.sha256
         || owned.bytes !== validation.projection.bytes) return refuse('PREPARATION_PROJECTION_INTEGRITY');
-      const [bytes, projection] = await Promise.all([
-        readSnapshot(owned.snapshotId, owned.sha256),
-        readPreparationBlob(plan.projectId, plan.id, validation.projection, PREPARATION_LIMITS.unionBytes),
-        readPreparationBlob(plan.projectId, plan.id, validation.traceIndex, PREPARATION_LIMITS.unionBytes),
-      ]);
-      if (!bytes.equals(projection)) return refuse('PREPARATION_PROJECTION_INTEGRITY');
-      const snapshot = snapshotSchema.parse(JSON.parse(bytes.toString('utf8')));
+      const snapshot = await verifiedPublicationSnapshot(plan,validation,owned);
       if (snapshot.model.projectId !== plan.projectId || snapshot.model.modelVersionId !== plan.modelVersionId
         || snapshot.model.contentSha256 !== plan.contentFingerprint || snapshot.objects.length !== validation.counts.objects)
         return refuse('PREPARATION_PROJECTION_INTEGRITY');

@@ -19,7 +19,7 @@ vi.mock('./preparationStorage.js', () => ({
 import { createPreparationService, preparationTransaction, PREPARATION_SQL_BOUNDS, type PreparationAdapters, type PreparationValidation } from './preparationSessions.js';
 import { PathFinderError } from './errors.js';
 import type { ComputationalSnapshot } from './contracts.js';
-import type { PreparationCreate, PreparationContext } from '../../shared/pathfinderPreparation.js';
+import type { PreparationCreate, PreparationContext, PreparationPlan } from '../../shared/pathfinderPreparation.js';
 import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const who = { userId: id(8), loginId: id(9), loginExpiresAt: Date.now() + 600000 };
@@ -198,6 +198,22 @@ describe('durable whole-network preparation lifecycle with mocked transactions a
   it('keeps exact in-progress publication retry explicitly uncertain, preserving its command', async () => { const validated = await adapters.validateUnion({} as any, [], new AbortController().signal); let begun!: () => void, finish!: (value: PreparationValidation) => void; const started = new Promise<void>(r => { begun = r; }); adapters.validateUnion = vi.fn(() => new Promise<PreparationValidation>(resolve => { finish = resolve; begun(); })); const { s, session } = await collected(), raw = command(session.sessionRevision), publishing = s.publish(id(1), who, session.id, raw); await started; await expect(s.publish(id(1), who, session.id, raw)).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_IN_PROGRESS', status: 503 }); finish(validated); expect((await publishing).aggregate.geometryRevision).toBe('1'); });
   it('rejects a missing/tampered part before publication and preserves its evidence', async () => { const { s, session, part } = await collected(); fake.blobs.set(part.partId, Buffer.from('{}')); await expect(s.publish(id(1), who, session.id, command(session.sessionRevision))).rejects.toMatchObject({ code: 'PREPARATION_BLOB_INTEGRITY' }); expect(fake.rows.get(session.id).state).toBe('failed'); expect(fake.parts.size).toBe(1); expect(adapters.publish).not.toHaveBeenCalled(); });
   it('refuses the effective staged 32MiB validation ceiling before reading or fitting the union', async () => { const { s, session, part } = await collected(); fake.parts.get(part.partId).payloadBytes = 32 * 1024 * 1024 + 1; await expect(s.publish(id(1), who, session.id, command(session.sessionRevision))).rejects.toMatchObject({ code: 'PREPARATION_VALIDATION_INPUT_LIMIT', status: 413 }); expect(adapters.validateUnion).not.toHaveBeenCalled(); expect(fake.rows.get(session.id).state).toBe('collecting'); expect(fake.aggregates).toHaveLength(0); });
+  it('passes only immutable receipt references to large-profile validation, while final publication still rechecks stored part integrity', async () => {
+    const {s,session,part}=await collected(service(LARGE_PREPARATION_CAPACITY_PROFILE));
+    const receipt=fake.parts.get(part.partId),validated=await adapters.validateUnion({} as PreparationPlan,[],new AbortController().signal);
+    adapters.validateUnion=vi.fn(async(_plan,parts)=>{
+      expect(parts).toEqual([{partId:receipt.partId,reference:{payloadRef:receipt.payloadRef,sha256:receipt.payloadSha256,bytes:receipt.payloadBytes}}]);
+      expect(Object.keys(parts[0]).sort()).toEqual(['partId','reference']);
+      fake.blobs.set(receipt.payloadRef,Buffer.from('{}'));
+      return validated;
+    });
+    await expect(s.publish(id(1),who,session.id,command(session.sessionRevision))).rejects.toMatchObject({code:'PREPARATION_BLOB_INTEGRITY'});
+    expect(adapters.validateUnion).toHaveBeenCalledTimes(1);expect(adapters.publish).not.toHaveBeenCalled();expect(fake.aggregates).toHaveLength(0);
+  });
+  it('keeps legacy-profile inline validation input and its strict normalized snapshot',async()=>{
+    const {s,session}=await collected();await s.publish(id(1),who,session.id,command(session.sessionRevision));
+    const [,parts]=vi.mocked(adapters.validateUnion).mock.calls[0];expect(parts).toHaveLength(1);expect(parts[0]).toMatchObject({payload:{schemaVersion:'pathfinder.model.snapshot.v1'}});expect(Object.hasOwn(parts[0],'reference')).toBe(false);
+  });
   it('cancellation aborts outside-SQL engine work and fences its final publication', async () => { let began!: () => void; const started = new Promise<void>(r => { began = r; }); adapters.validateUnion = vi.fn((_plan, _parts, signal) => new Promise<PreparationValidation>((_resolve, reject) => { began(); signal.addEventListener('abort', () => reject(new PathFinderError('PREPARATION_CANCELLED', 409)), { once: true }); })); const { s, session } = await collected(); const publishing = s.publish(id(1), who, session.id, command(session.sessionRevision)); await started; const current = await s.get(id(1), who, session.id); const cancelled = await s.cancel(id(1), who, session.id, { ...command(current.sessionRevision), idempotencyKey: id(21), reason: 'Operator cancelled' }); expect(cancelled.state).toBe('cancelled'); await expect(publishing).rejects.toMatchObject({ code: 'PREPARATION_CANCELLED' }); expect(fake.aggregates).toHaveLength(0); expect(fake.rows.get(session.id).state).toBe('cancelled'); });
   it('refuses stale cancellation CAS and exact-key conflicting payloads', async () => { const { s, session } = await collected(); await expect(s.cancel(id(1), who, session.id, command('0'))).rejects.toMatchObject({ code: 'PREPARATION_STATE_CONFLICT' }); const raw = command(session.sessionRevision); await s.cancel(id(1), who, session.id, raw); expect((await s.cancel(id(1), who, session.id, raw)).state).toBe('cancelled'); await expect(s.cancel(id(1), who, session.id, { ...raw, reason: 'Changed' })).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' }); });
 });

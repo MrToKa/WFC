@@ -2,10 +2,11 @@ import { Worker, type WorkerOptions } from 'node:worker_threads';
 import fs from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import type { PreparationPlan } from '../../shared/pathfinderPreparation.js';
-import type { ComputationalSnapshot } from './contracts.js';
 import { PathFinderError } from './errors.js';
 import { preparationStorageLockBuffer,releasePreparationStorageOwner } from './preparationStorage.js';
-import { preparationUnionPolicy,preparationUnionMessageSchema,checkPreparationUnionInputBytes,type PreparationUnionResult } from './preparationUnionTask.js';
+import { preparationUnionPolicy,preparationUnionMessageSchema,checkPreparationUnionInputBytes,type PreparationUnionParts,type PreparationUnionResult } from './preparationUnionTask.js';
+
+export type { PreparationUnionParts } from './preparationUnionTask.js';
 
 export interface PreparationUnionThread {
  readonly threadId:number;
@@ -38,15 +39,18 @@ export async function resolvePreparationUnionWorkerTarget():Promise<Target>{
 /** Dependency injection is server-internal for pure lifecycle tests, never request input. */
 export function createPreparationUnionRunner(dependencies:PreparationUnionWorkerDependencies){
  let occupied=false;
- return async(plan:PreparationPlan,parts:{partId:string;payload:ComputationalSnapshot}[],signal:AbortSignal):Promise<PreparationUnionResult>=>{
+ return async(plan:PreparationPlan,parts:PreparationUnionParts,signal:AbortSignal):Promise<PreparationUnionResult>=>{
   signal.throwIfAborted();if(occupied)throw new PathFinderError('PREPARATION_UNION_BUSY',503);occupied=true;
   let spawned=false;
   try{
-   try{checkPreparationUnionInputBytes(plan,parts);}catch{throw new PathFinderError('PREPARATION_UNION_LIMIT',413);}
+   let inputMode:'inline'|'references';
+   try{inputMode=checkPreparationUnionInputBytes(plan,parts);}catch{throw new PathFinderError('PREPARATION_UNION_LIMIT',413);}
    const initialRss=dependencies.residentBytes();if(!Number.isFinite(initialRss)||initialRss<0)throw new PathFinderError('PREPARATION_UNION_MEMORY_UNAVAILABLE',503);if(initialRss>=preparationUnionPolicy.rssBytes)throw new PathFinderError('PREPARATION_UNION_MEMORY_LIMIT',413);
    const target=await dependencies.target();signal.throwIfAborted();
    const requestId=randomUUID(),snapshotId=randomUUID();
-   const worker=dependencies.spawn(target.filename,{...target.options,execArgv:[],workerData:{schemaVersion:'wfc.pf.preparation-union-task.v1',requestId,snapshotId,plan,parts,storageLockBuffer:dependencies.storageLockBuffer},resourceLimits:{maxOldGenerationSizeMb:preparationUnionPolicy.oldGenerationMiB}});
+   // Production references cross the thread boundary without loading, parsing or
+   // cloning geometry on this parent lane. Inline v1 remains an explicit mode.
+   const worker=dependencies.spawn(target.filename,{...target.options,execArgv:[],workerData:{schemaVersion:inputMode==='references'?'wfc.pf.preparation-union-task.v2':'wfc.pf.preparation-union-task.v1',requestId,snapshotId,plan,parts,storageLockBuffer:dependencies.storageLockBuffer},resourceLimits:{maxOldGenerationSizeMb:preparationUnionPolicy.oldGenerationMiB}});
    spawned=true;const threadId=worker.threadId;
    return await new Promise<PreparationUnionResult>((resolve,reject)=>{
     let settled=false,exited=false,released=false,stopping=false,result:PreparationUnionResult|undefined,messageSeen=false,stopError:Error|undefined;

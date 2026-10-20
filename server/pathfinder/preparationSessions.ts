@@ -9,8 +9,9 @@ import { calculationGrantProvenanceSchema, type CalculationGrantProvenance } fro
 import { PathFinderError } from './errors.js';
 import { readPreparationContext, readPreparationState, equalPreparationScope, buildPreparationPlan, preparationDigest } from './preparationPlans.js';
 import { storePreparationBlob, readPreparationBlob, encodePreparationPayload } from './preparationStorage.js';
-import { LEGACY_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
+import { LEGACY_PREPARATION_CAPACITY_PROFILE, LARGE_PREPARATION_CAPACITY_PROFILE, preparationCapacity, preparationCapacityProfileSchema, type PreparationCapacityProfile } from '../../shared/pathfinderCapacity.js';
 import { preparationPlanSchema, preparationPlanHashInput } from '../../shared/pathfinderPreparation.js';
+import type { PreparationUnionParts } from './preparationUnionTask.js';
 
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Project preparation requires a refresh or an explicit routing decision.'); };
 const terminal = new Set(['published', 'failed', 'cancelled', 'stale']);
@@ -124,7 +125,7 @@ const validationSchema = z.object({ projection: preparationBlobSchema, traceInde
 export type PreparationValidation = z.infer<typeof validationSchema>;
 export type PreparationAdapters = {
   validatePart?: (plan: PreparationPlan, part: PreparationPlan['partPlan'][number], payload: ComputationalSnapshot) => ComputationalSnapshot;
-  validateUnion: (plan: PreparationPlan, parts: { partId: string; payload: ComputationalSnapshot }[], signal: AbortSignal) => Promise<PreparationValidation>;
+  validateUnion: (plan: PreparationPlan, parts: PreparationUnionParts, signal: AbortSignal) => Promise<PreparationValidation>;
   publish: (client: PoolClient, input: { session: PreparationSession; plan: PreparationPlan; aggregateId: string; geometryRevision: string; validation: PreparationValidation; principal: OperationPrincipal }) => Promise<{ artifactId: string; registryRevision: string }>;
 };
 
@@ -238,8 +239,21 @@ export function createPreparationService(pool: Pool, adapters: PreparationAdapte
       const timeout = setTimeout(() => controller.abort(), PREPARATION_LIMITS.validationMilliseconds);
       let finalPublicationStarted = false;
       try {
-        const parts = [];
-        for (const part of session.parts) { controller.signal.throwIfAborted(); const bytes = await readPreparationBlob(projectId, id, partBlob(part)); parts.push({ partId: part.partId, payload: snapshotSchema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) }); }
+        let parts: PreparationUnionParts;
+        if (session.plan.limitsProfile === LARGE_PREPARATION_CAPACITY_PROFILE) {
+          // Only immutable server receipts cross the thread boundary. The worker
+          // repeats byte/hash, strict schema and frozen coverage validation while
+          // loading each fixed project/session reference; no geometry is cloned
+          // onto the HTTP loop before spawning it.
+          parts = session.parts.map(part => {
+            controller.signal.throwIfAborted();
+            return { partId: part.partId, reference: partBlob(part) };
+          });
+        } else {
+          const inlineParts: {partId: string; payload: ComputationalSnapshot}[] = [];
+          for (const part of session.parts) { controller.signal.throwIfAborted(); const bytes = await readPreparationBlob(projectId, id, partBlob(part)); inlineParts.push({ partId: part.partId, payload: snapshotSchema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes))) }); }
+          parts = inlineParts;
+        }
         const validation = validationSchema.parse(await adapters.validateUnion(session.plan, parts, controller.signal)); controller.signal.throwIfAborted();
         if (validation.projection.bytes > preparationCapacity(session.plan.limitsProfile).projectionInputBytes) return fail('PREPARATION_VALIDATION_INPUT_LIMIT', 413);
         finalPublicationStarted = true;

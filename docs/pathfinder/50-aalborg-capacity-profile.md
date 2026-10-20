@@ -3,6 +3,53 @@
 Status: **SOURCE_VERIFIED; REAL_FULL_INPUT_QUALIFICATION_IN_PROGRESS**.
 This checkpoint does not establish engineering acceptance or permission for real Apply.
 
+## Latest actual checkpoint — 20 October 2026, 07:44 UTC
+
+Capacity4 normal capture completed all five parts of immutable session
+`9f8f7c49-ecce-43e4-9dc7-682aea331aee`, plan
+`7eb7e8e9db97985396d4f35090bb6cb1d7967da7984ce5d269f8efd6a3d1f606`:
+114,186,790 bytes, 330 project trays, 1165 physical leaves, 1527 endpoint names,
+zero plan diagnostics. Normal API readback and independent immutable payload/
+capture-evidence copies PASS, all five parts hash/size matched and actual
+actor/login/plan identity independently compared in a read-only transaction.
+This is full capture, not successful union, fitting or publication.
+
+The first actual full-input union qualification **FAIL**: exact capacity4 API
+image, fresh owned helper with hard2GiB memory/swap total,1CPU,128pids,networknone,
+read-only inputs/root. Docker reported exit137/OOMKilled. Last child checkpoint
+entered runner at4541.60ms with wholeNodeRSS766,734,336bytes after parent loading.
+No final measurement/result survived the killed supervisor, so its exact peak,
+worker subphase and wall duration are **NOT_MEASURED**. Helper ownership was
+rechecked and its container removed; immutable inputs and progress retained.
+No aggregate, trace, cable Apply or cable write occurred. Baseline hash of all
+columns of2140cables recorded privately, zero Apply receipts.
+
+After capture, host freeRAM2.80GB/3.12GB failed the selected3GiB reserve preflight.
+Normal navigation to Details and page reload released the unused3D page; next
+preflight PASS free8,508,551,168bytes, freevirtual9,797,873,664bytes. LinuxVM
+available12,673,458,176bytes is a separate overlapping view, not additive.
+Cgroupv2 files are absent on this VM; do not claim a measured v2 memory peak.
+Browser console exposes timing-object arguments only as `Object`, so detailed
+browser timing fields are **NOT_CAPTURED**; capture timestamps are not substituted
+for those measurements. Source repairs remain subject to new image qualification.
+
+Memory repair source in progress: immutable references cross the large-profile
+worker boundary, fixed-scope worker reads repeat hashes/schema/coverage, parts
+are strict-parsed incrementally, owned geometry avoids repeated full graph
+copies, and one exact canonical byte sequence backs independent quota/cache
+files. Legacy inline transport and generic merge immutability/duplicate behavior
+remain. Final publication verifies trace/cache/projection sequentially and reuses
+the existing strict per-object parser before all unchanged model/structure/SQL
+fences. Source review found no blocking issue; **145 union/merge/session/publisher
+checks and31 storage checks PASS**. Frontend/server TypeScript and focused lint
+PASS. The initial server typecheck found an implicit-any in a new test assertion;
+the assertion was repaired, server types/lint and the affected session suite rerun
+PASS. This is a source checkpoint; the next real full-input trial is **NOT_RUN**.
+No time, memory, geometry, C# or engineering acceptance limit was increased.
+
+The older paragraphs below are historical checkpoints and are superseded only
+where this latest actual observation supplies stronger evidence.
+
 20October06:24UTC actual capture checkpoint: session4ff550aa retained4/5parts,
 112,648,588bytes, all1165routing leaves across those four parts. The final
 equipment-only part refused with generic`EXTRACTION_FAILED`; no subcause was

@@ -232,3 +232,117 @@ Proposed source/test scope for that later change:
   query counts and runtime separately when the authorized executor tests it;
   this design makes no performance or live-data acceptance claim.
 
+### 9.2. Proposed ordinary-trace recalculation event — NOT_IMPLEMENTED
+
+This is a source-only design for a later narrow repair. No production code,
+tests, database schema or live policy was changed for this section. The
+ordinary-trace ordering condition in section 4 therefore still applies.
+
+**Recommended boundary:** add one transactional dirty event only when an
+ordinary current-login administrator publishes a **new** immutable trace for
+the currently selected, healthy prepared aggregate. Keep the existing grant
+maintenance event in its existing owner; do not make the repository emit an
+additional event for a grant principal.
+
+The existing `markRecalculationDirty` helper accepts a `PoolClient` and calls
+`pf_recalculation_dirty` on that same transaction
+(`server/pathfinder/recalculationSchema.ts:144`). Reuse domain `geometry`, reason
+`GEOMETRY_TRACE_PUBLISHED`, and source revision `trace.id + ':' +
+trace.contentSha256`, as already used by managed maintenance
+(`server/pathfinder/grantPreparedMaintenance.ts:192`). The SQL permits the
+declared domain set, an uppercase reason matching
+`^[A-Z][A-Z0-9_]{0,95}$`, and a source revision of at most 256 bytes; there is no
+additional literal reason allowlist to extend for this already-used cause
+(`server/pathfinder/recalculationSchema.ts:64`). The UUID-plus-SHA256 source is
+101 ASCII bytes. The helper itself is **not deduplicating**: every invocation
+advances a generation and inserts an event (`recalculationSchema.ts:66` and
+`:73`), so invocation ownership is the idempotency boundary.
+
+Proposed insertion and guards:
+
+1. In the new-publication branch of `geometryTraceRepository.create`, retain
+   all existing principal authorization, frozen aggregate/runtime validation,
+   lease checks, worker joins, object-page and diagnostic-page checks. Do not
+   emit at admission, after the worker returns, or after the outer transaction
+   commits (`server/pathfinder/geometryTraceRepository.ts:61` and `:94`).
+2. After the new trace/index rows, completed intent and exact command receipt
+   have been written, but before returning the receipt from the **same final
+   transaction**, check `!isGrantPrincipal(who)` and read the current prepared
+   pointer/active selection under the established project transaction. Compare
+   aggregate, artifact, model, selection revision and content fingerprint with
+   the newly frozen trace/aggregate; require the active model still ready and
+   healthy. Use a bounded current-scope read, not a full endpoint or cable
+   collection. A historical trace may still be stored for inspection but must
+   not cause a recalculation of an unrelated current aggregate. Existing
+   current-scope identity checks are illustrated by
+   `server/pathfinder/endpointBindingRepository.ts:57` and
+   `server/pathfinder/automaticEndpointCandidates.ts:55`.
+3. For that qualified ordinary new publication, call the existing dirty helper
+   once with the trace cause above, as the final SQL mutation before the
+   transaction's cancellation/final-login check and COMMIT. This retains
+   project/principal-before-scheduler lock ordering. The insertion point follows
+   `saveReceipt` in `server/pathfinder/geometryTraceRepository.ts:107`; current
+   transaction fencing and commit-unknown handling remain in
+   `server/pathfinder/geometryTraceRepository.ts:23`.
+4. Do not add the helper to either receipt-replay branch: exact historical key
+   replay at `geometryTraceRepository.ts:64`, complete-derivation reuse with a
+   new command key at `:71`, or outer unknown-outcome reconciliation at `:113`.
+   Those paths return existing durable evidence and must not create another
+   event. A failed transaction rolls back the new trace, receipt and event
+   together; a committed but unacknowledged transaction is recovered through
+   the exact existing receipt, without another helper invocation.
+
+**Grant boundary and recursion:** the grant path must continue to create its
+trace under its finite operation lease, validate its exact receipt, emit its
+owned event in the grant transaction, persist `trace.dirty`, then positively
+release that lease before comparison (`grantPreparedMaintenance.ts:183` through
+`:198`). The proposed ordinary-only guard leaves those semantics and its
+unknown-outcome quarantine unchanged. An unconditional repository event would
+add a second generation to that path and is therefore unsuitable for this
+narrow repair. Do not introduce a generic trace-table trigger as an alternative
+while the managed-maintenance emitter remains. The new event only marks a
+generation; it does not call trace creation, preparation, comparison, job
+creation, Review or Apply recursively. Existing preparation publication and
+trace completion remain two distinct dependency changes, not two emissions
+of the same trace event.
+
+The event must not enable a policy or mint authority. Existing SQL preserves
+disabled/paused/expired-authority states, and normal producer claim/admission
+still checks the current role, login, epoch, generation and engine
+(`server/pathfinder/recalculationSchema.ts:71` and
+`server/pathfinder/recalculationRepository.ts:162`). A newly dirty generation
+may still be all blocked or produce no route. An already stored trace that was
+created before the repair does not acquire a retroactive event through a replay;
+use the existing explicit Retry workflow if its current generation needs one.
+
+Proposed checks for the later implementation, all **NOT_RUN** here:
+
+- Extend `server/pathfinder/geometryTraceRepository.test.ts` with a genuine
+  new-publication fixture proving exactly one correctly scoped helper call on
+  the same client after trace/index/receipt completion and before COMMIT.
+  Preserve the existing current-role, final-expiry, lease, fingerprint and
+  rollback/commit-unknown checks at `:38` through `:44`.
+- Extend exact-key replay (`geometryTraceRepository.test.ts:45`) and
+  complete-derivation reuse (`:47`) to assert zero helper calls. Exercise a
+  lost final COMMIT acknowledgement whose durable receipt is then reconciled,
+  proving one durable trace/event rather than a replay generation. Refused,
+  cancelled, integrity-failed and genuinely rolled-back publications must have
+  no committed event.
+- Cover a non-current/historical aggregate and changed active selection,
+  fingerprint, artifact or model health: the ordinary trace must not dirty an
+  unrelated current scope. Cover disabled, paused and expired finite policy
+  state: a trace event must not silently renew or enable calculation authority.
+- Keep `server/pathfinder/grantPreparedMaintenance.test.ts:89` proving one
+  existing trace dirty call before lease release. Retain completed-maintenance
+  replay at `:131`, unknown trace completion at `:147`, unknown dirty-commit
+  outcome at `:171`, and durable dirty-receipt requirements at `:206`.
+  Add a repository grant-principal new-publication check proving the proposed
+  ordinary emitter is skipped, so the combined path has one owner.
+- Use the isolated recalculation transaction controls to prove that an
+  all-blocked pre-trace generation is superseded by the newly committed trace
+  event under still-live finite authority, without an explicit Retry; retain
+  existing all-blocked baseline and generation-fencing checks in
+  `server/pathfinder/recalculationRepository.test.ts:35` through `:42`.
+  Verify event/trace rollback atomically in an owned test database rather than
+  treating a SQL-spy ordering assertion as proof of database atomicity.
+

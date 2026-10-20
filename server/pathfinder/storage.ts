@@ -30,6 +30,18 @@ function encodeSnapshot(value:unknown):Buffer {
 export function snapshotDigest(value:unknown):string {return createHash('sha256').update(encodeSnapshot(value)).digest('hex');}
 export async function storeSnapshot(id: string, value: unknown): Promise<{sha256:string;bytes:number}> {
   const bytes=encodeSnapshot(value);
+  return writeSnapshotBytes(id,bytes);
+}
+/** Exact server-produced UTF-8 after the caller's strict DTO validation. Copy
+ * before the first await so concurrent mutation cannot change immutable bytes.
+ * This creates an independent cache file; quota-accounted backing is owned by
+ * the preparation publisher and must be committed first. */
+export async function storeSnapshotBytes(id: string, value: Buffer): Promise<{sha256:string;bytes:number}> {
+  if (!Buffer.isBuffer(value) || value.length === 0 || value.length > 256 * 1024 * 1024)
+    throw new PathFinderError('SNAPSHOT_BUDGET',413);
+  return writeSnapshotBytes(id,Buffer.from(value));
+}
+async function writeSnapshotBytes(id: string, bytes: Buffer): Promise<{sha256:string;bytes:number}> {
   const filename = await snapshotFilename(id), temporary = `${filename}.${randomUUID()}.tmp`;
   const handle = await fs.open(temporary,'wx',0o600);
   try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }

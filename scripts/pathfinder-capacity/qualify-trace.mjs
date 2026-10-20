@@ -72,6 +72,15 @@ async function main() {
   const capacity = capacityModule.preparationCapacity(plan.limitsProfile);
   if (inputBytes > capacity.validationInputBytes) fail('PREPARATION_VALIDATION_INPUT_LIMIT');
   const unionResultBytes = await read(UNION + '/result.json', 65536), unionResult = json.parsePolicyJson(unionResultBytes, { maxBytes: 65536 });
+  const unionSupervisionBytes = await read(UNION + '/supervision.json', 65536), unionSupervision = json.parsePolicyJson(unionSupervisionBytes, { maxBytes: 65536 });
+  const measured = unionSupervision?.measurement, emittedResult = Buffer.concat([unionResultBytes, Buffer.from('\n')]);
+  // A completed child receipt can outlive a failed supervisor. Admit only the
+  // independently joined, successful trial whose full stdout binds this receipt.
+  if (unionSupervision?.schemaVersion !== 'wfc.pf.full-network-supervision.v1' || unionSupervision.status !== 'PASS' ||
+      measured?.status !== 'PASS' || measured.spawned !== true || measured.code !== 0 || measured.signal !== null ||
+      measured.sampleError !== null || measured.cleanup?.groupGone !== true || measured.outputBytes !== emittedResult.length ||
+      measured.retainedOutputBytes !== emittedResult.length || measured.outputSha256 !== hash(emittedResult) ||
+      canonicalPurposeJson(unionSupervision.result) !== canonicalPurposeJson(unionResult)) fail('QUALIFICATION_UNION_NOT_PROVEN');
   const receiptHash = hash(canonicalPurposeJson(receipts.map(r => ({ partId: r.partId, partIndex: r.partIndex, payloadRef: r.payloadRef, bytes: r.payloadBytes, sha256: r.payloadSha256 }))));
   if (unionResult?.schemaVersion !== 'wfc.pf.full-network-qualification.v1' || unionResult.status !== 'PASS' || unionResult.mode !== 'publisher' || unionResult.code !== 'COMPLETED' || unionResult.publicationInvoked !== false || unionResult.hashes?.manifestSha256 !== hash(manifestBytes) || unionResult.hashes?.orderedPlanSha256 !== plan.orderedPlanSha256 || unionResult.hashes?.orderedReceiptSha256 !== receiptHash) fail('QUALIFICATION_UNION_NOT_PROVEN');
   const references = unionResult.references;
@@ -81,7 +90,7 @@ async function main() {
   if (references.snapshotId !== projection.payloadRef || projection.schemaVersion !== 'pathfinder.model.snapshot.v1' || traceIndex.schemaVersion !== 'wfc.pf.preparation-trace-index.v1' || projection.payloadRef === traceIndex.payloadRef || projection.bytes > capacity.projectionInputBytes || traceIndex.bytes > 16 * MIB || projection.sha256 !== unionResult.hashes.projectionSha256 || traceIndex.sha256 !== unionResult.hashes.traceIndexSha256 || counts.physicalLeaves !== plan.requestedScope.orderedPhysicalLeafIds.length || Object.entries(counts).some(([key, value]) => unionResult.counts?.[key] !== value)) fail('QUALIFICATION_UNION_IDENTITY');
   result.counts = { parts: receipts.length, totalInputBytes: inputBytes, ...counts };
   result.hashes = { manifestSha256: hash(manifestBytes), orderedPlanSha256: plan.orderedPlanSha256, orderedReceiptSha256: receiptHash,
-    unionResultSha256: hash(unionResultBytes), projectionSha256: projection.sha256, traceIndexSha256: traceIndex.sha256 };
+    unionResultSha256: hash(unionResultBytes), unionSupervisionSha256: hash(unionSupervisionBytes), projectionSha256: projection.sha256, traceIndexSha256: traceIndex.sha256 };
   result.capacity = { profile: plan.limitsProfile, projectionBytes: capacity.projectionInputBytes };
   current(); await phase('copy-union');
   const sourceBlobPath = ref => UNION + '/preparations/' + plan.projectId + '/' + plan.id + '/' + ref.payloadRef + '.json';

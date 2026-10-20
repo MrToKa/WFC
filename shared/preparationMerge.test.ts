@@ -1,5 +1,6 @@
 import { describe,it,expect,vi } from 'vitest';
-import { mergePreparationParts,validatePreparationPart,preparationCaptureRequest } from './preparationMerge.js';
+import { mergePreparationParts,validatePreparationPart,preparationCaptureRequest,createOwnedPreparationMerge } from './preparationMerge.js';
+import {canonicalPurposeJson} from './pathfinderPurposePolicy.js';
 import type { PreparationPlan } from './pathfinderPreparation.js';
 import type { ComputationalSnapshot,SnapshotObject } from '../server/pathfinder/contracts.js';
 import { snapshotSchema } from '../server/pathfinder/contracts.js';
@@ -64,5 +65,28 @@ describe('whole preparation union',()=>{
  it('rejects differing immutable ancestor properties and enforces the monotonic validation deadline',()=>{
   const{plan,parts}=fixture();parts[1].payload.objects[1].properties=[{category:'Source',name:'Changed',value:'yes'}];expect(()=>mergePreparationParts(plan,parts)).toThrow();parts[1].payload.objects[1].properties=[];
   const now=vi.spyOn(performance,'now');let ticks=0;now.mockImplementation(()=>++ticks*120001);try{expect(()=>mergePreparationParts(plan,parts)).toThrowError(expect.objectContaining({code:'PREPARATION_VALIDATION_TIMEOUT'}));}finally{now.mockRestore();}
+ });
+ it('incrementally adopts strictly parsed private parts without snapshot-sized clones, retaining exact generic output bytes',()=>{
+  const{plan,parts}=fixture(),expected=mergePreparationParts(plan,parts),owned=parts.map(part=>({...part,payload:snapshotSchema.parse(part.payload)})),merge=createOwnedPreparationMerge(plan);
+  const stringify=vi.spyOn(JSON,'stringify');let actual:ReturnType<typeof merge.finish>;
+  try{
+   for(const part of owned)merge.addPart(part.partId,part.payload);actual=merge.finish();
+   expect(stringify.mock.calls.some(([value])=>value&&typeof value==='object'&&'schemaVersion' in value&&value.schemaVersion==='pathfinder.model.snapshot.v1')).toBe(false);
+  }finally{stringify.mockRestore();}
+  expect(canonicalPurposeJson(actual!)).toBe(canonicalPurposeJson(expected));expect(actual!.snapshot.objects[2]).toBe(owned[0].payload.objects[0]);expect(actual!.snapshot.objects[3].fragments[0].vertices).toBe(owned[1].payload.objects[0].fragments[0].vertices);
+  expect(parts[0].payload.objects[1].bounds.maximum).toEqual(parts[0].payload.objects[0].bounds.maximum);
+ });
+ it('the owning path keeps strict completeness, frozen order, identity, policy and single-use guards',()=>{
+  for(const kind of ['missing','order','duplicate','mask','parent','properties'] as const){
+   const{plan,parts}=fixture(),merge=createOwnedPreparationMerge(plan);if(kind==='mask')parts[0].payload.objects[0].allowedCategories=['MV'];if(kind==='parent')parts[0].payload.objects[0].parentId='dbid:1';if(kind==='properties')parts[1].payload.objects[1].properties=[{category:'Source',name:'Changed',value:'yes'}];
+   expect(()=>{if(kind==='order')merge.addPart(parts[1].partId,parts[1].payload);else{merge.addPart(parts[0].partId,parts[0].payload);if(kind==='duplicate')merge.addPart(parts[0].partId,parts[0].payload);else if(kind!=='missing')merge.addPart(parts[1].partId,parts[1].payload);merge.finish();}}).toThrow();
+  }
+  const{plan,parts}=fixture(),merge=createOwnedPreparationMerge(plan);for(const part of parts)merge.addPart(part.partId,part.payload);merge.finish();expect(()=>merge.finish()).toThrow();expect(()=>merge.addPart(parts[0].partId,parts[0].payload)).toThrow();
+ });
+ it('keeps escaped UTF-8, exponent and negative-zero values without a mesh-sized encoder allocation',()=>{
+  const{plan,parts}=fixture();for(const part of parts)for(const object of part.payload.objects)object.properties=[{category:'Source',name:'quoted " slash \\ emoji 🙂',value:'漢字é𝄞'}];
+  // Properties are already DTO-validated by the caller; byte accounting follows JSON.stringify exactly.
+  parts[0].payload.objects[0].fragments[0].vertices[0][1]=-0;parts[0].payload.objects[0].fragments[0].vertices[1][1]=1e-7;
+  const encode=vi.spyOn(TextEncoder.prototype,'encode');try{const result=mergePreparationParts(plan,parts);expect(snapshotSchema.safeParse(result.snapshot).success).toBe(true);expect(result.snapshot.objects[2].properties).toEqual(parts[0].payload.objects[0].properties);expect(result.snapshot.objects[2].fragments[0].vertices[1][1]).toBe(1e-7);expect(Math.max(...encode.mock.calls.map(([value])=>(value??'').length))).toBeLessThan(256);}finally{encode.mockRestore();}
  });
 });
