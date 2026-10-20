@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "wfc.pf.current-full-recovery-public.v1",
+  "observedAt": "2026-10-20T12:47:13.723Z",
+  "branch": "pf-aalborg-current-full-recovery-local-20261020",
+  "deliveryParent": "d5e678dc5bcb59f1a05e803af5addec1641b1035",
+  "operatorSourceRevision": "7c0c673fd1a6aa442c4989c816d760f2626797b6",
+  "runtimeSourceRevision": "c68b4434ffadc73c7c6ca38997cfe4689aca928f",
+  "engineeringAccepted": false,
+  "nativeParity": "not-performed",
+  "status": "FAIL",
+  "phase": "normal-login-with-legacy-demo-metadata",
+  "httpStatus": 401,
+  "code": "FULL_RECOVERY_READBACK_HTTP_STATUS",
+  "successfulSession": false,
+  "noPasswordReset": true,
+  "rawReceipt": {
+    "filename": "full-recovery1-readback1-failure.private.json",
+    "bytes": 771,
+    "sha256": "4520c8d0311e26024c52704ff4d38d3e5035638c91fa12fb9f61e9daa28ec4f0"
+  },
+  "followUp": "Explicit human approved an exact existing historical test account source and private storage only for5192; normal readback2 below used that existing account."
+}

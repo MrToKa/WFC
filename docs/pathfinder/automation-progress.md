@@ -1,5 +1,91 @@
 # PathFinder local implementation progress
 
+## Current verified delivery — 2026-10-20T12:46Z
+
+CURRENT STAGE: **TECHNICAL_RECOVERY_PASS / AWAITING_HUMAN_ENGINEERING_REVIEW**.
+No independent implementation stage remains in the accepted current scope.
+Automation path-finder-purpose-rules-and-model-revisions **PAUSED** through app
+update and TOML readback at12:46:07.3439309Z; no unchanged automatic repeats.
+
+Worktree C:/Users/todor.chankov/source/WFC-pathfinder-local; branch
+pf-aalborg-current-full-recovery-local-20261020. This documentation delivery
+inherits d5e678d and operator7c0c673; read live HEAD for its final local commit.
+Runtime images remain c68b443 (no app rebuild or source5191 upgrade this turn).
+Root actual processes are joined; all agents completed; only report/progress/
+eight sanitized public receipts/new human handoff are delivery changes.
+
+Actual PASS: backup3 ID980bde15-08db-43f6-bdca-e90730e65410,8members/fourimages/
+3148555384corebytes plus separate private host/producercompanion; fresh5192
+restore1/126tables/twoauthgroups/threequalifiedfencingtables/leasesexact/JWT+epoch
+rotated/7producerblank. Normal existing-admin readback2 checked all230immutable
+nonMVproposals+productionledgers/protected200,401,204,410. UI3 postcheck kept
+124business/PF tables exact;1UIlogin+2Viewersessionsnormalclosed/0unrevoked.
+Actual computer-use proved originalcolors/yellowline/filledGhost/Zoom/Clear.
+Final exact private captures are route3/clear2; earlier partial progressive
+frames are not proof. All temporary target tabs3/4 closed; source tab2 retained.
+Qualification1 has14actualgates/9pinnedPASSrefs. Retire1 ACTUALPASS:0owned5192
+containers/volumes/networks,portECONNREFUSED,source126tablesunchanged. Fresh
+outside bookend18containers/28volumes/14networks unchanged. Source5191 retained.
+
+Final evidence index: evidence/aalborg-full-recovery/final-actual1.json SHA
+61b9eb49a3d52cc354e08a28a44cd499df3960e402036cd783126a8e4cbb4923.
+Report55 records technical verification separately from engineering acceptance.
+Historical failed backups, legacydemo401 and pre-SQL reference-adapter failure
+remain immutable. The explicit user approved the exact historical test account
+source and private storage only for5192; no account reset or promotion occurred.
+
+NonMVjob remains1808selected/230calculated/1578locations_required/332MVexcluded.
+Source fence9 PASS2140all-columnSHA
+0cc900778484ca50a770c30a3566564c5975c5649885793aed8b8e8e426f9155,0Apply.
+No new calculation/review/mapping/Apply/authority renewal during recovery.
+PolicyPAUSED7/grantdisabled/oldauthorityexpired/producerunqualified.
+
+Next useful handoff: handoffs/PF-Aalborg-engineering-review.md. Human decisions
+needed:1042missing/48ambiguous shared locations,17revisionidentities,review230
+proposals and explicitly choose any Apply. Never invent engineering inputs.
+OriginalWFC/oldPF/canonicalPF/sources/5190/original data are unchanged; old PF
+local edits preserved. No push/PR/merge/deployment. Source5191/archive/private
+companions/olderSVF/evidence retained. Deniedpaths and unqualified1Bvolume left
+untouched; cleanup removed only newly owned qualified5192fixture.
+
+## Historical execution checkpoints (preserved)
+
+
+## Recovery execution checkpoint — 2026-10-20T12:26Z
+
+Backup3 PASS980bde15-08db-43f6-bdca-e90730e65410,8members/4images/126tables;
+private result SHA f97f7ee3b66d198999380f549217d025097530d8588b53a0acb39bef677674be.
+Fresh restore preflight8 PASS; profile7 retained for immutable archive lineage.
+Restore1 PASS126tables/2authgroups/3qualified fencing tables,JWT+epochrotation,
+lease rows exact,7producer variables blank; target5192 full-recovery1-target-current1.
+Outside transition PASS actual precreation→qualified postcreation18/28/14,
+SHA83ab4168d46456fda9ebbefcb0c9e72db25e5d302ebe241c7a489e9edfff6e45.
+Normal readback1 FAIL known401 on firstlogin (no session/unknown mutation).
+Archived legacy demo credentials are copied exactly but identify a different actor
+from known valid source login2. No password reset/promotion/account changes.
+Capacity agent investigates existing credential provenance read-only; new existing
+account adapter SHA50cd7ba89bff5fc826e5d56d5fd829f1438d0da4e472a9de818d0f8cfc1c7100
+syntax+independent review PASS, not executed. Target browser2/tab3 at normallogin;
+source browser2/tab2 preserved deliverable. Root sole actual executor.
+Next: known existing-admin normal login,230readbacks,actual UI,postUI closure,
+qualified target-only retirement. No new calculation or realApply.
+
+
+## Resumed live checkpoint — 2026-10-20T12:14Z
+
+CURRENT STAGE: **RUNNING_CURRENT_FULL_RECOVERY**. User resumed after freeing RAM;
+actual Windows free physical ~9 GiB. Fresh preflight7 PASS12:13:56.832Z;
+profile SHA6b16a991fc78b1b61fa20f731086ee0ab2cfda159af1373b70602e75ca0724b7.
+Backup3 root session17477 RUNNING; fresh5192restore NOT_RUN.
+Same recovery branch, checkpoints7c0c673/d5e678d; no app rebuild.
+Automation ACTIVE through app tool. Capacity agent read-only restore audit;
+root sole actual runtime executor. MVskip230calculated/1578locations_required,
+332excluded, policyPAUSED7/grantdisabled; no new calculation/Apply.
+Historical failures/refused paths/unqualified1B volume retained untouched.
+Next: backup3 result/outside bookend, fresh5192 restore, normal protected API/UI,
+qualification and retirement only of the new fixture. Historical checkpoint follows.
+
+
 ## Current live checkpoint — 2026-10-20T11:34:59.856Z
 
 CURRENT STAGE: **BLOCKED_WINDOWS_MEMORY** — unfinished current-full-network
