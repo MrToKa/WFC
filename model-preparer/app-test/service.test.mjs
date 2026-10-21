@@ -13,10 +13,10 @@ import { readConfiguration } from '../app/config.mjs';
 import { simulationResources } from '../app/simulation.mjs';
 import { createFakeProvider, createFakeCostProvider, CoreError } from '../index.mjs';
 import { createJournal } from '../app/io.mjs';
-import * as PackageAPI from '../../routings-model-package/index.mjs';
+import * as PackageAPI from '../../server/vendor/routings-model-package/index.mjs';
 import { safeError } from '../app/errors.mjs';
 
-const packageModulePath = fileURLToPath(new URL('../../routings-model-package/index.mjs', import.meta.url));
+const packageModulePath = fileURLToPath(new URL('../../server/vendor/routings-model-package/index.mjs', import.meta.url));
 async function setup(t, options = {}) {
   const root = await fs.mkdtemp(path.join(await fs.realpath(os.tmpdir()), 'preparer-app-test-'));
   const dataDirectory = path.join(root, 'data'), workDirectory = path.join(root, 'work'), outputDirectory = path.join(root, 'output'), importRoot = path.join(root, 'imports');

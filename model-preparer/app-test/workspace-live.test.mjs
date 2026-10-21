@@ -7,7 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createWorkspaceService } from '../app/workspace-service.mjs';
 import { tinyModel } from '../test/fixtures/model-fixture.mjs';
-import * as PackageAPI from '../../routings-model-package/index.mjs';
+import * as PackageAPI from '../../server/vendor/routings-model-package/index.mjs';
 
 const hash = (bytes, algorithm = 'sha256') => createHash(algorithm).update(bytes).digest('hex');
 const json = (value, statusCode = 200, headers = {}) => ({ statusCode, headers, body: Buffer.from(JSON.stringify(value)) });
@@ -65,7 +65,7 @@ test('real live composition automatically prepares, verifies and imports one exa
   } };
   const config = { mode: 'live', wfcOrigin: 'http://wfc.example.test', host: '127.0.0.1', port: 0, publicOrigin: 'http://127.0.0.1:0',
     dataDirectory: path.join(root, 'data'), workDirectory: path.join(root, 'work'), outputDirectory: path.join(root, 'output'),
-    packageModulePath: fileURLToPath(new URL('../../routings-model-package/index.mjs', import.meta.url)), sourceRoot, sdkDirectory: null, configuration: {} };
+    packageModulePath: fileURLToPath(new URL('../../server/vendor/routings-model-package/index.mjs', import.meta.url)), sourceRoot, sdkDirectory: null, configuration: {} };
   let service = await createWorkspaceService({ config, wfcFetch, apsFetch, apsTestTransport: testTransport, operationPollMs: 200, derivativePollMs: 200, importPollMs: 100 });
   await service.listen();
   t.after(async () => { await service.close(); assert.equal(path.dirname(root), base); await fs.rm(root, { recursive: true, force: true }); });

@@ -1,0 +1,34 @@
+{
+  "sourceProduct": "3d86cb2b34baa0dbc7ada8fc93f7979eb4aa34ed",
+  "sourceRepository": "WFC-pathfinder-local",
+  "mode": "Verbatim base with explicit Preparer-only archive profile in docker-bounds.mjs",
+  "files": [
+    {
+      "name": "archives.mjs",
+      "sha256": "2f0f89696c13a66eaab0bc4006b57240944fac5be01cf6d88518b4674c5f5066",
+      "bytes": 18503
+    },
+    {
+      "name": "docker.mjs",
+      "sha256": "b55d226f139e6f148e25972962ecd32fe180efd90140f14b853f4e77ef18ce14",
+      "bytes": 8896
+    },
+    {
+      "name": "docker-bounds.mjs",
+      "sha256": "74ec42cbfdc85f047f86c447f879a060f712ae697dc2675b77baefd7d85a60b8",
+      "bytes": 32112
+    },
+    {
+      "name": "manifest.mjs",
+      "sha256": "102e31b5090ae2cc3f54fed70a7b9043ded6e883b15d92fd670b536376629e27",
+      "bytes": 12103
+    }
+  ],
+  "modifications": [
+    {
+      "name": "docker-bounds.mjs",
+      "reason": "Closed offline-seed ownership/capability profile; historical profile preserved",
+      "sha256": "97c961574c35f1ca2b8024db2e887ff5aa871f5e665bc18257c1517012e1ec35"
+    }
+  ]
+}

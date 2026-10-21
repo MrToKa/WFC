@@ -10,7 +10,7 @@ import { isAPSProvider } from '../lib/aps-capabilities.mjs';
 import { isFakeProvider } from '../lib/providers.mjs';
 import { contextFromSpec, CoreError, PROFILE } from '../lib/contracts.mjs';
 import { tinyModel } from './fixtures/model-fixture.mjs';
-import * as packageApi from '../../routings-model-package/index.mjs';
+import * as packageApi from '../../server/vendor/routings-model-package/index.mjs';
 
 const hash = (value, algorithm = 'sha256') => createHash(algorithm).update(value).digest('hex');
 const json = (value, headers = {}, statusCode = 200) => ({ statusCode, headers, body: Buffer.from(JSON.stringify(value)) });

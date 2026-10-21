@@ -114,7 +114,7 @@ test('HTTP browser without randomUUID uploads and captures an NWD through the re
   service = await createPreparerService({ configuration: {
     mode: 'closed', port: 0, host: '127.0.0.1', publicOrigin: 'http://127.0.0.1:0',
     dataDirectory: path.join(root, 'data'), workDirectory: path.join(root, 'work'), outputDirectory: path.join(root, 'output'),
-    packageModulePath: fileURLToPath(new URL('../../routings-model-package/index.mjs', import.meta.url)),
+    packageModulePath: fileURLToPath(new URL('../../server/vendor/routings-model-package/index.mjs', import.meta.url)),
     importRoot, sourceRoot, sdkDirectory: null, configuration: {},
   } });
   await service.listen();

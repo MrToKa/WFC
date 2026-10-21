@@ -6,12 +6,12 @@ import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
-import * as publicPackage from '../../routings-model-package/index.mjs';
+import * as publicPackage from '../../server/vendor/routings-model-package/index.mjs';
 import { createPackageAdapter } from '../lib/package-adapter.mjs';
 import { CoreError, contextFromSpec, clone } from '../lib/contracts.mjs';
 import { tinyModel } from './fixtures/model-fixture.mjs';
 
-const packageModulePath = fileURLToPath(new URL('../../routings-model-package/index.mjs', import.meta.url));
+const packageModulePath = fileURLToPath(new URL('../../server/vendor/routings-model-package/index.mjs', import.meta.url));
 const hash = data => createHash('sha256').update(data).digest('hex');
 const rejects = (fn, code) => assert.rejects(fn, error => error instanceof CoreError && error.code === code);
 

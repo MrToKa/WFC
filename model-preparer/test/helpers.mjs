@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createModelPreparer, createFakeProvider, createFakeCostProvider } from '../index.mjs';
 
-export const packageModulePath = fileURLToPath(new URL('../../routings-model-package/index.mjs', import.meta.url));
+export const packageModulePath = fileURLToPath(new URL('../../server/vendor/routings-model-package/index.mjs', import.meta.url));
 export function fakeClock(initial = Date.now()) {
   let at = initial;
   return { now: () => at, advance: ms => { at += ms; }, sleep: async (ms, signal) => { if (signal?.aborted) throw signal.reason; at += ms; } };

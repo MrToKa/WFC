@@ -9,7 +9,7 @@ import { createWorkspaceService } from '../app/workspace-service.mjs';
 import { createPreparerService } from '../app/service.mjs';
 import { createFakeProvider, createFakeCostProvider } from '../index.mjs';
 import { simulationResources } from '../app/simulation.mjs';
-import { verifyPackage } from '../../routings-model-package/index.mjs';
+import { verifyPackage } from '../../server/vendor/routings-model-package/index.mjs';
 
 const USER = '380e4cb8-32ea-4ae0-92fa-4011a5abe0a0', PROJECT = '6eb2648b-0aa6-4cc8-91c1-44759e888250', IMPORT = 'ab7f4dbb-a6bd-45da-9655-9a12e506019a', VERSION = '7841a44a-2e14-4645-966d-f8d315730992';
 const credentials = { clientId: 'fixture-aps-client', clientSecret: 'PRIVATE_APS_SECRET', region: 'EMEA', bucket: 'fixture-aps-bucket' };
@@ -52,7 +52,7 @@ async function setup(t, options = {}) {
     if (new URL(url).pathname === '/authentication/v2/token') { assert.equal(new Headers(init.headers).get('Authorization'), 'Basic ' + Buffer.from(credentials.clientId + ':' + credentials.clientSecret).toString('base64')); return response({ access_token: 'PRIVATE_APS_TOKEN', expires_in: 3600 }); }
     assert.equal(new Headers(init.headers).get('Authorization'), 'Bearer PRIVATE_APS_TOKEN'); return response({ bucketKey: credentials.bucket, bucketOwner: credentials.clientId });
   };
-  const config = { mode: 'live', wfcOrigin: 'https://wfc.example.test', host: '127.0.0.1', port: 0, publicOrigin: 'http://127.0.0.1:0', dataDirectory, workDirectory, outputDirectory, sourceRoot, importRoot, packageModulePath: fileURLToPath(new URL('../../routings-model-package/index.mjs', import.meta.url)), configuration: {}, sdkDirectory: null };
+  const config = { mode: 'live', wfcOrigin: 'https://wfc.example.test', host: '127.0.0.1', port: 0, publicOrigin: 'http://127.0.0.1:0', dataDirectory, workDirectory, outputDirectory, sourceRoot, importRoot, packageModulePath: fileURLToPath(new URL('../../server/vendor/routings-model-package/index.mjs', import.meta.url)), configuration: {}, sdkDirectory: null };
   const costProvider = createFakeCostProvider({ ttlMs: 3600000 });
   const create = () => createWorkspaceService({ config, seedAPSConfiguration: credentials, wfcFetch, apsFetch, operationPollMs: 1, importPollMs: 1, derivativePollMs: 1, createInnerService: innerOptions => createPreparerService({ ...innerOptions, configuration: { ...innerOptions.configuration, mode: 'simulation' }, simulationProvider: provider, simulationCostProvider: costProvider }) });
   const s = { root, config, control, provider, create, service: await create(), cookie: null, csrf: null }; await s.service.listen();
