@@ -1,5 +1,34 @@
 # PathFinder local implementation progress
 
+## In progress — PF-B0 contracts and independent B1 collision kernel
+
+New user requirement supersedes routine next-PF-browser step: execute plan78
+PF-B0–B9 for explicit wall/floor/ceiling meshes and actual holes. User confirmed
+Drill through the walls defaults off, bypasses ALL selected barriers only for
+current calculation; no silent background inheritance. BBox broadphase only.
+Branch pf-w0-barrier-contracts-local-20261021 inherits57d2694; original main clean
+96e63f13, live GitHub main same2026-10-21T10:06:26.347Z; no branch PR returned.
+Foreign .pf0-work/.pf2-work and refused paths untouched. No runtime changes here.
+
+Root owns plan78, matrix79, handoffs/progress/evidence and sole tests/runtime/SQL.
+Agent barrier_dependency_map owns new shared/pathfinderBarriers.ts +test (B0).
+Agent barrier_engine_map owns new PathFinder.Barriers library (B1); its scoped
+child barrier_kernel_tests owns new console test project only. Legacy11 Core and
+frozen fixtures remain unchanged. Independent geometry map completed read-only.
+Initial bounds declared, not measured:128parents/256computational meshes/250ktris/
+500kvertices/500kBVHnodes,32MiB blobs/64MiB set; supported topology initially closed
+consistent2manifold with bounded selfintersection qualification, centreline-only.
+
+App automation path-finder-purpose-rules-and-model-revisions successfully updated
+ACTIVE for this new authorized scope, every10minutes in same thread. Readable
+prompt includes isolation, per-stage handoff+execution, real-data gates and quiet
+notifications. This supersedes older PAUSED records below for current automation.
+No permission-file/TOML edit or browser bypass. Real5191 browser refusal unchanged;
+actual converted obstacle capture/SDK acceptance still pending, never syntheticPASS.
+NEXT: finish B0 source/tests, validate exact bounds/contracts, local commit/report,
+PF-B1 prompt + inherited branch, finish/run independent geometry kernel. Continue
+all independent work before any real access blocker. Preparer remains queued.
+
 ## Delivered — From/To display after cable-list updates
 
 Branch `pf-endpoint-show-consistency-local-20261021`, product
