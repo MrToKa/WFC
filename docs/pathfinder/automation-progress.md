@@ -1,5 +1,31 @@
 # PathFinder local implementation progress
 
+## Current checkpoint — separate cable windows delivered
+
+Branch pf-floating-cable-windows-local-20261021, product 8eed67c996352ece4ef207b039328aa1d2166fc0.
+Report74 + evidence/cable-workflow/floating-cable-windows-actual.json.
+Click opens a retained native browser popup in PF and Routing; hover stays inline
+and read-only. PF selection/refresh does not enable Ghost; Show/Hide is explicit,
+bound to the exact proposal. Assign/atomic Save/shared reuse/math/Apply unchanged.
+PASS399 tests/11 files at this commit, client types/scoped lint/production build,
+independent review (including repaired historical-selection→Show regression).
+Static web delivery PASS 2026-10-21T06:24:09.481Z, web a6f80c989013;
+API3476333e/PG/MinIO identity/config/start, runtimebf4c8f76/adapter21469bc0 unchanged.
+No SQL/model/realSave/Review/Apply/grant/calculation by this task. Fresh prior-web
+rollback tar/private env/state and existing DB/model archives retained. No test
+containers/volumes or general prune; own empty root scratch removed, denied paths
+untouched. No original5180/5190 writes or push/PR/merge. Original backend externally
+restarting was observed, not controlled. No active helper/test after delivery.
+
+Real Aalborg reread/native popup/multimonitor check remains BLOCKED/NOT_RUN by the
+unchanged saved origin refusal; never retry unchanged or bypass. Next prompt:
+handoffs/PF-U7-floating-cable-windows-browser-check.md. Latest user pause was
+revoked by explicit Continue; work resumed from8eed67c and completed399 checks.
+Automation last persisted PAUSED; app view returned approval-required/policy-never,
+so no app automation change was claimed. Preserve conditional PFchecks→Simplified
+Preparer5180 with fresh inventory/tests/verified DB-model backup. No duplicate job.
+
+
 ## Current checkpoint — Model Browser parent selection delivered
 
 Branchpf-parent-modelbrowser-local-20261021, productf52017d3cf79f5abfb71d587aad8ffac386eeec7.
