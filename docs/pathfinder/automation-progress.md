@@ -1,8 +1,8 @@
 # PathFinder local implementation progress
 
-## PF-B2 technically checked — selected-scope capture and immutable registry
+## PF-B2 completed technically; PF-B3 next
 
-Branch pf-b2-barrier-capture-local-20261021 inherits B1 product66c1772 and report
+B2 producta967ddd12c8a7052f61abc290491554df75d2388 on branch pf-b2-barrier-capture-local-20261021 inherits B1 product66c1772 and report
 c23f798. B1 standalone complete:94rootchecks/workloadsmoke/11hashaudit, report81.
 Root owns protocol/bridge/adapter/controller/API integration and sole execution.
 barrier_geometry_map owns new barrier-capture module/tests; barrier_engine_map owns
@@ -10,7 +10,7 @@ new independent BarrierVerifier CLI/library/tests; barrier_registry owns new ser
 storage/schema/repository/tests. Preserve concurrent edits. No 5191/runtime delivery changes.
 Actual5191 capture remains NOT_RUN due unchanged browser refusal, no retry/bypass;
 independent implementation continues. Automation ACTIVE. Next finish B2, execute
-checks, report/commit and prepare-stage-handoff B3 immediately.
+checks completed; report82/publicB2receipt/PF-B3handoff saved. NEXT create inherited B3branch and execute immediately.
 ROOT actual checks:39capture +48C#verifier +311combinedTS +55bridge +29runtime PASS;
 real TS→C#stdin→strictTSreceipt PASS.9actualLinuxPostgreSQL18/storage tests PASS,
 4actualLinux.NETwrapper tests PASS, exact current-frame SQL1/2frame check PASS.
