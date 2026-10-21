@@ -1,6 +1,20 @@
 # PathFinder local implementation progress
 
-## PF-B8 independent checks delivered; PF-B8a ACTIVE; actual-model failure open
+## PF-B8a technically verified; PF-B8b ACTIVE — real snapshot memory failure
+
+B8a product7b6b74a2db46e59c2ccfcf4020758e7ee207a69a on
+pf-b8a-mixed-obstacles-local-20261021, report90/publicb8a-mixed-obstacles.json.
+Root actual89Vitest/41Node/50C#PASS; client/servertypes/lint/syntax/whitespace/
+server+ownproductionwebbuilds/Core11+frozen3PASS. Elevenfiles addgenericobstacle
+consistently with strictoldkinds/unknownrefusal and accurateEnglishUI. No limits,
+algorithm, defaultcheckbox, protectedaccess or5191runtimechanges. Actualgroups
+remainuncaptured; B8actual512MiBFAIL remains. No active root test/build now.
+
+PreparedPF-B8b-actual-snapshot-memory via prepare-stage-handoff, executing on new
+inherited branch. A ownsSnapshotReader+ModelTests; B ownsfittedcache/runner/session+
+tests, C independentreview; rootsoleexecutor/docs/actualreplay. Preserve512MiB and
+Coremath/meshes/strictvalidation/SHA; no fittrace shortcut or realApply. AllB8fixture
+containersretired, actualprivatecopies/evidence preserved; Preparerqueued/automationACTIVE.
 
 Latest user instruction21October2026: at the end of tests run a REAL Aalborg-model
 test, including reported cable =H1=KF1=TAC1=WGA1. This is a required final gate;
