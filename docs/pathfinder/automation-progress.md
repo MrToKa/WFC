@@ -1,61 +1,79 @@
 # PathFinder local implementation progress
 
-## PF-B8a technically verified; PF-B8b ACTIVE — real snapshot memory failure
+## Current: PF-B8b technically verified; execute PF-B9 immediately
 
-B8a product7b6b74a2db46e59c2ccfcf4020758e7ee207a69a on
-pf-b8a-mixed-obstacles-local-20261021, report90/publicb8a-mixed-obstacles.json.
-Root actual89Vitest/41Node/50C#PASS; client/servertypes/lint/syntax/whitespace/
-server+ownproductionwebbuilds/Core11+frozen3PASS. Elevenfiles addgenericobstacle
-consistently with strictoldkinds/unknownrefusal and accurateEnglishUI. No limits,
-algorithm, defaultcheckbox, protectedaccess or5191runtimechanges. Actualgroups
-remainuncaptured; B8actual512MiBFAIL remains. No active root test/build now.
+B8b product `985afcd9ab3d0423d9352f999757a9f46fcce023` on
+`pf-b8b-snapshot-memory-local-20261021`, inheriting38e4f20. Report91 and public
+`evidence/barriers/b8b-{qualification,memory-diagnostics,source-files}.json` record
+the exact source/binary scopes. No deployment/real-data Apply occurred.
 
-PreparedPF-B8b-actual-snapshot-memory via prepare-stage-handoff, executing on new
-inherited branch. A ownsSnapshotReader+ModelTests; B ownsfittedcache/runner/session+
-tests, C independentreview; rootsoleexecutor/docs/actualreplay. Preserve512MiB and
-Coremath/meshes/strictvalidation/SHA; no fittrace shortcut or realApply. AllB8fixture
-containersretired, actualprivatecopies/evidence preserved; Preparerqueued/automationACTIVE.
+- Root built15 projects. Windows433/Linux435PASS, protected39/trace39,
+  regression105/golden43-215, kernel94/verifier50/constrained54/local40/ledger35/
+  direct63PASS. Model131/Reader37/Lookup37 use the identical Model DLL by hash.
+  Core11/frozen3 unchanged; no PF-0 receipt writer. Counts overlap.
+- Final production-default Linux synthetic69+6PASS,2supervisors/64→65,
+  independent4226 clear segmentsPASS; engine176205824/Node136060928 sampledbytes,
+  exit0/noOOM/timeout. No2140-throughput/actual-civil claim.
+- FINAL actual Aalborg7 PASS all5modes and exact DTO equality: cold20.038s,
+  disk11.872s, sessiondisk16.581s, warm2.351/1.262s. Source330trays/1165leaves,
+  114111391bytes SHA27f8cf8c352b8847b778f764ce942aa0bb61ebfab16aeb993c0a83bd100c38e2.
+  Sampled one-shot442335232/session450367488/Node82026496bytes,1unavailable sample,
+  not exactpeak. Before/after7actual scope/endpoints/cable unchanged; exit0/noOOM.
+  Checked runner2c92a10c43d9a9c91df1f1451ec7ade6bb0e42b794c7cad12ea63c30713f86ac.
+  No phasefile on finalrun. Instrumented6 separately proves effective335544320
+  worker heap budget and natural Gen2 collection;512MiBRSS guard unchanged.
+- Previous actual1–5 failures and build1/build5 failures are retained, not
+  relabelled. Failed fixture expectations corrected with independent review.
+  Optional private phases32rows/64KiB/defaultoff; no forced GC or changes to the
+  existing RSS/admission limits or Core maths.
+- All13 exact owned stopped B8b test containers retired after owner/image/mount/
+  port preflight and log retention. No host files/volumes deleted. Own scratch,
+  private actual inputs, old binary closures and evidence retained under
+  `.scratch/snapshot-memory-20261021-8e96ca43-92b3-4058-a617-cf000a9cefed`.
 
-Latest user instruction21October2026: at the end of tests run a REAL Aalborg-model
-test, including reported cable =H1=KF1=TAC1=WGA1. This is a required final gate;
-synthetic counts/measurement cannot satisfy it. Use actual model/FromTo/Details,
-and actual civil triangles for wall/opening claims. No real-data Apply. Complete
-permitted real-input replay/inspection and record exact absent/protected-capture
-dependencies honestly; do not retry/bypass saved browser refusal without new fact.
+NEXT: `handoffs/PF-B9-local-barrier-delivery.md` is the self-contained executable
+prompt prepared with prepare-stage-handoff. After docs commit create inherited
+`pf-b9-barrier-delivery-local-20261021` and execute without routine confirmation.
+Root sole builds/tests/SQL/HTTP/Docker executor; source agents were frozen/complete
+at this checkpoint. No active root build/test/measurement. Do not repeat seed,
+model import, prior failure attempts or retired fixtures.
 
-B8 product8770104 on pf-b8-barrier-qualification-local-20261021; report89 and
-public evidence/barriers/b8-qualification.json +b8-source-files.json record exact
-scope. Core11/frozen3 preservation, golden43/215, regression105, kernel94/verifier48/
-constrained54/local40/ledger35/direct63/session308PASS. Contracts468/Node.NET18/
-transport39/driver34/realSQLgrantAuto4PASS; groups overlap, synthetic physicalinputs.
-Types/lint/syntaxPASS. One staleDLL interop failure corrected with owned freshDLL.
+B9 requires new reviewed migration/control-delta qualifier before source update:
+fresh explicit5191 cold backup/private companion → fresh inactive5192 restore →
+exact before-fence inventory → verified fencing → schema-only migration vspristine
+final image preserving ALLold rows/sequences and ownership → separate bounded
+runtime/observer delta proof → only qualified exact API/web images to5191.
+Unchanged owned-update-v2 strict equality deliberately rejects migrations; never
+forge PASS/retry uncertain phase. No default5190 or original5180 operations.
 
-OwnedLinuxproductiondefault69session+6oneshotPASS,2supervisors and real64→65,
-16endpointpairs/3categories/65syntheticmeshes/800triangles. IndependentC#69results/
-6DTOcomparisons/4226clearsegmentsPASS. Sampledengine181329920bytes/Node138231808;
-30.515s, sessionmedian169.745ms/p95628.418ms. Not2140actualcapacity or exactpeak.
-Retain attempt1missinghelper and attempt2no-init/request64reapFAIL; attempt3 used
-actualcomposeinit:true, exited0/OOMfalse with unchanged512MiBguard/1GiBhardbound.
-Root retired ONLY4 exactownedB8fixtures(PG55443+3Linux), evidence/inputs retained.
+Actual civil/SDK/browser/engineering gate remainsBLOCKED: user identified
+`3D-Modell_BIS_20260304.rvm` and `DB2401_DESIGN_01-PIPE+GRID_20260304.rvm`.
+Need legitimate protected capture of complete selected descendant triangles and
+real openings/topology/capacity. No boxes/synthetic/empty-scope substitute or
+saved-browser-refusal retry/native/CDP/alternate-origin/indirect bypass. No licence
+retry/native parity, engineering acceptance or real Apply by agent.
 
-Actual5191READONLY owner/port/image checked; copied exact current fullsnapshot+
-durableprojection+traceindex with hash/bytes. Actual330trays/1165leaves/2965objects,
-snapshot114111391bytes SHA27f8cf8c..., current2confirmedfixedworldheads validated,
-Details7/5/10/gap1. Actual reportedcable replay FAILresource_limit ~987.685ms:
-'Combined worker RSS exceeds the sampled memory budget.' No route/Apply/writes.
-This is a real capacity failure, not externalBLOCKED. Sourcebookends unchanged.
-Current5191hasnobarrierregistry; actualcivil/openingcapture remainsBLOCKED and
-savedbrowserrefusaluntouched. Userrequiredsources:3D-Modell_BIS_20260304.rvm and
-DB2401_DESIGN_01-PIPE+GRID_20260304.rvm. Do not substitute AABBs/synthetic/empty scope.
+Source5191 owner8fffd6b8-c896-4bb0-ad92-b6c82f5a7d46, compose
+wfc-pathfinder-local-0cba87606e9b, runtime
+`pathfinder-engine/.scratch/batched-capture-runtime-20261018-1600`,
+project1af0f807-7653-40ea-8391-7eea6c54e7d4. Preserve demo/archives/private companion,
+all denied paths/parents, foreign.pf0-work/.pf2-work. No prune/push/PR/merge.
+Original WFC and canonical PF clean at96e63f13 /45c24bf5; live origin main96e63f13
+read2026-10-21T19:53Z. No headPR/base-status/PR-triggered runs returned; no CI
+approval inferred. Original/runtime data untouched by B8b.
 
-Next handoffPF-B8a-mixed-obstacles preparedwithskill/executing: oneagent's11source
-draftsfrozen (shared/runtime/C#strictkind+EnglishUI+tests), rootverificationpending.
-ThenPF-B8b eliminate repeated snapshotmaterialization under SAME512MiB/math/guards,
-actualcold/disk/warm+64→65+realreplay; sourceauditfound doubleSnapshotReader/fullDOM/
-MemoryStreamcopy. No safe raw-free currentfitartifact. B9 and Preparerqueued,
-automationACTIVE. Rootsoleexecutor; no active tests/SQL/HTTP now, nextfocusedchecks.
-Original/liveoriginmain96e63f13 verified18:05Z; no push/PR/CI. All denied paths/parents
-andforeignchangespreserved. Actualcivil/native/useracceptance notclaimed.
+Simplified Preparer is separately queued for main5180 via
+`C:/Users/todor.chankov/source/WFC-preparer-local-20261020`, dirty sourcepatch
+preserved, no runtime changes/backups/security implementation yet. Fresh audit:
+retained package baseline173/174FAIL, probable custom-promisify preload defect;
+Preparer suiteCANCELLED/no terminalPASS; sibling package topology missing. Source
+audit identifies global APS/settings/runtime and cross-admin job bypass. Future
+stages need fresh baseline, DB/models/key/config backup+restore, strict current
+admin and per-user-only credentials/OAuth/jobs, English browser workflow. No PF
+credential reuse. Continue useful authorized independent work; automation ACTIVE.
+
+## Earlier verified stage history
+
 
 ## PF-B7a technically checked — preparing and executing PF-B8
 
