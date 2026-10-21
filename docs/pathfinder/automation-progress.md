@@ -1,5 +1,34 @@
 # PathFinder local implementation progress
 
+## PF-B5 active — administrator barrier authoring
+
+Branch pf-b5-barrier-authoring-local-20261021 inherits658997b4223be2f61daaa7dccc48e7cb563eb8b3,
+B4 producta7aa8bce1c2ffdda8e1a9fea10661a58624d2a96/report84/evidence complete.
+prepare-stage-handoff created PF-B5-barrier-authoring.md; executing immediately.
+barrier_registry owns new panel/hook+strict API extension; barrier_geometry_map new
+panel/hook tests; barrier_engine_map new shared admission-intent+tests. Root sole
+executor owns existing hook facade/Tab/preferences/resume integration and docs.
+Exact schema/props being coordinated. Preview uses actual current Model Browser
+selection/highlight, no new arbitrary SDK/bridge or appearance command. Only two
+facade additions: protected captureBarriers/publishBarriers under current+abort.
+Fresh Drill through the walls defaultoff, immutable choices cannot downgrade to
+old calculations. Runtime/dependency enforcement B6 and write guards B7 pending.
+B5 sources frozen after review fixes for unknown-write/read-error reconciliation
+and stale drilling resurrection on model/Viewer changes. ROOT checks:105 shared/
+facade PASS;70 final panel/hook/preparation PASS;33 manifest/workspace PASS;client/
+server types and changed17filelint PASS. Initial combinedUI114PASS/2FAIL were test
+fixture/expectation mismatches, corrected; initialclient3oldmock typeerrors corrected.
+Full final Tab regression60PASS (maxWorkers1,708.31s); all root test processes ended.
+Nonfatal React act warnings retained; not an actual browser/performance benchmark.
+First slower combinedrootretry interrupted;
+only exact verified ownedtesttree stopped, processreceipt retained. No containers/
+runtime changes. Scratch barrier-authoring-20261021-e4731432-f987-43da-8092-3e12cc372667.
+Report85/B6handoff prepared with actual runner/dependency/identity traps;
+write exact receipt/localcommits, then newbranch+B6execution immediately.
+Actual capture/UI NOT_RUN due unchanged origin refusal, no bypass. Preserve all
+refused targets/parents. Preparer future readiness source-review only, implementation
+queued after PF code/checks. No new runtime/process work by agents.
+
 ## PF-B4 technically checked — bounded local approaches; PF-B5 next
 
 Current branch pf-b4-local-approaches-local-20261021 inherits9801488fa988120399b275d9e6c069caccd531fc,
