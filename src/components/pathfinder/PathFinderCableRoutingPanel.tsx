@@ -82,7 +82,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
     <h3 id={title} className={styles.heading}>{cable.cable.tag?.trim() ? cable.cable.tag : 'Cable routing'}</h3>
     <div className={styles.actions}><Button aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? 'Expand' : 'Collapse'}</Button><Button onClick={close}>Close</Button></div>
     {collapsed ? <p className={styles.note}>Cable routing is collapsed. The model remains available; any pending save is retained.</p> : <>
-      <p className={styles.note}>Assign the selected Model Browser object to From or To, then Save to confirm. The saved location is reused by other cables with the same location name.</p>
+      <p className={styles.note}>Assign the selected Model Browser object to From or To. The connection starts at the centre of its bottom face. Save to confirm and reuse this location for other cables with the same location name.</p>
       {pending ? <section aria-label="Pending endpoint assignment"><h4>Pending endpoint assignment</h4>
         <p className={styles.note}>An exact Save is retained for this project. Reconcile its original cable and endpoint assignments before making another assignment.</p>
         <div className={styles.actions}><Button disabled={busy || !assignment.canRetry} onClick={() => void assignment.retry()}>Retry exact pending save</Button>
@@ -109,7 +109,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         {assignment.notice ? <p role="status" className={styles.note}>{assignment.notice}</p> : null}
         <p className={styles.note}>Save recalculates affected cables. Routing and design length fill automatically only when both are empty. Existing values require Review and Apply.</p>
       </section>
-      <details><summary>Endpoint details</summary><p className={styles.note}>The calculation uses the verified bounding-box bottom centre in project metres.</p>
+      <details><summary>Endpoint details</summary><p className={styles.note}>The connection point is the bounding-box bottom centre in project metres. Manually assigned points must be checked again after a model revision.</p>
         <Button disabled={busy || Boolean(pending) || !assignment.enabled} onClick={() => void assignment.refresh()}>Refresh endpoint contexts</Button>
       </details>
     </>}

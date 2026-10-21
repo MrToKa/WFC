@@ -124,6 +124,34 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
       object: evidence.object, point: evidence.pointProjectMetres }, notice: 'Verified retained geometry supplies the approximate bottom-centre anchor. The cable’s logical location name is preserved.' });
     else update({ draft: null, notice: 'The selected object has no usable verified retained geometry. You may explicitly use its displayed point as a fixed-world point; it will not follow model revisions.' });
   }), [runRead, owner, live, update, access.projectId, access.token]);
+  // This separate popup action explicitly stages a displayed fixed point when
+  // only the retained equipment observation is absent. It never saves a binding.
+  const assignObjectBottomCentre = useCallback(() => runRead(async signal => {
+    const context = data.current.context;
+    const canStage = () => live() && latest.current.active && !signal.aborted && !readPendingCableEndpoint(owner());
+    if (!context?.canBind || !context.current || !canStage()) return;
+    const display = selectedObject(await callbacks.current.readSelection());
+    if (!canStage()) return;
+    if (!display) {
+      update({ draft: null, displaySelection: null, notice: 'Select exactly one current model object with a finite bounding-box bottom centre.' }); return;
+    }
+    update({ draft: null, displaySelection: display, notice: 'Checking the selected bottom-centre point against the current retained equipment…' });
+    const response = await fetchCableEndpointSelection(access.projectId!, access.token!, context, display.sdkObjectId, signal);
+    if (!canStage()) return;
+    const evidence = response.selection;
+    if (evidence.status === 'available' && evidence.object && evidence.pointProjectMetres) {
+      update({ draft: { mode: 'object-derived', sdkObjectId: display.sdkObjectId, object: evidence.object, point: evidence.pointProjectMetres },
+        notice: 'Verified retained equipment supplies the approximate bottom-centre anchor. Save confirms it for the unchanged logical location name.' }); return;
+    }
+    const absentEvidence = new Set(['SDK_OBJECT_NOT_RETAINED', 'SDK_OBJECT_GEOMETRY_NOT_RETAINED', 'SDK_OBJECT_EQUIPMENT_GEOMETRY_REQUIRED']);
+    if ((evidence.status === 'unavailable' || evidence.status === 'unsupported') && evidence.reasonCodes.length > 0
+      && evidence.reasonCodes.every(reason => absentEvidence.has(reason))) {
+      update({ draft: { mode: 'fixed-world', point: [...display.point], derivation: 'manual-world-point', displaySdkObjectId: display.sdkObjectId },
+        notice: 'The selected bounding-box bottom centre is staged as a fixed-world point in project metres. Save confirms it for the unchanged logical location name. It will not follow later model revisions.' }); return;
+    }
+    update({ draft: null, notice: 'The selected bottom-centre point cannot be assigned from this preparation ('
+      + (evidence.reasonCodes.length ? evidence.reasonCodes.join(', ') : evidence.status) + '). No endpoint was saved.' });
+  }), [runRead, owner, live, update, access.projectId, access.token]);
   const setFixedPoint = useCallback((point: CanonicalPoint, display: DisplaySelection | null = null) => {
     if (!canAct() || !data.current.context?.canBind || data.current.pending) return false;
     const parsed = endpointPointSchema.safeParse(point); if (!parsed.success) { update({ error: 'Enter three finite coordinates in project metres.' }); return false; }
@@ -228,7 +256,7 @@ export function useCableEndpointSelection(access: CableEndpointSelectionAccess) 
     try { return await execute(pending, abort, mode); }
     finally { if (request.current === abort) { request.current = null; update({ busy: false }); } }
   }, [canAct, owner, update, execute]);
-  return { ...current, enabled: allowed && denied.current !== account, selectObject, setFixedPoint, applySelectedObject,
+  return { ...current, enabled: allowed && denied.current !== account, selectObject, assignObjectBottomCentre, setFixedPoint, applySelectedObject,
     chooseDisplayedPoint: () => { const display = data.current.displaySelection; return display ? setFixedPoint(display.point, display) : false; },
     refresh: loadContext, save, retry: () => reconcile('save'), closePending: () => reconcile('close'),
     canSelect: allowed && access.active && !current.busy && !current.pending && Boolean(current.context?.canBind),

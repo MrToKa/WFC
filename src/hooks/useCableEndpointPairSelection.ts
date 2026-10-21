@@ -107,7 +107,7 @@ export function useCableEndpointPairSelection(access: CableEndpointPairSelection
   const assign = useCallback(async (end: CableEndpointEnd) => {
     if (!canEdit()) return;
     const operation = {}; assigning.current = operation; update({ busy: true, error: null });
-    try { await children.current[end].selectObject(); }
+    try { await children.current[end].assignObjectBottomCentre(); }
     finally { if (assigning.current === operation) { assigning.current = null; update({ busy: false }); } }
   }, [canEdit, update]);
   const execute = useCallback(async (intent: PendingCableEndpointPair, abort: AbortController, mode: 'save' | 'close'): Promise<boolean> => {

@@ -25,6 +25,10 @@ function viewerSelection(): ViewerSelection { return { coordinateFrame: 'world-m
 function evidence(current = context()) { return { schemaVersion: 'wfc.pf.cable-endpoint-selection-response.v1' as const, projectId: project, cableId: current.cableId, end: current.end, contextSha256: current.contextSha256,
   selection: { schemaVersion: 'wfc.pf.cable-endpoint-selection.v1' as const, projectId: project, current: current.current!, sdkObjectId: 99999, status: 'available' as const,
     reasonCodes: [], object, pointProjectMetres: [4, 5, 6] as [number, number, number], bounds: { minimum: [3, 4, 6] as [number, number, number], maximum: [5, 6, 8] as [number, number, number] }, approximate: true as const, derivation: 'equipment-bottom-aabb.v1' as const } }; }
+function unavailableEvidence(reasonCodes: string[], status: 'unavailable' | 'unsupported' | 'ambiguous' = 'unavailable', current = context()) {
+  const response = evidence(current);
+  return { ...response, selection: { ...response.selection, status, reasonCodes, object: null, pointProjectMetres: null, bounds: null, derivation: null } };
+}
 function receipt(input: CableEndpointCommand, selectedCable = cable, end: 'from' | 'to' = 'from'): CableEndpointReceipt {
   const current = input.expectedCurrent, selection = input.selection;
   return { schemaVersion: 'wfc.pf.cable-endpoint-receipt.v1', projectId: project, actorId: actor, cableId: selectedCable, end, logicalName: input.expectedLogicalName,
@@ -370,5 +374,100 @@ describe('persistent owned cable endpoint selection', () => {
     const view = renderHook(() => useCableEndpointSelection(access())); await waitFor(() => expect(view.result.current.context).not.toBeNull());
     expect(view.result.current.canSelect).toBe(false); expect(view.result.current.canSave).toBe(false); await act(async () => { await view.result.current.selectObject(); });
     expect(fetchCableEndpointSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+});
+
+describe('explicit popup selected bounding-box bottom-centre draft', () => {
+  it('stages the unretained selected bottom face independently of its name and writes only after explicit Save', async () => {
+    vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(async (_project, _token, current) => unavailableEvidence(['SDK_OBJECT_NOT_RETAINED'], 'unavailable', current));
+    const props = normalAccess(), view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    expect(view.result.current.displaySelection?.name).toBe('Different arbitrary SDK display name');
+    expect(view.result.current.context?.logicalName).toBe('LP-001');
+    expect(view.result.current.draft).toEqual({ mode: 'fixed-world', point: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 99999 });
+    expect(view.result.current.draft?.point[2]).not.toBe(4); expect(view.result.current.notice).toContain('will not follow later model revisions');
+    expect(view.result.current.canSave).toBe(true); expect(saveCableEndpoint).not.toHaveBeenCalled(); expect(props.onSaved).not.toHaveBeenCalled();
+    expect(readPendingCableEndpoint(owner)).toBeNull();
+    await act(async () => { expect(await view.result.current.save('Save selected bottom centre')).toBe(true); });
+    expect(vi.mocked(saveCableEndpoint).mock.calls[0][4]).toMatchObject({ expectedLogicalName: 'LP-001', selection: {
+      mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 99999 } });
+    expect(view.result.current.receipt?.binding.binding.pointProjectMetres).toEqual([1, 2, 3]);
+    expect(view.result.current.receipt?.binding.binding.sourceObject).toBeNull();
+  });
+  it('keeps available retained equipment object-derived without saving or substituting display coordinates', async () => {
+    const props = normalAccess(), view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    expect(view.result.current.draft).toEqual({ mode: 'object-derived', sdkObjectId: 99999, object, point: [4, 5, 6] });
+    expect(saveCableEndpoint).not.toHaveBeenCalled(); expect(readPendingCableEndpoint(owner)).toBeNull();
+  });
+  it.each(['SDK_OBJECT_NOT_RETAINED', 'SDK_OBJECT_GEOMETRY_NOT_RETAINED', 'SDK_OBJECT_EQUIPMENT_GEOMETRY_REQUIRED'])('permits only an explicit fixed draft for %s', async reason => {
+    vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(async (_project, _token, current) => unavailableEvidence([reason], reason === 'SDK_OBJECT_EQUIPMENT_GEOMETRY_REQUIRED' ? 'unsupported' : 'unavailable', current));
+    const view = renderHook(() => useCableEndpointSelection(access())); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    expect(view.result.current.draft?.mode).toBe('fixed-world'); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['unsupported', ['SDK_OBJECT_HIDDEN']], ['ambiguous', ['SDK_OBJECT_ID_AMBIGUOUS']], ['ambiguous', ['SDK_OBJECT_NOT_RETAINED']],
+    ['unavailable', ['CURRENT_GEOMETRY_SCOPE_CHANGED']], ['unavailable', ['SDK_OBJECT_EVIDENCE_SCOPE_INVALID']],
+    ['unavailable', ['SDK_OBJECT_ANCHOR_INVALID']], ['unavailable', ['SDK_OBJECT_NOT_RETAINED', 'SDK_OBJECT_HIDDEN']], ['unavailable', []],
+  ] as const)('does not turn %s %j into a fixed-world assignment', async (status, reasons) => {
+    vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(async (_project, _token, current) => unavailableEvidence([...reasons], status, current));
+    const view = renderHook(() => useCableEndpointSelection(access())); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    expect(view.result.current.draft).toBeNull(); expect(view.result.current.canSave).toBe(false);
+    for (const reason of reasons) expect(view.result.current.notice).toContain(reason);
+    expect(view.result.current.notice).not.toContain('has no usable'); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each(['empty', 'multiple', 'nonfinite', 'inconsistent-bottom'] as const)('rejects %s protected selection before server lookup or any write', async kind => {
+    const selected = viewerSelection();
+    if (kind === 'empty') selected.objects = [];
+    else if (kind === 'multiple') selected.objects.push({ ...selected.objects[0], objectId: 44 });
+    else if (kind === 'nonfinite') selected.objects[0].bounds!.minimum[0] = Number.NaN;
+    else selected.objects[0].bottomCentre = [1, 2, 4];
+    const view = renderHook(() => useCableEndpointSelection({ ...access(), readSelection: vi.fn(async () => selected) })); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    expect(view.result.current.draft).toBeNull(); expect(fetchCableEndpointSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each(['pause', 'account', 'model', 'preparation', 'preferences', 'cable', 'end'] as const)('does not stage a late protected selection after %s changes', async kind => {
+    let finish!: (value: ViewerSelection) => void;
+    const props = { ...normalAccess(), readSelection: vi.fn(() => new Promise<ViewerSelection>(resolve => { finish = resolve; })) };
+    const view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    let pending!: Promise<void>; act(() => { pending = view.result.current.assignObjectBottomCentre(); }); await waitFor(() => expect(props.readSelection).toHaveBeenCalledOnce());
+    const change = kind === 'pause' ? { active: false } : kind === 'account' ? { accountId: id(50), token: 'other-login' }
+      : kind === 'model' ? { model: { ...props.model!, selectionRevision: '99' } } : kind === 'preparation' ? { preparationKey: 'new-preparation' }
+        : kind === 'preferences' ? { calculation: { preferences: { secondaryDistanceMeters: 9, preferVerticalApproach: false }, timeoutMilliseconds: 60000 } }
+          : kind === 'cable' ? { cableId: id(51) } : { end: 'to' as const };
+    view.rerender({ ...props, ...change }); await act(async () => { finish(viewerSelection()); await pending; });
+    expect(view.result.current.draft).toBeNull(); expect(fetchCableEndpointSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it('does not stage a late unavailable response after the model changes', async () => {
+    let finish!: (value: ReturnType<typeof unavailableEvidence>) => void;
+    vi.mocked(fetchCableEndpointSelection).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const props = normalAccess(), view = renderHook(value => useCableEndpointSelection(value), { initialProps: props }); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    let pending!: Promise<void>; act(() => { pending = view.result.current.assignObjectBottomCentre(); }); await waitFor(() => expect(fetchCableEndpointSelection).toHaveBeenCalledOnce());
+    view.rerender({ ...props, model: { ...props.model!, selectionRevision: '99' } });
+    await act(async () => { finish(unavailableEvidence(['SDK_OBJECT_NOT_RETAINED'])); await pending; });
+    expect(view.result.current.draft).toBeNull(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+  });
+  it.each([401, 403, 409])('does not fall back after an authority/context HTTP %s error', async status => {
+    vi.mocked(fetchCableEndpointSelection).mockRejectedValueOnce(new CableEndpointApiError(status === 409 ? 'CABLE_ENDPOINT_CONTEXT_CHANGED' : 'ADMIN_REQUIRED', status, 'Current selection refused', 'refused'));
+    const props = normalAccess(), view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    await act(async () => { await view.result.current.assignObjectBottomCentre(); });
+    expect(view.result.current.draft).toBeNull(); expect(view.result.current.error).toContain('Current selection refused'); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    if (status !== 409) { expect(view.result.current.context).toBeNull(); expect(props.onAuthorityLost).toHaveBeenCalledOnce(); }
+  });
+  it('refuses to stage if a concurrent editor retains a pending command while selection is read', async () => {
+    let finish!: (value: ViewerSelection) => void;
+    const props = { ...normalAccess(), readSelection: vi.fn(() => new Promise<ViewerSelection>(resolve => { finish = resolve; })) };
+    const view = renderHook(() => useCableEndpointSelection(props)); await waitFor(() => expect(view.result.current.canSelect).toBe(true));
+    let pending!: Promise<void>; act(() => { pending = view.result.current.assignObjectBottomCentre(); }); await waitFor(() => expect(props.readSelection).toHaveBeenCalledOnce());
+    const current = context(), command: CableEndpointCommand = { schemaVersion: 'wfc.pf.cable-endpoint-command.v1', idempotencyKey: id(90), expectedContextSha256: current.contextSha256,
+      expectedCableWriteRevision: current.cableWriteRevision, expectedLogicalName: current.logicalName!, expectedRegistryRevision: current.registryRevision,
+      expectedLocationId: null, expectedLocationRevision: null, expectedHeadId: null, expectedCurrent: current.current!, reason: 'Other editor pending point',
+      selection: { mode: 'fixed-world', pointProjectMetres: [8, 9, 10], derivation: 'manual-world-point', displaySdkObjectId: null } };
+    await retainPendingCableEndpoint(owner, cable, 'to', command);
+    await act(async () => { finish(viewerSelection()); await pending; });
+    expect(view.result.current.draft).toBeNull(); expect(fetchCableEndpointSelection).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    expect(readPendingCableEndpoint(owner)?.command).toEqual(command);
   });
 });

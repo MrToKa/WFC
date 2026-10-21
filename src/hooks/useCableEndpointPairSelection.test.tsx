@@ -209,3 +209,29 @@ describe('one explicit From/To Save', () => {
     expect(view.result.current.from.context).toBeNull(); expect(view.result.current.to.context).toBeNull(); expect(view.result.current.canSave).toBe(false);
   });
 });
+
+describe('explicit selected-object bottom-centre pair assignment', () => {
+  it.each(['SDK_OBJECT_NOT_RETAINED', 'SDK_OBJECT_GEOMETRY_NOT_RETAINED', 'SDK_OBJECT_EQUIPMENT_GEOMETRY_REQUIRED'])('stages both unprepared selected objects for %s and sends their lower-face points in one explicit Save', async reason => {
+    vi.mocked(fetchCableEndpointSelection).mockImplementation(async (_project, _token, current, sdk) => ({
+      schemaVersion: 'wfc.pf.cable-endpoint-selection-response.v1', projectId: project, cableId: current.cableId, end: current.end,
+      contextSha256: current.contextSha256, selection: { schemaVersion: 'wfc.pf.cable-endpoint-selection.v1', projectId: project,
+        current: current.current!, sdkObjectId: sdk, status: reason === 'SDK_OBJECT_EQUIPMENT_GEOMETRY_REQUIRED' ? 'unsupported' : 'unavailable',
+        reasonCodes: [reason], object: null, pointProjectMetres: null, bounds: null, approximate: true, derivation: null } }));
+    const props = access(), view = renderHook(() => useCableEndpointPairSelection(props)); await ready(view);
+    await act(async () => { await view.result.current.from.selectObject(); await view.result.current.to.selectObject(); });
+    expect(view.result.current.from.draft).toEqual({ mode: 'fixed-world', point: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55 });
+    expect(view.result.current.to.draft?.point).toEqual([1, 2, 3]);
+    expect(view.result.current.from.context?.logicalName).toBe('LP-001'); expect(view.result.current.to.context?.logicalName).toBe('LP-002');
+    expect(view.result.current.from.displaySelection?.name).toBe('Selected equipment 55');
+    expect(saveCableEndpointPair).not.toHaveBeenCalled(); expect(saveCableEndpoint).not.toHaveBeenCalled();
+    expect(readPendingCableEndpointPair(owner)).toBeNull(); expect(view.result.current.canSave).toBe(true);
+    await act(async () => { expect(await view.result.current.save('Confirm selected lower-face centres')).toBe(true); });
+    expect(saveCableEndpointPair).toHaveBeenCalledOnce();
+    const command = vi.mocked(saveCableEndpointPair).mock.calls[0][3];
+    expect(command.endpoints.map(item => [item.end, item.command.expectedLogicalName, item.command.selection])).toEqual([
+      ['from', 'LP-001', { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55 }],
+      ['to', 'LP-002', { mode: 'fixed-world', pointProjectMetres: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55 }],
+    ]);
+    expect(readPendingCableEndpointPair(owner)).toBeNull(); expect(props.onSaved).toHaveBeenCalledTimes(2);
+  });
+});

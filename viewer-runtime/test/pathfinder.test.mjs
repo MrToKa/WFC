@@ -262,6 +262,60 @@ test('current model selection returns exact canonical bottom centres without cha
   await assert.rejects(() => f.controller.readSelection(), { code: 'EXTRACTION_FAILED' }); f.controller.dispose();
 });
 
+test('Model Browser parent and child retain their exact recursive bounding boxes without substitution', async () => {
+  const f = fixture(); let selectedId = 1;
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [selectedId] }];
+  f.tree.enumNodeFragments = (id, callback, recursive) => {
+    if (id === 1 && recursive) { callback(2); callback(3); } else if (id === 2 || id === 3) callback(id);
+  };
+  const parent = (await f.controller.readSelection()).objects[0]; selectedId = 2;
+  const child = (await f.controller.readSelection()).objects[0], coordinates = modelCoordinates(f.model);
+  assert.equal(parent.objectId, 1); assert.equal(child.objectId, 2); assert.equal(child.parentId, 1);
+  assert.deepEqual(parent.bounds, { minimum: coordinates.toCanonical([2, 2, 3]), maximum: coordinates.toCanonical([4, 4, 5]) });
+  assert.deepEqual(child.bounds, { minimum: coordinates.toCanonical([2, 2, 3]), maximum: coordinates.toCanonical([3, 4, 5]) });
+  assert.deepEqual(parent.bottomCentre, coordinates.toCanonical([3, 3, 3]));
+  assert.deepEqual(child.bottomCentre, coordinates.toCanonical([2.5, 3, 3])); assert.notDeepEqual(parent.bottomCentre, child.bottomCentre); f.controller.dispose();
+});
+test('selected lower-plane centre applies display units and binary64 global offset exactly once', async () => {
+  const f = fixture(); f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [2] }];
+  f.model.getUnitScale = () => 2.5; f.model.getGlobalOffset = () => ({ x: -1.25, y: 2.5, z: -3.75 });
+  const selected = await f.controller.readSelection(); assert.equal(selected.objects[0].objectId, 2);
+  assert.deepEqual(selected.globalOffsetMetres, [-3.125, 6.25, -9.375]);
+  assert.deepEqual(selected.objects[0].bounds, { minimum: [1.875, 11.25, -1.875], maximum: [4.375, 16.25, 3.125] });
+  assert.deepEqual(selected.objects[0].bottomCentre, [3.125, 13.75, -1.875]);
+  assert.equal(selected.objects[0].derivation, 'display-aabb-bottom-centre'); assert.equal(selected.objects[0].nativeVisibility, 'unknown'); f.controller.dispose();
+});
+test('an empty Model Browser selection remains empty instead of substituting an ancestor or model centre', async () => {
+  const f = fixture(); f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [] }];
+  assert.deepEqual((await f.controller.readSelection()).objects, []); f.controller.dispose();
+});
+test('a changed Model Browser selection during metadata read refuses the old bounding-centre result', async () => {
+  const f = fixture(); let selectedId = 2; f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [selectedId] }];
+  f.model.getProperties = (_id, success) => { selectedId = 3; success({ properties: [] }); };
+  await assert.rejects(() => f.controller.readSelection(), { code: 'EXTRACTION_FAILED' }); f.controller.dispose();
+});
+test('a replaced active model refuses both cached and in-flight old-model bounding centres', async () => {
+  const f = fixture(); f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [2] }];
+  f.model.getProperties = (_id, success) => { f.viewer.model = { ...f.model }; success({ properties: [] }); };
+  await assert.rejects(() => f.controller.readSelection(), { code: 'MODEL_SELECTION_CHANGED' });
+  await assert.rejects(() => f.controller.readSelection(), { code: 'MODEL_SELECTION_CHANGED' }); f.viewer.model = f.model; f.controller.dispose();
+});
+test('fragment cap returns no selectable bbox rather than a partial selected-object centre', async () => {
+  const f = fixture(); f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [2] }];
+  f.tree.enumNodeFragments = (id, callback) => { if (id === 2) for (let fragment = 0; fragment < 8193; fragment++) callback(fragment); };
+  const selected = await f.controller.readSelection(); assert.equal(selected.objects[0].objectId, 2);
+  assert.equal(selected.objects[0].bounds, null); assert.equal(selected.objects[0].bottomCentre, null); f.controller.dispose();
+});
+test('reading a selected bounding centre leaves Ghost overlays, appearance and SDK selection unchanged', async () => {
+  const f = fixture(); f.controller.showPath({ points: [[1000, -2000, 3], [1001, -2000, 3]], objectIds: [2] });
+  f.viewer.getAggregateSelection = () => [{ model: f.model, selection: [3] }]; let selectionCleared = false;
+  f.viewer.clearSelection = () => { selectionCleared = true; };
+  const meshes = [...f.meshes], isolated = [...f.viewer.isolated], visibility = f.model.visibilityManager.getVisibility();
+  const selected = await f.controller.readSelection(); assert.equal(selected.objects[0].objectId, 3);
+  assert.deepEqual(f.meshes, meshes); assert.deepEqual(f.viewer.isolated, isolated); assert.deepEqual(f.model.visibilityManager.getVisibility(), visibility);
+  assert.equal(f.viewer.impl.fadeMaterial.opacity, 0.025); assert.equal(selectionCleared, false); f.controller.dispose();
+});
+
 test('explicit percentages change original background materials, protect route colours and restore all exact appearance on Clear', async () => {
   const f = fixture(); await assert.rejects(() => f.controller.setTransparency(50), { code: 'PATH_INVALID' });
   const original = { opacity: f.originalMaterial.opacity, transparent: f.originalMaterial.transparent, depthWrite: f.originalMaterial.depthWrite };

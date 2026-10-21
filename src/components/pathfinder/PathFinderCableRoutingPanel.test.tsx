@@ -180,3 +180,18 @@ describe('persistent nonmodal cable routing panel with atomic drafts', () => {
     expect(region.getByRole('alert')).toHaveTextContent('The selected object belongs to another model.');
   });
 });
+
+describe('selected bounding-box point presentation', () => {
+  it('shows the manually selected object and its lower-face point while Save remains explicit', () => {
+    assignment.from.draft = { mode: 'fixed-world', point: [1, 2, 3], derivation: 'manual-world-point', displaySdkObjectId: 55 };
+    assignment.from.effectiveDraft = assignment.from.draft; assignment.from.draftSource = 'selected';
+    assignment.from.displaySelection = { sdkObjectId: 55, name: 'BOX 1 of EQUIPMENT', point: [1, 2, 3] }; assignment.canSave = true;
+    const p = props(); render(<PathFinderCableRoutingPanel {...p} />);
+    expect(screen.getByRole('textbox', { name: 'From assigned model object' })).toHaveValue('BOX 1 of EQUIPMENT\nX: 1 m; Y: 2 m; Z: 3 m');
+    expect(screen.getByRole('heading', { name: 'From: Panel 001' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Calculate routing' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled(); expect(assignment.save).not.toHaveBeenCalled();
+    expect(screen.getByText(/connection starts at the centre of its bottom face/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' })); expect(assignment.save).toHaveBeenCalledOnce();
+  });
+});
