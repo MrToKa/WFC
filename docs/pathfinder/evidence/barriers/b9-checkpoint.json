@@ -1,13 +1,15 @@
 {
   "schemaVersion": "wfc.pf.b9.checkpoint.v1",
   "status": "ACTIVE",
-  "at": "2026-10-21T21:06:35.950Z",
+  "at": "2026-10-21T21:55:50.553Z",
   "productCommit": "959dfd975948b795fa5e661b3be63e3c72c4e91f",
   "controls": {
-    "finalCombined": 99,
+    "finalCombined": 138,
     "status": "PASS",
     "earlierFoundation": 168,
-    "countsOverlap": true
+    "countsOverlap": true,
+    "priorCombined": 99,
+    "networkFixIndependentReview": "CLEAR"
   },
   "firstOperation": {
     "id": "55c9f2e7-c53d-4ef1-ad92-26f14ed2aa3e",
@@ -28,7 +30,47 @@
   },
   "newOperation": {
     "id": "cabe7f1a-568b-43a7-b034-ffcca45b5e39",
-    "status": "NOT_RUN"
+    "status": "FAILED_PRE_INSTALL_RESOURCE_COMPARISON",
+    "passed": [
+      "init",
+      "backup",
+      "restore-quarantine",
+      "candidate-build",
+      "target-migration",
+      "target-runtime"
+    ],
+    "failure": {
+      "phase": "update-source",
+      "code": "B9_DATA_RESOURCES_CHANGED",
+      "at": "2026-10-21T21:44:10.880Z",
+      "controllerRetained": true
+    },
+    "sourceImageInstall": "NOT_RUN",
+    "sourceOldImagesResumedHealthy": true,
+    "backupTables": 134,
+    "backupRows": "80850",
+    "backupRawSqlBytes": "278070855",
+    "targetRetirement": "PASS_VERIFIED_ONLY_NEW5192",
+    "normalHTTP": {
+      "status": "PASS_WITH_LIMITATIONS",
+      "requests": 29,
+      "sourceSignatureValidUnexpiredBearerRejected": true,
+      "expiredCookieReplay": "NOT_RUN",
+      "SDKOrCivilCapture": "BLOCKED"
+    },
+    "authDelta": {
+      "status": "PASS",
+      "tables": 141,
+      "unchangedWholeTables": 138,
+      "allExistingRowsKeysExact": true,
+      "ddlGlobalsSequencesExact": true,
+      "additions": {
+        "users": 1,
+        "logins": 2,
+        "closedSessions": 2
+      },
+      "finalProjectAccessNone": true
+    }
   },
   "userDisabledBackgroundGrant": {
     "independentlyReadVerified": true,
@@ -46,5 +88,15 @@
     "actualCivilAvoidance": "BLOCKED",
     "nativeParity": "NOT_RUN",
     "engineeringAcceptance": "NOT_RUN"
+  },
+  "networkColdDiagnostic": {
+    "status": "PASS_OBSERVED",
+    "onlyFourAllocationCountersChanged": true,
+    "sourceConfigurationImagesIdsPreserved": true,
+    "sourceResumedHealthy": true
+  },
+  "nextOperation": {
+    "id": "1335da29-4a1d-4e2f-9084-8feae288d992",
+    "status": "PLANNED_AFTER_FIX_COMMIT"
   }
 }

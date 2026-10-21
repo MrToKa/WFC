@@ -52,7 +52,7 @@ Eight historical human preparation rows are planned4/collecting4, all past the
 production30-minute hard deadline and with no active validation. They are passive
 HTTP workflow records, not a startup queue, and remain byte-for-byte retained.
 
-One **valid enabled persistent calculation grant** remains. Its current issuer is
+At the superseded55c9f2e7 checkpoint, one **valid enabled persistent calculation grant** remained. Its then-current issuer was
 still admin at the matching admin revision; it has no expiry. Producer settings,
 old login timestamps or completed generations cannot make it harmless. Original
 strict quiescence refusal is retained. The independently reviewed closed
@@ -81,8 +81,70 @@ separately retired only its verified new5192 fixture, positively checked resourc
 absence and source health/conservation. No controller prerequisite was forged.
 
 Continue with fresh operationcabe7f1a-568b-43a7-b034-ffcca45b5e39 under the SAME
-source controls, from a fresh backup that includes the user's setting. Target
-runtime, final source migration/runtime and browser/HTTP delivery remain NOT_RUN.
+source controls, from a fresh backup that includes the user's setting. Its init,
+backup, restore-quarantine, candidate-build, target-migration and target-runtime
+are now **PASS**. Backup134tables/80850rows/278070855rawSQLbytes. Fresh target
+ownerf9bed82e-b294-41c8-a450-4067466c27e8, composewfc-pathfinder-local-4f107ee7fae2,
+port5192. Migration preserves134oldtables/80850rows/keys/sequences; canonical
+seven new tables empty, ordinal uncalled and second initializer exact. Runtime
+comparison covers141tables and permits only5engine-observer events in5projects;
+no other row changes. TargetAPI/web are stopped after its bounded qualification.
+Final source migration/runtime and normal HTTP qualification remain NOT_RUN.
+
+### Subsequent normal HTTP checks and source-delivery refusal
+
+Normal5192 operational qualification **PASS_WITH_LIMITATIONS**,29requests: exact
+fresh admin and basic identities; ordinary assigned model access but PF403;
+immediate assignment revocation using the same bearer/cookie; protected997B
+resource exact SHA; explicit close followed by410SESSION_REVOKED. An actual retained
+unexpired bearer has a verified signature under the unchanged source key and is
+rejected401 by restored5192. Old expired cookie replay is **NOT_RUN**, never expiry
+as fencing proof. Existing full raw restore-fence evidence remains separate.
+Only new owned auth fixtures were written; sourceHTTPrequests/authwrites0, source
+configuration/resource bookends exact, targetAPI/web stopped. Root captured all141
+tables afterward for a separate exact owned-row delta qualification.
+
+The source-update attempt then **FAILED B9_DATA_RESOURCES_CHANGED** at
+2026-10-21T21:44:10Z, with no image-install BEGIN. Its sticky failure/lock and all
+earlier receipts remain; it must not be rerun or called a completed delivery.
+Old5191state/env/images remain, with oldAPI/web running. A subsequent explicit
+owned-source cold metadata diagnostic records only dynamic Docker network IPAM
+usage changes: frontIPsInUse4→3/DynamicIPsAvailable65532→65533, backend7→5/
+65529→65531. All identity/configuration/IDs/images/data resources are retained;
+the same old containers resumed and health200. This proves the counter-comparison
+defect, not permission to waive immutable configuration checks. Add narrowly
+validated allocation observation handling, independent review/regressions, local
+commit and a **fresh** source-pinned operation. Retain this target/archives/evidence
+until exact scoped retirement; no failed operation receipt or source pin is edited.
+
+Root's operational auth delta comparator subsequently **PASS** across141tables:
+138whole-table contents exact; every existing row/key exact in the other three;
+all DDL/globals/sequences exact. Only the expected one basic user, two login
+bindings and two closed viewer sessions were added; project access returns to its
+prior state. Exact password/cookie/JWT identity and source-derived time rules were
+checked privately. The first forward-slash CLI launch refused setup before any
+capture/result; native exact canonical-path launch passed. Both logs remain.
+
+The diagnosed network fix excludes only the two strictly validated bounded integer
+usage observations per exactly configured subnet. All other network identity,
+configuration, ownership and security fields remain in equality; unknown status
+shapes fail. Raw allocation observations remain separately retained, and record
+sorting is canonical. Root combined **138PASS**,0fail/cancel/skip, overlaps the
+earlier99. Independent C source review is clear. No calculation/engineering guard
+is weakened and no DLL/source arithmetic changed.
+
+Only the exact cabe7f1a5192 fixture has now been retired after this proof, with
+positive resource absence and unchanged healthy old5191. Its failed controller,
+backup, private companion, inputs and all evidence remain. Next is a new operation
+1335da29-4a1d-4e2f-9084-8feae288d992 after the local fix commit; previous PASS or
+FAIL records are not rewritten or replayed as a new source-delivery success.
+
+Current frozen candidateAPI297940057e6a047b1e05786df5e291285ee5e508bebca96e6b2f94616d55c3ca,
+webd95000381daabe12f7ef264c97652ede08d198441c14750d0eea181e118fb535.
+Root independently inspected all16installed engine files: closureSHA0294e63ea309917eeda81faaac79b54bfb0ce47b602f31517ceb65e1fc1f57c7,
+engineidentitycb8e6a08 and runner2ba050c3 exactly match the separately actual-qualified
+first candidate below. Image IDs differ; binary qualification is reused only for
+the proven identical complete engine closure, not inferred from branch/source.
 
 ## Fresh built-image actual planning replay
 

@@ -1,6 +1,6 @@
 # PathFinder local implementation progress
 
-## Current: PF-B9 ACTIVE — fresh source backup after user setting change
+## Current: PF-B9 ACTIVE — reviewed network fix, fresh operation next
 
 Branch pf-b9-barrier-delivery-local-20261021. Product959dfd975948b795fa5e661b3be63e3c72c4e91f;
 baseb4c1f56. Report92 ACTIVE. Root sole actual builds/tests/Docker/SQL/HTTPexecutor.
@@ -24,7 +24,39 @@ User explicitly disabled backgroundgrant in old synthetic PF-R3-UI project
 No grant/schedule/cable change byagent. Because userchange AFTERbackup, oldoperation
 is SUPERSEDED, not stagecomplete. Do not run old update/retire controller phases.
 
-Newfreshoperation NEXT: .scratch/barrier-delivery-cabe7f1a-568b-43a7-b034-ffcca45b5e39.
+Newfreshoperation ACTIVE: .scratch/barrier-delivery-cabe7f1a-568b-43a7-b034-ffcca45b5e39.
+Init/backup/restore-quarantine/candidate-build/target-migration/target-runtime PASS.
+Fresh backup134tables/80850rows/278070855rawSQLbytes; source resumed after backup.
+Targetf9bed82e/wfc-pathfinder-local-4f107ee7fae2/5192 is stopped after qualification.
+Migration preserves134legacytables/80850rows/keys/sequences; canonical7newtables
+empty/ordinaluncalled; second initializer exact. Runtime141tablesPASS: only5engine
+observer events in5projects, no other changes. CandidateAPI297940057e6a047b1e05786df5e291285ee5e508bebca96e6b2f94616d55c3ca,
+webd95000381daabe12f7ef264c97652ede08d198441c14750d0eea181e118fb535.
+Installed16-fileengineclosure0294e63e/identitycb8/runner2ba matches actual5-mode
+replay exactly. Root next normal5192 auth/static-resource checks, then late source
+no-drift/update-source/source-runtime/retire ONLY this new5192. Source not upgraded.
+Actual normal5192HTTP PASS_WITH_LIMITATIONS29requests: freshadmin/basic/project
+grant-revoke/PF403/static997B/closedcookie and oldsource-signaturevalid unexpired
+bearer401 PASS. Oldexpiredcookie replayNOT_RUN; SQLrestorefence separatelyPASS.
+Postauth141tablecapture complete; exact ownedrowcomparator pendingrootexecution.
+UPDATE-SOURCE FAILED B9_DATA_RESOURCES_CHANGED at2026-10-21T21:44:10Z BEFORE
+imageinstallBEGIN. Keep stickyfailure/lock; no retry/relabel. Old5191images/env/state
+remain; oldAPI/web running. One explicitcoldmetadata diagnostic PASS_OBSERVED:
+ONLYfrontStatus.IPAM usage4→3/65532→65533 andbackend7→5/65529→65531; allresource
+identity/config unchanged, exactoldcontainers resumed/health200. Fix narrowknown
+allocation-counter observation, preserve immutable network configuration/unknown
+shape refusal, independentlyreview/test, localcommitthenNEWfreshoperation. Current
+cabe7f1a target wasretiredONLYafterverifiedownauthdelta/evidence, resourcesabsent
+and oldsource5191healthy; allbackup/privatefiles/failedcontrollerretained. Authdelta
+PASS141tables,138wholeexact,alloldrows/keys/DDL/globals/sequencesexact; only1owned
+basicuser/2logins/2closed sessions added,finalprojectaccessnone. Initialforwardslash
+CLIsetuprefusal retained; nativeexactpath secondlaunchPASS, no guardchange.
+Networkfix: only2strictvalidatedsafeintegerusagefields per configuredsubnetleave
+identitycomparison; allothernetworkfields/unknownshaperefusal preserved, rawusage
+recordedseparately. Rootcombined138PASS0fail/cancel/skip; CindependentreviewCLEAR.
+NEXT NEWoperation1335da29-4a1d-4e2f-9084-8feae288d992 AFTERlocalcommit; newbackup/
+fresh5192/candidate/migration/runtime/latesourcegates, nooldphase/receipt retry.
+A/B/Csourcewritersfrozen; noactiveactualruntime/test. Sourceoriginal5180/5190untouched.
 Use v3 same source controls/qualifiedinventory62140a916c96509c771f89f161b989e11927ca2202c23ff8ddddab2a30da812f
 from diagnostic scratch .scratch/barrier-delivery-20261021-9f5058f3-8408-4a36-8592-dd46d90e6742.
 Init→freshbackup→freshinactive5192→candidate→migration/runtime→late sourceNoDrift→

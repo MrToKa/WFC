@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import * as runtime from '../pathfinder-local/runtime-lib.mjs';
 import { createDocker, command, jsonCommand, writePrivateJson } from '../operations/docker.mjs';
 import { assertCanonicalPath, hashFile } from '../operations/archives.mjs';
@@ -10,6 +11,7 @@ import { compareCurrentInventories } from '../pathfinder-copied-recovery/current
 import { createRawInventoryProvider } from '../pathfinder-cable-workflow/raw-inventory-provider.mjs';
 import { SOURCE, need, same, digest, pin, assertSource, assertTarget, assertOperation, claimBuildChild } from './owned-update-v3.mjs';
 import { outsideIdentity } from '../pathfinder-cable-workflow/owned-update-v2.mjs';
+import { projectNetworkResource, sortCanonicalRecords } from './network-resource-identity.mjs';
 
 const ROOT = runtime.ROOT, SCRATCH = path.join(ROOT, 'pathfinder-engine/.scratch');
 const SHA = /^[a-f0-9]{64}$(?![\s\S])/, UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$(?![\s\S])/;
@@ -121,14 +123,19 @@ async function immutableCopy(config, name, filename) {
 async function snapshot(state, target) {
   await runtime.configuration(state); const owned = await runtime.ownership(state), docker = await createDocker(), all = await docker.containers();
   const ids = new Set(owned.containers.map(item => item.id));
-  const sort = values => values.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  const sort = sortCanonicalRecords;
+  const networks = (await jsonCommand(['network', 'inspect', ...owned.networks.map(item => item.id)]))
+    .map(({ Containers, ...value }) => projectNetworkResource(value));
   return { owned, services: sort(all.filter(item => ids.has(item.Id)).map(normalize)),
     outside: sort(all.filter(item => !ids.has(item.Id) && (!target || !runtime.claimsProject(item, target))).map(normalize)),
     volumes: sort(await jsonCommand(['volume', 'inspect', ...owned.volumes])),
-    networks: sort((await jsonCommand(['network', 'inspect', ...owned.networks.map(item => item.id)])).map(({ Containers, ...value }) => value)) };
+    networks: sort(networks.map(value => value.identity)), networkAllocations: sort(networks.map(value => value.allocation)) };
 }
 async function sourceConserved(config, { target, updated = false, stopped = false } = {}) {
   const state = assertSource(await runtime.load(SOURCE.runtime)), view = await snapshot(state, target), before = config.baseline;
+  await writePrivateJson(ownedFile(config, 'source-network-observation-' + randomUUID() + '.private.json'), {
+    schemaVersion: 'wfc.pf.b9.network-allocation-observation.v1', operationId: config.operationId, at: new Date().toISOString(),
+    source: SOURCE, allocation: view.networkAllocations });
   if (updated) {
     const installed = await read(ownedFile(config, 'source-image-install.result.private.json'));
     need(installed.status === 'PASS' && installed.operationId === config.operationId
