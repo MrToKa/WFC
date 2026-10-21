@@ -2,6 +2,16 @@
 
 ## SP-0 ACTIVE
 
+Resumed from PF-B11 delivery77bbcf8/web75187b0a (recorda85b051). Source checkpoint
+31d8ce702d4d1d4d07a218f253e161d2abeb2716 explicitly preserves INCOMPLETE baseline/
+backup source. Executing PFhandoff SP-0-baseline-diagnostics.md. C owns five
+baselineharness files for exact-file subset and bounded safe stage/denial evidence;
+B independent review. A owns offline-seed finalization repair after independent
+finding of source-lock release before terminal marker; root docs/actualchecks.
+Main5180 and PG untouched; no actualbackup/import/cloud call. Root actual later
+OS check:0ownedNodeprocesses and0listeners on retainedmarker56078; old marker
+kept. This does not change the failed baseline. Report03/publicreceipt retain scope.
+
 Root fresh baseline296f8fde-146c-41f9-8472-45f341973c7a: guard9PASS/package174PASS;
 Preparer FAIL/incomplete at480s supervisor deadline, killed/joined/killerJoined=true,
 no terminal TAP totals,49/50 timed out120s, earlier36READ_LIMIT. Port marker from
@@ -11,9 +21,9 @@ no claim of permanent deadlock. Source+copy pins and detailed failure retained.
 Strict supervisor totals controls4PASS, independent review clear; new totals require
 zero skip/todo and positive equal tests/pass. Original invalid provenance path and
 numeric-loopback guard failures retained. No unchanged rerun until focused diagnostic.
-Current user cable/5191 UI priority: PF-B10 delivered and PF-B11 action/persistence
-repair being qualified. Main5180 remains unmodified; independent Preparer diagnosis
-continues after current PF delivery. Do not infer SP-0 complete from packagePASS.
+PF-B10 and PF-B11 action/persistence repairs are technically delivered. Main5180
+remains unmodified; independent Preparer diagnosis resumed after PF delivery.
+Do not infer SP-0 complete from packagePASS.
 
 Target mainWFC5180 explicitly selected by user; PF5191 separate/preserved.
 Branch sp-0-preparer-baseline-local-20261022, baseline96e63f13; local checkpoint

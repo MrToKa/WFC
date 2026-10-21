@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "wfc.preparer.sp0-baseline-observation.v1",
+  "status": "FAIL",
+  "node": "v24.19.0",
+  "finishedAt": "2026-10-21T23:41:27.242Z",
+  "sourceCheckpoint": "31d8ce702d4d1d4d07a218f253e161d2abeb2716",
+  "checkpointMeaning": "INCOMPLETE source preservation; execution source pinned separately",
+  "sourceInputReceipt": {
+    "sha256": "b6c51ec33e4a8def0c575458293129ded5aa55e18a0cc80f82b2e15d9623d7bf",
+    "bytes": 132200
+  },
+  "sourceInputsUnchanged": true,
+  "copiedInputsUnchanged": true,
+  "suites": [
+    {
+      "name": "guard",
+      "status": "PASS",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cancelled": 0,
+      "killed": false,
+      "joined": true,
+      "killerJoined": null,
+      "childrenJoined": true,
+      "portsClosed": true,
+      "durationMs": 603,
+      "guardDenied": 8,
+      "expectedDenied": 8,
+      "tapSha256": "c46b7305e9726784cbc8db8a6a8e76746a7d7ea30e82f57afdb53f045e33e53d"
+    },
+    {
+      "name": "package",
+      "status": "PASS",
+      "tests": 174,
+      "pass": 174,
+      "fail": 0,
+      "cancelled": 0,
+      "killed": false,
+      "joined": true,
+      "killerJoined": null,
+      "childrenJoined": true,
+      "portsClosed": true,
+      "durationMs": 22735,
+      "guardDenied": 0,
+      "expectedDenied": 0,
+      "tapSha256": "1e59c0e49f2848396595fd2100356b7c0067563b11a162436bb9d0f3bf216a4c"
+    },
+    {
+      "name": "preparer",
+      "status": "FAIL",
+      "tests": null,
+      "pass": null,
+      "fail": null,
+      "cancelled": null,
+      "killed": true,
+      "joined": true,
+      "killerJoined": true,
+      "childrenJoined": false,
+      "portsClosed": false,
+      "durationMs": 480740,
+      "guardDenied": 2,
+      "expectedDenied": 0,
+      "tapSha256": "0095636384d282911844570ddfd6f830974d7b671e2b6d88aecb504bbce2d3de"
+    }
+  ],
+  "laterRuntimeObservation": {
+    "ownedNodeProcesses": 0,
+    "retainedMarkerPort": 56078,
+    "listeners": 0,
+    "historicalMarkerDeleted": false
+  },
+  "scope": "Synthetic copied-source/fixture tests only; no actual WFC/APS/DB/model operations"
+}
