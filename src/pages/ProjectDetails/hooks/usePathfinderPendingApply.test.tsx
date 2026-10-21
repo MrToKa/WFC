@@ -1,19 +1,33 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PENDING_APPLY_STORAGE_KEY, usePathfinderPendingApply, type PendingApplyAccess, type PendingApplyInput } from './usePathfinderPendingApply';
+import { barrierWriteEvidenceSchema } from '../../../../shared/pathfinderBarrierWrites';
 
 const id = (value: number) => `40000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
 const input: PendingApplyInput = { proposalId: id(3), proposalHash: 'a'.repeat(64), cableId: id(4), reviewId: id(5),
   expectedCableWriteRevision: '9', revisionResultHash: 'b'.repeat(64) };
 const access = (): PendingApplyAccess => ({ projectId: id(1), loadedProjectId: id(1), accountId: id(2), token: 'private-bearer-token',
   isAdmin: true, active: true, action: vi.fn(async () => null) });
+function barrierEvidence(body: PendingApplyInput = input) {
+  return barrierWriteEvidenceSchema.parse({ schemaVersion: 'wfc.pf.barrier-write-evidence.v1', dependencyVersion: 'pathfinder.dependencies.v8', responseVersion: 'pathfinder.model.response.v3',
+    projectId: id(1), cableId: body.cableId, dependencySha256: 'c'.repeat(64), engineIdentitySha256: 'd'.repeat(64), engineResultSha256: 'e'.repeat(64),
+    contextSha256: 'f'.repeat(64), executionSha256: '1'.repeat(64), routeSha256: '2'.repeat(64), policySha256: '3'.repeat(64), profileSha256: '4'.repeat(64),
+    registryRevision: '1', snapshotId: id(90), snapshotSha256: '5'.repeat(64), drillThroughWalls: false, status: 'no-barriers-declared' });
+}
 function receipt(body: PendingApplyInput = input) {
   return { duplicate: true, receipt: { id: id(7), projectId: id(1), proposalId: body.proposalId, cableId: body.cableId,
     appliedAt: '2026-10-19T14:00:00Z',
     before: { id: body.cableId, project_id: id(1), cable_write_revision: body.expectedCableWriteRevision },
     after: { id: body.cableId, project_id: id(1), cable_write_revision: '10' },
-    provenance: { schemaVersion: 'pathfinder.apply.v2', proposalId: body.proposalId, proposalHash: body.proposalHash,
-      reviewId: body.reviewId, review: { id: body.reviewId, actorId: id(2) }, revisionResult: { revisionResultSha256: body.revisionResultHash } } } };
+    provenance: { schemaVersion: 'pathfinder.apply.v3', proposalId: body.proposalId, proposalHash: body.proposalHash,
+      reviewId: body.reviewId, review: { id: body.reviewId, actorId: id(2), dependencyHash: 'c'.repeat(64), revisionResultSha256: body.revisionResultHash },
+      dependencies: { schemaVersion: 'pathfinder.dependencies.v8', projectId: id(1), cableId: body.cableId,
+        engineIdentity: { schemaVersion: 'wfc.pf.engine-identity.v2', contentSha256: 'd'.repeat(64) } },
+      revisionResult: { revisionResultSha256: body.revisionResultHash, dependencyHash: 'c'.repeat(64), engineResultSha256: 'e'.repeat(64) }, barrierEvidence: barrierEvidence(body) } } };
+}
+function historicalReceipt(body: PendingApplyInput = input) {
+  const current = receipt(body), { barrierEvidence: _evidence, ...provenance } = current.receipt.provenance;
+  return { ...current, receipt: { ...current.receipt, provenance: { ...provenance, schemaVersion: 'pathfinder.apply.v2' } } };
 }
 const stored = () => JSON.parse(sessionStorage.getItem(PENDING_APPLY_STORAGE_KEY)!);
 function recovery(status: 'already-applied' | 'closed-without-apply') {
@@ -26,6 +40,53 @@ beforeEach(() => { sessionStorage.clear(); });
 afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
 
 describe('durable human Apply recovery', () => {
+  it('acknowledges a fresh protected v3 receipt only after an explicit Apply', async () => {
+    const props = access(); vi.mocked(props.action).mockResolvedValueOnce(receipt());
+    const view = renderHook(() => usePathfinderPendingApply(props));
+    await waitFor(() => expect(view.result.current.canStart).toBe(true)); expect(props.action).not.toHaveBeenCalled();
+    await act(async () => { expect(await view.result.current.start(input)).toBe(true); });
+    expect(view.result.current.pending).toBeNull(); expect(stored().intents).toEqual([]);
+    expect(props.action).toHaveBeenCalledOnce();
+  });
+  it.each(['project', 'cable', 'dependency version', 'response version', 'missing evidence', 'invalid digest', 'unpaired snapshot', 'implicit bypass', 'empty publication', 'engine identity chain', 'dependency hash chain', 'result hash chain'] as const)(
+    'retains the exact command after tampered protected receipt evidence: %s', async field => {
+      const props = access(), valid = receipt();
+      const evidence: Record<string, unknown> = { ...valid.receipt.provenance.barrierEvidence };
+      if (field === 'project') evidence.projectId = id(99);
+      if (field === 'cable') evidence.cableId = id(99);
+      if (field === 'dependency version') evidence.dependencyVersion = 'pathfinder.dependencies.v7';
+      if (field === 'response version') evidence.responseVersion = 'pathfinder.model.response.v2';
+      if (field === 'invalid digest') evidence.routeSha256 = 'not-a-digest';
+      if (field === 'unpaired snapshot') evidence.snapshotSha256 = null;
+      if (field === 'implicit bypass') evidence.status = 'bypassed';
+      if (field === 'empty publication') { evidence.snapshotId = null; evidence.snapshotSha256 = null; }
+      if (field === 'engine identity chain') evidence.engineIdentitySha256 = '9'.repeat(64);
+      if (field === 'dependency hash chain') evidence.dependencySha256 = '9'.repeat(64);
+      if (field === 'result hash chain') evidence.engineResultSha256 = '9'.repeat(64);
+      const provenance = { ...valid.receipt.provenance, barrierEvidence: field === 'missing evidence' ? undefined : evidence };
+      vi.mocked(props.action).mockResolvedValueOnce({ ...valid, receipt: { ...valid.receipt, provenance } });
+      const view = renderHook(() => usePathfinderPendingApply(props)); await waitFor(() => expect(view.result.current.canStart).toBe(true));
+      await act(async () => { expect(await view.result.current.start(input)).toBe(false); });
+      expect(view.result.current.pending).toMatchObject(input); expect(stored().intents).toHaveLength(1);
+      expect(view.result.current.error).toMatch(/does not match/); expect(props.action).toHaveBeenCalledOnce();
+    });
+  it('keeps a historical v2 receipt for explicit committed retry recovery, without accepting it as a new protected acknowledgment', async () => {
+    const props = access(), action = vi.mocked(props.action); action.mockResolvedValueOnce(historicalReceipt()).mockResolvedValueOnce(historicalReceipt());
+    const first = renderHook(() => usePathfinderPendingApply(props)); await waitFor(() => expect(first.result.current.canStart).toBe(true));
+    await act(async () => { expect(await first.result.current.start(input)).toBe(false); });
+    const original = action.mock.calls[0], retained = stored().intents[0]; first.unmount();
+    const view = renderHook(() => usePathfinderPendingApply(props)); await waitFor(() => expect(view.result.current.pending).toEqual(retained));
+    expect(action).toHaveBeenCalledOnce();
+    await act(async () => { expect(await view.result.current.retry()).toBe(true); });
+    expect(action.mock.calls[1]).toEqual(original); expect(view.result.current.pending).toBeNull();
+  });
+  it('recognizes an exact historically committed v2 receipt through explicit close reconciliation', async () => {
+    const props = access(), action = vi.mocked(props.action); action.mockResolvedValueOnce(null).mockImplementationOnce(async () => ({ ...recovery('already-applied'), receipt: historicalReceipt().receipt }));
+    const view = renderHook(() => usePathfinderPendingApply(props)); await waitFor(() => expect(view.result.current.canStart).toBe(true));
+    await act(async () => { await view.result.current.start(input); });
+    await act(async () => { expect(await view.result.current.close()).toBe(true); });
+    expect(view.result.current.pending).toBeNull(); expect(action).toHaveBeenCalledTimes(2);
+  });
   it('retains the exact command before the first POST and never stores a bearer', async () => {
     const props = access();
     props.action = vi.fn(async (_path, body) => {

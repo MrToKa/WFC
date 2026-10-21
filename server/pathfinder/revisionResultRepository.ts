@@ -16,6 +16,7 @@ import { PathFinderError } from './errors.js';
 import { readProposalApplicability } from './proposalApplicability.js';
 import type { SealedCableItemApplicability } from '../../shared/pathfinderItemApplicability.js';
 import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
+import { readBarrierWriteEvidence } from './barrierWrites.js';
 
 type Row = Record<string, unknown>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The immutable cable revision result is unavailable or inconsistent. Refresh the admission and calculate a new proposal when required.'); };
@@ -46,9 +47,40 @@ function cableSnapshot(row: Row): RevisionBaseline['currentCable'] {
     designLength: nullableString(row.design_length), installLength: nullableString(row.install_length), cableWriteRevision: row.cable_write_revision },
     lastAcceptedApply: null, acceptedMatchesCurrent: false }).currentCable;
 }
+/** Retained human acceptance is proved from the immutable command/review/result,
+ * without renewing its old login or comparing its scope with today's model. */
+function protectedManualBaseline(row: Row, dependencies: DependencySnapshot, output: EngineResponse,
+  seal: RevisionResultEnvelope, projectId: string, cableId: string): boolean {
+  const provenance = object(row.accepted_provenance), before = object(row.accepted_before), after = object(row.accepted_after),
+    review = object(provenance?.review), revision = object(provenance?.revisionResult), evidence = readBarrierWriteEvidence(dependencies, output);
+  if (!provenance || !before || !after || !review || !revision || !evidence || provenance.schemaVersion !== 'pathfinder.apply.v3'
+    || !equal(provenance.barrierEvidence, evidence) || !equal(provenance.dependencies, dependencies)
+    || dependencies.projectId !== projectId || dependencies.cableId !== cableId || dependencies.cableWriteRevision !== before.cable_write_revision
+    || before.id !== cableId || after.id !== cableId || before.project_id !== projectId || after.project_id !== projectId
+    || !Object.hasOwn(before, 'install_length') || !Object.hasOwn(after, 'install_length')
+    || !policyRevisionSchema.safeParse(before.cable_write_revision).success || !policyRevisionSchema.safeParse(after.cable_write_revision).success
+    || BigInt(String(after.cable_write_revision)) !== BigInt(String(before.cable_write_revision)) + 1n
+    || provenance.proposalId !== row.proposal_id || provenance.proposalHash !== row.proposal_hash
+    || provenance.reviewId !== row.accepted_review_id || review.id !== row.accepted_review_id || review.actorId !== row.receipt_actor_id
+    || row.accepted_review_actor !== row.receipt_actor_id || row.accepted_review_proposal !== row.proposal_id
+    || row.accepted_review_proposal_hash !== row.proposal_hash || !['manual-review', 'synthetic-fixture'].includes(String(row.accepted_validation_method))
+    || provenance.validationMethod !== row.accepted_validation_method || review.validationMethod !== row.accepted_validation_method
+    || review.loginId !== row.accepted_review_login_id || row.accepted_review_dependency_sha256 !== seal.dependencyHash
+    || review.dependencyHash !== seal.dependencyHash || row.accepted_review_result_sha256 !== seal.revisionResultSha256
+    || review.revisionResultSha256 !== seal.revisionResultSha256 || revision.revisionResultSha256 !== seal.revisionResultSha256
+    || revision.dependencyHash !== seal.dependencyHash || revision.baselineHash !== seal.baselineHash || revision.ledgerHash !== seal.ledgerHash
+    || revision.engineResultSha256 !== seal.engineResultSha256 || evidence.engineResultSha256 !== seal.engineResultSha256
+    || evidence.dependencySha256 !== seal.dependencyHash || after.routing !== output.route?.routeText
+    || typeof after.design_length !== 'string' || !numericEqual(after.design_length, output.design?.designLengthMeters ?? null)
+    || row.receipt_payload_hash !== revisionResultHash({ proposalId: row.proposal_id, idempotencyKey: row.receipt_idempotency_key,
+      reviewId: row.accepted_review_id, expectedCableWriteRevision: before.cable_write_revision })) return false;
+  const changed = new Set(['routing', 'design_length', 'updated_at', 'cable_write_revision']);
+  return equal(Object.keys(before).sort(), Object.keys(after).sort())
+    && Object.keys(before).every(key => changed.has(key) || equal(before[key], after[key]));
+}
 async function acceptedBaselines(client: PoolClient, projectId: string, ids: string[]): Promise<Map<string, RevisionBaseline['lastAcceptedApply']>> {
   const result = new Map<string, RevisionBaseline['lastAcceptedApply']>();
-  const initialFillBody = `r.provenance->>'schemaVersion'='pathfinder.initial-fill.v1' AND
+  const retainedWriteBody = `r.provenance->>'schemaVersion' IN('pathfinder.initial-fill.v1','pathfinder.initial-fill.v2','pathfinder.apply.v3') AND
     octet_length(r.before_snapshot::text)+octet_length(r.after_snapshot::text)+octet_length(r.provenance::text)
       +octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144`;
   for (let at = 0; at < ids.length; at += REVISION_RESULTS_LIMITS.chunk) {
@@ -60,18 +92,25 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
       p.result#>>'{design,designLengthMeters}' AS design_length,p.result#>>'{design,unroundedLengthMeters}' AS unrounded_length,
       s.record_sha256 AS sealed_hash,s.engine_result_sha256,s.ledger_sha256,
       coalesce(r.provenance->>'schemaVersion' LIKE 'pathfinder.initial-fill.%',false) AS initial_fill_kind,
+      coalesce(r.provenance->>'schemaVersion' LIKE 'pathfinder.apply.%' AND (r.provenance->>'schemaVersion' NOT IN('pathfinder.apply.v1','pathfinder.apply.v2')
+        OR p.dependencies->>'schemaVersion'='pathfinder.dependencies.v8' OR r.provenance ? 'barrierEvidence'),false) AS protected_apply_kind,
       r.actor_id AS receipt_actor_id,r.idempotency_key AS receipt_idempotency_key,r.payload_hash AS receipt_payload_hash,
-      CASE WHEN ${initialFillBody} THEN r.before_snapshot ELSE NULL END AS accepted_before,
-      CASE WHEN ${initialFillBody} THEN r.after_snapshot ELSE NULL END AS accepted_after,
-      CASE WHEN ${initialFillBody} THEN r.provenance ELSE NULL END AS accepted_provenance,
-      CASE WHEN ${initialFillBody} THEN p.dependencies ELSE NULL END AS accepted_dependencies,
-      CASE WHEN ${initialFillBody} THEN p.result ELSE NULL END AS accepted_result
+      CASE WHEN ${retainedWriteBody} THEN r.before_snapshot ELSE NULL END AS accepted_before,
+      CASE WHEN ${retainedWriteBody} THEN r.after_snapshot ELSE NULL END AS accepted_after,
+      CASE WHEN ${retainedWriteBody} THEN r.provenance ELSE NULL END AS accepted_provenance,
+      CASE WHEN ${retainedWriteBody} THEN p.dependencies ELSE NULL END AS accepted_dependencies,
+      CASE WHEN ${retainedWriteBody} THEN p.result ELSE NULL END AS accepted_result,
+      v.id AS accepted_review_id,v.actor_id AS accepted_review_actor,v.proposal_id AS accepted_review_proposal,
+      v.proposal_hash AS accepted_review_proposal_hash,v.validation_method AS accepted_validation_method,
+      v.revision_result_sha256 AS accepted_review_result_sha256,v.review_dependency_sha256 AS accepted_review_dependency_sha256,
+      v.review_login_id AS accepted_review_login_id
       FROM pf_apply_receipts r JOIN pf_proposals p ON p.project_id=r.project_id AND p.id=r.proposal_id AND p.cable_id=r.cable_id
       LEFT JOIN pf_revision_results s ON s.project_id=p.project_id AND s.proposal_id=p.id
+      LEFT JOIN pf_reviews v ON v.project_id=r.project_id AND v.id::text=r.provenance->>'reviewId'
       WHERE r.project_id=$1 AND r.cable_id=ANY($2::uuid[]) ORDER BY r.cable_id,r.applied_at DESC,r.id DESC`, [projectId, ids.slice(at, at + REVISION_RESULTS_LIMITS.chunk)])).rows;
     for (const row of values) {
       const cableId = policyUuidSchema.parse(row.cable_id); if (result.has(cableId) || !ids.includes(cableId)) return fail('REVISION_ACCEPTED_BASELINE_SCOPE', 500);
-      if (row.initial_fill_kind) {
+      if (row.initial_fill_kind || row.protected_apply_kind) {
         // A new write kind is recognized only through its complete immutable
         // mandate/command/result chain. Never fall back to an older receipt.
         try {
@@ -82,9 +121,11 @@ async function acceptedBaselines(client: PoolClient, projectId: string, ids: str
           const output = retained as unknown as EngineResponse;
           const seal = await verifyRevisionResultForProposal(client, { projectId, proposalId: String(row.proposal_id),
             dependencies, result: output, proposalHash: String(row.proposal_hash) });
-          if (!seal || !await initialFillReceipt({ projectId, cableId, receiptId: String(row.receipt_id), proposalId: String(row.proposal_id),
+          if (!seal) continue;
+          if (row.initial_fill_kind && !await initialFillReceipt({ projectId, cableId, receiptId: String(row.receipt_id), proposalId: String(row.proposal_id),
             actorId: String(row.receipt_actor_id), idempotencyKey: String(row.receipt_idempotency_key), payloadHash: String(row.receipt_payload_hash),
             before: row.accepted_before, after: row.accepted_after, provenance: row.accepted_provenance, dependencies, result: output, seal })) continue;
+          if (row.protected_apply_kind && !protectedManualBaseline(row, dependencies, output, seal, projectId, cableId)) continue;
         } catch (error) {
           if (error instanceof PathFinderError && /DEADLINE|READ_LIMIT|DATABASE_BUSY|ABORT/.test(error.code) || error instanceof Error && error.name === 'AbortError') throw error;
           continue;
@@ -274,8 +315,10 @@ export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage
       const id = String(row.cable_id), baseline = verifiedBaseline(row), envelope = object(row.record), current = revisions.get(id);
       if (current === undefined) result.set(id, { state: 'missing', reasonCodes: ['CABLE_NOT_FOUND'] });
       else if (current !== baseline.currentCable.cableWriteRevision) result.set(id, { state: 'changed', reasonCodes: ['CABLE_WRITE_REVISION_CHANGED'] });
+      else if (version(row) !== 'pathfinder.dependencies.v8') result.set(id, { state: 'unavailable', reasonCodes: ['BARRIER_WRITE_PROOF_REQUIRED'] });
       else if (authority?.enrolled && !authority.valid) result.set(id, { state: 'changed', reasonCodes: [authority.code ?? 'AUTOMATIC_AUTHORITY_CHANGED'] });
       else if (!envelope) result.set(id, { state: 'unavailable', reasonCodes: ['CALCULATION_OUTPUT_UNAVAILABLE'] });
+      else if (row.proposal_status !== 'calculated') result.set(id, { state: 'unavailable', reasonCodes: ['CALCULATION_OUTPUT_NOT_APPLICABLE'] });
       else if (!items.get(id)?.dependencies) result.set(id, { state: 'unavailable', reasonCodes: [unavailable.get(id)??'CURRENT_DEPENDENCIES_UNAVAILABLE'] });
       else {
         const currentHash=revisionResultHash(items.get(id)!.dependencies),equal=currentHash===envelope.dependencyHash;
@@ -285,7 +328,7 @@ export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage
         const sealed=equal&&scoped?verifiedEnvelope({...row,...object(row.sealed_row)}):null;
         const applicable=sealed?await readProposalApplicability(client,{projectId:String(admission.project_id),jobId:sealed.jobId,cableId:id,proposalId:sealed.proposalId,
           dependencyVersion:String(row.dependency_version),dependencyHash:sealed.dependencyHash,jobState:String(row.job_state),cancelRequested:row.cancel_requested===true,seal:sealed}):null;
-        if(equal&&row.dependency_version==='pathfinder.dependencies.v8'&&row.job_state==='complete'&&!applicable?.applicable){
+        if(equal&&row.dependency_version==='pathfinder.dependencies.v8'&&!applicable?.applicable){
           result.set(id,{state:'unavailable',reasonCodes:['BARRIER_ITEM_PROOF_UNAVAILABLE']});continue;
         }
         result.set(id,{state:equal?'current':'changed',reasonCodes:equal?[]:['CALCULATION_DEPENDENCIES_CHANGED'],itemApplicability:applicable?.evidence??null});

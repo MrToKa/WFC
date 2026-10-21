@@ -33,7 +33,8 @@ const calculationLabel = (value: { kind: string; generation: string | null }) =>
   : value.kind === 'location-impact' ? 'Shared location calculation' : 'Manual calculation';
 function hasExactItemApplicability(row: RevisionResultDetail['row'], projectId: string | null, jobId: string | null | undefined) {
   const proof = sealedCableItemApplicabilitySchema.safeParse(row.itemApplicability);
-  return Boolean(proof.success && projectId && jobId && row.result && proof.data.projectId === projectId && proof.data.jobId === jobId
+  return Boolean(proof.success && proof.data.schemaVersion === 'wfc.pf.sealed-cable-applicability.v2'
+    && proof.data.dependencyVersion === 'pathfinder.dependencies.v8' && projectId && jobId && row.result && proof.data.projectId === projectId && proof.data.jobId === jobId
     && proof.data.cableId === row.cableId && proof.data.proposalId === row.result.proposalId && proof.data.dependencyHash === row.result.dependencyHash);
 }
 function gaps(result: unknown): { count: number; metres: number } | null {
@@ -121,8 +122,8 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
   const ownsScope = Boolean(state.enabled && props.isAdmin && props.accountId && props.token && props.projectId === props.loadedProjectId);
   const wholeJobReady = Boolean(props.active && ownsScope && scopeJob?.status === 'complete' && !scopeJob.cancelRequested);
   const activeParent = Boolean(props.active && ownsScope && scopeJob && ['queued', 'running'].includes(scopeJob.status) && !scopeJob.cancelRequested);
-  const itemReady = (value: RevisionResultDetail['row']) => wholeJobReady || activeParent
-    && hasExactItemApplicability(value, props.projectId, state.admission?.jobId);
+  const itemReady = (value: RevisionResultDetail['row']) => value.itemApplicability?.schemaVersion !== 'wfc.pf.sealed-cable-applicability.v1' && (wholeJobReady || activeParent
+    && hasExactItemApplicability(value, props.projectId, state.admission?.jobId));
   const scopeReady = wholeJobReady || Boolean(activeParent && [...(state.page?.rows ?? []), ...(state.detail ? [state.detail.row] : [])]
     .some(value => value.status === 'calculated' && value.currentness.state === 'current' && itemReady(value)));
   const scopeIssue = !ownsScope ? 'Administrator access is required. Refresh your account before continuing.'
@@ -160,6 +161,7 @@ export function PathFinderRevisionResults(props: PathFinderRevisionResultsProps)
       tag: value.baseline.currentCable.tag ?? value.cableId, routeText: output.routeText, designLength: output.designLengthMeters };
   };
   const rowStatus = (value: RevisionResultDetail['row']) => value.status !== 'calculated' ? status(value.status)
+    : value.itemApplicability?.schemaVersion === 'wfc.pf.sealed-cable-applicability.v1' ? 'Historical — fresh barrier calculation required'
     : !itemReady(value) ? scopeJob?.cancelRequested || scopeJob?.status === 'cancelled' ? 'Review blocked — cancelled calculation'
       : scopeJob ? 'Review blocked — incomplete calculation' : 'Review blocked — calculation state unknown'
       : value.currentness.state !== 'current' ? 'Outdated — review blocked' : status(value.status);

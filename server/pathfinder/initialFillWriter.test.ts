@@ -6,6 +6,7 @@ import { initialFillIdempotencyKey } from './initialFillIdentity.js';
 import { hash } from './dependencies.js';
 import { defaultOptions, type EngineResponse, type ScopedDependencySnapshot } from './jobContracts.js';
 import { syntheticEngineIdentity } from './calculationFixtures.js';
+import { syntheticInitialFillBarrierInputs } from './initialFillBarrierFixtures.js';
 import { locationImpactItemSchema } from '../../shared/pathfinderLocationImpacts.js';
 import { INITIAL_FILL_ROUTING_WHITESPACE, initialFillProvenanceSchema, type InitialFillMandate } from '../../shared/pathfinderInitialFill.js';
 import { PathFinderError } from './errors.js';
@@ -30,7 +31,7 @@ function fixture() {
     current, eligibleCableIds: [cableId], createdAt: new Date(now).toISOString(), contentSha256: 'e'.repeat(64) };
   const endpoint = (locationId: string) => ({ locationId, locationRevision: '1', bindingRevision: '1', point: [1, 2, 3] as [number, number, number], bindingId: id(16), bindingContentSha256: 'f'.repeat(64),
     mode: 'fixed-world' as const, captureFrameId: current.captureFrameId, qualifiedProjectFrameId: null, aggregateId: current.aggregateId, projectionSha256: current.projectionSha256, sourceObjectRevisionId: null, migrationDecisionId: null });
-  const dependencies: ScopedDependencySnapshot = { schemaVersion: 'pathfinder.dependencies.v7', projectId, cableId, cableWriteRevision: '7',
+  const legacyDependencies: ScopedDependencySnapshot = { schemaVersion: 'pathfinder.dependencies.v7', projectId, cableId, cableWriteRevision: '7',
     model: { id: current.modelVersionId, selectionRevision: '1', contentFingerprint: current.contentFingerprint }, artifact: { id: current.artifactId, sha256: current.projectionSha256 },
     preparation: { aggregateId: current.aggregateId, geometryRevision: current.geometryRevision, captureFrameId: current.captureFrameId, projectionSha256: current.projectionSha256 },
     routing: { catalogRevision: '1', routingContentSha256: 'a'.repeat(64), routingPolicyRevision: '1', routingPolicySha256: 'b'.repeat(64) },
@@ -38,17 +39,19 @@ function fixture() {
     settings: { revision: '2', connectionGap: '1', secondaryTrayLength: null, endConnectionLength: '1', additionalBendingPercent: '10' }, options: { ...defaultOptions },
     from: endpoint(id(18)), to: endpoint(id(19)), endpointResolution: { schemaVersion: 'pathfinder.endpoint-resolution.v1', matchingPolicy: 'nfc-trim-uppercase-v1', from: { logicalKey: 'FROM', locationId: id(18) }, to: { logicalKey: 'TO', locationId: id(19) } },
     comparison: null, engineVersion: 'pathfinder-45c24bf5-pf1-modelrunner-v1', engineIdentity: syntheticEngineIdentity() };
-  const result: EngineResponse = { schemaVersion: 'pathfinder.model.response.v1', requestId: id(20), status: 'calculated', message: 'Synthetic writer fixture.', engineeringAccepted: false,
+  const legacyResult: EngineResponse = { schemaVersion: 'pathfinder.model.response.v1', requestId: id(20), status: 'calculated', message: 'Synthetic writer fixture.', engineeringAccepted: false,
     route: { success: true, message: '', routeText: '/A', routeCodes: ['A'], segmentIds: ['dbid:1'], pathPoints: [{ x: 0, y: 0, z: 0 }, { x: 5, y: 0, z: 0 }], lengthMeters: 5, fromDistanceMeters: 1, toDistanceMeters: 1, fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 },
     design: { lengthBeforePercentageMeters: '6', unroundedLengthMeters: '6.6', designLengthMeters: '7' }, lengthLedger: { schemaVersion: 'wfc.pf.length-components.v1', formulaVersion: 'pathfinder-45c24bf5', settingsRevision: '2',
       raw: { lengthMeters: 5, fromDistanceMeters: 1, toDistanceMeters: 1 }, rawLengthDecimalMeters: '5', from: { requiresSecondary: false, removedApproachMeters: '0' }, to: { requiresSecondary: false, removedApproachMeters: '0' },
       settings: { secondaryTrayLengthMeters: null, endConnectionLengthMeters: '1', additionalBendingPercent: '10' }, secondaryEnds: 0, replacementMeters: '0', beforeClampMeters: '5', clampAdjustmentMeters: '0', afterClampMeters: '5',
       beforePercentageMeters: '6', bendingIncrementMeters: '0.6', unroundedMeters: '6.6', ceilingIncrementMeters: '0.4', designLengthMeters: '7', gapAccounting: 'already-in-raw-geometry' } };
+  const {dependencies,result}=syntheticInitialFillBarrierInputs(legacyDependencies,legacyResult);
   const proposal: Row = { id: proposalId, project_id: projectId, cable_id: cableId, job_id: jobId, status: 'calculated', proposal_hash: 'c'.repeat(64), dependency_hash: hash(dependencies), dependencies, result, job_state: 'complete', cancel_requested: false };
   const seal: Row = { admissionId: id(21), revisionResultSha256: 'd'.repeat(64), baselineHash: 'e'.repeat(64), engineResultSha256: hash(result), ledgerHash: hash(result.lengthLedger), dependencyHash: hash(dependencies) };
   const itemBody = { schemaVersion: 'wfc.pf.location-impact-item.v1' as const, projectId, impactId, cableId, generation: '3', cableWriteRevision: '7', fromLogicalKey: 'FROM', toLogicalKey: 'TO', category: 'LV', eligible: true };
   const item = locationImpactItemSchema.parse({ ...itemBody, contentSha256: hash(itemBody) });
-  const member: Row = { generation: '3', record_sha256: item.contentSha256, record: item };
+  const member: Row = { generation: '3', record_sha256: item.contentSha256, record: item,impact_sha256:mandate.impactContentSha256,
+    calculation:{preferences:{secondaryDistanceMeters:dependencies.options.secondaryDistanceMeters,preferVerticalApproach:dependencies.options.preferVerticalApproach,barrierRouting:structuredClone(dependencies.options.barrierRouting)},timeoutMilliseconds:60000} };
   const keyInput = () => ({ projectId, cableId, proposalId, proposalHash: proposal.proposal_hash, mandateId, expectedCableWriteRevision: dependencies.cableWriteRevision });
   const request = { schemaVersion: 'wfc.pf.initial-fill-request.v1' as const, idempotencyKey: initialFillIdempotencyKey(keyInput()), proposalId, expectedProposalHash: proposal.proposal_hash, mandateId, expectedCableWriteRevision: dependencies.cableWriteRevision };
   const state = { cable: { id: cableId, project_id: projectId, mto: 'LV', from_location: 'FROM', to_location: 'TO', cable_type_id: id(17), routing: null, design_length: null, install_length: '123.4500', cable_write_revision: '7', revision: 'engineering-1', tag: 'Synthetic cable', updated_at: new Date(now).toISOString() } as Row,
@@ -84,13 +87,13 @@ function fixture() {
   });
   const release = vi.fn(), pool = { connect: vi.fn(async () => ({ query, release })) } as unknown as Pool;
   mandateMocks.read.mockResolvedValue(mandate); mandateMocks.requireCurrent.mockResolvedValue(mandate);
-  const collect = vi.fn(async () => ({ dependencies, cable: { cable_write_revision: dependencies.cableWriteRevision } })), identity = vi.fn(async () => syntheticEngineIdentity()), snapshot = vi.fn(async () => ({})),
+  const collect = vi.fn(async () => ({ dependencies, cable: { cable_write_revision: dependencies.cableWriteRevision } })), barrierFence = vi.fn(async () => dependencies.engineIdentity), snapshot = vi.fn(async () => ({})),
     verifySeal = vi.fn(async () => seal), proof = vi.fn(async () => true), applicability = vi.fn(async () => ({ applicable: true }));
-  const writer = createInitialFillWriter(pool, { collect: collect as any, identity, snapshot: snapshot as any, seal: verifySeal as any, proof, applicability: applicability as any });
+  const writer = createInitialFillWriter(pool, { collect: collect as any, barrierFence, snapshot: snapshot as any, seal: verifySeal as any, proof, applicability: applicability as any });
   const fence = vi.fn(async () => undefined);
   const run = (signal?: AbortSignal) => writer.apply(projectId, request, fence, signal);
   const resignMember = () => { const { contentSha256: _hash, ...body } = member.record; member.record.contentSha256 = hash(body); member.record_sha256 = member.record.contentSha256; };
-  return { projectId, cableId, proposalId, jobId, mandate, dependencies, result, proposal, seal, member, request, state, query, release, pool, collect, identity, snapshot, verifySeal, proof, applicability, fence, run, resignMember };
+  return { projectId, cableId, proposalId, jobId, mandate, dependencies, result,legacyDependencies,legacyResult, proposal, seal, member, request, state, query, release, pool, collect, barrierFence, snapshot, verifySeal, proof, applicability, fence, run, resignMember };
 }
 
 describe('conditional initial-fill writer with synthetic transactional SQL and explicit proof adapters', () => {
@@ -98,8 +101,9 @@ describe('conditional initial-fill writer with synthetic transactional SQL and e
     const f = fixture(), outcome = await f.run(); expect(outcome.status).toBe('written'); expect(f.state.cable).toMatchObject({ routing: '/A', design_length: '7', install_length: '123.4500', cable_write_revision: '8', revision: 'engineering-1' });
     expect(f.state.history).toHaveLength(1); expect(f.state.receipts).toHaveLength(1); expect(f.state.history[0].cable).toEqual(f.state.cable);
     const receipt = f.state.receipts[0], provenance = initialFillProvenanceSchema.parse(receipt.provenance);
-    expect(provenance).toMatchObject({ engineeringAccepted: false, validationMethod: 'automatic-initial-fill', nativeParity: 'not-performed', request: f.request, authorized: { actorId: f.mandate.actorId, loginId: f.mandate.loginId, targetGeneration: '3' } });
-    expect(f.collect).toHaveBeenCalledWith(expect.anything(), f.projectId, f.cableId, f.dependencies.options, 'pathfinder.dependencies.v7', true, expect.anything());
+    expect(provenance).toMatchObject({schemaVersion:'pathfinder.initial-fill.v2',barrierEvidence:{dependencyVersion:'pathfinder.dependencies.v8',responseVersion:'pathfinder.model.response.v3',status:'no-barriers-declared',drillThroughWalls:false}, engineeringAccepted: false, validationMethod: 'automatic-initial-fill', nativeParity: 'not-performed', request: f.request, authorized: { actorId: f.mandate.actorId, loginId: f.mandate.loginId, targetGeneration: '3' } });
+    expect(f.collect).toHaveBeenCalledWith(expect.anything(), f.projectId, f.cableId, f.dependencies.options, 'pathfinder.dependencies.v8', true, f.dependencies.engineIdentity);
+    expect(f.barrierFence).toHaveBeenCalledTimes(2);
     expect(f.fence).toHaveBeenCalledTimes(3); expect(mandateMocks.requireCurrent).toHaveBeenCalledTimes(3);
     expect(f.query.mock.calls.map(([sql]) => sql).join('\n')).not.toMatch(/pf_reviews|UPDATE pf_location|INSERT INTO pf_jobs/);
     expect(f.query.mock.calls.find(([sql]) => sql.startsWith('UPDATE cables c'))?.[1]?.slice(4)).toEqual(['7', INITIAL_FILL_ROUTING_WHITESPACE]);
@@ -139,6 +143,43 @@ describe('conditional initial-fill writer with synthetic transactional SQL and e
     if (kind === 'category') f.member.record.category = 'Control'; if (kind === 'generation') f.member.generation = '4'; if (kind === 'eligible') f.member.record.eligible = false;
     if (kind === 'hash') f.member.record_sha256 = '0'.repeat(64); else f.resignMember(); await expect(f.run()).rejects.toBeDefined(); expect(f.state.writes).toBe(0);
   });
+  it.each(['impact-hash','secondary-trigger','vertical-preference','drilling','snapshot','missing-intent'] as const)('requires the exact original mandate calculation %s',async kind=>{
+    const f=fixture();
+    if(kind==='impact-hash')f.member.impact_sha256='0'.repeat(64);
+    if(kind==='secondary-trigger')f.member.calculation.preferences.secondaryDistanceMeters=3;
+    if(kind==='vertical-preference')f.member.calculation.preferences.preferVerticalApproach=false;
+    if(kind==='drilling')f.member.calculation.preferences.barrierRouting.drillThroughWalls=true;
+    if(kind==='snapshot')f.member.calculation.preferences.barrierRouting.expectedSnapshot.contentSha256='0'.repeat(64);
+    if(kind==='missing-intent')delete f.member.calculation.preferences.barrierRouting;
+    await expect(f.run()).rejects.toMatchObject({code:'INITIAL_FILL_ORIGINAL_SCOPE_CHANGED'});
+    expect(f.state.writes).toBe(0);expect(f.state.receipts).toHaveLength(0);expect(f.barrierFence).not.toHaveBeenCalled();
+  });
+  it.each(['v7','legacy-response','missing-proof','changed-route','design-only','changed-policy'] as const)('refuses unprotected or crossed stored evidence %s before collecting live write inputs',async kind=>{
+    const f=fixture();
+    if(kind==='v7')f.proposal.dependencies=f.legacyDependencies;
+    if(kind==='legacy-response')f.proposal.result={...f.legacyResult,calculationMode:'calculate'};
+    if(kind==='missing-proof')(f.result as Row).barriers.proof=null;
+    if(kind==='changed-route')f.result.route!.pathPoints[1].z=2;
+    if(kind==='design-only')(f.result as Row).calculationMode='design';
+    if(kind==='changed-policy')f.dependencies.options.barrierRouting!.drillThroughWalls=true;
+    await expect(f.run()).rejects.toMatchObject({code:kind==='v7'?'INITIAL_FILL_PROPOSAL_INVALID':'BARRIER_WRITE_PROOF_REQUIRED'});
+    expect(f.state.writes).toBe(0);expect(f.collect).not.toHaveBeenCalled();expect(f.barrierFence).not.toHaveBeenCalled();
+  });
+  it.each([1,2])('rolls back the whole pair/history/receipt when live barrier/implementation fence %i refuses',async call=>{
+    const f=fixture(),before=structuredClone(f.state.cable);f.barrierFence.mockImplementation(async()=>{
+      if(f.barrierFence.mock.calls.length===call)throw new PathFinderError('PROPOSAL_STALE',409,'Synthetic barrier/implementation changed.');
+      return f.dependencies.engineIdentity;
+    });
+    await expect(f.run()).rejects.toMatchObject({code:'PROPOSAL_STALE'});expect(f.state.cable).toEqual(before);expect(f.state.history).toHaveLength(0);expect(f.state.receipts).toHaveLength(0);
+    expect(f.state.writes).toBe(call===1?0:1);
+  });
+  it('uses only the final barrier/implementation fence after its own cable revision increment',async()=>{
+    const f=fixture();await f.run();expect(f.collect).toHaveBeenCalledOnce();expect(f.barrierFence).toHaveBeenCalledTimes(2);
+    expect(f.barrierFence.mock.calls[0]).toEqual([expect.anything(),f.dependencies,{signal:undefined}]);
+    expect(f.barrierFence.mock.calls[1]).toEqual([expect.anything(),f.dependencies,{signal:undefined}]);
+    const sql=f.query.mock.calls.map(([value])=>value),receipt=sql.findIndex(value=>value.startsWith('INSERT INTO pf_apply_receipts'));
+    expect(receipt).toBeGreaterThan(sql.findIndex(value=>value.startsWith('UPDATE cables c')));expect(f.state.cable.cable_write_revision).toBe('8');
+  });
   it.each(['proposal-hash', 'request-key', 'legacy-dependencies', 'proposal-status', 'missing-proposal', 'missing-snapshot', 'no-seal', 'not-applicable', 'changed-dependencies', 'changed-write-revision', 'invalid-ledger', 'oversized-route'] as const)('refuses %s without recording any pair/history/receipt', async kind => {
     const f = fixture(); if (kind === 'proposal-hash') f.request.expectedProposalHash = 'f'.repeat(64); if (kind === 'request-key') f.request.idempotencyKey = id(999);
     if (kind === 'legacy-dependencies') (f.dependencies as Row).schemaVersion = 'pathfinder.dependencies.v5'; if (kind === 'proposal-status') f.proposal.status = 'no_path'; if (kind === 'missing-proposal') f.state.proposalPresent = false;
@@ -162,8 +203,16 @@ describe('conditional initial-fill writer with synthetic transactional SQL and e
   });
   it('recognizes one durable exact receipt after lost COMMIT acknowledgement, without another write or renewed authority', async () => {
     const f = fixture(); f.state.commitLostAck = true; await expect(f.run()).rejects.toMatchObject({ code: 'ENDPOINT_COMMIT_OUTCOME_UNKNOWN' }); expect(f.state.receipts).toHaveLength(1);
-    const authorityCalls = mandateMocks.requireCurrent.mock.calls.length; f.state.commitLostAck = false; vi.setSystemTime(now + 86400000);
-    expect(await f.run()).toMatchObject({ status: 'already-written', receiptId: f.state.receipts[0].id, cableId: f.cableId }); expect(f.state.writes).toBe(1); expect(f.state.history).toHaveLength(1); expect(mandateMocks.requireCurrent).toHaveBeenCalledTimes(authorityCalls); expect(f.proof).toHaveBeenCalledTimes(1); expect(f.release).toHaveBeenCalledWith(true);
+    const authorityCalls = mandateMocks.requireCurrent.mock.calls.length,barrierCalls=f.barrierFence.mock.calls.length; f.state.commitLostAck = false; vi.setSystemTime(now + 86400000);
+    expect(await f.run()).toMatchObject({ status: 'already-written', receiptId: f.state.receipts[0].id, cableId: f.cableId }); expect(f.state.writes).toBe(1); expect(f.state.history).toHaveLength(1); expect(mandateMocks.requireCurrent).toHaveBeenCalledTimes(authorityCalls);expect(f.barrierFence).toHaveBeenCalledTimes(barrierCalls); expect(f.proof).toHaveBeenCalledTimes(1); expect(f.release).toHaveBeenCalledWith(true);
+  });
+  it('recognizes an exact already-committed v1 receipt through its historical proof adapter without new v8 authority',async()=>{
+    const f=fixture();await f.run();const receipt=f.state.receipts[0],{barrierEvidence:_evidence,...oldBody}=receipt.provenance;
+    receipt.provenance={...oldBody,schemaVersion:'pathfinder.initial-fill.v1',dependencies:f.legacyDependencies};
+    f.proposal.dependencies=f.legacyDependencies;f.proposal.result={...f.legacyResult,calculationMode:'calculate'};
+    const barrierCalls=f.barrierFence.mock.calls.length;f.barrierFence.mockRejectedValue(new PathFinderError('CALCULATION_ENGINE_UNAVAILABLE',503));
+    vi.setSystemTime(now+86400000);expect((await f.run()).status).toBe('already-written');expect(f.state.writes).toBe(1);expect(f.barrierFence).toHaveBeenCalledTimes(barrierCalls);
+    expect(f.proof).toHaveBeenCalledOnce();
   });
   it.each(['payload', 'request', 'proof', 'seal', 'proposal-missing'] as const)('never blesses a corrupt historical %s replay', async kind => {
     const f = fixture(); await f.run(); if (kind === 'payload') f.state.receipts[0].payload_hash = 'f'.repeat(64); if (kind === 'request') f.state.receipts[0].provenance.request.expectedCableWriteRevision = '6';

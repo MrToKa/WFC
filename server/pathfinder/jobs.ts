@@ -4,15 +4,15 @@ import type { z } from 'zod';
 import { PathFinderError } from './errors.js';
 import { collectDependenciesForVersion, hash, hasSyntheticProof } from './dependencies.js';
 import type { PathFinderRepository } from './repository.js';
-import { defaultOptions, type createJobSchema, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
+import { defaultOptions, type createJobSchema, type BarrierDependencySnapshot, type DependencySnapshot, type JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
-import { principalTransaction } from './auth.js';
+import { assertLoginNotExpired, principalTransaction } from './auth.js';
 import { isGrantPrincipal, grantProvenance, type OperationPrincipal } from './operationAuthority.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { collectDependencyBatchInTransaction, type DependencyBatch } from './dependencyBatch.js';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { pauseRecalculationForJob, readRecalculationJobAuthority, requireEnrollmentAuthority, type RecalculationJobAdapter } from './recalculationRepository.js';
-import { calculationEngineIdentity } from './calculationEngineIdentity.js';
+import { BARRIER_WRITE_UNVERIFIED_MESSAGE, readBarrierWriteEvidence, requireBarrierWriteEvidence, requireCurrentBarrierWriteScope } from './barrierWrites.js';
 import { persistRevisionAdmission, verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { isAutomaticEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import { readProposalApplicability } from './proposalApplicability.js';
@@ -54,7 +54,8 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
   let endpointIssue: string | null = null;
   try { requireVersionedCalculationScope(dependencies); }
   catch (error) { endpointIssue = error instanceof PathFinderError ? error.message : 'Calculate and review a fresh proposal against current dependencies.'; }
-  const compatibilityIssue = endpointIssue ?? (route ? routeCompatibilityIssue(route.routeText) : null)
+  const barrierEvidence=readBarrierWriteEvidence(dependencies,result);
+  const compatibilityIssue = (barrierEvidence?null:BARRIER_WRITE_UNVERIFIED_MESSAGE) ?? endpointIssue ?? (route ? routeCompatibilityIssue(route.routeText) : null)
     ?? (result.design != null ? designLengthCompatibilityIssue(result.design.designLengthMeters) : null)
     ?? (routingPreferences ? null : 'The original calculation preferences are unavailable. Calculate and review a fresh proposal.')
     ?? (revisionResult ? null : 'The immutable cable baseline and exact length components are unavailable for this historical result. Calculate a fresh proposal.');
@@ -200,9 +201,11 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         const row = (await client.query<Row>(`SELECT p.*,j.state AS job_state,j.cancel_requested FROM pf_proposals p JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id WHERE p.project_id=$1 AND p.id=$2 FOR SHARE OF p,j`,[projectId,proposalId])).rows[0];
         if (!row) throw new PathFinderError('PROPOSAL_NOT_FOUND',404);
         if (row.proposal_hash !== expectedProposalHash) throw new PathFinderError('PROPOSAL_HASH_CONFLICT',409);
-        await calculationEngineIdentity({force:true});
         const frozen=row.dependencies as DependencySnapshot;
-        await collectDependenciesForVersion(client,projectId,row.cable_id,frozen.options,frozen.schemaVersion,true);
+        requireBarrierWriteEvidence(frozen,row.result);
+        const identity=await requireCurrentBarrierWriteScope(client,frozen as BarrierDependencySnapshot);
+        const current=await collectDependenciesForVersion(client,projectId,row.cable_id,frozen.options,frozen.schemaVersion,true,identity);
+        if(!current.dependencies||hash(current.dependencies)!==row.dependency_hash)throw new PathFinderError('PROPOSAL_STALE',409);
         await requireEnrollmentAuthority(client,{projectId,jobId:row.job_id,cableId:row.cable_id});
         const proposal = await proposalDto(client,row,true);
         if (proposal.stale) throw new PathFinderError('PROPOSAL_STALE',409);
@@ -211,7 +214,9 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
         if(!sealed||!sealed.ledgerHash)throw new PathFinderError('REVISION_RESULT_REVIEW_REQUIRED',409);
         const reviewId = randomUUID(); await client.query(`INSERT INTO pf_reviews(id,project_id,proposal_id,actor_id,proposal_hash,validation_method,revision_result_sha256,review_login_id,review_dependency_sha256)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[reviewId,projectId,proposalId,who.userId,expectedProposalHash,proposal.synthetic?'synthetic-fixture':'manual-review',sealed.revisionResultSha256,who.loginId,sealed.dependencyHash]);
+        await requireCurrentBarrierWriteScope(client,frozen as BarrierDependencySnapshot);
         await requireEnrollmentAuthority(client,{projectId,jobId:row.job_id,cableId:row.cable_id});
+        assertLoginNotExpired(who);
         return {reviewId,proposal};
       });
     },

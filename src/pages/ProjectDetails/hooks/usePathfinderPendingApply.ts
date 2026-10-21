@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import { parsePurposeJson } from '../../../../shared/pathfinderPurposePolicy';
+import { barrierWriteEvidenceSchema } from '../../../../shared/pathfinderBarrierWrites';
 
 export const PENDING_APPLY_STORAGE_KEY = 'wfc.pathfinder.pending-apply.v1';
 const MAX_BYTES = 16_384, MAX_INTENTS = 8;
@@ -34,24 +35,41 @@ function writeStore(value: z.infer<typeof storeSchema>) {
   sessionStorage.setItem(PENDING_APPLY_STORAGE_KEY, raw);
   if (sessionStorage.getItem(PENDING_APPLY_STORAGE_KEY) !== raw) throw new Error('Pending Apply could not be retained.');
 }
+const receiptProvenanceFields = { proposalId: uuid, proposalHash: hash, reviewId: uuid,
+  review: z.object({ id: uuid, actorId: uuid }).passthrough(),
+  revisionResult: z.object({ revisionResultSha256: hash }).passthrough(),
+};
 const receiptSchema = z.object({ duplicate: z.boolean(), receipt: z.object({
   id: uuid, projectId: uuid, proposalId: uuid, cableId: uuid, appliedAt: z.string().min(1).max(128),
   before: z.object({ id: uuid, project_id: uuid, cable_write_revision: revision }).passthrough(),
   after: z.object({ id: uuid, project_id: uuid, cable_write_revision: revision }).passthrough(),
-  provenance: z.object({ schemaVersion: z.literal('pathfinder.apply.v2'), proposalId: uuid,
-    proposalHash: hash, reviewId: uuid,
-    review: z.object({ id: uuid, actorId: uuid }).passthrough(),
-    revisionResult: z.object({ revisionResultSha256: hash }).passthrough(),
-  }).passthrough(),
+  provenance: z.discriminatedUnion('schemaVersion', [
+    z.object({ schemaVersion: z.literal('pathfinder.apply.v2'), ...receiptProvenanceFields }).passthrough(),
+    z.object({ schemaVersion: z.literal('pathfinder.apply.v3'), ...receiptProvenanceFields,
+      dependencies: z.object({ schemaVersion: z.literal('pathfinder.dependencies.v8'), projectId: uuid, cableId: uuid,
+        engineIdentity: z.object({ schemaVersion: z.literal('wfc.pf.engine-identity.v2'), contentSha256: hash }).passthrough() }).passthrough(),
+      review: receiptProvenanceFields.review.extend({ dependencyHash: hash, revisionResultSha256: hash }),
+      revisionResult: receiptProvenanceFields.revisionResult.extend({ dependencyHash: hash, engineResultSha256: hash }),
+      barrierEvidence: barrierWriteEvidenceSchema }).passthrough(),
+  ]),
 }).passthrough() });
 const recoverySchema = z.object({ schemaVersion: z.literal('wfc.pf.apply-recovery.v1'), projectId: uuid, proposalId: uuid,
   idempotencyKey: uuid, reviewId: uuid, expectedCableWriteRevision: revision,
   status: z.enum(['already-applied', 'closed-without-apply']), duplicate: z.boolean(), receipt: z.unknown(),
 }).strict();
-function matchingReceipt(value: unknown, intent: PendingApplyIntent): boolean {
+function matchingReceipt(value: unknown, intent: PendingApplyIntent, allowHistorical = false): boolean {
   const parsed = receiptSchema.safeParse(value);
   if (!parsed.success) return false;
   const receipt = parsed.data.receipt;
+  if (receipt.provenance.schemaVersion === 'pathfinder.apply.v2' && !allowHistorical) return false;
+  if (receipt.provenance.schemaVersion === 'pathfinder.apply.v3') {
+    const { barrierEvidence: evidence, dependencies, revisionResult: result, review } = receipt.provenance;
+    if (evidence.projectId !== intent.projectId || evidence.cableId !== intent.cableId
+      || dependencies.projectId !== intent.projectId || dependencies.cableId !== intent.cableId
+      || dependencies.engineIdentity.contentSha256 !== evidence.engineIdentitySha256
+      || result.dependencyHash !== evidence.dependencySha256 || result.engineResultSha256 !== evidence.engineResultSha256
+      || review.dependencyHash !== evidence.dependencySha256 || review.revisionResultSha256 !== result.revisionResultSha256) return false;
+  }
   return receipt.projectId === intent.projectId && receipt.proposalId === intent.proposalId && receipt.cableId === intent.cableId
     && receipt.before.id === intent.cableId && receipt.after.id === intent.cableId
     && receipt.before.project_id === intent.projectId && receipt.after.project_id === intent.projectId
@@ -87,7 +105,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
     return () => { mounted.current = false; };
   }, [identity, allowed, access.accountId, access.projectId]);
 
-  const execute = useCallback(async (intent: PendingApplyIntent, ticket: object, mode: 'apply' | 'close' = 'apply'): Promise<boolean> => {
+  const execute = useCallback(async (intent: PendingApplyIntent, ticket: object, mode: 'apply' | 'close' = 'apply', allowHistorical = false): Promise<boolean> => {
     if (!live() || !latest.current.active || request.current !== ticket) return false;
     setState(value => ({ ...value, busy: true, error: null, message: null }));
     try {
@@ -96,7 +114,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
         expectedCableWriteRevision: intent.expectedCableWriteRevision,
       });
       if (!live() || request.current !== ticket) return false;
-      let closedWithoutApply = false, confirmed = mode === 'apply' && matchingReceipt(result, intent);
+      let closedWithoutApply = false, confirmed = mode === 'apply' && matchingReceipt(result, intent, allowHistorical);
       if (mode === 'close') {
         const recovery = recoverySchema.safeParse(result);
         if (recovery.success && recovery.data.projectId === intent.projectId && recovery.data.proposalId === intent.proposalId
@@ -104,7 +122,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
           && recovery.data.expectedCableWriteRevision === intent.expectedCableWriteRevision) {
           closedWithoutApply = recovery.data.status === 'closed-without-apply' && recovery.data.receipt === null;
           confirmed = closedWithoutApply || recovery.data.status === 'already-applied'
-            && matchingReceipt({ receipt: recovery.data.receipt, duplicate: recovery.data.duplicate }, intent);
+            && matchingReceipt({ receipt: recovery.data.receipt, duplicate: recovery.data.duplicate }, intent, true);
         }
       }
       if (!confirmed) {
@@ -159,7 +177,7 @@ export function usePathfinderPendingApply(access: PendingApplyAccess) {
   const retry = useCallback(async (): Promise<boolean> => {
     if (!live() || !latest.current.active || !ownedState.ready || !ownedState.pending || request.current) return false;
     const ticket = {}; request.current = ticket;
-    return execute(ownedState.pending, ticket);
+    return execute(ownedState.pending, ticket, 'apply', true);
   }, [live, ownedState.ready, ownedState.pending, execute]);
   const close = useCallback(async (): Promise<boolean> => {
     if (!live() || !latest.current.active || !ownedState.ready || !ownedState.pending || request.current) return false;

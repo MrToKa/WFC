@@ -69,7 +69,7 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe('immutable deterministic initial-fill attempt discovery with synthetic SQL', () => {
-  it('discovers a bounded exact v7 completed-cable scope and retains one immutable request/hash', async () => {
+  it('discovers a bounded exact protected v8/v3 completed-cable scope and retains one immutable request/hash', async () => {
     const f = fixture(); expect(await f.repository.discover()).toBe(1); const row = [...f.state.attempts.values()][0];
     expect(row.request).toEqual({ schemaVersion: 'wfc.pf.initial-fill-request.v1', idempotencyKey: initialFillIdempotencyKey({ projectId: f.candidate.project_id,
       cableId: f.candidate.cable_id, proposalId: f.candidate.proposal_id, proposalHash: f.candidate.proposal_hash, mandateId: f.candidate.mandate_id,
@@ -78,7 +78,9 @@ describe('immutable deterministic initial-fill attempt discovery with synthetic 
     expect(row.request_sha256).toBe(hash(initialFillRequestHashInput(row.request))); expect(f.state.dispatch.size).toBe(1);
     const sql = f.query.mock.calls.find(([sql]) => sql.startsWith('/* initial-fill:discover */'))![0];
     expect(sql).toContain('LIMIT 10 FOR SHARE OF m,p,i,j'); expect(sql).toContain("i.state='complete' AND i.status='calculated'");
-    expect(sql).toContain("p.dependencies->>'schemaVersion'='pathfinder.dependencies.v7'"); expect(sql).toContain("j.state IN('queued','running','complete') AND NOT j.cancel_requested");
+    expect(sql).toContain("p.dependencies->>'schemaVersion'='pathfinder.dependencies.v8'");
+    expect(sql).toContain("p.result->>'schemaVersion'='pathfinder.model.response.v3'");expect(sql).toContain("p.result->>'calculationMode'='calculate'");
+    expect(sql).toContain("j.state IN('queued','running','complete') AND NOT j.cancel_requested");
     expect(sql).toContain('FROM pf_initial_fill_mandates'); expect(sql).not.toMatch(/pf_calculation_grants|pf_recalculation_grants/);
   });
   it('does not replace the saved body or enqueue twice after an exact concurrent/replayed discovery', async () => {

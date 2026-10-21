@@ -36,7 +36,7 @@ CREATE TABLE pf_artifacts(project_id uuid,id uuid,snapshot_sha256 text,PRIMARY K
 CREATE TABLE pf_geometry_trace_sets(project_id uuid,id uuid,aggregate_id uuid,created_at timestamptz DEFAULT now(),PRIMARY KEY(project_id,id));
 CREATE TABLE pf_jobs(project_id uuid REFERENCES projects(id),id uuid,state text,cancel_requested boolean,PRIMARY KEY(project_id,id));
 CREATE TABLE pf_job_items(project_id uuid,job_id uuid,cable_id uuid,state text,status text,PRIMARY KEY(project_id,job_id,cable_id),FOREIGN KEY(project_id,job_id) REFERENCES pf_jobs(project_id,id) ON DELETE CASCADE);
-CREATE TABLE pf_proposals(project_id uuid,id uuid,job_id uuid,cable_id uuid,status text,dependencies jsonb,PRIMARY KEY(project_id,id),UNIQUE(project_id,job_id,cable_id),FOREIGN KEY(project_id,job_id) REFERENCES pf_jobs(project_id,id) ON DELETE CASCADE);
+CREATE TABLE pf_proposals(project_id uuid,id uuid,job_id uuid,cable_id uuid,status text,dependencies jsonb,result jsonb,PRIMARY KEY(project_id,id),UNIQUE(project_id,job_id,cable_id),FOREIGN KEY(project_id,job_id) REFERENCES pf_jobs(project_id,id) ON DELETE CASCADE);
 CREATE TABLE pf_apply_receipts(id uuid PRIMARY KEY,project_id uuid,actor_id uuid,idempotency_key uuid,proposal_id uuid,cable_id uuid,
  UNIQUE(project_id,actor_id,idempotency_key));
 `;
@@ -61,7 +61,7 @@ async function seed(withMandate = true) {
   await pool.query('INSERT INTO pf_location_impact_enrollments(project_id,impact_id,job_id,input_sha256,total,ready_cables,blocked_cables) VALUES($1,$2,$3,$4,3,2,1)', [projectId, impactId, jobId, 'e'.repeat(64)]);
   for (const [at, cableId] of cableIds.entries()) {
     await pool.query('INSERT INTO pf_job_items VALUES($1,$2,$3,$4,$5)', [projectId, jobId, cableId, at === 0 ? 'waiting' : at === 1 ? 'complete' : 'blocked', at === 0 ? 'waiting' : at === 1 ? 'calculated' : 'no_path']);
-    if (at === 1) await pool.query('INSERT INTO pf_proposals VALUES($1,$2,$3,$4,$5,$6)', [projectId, id(40), jobId, cableId, 'calculated', { schemaVersion: 'pathfinder.dependencies.v7' }]);
+    if (at === 1) await pool.query('INSERT INTO pf_proposals VALUES($1,$2,$3,$4,$5,$6,$7)', [projectId, id(40), jobId, cableId, 'calculated', { schemaVersion: 'pathfinder.dependencies.v8' },{schemaVersion:'pathfinder.model.response.v3',calculationMode:'calculate'}]);
   }
   if (withMandate) {
     const draft = initialFillMandateRecordSchema.parse({ schemaVersion: 'wfc.pf.initial-fill-mandate.v1', id: mandateId, projectId, impactId, impactContentSha256: impact.contentSha256,

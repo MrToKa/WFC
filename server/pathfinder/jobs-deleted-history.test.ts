@@ -88,8 +88,8 @@ describe('retained proposal reads after live cable deletion',()=>{
 
   it('does not apply the read fallback to the independent locked human Review collector',async()=>{
     const db=database();
-    await expect(createPathFinderJobs(db.pool,{} as PathFinderRepository).review(projectId,who,proposalId,'a'.repeat(64))).rejects.toMatchObject({code:'CABLE_NOT_FOUND'});
-    expect(mocks.collect).toHaveBeenCalledWith(db.client,projectId,cableId,db.proposal.dependencies.options,db.proposal.dependencies.schemaVersion,true);
+    await expect(createPathFinderJobs(db.pool,{} as PathFinderRepository).review(projectId,who,proposalId,'a'.repeat(64))).rejects.toMatchObject({code:'BARRIER_WRITE_PROOF_REQUIRED'});
+    expect(mocks.collect).not.toHaveBeenCalled();
     expect(db.query.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO pf_reviews'))).toBe(false);expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
 });

@@ -12,6 +12,7 @@ import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
 import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { emptyInitialFillCounters, type InitialFillProgress } from '../../../shared/pathfinderInitialFillProgress';
 import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
+import type { PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn() }));
 vi.mock('@/hooks/usePathfinderLocationImpactProgress', () => ({ usePathfinderLocationImpactProgress: vi.fn() }));
@@ -36,6 +37,11 @@ function props(): PathFinderCableWorkspaceProps {
     pf: { preparationAccess: { projectId: id(1), loadedProjectId: id(1), token: 'fixture-token', isAdmin: true }, preparationViewerGeneration: 7,
       viewerPhase: 'ready', busy: false, calculate: vi.fn(async () => null), data: { activeModel: { modelVersionId: scope.modelVersionId, selectionRevision: scope.selectionRevision, contentFingerprint: scope.contentFingerprint }, artifacts: [] }, readSelection: vi.fn(), refresh: vi.fn() } as unknown as PathFinderCableWorkspaceProps['pf'] };
 }
+function reviewController(cableId: string, proposalId: string): PathFinderWorkflowReview {
+  return { cableId, proposalId, comparison: null, comparisonLoading: false, comparisonError: null, message: null, reviewed: false, applied: false,
+    canReview: true, canApply: false, busy: false, pending: false, canRecover: false, recoveryMessage: null, recoveryError: null,
+    review: vi.fn(), apply: vi.fn(), retry: vi.fn(), closePending: vi.fn() };
+}
 function writeProgress(): InitialFillProgress { return { schemaVersion: 'wfc.pf.initial-fill-progress.v1', projectId: id(1), actorId: id(2), impactId: id(8),
   mandate: { id: id(9), impactId: id(8), contentSha256: 'a'.repeat(64), mode: 'when-both-empty' }, authorized: true, currentAuthority: true, eligibleCables: 1,
   counters: { ...emptyInitialFillCounters(), written: 1 }, retryableUnknown: 0, outstanding: 0, selected: null }; }
@@ -47,6 +53,35 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 describe('owned cable routing workspace composition (mocked reads and child UI)', () => {
+  it('passes only the exact selected proposal controller to the popup', () => {
+    listRow = cableWorkflowRowSchema.parse({ ...row(), calculation: { ...row().calculation, jobId: id(70), jobStatus: 'complete', proposalId: id(80), proposalHash: 'f'.repeat(64) } });
+    const p = props(), review = reviewController(id(3), id(80)), view = render(<PathFinderCableWorkspace {...p} review={review} />);
+    fireEvent.click(screen.getByText('Needs routing cable')); expect(panelProps.review).toBe(review);
+    view.rerender(<PathFinderCableWorkspace {...p} review={{ ...review, cableId: id(99) }} />); expect(panelProps.review).toBeNull();
+    view.rerender(<PathFinderCableWorkspace {...p} review={{ ...review, proposalId: id(99) }} />); expect(panelProps.review).toBeNull();
+    const recovery = { ...review, proposalId: id(99), pending: true, canReview: false, canApply: false, canRecover: true };
+    view.rerender(<PathFinderCableWorkspace {...p} review={recovery} />); expect(panelProps.review).toBe(recovery);
+    expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
+  it('follows only the explicitly submitted new calculation and never reuses the earlier popup approval', async () => {
+    listRow = cableWorkflowRowSchema.parse({ ...row(), cable: { ...row().cable, routing: '/OLD', designLength: '150' },
+      calculation: { ...row().calculation, jobId: id(70), jobStatus: 'complete', proposalId: id(80), proposalHash: 'e'.repeat(64) } });
+    const available = { status: 'confirmed-ready', pointAvailable: true, source: 'confirmed-shared-location', approximate: false,
+      candidateObjectIds: [], reasonCode: null, engineeringAccepted: false };
+    const completed = cableWorkflowRowSchema.parse({ ...listRow, from: available, to: available, calculation: { ...listRow.calculation, jobId: id(71), jobStatus: 'complete', itemState: 'complete',
+      outcome: 'calculated', currentness: 'current', reviewable: true, proposalId: id(81), proposalHash: 'f'.repeat(64) } });
+    const p = props(), started = vi.fn(), oldReview = reviewController(id(3), id(80));
+    vi.mocked(p.pf.calculate).mockResolvedValueOnce({ jobId: id(71) });
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValueOnce({ projectId: id(1), cableId: id(3), row: completed } as never);
+    const view = render(<PathFinderCableWorkspace {...p} review={oldReview} onCalculationStart={started} />);
+    fireEvent.click(screen.getByText('Needs routing cable')); expect(panelProps.review).toBe(oldReview);
+    await act(async () => { await panelProps.onCalculate?.(); });
+    await waitFor(() => expect(p.onSelect).toHaveBeenLastCalledWith(completed));
+    expect(started).toHaveBeenCalledExactlyOnceWith(id(3)); expect(panelProps.review).toBeNull(); expect(panelProps.calculationPending).toBe(false);
+    const freshReview = reviewController(id(3), id(81)); view.rerender(<PathFinderCableWorkspace {...p} review={freshReview} onCalculationStart={started} />);
+    expect(panelProps.review).toBe(freshReview); expect(panelProps.cable!.cable).toMatchObject({ routing: '/OLD', designLength: '150' });
+    expect(oldReview.review).not.toHaveBeenCalled(); expect(freshReview.apply).not.toHaveBeenCalled(); expect(p.pf.calculate).toHaveBeenCalledOnce();
+  });
   it('opens the selected bounded row without global refresh and deliberately supplies both-empty v3 policy', () => {
     const p = props(); render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByRole('button', { name: 'Needs routing cable' }));
     expect(screen.getByRole('dialog')).toBeVisible(); expect(p.onSelect).toHaveBeenCalledWith(row()); expect(p.pf.refresh).not.toHaveBeenCalled();
@@ -159,7 +194,8 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
   it('fences repeated selected-cable calculation while its first request is unsettled', async () => {
     let finish!: () => void; const p = props(); vi.mocked(p.pf.calculate).mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve(null as never); }));
     render(<PathFinderCableWorkspace {...p} />); fireEvent.click(screen.getByText('Needs routing cable'));
-    let first!: Promise<void>; act(() => { first = Promise.resolve(panelProps.onCalculate?.()); });
+    const captured = panelProps.onCalculate!;
+    let first!: Promise<void>; act(() => { first = Promise.resolve(captured()); void captured(); });
     expect(panelProps.actionsBusy).toBe(true); await act(async () => { await panelProps.onCalculate?.(); }); expect(p.pf.calculate).toHaveBeenCalledOnce();
     await act(async () => { finish(); await first; }); expect(panelProps.actionsBusy).toBe(false);
   });

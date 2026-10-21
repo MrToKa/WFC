@@ -39,6 +39,9 @@ function matchesProposal(candidate: BatchReviewCandidate, proposal: PathFinderPr
     && proposal.cableId === candidate.cableId && proposal.cableWriteRevision === candidate.cableWriteRevision
     && (proposal.revisionResultHash ?? null) === candidate.revisionResultHash
     && proposal.status === 'calculated' && !proposal.stale && proposal.canApply && !proposal.compatibilityIssue
+    && proposal.provenance?.dependencyVersion === 'pathfinder.dependencies.v8'
+    && proposal.barriers?.schemaVersion === 'wfc.pf.barrier-execution.v1'
+    && ['clear', 'bypassed', 'no-barriers-declared'].includes(proposal.barriers.diagnostics.status)
     && proposal.route?.success && proposal.route.routeText === candidate.routeText
     && proposal.design?.designLengthMeters === candidate.designLength
     && options !== null && (options === undefined || proposal.routingPreferences

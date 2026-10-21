@@ -53,7 +53,8 @@ function observation(row: Row, live: boolean): { status: InitialFillProgressStat
     return result(status, row.reason_code === null ? null : code(row.reason_code, 'INITIAL_FILL_UNAVAILABLE'), null, retryable);
   }
   const activeJob = ['queued', 'running', 'complete'].includes(row.job_state) && row.cancel_requested === false;
-  if (live && row.proposal_status === 'calculated' && row.dependency_version === 'pathfinder.dependencies.v7' && row.item_state === 'complete' && row.item_status === 'calculated' && activeJob)
+  if (live && row.proposal_status === 'calculated' && row.dependency_version === 'pathfinder.dependencies.v8' && row.response_version === 'pathfinder.model.response.v3'
+    && row.calculation_mode === 'calculate' && row.item_state === 'complete' && row.item_status === 'calculated' && activeJob)
     return result('awaiting-result', 'INITIAL_FILL_AWAITING_DISCOVERY');
   if (live && ['queued', 'running'].includes(row.job_state) && row.cancel_requested === false && ['waiting', 'running'].includes(row.item_state))
     return result('awaiting-result', 'INITIAL_FILL_AWAITING_CALCULATION');
@@ -87,6 +88,8 @@ export function createInitialFillProgress(pool: Pool) {
           CASE WHEN octet_length(i.status)<=96 THEN i.status ELSE NULL END AS item_status,
           CASE WHEN octet_length(p.status)<=96 THEN p.status ELSE NULL END AS proposal_status,
           CASE WHEN octet_length(p.dependencies->>'schemaVersion')<=96 THEN p.dependencies->>'schemaVersion' ELSE NULL END AS dependency_version,
+          CASE WHEN octet_length(p.result->>'schemaVersion')<=96 THEN p.result->>'schemaVersion' ELSE NULL END AS response_version,
+          CASE WHEN octet_length(p.result->>'calculationMode')<=96 THEN p.result->>'calculationMode' ELSE NULL END AS calculation_mode,
           a.idempotency_key AS attempt_key,d.status AS dispatch_status,d.attempts,d.not_before,d.lease_until,
           CASE WHEN d.reason_code~'^[A-Z][A-Z0-9_]{0,95}$' THEN d.reason_code ELSE NULL END AS reason_code,r.id AS verified_receipt_id,dispatch.status AS impact_status
           FROM unnest($3::uuid[]) scope(cable_id) LEFT JOIN pf_location_impact_enrollments e ON e.project_id=$1 AND e.impact_id=$2

@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PathFinderProposal } from '@/api/pathfinder';
 import { PENDING_APPLY_STORAGE_KEY, usePathfinderPendingApply, type PendingApplyInput } from './usePathfinderPendingApply';
 import { MAX_BATCH_REVIEW_SELECTION, usePathfinderBatchReview, type BatchReviewAccess, type BatchReviewCandidate } from './usePathfinderBatchReview';
+import { barrierCalculationFixture } from '@/test/pathfinderBarrierFixtures';
 
 const id = (value: number) => `51000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
-const options = { secondaryDistanceMeters: 2, preferVerticalApproach: true };
+const protectedFixture = barrierCalculationFixture(id), options = protectedFixture.preferences;
 const candidate = (value: number): BatchReviewCandidate => ({ proposalId: id(value), proposalHash: 'a'.repeat(64),
   revisionResultHash: 'b'.repeat(64), cableId: id(value + 10_000), cableWriteRevision: '9', tag: `Synthetic cable ${value}`,
   routeText: `/TEST-${value}`, designLength: '42' });
@@ -13,7 +14,9 @@ function proposal(value: BatchReviewCandidate): PathFinderProposal {
   return { id: value.proposalId, projectId: id(1), jobId: id(2), cableId: value.cableId, status: 'calculated',
     proposalHash: value.proposalHash, revisionResultHash: value.revisionResultHash, cableWriteRevision: value.cableWriteRevision,
     stale: false, synthetic: true, engineeringAccepted: true, acceptanceScope: 'local-synthetic-fixture', canApply: true,
-    compatibilityIssue: null, message: 'Synthetic result', engineeringMessage: 'Synthetic fixture only',
+    compatibilityIssue: null, message: 'Synthetic result', engineeringMessage: 'Synthetic fixture only', barriers: protectedFixture.barriers,
+    provenance: { dependencyVersion: 'pathfinder.dependencies.v8', dependencyHash: 'c'.repeat(64), engineIdentity: protectedFixture.engineIdentity, automatic: null,
+      endpointSources: { from: 'confirmed-shared-location', to: 'confirmed-shared-location' } },
     design: { lengthBeforePercentageMeters: '38', unroundedLengthMeters: '41.8', designLengthMeters: value.designLength },
     route: { success: true, message: 'Synthetic path', routeText: value.routeText, routeCodes: [value.routeText], segmentIds: ['dbid:1'],
       points: [[0, 0, 0], [10, 0, 0]], objectIds: ['dbid:1'], lengthMeters: 10, fromDistanceMeters: 0, toDistanceMeters: 0,
@@ -44,8 +47,11 @@ function applyReceipt(value: BatchReviewCandidate) {
     proposalId: value.proposalId, cableId: value.cableId, appliedAt: '2026-10-20T00:00:00Z',
     before: { id: value.cableId, project_id: id(1), cable_write_revision: value.cableWriteRevision },
     after: { id: value.cableId, project_id: id(1), cable_write_revision: '10' },
-    provenance: { schemaVersion: 'pathfinder.apply.v2', proposalId: value.proposalId, proposalHash: value.proposalHash,
-      reviewId, review: { id: reviewId, actorId: id(8) }, revisionResult: { revisionResultSha256: value.revisionResultHash } } } };
+    provenance: { schemaVersion: 'pathfinder.apply.v3', proposalId: value.proposalId, proposalHash: value.proposalHash,
+      reviewId, review: { id: reviewId, actorId: id(8), dependencyHash: 'c'.repeat(64), revisionResultSha256: value.revisionResultHash },
+      dependencies: { schemaVersion: 'pathfinder.dependencies.v8', projectId: id(1), cableId: value.cableId,
+        engineIdentity: protectedFixture.engineIdentity },
+      revisionResult: { revisionResultSha256: value.revisionResultHash, dependencyHash: 'c'.repeat(64), engineResultSha256: 'e'.repeat(64) }, barrierEvidence: protectedFixture.evidence(value.cableId) } } };
 }
 function actualPendingFixture(values: BatchReviewCandidate[]) {
   sessionStorage.clear();
@@ -62,6 +68,15 @@ function actualPendingFixture(values: BatchReviewCandidate[]) {
 }
 
 describe('explicit bounded batch Review and Apply', () => {
+  it.each(['historical version', 'missing barrier evidence', 'unsuccessful barrier outcome'] as const)('keeps a selected %s ineligible even if a stale caller supplies canApply', async field => {
+    const f = fixture(), current = f.proposals.get(f.values[0].proposalId)!;
+    if (field === 'historical version') current.provenance = { ...current.provenance!, dependencyVersion: 'pathfinder.dependencies.v7' };
+    if (field === 'missing barrier evidence') current.barriers = null;
+    if (field === 'unsuccessful barrier outcome') current.barriers = { ...current.barriers!, diagnostics: { ...current.barriers!.diagnostics, status: 'unavailable' } };
+    f.selectAll(); await act(async () => { expect(await f.view.result.current.confirmReview()).toBe(false); });
+    expect(f.access.reviewProposal).not.toHaveBeenCalled(); expect(f.access.pendingApply.start).not.toHaveBeenCalled();
+    expect(f.view.result.current.entries.map(value => value.status)).toEqual(['blocked', 'selected']);
+  });
   it('never sends requests on mount or selection and requires separate review and Apply actions', async () => {
     const f = fixture(); f.selectAll();
     expect(f.access.readProposal).not.toHaveBeenCalled(); expect(f.access.reviewProposal).not.toHaveBeenCalled();

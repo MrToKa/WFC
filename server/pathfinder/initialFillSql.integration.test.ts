@@ -4,7 +4,7 @@ import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it,vi } from 'vitest';
 import { cableEndpointCommandSchema } from '../../shared/pathfinderCableEndpoints.js';
 import { createCableEndpointCommands } from './cableEndpointCommands.js';
 import { initializeEndpointBindingSchema } from './endpointBindingSchema.js';
@@ -15,7 +15,8 @@ import { createInitialFillAttempts } from './initialFillAttempts.js';
 import { createInitialFillWriter } from './initialFillWriter.js';
 import { initialFillIdempotencyKey } from './initialFillIdentity.js';
 import { readInitialFillMandate } from './initialFillMandates.js';
-import { syntheticEngineIdentity } from './calculationFixtures.js';
+import { syntheticEngineIdentity,syntheticBarrierEngineIdentity } from './calculationFixtures.js';
+import { syntheticInitialFillBarrierInputs } from './initialFillBarrierFixtures.js';
 import { defaultOptions, type EngineResponse, type ScopedDependencySnapshot } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { INITIAL_FILL_ROUTING_WHITESPACE, initialFillProvenanceSchema } from '../../shared/pathfinderInitialFill.js';
@@ -25,6 +26,14 @@ import { buildGeometryTrace } from './geometryTraceBuilder.js';
 import { initializeLocationImpactSchema } from './locationImpactSchema.js';
 import { readLocationImpactJobAuthority } from './locationImpactRepository.js';
 import { PathFinderError } from './errors.js';
+
+// This existing SQL slice isolates real binding/mandate/write transactions.
+// Immutable barrier admission, like its engineering collector/ledger/artifact
+// adapters below, is explicit synthetic evidence rather than an actual capture.
+vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:async()=>undefined}));
+// This selected-object command slice does not exercise automatic model matching.
+vi.mock('./automaticEndpointCandidates.js',async original=>({...await original<typeof import('./automaticEndpointCandidates.js')>(),
+  readAutomaticNamedEndpointCandidate:async()=>({status:'missing',candidateObjectIds:[],point:null,objectId:null})}));
 
 // Actual owned PostgreSQL. Binding/impact/mandate/authority/writer/history SQL are real.
 // Admission and engineering proof/collector/artifact adapters are explicitly synthetic.
@@ -103,12 +112,16 @@ async function commandFor(version: 'v1' | 'v2' | 'v3' = 'v3', initialFill: { mod
   if (!context.current || !context.logicalName) throw Error('Synthetic endpoint context must be bindable.');
   const selected = await commands.selection(projectId, who, cableId, 'from', 5, context.contextSha256);
   if (selected.selection.status !== 'available' || !selected.selection.object) throw Error('Synthetic object evidence must be available.');
+  const barrierScope={projectId,modelVersionId:context.current.modelVersionId,selectionRevision:context.current.selectionRevision,
+    contentFingerprint:context.current.contentFingerprint,captureFrameId:context.current.captureFrameId,captureFrameSha256:'8'.repeat(64),coordinateFrame:'canonical-world-metres'};
   return cableEndpointCommandSchema.parse({ schemaVersion: `wfc.pf.cable-endpoint-command.${version}`, idempotencyKey: randomUUID(),
     expectedContextSha256: context.contextSha256, expectedCableWriteRevision: context.cableWriteRevision, expectedLogicalName: context.logicalName,
     expectedRegistryRevision: context.registryRevision, expectedLocationId: context.location?.id ?? null, expectedLocationRevision: context.location?.revision ?? null,
     expectedHeadId: context.head?.id ?? null, expectedCurrent: context.current, reason: 'Explicit synthetic owned SQL initial-fill test.',
     selection: { mode: 'object-derived', sdkObjectId: 5, object: selected.selection.object },
-    ...(version !== 'v1' ? { calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 } } : {}),
+    ...(version !== 'v1' ? { calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true,
+      barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope:barrierScope,
+        expectedRegistryRevision:'1',expectedSnapshot:{snapshotId:'bf710000-0000-4000-8000-000000000001',scope:barrierScope,registryRevision:'1',contentSha256:'9'.repeat(64),mode:'explicit-empty'},drillThroughWalls:false}}, timeoutMilliseconds: 60000 } } : {}),
     ...(version === 'v3' ? { initialFill } : {}) });
 }
 async function counts() {
@@ -133,7 +146,7 @@ async function writable() {
     point: saved.binding.binding.pointProjectMetres, bindingId: saved.binding.binding.id, bindingContentSha256: saved.binding.binding.contentSha256,
     mode: saved.binding.binding.mode, captureFrameId: mandate.current.captureFrameId, qualifiedProjectFrameId: null, aggregateId: mandate.current.aggregateId,
     projectionSha256: mandate.current.projectionSha256, sourceObjectRevisionId: saved.binding.binding.sourceObject?.objectRevisionId ?? null, migrationDecisionId: null };
-  const dependencies: ScopedDependencySnapshot = { schemaVersion: 'pathfinder.dependencies.v7', projectId, cableId, cableWriteRevision: original.cable_write_revision,
+  const legacyDependencies: ScopedDependencySnapshot = { schemaVersion: 'pathfinder.dependencies.v7', projectId, cableId, cableWriteRevision: original.cable_write_revision,
     model: { id: mandate.current.modelVersionId, selectionRevision: mandate.current.selectionRevision, contentFingerprint: mandate.current.contentFingerprint },
     artifact: { id: mandate.current.artifactId, sha256: mandate.current.projectionSha256 }, preparation: { aggregateId: mandate.current.aggregateId, geometryRevision: mandate.current.geometryRevision,
       captureFrameId: mandate.current.captureFrameId, projectionSha256: mandate.current.projectionSha256 }, routing: { catalogRevision: '2', routingContentSha256: 'a'.repeat(64), routingPolicyRevision: '3', routingPolicySha256: 'b'.repeat(64) },
@@ -141,12 +154,13 @@ async function writable() {
     options: { ...defaultOptions }, from: endpoint, to: endpoint,
     endpointResolution: { schemaVersion: 'pathfinder.endpoint-resolution.v1', matchingPolicy: 'nfc-trim-uppercase-v1', from: { logicalKey: logicalName, locationId: saved.locationId }, to: { logicalKey: logicalName, locationId: saved.locationId } },
     comparison: null, engineVersion: 'pathfinder-45c24bf5-pf1-modelrunner-v1', engineIdentity: syntheticEngineIdentity() };
-  const result: EngineResponse = { schemaVersion: 'pathfinder.model.response.v1', requestId: randomUUID(), status: 'calculated', message: 'Synthetic engine result, not engineering acceptance.', engineeringAccepted: false,
+  const legacyResult: EngineResponse = { schemaVersion: 'pathfinder.model.response.v1', requestId: randomUUID(), status: 'calculated', message: 'Synthetic engine result, not engineering acceptance.', engineeringAccepted: false,
     route: { success: true, message: '', routeText: '/B001', routeCodes: ['B001'], segmentIds: ['dbid:9'], pathPoints: [{ x: 0, y: 0, z: 0 }, { x: 5, y: 0, z: 0 }], lengthMeters: 5, fromDistanceMeters: 1, toDistanceMeters: 1,
       fromRequiresSecondary: false, toRequiresSecondary: false, connectionGapCount: 0, connectionGapLengthMeters: 0 }, design: { lengthBeforePercentageMeters: '6', unroundedLengthMeters: '6.6', designLengthMeters: '7' },
     lengthLedger: { schemaVersion: 'wfc.pf.length-components.v1', formulaVersion: 'pathfinder-45c24bf5', settingsRevision: '2', raw: { lengthMeters: 5, fromDistanceMeters: 1, toDistanceMeters: 1 }, rawLengthDecimalMeters: '5',
       from: { requiresSecondary: false, removedApproachMeters: '0' }, to: { requiresSecondary: false, removedApproachMeters: '0' }, settings: { secondaryTrayLengthMeters: null, endConnectionLengthMeters: '1', additionalBendingPercent: '10' },
       secondaryEnds: 0, replacementMeters: '0', beforeClampMeters: '5', clampAdjustmentMeters: '0', afterClampMeters: '5', beforePercentageMeters: '6', bendingIncrementMeters: '0.6', unroundedMeters: '6.6', ceilingIncrementMeters: '0.4', designLengthMeters: '7', gapAccounting: 'already-in-raw-geometry' } };
+  const {dependencies,result}=syntheticInitialFillBarrierInputs(legacyDependencies,legacyResult);
   const proposalHash = hash({ dependencies, result }), inputSha256 = 'e'.repeat(64), admissionId = randomUUID();
   await pool.query(`INSERT INTO pf_jobs(id,project_id,requested_by,login_id,login_expires_at,state,total,completed,options,timeout_ms,request_hash,authority_kind)
     VALUES($1,$2,$3,$4,$5,'complete',$6,$6,$7,60000,$8,'current-login')`, [jobId, projectId, who.userId, who.loginId, new Date(who.loginExpiresAt), mandate.eligibleCableIds.length, dependencies.options, inputSha256]);
@@ -156,7 +170,8 @@ async function writable() {
   await pool.query(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
     VALUES($1,$2,$3,$4,'calculated',$5,$6,$7,$8,$9)`, [proposalId, projectId, jobId, cableId, dependencies, hash(dependencies), 'a'.repeat(64), result, proposalHash]);
   const seal = { admissionId, revisionResultSha256: 'd'.repeat(64), baselineHash: 'e'.repeat(64), engineResultSha256: hash(result), ledgerHash: hash(result.lengthLedger), dependencyHash: hash(dependencies) };
-  const writer = createInitialFillWriter(pool, { identity: async () => syntheticEngineIdentity(), snapshot: (async () => ({})) as any, seal: (async () => seal) as any,
+  const barrierFence=vi.fn(async()=>dependencies.engineIdentity);
+  const writer = createInitialFillWriter(pool, {barrierFence, snapshot: (async () => ({})) as any, seal: (async () => seal) as any,
     proof: async () => true, applicability: (async () => ({ applicable: true })) as any,
     collect: (async (c: import('pg').PoolClient, pid: string, cid: string) => {
       const live = (await c.query(`SELECT cable_write_revision::text,from_location,to_location,mto,cable_type_id FROM cables WHERE project_id=$1 AND id=$2 FOR UPDATE`, [pid, cid])).rows[0];
@@ -164,7 +179,7 @@ async function writable() {
     }) as any });
   const request = { schemaVersion: 'wfc.pf.initial-fill-request.v1', proposalId, expectedProposalHash: proposalHash, mandateId: mandate.id, expectedCableWriteRevision: dependencies.cableWriteRevision,
     idempotencyKey: initialFillIdempotencyKey({ projectId, cableId, proposalId, proposalHash, mandateId: mandate.id, expectedCableWriteRevision: dependencies.cableWriteRevision }) };
-  return { projectId, cableId, command, saved, mandate, original, jobId, writer, request, run: () => writer.apply(projectId, request, async () => undefined) };
+  return { projectId, cableId, command, saved, mandate, original, jobId, writer, request,barrierFence, run: () => writer.apply(projectId, request, async () => undefined) };
 }
 
 describe.runIf(Boolean(fixturePath))('PF-U4 owned actual command/mandate/initial-fill SQL slice with explicit synthetic engineering adapters', () => {
@@ -227,7 +242,7 @@ describe.runIf(Boolean(fixturePath))('PF-U4 owned actual command/mandate/initial
     await attempts.finish(claim, { status: result.status, receiptId: result.receiptId }); expect(await attempts.claim()).toBeNull(); const after = await cable();
     expect(after).toMatchObject({ routing: '/B001', design_length: '7', install_length: f.original.install_length, revision: f.original.revision }); expect(BigInt(after.cable_write_revision)).toBe(BigInt(f.original.cable_write_revision) + 1n);
     expect(await counts()).toMatchObject({ history: 1, receipts: 1 }); const receipt = (await pool.query('SELECT * FROM pf_apply_receipts')).rows[0], provenance = initialFillProvenanceSchema.parse(receipt.provenance);
-    expect(provenance).toMatchObject({ validationMethod: 'automatic-initial-fill', engineeringAccepted: false, mandate: f.saved.initialFillMandate, authorized: { actorId: who.userId, loginId: who.loginId } });
+    expect(provenance).toMatchObject({schemaVersion:'pathfinder.initial-fill.v2',barrierEvidence:{dependencyVersion:'pathfinder.dependencies.v8',responseVersion:'pathfinder.model.response.v3',status:'no-barriers-declared'}, validationMethod: 'automatic-initial-fill', engineeringAccepted: false, mandate: f.saved.initialFillMandate, authorized: { actorId: who.userId, loginId: who.loginId } });
     expect((await pool.query('SELECT count(*)::int FROM pf_reviews')).rows[0].count).toBe(0); expect((await pool.query('SELECT routing,design_length::text,install_length::text FROM cable_versions')).rows[0]).toMatchObject({ routing: '/B001', design_length: '7', install_length: f.original.install_length });
     expect((await pool.query('SELECT status,attempts,receipt_id,owner_token,lease_until FROM pf_initial_fill_dispatch')).rows[0]).toMatchObject({ status: 'written', attempts: 1, receipt_id: result.receiptId, owner_token: null, lease_until: null });
     expect((await f.run()).status).toBe('already-written'); expect(await counts()).toMatchObject({ history: 1, receipts: 1 });
@@ -255,6 +270,15 @@ describe.runIf(Boolean(fixturePath))('PF-U4 owned actual command/mandate/initial
     const f = await writable(), before = await cable(); await pool.query("CREATE FUNCTION pfu4_deny_history() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic history fault';END $$;CREATE TRIGGER pfu4_deny_history BEFORE INSERT ON cable_versions FOR EACH ROW EXECUTE FUNCTION pfu4_deny_history()");
     try { await expect(f.run()).rejects.toThrow('synthetic history fault'); expect(await cable()).toEqual(before); expect(await counts()).toMatchObject({ receipts: 0, history: 0 }); }
     finally { await pool.query('DROP TRIGGER pfu4_deny_history ON cable_versions;DROP FUNCTION pfu4_deny_history()'); }
+  });
+  it('final synthetic barrier/implementation refusal rolls back the actual pair, history and receipt',async()=>{
+    const f=await writable(),before=await cable();
+    // The first configured answer remains an exact synthetic v2 identity; only
+    // the final seam refuses. PostgreSQL still performs all rollback behavior.
+    f.barrierFence.mockReset().mockResolvedValueOnce(syntheticBarrierEngineIdentity())
+      .mockRejectedValueOnce(new PathFinderError('PROPOSAL_STALE',409,'Explicit synthetic final-barrier seam refusal.'));
+    await expect(f.run()).rejects.toMatchObject({code:'PROPOSAL_STALE'});expect(await cable()).toEqual(before);expect(await counts()).toMatchObject({receipts:0,history:0});
+    expect(f.barrierFence).toHaveBeenCalledTimes(2);
   });
   it('real immutable triggers refuse receipt and mandate UPDATEs', async () => {
     const f = await writable(); await f.run();

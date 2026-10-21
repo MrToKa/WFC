@@ -7,6 +7,8 @@ import { defaultOptions } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES } from './cableWorkflowProof.js';
 import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+import { syntheticBarrierEngineIdentity } from './calculationFixtures.js';
+import { readBarrierWriteEvidence } from './barrierWrites.js';
 
 const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn(), initialFill: vi.fn() }));
 vi.mock('./revisionResultRepository.js', () => ({ verifyRevisionResultForProposal: proof.seal }));
@@ -81,7 +83,7 @@ function barrierFixture() {
   const barriers:BarrierRuntimeContext={schemaVersion:'wfc.pf.barrier-runtime.v1',binding:{scope,registryRevision:'3',snapshot:{snapshotId:id(21),scope,registryRevision:'3',contentSha256:'c'.repeat(64),mode:'explicit-empty'},policy,policySha256:hash(policy)},
     profile:structuredClone(BARRIER_RUNTIME_PROFILE),profileSha256:hash(BARRIER_RUNTIME_PROFILE),storage:{intentId:id(22),manifest:{blobId:id(23),sha256:'d'.repeat(64),bytes:1000},capture:null}};
   const {registryRevision:_registry,...body}=f.dependencies as DependencySnapshot&{registryRevision:string};
-  const dependencies={...body,schemaVersion:'pathfinder.dependencies.v8',barriers,cableInputs:{fromLocation:'FROM',toLocation:'TO',mto:'LV',cableTypeId:id(24)},
+  const dependencies={...body,schemaVersion:'pathfinder.dependencies.v8',barriers,engineIdentity:syntheticBarrierEngineIdentity(),cableInputs:{fromLocation:'FROM',toLocation:'TO',mto:'LV',cableTypeId:id(24)},
     from:{point:[0,0,0]},to:{point:[5,0,0]},options:{...body.options,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope,expectedRegistryRevision:'3',expectedSnapshot:barriers.binding.snapshot,drillThroughWalls:false}}} as BarrierDependencySnapshot;
   const routeHash=hash(barrierRouteHashInput([[0,0,0],[5,0,0]]));
   const result:Data={...f.result,schemaVersion:'pathfinder.model.response.v3',calculationMode:'calculate',effectiveCategory:'LV',barriers:{schemaVersion:'wfc.pf.barrier-execution.v1',context:barriers,
@@ -94,6 +96,16 @@ function barrierFixture() {
     proof.seal.mockResolvedValue({...f.seal,proposalId,dependencyHash:f.raw.dependency_hash,proposalHash:f.raw.proposal_hash,engineResultSha256:hash(result)});};
   reseal();
   return {...f,dependencies,result,reseal};
+}
+function protectedAcceptedFixture() {
+  const f = barrierFixture(), evidence = readBarrierWriteEvidence(f.dependencies, f.result);
+  if (!evidence) throw Error('Expected complete synthetic protected receipt evidence.');
+  f.receipt.provenance = { ...f.provenance, schemaVersion: 'pathfinder.apply.v3', proposalHash: f.raw.proposal_hash,
+    dependencies: f.dependencies, barrierEvidence: evidence,
+    review: { ...f.provenance.review, dependencyHash: f.raw.dependency_hash, validationMethod: 'manual-review' },
+    revisionResult: { ...f.provenance.revisionResult, dependencyHash: f.raw.dependency_hash, engineResultSha256: hash(f.result) } };
+  f.receipt.review_proposal_hash = f.raw.proposal_hash; f.receipt.review_dependency_sha256 = f.raw.dependency_hash;
+  return f;
 }
 
 describe('cable workflow positive result evidence (synthetic boundaries)', () => {
@@ -125,9 +137,10 @@ describe('cable workflow positive result evidence (synthetic boundaries)', () =>
     expect(proof.scoped).not.toHaveBeenCalled();
     expect(await f.reader.accepted(f.cable,async()=>({...f.dependencies,cableWriteRevision:afterRevision}))).toBe(false);
   });
-  it('uses exact job/project/cable identity and existing seal, scope and C# ledger validators', async () => {
+  it('keeps exact historical seal/scope/ledger evidence inspectable without granting a new review', async () => {
     const f = fixture();
-    expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toEqual({ currentness: 'current', reviewable: true, reasonCodes: [] });
+    expect(await readWorkflowVerifiedProposal(f.client, projectId, cableId, proposalId)).not.toBeNull();
+    expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toEqual({ currentness: 'unavailable', reviewable: false, reasonCodes: ['BARRIER_WRITE_PROOF_REQUIRED'] });
     expect(proof.scope).toHaveBeenCalledWith(f.dependencies);
     expect(proof.seal).toHaveBeenCalledWith(f.client, { projectId, proposalId, result: f.result, dependencies: f.dependencies, proposalHash: f.raw.proposal_hash });
     expect(f.query.mock.calls[0][0]).toContain('octet_length(p.dependencies::text)+octet_length(p.result::text)<=$4');
@@ -163,40 +176,68 @@ describe('cable workflow positive result evidence (synthetic boundaries)', () =>
     const f = fixture(); f.raw.job_state = state;
     expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toMatchObject({ reviewable: false });
   });
-  it.each(['queued','running','complete'])('uses exact sealed v7 item readiness with %s siblings, without a legacy global gate',async state=>{
+  it.each(['queued','running','complete'])('does not promote historical sealed v7 readiness with %s siblings to a new protected review',async state=>{
     const f=fixture(),{registryRevision:_registry,...body}=f.dependencies as DependencySnapshot&{registryRevision:string};
     const dependencies={...body,schemaVersion:'pathfinder.dependencies.v7'} as DependencySnapshot;
     f.raw.dependencies=dependencies;f.raw.dependency_hash=hash(dependencies);f.raw.job_state=state;
     proof.seal.mockResolvedValue({...f.seal,proposalId,dependencyHash:f.raw.dependency_hash});
     proof.enrollment.mockResolvedValue({enrolled:true,valid:false,code:'AUTOMATIC_GENERATION_SUPERSEDED'});
     const result=await f.reader.reviewable(cableId,jobId,proposalId,dependencies);
-    expect(result).toMatchObject({currentness:'current',reviewable:true,itemApplicability:{projectId,jobId,cableId,proposalId,dependencyHash:f.raw.dependency_hash}});
-    expect(proof.enrollment).not.toHaveBeenCalled();expect(proof.scoped).toHaveBeenCalledWith(f.client,{projectId,jobId,cableId,lock:true});
+    expect(result).toMatchObject({currentness:'unavailable',reviewable:false,reasonCodes:['BARRIER_WRITE_PROOF_REQUIRED']});
+    expect(proof.enrollment).not.toHaveBeenCalled();expect(proof.scoped).not.toHaveBeenCalled();
   });
   it('refuses independently ready v7 when its exact cable target is superseded',async()=>{
     const f=fixture(),{registryRevision:_registry,...body}=f.dependencies as DependencySnapshot&{registryRevision:string};
     const dependencies={...body,schemaVersion:'pathfinder.dependencies.v7'} as DependencySnapshot;f.raw.dependencies=dependencies;f.raw.dependency_hash=hash(dependencies);f.raw.job_state='running';
     proof.seal.mockResolvedValue({...f.seal,proposalId,dependencyHash:f.raw.dependency_hash});proof.scoped.mockResolvedValue({enrolled:true,valid:false,code:'LOCATION_IMPACT_TARGET_SUPERSEDED'});
-    expect(await f.reader.reviewable(cableId,jobId,proposalId,dependencies)).toMatchObject({currentness:'changed',reviewable:false,itemApplicability:null});
+    expect(await f.reader.reviewable(cableId,jobId,proposalId,dependencies)).toMatchObject({currentness:'unavailable',reviewable:false,reasonCodes:['BARRIER_WRITE_PROOF_REQUIRED']});
   });
-  it('preserves strict global-registry v5 staleness and checks enrollment once per job', async () => {
+  it('retains proof caching but never obtains new enrollment authority for collision-unaware history', async () => {
     const f = fixture();
     const changed=structuredClone(f.dependencies);if(!('registryRevision' in changed))throw Error('Expected the legacy fixture.');changed.registryRevision='6';
-    expect(await f.reader.reviewable(cableId, jobId, proposalId, changed)).toMatchObject({ currentness: 'changed', reviewable: false });
+    expect(await f.reader.reviewable(cableId, jobId, proposalId, changed)).toMatchObject({ currentness: 'unavailable', reviewable: false });
     proof.enrollment.mockResolvedValue({ enrolled: true, valid: false, code: 'AUTOMATIC_GENERATION_SUPERSEDED' });
     const first = await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies);
-    expect(first).toMatchObject({ currentness: 'changed', reviewable: false, reasonCodes: ['AUTOMATIC_GENERATION_SUPERSEDED'] });
+    expect(first).toMatchObject({ currentness: 'unavailable', reviewable: false, reasonCodes: ['BARRIER_WRITE_PROOF_REQUIRED'] });
     await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies);
-    expect(proof.enrollment).toHaveBeenCalledTimes(1); expect(proof.seal).toHaveBeenCalledTimes(1);
+    expect(proof.enrollment).not.toHaveBeenCalled(); expect(proof.seal).toHaveBeenCalledTimes(1);
   });
   it('refuses a cross-job proposal and cancellation request even with available points', async () => {
-    const f = fixture(); expect(await f.reader.reviewable(cableId, id(99), proposalId, f.dependencies)).toMatchObject({ reviewable: false });
+    const f = barrierFixture(); expect(await f.reader.reviewable(cableId, id(99), proposalId, f.dependencies)).toMatchObject({ reviewable: false });
     f.raw.cancel_requested = true;
-    expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toMatchObject({ reviewable: false, reasonCodes: ['CALCULATION_CANCEL_REQUESTED'] });
+    expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toMatchObject({ reviewable: false, reasonCodes: ['SCOPED_ITEM_NOT_APPLICABLE'] });
   });
 });
 
 describe('receipt-backed current accepted cable display', () => {
+  it('recognizes exact apply.v3 protected evidence with its immutable human review and own-write transition', async () => {
+    const f = protectedAcceptedFixture(), currentForOptions = vi.fn(async () => ({ ...f.dependencies, cableWriteRevision: afterRevision }));
+    expect(await f.reader.accepted(f.cable, currentForOptions)).toBe(true);
+    expect(currentForOptions).toHaveBeenCalledWith(f.dependencies.options, 'pathfinder.dependencies.v8');
+    expect(proof.enrollment).not.toHaveBeenCalled();
+  });
+  it.each(['legacy-label', 'missing-evidence', 'execution-digest', 'policy', 'result-digest', 'review-method', 'wrong-dependencies'] as const)(
+    'does not recognize protected acceptance with exchanged %s', async kind => {
+      const f = protectedAcceptedFixture(), provenance = f.receipt.provenance as Data;
+      if (kind === 'legacy-label') provenance.schemaVersion = 'pathfinder.apply.v2';
+      if (kind === 'missing-evidence') delete provenance.barrierEvidence;
+      if (kind === 'execution-digest') provenance.barrierEvidence.executionSha256 = 'f'.repeat(64);
+      if (kind === 'policy') provenance.barrierEvidence.policySha256 = 'f'.repeat(64);
+      if (kind === 'result-digest') provenance.revisionResult.engineResultSha256 = 'f'.repeat(64);
+      if (kind === 'review-method') provenance.review.validationMethod = 'automatic-initial-fill';
+      if (kind === 'wrong-dependencies') provenance.dependencies = { ...f.dependencies, options: { ...f.dependencies.options, secondaryDistanceMeters: 99 } };
+      const currentForOptions = vi.fn(); expect(await f.reader.accepted(f.cable, currentForOptions)).toBe(false); expect(currentForOptions).not.toHaveBeenCalled();
+    });
+  it('recognizes initial-fill.v2 only through its separate immutable receipt chain after physical evidence validation', async () => {
+    const f = protectedAcceptedFixture(); f.receipt.provenance.schemaVersion = 'pathfinder.initial-fill.v2'; proof.initialFill.mockResolvedValue(true);
+    expect(await f.reader.accepted(f.cable, async () => ({ ...f.dependencies, cableWriteRevision: afterRevision }))).toBe(true);
+    expect(proof.initialFill).toHaveBeenCalledWith(expect.objectContaining({ dependencies: f.dependencies, result: f.result, provenance: f.receipt.provenance }));
+  });
+  it('does not let protected own-write proof excuse a subsequent barrier policy change', async () => {
+    const f = protectedAcceptedFixture(), current = { ...f.dependencies, cableWriteRevision: afterRevision,
+      options: { ...f.dependencies.options, barrierRouting: { ...f.dependencies.options.barrierRouting!, drillThroughWalls: true } } };
+    expect(await f.reader.accepted(f.cable, async () => current)).toBe(false);
+  });
   it('proves the exact large own-write revision transition and decimal scale without requiring the old login alive', async () => {
     const f = fixture(), currentForOptions = vi.fn(async () => f.current);
     expect(await f.reader.accepted(f.cable, currentForOptions)).toBe(true);

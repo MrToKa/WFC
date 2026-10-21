@@ -21,7 +21,8 @@ export function createInitialFillAttempts(pool:Pool){
         JOIN pf_jobs j ON j.project_id=p.project_id AND j.id=p.job_id
         LEFT JOIN pf_initial_fill_attempts a ON a.project_id=m.project_id AND a.mandate_id=m.id AND a.proposal_id=p.id
         WHERE a.proposal_id IS NULL AND i.state='complete' AND i.status='calculated' AND p.status='calculated'
-          AND p.dependencies->>'schemaVersion'='pathfinder.dependencies.v7' AND j.state IN('queued','running','complete') AND NOT j.cancel_requested
+          AND p.dependencies->>'schemaVersion'='pathfinder.dependencies.v8' AND p.result->>'schemaVersion'='pathfinder.model.response.v3'
+          AND p.result->>'calculationMode'='calculate' AND j.state IN('queued','running','complete') AND NOT j.cancel_requested
         ORDER BY p.created_at,m.project_id,m.id,p.id LIMIT 10 FOR SHARE OF m,p,i,j`)).rows;
       for(const row of rows){signal?.throwIfAborted();const request=initialFillApplyRequestSchema.parse({schemaVersion:'wfc.pf.initial-fill-request.v1',
         idempotencyKey:initialFillIdempotencyKey({projectId:row.project_id,cableId:row.cable_id,proposalId:row.proposal_id,proposalHash:row.proposal_hash,mandateId:row.mandate_id,expectedCableWriteRevision:row.revision}),

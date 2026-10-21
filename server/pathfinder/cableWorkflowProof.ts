@@ -3,15 +3,14 @@ import { canonicalPurposeJson, policyHashSchema, policyRevisionSchema, policyUui
 import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
 import type { CableWorkflowRow } from '../../shared/pathfinderCableWorkflow.js';
 import type { DependencySnapshot, EngineResponse } from './jobContracts.js';
-import { designLengthCompatibilityIssue, engineResponseSchema, optionsSchema, proposalRoutingPreferences, routeCompatibilityIssue } from './jobContracts.js';
+import { designLengthCompatibilityIssue, optionsSchema, proposalRoutingPreferences, routeCompatibilityIssue } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
-import { readRecalculationJobAuthority } from './recalculationRepository.js';
 import { readProposalApplicability } from './proposalApplicability.js';
 import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
-import { requireBarrierEngineStrategy } from './barrierStrategy.js';
+import { readBarrierWriteEvidence } from './barrierWrites.js';
 
 export const WORKFLOW_PROOF_BYTES = 256 * 1024;
 type Data = Record<string, any>;
@@ -39,13 +38,7 @@ export async function readWorkflowVerifiedProposal(client: PoolClient, projectId
     if (!dependencies || !result || dependencies.projectId !== projectId || dependencies.cableId !== cableId
       || hash(dependencies) !== raw.dependency_hash || !optionsSchema.safeParse(dependencies.options).success) return null;
     requireVersionedCalculationScope(dependencies);
-    if (dependencies.schemaVersion === 'pathfinder.dependencies.v8') {
-      const { calculationMode, ...body } = result as EngineResponse & { calculationMode?: unknown };
-      if (calculationMode !== 'calculate') return null;
-      const parsed = engineResponseSchema.safeParse(body); if (!parsed.success) return null;
-      requireBarrierEngineStrategy(parsed.data, { context: dependencies.barriers, category: dependencies.cableInputs.mto,
-        fromPoint: dependencies.from.point, toPoint: dependencies.to.point });
-    }
+    if (dependencies.schemaVersion === 'pathfinder.dependencies.v8' && !readBarrierWriteEvidence(dependencies, result)) return null;
     if (result.status !== 'calculated' || !result.route?.success || !result.design || !proposalRoutingPreferences(dependencies.options)
       || routeCompatibilityIssue(result.route.routeText) || designLengthCompatibilityIssue(result.design.designLengthMeters)) return null;
     const ledger = requireCalculationLengthLedger(result, dependencies.settings);
@@ -57,7 +50,7 @@ export async function readWorkflowVerifiedProposal(client: PoolClient, projectId
 }
 
 export function createCableWorkflowProofReader(client: PoolClient, projectId: string, check: () => void) {
-  const proposals = new Map<string, Promise<Verified | null>>(), enrollment = new Map<string, ReturnType<typeof readRecalculationJobAuthority>>();
+  const proposals = new Map<string, Promise<Verified | null>>();
   const initialFillReceipt = createInitialFillReceiptProofReader(client, check);
   const proposal = (cableId: string, proposalId: string) => {
     const key = cableId + ':' + proposalId;
@@ -69,21 +62,15 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
     async reviewable(cableId: string, jobId: string, proposalId: string, current: DependencySnapshot | null) {
       check(); const verified = await proposal(cableId, proposalId); check();
       if (!verified || verified.raw.job_id !== jobId) return { currentness: 'unavailable' as const, reviewable: false, reasonCodes: ['PROPOSAL_PROOF_UNAVAILABLE'] };
+      if (verified.dependencies.schemaVersion !== 'pathfinder.dependencies.v8')
+        return { currentness: 'unavailable' as const, reviewable: false, reasonCodes: ['BARRIER_WRITE_PROOF_REQUIRED'] };
       if (!current || hash(current) !== verified.raw.dependency_hash)
         return { currentness: 'changed' as const, reviewable: false, reasonCodes: ['PROPOSAL_DEPENDENCIES_CHANGED'] };
-      if(verified.dependencies.schemaVersion==='pathfinder.dependencies.v7'||verified.dependencies.schemaVersion==='pathfinder.dependencies.v8'){
-        const applicable=await readProposalApplicability(client,{projectId,jobId,cableId,proposalId,
+      const applicable=await readProposalApplicability(client,{projectId,jobId,cableId,proposalId,
           dependencyVersion:verified.dependencies.schemaVersion,dependencyHash:verified.raw.dependency_hash,
           jobState:verified.raw.job_state,cancelRequested:verified.raw.cancel_requested,seal:verified.seal});check();
-        return {currentness:applicable.applicable?'current' as const:'changed' as const,reviewable:applicable.applicable,
+      return {currentness:applicable.applicable?'current' as const:'changed' as const,reviewable:applicable.applicable,
           reasonCodes:applicable.applicable?[]:['SCOPED_ITEM_NOT_APPLICABLE'],itemApplicability:applicable.evidence};
-      }
-      if (!enrollment.has(jobId)) enrollment.set(jobId, readRecalculationJobAuthority(client, { projectId, jobId }));
-      const authority = await enrollment.get(jobId)!; check();
-      if (authority.enrolled && !authority.valid)
-        return { currentness: 'changed' as const, reviewable: false, reasonCodes: [authority.code] };
-      return { currentness: 'current' as const, reviewable: verified.raw.job_state === 'complete' && verified.raw.cancel_requested === false,
-        reasonCodes: verified.raw.cancel_requested ? ['CALCULATION_CANCEL_REQUESTED'] : [] };
     },
     /** Only a receipt-proven own write can explain the pre/post cable revision difference. */
     async accepted(cable: CableWorkflowRow['cable'], currentForOptions: (options: unknown,version:DependencySnapshot['schemaVersion']) => Promise<DependencySnapshot | null>): Promise<boolean> {
@@ -98,7 +85,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
       try {
         if (!receipt || receipt.project_id !== projectId || receipt.cable_id !== cable.id || !policyUuidSchema.safeParse(receipt.proposal_id).success) return false;
         const before = object(receipt.before_snapshot), after = object(receipt.after_snapshot), provenance = object(receipt.provenance);
-        if (!before || !after || !provenance || !['pathfinder.apply.v2', 'pathfinder.initial-fill.v1'].includes(provenance.schemaVersion)
+        if (!before || !after || !provenance || !['pathfinder.apply.v2', 'pathfinder.apply.v3', 'pathfinder.initial-fill.v1', 'pathfinder.initial-fill.v2'].includes(provenance.schemaVersion)
           || before.id !== cable.id || after.id !== cable.id || before.project_id !== projectId || after.project_id !== projectId
           || !policyRevisionSchema.safeParse(before.cable_write_revision).success || !policyRevisionSchema.safeParse(after.cable_write_revision).success
           || BigInt(after.cable_write_revision) !== BigInt(before.cable_write_revision) + 1n || after.cable_write_revision !== cable.cableWriteRevision
@@ -107,7 +94,14 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
         if (!same(Object.keys(before).sort(), Object.keys(after).sort()) || Object.keys(before).some(key => !changed.has(key) && !same(before[key], after[key]))) return false;
         const verified = await proposal(cable.id, receipt.proposal_id); check(); if (!verified) return false;
         const { dependencies, result, seal, raw } = verified;
-        if (provenance.schemaVersion === 'pathfinder.initial-fill.v1') {
+        const protectedReceipt = provenance.schemaVersion === 'pathfinder.apply.v3' || provenance.schemaVersion === 'pathfinder.initial-fill.v2';
+        if (protectedReceipt) {
+          const evidence = readBarrierWriteEvidence(dependencies, result);
+          if (!evidence || !same(evidence, provenance.barrierEvidence)
+            || provenance.revisionResult?.engineResultSha256 !== evidence.engineResultSha256
+            || provenance.revisionResult?.dependencyHash !== evidence.dependencySha256) return false;
+        } else if (dependencies.schemaVersion === 'pathfinder.dependencies.v8' || Object.hasOwn(provenance, 'barrierEvidence')) return false;
+        if (provenance.schemaVersion === 'pathfinder.initial-fill.v1' || provenance.schemaVersion === 'pathfinder.initial-fill.v2') {
           if (!await initialFillReceipt({ projectId, cableId: cable.id, receiptId: receipt.id, proposalId: receipt.proposal_id,
             actorId: receipt.actor_id, idempotencyKey: receipt.idempotency_key, payloadHash: receipt.payload_hash,
             before, after, provenance, dependencies, result, seal })) return false;
@@ -116,6 +110,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
           || provenance.reviewId !== receipt.review_id || provenance.review?.id !== receipt.review_id || provenance.review?.actorId !== receipt.actor_id
           || receipt.review_actor !== receipt.actor_id || receipt.review_proposal !== raw.id || receipt.review_proposal_hash !== raw.proposal_hash
           || !['manual-review', 'synthetic-fixture'].includes(receipt.validation_method) || provenance.validationMethod !== receipt.validation_method
+          || protectedReceipt && provenance.review?.validationMethod !== receipt.validation_method
           || receipt.revision_result_sha256 !== seal.revisionResultSha256 || receipt.review_dependency_sha256 !== raw.dependency_hash
           || provenance.review?.loginId !== receipt.review_login_id || provenance.review?.dependencyHash !== raw.dependency_hash
           || provenance.review?.revisionResultSha256 !== seal.revisionResultSha256 || !same(provenance.dependencies, dependencies)

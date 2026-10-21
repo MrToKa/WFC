@@ -58,24 +58,22 @@ describe('bounded recent-proposal state preview', () => {
     expect(value.proposals.map(row => row.id)).toEqual(db.proposals.slice(0, 5).map(row => row.id));
     expect(seams.collect).toHaveBeenCalledTimes(5); expect(seams.seal).toHaveBeenCalledTimes(5); expect(seams.synthetic).toHaveBeenCalledTimes(5);
     expect(value.proposals.slice(0, 2).every(row => row.stale && !row.canApply)).toBe(true);
-    expect(value.proposals.slice(2).every(row => !row.stale && row.canApply)).toBe(true);
+    expect(value.proposals.slice(2).every(row => !row.stale && !row.canApply && row.compatibilityIssue?.includes('historical or unverified'))).toBe(true);
     expect(db.query.mock.calls.some(([sql]) => sql === 'SELECT is_admin FROM users WHERE id=$1 FOR SHARE')).toBe(true);
     expect(db.query.mock.calls.at(-1)?.[0]).toBe('COMMIT'); expect(db.release).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
   it('still reads any exact historical proposal outside the preview window with fresh validation', async () => {
     const db = fixture(), row = db.proposals[7], value = await db.jobs.proposal(projectId, who, row.id);
-    expect(value).toMatchObject({ id: row.id, canApply: true, stale: false }); expect(value.route?.points).toEqual([[0, 0, 0], [5, 0, 0]]);
+    expect(value).toMatchObject({ id: row.id, canApply: false, stale: false }); expect(value.route?.points).toEqual([[0, 0, 0], [5, 0, 0]]);
     expect(seams.collect).toHaveBeenCalledExactlyOnceWith(db.client, projectId, row.cable_id, row.dependencies.options,row.dependencies.schemaVersion);
     expect(db.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });
 
-  it('preserves the independent locked Review path for a proposal outside the state window', async () => {
-    const db = fixture(), row = db.proposals[7], reviewed = await db.jobs.review(projectId, who, row.id, row.proposal_hash);
-    expect(reviewed.proposal).toMatchObject({ id: row.id, canApply: true, stale: false });
-    expect(seams.collect).toHaveBeenNthCalledWith(1, db.client, projectId, row.cable_id, row.dependencies.options,row.dependencies.schemaVersion, true);
-    expect(seams.collect).toHaveBeenNthCalledWith(2, db.client, projectId, row.cable_id, row.dependencies.options,row.dependencies.schemaVersion);
-    expect(seams.engine).toHaveBeenCalledExactlyOnceWith({ force: true });
-    expect(db.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO pf_reviews'))).toBe(true);
+  it('does not grant historical output new Review authority outside the state window', async () => {
+    const db = fixture(), row = db.proposals[7];
+    await expect(db.jobs.review(projectId, who, row.id, row.proposal_hash)).rejects.toMatchObject({code:'BARRIER_WRITE_PROOF_REQUIRED'});
+    expect(seams.collect).not.toHaveBeenCalled();expect(seams.engine).not.toHaveBeenCalled();
+    expect(db.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO pf_reviews'))).toBe(false);
   });
 });

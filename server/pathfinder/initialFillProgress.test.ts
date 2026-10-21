@@ -24,7 +24,7 @@ function fixture() {
     active_model_version_id: current.modelVersionId, selection_revision: '1', state: 'ready', health: 'healthy', content_fingerprint: current.contentFingerprint,
     current_aggregate_id: current.aggregateId, current_artifact_id: current.artifactId, geometry_revision: '1', capture_frame_id: current.captureFrameId, snapshot_sha256: current.projectionSha256, trace_id: current.traceId };
   const rows: Row[] = ids.map(cable_id => ({ cable_id, job_id: id(21), job_state: 'running', cancel_requested: false, item_state: 'waiting', item_status: 'waiting', proposal_status: null,
-    dependency_version: null, attempt_key: null, dispatch_status: null, attempts: null, not_before: null, lease_until: null, reason_code: null, verified_receipt_id: null, impact_status: 'enrolled' }));
+    dependency_version: null,response_version:null,calculation_mode:null, attempt_key: null, dispatch_status: null, attempts: null, not_before: null, lease_until: null, reason_code: null, verified_receipt_id: null, impact_status: 'enrolled' }));
   const state = { admin: true, revoked: false, impact: impact as Row | null, authority: authority as Row | null, rows };
   const query = vi.fn(async (sql: string) => {
     if (sql.startsWith('SELECT id FROM projects')) return { rows: [{ id: projectId }] };
@@ -52,10 +52,18 @@ describe('SELECT-only exact-impact initial-fill progress with synthetic SQL', ()
     const f = fixture(); f.state.rows.forEach(row => Object.assign(row, { item_state: 'blocked', item_status, job_state: 'complete' })); expect(await f.read()).toMatchObject({ outstanding: 0, counters: { 'not-applicable': 2 } });
   });
   it('counts calculated-but-undiscovered and bounded retry-unknown separately', async () => {
-    const f = fixture(); Object.assign(f.state.rows[0], { item_state: 'complete', item_status: 'calculated', proposal_status: 'calculated', dependency_version: 'pathfinder.dependencies.v7' });
+    const f = fixture(); Object.assign(f.state.rows[0], { item_state: 'complete', item_status: 'calculated', proposal_status: 'calculated', dependency_version: 'pathfinder.dependencies.v8',response_version:'pathfinder.model.response.v3',calculation_mode:'calculate' });
     Object.assign(f.state.rows[1], { attempt_key: id(40), dispatch_status: 'unknown', attempts: 2, not_before: new Date(now), reason_code: 'INITIAL_FILL_INTERRUPTED' });
     expect(await f.read()).toMatchObject({ outstanding: 2, retryableUnknown: 1, counters: { unknown: 1, 'awaiting-result': 1 } });
     f.state.rows[1].attempts = 3; f.state.rows[1].not_before = null; expect(await f.read()).toMatchObject({ outstanding: 1, retryableUnknown: 0 });
+  });
+  it.each([
+    {dependency_version:'pathfinder.dependencies.v7',response_version:'pathfinder.model.response.v1',calculation_mode:'calculate'},
+    {dependency_version:'pathfinder.dependencies.v8',response_version:'pathfinder.model.response.v1',calculation_mode:'calculate'},
+    {dependency_version:'pathfinder.dependencies.v8',response_version:'pathfinder.model.response.v3',calculation_mode:'design'},
+  ])('does not await fresh automatic discovery for historical/incompatible result %j',async versions=>{
+    const f=fixture();f.state.rows.forEach(row=>Object.assign(row,{item_state:'complete',item_status:'calculated',proposal_status:'calculated',job_state:'complete',...versions}));
+    expect(await f.read()).toMatchObject({outstanding:0,counters:{'awaiting-result':0,'not-applicable':2}});
   });
   it('does not turn a written dispatch without its exact immutable receipt into Updated', async () => {
     const f = fixture(); Object.assign(f.state.rows[0], { attempt_key: id(40), dispatch_status: 'written', verified_receipt_id: null });
@@ -71,7 +79,7 @@ describe('SELECT-only exact-impact initial-fill progress with synthetic SQL', ()
     vi.setSystemTime(now); f.authority.current_aggregate_id = id(99); expect(await f.read()).toMatchObject({ currentAuthority: false, outstanding: 0 });
   });
   it('does not poll a calculated-but-undiscovered item forever after its finite original authority expires', async () => {
-    const f = fixture(); f.state.rows.forEach(row => Object.assign(row, { item_state: 'complete', item_status: 'calculated', proposal_status: 'calculated', dependency_version: 'pathfinder.dependencies.v7' }));
+    const f = fixture(); f.state.rows.forEach(row => Object.assign(row, { item_state: 'complete', item_status: 'calculated', proposal_status: 'calculated', dependency_version: 'pathfinder.dependencies.v8',response_version:'pathfinder.model.response.v3',calculation_mode:'calculate' }));
     vi.setSystemTime(now + 30000); expect(await f.read()).toMatchObject({ authorized: true, currentAuthority: false, outstanding: 0, counters: { 'awaiting-result': 0, 'not-applicable': 2 } });
   });
   it('projects exhausted expired running leases as terminal unknown without inventing a retry', async () => {

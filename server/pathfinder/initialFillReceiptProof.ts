@@ -15,6 +15,8 @@ import { requireVersionedCalculationScope } from './routingScope.js';
 import { readInitialFillMandate } from './initialFillMandates.js';
 import { initialFillIdempotencyKey } from './initialFillIdentity.js';
 import { PathFinderError } from './errors.js';
+import { sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
+import { readBarrierWriteEvidence } from './barrierWrites.js';
 
 type Row = Record<string, any>;
 const object = (value: unknown): Row | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Row : null;
@@ -87,7 +89,12 @@ export function createInitialFillReceiptProofReader(client: Pick<PoolClient, 'qu
       for (const value of [input.projectId, input.cableId, input.receiptId, input.proposalId, input.actorId, input.idempotencyKey]) policyUuidSchema.parse(value);
       policyHashSchema.parse(input.payloadHash);
       const provenance = initialFillProvenanceSchema.parse(input.provenance), before = object(input.before), after = object(input.after), dependencies = input.dependencies, seal = input.seal;
-      if (!initialFillOwnWriteTransition(input) || !before || !after || dependencies.schemaVersion !== 'pathfinder.dependencies.v7') return false;
+      if (!initialFillOwnWriteTransition(input) || !before || !after
+        || dependencies.schemaVersion !== 'pathfinder.dependencies.v7' && dependencies.schemaVersion !== 'pathfinder.dependencies.v8') return false;
+      if (provenance.schemaVersion === 'pathfinder.initial-fill.v2') {
+        const evidence = readBarrierWriteEvidence(dependencies, input.result);
+        if (dependencies.schemaVersion !== 'pathfinder.dependencies.v8' || !evidence || !same(evidence, provenance.barrierEvidence)) return false;
+      } else if (dependencies.schemaVersion !== 'pathfinder.dependencies.v7' || input.result.schemaVersion === 'pathfinder.model.response.v3') return false;
       requireVersionedCalculationScope(dependencies);
       const ledger = requireCalculationLengthLedger(input.result, dependencies.settings);
       if (!ledger || input.result.status !== 'calculated' || !input.result.route?.success || !input.result.design
@@ -129,7 +136,9 @@ export function createInitialFillReceiptProofReader(client: Pick<PoolClient, 'qu
         || dependencies.preparation.geometryRevision !== historicalMandate.current.geometryRevision || dependencies.preparation.captureFrameId !== historicalMandate.current.captureFrameId
         || dependencies.preparation.projectionSha256 !== historicalMandate.current.projectionSha256
         || dependencies.options.secondaryDistanceMeters !== impactRecord.calculation.preferences.secondaryDistanceMeters
-        || dependencies.options.preferVerticalApproach !== impactRecord.calculation.preferences.preferVerticalApproach) return false;
+        || dependencies.options.preferVerticalApproach !== impactRecord.calculation.preferences.preferVerticalApproach
+        || dependencies.schemaVersion === 'pathfinder.dependencies.v8' && !sameBarrierAdmissionIntent(
+          dependencies.options.barrierRouting, impactRecord.calculation.preferences.barrierRouting)) return false;
       const rawCommand = await command(input.projectId, historicalMandate.actorId, historicalMandate.idempotencyKey); check();
       if (!rawCommand || rawCommand.kind !== 'confirm') return false;
       const owner = commandOwnerSchema.parse(rawCommand.request), original = owner.command, stored = savedCommandSchema.parse(rawCommand.receipt).receipt;

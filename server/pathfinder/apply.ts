@@ -4,16 +4,19 @@ import type { z } from 'zod';
 import { PathFinderError } from './errors.js';
 import { collectDependenciesForVersion, hash, hasSyntheticProof } from './dependencies.js';
 import { readSnapshot } from './storage.js';
-import type { applySchema, DependencySnapshot, JobPrincipal } from './jobContracts.js';
+import type { applySchema, BarrierDependencySnapshot, DependencySnapshot, JobPrincipal } from './jobContracts.js';
 import { designLengthCompatibilityIssue,routeCompatibilityIssue,proposalRoutingPreferences } from './jobContracts.js';
 import { assertLoginNotExpired, principalTransaction } from './auth.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
-import { calculationEngineIdentity } from './calculationEngineIdentity.js';
+import { requireBarrierWriteEvidence, requireCurrentBarrierWriteScope } from './barrierWrites.js';
 import { requireEnrollmentAuthority } from './recalculationRepository.js';
 import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
 import { readApplyAbandonment } from './applyRecovery.js';
 import { readProposalApplicability } from './proposalApplicability.js';
+import { recordPathFinderCableHistory } from './cableWriteHistory.js';
+import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
+import { canonicalPurposeJson } from '../../shared/pathfinderPurposePolicy.js';
 
 type Row = Record<string,any>;
 function receiptDto(row:Row) {
@@ -38,6 +41,7 @@ export function createPathFinderApply(pool:Pool) {
     if (!review || review.actor_id !== who.userId || review.proposal_id !== proposalId || review.proposal_hash !== proposal.proposal_hash) throw new PathFinderError('REVIEW_REQUIRED',409,'Review this exact proposal before applying it.');
     const dependencies = proposal.dependencies as DependencySnapshot,result = proposal.result;
     if (!proposalRoutingPreferences(dependencies.options)) throw new PathFinderError('PROPOSAL_PREFERENCES_REQUIRED',409,'The original calculation preferences are unavailable. Calculate and review a fresh proposal.');
+    const barrierEvidence=requireBarrierWriteEvidence(dependencies,result);
     requireVersionedCalculationScope(dependencies);
     if (proposal.status !== 'calculated' || !result.route?.success || !result.design || proposal.cancel_requested) throw new PathFinderError('PROPOSAL_NOT_APPLICABLE',409);
     const revisionResult=await verifyRevisionResultForProposal(client,{projectId,proposalId,result,dependencies,proposalHash:proposal.proposal_hash});
@@ -49,8 +53,8 @@ export function createPathFinderApply(pool:Pool) {
     requireCalculationLengthLedger(result,dependencies.settings);
     const synthetic=await hasSyntheticProof(client,dependencies);
     if (!synthetic && review.validation_method!=='manual-review') throw new PathFinderError('MANUAL_REVIEW_REQUIRED',409,'Confirm manual review of this exact proposal before applying it. Historical reviews do not grant manual acceptance.');
-    await calculationEngineIdentity({force:true});
-    const current = await collectDependenciesForVersion(client,projectId,proposal.cable_id,dependencies.options,dependencies.schemaVersion,true);
+    const identity=await requireCurrentBarrierWriteScope(client,dependencies as BarrierDependencySnapshot);
+    const current = await collectDependenciesForVersion(client,projectId,proposal.cable_id,dependencies.options,dependencies.schemaVersion,true,identity);
     if (!current.dependencies || hash(current.dependencies) !== proposal.dependency_hash || input.expectedCableWriteRevision !== current.cable.cable_write_revision) throw new PathFinderError('PROPOSAL_STALE',409,'The cable or a calculation dependency changed. Recalculate and review.');
     await readSnapshot(dependencies.artifact.id,dependencies.artifact.sha256);
     const length = result.design.designLengthMeters;
@@ -67,7 +71,17 @@ export function createPathFinderApply(pool:Pool) {
     const after = (await client.query<Row>(`UPDATE cables c SET routing=$3,design_length=$4,updated_at=NOW()
       WHERE c.project_id=$1 AND c.id=$2 AND c.cable_write_revision=$5 RETURNING to_jsonb(c)||jsonb_build_object('design_length',c.design_length::text,'install_length',c.install_length::text,'cable_write_revision',c.cable_write_revision::text) AS value`,[projectId,proposal.cable_id,route,length,input.expectedCableWriteRevision])).rows[0]?.value;
     if (!after) throw new PathFinderError('CABLE_WRITE_CONFLICT',409);
-    const provenance = {schemaVersion:'pathfinder.apply.v2',proposalId,proposalHash:proposal.proposal_hash,reviewId:input.reviewId,dependencies,
+    // Verify the exact pair and preserved fields even if a schema trigger changes.
+    let validTransition=false;
+    try {
+      const changed=new Set(['routing','design_length','updated_at','cable_write_revision']);
+      validTransition=after.routing===route&&canonicalDecimalString(after.design_length)===canonicalDecimalString(length)
+        &&BigInt(after.cable_write_revision)===BigInt(before.cable_write_revision)+1n
+        &&canonicalPurposeJson(Object.keys(before).sort())===canonicalPurposeJson(Object.keys(after).sort())
+        &&Object.keys(before).every(key=>changed.has(key)||canonicalPurposeJson(before[key])===canonicalPurposeJson(after[key]));
+    }catch{validTransition=false;}
+    if(!validTransition)throw new PathFinderError('APPLY_WRITE_INTEGRITY',409,'The exact routing and design length could not be recorded with all other cable values preserved.');
+    const provenance = {schemaVersion:'pathfinder.apply.v3',proposalId,proposalHash:proposal.proposal_hash,reviewId:input.reviewId,dependencies,barrierEvidence,
       revisionResult:{admissionId:revisionResult.admissionId,revisionResultSha256:revisionResult.revisionResultSha256,baselineHash:revisionResult.baselineHash,
         engineResultSha256:revisionResult.engineResultSha256,ledgerHash:revisionResult.ledgerHash,dependencyHash:revisionResult.dependencyHash,
         oldModel:revisionResult.oldModel,newModel:revisionResult.summary.newModel,comparisonRef:revisionResult.comparisonRef,reasons:revisionResult.summary.reasonCodes,
@@ -77,16 +91,12 @@ export function createPathFinderApply(pool:Pool) {
       review:{id:review.id,actorId:review.actor_id,loginId:review.review_login_id,reviewedAt:review.reviewed_at,validationMethod:review.validation_method,
         dependencyHash:review.review_dependency_sha256,revisionResultSha256:review.revision_result_sha256},
       engineeringAcceptanceMessage:synthetic?'This is the explicitly seeded synthetic fixture; it is not acceptance of the real converted model.':'An administrator confirmed manual review of this exact proposal. Native engineering parity has not been performed; broader user acceptance remains pending.'};
-    await client.query(`INSERT INTO cable_versions(id,cable_id,version_number,change_type,change_source,cable_number,revision,mto,tag,cable_type_id,cable_type_name,
-      from_location,to_location,routing,delivery,design_length,install_length,pull_date,connected_from,connected_to,tested,changed_by,changed_by_snapshot)
-      SELECT $1,c.id,COALESCE((SELECT MAX(v.version_number) FROM cable_versions v WHERE v.cable_id=c.id),0)+1,'update','pathfinder',c.cable_id,c.revision,c.mto,c.tag,c.cable_type_id,ct.name,
-      c.from_location,c.to_location,c.routing,c.delivery,c.design_length,c.install_length,c.pull_date,c.connected_from,c.connected_to,c.tested,$4,
-      (SELECT jsonb_build_object('id',u.id,'firstName',u.first_name,'lastName',u.last_name,'email',u.email) FROM users u WHERE u.id=$4)
-      FROM cables c JOIN cable_types ct ON ct.id=c.cable_type_id WHERE c.project_id=$2 AND c.id=$3`,[randomUUID(),projectId,proposal.cable_id,who.userId]);
+    await recordPathFinderCableHistory(client,{projectId,cableId:proposal.cable_id,actorId:who.userId});
     const receipt = (await client.query<Row>(`INSERT INTO pf_apply_receipts(id,project_id,actor_id,idempotency_key,payload_hash,proposal_id,cable_id,before_snapshot,after_snapshot,provenance)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,[randomUUID(),projectId,who.userId,input.idempotencyKey,payloadHash,proposalId,proposal.cable_id,before,after,provenance])).rows[0];
-    assertLoginNotExpired(who);
+    await requireCurrentBarrierWriteScope(client,dependencies as BarrierDependencySnapshot);
     await requireEnrollmentAuthority(client,{projectId,jobId:proposal.job_id,cableId:proposal.cable_id});
+    assertLoginNotExpired(who);
     return {receipt:receiptDto(receipt),duplicate:false};
   });
 }

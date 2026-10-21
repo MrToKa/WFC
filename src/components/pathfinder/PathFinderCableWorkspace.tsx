@@ -13,14 +13,15 @@ import type { EndpointCurrentScope } from '../../../shared/pathfinderEndpointBin
 import type { LocationImpactCalculation } from '../../../shared/pathfinderLocationImpacts';
 import { classifyCableWorkflow } from '../../../shared/pathfinderCableWorkflow';
 import type { usePathFinder } from '@/pages/ProjectDetails/hooks/usePathFinder';
-import type { PathFinderWorkflowDisplay } from '@/pages/ProjectDetails/PathFinderResults';
+import type { PathFinderWorkflowDisplay, PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { cableWorkflowReason, PathFinderNeedsRoutingList } from './PathFinderNeedsRoutingList';
 import { PathFinderCableRoutingPanel } from './PathFinderCableRoutingPanel';
 
 type Access = { projectId: string | null; loadedProjectId: string | null; accountId: string | null; token: string | null; isAdmin: boolean };
 export type PathFinderCableWorkspaceProps = Access & { pf: ReturnType<typeof usePathFinder>; active: boolean;
   preferences: PathFinderPreferences | null; selectedCableId?: string | null; refreshKey?: number; onSelect: (row: CableWorkflowRow) => void;
-  display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void };
+  display?: PathFinderWorkflowDisplay; onTogglePath?: (cableId: string) => void; review?: PathFinderWorkflowReview | null;
+  onCalculationStart?: (cableId: string) => void };
 type Impact = { id: string; current: EndpointCurrentScope; calculation: LocationImpactCalculation | null; originCableId: string | null };
 
 /** One account/model/preferences owns this workspace. No action here uses full-state polling. */
@@ -35,6 +36,9 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const [selected, setSelected] = useState<CableWorkflowRow | null>(null), [open, setOpen] = useState(false);
   const [impact, setImpact] = useState<Impact | null>(null), [revision, setRevision] = useState(0), [notice, setNotice] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [submittedCalculation, setSubmittedCalculation] = useState<{ cableId: string; jobId: string | null;
+    previousJobId: string | null; previousProposalId: string | null } | null>(null);
+  const submittedRef = useRef(submittedCalculation); submittedRef.current = submittedCalculation;
   const [popup, setPopup] = useState<FloatingCableWindowRequest | null>(null), popupRef = useRef<FloatingCableWindowRequest | null>(null);
   const [preview, setPreview] = useState<{ row: CableWorkflowRow; anchor: HTMLElement } | null>(null);
   const dwell = useRef<ReturnType<typeof setTimeout> | null>(null), leave = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,7 +56,8 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     // User activation belongs to this click, before the editor is mounted.
     const request = requestFloatingCableWindow({ title: row.cable.tag || 'Cable routing' }, popupRef.current);
     popupRef.current = request; setPopup(request); dismissPreview();
-    read.current?.abort(); setSelected(row); selectedRef.current = row; setOpen(true); setNotice(null); props.onSelect(row);
+    read.current?.abort(); setSelected(row); selectedRef.current = row; setOpen(true); setNotice(null);
+    setSubmittedCalculation(previous => previous?.cableId === row.cable.id ? previous : null); props.onSelect(row);
   };
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const callbacks = useRef(props); callbacks.current = props;
@@ -73,6 +78,10 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
       if (!alive.current || ticket.signal.aborted || read.current !== ticket || selectedRef.current?.cable.id !== row.cable.id || !callbacks.current.active
         || callbacks.current.selectedCableId !== undefined && callbacks.current.selectedCableId !== row.cable.id) return;
       setSelected(detail.row); current.onSelect(detail.row);
+      const submitted = submittedRef.current, observed = detail.row.calculation;
+      if (submitted?.cableId === row.cable.id && (submitted.jobId ? observed.jobId === submitted.jobId : observed.jobId !== null && observed.jobId !== submitted.previousJobId)
+        && ['complete', 'failed', 'cancelled'].includes(observed.jobStatus ?? '')
+        && (observed.outcome !== 'calculated' || observed.proposalId !== submitted.previousProposalId)) setSubmittedCalculation(null);
     } catch { if (alive.current && !ticket.signal.aborted) setNotice('The saved operation is retained. Refresh this cable to check its current routing state.'); }
     finally { if (read.current === ticket) read.current = null; }
   }, []);
@@ -89,6 +98,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     if (!props.active) read.current?.abort();
     if (props.selectedCableId !== undefined && selectedRef.current && props.selectedCableId !== selectedRef.current.cable.id) {
       read.current?.abort(); selectedRef.current = null; setSelected(null); setOpen(false);
+      setSubmittedCalculation(null);
     }
   }, [props.active, props.selectedCableId]);
   // Restore only the most recent matching owned impact from a bounded history page.
@@ -132,14 +142,61 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
     refreshDiagnostics();
   }, [refreshDiagnostics]);
   const selectedStatus = selected ? classifyCableWorkflow(selected) : null;
+  // Follow only an explicitly submitted selected-cable calculation. This is a
+  // bounded read of its current metadata, never a second calculation or write.
+  useEffect(() => {
+    if (!submittedCalculation || calculating || !enabled || !props.projectId || !props.token || !preferences) return;
+    const submitted = submittedCalculation, projectId = props.projectId, token = props.token, ticket = new AbortController();
+    let stopped = false, timer: ReturnType<typeof setTimeout> | undefined, reads = 0;
+    const deadline = Date.now() + 120000;
+    const poll = async () => {
+      try {
+        const detail = await fetchPathFinderCableWorkflowDetail(projectId, token, submitted.cableId, preferences, ticket.signal);
+        const current = callbacks.current;
+        if (stopped || ticket.signal.aborted || !alive.current || !current.active || selectedRef.current?.cable.id !== submitted.cableId
+          || current.selectedCableId !== undefined && current.selectedCableId !== submitted.cableId) return;
+        if (detail.projectId !== projectId || detail.cableId !== submitted.cableId || detail.row.projectId !== projectId || detail.row.cable.id !== submitted.cableId)
+          throw new Error('CALCULATION_SCOPE_CHANGED');
+        const observed = detail.row.calculation, ownsNewJob = submitted.jobId ? observed.jobId === submitted.jobId
+          : observed.jobId !== null && observed.jobId !== submitted.previousJobId;
+        if (ownsNewJob) {
+          setSelected(detail.row); selectedRef.current = detail.row; current.onSelect(detail.row);
+          if (['complete', 'failed', 'cancelled'].includes(observed.jobStatus ?? '')) {
+            if (observed.outcome === 'calculated' && observed.proposalId === submitted.previousProposalId) throw new Error('EARLIER_PROPOSAL_RETAINED');
+            setSubmittedCalculation(null); setRevision(value => value + 1);
+            setNotice(observed.jobStatus === 'complete' ? 'The new calculation is ready. Compare the current and proposed values in this cable window, then use Show, Review and Apply.'
+              : 'The new calculation stopped without an applicable result. Existing Cable list values were retained.');
+            return;
+          }
+        }
+        reads++;
+        if (reads >= 80 || Date.now() >= deadline) { setNotice('The calculation outcome is not confirmed. Refresh the selected cable to inspect its current job; no new calculation or Apply was sent.'); return; }
+        timer = setTimeout(() => void poll(), 1500);
+      } catch (error) {
+        if (!stopped && !ticket.signal.aborted && error && typeof error === 'object' && 'status' in error && [401, 403].includes(Number(error.status))) authorityLost();
+        if (!stopped && !ticket.signal.aborted && alive.current) setNotice('The new calculation could not be checked. Refresh this cable before reviewing a result. Existing values were retained.');
+      }
+    };
+    void poll();
+    return () => { stopped = true; ticket.abort(); if (timer) clearTimeout(timer); };
+  }, [submittedCalculation, calculating, enabled, props.projectId, props.token, barrierPreferenceKey,
+    preferences?.secondaryDistanceMeters, preferences?.preferVerticalApproach, authorityLost]);
   const calculateSelected = async () => {
     const row = selectedRef.current, current = callbacks.current;
-    if (!enabled || calculating || !row || !current.preferences || row.calculation.jobStatus === 'queued' || row.calculation.jobStatus === 'running') return;
-    setCalculating(true); setNotice(null);
-    try { await current.pf.calculate([row.cable.id], true, current.preferences); if (alive.current && selectedRef.current?.cable.id === row.cable.id) refreshDiagnostics(); }
+    if (!enabled || calculating || submittedRef.current || !row || !current.preferences || row.calculation.jobStatus === 'queued' || row.calculation.jobStatus === 'running') return;
+    const submitted = { cableId: row.cable.id, jobId: null as string | null, previousJobId: row.calculation.jobId, previousProposalId: row.calculation.proposalId };
+    submittedRef.current = submitted;
+    setSubmittedCalculation(submitted); setCalculating(true); setNotice(null); current.onCalculationStart?.(row.cable.id);
+    try {
+      const result = await current.pf.calculate([row.cable.id], true, current.preferences);
+      if (alive.current && selectedRef.current?.cable.id === row.cable.id) setSubmittedCalculation({ ...submitted,
+        jobId: result && typeof result.jobId === 'string' ? result.jobId : null });
+    }
     catch { if (alive.current && selectedRef.current?.cable.id === row.cable.id) setNotice('Routing could not be calculated. Refresh this cable and try again.'); }
     finally { if (alive.current) setCalculating(false); }
   };
+  const popupReview = props.review && selected && props.review.cableId === selected.cable.id
+    && (props.review.pending || !submittedCalculation && props.review.proposalId === selected.calculation.proposalId) ? props.review : null;
   return <section aria-label="Cable routing workspace">
     <PathFinderNeedsRoutingList {...props} active={enabled} modelScopeKey={JSON.stringify([props.owner, revision])}
       preferences={preferences ?? { secondaryDistanceMeters: 2, preferVerticalApproach: true }} selectedCableId={selected?.cable.id ?? null}
@@ -169,11 +226,13 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
         selectionRevision: model.selectionRevision, contentFingerprint: model.contentFingerprint } : null,
       preparationKey: JSON.stringify([props.pf.preparationViewerGeneration, props.pf.data?.artifacts.map(item => [item.id, item.snapshotSha256])]),
       calculation, initialFill: { mode: 'when-both-empty' }, readSelection: props.pf.readSelection, onSaved: saved, onAuthorityLost: authorityLost,
-    }} onCalculate={enabled && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
+    }} onCalculate={enabled && !submittedCalculation && selected?.calculation.jobStatus !== 'queued' && selected?.calculation.jobStatus !== 'running' ? calculateSelected : undefined}
       onTogglePath={selected && props.onTogglePath ? () => props.onTogglePath?.(selected.cable.id) : undefined}
       pathVisible={props.display?.cableId === selected?.cable.id && props.display?.visible}
       calculatedRouting={props.display?.cableId === selected?.cable.id ? props.display?.routing : undefined}
       calculatedDesignLength={props.display?.cableId === selected?.cable.id ? props.display?.designLength : undefined}
+      review={popupReview}
+      calculationPending={submittedCalculation?.cableId === selected?.cable.id}
       actionsBusy={calculating || props.pf.busy} />
   </section>;
 }

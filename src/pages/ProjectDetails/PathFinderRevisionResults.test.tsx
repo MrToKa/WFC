@@ -38,8 +38,8 @@ const completeJob = (key = id(3)) => ({ id: key, projectId: id(1), status: 'comp
   failure: null, attempts: 1, createdAt: '2026-10-19T12:00:00Z', updatedAt: '2026-10-19T12:01:00Z' });
 const props = (): PathFinderRevisionResultsProps => ({ projectId: id(1), loadedProjectId: id(1), accountId: id(9), token: 'current-token', isAdmin: true, active: true, contextKey: 'model-A', onOpenProposal: vi.fn(), jobs: [completeJob()] });
 function sealedRow(row: ReturnType<typeof fixtures>['page']['rows'][number]) {
-  return { ...row, itemApplicability: { schemaVersion: 'wfc.pf.sealed-cable-applicability.v1' as const,
-    dependencyVersion: 'pathfinder.dependencies.v7' as const, projectId: id(1), jobId: id(3), cableId: row.cableId,
+  return { ...row, itemApplicability: { schemaVersion: 'wfc.pf.sealed-cable-applicability.v2' as const,
+    dependencyVersion: 'pathfinder.dependencies.v8' as const, projectId: id(1), jobId: id(3), cableId: row.cableId,
     proposalId: row.result!.proposalId, dependencyHash: row.result!.dependencyHash, scope: 'sealed-cable-item' as const } };
 }
 function setup() {
@@ -63,7 +63,7 @@ describe('administrator cable revision inspection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open exact proposal in Viewer' }));
     await waitFor(() => expect(p.onOpenProposal).toHaveBeenCalledWith(id(7), id(3))); expect(chooseHistory).toHaveBeenCalledTimes(3);
   });
-  it.each(['queued', 'running'] as const)('selects only exact current sealed v7 rows while the parent is %s', status => {
+  it.each(['queued', 'running'] as const)('selects only exact current sealed v8 rows while the parent is %s', status => {
     const { f, state } = setup(), row = sealedRow(f.page.rows[0]), readiness = vi.fn();
     const sibling = { ...f.page.rows[0], cableId: id(40), baseline: { ...row.baseline, currentCable: { ...row.baseline.currentCable, id: id(40), tag: 'UNSEALED-SIBLING' } } };
     vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row, sibling] }, detail: { ...f.detail, row } });
@@ -76,6 +76,19 @@ describe('administrator cable revision inspection', () => {
     expect(batch.select).toHaveBeenCalledOnce(); expect(batch.select).toHaveBeenCalledWith(expect.objectContaining({ cableId: row.cableId }), true);
     expect(readiness).toHaveBeenLastCalledWith(expect.objectContaining({ admissionId: id(2), jobId: id(3), ready: true, wholeJobReady: false, jobStatus: status, cancelRequested: false }));
     expect(screen.getByText(/Only individually sealed, current cable results can be reviewed/)).toBeVisible();
+  });
+  it.each(['running', 'complete'] as const)('keeps historical sealed v7 rows inspectable but not selectable when their parent is %s', status => {
+    const { f, state } = setup(), current = sealedRow(f.page.rows[0]);
+    const row = { ...current, itemApplicability: { ...current.itemApplicability,
+      schemaVersion: 'wfc.pf.sealed-cable-applicability.v1' as const, dependencyVersion: 'pathfinder.dependencies.v7' as const } };
+    vi.mocked(usePathfinderRevisionResults).mockReturnValue({ ...state, page: { ...f.page, rows: [row] }, detail: { ...f.detail, row } });
+    const batch = { entries: [], busy: false, select: vi.fn(), clearSelection: vi.fn() } as unknown as NonNullable<PathFinderRevisionResultsProps['batch']>;
+    render(<PathFinderRevisionResults {...props()} batch={batch} cables={[{ id: row.cableId, mto: 'Control' }] as PathFinderRevisionResultsProps['cables']}
+      jobs={[{ ...completeJob(), status }]} />);
+    expect(screen.getByRole('checkbox', { name: 'Select C-001 for review' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Inspect C-001' })).toBeEnabled();
+    expect(screen.getByText('Historical — fresh barrier calculation required')).toBeVisible();
+    expect(batch.select).not.toHaveBeenCalled();
   });
   it.each(['projectId', 'jobId', 'cableId', 'proposalId', 'dependencyHash'] as const)('refuses a running calculation row with a different proof %s', field => {
     const { f, state } = setup(), row = sealedRow(f.page.rows[0]);

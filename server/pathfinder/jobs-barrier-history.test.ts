@@ -79,7 +79,7 @@ describe('retained v8 proposal history after publication or capture changes',()=
   });
   it('does not extend the read fallback to locked human Review',async()=>{
     const db=database();await expect(createPathFinderJobs(db.pool,{} as PathFinderRepository).review(projectId,who,proposalId,'a'.repeat(64)))
-      .rejects.toMatchObject({code:'BARRIER_CALCULATION_SCOPE_CHANGED'});
+      .rejects.toMatchObject({code:'BARRIER_WRITE_PROOF_REQUIRED'});
     expect(db.query.mock.calls.some(([sql])=>sql.startsWith('INSERT INTO pf_reviews'))).toBe(false);expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
 });

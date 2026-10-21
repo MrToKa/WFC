@@ -8,6 +8,8 @@ import { cableWorkflowRowSchema } from '../../../shared/pathfinderCableWorkflow'
 import { cableEndpointContextSchema } from '../../../shared/pathfinderCableEndpoints';
 import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
 import { PathFinderCableRoutingPanel, type PathFinderCableRoutingPanelProps } from './PathFinderCableRoutingPanel';
+import type { PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
+import { cableComparisonInputSchema } from '../../../shared/pathfinderCableComparison';
 
 vi.mock('@/hooks/useCableEndpointSelection', () => ({ useCableEndpointSelection: vi.fn() }));
 vi.mock('@/hooks/useCableEndpointPairSelection', () => ({ useCableEndpointPairSelection: vi.fn() }));
@@ -46,9 +48,49 @@ function props(): PathFinderCableRoutingPanelProps {
       calculation: { jobId: null, jobStatus: null, itemState: null, outcome: 'not-evaluated', reasonCodes: [], errorCode: null, currentness: 'not-evaluated', proposalId: null, proposalHash: null, reviewable: false, acceptedMatchesCurrent: false } }),
     open: true, onClose: vi.fn(), onCalculate: vi.fn(), onTogglePath: vi.fn() };
 }
+function reviewController(p: PathFinderCableRoutingPanelProps): PathFinderWorkflowReview {
+  return { cableId: p.cable!.cable.id, proposalId: id(80), comparisonLoading: false, comparisonError: null, message: null,
+    reviewed: false, applied: false, canReview: true, canApply: false, busy: false, pending: false, canRecover: false, recoveryMessage: null, recoveryError: null,
+    review: vi.fn(), apply: vi.fn(), retry: vi.fn(), closePending: vi.fn(),
+    comparison: cableComparisonInputSchema.parse({ projectId: id(1), cableId: p.cable!.cable.id,
+      current: { source: 'live-cable-read', contextSha256: 'a'.repeat(64), mto: p.cable!.mto, cable: p.cable!.cable },
+      proposal: { projectId: id(1), cableId: p.cable!.cable.id, proposalId: id(80), proposalHash: 'b'.repeat(64), revisionResultHash: 'c'.repeat(64),
+        cableWriteRevision: p.cable!.cable.cableWriteRevision, routing: '/NEW/SECONDARY', designLength: '180' } }) };
+}
 beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection).mockReset().mockImplementation(() => assignment); vi.mocked(useCableEndpointSelection).mockReset(); });
 
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
+  it('compares retained and proposed routing and length in the same popup and requires separate review and Apply clicks', () => {
+    const p = props(); p.cable!.cable.routing = '/OLD/SECONDARY'; p.cable!.cable.designLength = '150';
+    const review = reviewController(p), view = render(<PathFinderCableRoutingPanel {...p} review={review} />);
+    const comparison = within(screen.getByRole('region', { name: 'Current and proposed cable values' }));
+    expect(comparison.getByText('/OLD/SECONDARY')).toBeVisible(); expect(comparison.getByText('/NEW/SECONDARY')).toBeVisible();
+    expect(comparison.getByText('Design length: 150 m')).toBeVisible(); expect(comparison.getByText('Design length: 180 m')).toBeVisible();
+    expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Review proposed routing' })); expect(review.review).toHaveBeenCalledOnce();
+    view.rerender(<PathFinderCableRoutingPanel {...p} review={{ ...review, reviewed: true, canReview: false, canApply: true }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply reviewed routing' })); expect(review.apply).toHaveBeenCalledOnce();
+    expect(p.cable!.cable.routing).toBe('/OLD/SECONDARY'); expect(p.cable!.cable.designLength).toBe('150'); expect(assignment.save).not.toHaveBeenCalled();
+  });
+  it('blocks an earlier proposal while a new calculation is pending and refuses a different cable controller', () => {
+    const p = props(), review = reviewController(p), view = render(<PathFinderCableRoutingPanel {...p} review={review} calculationPending />);
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled();
+    expect(screen.getByText(/Waiting for this cable’s new calculation/)).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Proposed cable values' })).toBeNull();
+    view.rerender(<PathFinderCableRoutingPanel {...p} review={{ ...review, cableId: id(99), canApply: true }} />);
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled(); expect(screen.getByRole('button', { name: 'Apply reviewed routing' })).toBeDisabled();
+    expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+  });
+  it('keeps original Apply recovery in the popup when comparison is unavailable without creating a new write', () => {
+    const p = props(), review = { ...reviewController(p), comparison: null, comparisonError: 'Refresh this exact comparison.', canReview: false,
+      canApply: false, pending: true, canRecover: true, recoveryError: 'The outcome is unconfirmed.' };
+    render(<PathFinderCableRoutingPanel {...p} review={review} />);
+    expect(screen.getByRole('button', { name: 'Review proposed routing' })).toBeDisabled(); expect(review.retry).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry pending routing Apply' })); expect(review.retry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Close pending routing request' })); expect(review.closePending).toHaveBeenCalledOnce();
+    expect(review.apply).not.toHaveBeenCalled(); expect(assignment.save).not.toHaveBeenCalled();
+  });
   it('keeps a bounded portal open through Model Browser focus, blur, pointer leave and outside interaction', () => {
     const p = props(); render(<><button>Outside control</button><iframe title="Model Browser" /><PathFinderCableRoutingPanel {...p} /></>);
     const dialog = screen.getByRole('dialog', { name: 'Cable <literal>' });

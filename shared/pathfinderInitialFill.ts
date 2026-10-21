@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { policyHashSchema as hash, policyRevisionSchema as revision, policyUuidSchema as uuid } from './pathfinderPurposePolicy.js';
 import { endpointCurrentScopeSchema } from './pathfinderEndpointBindings.js';
+import { barrierWriteEvidenceSchema } from './pathfinderBarrierWrites.js';
 
 export const INITIAL_FILL_LIMITS = Object.freeze({ cables: 10000, recordBytes: 1024 * 1024, authorityMilliseconds: 1800000 });
 /** The exact ECMAScript String.trim whitespace set; a server-owned SQL btrim parameter, never caller input. */
@@ -27,13 +28,29 @@ export const initialFillApplyRequestSchema = z.object({ schemaVersion: z.literal
   proposalId: uuid, expectedProposalHash: hash, mandateId: uuid, expectedCableWriteRevision: revision }).strict();
 export type InitialFillApplyRequest = z.infer<typeof initialFillApplyRequestSchema>;
 export function initialFillRequestHashInput(value: InitialFillApplyRequest) { return initialFillApplyRequestSchema.parse(value); }
-export const initialFillProvenanceSchema = z.object({ schemaVersion: z.literal('pathfinder.initial-fill.v1'), validationMethod: z.literal('automatic-initial-fill'),
+const provenanceFields = { validationMethod: z.literal('automatic-initial-fill'),
   nativeParity: z.literal('not-performed'), engineeringAccepted: z.literal(false), proposalId: uuid, proposalHash: hash,
   dependencies: z.unknown().refine(value => value !== null && typeof value === 'object' && !Array.isArray(value)),
   mandate: initialFillMandateReferenceSchema, request: initialFillApplyRequestSchema,
   revisionResult: z.object({ admissionId: uuid, revisionResultSha256: hash, baselineHash: hash, engineResultSha256: hash, ledgerHash: hash, dependencyHash: hash }).strict(),
-  authorized: z.object({ actorId: uuid, loginId: uuid, installationEpoch: uuid, targetGeneration: revision, authorizedAt: timestamp }).strict() }).strict().refine(value =>
-  value.request.proposalId === value.proposalId && value.request.expectedProposalHash === value.proposalHash && value.request.mandateId === value.mandate.id
-  && BigInt(value.authorized.targetGeneration) > 0n);
+  authorized: z.object({ actorId: uuid, loginId: uuid, installationEpoch: uuid, targetGeneration: revision, authorizedAt: timestamp }).strict() };
+const validProvenanceRequest = (value: { request: InitialFillApplyRequest; proposalId: string; proposalHash: string;
+  mandate: InitialFillMandateReference; authorized: { targetGeneration: string } }) => {
+  try { return value.request.proposalId === value.proposalId && value.request.expectedProposalHash === value.proposalHash && value.request.mandateId === value.mandate.id
+    && BigInt(value.authorized.targetGeneration) > 0n; } catch { return false; }
+};
+/** Frozen historical body: no defaults, new barrier fields or hash changes. */
+export const initialFillProvenanceV1Schema = z.object({ schemaVersion: z.literal('pathfinder.initial-fill.v1'), ...provenanceFields }).strict().refine(validProvenanceRequest);
+export const initialFillProvenanceV2Schema = z.object({ schemaVersion: z.literal('pathfinder.initial-fill.v2'), ...provenanceFields,
+  barrierEvidence: barrierWriteEvidenceSchema }).strict().refine(validProvenanceRequest).superRefine((value, context) => {
+  if (value.dependencies === null || typeof value.dependencies !== 'object' || Array.isArray(value.dependencies)) {
+    context.addIssue({ code: 'custom', message: 'Protected initial fill requires an exact v8 dependency body.' }); return;
+  }
+  const dependencies = value.dependencies as Record<string, unknown>, evidence = value.barrierEvidence;
+  if (dependencies.schemaVersion !== 'pathfinder.dependencies.v8' || dependencies.projectId !== evidence.projectId || dependencies.cableId !== evidence.cableId
+    || value.revisionResult.dependencyHash !== evidence.dependencySha256 || value.revisionResult.engineResultSha256 !== evidence.engineResultSha256)
+    context.addIssue({ code: 'custom', message: 'Protected initial fill retains the exact v8 dependency and v3 result evidence.' });
+});
+export const initialFillProvenanceSchema = z.union([initialFillProvenanceV1Schema, initialFillProvenanceV2Schema]);
 export type InitialFillProvenance = z.infer<typeof initialFillProvenanceSchema>;
 export const initialFillOutcomeSchema = z.enum(['written', 'already-written', 'review-required', 'stale', 'authority-expired', 'refused', 'unknown']);

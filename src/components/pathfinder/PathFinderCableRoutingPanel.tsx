@@ -6,6 +6,8 @@ import type { CableEndpointSelectionAccess } from '@/hooks/useCableEndpointSelec
 import { useCableEndpointPairSelection } from '@/hooks/useCableEndpointPairSelection';
 import type { CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/CablePopupSurface';
+import type { PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
+import { PathFinderCableComparison } from './PathFinderCableComparison';
 
 export type PathFinderCableRoutingPanelProps = {
   access: Omit<CableEndpointSelectionAccess, 'end' | 'cableId'>;
@@ -13,6 +15,7 @@ export type PathFinderCableRoutingPanelProps = {
   cable: CableWorkflowRow | null; open: boolean; onClose: () => void; anchor?: HTMLElement | null;
   onCalculate?: () => void | Promise<void>; onTogglePath?: () => void;
   pathVisible?: boolean; actionsBusy?: boolean; calculatedRouting?: string | null; calculatedDesignLength?: string | null;
+  review?: PathFinderWorkflowReview | null; calculationPending?: boolean;
 };
 type Endpoint = ReturnType<typeof useCableEndpointPairSelection>['from'];
 /** Persistent nonmodal portal; only its own bounds intercept pointer input. */
@@ -29,13 +32,15 @@ function FloatingRoutingPanel(props: PathFinderCableRoutingPanelProps & { cable:
   return <OwnedCableRoutingPanel key={props.cable.cable.id} {...props} floating={floating} />;
 }
 function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalculate, onTogglePath, pathVisible = false,
-  actionsBusy = false, calculatedRouting, calculatedDesignLength, floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
+  actionsBusy = false, calculatedRouting, calculatedDesignLength, review, calculationPending = false, floating }: PathFinderCableRoutingPanelProps & { cable: CableWorkflowRow; floating: ReturnType<typeof useFloatingCablePanel> }) {
   const title = useId(), panel = floating.panelRef;
   const [collapsed, setCollapsed] = useState(false), previousOpen = useRef(false), focusReturn = useRef<HTMLElement | null>(null);
   const active = access.active && open && !collapsed;
   const assignment = useCableEndpointPairSelection({ ...access, cableId: cable.cable.id, active });
   const { from, to, pending, legacyRecovery } = assignment, busy = assignment.busy || actionsBusy;
   const unsaved = Boolean(from.draft || to.draft || from.context?.automaticSelection || to.context?.automaticSelection);
+  const currentReview = review?.cableId === cable.cable.id ? review : null;
+  const reviewBlocked = busy || Boolean(pending) || unsaved || calculationPending || Boolean(currentReview?.pending);
   const close = () => { onClose(); const target = anchor?.isConnected ? anchor : focusReturn.current; if (target?.isConnected) target.focus({ preventScroll: true }); };
   const callbacks = useRef(close); callbacks.current = close;
   useLayoutEffect(() => {
@@ -101,7 +106,7 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         <textarea aria-label="Cable routing" className={styles.value} readOnly value={(calculatedRouting === undefined ? cable.cable.routing : calculatedRouting) ?? ''} placeholder="No routing calculated" rows={3} />
         {calculatedDesignLength !== undefined ? <p className={styles.note}>Calculated design length: {calculatedDesignLength ?? 'Not available'} m</p> : null}
         <div className={styles.actions}>
-          <Button disabled={busy || Boolean(pending) || unsaved || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
+          <Button disabled={busy || Boolean(pending) || unsaved || calculationPending || !onCalculate} onClick={() => void onCalculate?.()}>Calculate routing</Button>
           <Button disabled={busy || !onTogglePath || !pathVisible && (!cable.calculation.proposalId || unsaved)} aria-pressed={pathVisible} onClick={onTogglePath}>{pathVisible ? 'Hide' : 'Show'}</Button>
           <Button appearance="primary" disabled={busy || Boolean(pending) || !assignment.canSave} onClick={() => void assignment.save('Confirm cable From/To model assignments.')}>Save</Button>
         </div>
@@ -110,6 +115,28 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
         {assignment.error ? <p role="alert" className={styles.note}>{assignment.error}</p> : null}
         {assignment.notice ? <p role="status" className={styles.note}>{assignment.notice}</p> : null}
         <p className={styles.note}>Save recalculates affected cables. Routing and design length fill automatically only when both are empty. Existing values require Review and Apply.</p>
+      </section>
+      <section className={styles.field} aria-label="Review and Apply cable routing">
+        <h4 className={styles.heading}>Review and Apply</h4>
+        <p className={styles.note}>Keep the existing Cable list values. Compare them with the calculated proposal, inspect its path with Show, then explicitly review and Apply it.</p>
+        {calculationPending ? <p role="status" className={styles.note}>Waiting for this cable’s new calculation. Earlier proposals cannot be approved here.</p>
+          : currentReview?.comparisonLoading ? <Spinner size="tiny" label="Reading current and proposed cable values…" />
+            : <PathFinderCableComparison input={currentReview?.comparison ?? null} />}
+        {currentReview?.comparisonError ? <p role="alert" className={styles.note}>{currentReview.comparisonError}</p> : null}
+        {currentReview?.message ? <p role="status" className={styles.note}>{currentReview.message}</p> : null}
+        {currentReview?.reviewed ? <p role="status" className={styles.note}>Review confirmed for this exact proposal. Apply updates routing and design length together.</p> : null}
+        {currentReview?.applied ? <p role="status" className={styles.note}>The matching Apply receipt is confirmed. Cable list values have been updated.</p> : null}
+        <div className={styles.actions}>
+          <Button disabled={reviewBlocked || !currentReview?.canReview || currentReview.busy} onClick={() => currentReview?.review()}>Review proposed routing</Button>
+          <Button appearance="primary" disabled={reviewBlocked || !currentReview?.canApply || currentReview.busy} onClick={() => currentReview?.apply()}>Apply reviewed routing</Button>
+        </div>
+        {currentReview?.pending ? <section aria-label="Pending cable routing Apply">
+          <p className={styles.note}>The original Apply command is retained. Check its outcome before approving another result.</p>
+          <div className={styles.actions}><Button disabled={busy || !currentReview.canRecover} onClick={currentReview.retry}>Retry pending routing Apply</Button>
+            <Button disabled={busy || !currentReview.canRecover} onClick={currentReview.closePending}>Close pending routing request</Button></div>
+        </section> : null}
+        {currentReview?.recoveryError ? <p role="alert" className={styles.note}>{currentReview.recoveryError}</p> : null}
+        {currentReview?.recoveryMessage ? <p role="status" className={styles.note}>{currentReview.recoveryMessage}</p> : null}
       </section>
       <details><summary>Endpoint details</summary><p className={styles.note}>The connection point is the bounding-box bottom centre in project metres. Manually assigned points must be checked again after a model revision.</p>
         <Button disabled={busy || Boolean(pending) || !assignment.enabled} onClick={() => void assignment.refresh()}>Refresh endpoint contexts</Button>
