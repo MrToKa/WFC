@@ -61,10 +61,47 @@ and the inventory proves no other DB client; it cannot authorize source update
 or either runtime-start gate. Actual backup-mode diagnostic2 PASS records
 `sourceUpgradeAuthorized:false`. No grant/schedule row was changed or renewed.
 
-Fresh backup/restore, candidate build, target migration/runtime and source update
-are **NOT_RUN** at this checkpoint. Continue independent backup and target
-qualification. Before source update, the live grant must be safely resolved;
-do not silently disable it, fabricate an expired status or widen runtime deltas.
+Operation55c9f2e7 checkpoint: init, fresh backup, restore-quarantine, candidate
+build and target-migration **PASS**. Backup has134tables/80846rows and278067273raw
+SQL bytes, all model/staging/PF files and four exact images. Before-fence data and
+globals are exact; only the declared restore fences differ afterward. Source5191
+resumed and healthpassed. Fresh target owner89567827-65e0-4def-9e26-d4f80fe48e8f,
+composewfc-pathfinder-local-833787c05627, port5192. Full schema-only migration and
+second idempotent pass preserve every old row/key/sequence; canonical new seven
+tables remain empty and the new ordinal uncalled. Runtime/source delivery was
+not attempted in this operation.
+
+The user explicitly disabled the persistent setting in old synthetic project
+PF-R3-UI-56eadef6-8382-49f8-a652-c8f12026602e. Root read-only protected-runtime
+preflight confirms0current enabled grants and0runnable work/leases; the eight
+passive rows remain. The agent did not change grant/schedule rows. This change
+occurred **after** the first backup. Operation55c9f2e7 is therefore superseded,
+not failed/retried or relabelled completed. Its backup/evidence remain. Root
+separately retired only its verified new5192 fixture, positively checked resource
+absence and source health/conservation. No controller prerequisite was forged.
+
+Continue with fresh operationcabe7f1a-568b-43a7-b034-ffcca45b5e39 under the SAME
+source controls, from a fresh backup that includes the user's setting. Target
+runtime, final source migration/runtime and browser/HTTP delivery remain NOT_RUN.
+
+## Fresh built-image actual planning replay
+
+First candidate API6d087cc0e3e894d840d93584e44c72ecfef3e6d3678ffce361ad2a5066039767,
+web82a69effc3f780bdb50ad128d9c7b96795602b2f38b604df839aa4e31b8fb27c;
+engineidentitycb8e6a08e33869203b84ead898b3f0b47985082be4c178235a598e0c4102a6c8.
+Its installed runner209920bytes SHA2ba050c323db52636ae6650942ce69ba3226aaba708cbce7d88c69cee838e24c
+differs from B8b's checked artifact, so root qualified the actual image's own DLLs
+and compiled server adapters, with no old assembly/dist overlays.
+
+Fresh owned replay7eee550c-75b9-4625-b174-ca367b500b04 **PASS all five modes**:
+cold16.931s/disk13.591s/sessiondisk13.634s/warm1.233s/0.940s. Full DTOs equal B8b
+final7, normalizing ONLY requestId and prepared.loadedFromDisk. The exact actual
+snapshot/request/driver and source scope/endpoints/cable bookends are unchanged.
+Engine512MiB sampled guard remains; maxsampleone-shot441749504/session451059712,
+Node80891904bytes,100ms sampling,0unavailable; no exact-peak claim. Exit0/noOOM/
+timeout. Bounded network-none/readonly/init fixture retired through tracked own
+cleanup; private inputs/cache/receipts retained. This is single actual cable
+legacy planning equivalence, not protected civil/native/Auto/Apply acceptance.
 
 ## Protected scope and remaining acceptance
 

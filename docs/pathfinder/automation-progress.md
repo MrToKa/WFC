@@ -1,28 +1,51 @@
 # PathFinder local implementation progress
 
-## Current: PF-B9 ACTIVE — source controls and migration qualifier
+## Current: PF-B9 ACTIVE — fresh source backup after user setting change
 
-Branch pf-b9-barrier-delivery-local-20261021; base b4c1f56b49a09e3a2be79ba14d3d50c851bc98af.
-Root owns shared foundations, docs/Git and ALL actual builds/tests/Docker/SQL/HTTP.
-A owns new v3 operator/runtime helper; B migration qualifier; C read-only review.
-B9 controls: foundations168PASS; revised operator/foundations52PASS (overlap).
-Initial operator48PASS/4FAIL retained: explicit mounted-module seed + Windows temp
-canonical fixture fixed; production guards unchanged. PG18 readonly catalog5
-PASS:442relations/59routines/2sequences/1view/0unsupported. Earlier42725 SQL and
-unsupported-view diagnostic failures retained. No B9 backup/build/runtime mutation.
-Readonly quiescence FAIL:8historical preparations +1enabled grant; all job/import/
-impact/initial-fill/recalculation/current-lease counts0. Source-only audit now
-distinguishes passive records from runnable authority; no rows cancelled/changed.
-Draft scratch: .scratch/barrier-delivery-20261021-9f5058f3-8408-4a36-8592-dd46d90e6742.
-Actual one-shot execution will use a fresh absent operation directory.
-Report92 ACTIVE. Final combinedcontrols3:99PASS; source-onlyindependentreviewclear.
-Actualbackup-mode diagnosticPASS retains8expiredpassivehumanrows+1persistentgrant,
-sourceUpgradeAuthorized=false. Validissuergrant stillBLOCKSsourceupgrade; never
-treatasexpired orwaiveprotectedruntimegate. No grant/schedule changes.
-Freshoperation next: .scratch/barrier-delivery-55c9f2e7-c53d-4ef1-ad92-26f14ed2aa3e.
-Executeinit/backup/restore/candidate/targetgates ONLY; sourceupdateheld.
-Included buildcontext/docs nowfreeze throughcandidatebuild; write runtimeprogress
-onlyunderexcludedownscratch untilcandidatebuildcompleted.
+Branch pf-b9-barrier-delivery-local-20261021. Product959dfd975948b795fa5e661b3be63e3c72c4e91f;
+baseb4c1f56. Report92 ACTIVE. Root sole actual builds/tests/Docker/SQL/HTTPexecutor.
+A/B source writers frozen; C independent read-only review clear; no active agents
+editing product. Foreign .pf0-work/.pf2-work + denied paths/parents untouched.
+
+Controls final99PASS; earlier foundations168PASS overlap. Initial operator and
+fixture/SQL diagnostic failures retained; no production guard weakened. Actual
+PG18catalogPASS442relations/59routines/2seq/1view/0unsupported.
+
+Operation55c9f2e7-c53d-4ef1-ad92-26f14ed2aa3e init/backup/restore-quarantine/
+candidate-build/target-migrationPASS. Backup134tables/80846rows/278067273rawSQLbytes;
+allmodels/PF files+fourimages verified. Exactrestore/fence and canonical migration+
+idempotence preserving alloldrows/keys/sequences PASS; newsevenempty/ordinaluncalled.
+Source5191 resumed and healthy. Target89567827 /wfc-pathfinder-local-833787c05627
+retired onlyafter verified scope; source/backup/privateevidence retained.
+
+User explicitly disabled backgroundgrant in old synthetic PF-R3-UI project
+56eadef6-8382-49f8-a652-c8f12026602e. Root readonlyprotected-runtime gate nowPASS:
+0enabledgrants/0runnablejobs/imports/dispatch/recalc/leases,8expiredpassivehumanrows.
+No grant/schedule/cable change byagent. Because userchange AFTERbackup, oldoperation
+is SUPERSEDED, not stagecomplete. Do not run old update/retire controller phases.
+
+Newfreshoperation NEXT: .scratch/barrier-delivery-cabe7f1a-568b-43a7-b034-ffcca45b5e39.
+Use v3 same source controls/qualifiedinventory62140a916c96509c771f89f161b989e11927ca2202c23ff8ddddab2a30da812f
+from diagnostic scratch .scratch/barrier-delivery-20261021-9f5058f3-8408-4a36-8592-dd46d90e6742.
+Init→freshbackup→freshinactive5192→candidate→migration/runtime→late sourceNoDrift→
+sourceimageonlydelivery→sourcequalifier→retire. No original5180/5190 changes.
+
+New candidate image replayPASS5modes onactual330tray/114111391byte frozen snapshot:
+cold16.931s/disk13.591s/session13.634s/warm1.233/0.940s, fullDTOequalsB8b7.
+Runner2ba050c323db52636ae6650942ce69ba3226aaba708cbce7d88c69cee838e24c;
+engineidentitycb8e6a08e33869203b84ead898b3f0b47985082be4c178235a598e0c4102a6c8.
+Exact source/endpoints/cable unchanged; exit0/noOOM/timeout; sampledengine451059712
+maxbytes (notexactpeak),0unavailable; unchanged512MiBguard. Only tracked own new
+replayfixture retired; evidence .scratch/candidate-replay-7eee550c-75b9-4625-b174-ca367b500b04.
+Nextimage MUSTmatchthiscompleteengineclosure or needfreshqualification.
+
+Actual civil/SDK/browser remainsBLOCKED: namedRVMgroups requirelegitimate complete
+triangle/opening capture; no bbox/empty/synthetic/native acceptance substitute or
+savedbrowserrefusal bypass. Source5191 owner8fffd6b8/runtimebatched-capture-runtime-
+20261018-1600/composewfc-pathfinder-local-0cba87606e9b; preserveallsource resources.
+SimplifiedPreparer stillqueued AFTER permittedPFchecks in separateworktree; source
+readiness audit complete, no runtime/credential implementation changed. Automation
+continues. Newoperation progress underexcludedownscratch while buildcontextfrozen.
 
 ## PF-B8b technically verified baseline
 

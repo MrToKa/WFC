@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "wfc.pf.b9.checkpoint.v1",
+  "status": "ACTIVE",
+  "at": "2026-10-21T21:06:35.950Z",
+  "productCommit": "959dfd975948b795fa5e661b3be63e3c72c4e91f",
+  "controls": {
+    "finalCombined": 99,
+    "status": "PASS",
+    "earlierFoundation": 168,
+    "countsOverlap": true
+  },
+  "firstOperation": {
+    "id": "55c9f2e7-c53d-4ef1-ad92-26f14ed2aa3e",
+    "status": "SUPERSEDED_AFTER_USER_SETTING_CHANGE",
+    "passed": [
+      "init",
+      "backup",
+      "restore-quarantine",
+      "candidate-build",
+      "target-migration"
+    ],
+    "sourceUpdate": "NOT_RUN",
+    "targetRetirement": "PASS_verified_only_new_fixture",
+    "sourceHealthyAndResourcesConserved": true,
+    "backupTables": 134,
+    "backupRows": "80846",
+    "backupRawSqlBytes": "278067273"
+  },
+  "newOperation": {
+    "id": "cabe7f1a-568b-43a7-b034-ffcca45b5e39",
+    "status": "NOT_RUN"
+  },
+  "userDisabledBackgroundGrant": {
+    "independentlyReadVerified": true,
+    "enabledCurrentGrants": 0,
+    "runnableWork": 0,
+    "agentChangedGrant": false
+  },
+  "candidateActualReplay": {
+    "status": "PASS_DIAGNOSTIC_ONLY",
+    "modes": 5,
+    "runnerSha256": "2ba050c323db52636ae6650942ce69ba3226aaba708cbce7d88c69cee838e24c",
+    "exactDtoEqualsB8bFinal7": true,
+    "sourceBookends": "PASS",
+    "fixtureRetirement": "PASS",
+    "actualCivilAvoidance": "BLOCKED",
+    "nativeParity": "NOT_RUN",
+    "engineeringAcceptance": "NOT_RUN"
+  }
+}
