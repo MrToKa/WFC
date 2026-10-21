@@ -6,12 +6,19 @@ import { createCableEndpointCommands } from './cableEndpointCommands.js';
 import { endpointBindingHash, confirmEndpointBindingChangeInTransaction, endpointBindingTransaction } from './endpointBindingRepository.js';
 import { cableEndpointContextHashInput, type CableEndpointContext, type CableEndpointCommand } from '../../shared/pathfinderCableEndpoints.js';
 import { cableEndpointPairCommandSchema, type CableEndpointPairCommand } from '../../shared/pathfinderCableEndpointPair.js';
-const mocks = vi.hoisted(() => ({ selection: vi.fn(), automatic: vi.fn(), append: vi.fn(), mandate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ selection: vi.fn(), automatic: vi.fn(), append: vi.fn(), mandate: vi.fn(), barriers: vi.fn() }));
 vi.mock('./cableEndpointSelection.js', () => ({ readCableEndpointSelection: mocks.selection }));
 vi.mock('./locationImpactRepository.js', () => ({ appendLocationImpactInTransaction: mocks.append }));
 vi.mock('./initialFillMandates.js', () => ({ appendInitialFillMandateInTransaction: mocks.mandate }));
 vi.mock('./automaticEndpointCandidates.js', () => ({ readAutomaticNamedEndpointCandidate: mocks.automatic }));
-beforeEach(() => { vi.resetAllMocks(); mocks.automatic.mockResolvedValue({ status: 'missing', candidateObjectIds: [], point: null, objectId: null }); });
+vi.mock('./barrierCalculationScope.js', () => ({ collectBarrierCalculationScope: mocks.barriers }));
+beforeEach(() => { vi.resetAllMocks(); mocks.automatic.mockResolvedValue({ status: 'missing', candidateObjectIds: [], point: null, objectId: null }); mocks.barriers.mockResolvedValue({}); });
+function calculationFor(projectId: string, current: NonNullable<CableEndpointContext['current']>) {
+  const scope = { projectId, modelVersionId: current.modelVersionId, selectionRevision: current.selectionRevision, contentFingerprint: current.contentFingerprint,
+    captureFrameId: current.captureFrameId, captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
+  return { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting: { schemaVersion: 'wfc.pf.barrier-admission-intent.v1' as const,
+    scope, expectedRegistryRevision: '3', expectedSnapshot: { snapshotId: id(700), scope, registryRevision: '3', contentSha256: 'c'.repeat(64), mode: 'explicit-empty' as const }, drillThroughWalls: false } }, timeoutMilliseconds: 60000 };
+}
 /** Extends the existing mock SQL protocol; all binding mutations still exercise the real transaction/helper. */
 function fixture() {
   const f = endpointBindingFixture(), settings = { cableRevision: '7', mto: 'LV' as string | null, oversized: false, budget: false, missing: false, impactBytes: '1024' };
@@ -58,6 +65,42 @@ function fixture() {
   return { ...f, settings, query, client, pool, repo, projectId, cableId, read, legacyCommand: f.command, command, save, close, object, ref };
 }
 describe('cable endpoint commands with synthetic SQL; selection reader independently tested', () => {
+  it.each(['wfc.pf.cable-endpoint-command.v2','wfc.pf.cable-endpoint-command.v3'] as const)('refuses a fresh %s calculation without intent before any endpoint/outbox write',async schemaVersion=>{
+    const f=fixture(),base=f.command(await f.read()),command={...base,schemaVersion,calculation:{preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeoutMilliseconds:60000},...(schemaVersion.endsWith('v3')?{initialFill:null}:{})};
+    await expect(f.save(command as CableEndpointCommand)).rejects.toMatchObject({code:'BARRIER_ROUTING_INTENT_REQUIRED'});
+    expect(f.state.locations.size).toBe(0);expect(f.state.bindings.size).toBe(0);expect(f.state.commands.size).toBe(0);
+    expect(mocks.barriers).not.toHaveBeenCalled();expect(mocks.append).not.toHaveBeenCalled();expect(mocks.mandate).not.toHaveBeenCalled();
+  });
+  it('verifies the current published barrier scope before a fresh calculated endpoint save',async()=>{
+    const f=fixture(),current=await f.read(),calculation=calculationFor(f.projectId,current.current!),command={...f.command(current),schemaVersion:'wfc.pf.cable-endpoint-command.v2' as const,calculation};
+    mocks.append.mockResolvedValue({id:id(900),status:'pending',eligibleCables:2,excludedMvCables:0,blockedCategoryCables:0});
+    mocks.barriers.mockImplementation(async(client,projectId,intent)=>{expect(client).toBe(f.client);expect(projectId).toBe(f.projectId);expect(intent).toEqual(calculation.preferences.barrierRouting);expect(f.state.bindings.size).toBe(0);expect(f.state.commands.size).toBe(0);return{};});
+    await f.save(command);expect(mocks.barriers).toHaveBeenCalledExactlyOnceWith(f.client,f.projectId,calculation.preferences.barrierRouting,{signal:undefined});
+    expect(mocks.append).toHaveBeenCalledOnce();
+  });
+  it('refuses a changed publication before committing a new location or queued impact',async()=>{
+    const f=fixture(),current=await f.read(),command={...f.command(current),schemaVersion:'wfc.pf.cable-endpoint-command.v2' as const,calculation:calculationFor(f.projectId,current.current!)};
+    mocks.barriers.mockRejectedValue(Object.assign(Error('Synthetic changed publication'),{code:'BARRIER_CALCULATION_SCOPE_CHANGED'}));
+    await expect(f.save(command)).rejects.toMatchObject({code:'BARRIER_CALCULATION_SCOPE_CHANGED'});
+    expect(f.state.bindings.size).toBe(0);expect(f.state.locations.size).toBe(0);expect(f.state.commands.size).toBe(0);expect(mocks.append).not.toHaveBeenCalled();
+  });
+  it('recovers an exact historical saved calculation command without requiring a now-missing intent or current publication',async()=>{
+    const f=fixture(),base=f.command(await f.read()),savedCommand={...base,schemaVersion:'wfc.pf.cable-endpoint-command.v2' as const,calculation:null};
+    mocks.append.mockResolvedValue({id:id(900),status:'blocked',eligibleCables:2,excludedMvCables:0,blockedCategoryCables:0});
+    const saved=await f.save(savedCommand),historical={...savedCommand,calculation:{preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeoutMilliseconds:60000}},receipt={...saved,commandSha256:endpointBindingHash(historical)};
+    // Model the exact already-retained historical command and its verified
+    // receipt in this SQL fixture; production never rewrites old rows.
+    const request={schemaVersion:'wfc.pf.cable-endpoint-command-owner.v1',cableId:f.cableId,end:'from',command:historical};
+    f.state.commands.set(f.who.userId+':'+historical.idempotencyKey,{kind:'confirm',request_sha256:endpointBindingHash(request),request,receipt:{schemaVersion:'wfc.pf.cable-endpoint-stored.v1',status:'saved',receipt}});
+    f.state.prepared=false;mocks.barriers.mockRejectedValue(Error('Must not read current barriers'));
+    expect(await f.save(historical)).toEqual({...receipt,duplicate:true});expect((await f.close(historical)).status).toBe('saved');
+    expect(mocks.barriers).not.toHaveBeenCalled();expect(mocks.append).toHaveBeenCalledOnce();expect(f.state.bindings.size).toBe(1);
+  });
+  it('can close a historical unsaved missing-intent command without authorizing any delayed calculation',async()=>{
+    const f=fixture(),command={...f.command(await f.read()),schemaVersion:'wfc.pf.cable-endpoint-command.v2' as const,calculation:{preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeoutMilliseconds:60000}};
+    expect((await f.close(command)).status).toBe('closed');await expect(f.save(command)).rejects.toMatchObject({code:'CABLE_ENDPOINT_COMMAND_CLOSED'});
+    expect(mocks.barriers).not.toHaveBeenCalled();expect(mocks.append).not.toHaveBeenCalled();expect(f.state.bindings.size).toBe(0);
+  });
   it('reads exact cable-owned names and SHA context without login initialization or other DML', async () => {
     const f = fixture(), c = await f.read(); expect(c.logicalName).toBe('EQUIPMENT'); expect(c.canBind).toBe(true); expect(c.location).toBe(null);
     expect(c.contextSha256).toBe(endpointBindingHash(cableEndpointContextHashInput(c))); expect(f.queries.some(q => /^\s*(?:INSERT|UPDATE|DELETE|CREATE)\b/i.test(q))).toBe(false);
@@ -199,8 +242,9 @@ describe('cable endpoint commands with synthetic SQL; selection reader independe
     expect(receipt.locationImpact).toBeUndefined(); expect(mocks.append).not.toHaveBeenCalled(); expect(f.queries.join('\n')).not.toContain('wfc.pathfinder_location_impact');
     expect(f.state.commands.values().next().value?.request).toMatchObject({ command });
   });
-  it.each([null, { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 }])('v2 saves one durable impact with exact explicit configuration %j; replay and closure never append another', async calculation => {
-    const f = fixture(), command = { ...f.command(await f.read()), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation };
+  it.each([false, true])('v2 saves one durable impact with exact explicit configuration enabled=%s; replay and closure never append another', async enabled => {
+    const f = fixture(), current = await f.read(), calculation = enabled ? calculationFor(f.projectId, current.current!) : null,
+      command = { ...f.command(current), schemaVersion: 'wfc.pf.cable-endpoint-command.v2', calculation };
     const reference = { id: id(900), status: calculation ? 'pending' : 'blocked', eligibleCables: 2, excludedMvCables: 0, blockedCategoryCables: 0 }; mocks.append.mockResolvedValue(reference);
     const receipt = await f.save(command as CableEndpointCommand); expect(receipt.locationImpact).toEqual(reference);
     expect(mocks.append).toHaveBeenCalledExactlyOnceWith(expect.any(Object), expect.objectContaining({ calculation, affectedCableIds: [id(10), id(11)], commandSha256: endpointBindingHash(command) }), expect.any(Function));
@@ -241,7 +285,7 @@ async function pairFixture(ends: ('from' | 'to')[] = ['from', 'to']) {
   const command = cableEndpointPairCommandSchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-pair-command.v1', idempotencyKey: id(800),
     expectedContexts: { from: originals.from.contextSha256, to: originals.to.contextSha256 }, endpoints: ends.map(end => ({ end,
       command: { ...f.command(originals[end]), schemaVersion: 'wfc.pf.cable-endpoint-command.v3',
-        calculation: { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 60000 }, initialFill: { mode: 'when-both-empty' } },
+        calculation: calculationFor(f.projectId, originals[end].current!), initialFill: { mode: 'when-both-empty' } },
     })) });
   let impactId = 900, mandateId = 950;
   mocks.append.mockImplementation(async (_client, input, check) => { check(); return { id: id(impactId++), status: input.calculation ? 'pending' : 'blocked', eligibleCables: input.affectedCableIds.length, excludedMvCables: 0, blockedCategoryCables: 0 }; });
@@ -251,6 +295,21 @@ async function pairFixture(ends: ('from' | 'to')[] = ['from', 'to']) {
     closePair: (input: CableEndpointPairCommand = command) => f.repo.closePair(f.projectId, f.who, f.cableId, input) };
 }
 describe('atomic cable endpoint pair saves using synthetic SQL', () => {
+  it('checks the identical pair barrier intent once before either binding write',async()=>{
+    const f=await pairFixture();mocks.barriers.mockImplementation(async()=>{expect(f.state.bindings.size).toBe(0);expect(f.state.locations.size).toBe(0);return{};});
+    await f.savePair();expect(mocks.barriers).toHaveBeenCalledOnce();expect(f.state.bindings.size).toBe(2);
+  });
+  it('refuses a fresh pair with missing calculation intent without writing either head or queuing work',async()=>{
+    const f=await pairFixture();for(const endpoint of f.pair.endpoints)delete endpoint.command.calculation!.preferences.barrierRouting;
+    await expect(f.savePair()).rejects.toMatchObject({code:'BARRIER_ROUTING_INTENT_REQUIRED'});
+    expect(f.state.bindings.size).toBe(0);expect(f.state.locations.size).toBe(0);expect(f.state.commands.size).toBe(0);expect(mocks.append).not.toHaveBeenCalled();
+    expect((await f.closePair()).status).toBe('closed');expect(mocks.barriers).not.toHaveBeenCalled();
+  });
+  it('refuses the entire pair when current barrier publication cannot be verified',async()=>{
+    const f=await pairFixture();mocks.barriers.mockRejectedValue(Object.assign(Error('Changed barrier publication'),{code:'BARRIER_CALCULATION_SCOPE_CHANGED'}));
+    await expect(f.savePair()).rejects.toMatchObject({code:'BARRIER_CALCULATION_SCOPE_CHANGED'});
+    expect(f.state.bindings.size).toBe(0);expect(f.state.locations.size).toBe(0);expect(f.state.commands.size).toBe(0);expect(mocks.append).not.toHaveBeenCalled();
+  });
   it('commits both heads before either impact/mandate and stores the original pair and child receipts atomically', async () => {
     const f = await pairFixture(); f.queries.length = 0;
     mocks.append.mockImplementation(async (_client, input) => { expect(f.state.heads.size).toBe(2); return { id: input.idempotencyKey, status: 'pending', eligibleCables: 2, excludedMvCables: 0, blockedCategoryCables: 0 }; });

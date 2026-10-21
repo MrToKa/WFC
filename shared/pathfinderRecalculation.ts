@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { canonicalPurposeJson, policyRevisionSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
+import { barrierAdmissionIntentSchema } from './pathfinderBarrierAdmission.js';
 
 /** New refusal bounds, not a claim that full-scale runtime capacity is proven. */
 export const RECALCULATION_LIMITS = Object.freeze({
@@ -24,12 +25,22 @@ const reasonText = text(2048).refine(value => value.trim().length > 0);
 const timestamp = z.string().datetime({ offset: false }).refine(value => value.endsWith('Z') && !/[\u0000-\u0020]/u.test(value));
 const count = z.number().int().nonnegative().max(RECALCULATION_LIMITS.cables);
 export const recalculationReasonSchema = z.string().max(96).refine(value => /^[A-Z][A-Z0-9_]{0,95}$/.exec(value)?.[0] === value);
-export const recalculationDomainSchema = z.enum(['model', 'geometry', 'routing', 'endpoints', 'settings', 'cables', 'engine', 'manual', 'preferences']);
+export const recalculationDomainSchema = z.enum(['model', 'geometry', 'routing', 'endpoints', 'settings', 'cables', 'engine', 'manual', 'preferences', 'barriers']);
 export const recalculationStatusSchema = z.enum(['disabled', 'awaiting_authority', 'paused', 'debouncing', 'collecting', 'queued', 'calculating', 'complete', 'blocked', 'superseded', 'failed']);
 export const recalculationPreferencesSchema = z.object({
   secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000),
   preferVerticalApproach: z.boolean(),
+  // Absence retains the historical request/hash. Fresh barrier-aware requests
+  // must submit the complete strict intent; never infer it from UI defaults.
+  barrierRouting: barrierAdmissionIntentSchema.optional(),
 }).strict();
+/** A finite background grant must never inherit permission to drill from a
+ * prior manual calculation. Scoped administrator calculations use the general
+ * preference schema above and may carry an explicit true choice. */
+export const backgroundRecalculationPreferencesSchema = recalculationPreferencesSchema.refine(
+  value => value.barrierRouting?.drillThroughWalls !== true,
+  { message: 'Background calculation cannot authorize drilling through barriers.' },
+);
 export const recalculationTimeoutSchema = z.number().int().min(100).max(120_000);
 export const recalculationAuthoritySchema = z.object({
   kind: z.literal('current-login'),
@@ -72,7 +83,7 @@ const commandBase = {
   reason: reasonText,
 };
 export const recalculationCommandSchema = z.discriminatedUnion('action', [
-  z.object({ ...commandBase, action: z.literal('enable'), preferences: recalculationPreferencesSchema, timeoutMilliseconds: recalculationTimeoutSchema }).strict(),
+  z.object({ ...commandBase, action: z.literal('enable'), preferences: backgroundRecalculationPreferencesSchema, timeoutMilliseconds: recalculationTimeoutSchema }).strict(),
   z.object({ ...commandBase, action: z.literal('pause') }).strict(),
   z.object({ ...commandBase, action: z.literal('resume') }).strict(),
   z.object({ ...commandBase, action: z.literal('retry') }).strict(),

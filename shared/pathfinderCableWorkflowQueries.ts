@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CABLE_WORKFLOW_LIMITS, cableWorkflowRowSchema } from './pathfinderCableWorkflow.js';
-import { policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
+import { parsePurposeJson, policyHashSchema, policyUuidSchema } from './pathfinderPurposePolicy.js';
+import { barrierAdmissionIntentSchema } from './pathfinderBarrierAdmission.js';
 import { recalculationReasonSchema } from './pathfinderRecalculation.js';
 
 export const CABLE_WORKFLOW_READ_LIMITS = Object.freeze({ responseBytes: 8 * 1024 ** 2, searchCharacters: 256, deadlineMilliseconds: 15_000 });
@@ -11,6 +12,7 @@ const search = z.string().max(CABLE_WORKFLOW_READ_LIMITS.searchCharacters).refin
 const preferences = {
   secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).default(2),
   preferVerticalApproach: z.boolean().default(true),
+  barrierRouting: barrierAdmissionIntentSchema.optional(),
 };
 export const cableWorkflowFilterSchema = z.enum(['needs-routing', 'calculating', 'ready-for-review', 'up-to-date', 'all']);
 export const cableWorkflowQuerySchema = z.object({ filter: cableWorkflowFilterSchema.default('needs-routing'), search: search.default(''),
@@ -21,6 +23,14 @@ export type CableWorkflowDetailQuery = z.infer<typeof cableWorkflowDetailQuerySc
 const httpPreferences = {
   secondaryDistanceMeters: z.string().max(32).regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$(?![\s\S])/).transform(Number).optional(),
   preferVerticalApproach: z.enum(['true', 'false']).transform(value => value === 'true').optional(),
+  barrierRouting: z.string().max(8192).transform((value, context) => {
+    let decoded: unknown;
+    try { decoded = parsePurposeJson(value, { maximumBytes: 8192 }); }
+    catch { context.addIssue({ code: 'custom', message: 'Use one bounded barrier admission JSON value without duplicate members.' }); return z.NEVER; }
+    const parsed = barrierAdmissionIntentSchema.safeParse(decoded);
+    if (!parsed.success) { context.addIssue({ code: 'custom', message: 'Use the exact current barrier admission intent.' }); return z.NEVER; }
+    return parsed.data;
+  }).optional(),
 };
 export function parseCableWorkflowHttpQuery(value: unknown): CableWorkflowQuery {
   const parsed = z.object({ filter: cableWorkflowFilterSchema.optional(), search: search.optional(),

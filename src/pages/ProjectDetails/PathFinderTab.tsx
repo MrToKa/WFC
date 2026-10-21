@@ -256,7 +256,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           />
         </div>
         </details>
-        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} onCableValuesChanged={cableValuesChanged} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} onBatchBusyChange={setBatchBusy}
+        <PathFinderResults pf={pf} accountId={accountId} selectedCableId={selectedCableId} workflowSelection={workflowSelection} onCableValuesChanged={cableValuesChanged} active={mode === 'path' && !routeRulesDirty} displayOwned={mode === 'path' && displayOwner === 'proposal'} claimViewer={() => claimViewer('proposal', false)} options={routeRulesDirty ? null : preferences} backgroundOptions={routeRulesDirty ? null : backgroundPreferences} onBatchBusyChange={setBatchBusy}
           workflowDisplayRequest={workflowDisplayRequest} onWorkflowDisplayChange={workflowDisplayChanged} />
         </div>
         <div id={`${panelId}-lookup-panel`} role="tabpanel" aria-labelledby={`${panelId}-lookup-tab`} className={extra.panel} style={{ display: mode === 'lookup' ? 'flex' : 'none' }}>

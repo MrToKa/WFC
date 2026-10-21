@@ -3,9 +3,11 @@ import { Button, Caption1, Checkbox, Spinner } from '@fluentui/react-components'
 import { usePathfinderCalculationGrants, type CalculationGrantAccess } from './hooks/usePathfinderCalculationGrants';
 import type { CalculationGrantCommand } from '@/api/pathfinderCalculationGrants';
 import { recalculationPreferencesSchema, recalculationTimeoutSchema } from '../../../shared/pathfinderRecalculation';
+import type { PathFinderPreferences } from '@/api/pathfinder';
+import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 
 export type CalculationGrantPanelProps = CalculationGrantAccess & {
-  preferences: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null | undefined; className?: string;
+  preferences: PathFinderPreferences | null | undefined; className?: string;
 };
 const statusLabels = { disabled: 'Disabled', enabled: 'Enabled', revoked: 'Administrator authorization revoked', 'restore-fenced': 'Enable again after restore', blocked: 'Action required' };
 const producerLabels = { unqualified: 'Model preparation not qualified', ready: 'Model preparation ready', running: 'Preparing model', blocked: 'Geometry pending — model preparation blocked', quarantined: 'Model preparation stopped' };
@@ -23,7 +25,8 @@ export function PathFinderCalculationGrantPanel(props: CalculationGrantPanelProp
   const frozen = state.busy || Boolean(state.pending), unavailable = !props.active || !context || frozen || state.conflict;
   const timeoutValue = timeout.trim() ? Number(timeout) : NaN;
   const validOptions = recalculationPreferencesSchema.safeParse(props.preferences).success && recalculationTimeoutSchema.safeParse(timeoutValue).success;
-  const samePreferences = Boolean(grant && props.preferences && grant.preferences.secondaryDistanceMeters === props.preferences.secondaryDistanceMeters && grant.preferences.preferVerticalApproach === props.preferences.preferVerticalApproach && grant.timeoutMilliseconds === timeoutValue);
+  const samePreferences = Boolean(grant && props.preferences && grant.preferences.secondaryDistanceMeters === props.preferences.secondaryDistanceMeters && grant.preferences.preferVerticalApproach === props.preferences.preferVerticalApproach
+    && sameBarrierAdmissionIntent(grant.preferences.barrierRouting,props.preferences.barrierRouting) && grant.timeoutMilliseconds === timeoutValue);
   const changed = checked !== persistedEnabled || checked && !samePreferences;
   const save = () => {
     if (unavailable || !context || !changed || checked && !validOptions) return;

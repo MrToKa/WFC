@@ -1,9 +1,10 @@
 import type { PoolClient } from 'pg';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
-import { optionsSchema, type EngineOptions, type CurrentDependencySnapshot } from './jobContracts.js';
-import { collectCommonCalculationInputs, freezeCableDependenciesForVersion, canonicalJson, type CollectedDependencies } from './dependencies.js';
-import { calculationEngineIdentity } from './calculationEngineIdentity.js';
+import { optionsSchema, type EngineOptions } from './jobContracts.js';
+import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, canonicalJson, type CollectedDependencies } from './dependencies.js';
+import { calculationEngineIdentity, barrierCalculationEngineIdentity } from './calculationEngineIdentity.js';
+import type { BarrierEngineIdentity, CalculationEngineIdentity, EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
 import { readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import { endpointCalculationPoint, type CurrentEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
@@ -16,10 +17,13 @@ const refused = (code:string,status=413):never => {throw new PathFinderError(cod
 /** Caller holds project/authority locks. Scheduler state must remain unlocked until this returns. */
 export async function collectDependencyBatchInTransaction(client:PoolClient,input:{
   projectId:string;options:EngineOptions;cableIds?:string[];signal?:AbortSignal;
-  deadline?:number;engineIdentity?:CurrentDependencySnapshot['engineIdentity'];
-  dependencyVersion?:'pathfinder.dependencies.v7';
+  deadline?:number;engineIdentity?:CalculationEngineIdentity;
+  dependencyVersion?:'pathfinder.dependencies.v7'|'pathfinder.dependencies.v8';
 }):Promise<DependencyBatch>{
   const projectId=policyUuidSchema.parse(input.projectId),options=optionsSchema.parse(input.options);
+  const barrierVersion=input.dependencyVersion==='pathfinder.dependencies.v8';
+  if (barrierVersion ? !options.barrierRouting : options.barrierRouting!==undefined)
+    throw new PathFinderError('BARRIER_ADMISSION_REQUIRED',409,'The exact barrier choice requires a barrier-aware calculation version.');
   const deadline=Math.min(input.deadline??Infinity,Date.now()+RECALCULATION_LIMITS.collectionMilliseconds);
   const check=()=>{input.signal?.throwIfAborted();if(Date.now()>deadline)refused('RECALCULATION_COLLECTION_DEADLINE',503);};
   if(input.cableIds&&input.cableIds.length>RECALCULATION_LIMITS.cables)refused('JOB_CABLE_BUDGET');
@@ -48,8 +52,11 @@ export async function collectDependencyBatchInTransaction(client:PoolClient,inpu
   }
   check();
   // One actual implementation read per whole batch; no DLL hashing in its cable loop.
-  const identity=input.engineIdentity??await calculationEngineIdentity({force:true});
-  const common=await collectCommonCalculationInputs(client,projectId,options,true,identity);
+  const identity=input.engineIdentity??(barrierVersion?await barrierCalculationEngineIdentity({force:true}):await calculationEngineIdentity({force:true}));
+  if (identity.schemaVersion !== (barrierVersion?'wfc.pf.engine-identity.v2':'wfc.pf.engine-identity.v1'))
+    throw new PathFinderError('BARRIER_ENGINE_IDENTITY_REQUIRED',503,'The calculation version and actual engine identity differ.');
+  const common=barrierVersion?await collectBarrierCommonCalculationInputs(client,projectId,options,true,identity as BarrierEngineIdentity,{signal:input.signal,deadline})
+    :await collectCommonCalculationInputs(client,projectId,options,true,identity as EngineIdentity);
   check();
   const registry=common.inputs===null?(await client.query<{registry_revision:string}>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR SHARE',[projectId])).rows[0]?.registry_revision:common.inputs.registryRevision;
   if(!registry)throw new PathFinderError('REGISTRY_CONFLICT',409);

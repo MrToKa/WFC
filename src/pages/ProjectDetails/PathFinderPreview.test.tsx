@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { PathFinderPreview as Preview, PathFinderPreviewInput, PathFinderState } from '@/api/pathfinder';
 import type { ViewerSelection } from '../../../viewer-runtime/protocol.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
@@ -52,6 +52,24 @@ async function selectEndpoints(pf: ReturnType<typeof model>) {
 }
 
 describe('standalone path endpoint foreground', () => {
+  it('offers only non-MV categories for a fresh standalone calculation and defaults to LV', () => {
+    const pf = model(); mount(pf);
+    const categories = screen.getByRole('combobox', { name: 'Path cable type' });
+    expect(categories).toHaveValue('LV');
+    expect(within(categories).getAllByRole('option').map(option => (option as HTMLOptionElement).value)).toEqual(['LV', 'Control', 'Instrumentation']);
+    expect(within(categories).queryByRole('option', { name: /^MV$/ })).toBeNull();
+    expect(screen.getByText('MV cables are excluded from path calculation.')).toBeVisible();
+    expect(pf.startPreview).not.toHaveBeenCalled();
+  });
+
+  it.each(['LV', 'Control', 'Instrumentation'] as const)('keeps the %s calculation category, endpoint names and preferences unchanged', async category => {
+    const pf = model(); mount(pf); enterNames();
+    if (category !== 'LV') fireEvent.change(screen.getByRole('combobox', { name: 'Path cable type' }), { target: { value: category } });
+    fireEvent.click(screen.getByRole('button', { name: 'Calculate path' }));
+    await waitFor(() => expect(pf.startPreview).toHaveBeenCalledExactlyOnceWith({ from: { name: 'FROM' }, to: { name: 'TO' }, category, reverse: false, ...options }));
+    expect(pf.action).not.toHaveBeenCalled();
+  });
+
   it('includes verified From and To equipment in the exact route foreground without changing its points', async () => {
     const pf = model(), result = preview(); result.result!.route!.objectIds = ['dbid:23', 'dbid:44', 'dbid:23'];
     result.result!.from = { ...result.result!.from, source: 'equipment-bottom-aabb', objectId: 'dbid:44' };

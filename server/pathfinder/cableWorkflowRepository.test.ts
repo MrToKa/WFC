@@ -9,7 +9,8 @@ import { endpointBindingFixture } from '../../shared/pathfinderEndpointFixtures.
 const mocks = vi.hoisted(() => ({ tx: vi.fn(), common: vi.fn(), heads: vi.fn(), automatic: vi.fn(), verified: vi.fn(), reviewable: vi.fn(), accepted: vi.fn() }));
 vi.mock('./cableWorkflowRead.js', () => ({ cableWorkflowReadTransaction: mocks.tx }));
 vi.mock('./dependencies.js', async original => ({ ...await original<typeof import('./dependencies.js')>(), collectCommonCalculationInputs: mocks.common,
-  freezeCableDependencies: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }) }));
+  freezeCableDependencies: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }),
+  freezeCableDependenciesForVersion: (common: object, cable: Record<string, unknown>) => ({ cable, status: 'ready', message: '', dependencies: { ...common, cableId: cable.id, cableWriteRevision: cable.cable_write_revision } }) }));
 vi.mock('./endpointBindingRepository.js', () => ({ readCurrentEndpointBindingContext: vi.fn(async () => null), readNeededEndpointBindingHeads: mocks.heads }));
 vi.mock('./automaticEndpointCandidates.js', () => ({ readAutomaticEndpointCandidates: mocks.automatic }));
 vi.mock('./cableWorkflowProof.js', () => ({ createCableWorkflowProofReader: () => ({ verified: mocks.verified, reviewable: mocks.reviewable, accepted: mocks.accepted }) }));

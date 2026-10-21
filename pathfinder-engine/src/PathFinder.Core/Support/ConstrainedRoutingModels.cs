@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 
@@ -27,6 +28,17 @@ namespace AddinRibbon.Routing
     }
 
     public delegate RouteCollisionObservation RouteCollisionQuery(RoutePoint from, RoutePoint to, CancellationToken cancellationToken);
+
+    /// <summary>One actual ordered final-polyline query. Search diagnostics and
+    /// aggregate counters are deliberately separate from this immutable evidence.</summary>
+    public sealed class FinalRouteCollisionObservation
+    {
+        public RoutePoint From { get; private set; }
+        public RoutePoint To { get; private set; }
+        public RouteCollisionObservation Observation { get; private set; }
+        internal FinalRouteCollisionObservation(RoutePoint from, RoutePoint to, RouteCollisionObservation observation)
+        { From = from; To = to; Observation = observation; }
+    }
 
     /// <summary>Refusal ceilings, not a full-capacity RSS qualification. Work counts
     /// input/candidate/edge/final guards and oracle-reported primitive work. Pinned
@@ -84,12 +96,15 @@ namespace AddinRibbon.Routing
         /// <summary>Failure-only diagnostic: the first rejected attempted search
         /// segment. It has no final-route segment index and is not a route proof.</summary>
         public RouteCollisionObservation Blocking { get; private set; }
+        public IReadOnlyList<FinalRouteCollisionObservation> FinalChecks { get; private set; }
         internal ConstrainedRouteEvaluation(RouteResult route, ConstrainedRouteStatus status, string reason, bool complete, ConstrainedBudget budget)
         {
             Route = route; Status = status; Reason = reason; SearchComplete = complete;
             CandidatesTruncated = budget.CandidatesTruncated; CollisionQueries = budget.Queries;
             Work = budget.Work; PairAttempts = budget.Pairs;
             Blocking = status == ConstrainedRouteStatus.Clear || status == ConstrainedRouteStatus.Bypassed ? null : budget.FirstBlocking;
+            FinalChecks = Array.AsReadOnly(status == ConstrainedRouteStatus.Clear ? budget.FinalChecks.ToArray()
+                : new FinalRouteCollisionObservation[0]);
         }
     }
 
@@ -129,6 +144,12 @@ namespace AddinRibbon.Routing
         internal bool CandidatesTruncated;
         internal bool SawIndeterminate;
         internal RouteCollisionObservation FirstBlocking;
+        internal readonly List<FinalRouteCollisionObservation> FinalChecks = new List<FinalRouteCollisionObservation>();
+        internal RouteCollisionObservation FinalQuery(RouteCollisionQuery oracle, RoutePoint from, RoutePoint to)
+        {
+            var result = Query(oracle, from, to);
+            FinalChecks.Add(new FinalRouteCollisionObservation(from, to, result)); return result;
+        }
         internal ConstrainedBudget(ConstrainedRoutingLimits limits, CancellationToken token)
         {
             UserToken = token; UserToken.ThrowIfCancellationRequested(); Limits = limits;

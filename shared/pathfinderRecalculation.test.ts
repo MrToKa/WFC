@@ -3,6 +3,7 @@ import {
   RECALCULATION_LIMITS, planRecalculationImpact, recalculationCommandCanonicalJson,
   recalculationCommandSchema, recalculationContextSchema, recalculationErrorSchema,
   recalculationReceiptSchema, recalculationReasonSchema, type RecalculationCommand,
+  recalculationPreferencesSchema, backgroundRecalculationPreferencesSchema, recalculationDomainSchema,
 } from './pathfinderRecalculation.js';
 import {
   RECALCULATION_FIXTURE_ACTOR, RECALCULATION_FIXTURE_KEY, recalculationEnableFixture, recalculationFixture,
@@ -14,8 +15,30 @@ const enabled = () => recalculationFixture({
   authority: { kind: 'current-login', actorId: RECALCULATION_FIXTURE_ACTOR, expiresAt: '2026-01-01T00:30:00.000Z', currentLogin: true },
   reasonCodes: ['ENDPOINT_BINDING_REQUIRED'], total: 3, readyCables: 2, blockedCables: 1,
 });
+const barrierIntent = (drillThroughWalls = false) => {
+  const scope = { projectId: RECALCULATION_FIXTURE_KEY, modelVersionId: RECALCULATION_FIXTURE_ACTOR, contentFingerprint: 'a'.repeat(64),
+    selectionRevision: '3', captureFrameId: RECALCULATION_FIXTURE_KEY, captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
+  return { schemaVersion: 'wfc.pf.barrier-admission-intent.v1' as const, scope, expectedRegistryRevision: '4',
+    expectedSnapshot: { snapshotId: RECALCULATION_FIXTURE_KEY, scope, registryRevision: '4', contentSha256: 'c'.repeat(64), mode: 'explicit-empty' as const }, drillThroughWalls };
+};
 
 describe('R7 bounded current-login public contracts', () => {
+  it('preserves historical preference bytes while binding a complete optional barrier choice', () => {
+    const legacy = recalculationEnableFixture(), command = { ...legacy, preferences: { ...legacy.preferences, barrierRouting: barrierIntent() } };
+    expect(recalculationPreferencesSchema.parse(legacy.preferences)).not.toHaveProperty('barrierRouting');
+    expect(JSON.parse(recalculationCommandCanonicalJson(legacy))).toEqual(legacy);
+    expect(recalculationCommandSchema.parse(command)).toEqual(command);
+    expect(recalculationCommandCanonicalJson(command)).not.toBe(recalculationCommandCanonicalJson(legacy));
+    expect(recalculationDomainSchema.parse('barriers')).toBe('barriers');
+  });
+  it('allows explicit drilling only in general scoped preferences, refusing background enable without stripping it', () => {
+    const preferences = { ...recalculationEnableFixture().preferences, barrierRouting: barrierIntent(true) };
+    expect(recalculationPreferencesSchema.parse(preferences).barrierRouting?.drillThroughWalls).toBe(true);
+    expect(backgroundRecalculationPreferencesSchema.safeParse(preferences).success).toBe(false);
+    expect(recalculationCommandSchema.safeParse({ ...recalculationEnableFixture(), preferences }).success).toBe(false);
+    for (const barrierRouting of [null, { ...barrierIntent(), drillThroughWalls: undefined }, { ...barrierIntent(), unexpected: true }])
+      expect(recalculationPreferencesSchema.safeParse({ ...preferences, barrierRouting }).success).toBe(false);
+  });
   it('distinguishes 30 minute authority from the 30 second coherent collection budget', () => {
     expect(RECALCULATION_LIMITS.authorityMilliseconds).toBe(30 * 60_000);
     expect(RECALCULATION_LIMITS.collectionMilliseconds).toBe(30_000);

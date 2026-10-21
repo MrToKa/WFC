@@ -107,7 +107,8 @@ namespace AddinRibbon.Routing
     {
         public static LocalSecondaryEvaluation CalculateWithLocalApproaches(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
             CableCategory category, RouteCollisionQuery collision, RoutingOptions options = null, ConstrainedRoutingLimits limits = null,
-            LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken))
+            LocalConnectorOptions localOptions = null, bool drillThroughWalls = false, CancellationToken cancellationToken = default(CancellationToken),
+            bool finalReverse = false)
         {
             if (!drillThroughWalls && collision == null) throw new ArgumentNullException("collision");
             var frozen = RouteCalculator.ConstrainedOptions(options); var profile = (localOptions ?? new LocalConnectorOptions()).Snapshot();
@@ -131,7 +132,13 @@ namespace AddinRibbon.Routing
                             return wrap(RouteCalculator.LocalResult(new ConstrainedRouteEvaluation(distance.DirectRoute, ConstrainedRouteStatus.Bypassed,
                                 "DRILLING_BYPASS", true, budget), context));
                         }
-                        direct = budget.Query(collision, from, to);
+                        budget.FinalChecks.Clear();
+                        // The runner's legacy reverse operation recreates a
+                        // singleton direct From point at To even if a tiny
+                        // nonzero delta underflows to binary64 zero distance.
+                        // Certify that actual output point within this budget.
+                        var directFrom = finalReverse && distance.DirectRoute.PathPoints.Count == 1 ? to : from;
+                        direct = budget.FinalQuery(collision, directFrom, distance.DirectRoute.PathPoints.Count == 1 ? directFrom : to);
                         disposition = direct.Status == RouteCollisionStatus.Clear ? "clear" : direct.Status == RouteCollisionStatus.Blocked ? "blocked" : "indeterminate";
                         if (direct.Status == RouteCollisionStatus.Clear)
                             return wrap(RouteCalculator.LocalResult(new ConstrainedRouteEvaluation(distance.DirectRoute, ConstrainedRouteStatus.Clear,

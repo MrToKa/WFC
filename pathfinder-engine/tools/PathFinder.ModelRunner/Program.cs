@@ -50,7 +50,8 @@ internal static partial class Program
             return await Emit(Execute(request, deadline.Token));
         }
         catch (OperationCanceledException) { return await Emit(Failure(request, "deadline_exceeded", "Calculation deadline exceeded.")); }
-        catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidOperationException or OverflowException or System.ComponentModel.Win32Exception)
+        catch (SessionBudgetException error) { return await Emit(Failure(request, "resource_limit", error.Message)); }
+        catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidDataException or InvalidOperationException or OverflowException or FormatException or KeyNotFoundException or System.ComponentModel.Win32Exception)
         { return await Emit(Failure(request, "invalid_request", error is IOException ? "An owned input or cache file could not be read." : error.Message)); }
     }
 
@@ -114,6 +115,7 @@ internal static partial class Program
         }
 
         var root = OwnedRoot();
+        if (request.SchemaVersion == "pathfinder.model.runner.v2") session?.SelectBarrierKey(BarrierHash(BarrierContext(request).Value));
         var snapshots = SafeChild(root, "snapshots", create: false);
         var input = SafeChild(snapshots, request.SnapshotId + ".json", create: false);
         var info = new FileInfo(input);
@@ -183,6 +185,8 @@ internal static partial class Program
             SecondaryDistanceMeters = options.SecondaryDistanceMeters, PreferVerticalApproach = options.PreferVerticalApproach,
             MaxGraphNodes = options.MaxGraphNodes, MaxGraphConnections = options.MaxGraphConnections
         };
+        if (request.SchemaVersion == "pathfinder.model.runner.v2")
+            return ExecuteBarrierRoute(request, root, snapshot, prepared, summary, routeOptions, token, session);
         DirectSecondaryDecision? directSecondary = null;
         RouteResult routeResult;
         if (request.Operation == "calculate" && request.DirectSecondaryPolicy is not null)
@@ -270,10 +274,18 @@ internal static partial class Program
 
     private static void Validate(Request r)
     {
-        if (r.SchemaVersion != "pathfinder.model.runner.v1" || !Guid.TryParseExact(r.RequestId, "D", out _) ||
+        if (r.SchemaVersion is not ("pathfinder.model.runner.v1" or "pathfinder.model.runner.v2") || !Guid.TryParseExact(r.RequestId, "D", out _) ||
             !Guid.TryParseExact(r.ProjectId, "D", out _) || !Guid.TryParseExact(r.ModelVersionId, "D", out _) ||
             r.Operation is not ("prepare" or "calculate" or "design" or "lookup" or "lookup-plan") || r.TimeoutMilliseconds is < 1 or > 120000)
             throw new ArgumentException("Unknown schema, operation, identity, hash or deadline.");
+        if (r.SchemaVersion == "pathfinder.model.runner.v2")
+        {
+            if (r.Operation != "calculate" || r.Category is not ("LV" or "Control" or "Instrumentation") || r.ProjectSettings is null
+                || r.Options is null || r.Route is not null || r.FittedTraceExport is not null)
+                throw new ArgumentException("Protected runtime v2 accepts only a fresh supported non-MV calculation; design-only reuse is unavailable.");
+            _ = Point(r.From); _ = Point(r.To); _ = BarrierContext(r);
+        }
+        else if (r.Barriers is not null) throw new ArgumentException("Barrier contexts require protected runtime v2; legacy fallback is prohibited.");
         if (r.IncludeLengthLedger && r.Operation is not ("calculate" or "design"))
             throw new ArgumentException("Length-component ledgers apply only to calculate and design operations.");
         if (r.DirectSecondaryPolicy is not null && (r.DirectSecondaryPolicy != DirectSecondaryRoute.PolicyVersion || r.Operation is not ("calculate" or "design")
@@ -337,8 +349,16 @@ internal static partial class Program
             throw new ArgumentException("Artifact/cache path cannot be a link.");
         return target;
     }
-    private static object Failure(Request? r, string status, string message) => new
-    { schemaVersion = "pathfinder.model.response.v1", requestId = r?.RequestId, status, message, engineeringAccepted = false };
+    private static object Failure(Request? r, string status, string message)
+    {
+        if (r?.SchemaVersion == "pathfinder.model.runner.v2")
+        {
+            try { return BarrierFailure(r, BarrierContext(r), status, status switch { "deadline_exceeded" => "RUNTIME_DEADLINE_EXCEEDED",
+                "resource_limit" => "RUNTIME_RESOURCE_LIMIT", _ => "RUNTIME_CONTEXT_UNAVAILABLE" }, message); }
+            catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidDataException or InvalidOperationException or KeyNotFoundException or FormatException) { }
+        }
+        return new { schemaVersion = "pathfinder.model.response.v1", requestId = r?.RequestId, status, message, engineeringAccepted = false };
+    }
     private static async Task<int> Emit(object value)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(value, Json);
@@ -354,23 +374,55 @@ internal static partial class Program
         info.ArgumentList.Add("--worker");
         using var process = Process.Start(info) ?? throw new InvalidOperationException("Worker could not start.");
         using var deadline = new CancellationTokenSource(request.TimeoutMilliseconds);
+        using var guardStop = new CancellationTokenSource();
+        var memoryFault = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var memoryGuard = SessionMemory(process, memoryFault, guardStop.Token);
+        Task<byte[]>? stdout = null, stderr = null;
+        var ownedInput = process.StandardInput.BaseStream;
+        var ownedOutput = process.StandardOutput.BaseStream;
+        var ownedError = process.StandardError.BaseStream;
         try
         {
-            var stdout = ReadBounded(process.StandardOutput.BaseStream, MaximumOutput, deadline.Token);
-            var stderr = ReadBounded(process.StandardError.BaseStream, 65536, deadline.Token);
-            await process.StandardInput.BaseStream.WriteAsync(input, deadline.Token); process.StandardInput.Close();
-            await process.WaitForExitAsync(deadline.Token);
+            stdout = ReadBounded(ownedOutput, MaximumOutput, deadline.Token);
+            stderr = ReadBounded(ownedError, 65536, deadline.Token);
+            await ownedInput.WriteAsync(input, deadline.Token); process.StandardInput.Close();
+            var exited = process.WaitForExitAsync(deadline.Token);
+            if (await Task.WhenAny(exited, memoryFault.Task).WaitAsync(deadline.Token) == memoryFault.Task)
+                throw new SessionBudgetException(await memoryFault.Task);
+            await exited;
             var result = await stdout; _ = await stderr;
             if (process.ExitCode != 0 || result.Length == 0) throw new InvalidOperationException("Worker failed without a valid result.");
             using var parsed = JsonDocument.Parse(result);
-            var responseVersion = parsed.RootElement.GetProperty("schemaVersion").GetString();
-            if (responseVersion is not ("pathfinder.model.response.v1" or "pathfinder.model.response.v2") || responseVersion == "pathfinder.model.response.v2" && request.DirectSecondaryPolicy is null)
-                throw new InvalidOperationException("Worker response schema mismatch.");
+            ValidateResponseVersion(parsed.RootElement, request);
             await Console.OpenStandardOutput().WriteAsync(result); return 0;
         }
         finally
         {
-            if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(CancellationToken.None); }
+            try
+            {
+                if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(CancellationToken.None); }
+            }
+            finally
+            {
+                // Kill/reap precedes I/O retirement. Observe both bounded readers
+                // even after a deadline, RSS fault, oversized pipe or failed
+                // stdin write; no unobserved task survives normal supervision.
+                guardStop.Cancel(); deadline.Cancel();
+                foreach (var pipe in new[] { ownedInput, ownedOutput, ownedError })
+                    try { pipe.Dispose(); } catch (Exception error) when (error is IOException or ObjectDisposedException) { }
+                var joined = Task.WhenAll(stdout ?? Task.FromResult(Array.Empty<byte>()), stderr ?? Task.FromResult(Array.Empty<byte>()));
+                try
+                {
+                    try { await joined.WaitAsync(TimeSpan.FromMilliseconds(SessionProtocol.StartupMilliseconds)); }
+                    catch (TimeoutException)
+                    {
+                        _ = joined.ContinueWith(task => { _ = task.Exception; }, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+                        throw new SessionBudgetException("Worker output reader retirement could not be confirmed.");
+                    }
+                    catch (Exception) when (joined.IsCompleted) { _ = joined.Exception; }
+                }
+                finally { await memoryGuard; }
+            }
         }
     }
     private static async Task<byte[]> ReadBounded(Stream input, int maximum, CancellationToken token)
@@ -421,6 +473,8 @@ internal sealed record Request
     public string? DirectSecondaryPolicy { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public FittedTraceExportRequest? FittedTraceExport { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Barriers { get; init; }
 }
 internal sealed record RetainedRoute
 {

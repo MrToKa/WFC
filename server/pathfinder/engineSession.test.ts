@@ -12,6 +12,7 @@ import {
   type EngineSessionEvent,
 } from './engineSession.js';
 import { runEngine } from './engine.js';
+import { syntheticDrillingRuntime } from './calculationFixtures.js';
 
 const VERSION = 'pathfinder.engine.session.v1',
   HASH = 'a'.repeat(64),
@@ -127,6 +128,18 @@ afterEach(async () => {
   delete process.env.PF_ENGINE_DLL;
 });
 describe('private bounded session transport', () => {
+  it.each(['protected-response-to-legacy','legacy-response-to-protected'] as const)('rejects %s without relabeling or reusing its lane',async kind=>{
+    const scope={projectId:randomUUID(),modelVersionId:randomUUID(),contentFingerprint:'c'.repeat(64),selectionRevision:'1',captureFrameId:randomUUID(),captureFrameSha256:'d'.repeat(64),coordinateFrame:'canonical-world-metres' as const};
+    const context=syntheticDrillingRuntime(scope);
+    const {client,children}=setup({reply:(child,input,ordinal)=>{
+      const wrapper=answer(input,ordinal);
+      if(kind==='protected-response-to-legacy')Object.assign(wrapper.response,{schemaVersion:'pathfinder.model.response.v3',status:'invalid_request',barriers:{schemaVersion:'wfc.pf.barrier-execution.v1',context,
+        proof:null,directSecondary:null,qualification:null,connectors:{from:null,to:null},diagnostics:{status:'unavailable',reasonCode:'SYNTHETIC_REFUSAL',searchComplete:false,candidatesTruncated:false,pairAttempts:0,collisionQueries:0,work:'0',plannerAttempts:0,straightPairAttempts:0,localEdgeChecks:0,localPhaseUsed:false,straightPhaseTruncated:false}}});
+      child.stdout.write(frame(wrapper));
+    }});
+    await expect(client.execute({...request(),schemaVersion:kind==='legacy-response-to-protected'?'pathfinder.model.runner.v2':'pathfinder.model.runner.v1'},new AbortController().signal)).rejects.toMatchObject({code:'ENGINE_RESPONSE_VERSION'});
+    expect(children[0].dead).toBe(true);
+  });
   it('reuses one lane, unwraps unchanged responses and reports cache telemetry only privately', async () => {
     const { client, children, events } = setup();
     const first = await client.execute(request(), new AbortController().signal),

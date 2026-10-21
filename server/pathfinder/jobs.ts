@@ -17,6 +17,8 @@ import { persistRevisionAdmission, verifyRevisionResultForProposal } from './rev
 import { isAutomaticEndpointCalculationPoint } from './endpointCalculationProvenance.js';
 import { readProposalApplicability } from './proposalApplicability.js';
 import { cancelLocationImpactForJob } from './locationImpactRepository.js';
+import { readCurrentBarrierAdmissionIntent } from './barrierCalculationScope.js';
+import { barrierHistoricalUnavailableMessage, isExpectedBarrierCurrentnessError } from './barrierCurrentness.js';
 
 type Row = Record<string,any>;
 // The full admission history is separately paginated by Cable revision results.
@@ -30,12 +32,14 @@ export function jobDto(row:Row) {
 export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
   const dependencies = row.dependencies as DependencySnapshot;
   let current:Awaited<ReturnType<typeof collectDependenciesForVersion>>|null;
+  let unavailable: 'cable' | 'barriers' | null = null;
   try {current=await collectDependenciesForVersion(client,row.project_id,row.cable_id,dependencies.options,dependencies.schemaVersion);}
   catch(error){
-    // Retained history outlives a deleted live cable. Only this exact missing
-    // current-input state is readable as stale; other collection errors remain
-    // failures and the locked Review/Apply collectors still refuse the write.
-    if(error instanceof PathFinderError&&error.code==='CABLE_NOT_FOUND')current=null;
+    // Readability is independent from current applicability. Only explicit
+    // missing-cable/barrier-currentness refusals become stale history here;
+    // authority, implementation and unknown failures still refuse the request.
+    if(error instanceof PathFinderError&&error.code==='CABLE_NOT_FOUND'){current=null;unavailable='cable';}
+    else if(dependencies.schemaVersion==='pathfinder.dependencies.v8'&&isExpectedBarrierCurrentnessError(error)){current=null;unavailable='barriers';}
     else throw error;
   }
   const enrollment=await readRecalculationJobAuthority(client,{projectId:row.project_id,jobId:row.job_id,cableId:row.cable_id});
@@ -59,18 +63,21 @@ export async function proposalDto(client:PoolClient,row:Row,detail:boolean) {
     acceptanceScope:synthetic ? 'local-synthetic-fixture' : 'manual-review',canApply:!stale && !compatibilityIssue && row.status === 'calculated' && route?.success===true && result.design != null && applicability.applicable,
     itemApplicability:applicability.evidence,
     compatibilityIssue,routingPreferences,
-    message:current===null ? 'The cable no longer exists. This historical result remains available for inspection and cannot be applied.' : stale ? 'Dependencies changed. Calculate a fresh proposal.' : result.message,
-    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : (dependencies.schemaVersion === 'pathfinder.dependencies.v6'||dependencies.schemaVersion === 'pathfinder.dependencies.v7')&&(isAutomaticEndpointCalculationPoint(dependencies.from)||isAutomaticEndpointCalculationPoint(dependencies.to))
+    message:unavailable==='cable' ? 'The cable no longer exists. This historical result remains available for inspection and cannot be applied.'
+      : unavailable==='barriers' ? barrierHistoricalUnavailableMessage : stale ? 'Dependencies changed. Calculate a fresh proposal.' : result.message,
+    engineeringMessage:synthetic ? 'Synthetic local demonstration only.' : (dependencies.schemaVersion === 'pathfinder.dependencies.v6'||dependencies.schemaVersion === 'pathfinder.dependencies.v7'||dependencies.schemaVersion==='pathfinder.dependencies.v8')&&(isAutomaticEndpointCalculationPoint(dependencies.from)||isAutomaticEndpointCalculationPoint(dependencies.to))
       ? 'Automatic model endpoint candidates use approximate bounding-box anchors. Review their positions, route and length before explicit Apply. These endpoints have not been manually confirmed. Native engineering parity has not been performed.'
       : 'Manual review and explicit Apply are required for this exact proposal. Native engineering parity has not been performed.',
     design:result.design ?? null,lengthLedger:result.lengthLedger??null,
     ...(result.directSecondary ? { directSecondary: result.directSecondary } : {}),
+    ...(result.schemaVersion==='pathfinder.model.response.v3'?{barriers:result.barriers,
+      ...(result.barriers.directSecondary?.mode==='direct-secondary'?{directSecondary:result.barriers.directSecondary.distanceDecision}:{})}:{}),
     revisionResultHash:revisionResult?.revisionResultSha256??null,revisionBaselineHash:revisionResult?.baselineHash??null,
     ...(detail?{revisionResult}:{}),route:route ? {...route,pathPoints:undefined,...(detail ? {points:route.pathPoints.map((point:Row) => [point.x,point.y,point.z]),objectIds:[...new Set(route.segmentIds as string[])]} : {})} : null,
     calculationMode:result.calculationMode,
     provenance:{dependencyVersion:dependencies.schemaVersion,dependencyHash:row.dependency_hash,
-      engineIdentity:['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(dependencies.schemaVersion)?('engineIdentity' in dependencies?dependencies.engineIdentity:null):null,
-      ...(dependencies.schemaVersion==='pathfinder.dependencies.v6'||dependencies.schemaVersion==='pathfinder.dependencies.v7'?{endpointSources:{
+      engineIdentity:['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(dependencies.schemaVersion)?('engineIdentity' in dependencies?dependencies.engineIdentity:null):null,
+      ...(dependencies.schemaVersion==='pathfinder.dependencies.v6'||dependencies.schemaVersion==='pathfinder.dependencies.v7'||dependencies.schemaVersion==='pathfinder.dependencies.v8'?{endpointSources:{
         from:isAutomaticEndpointCalculationPoint(dependencies.from)?'automatic-model-candidate':'confirmed-shared-location',
         to:isAutomaticEndpointCalculationPoint(dependencies.to)?'automatic-model-candidate':'confirmed-shared-location',
       }}:{}),
@@ -106,7 +113,13 @@ export async function insertCalculationBatch(client:PoolClient,projectId:string,
 /** Called only inside the scheduler's current-principal transaction; scheduler state locks LAST. */
 export const createAutomaticJobInTransaction:RecalculationJobAdapter['createInTransaction']=async(client,input)=>{
   const deadline=Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
-  const batch=await collectDependencyBatchInTransaction(client,{projectId:input.projectId,options:{...defaultOptions,...input.preferences},signal:input.signal,deadline});
+  const {barrierRouting:_previousIntent,...mathPreferences}=input.preferences;
+  // Browser-closed work always derives the current publication with drilling off.
+  // Historical or expired preferences cannot downgrade a fresh calculation.
+  const options={...defaultOptions,...mathPreferences,
+    barrierRouting:await readCurrentBarrierAdmissionIntent(client,input.projectId,false)};
+  const batch=await collectDependencyBatchInTransaction(client,{projectId:input.projectId,options,signal:input.signal,deadline,
+    dependencyVersion:'pathfinder.dependencies.v8'});
   const inputSha256=batchHash(batch,input.timeoutMilliseconds),readyCables=batch.items.filter(item=>item.dependencies).length;
   const reasonCodes=[...new Set(batch.items.filter(item=>!item.dependencies).map(item=>item.status.toUpperCase()))].sort();
   input.signal.throwIfAborted();
@@ -124,13 +137,16 @@ export function createPathFinderJobs(pool:Pool,registry:PathFinderRepository) {
   return {
     createInTransaction:createAutomaticJobInTransaction,
     async create(projectId:string,who:JobPrincipal,input:z.infer<typeof createJobSchema>) {
+      if(!input.options?.barrierRouting)throw new PathFinderError('BARRIER_ROUTING_INTENT_REQUIRED',409,
+        'Refresh Path Finder and configure the current barriers, or explicitly enable drilling for this calculation.');
       const matched = await registry.match(projectId,who,input.expectedRegistryRevision);
       return principalTransaction(pool,projectId,who,async client => {
         const revision = (await client.query<Row>('SELECT registry_revision::text FROM pf_project_state WHERE project_id=$1 FOR UPDATE',[projectId])).rows[0];
         if (revision.registry_revision !== matched.registryRevision) throw new PathFinderError('REGISTRY_CONFLICT',409);
         await client.query("SET LOCAL lock_timeout='3000ms';SET LOCAL statement_timeout='15000ms';SET LOCAL idle_in_transaction_session_timeout='30000ms'");
         const deadline=Date.now()+RECALCULATION_LIMITS.collectionMilliseconds;
-        const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline});
+        const batch=await collectDependencyBatchInTransaction(client,{projectId,options:input.options??{...defaultOptions},cableIds:input.cableIds,deadline,
+          dependencyVersion:'pathfinder.dependencies.v8'});
         const requestHash=batchHash(batch,input.timeoutMilliseconds??60000);
         if (!input.force) {
           const latest=(await client.query<Row>("SELECT id,state,cancel_requested,request_hash FROM pf_jobs WHERE project_id=$1 AND kind='calculate' ORDER BY created_at DESC,id DESC LIMIT 1",[projectId])).rows[0];

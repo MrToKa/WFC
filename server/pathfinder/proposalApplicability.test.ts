@@ -4,11 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability.js';
 import { readProposalApplicability, type ProposalApplicabilityInput } from './proposalApplicability.js';
 import { freezeScopedCableDependencies, hash, type CommonCalculationInputs } from './dependencies.js';
-import { syntheticEngineIdentity } from './calculationFixtures.js';
+import { syntheticEngineIdentity, syntheticBarrierEngineIdentity } from './calculationFixtures.js';
 import type { EndpointCalculationPoint } from './endpointCalculationProvenance.js';
+import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+import type { BarrierDependencySnapshot } from './jobContracts.js';
 
 const authority = vi.hoisted(() => vi.fn());
+const wholeAuthority = vi.hoisted(() => vi.fn());
 vi.mock('./locationImpactRepository.js', () => ({ readLocationImpactJobAuthority: authority }));
+vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: wholeAuthority }));
 const id = (n: number) => `ad300000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const projectId = id(1), cableId = id(2), jobId = id(3), proposalId = id(4);
 function fixture(jobState = 'running') {
@@ -31,10 +35,84 @@ function fixture(jobState = 'running') {
   const client = { query } as unknown as PoolClient;
   return { input, row, state, dependencies, client, query, run: () => readProposalApplicability(client, input) };
 }
-beforeEach(() => { vi.clearAllMocks(); authority.mockResolvedValue({ scope: 'location-impact', enrolled: true, valid: true,
+beforeEach(() => { vi.clearAllMocks(); wholeAuthority.mockResolvedValue({enrolled:false}); authority.mockResolvedValue({ scope: 'location-impact', enrolled: true, valid: true,
   generation: '9', authorityEpoch: '1', impactId: id(50), code: 'LOCATION_IMPACT_AUTHORITY_CURRENT' }); });
 
+/** Synthetic retained integrity fixture only. No real storage/collision or
+ * engineering qualification is represented by its explicit empty declaration. */
+function barrierFixture(jobState = 'running') {
+  const f = fixture(jobState), base = f.dependencies;
+  const scope = { projectId, modelVersionId: base.model.id, selectionRevision: base.model.selectionRevision, contentFingerprint: base.model.contentFingerprint,
+    captureFrameId: id(8), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
+  const policy = createBarrierRuntimePolicy(false), barriers: BarrierRuntimeContext = { schemaVersion:'wfc.pf.barrier-runtime.v1',
+    binding:{scope,registryRevision:'3',snapshot:{snapshotId:id(60),scope,registryRevision:'3',contentSha256:'c'.repeat(64),mode:'explicit-empty'},policy,policySha256:hash(policy)},
+    profile:structuredClone(BARRIER_RUNTIME_PROFILE),profileSha256:hash(BARRIER_RUNTIME_PROFILE),storage:{intentId:id(61),manifest:{blobId:id(62),sha256:'d'.repeat(64),bytes:1000},capture:null} };
+  const dependencies = { ...base, schemaVersion:'pathfinder.dependencies.v8',engineIdentity:syntheticBarrierEngineIdentity(),barriers,
+    options:{...base.options,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope,expectedRegistryRevision:'3',expectedSnapshot:barriers.binding.snapshot,drillThroughWalls:false}} } as BarrierDependencySnapshot;
+  const points = [dependencies.from.point,dependencies.to.point], routeSha256=hash(barrierRouteHashInput(points));
+  const result = { schemaVersion:'pathfinder.model.response.v3',requestId:id(63),status:'calculated',message:'Synthetic strict retained body',engineeringAccepted:false,
+    calculationMode:'calculate',effectiveCategory:'LV',route:{success:true,message:'',routeText:'/A',routeCodes:['/A'],segmentIds:['a'],
+      pathPoints:points.map(point=>({x:point[0],y:point[1],z:point[2]})),lengthMeters:1,fromDistanceMeters:0.1,toDistanceMeters:0.1,fromRequiresSecondary:false,toRequiresSecondary:false,
+      connectionGapCount:0,connectionGapLengthMeters:0},design:{lengthBeforePercentageMeters:'6',unroundedLengthMeters:'6.6',designLengthMeters:'7'},
+    barriers:{schemaVersion:'wfc.pf.barrier-execution.v1',context:barriers,proof:{schemaVersion:'wfc.pf.barrier-check-proof.v2',binding:barriers.binding,routeSha256,
+      status:'no-barriers-declared',routePointCount:2,totalSegments:1,checkedSegments:0,blocking:null,failedSegmentIndex:null,reasonCode:'EXPLICIT_EMPTY_SCOPE',coverage:'registered-selected-objects-only',engineeringAccepted:false},
+      directSecondary:{schemaVersion:'wfc.pf.constrained-direct-secondary.v2',policyVersion:'nearest-eligible-tray-or-registered-barriers.v2',
+        distanceDecision:{schemaVersion:'wfc.pf.direct-secondary.v1',policyVersion:'nearest-eligible-tray-or.v1',coordinateFrame:'canonical-world-metres',mode:'tray-network',fromPoint:points[0],toPoint:points[1],
+          distanceMeters:1,nearestFromMeters:0.1,nearestToMeters:0.1,eligibleTrays:1,comparison:null},binding:barriers.binding,directRouteSha256:routeSha256,mode:'tray-network',directCheck:null,reasonCode:'DISTANCE_NOT_QUALIFIED'},
+      diagnostics:{status:'no-barriers-declared',reasonCode:'DRILLING_BYPASS',searchComplete:true,candidatesTruncated:false,pairAttempts:0,collisionQueries:0,work:'1',plannerAttempts:0,straightPairAttempts:0,localEdgeChecks:0,localPhaseUsed:false,straightPhaseTruncated:false},
+      connectors:{from:null,to:null},qualification:null} };
+  const row = { ...f.row,dependencies:dependencies as unknown,proposal_dependencies:dependencies as unknown,result:result as unknown,
+    proposal_hash:'',dependency_hash:hash(dependencies),proposal_status:'calculated' };
+  const input:ProposalApplicabilityInput={...f.input,dependencyVersion:'pathfinder.dependencies.v8',dependencyHash:hash(dependencies),seal:null};
+  const reseal = () => { const baselineHash='e'.repeat(64);row.dependency_hash=hash(row.dependencies);input.dependencyHash=row.dependency_hash;
+    row.proposal_hash=hash({dependencies:row.dependencies,result:row.result,baselineHash});input.seal={projectId,jobId,cableId,proposalId,dependencyHash:input.dependencyHash,
+      proposalHash:row.proposal_hash,engineResultSha256:hash(row.result),baselineHash}; };
+  reseal(); f.query.mockResolvedValue({rows:[row]});
+  return {...f,input,row,dependencies,result,reseal,run:()=>readProposalApplicability(f.client,input)};
+}
+
 describe('version-specific sealed cable applicability with mocked SQL and scoped authority', () => {
+  it.each(['queued','running','complete'])('permits independently ready v8 only with exact retained physical strategy and current scoped authority (%s)',async parent=>{
+    const f=barrierFixture(parent),value=await f.run();
+    expect(value).toEqual({applicable:true,evidence:{schemaVersion:'wfc.pf.sealed-cable-applicability.v2',dependencyVersion:'pathfinder.dependencies.v8',
+      projectId,jobId,cableId,proposalId,dependencyHash:f.input.dependencyHash,scope:'sealed-cable-item'}});
+    expect(f.query.mock.calls[0][0]).toContain('octet_length(i.dependencies::text)+octet_length(p.dependencies::text)+octet_length(p.result::text)<=262144');
+    expect(f.query.mock.calls[0][1]).toEqual([projectId,jobId,cableId,proposalId]);
+    expect(authority).toHaveBeenCalledExactlyOnceWith(f.client,{projectId,jobId,cableId,lock:true});expect(wholeAuthority).not.toHaveBeenCalled();
+  });
+  it.each(['queued','running','complete'])('keeps a non-enrolled v8 job whole-job ready only at complete (%s)',async parent=>{
+    const f=barrierFixture(parent);authority.mockResolvedValue(null);
+    expect(await f.run()).toEqual({applicable:parent==='complete',evidence:null});
+    expect(wholeAuthority).toHaveBeenCalledExactlyOnceWith(f.client,{projectId,jobId,cableId,lock:true});
+  });
+  it('does not turn a valid whole-project grant into independent cable-item authority',async()=>{
+    const f=barrierFixture();authority.mockResolvedValue(null);wholeAuthority.mockResolvedValue({enrolled:true,valid:true,generation:'4',authorityEpoch:'1'});
+    expect(await f.run()).toEqual({applicable:false,evidence:null});
+    f.input.jobState='complete';f.row.job_state='complete';expect(await f.run()).toEqual({applicable:true,evidence:null});
+    wholeAuthority.mockResolvedValue({enrolled:true,valid:false,code:'AUTOMATIC_AUTHORITY_CHANGED'});expect(await f.run()).toEqual({applicable:false,evidence:null});
+  });
+  it('refuses a superseded or expired v8 scoped item without falling back to whole-job completion',async()=>{
+    const f=barrierFixture('complete');authority.mockResolvedValue({enrolled:true,valid:false,code:'LOCATION_IMPACT_TARGET_SUPERSEDED'});
+    expect(await f.run()).toEqual({applicable:false,evidence:null});expect(wholeAuthority).not.toHaveBeenCalled();
+  });
+  it.each(['legacy-response','wrong-route-hash','wrong-endpoint','wrong-frame','design-reuse'] as const)('refuses coherently resealed v8 %s before authority checks',async kind=>{
+    const f=barrierFixture();
+    if(kind==='legacy-response') f.result.schemaVersion='pathfinder.model.response.v1';
+    if(kind==='wrong-route-hash') f.result.barriers.proof.routeSha256='0'.repeat(64);
+    if(kind==='wrong-endpoint') f.result.barriers.directSecondary.distanceDecision.fromPoint=[99,2,3];
+    if(kind==='wrong-frame') f.result.barriers.context.binding.scope.captureFrameId=id(99);
+    if(kind==='design-reuse') f.result.calculationMode='design';
+    f.reseal();expect(await f.run()).toEqual({applicable:false,evidence:null});expect(authority).not.toHaveBeenCalled();
+  });
+  it.each(['missing-proposal','wrong-proposal-dependencies','wrong-result-seal','wrong-proposal-hash','missing-v2-seal'] as const)('refuses unavailable or tampered v8 retained proof: %s',async kind=>{
+    const f=barrierFixture('complete');
+    if(kind==='missing-proposal') f.query.mockResolvedValue({rows:[]});
+    if(kind==='wrong-proposal-dependencies') f.row.proposal_dependencies={...f.dependencies,cableWriteRevision:'99'};
+    if(kind==='wrong-result-seal') f.input.seal!.engineResultSha256='0'.repeat(64);
+    if(kind==='wrong-proposal-hash') f.row.proposal_hash='0'.repeat(64);
+    if(kind==='missing-v2-seal') delete f.input.seal!.baselineHash;
+    expect(await f.run()).toEqual({applicable:false,evidence:null});expect(authority).not.toHaveBeenCalled();
+  });
   it.each(['queued', 'running', 'complete'])('permits one exact sealed v7 completed item with parent %s without waiting for siblings', async parent => {
     const f = fixture(parent), result = await f.run();
     expect(result.applicable).toBe(true); expect(sealedCableItemApplicabilitySchema.parse(result.evidence)).toEqual({

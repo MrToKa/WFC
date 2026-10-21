@@ -9,6 +9,8 @@ import { defaultOptions, optionsSchema, routeCompatibilityIssue } from './jobCon
 import { geometryHash, hash } from './dependencies.js';
 import type { DependencySnapshot } from './jobContracts.js';
 import { nextAutomaticCursor } from './worker.js';
+import { syntheticDrillingRuntime } from './calculationFixtures.js';
+import { DIRECT_SECONDARY_POLICY } from '../../shared/pathfinderDirectSecondary.js';
 
 const saved = {root:process.env.PF_ROOT,dll:process.env.PF_ENGINE_DLL};
 const projectId = randomUUID(),modelVersionId = randomUUID(),snapshotId = randomUUID(),gapSnapshotId=randomUUID();
@@ -34,6 +36,15 @@ function request() {
     projectSettings:{revision:'1',secondaryTrayLength:'5',endConnectionLength:'6',additionalBendingPercent:'10'}};
 }
 describe('actual .NET private process through production Node client',() => {
+  it('retains a protected v2 request and v3 explicit bypass through real production stdio without claiming clearance',async()=>{
+    const barriers=syntheticDrillingRuntime({projectId,modelVersionId,selectionRevision:'1',contentFingerprint:'a'.repeat(64),captureFrameId:randomUUID(),captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres'});
+    const result=await runEngine({...request(),schemaVersion:'pathfinder.model.runner.v2',barriers,directSecondaryPolicy:DIRECT_SECONDARY_POLICY},new AbortController().signal);
+    expect(result).toMatchObject({schemaVersion:'pathfinder.model.response.v3',status:'calculated',barriers:{context:barriers,diagnostics:{status:'bypassed'}}});
+    expect(result.schemaVersion==='pathfinder.model.response.v3'&&result.barriers.proof?.status).toBe('bypassed');
+  },40000);
+  it('refuses an early malformed v2 request returning a legacy error rather than relabeling it protected',async()=>{
+    await expect(runEngine({...request(),schemaVersion:'pathfinder.model.runner.v2'},new AbortController().signal)).rejects.toMatchObject({code:'ENGINE_RESPONSE_INVALID'});
+  },40000);
   it('calculates exact real Core fixture and maps Instrumentation to Control',async () => {
     const result = await runEngine(request(),new AbortController().signal);
     expect(result.status).toBe('calculated'); expect(result.effectiveCategory).toBe('Control'); expect(result.route?.lengthMeters).toBe(10); expect(result.design?.designLengthMeters).toBe('18');

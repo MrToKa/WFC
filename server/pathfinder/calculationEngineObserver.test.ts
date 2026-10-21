@@ -2,9 +2,9 @@
 import type { Pool, PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
-import { calculationEngineIdentity } from './calculationEngineIdentity.js';
+import { barrierCalculationEngineIdentity as calculationEngineIdentity } from './calculationEngineIdentity.js';
 import { createCalculationEngineObserver } from './calculationEngineObserver.js';
-import { syntheticEngineIdentity } from './calculationFixtures.js';
+import { syntheticBarrierEngineIdentity as syntheticEngineIdentity } from './calculationFixtures.js';
 import { PathFinderError } from './errors.js';
 import { createRecalculationProducer } from './recalculationProducer.js';
 import {
@@ -12,7 +12,7 @@ import {
   markRecalculationEngineUnavailable,
 } from './recalculationSchema.js';
 
-vi.mock('./calculationEngineIdentity.js', () => ({ calculationEngineIdentity: vi.fn() }));
+vi.mock('./calculationEngineIdentity.js', () => ({ barrierCalculationEngineIdentity: vi.fn() }));
 vi.mock('./recalculationSchema.js', () => ({
   markRecalculationEngineIdentity: vi.fn(),
   markRecalculationEngineUnavailable: vi.fn(),

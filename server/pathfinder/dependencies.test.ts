@@ -4,8 +4,11 @@ import type { PoolClient } from 'pg';
 import { collectDependencies, collectDependenciesForVersion, geometryHash, hash, verifiedDesignOnlyChange } from './dependencies.js';
 import { defaultOptions } from './jobContracts.js';
 import { syntheticEngineIdentity } from './calculationFixtures.js';
-vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:async()=>syntheticEngineIdentity()}));
-const mocked=vi.hoisted(()=>({context:vi.fn(),binding:vi.fn(),active:vi.fn(),artifact:vi.fn(),routing:vi.fn(),settings:vi.fn(),comparison:vi.fn(),automatic:vi.fn()}));
+import { BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS, type BarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { BARRIER_RUNTIME_PROFILE, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:async()=>syntheticEngineIdentity(),barrierCalculationEngineIdentity:async()=>barrierIdentity()}));
+const mocked=vi.hoisted(()=>({context:vi.fn(),binding:vi.fn(),active:vi.fn(),artifact:vi.fn(),routing:vi.fn(),settings:vi.fn(),comparison:vi.fn(),automatic:vi.fn(),barriers:vi.fn()}));
+vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:mocked.barriers}));
 vi.mock('./automaticEndpointCandidates.js',()=>({readAutomaticEndpointCandidates:mocked.automatic}));
 vi.mock('./repository.js',()=>({activeModel:mocked.active,latestArtifact:mocked.artifact}));
 vi.mock('./endpointBindingRepository.js',()=>({readCurrentEndpointBindingContext:mocked.context,readEndpointBindingScope:mocked.binding}));
@@ -14,10 +17,21 @@ vi.mock('./settings.js',()=>({projectRoutingSettings:mocked.settings}));
 vi.mock('./revisionComparisonRepository.js',()=>({readComparisonDependency:mocked.comparison}));
 const id=(n:number)=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`,pid=id(1),mid=id(2),artifactId=id(3),aggregateId=id(4),frameId=id(5);
 const context=()=>({modelVersionId:mid,selectionRevision:'1',contentFingerprint:'c'.repeat(64),artifactId,aggregateId,projectionSha256:'d'.repeat(64),captureFrameId:frameId,geometryRevision:'2',traceId:null});
+function barrierIdentity():BarrierEngineIdentity {
+ const {contentSha256:_old,...base}=syntheticEngineIdentity();
+ const body={...base,schemaVersion:'wfc.pf.engine-identity.v2' as const,barriersModuleSha256:'8'.repeat(64),barrierVerifierModuleSha256:'9'.repeat(64),policyVersions:{...BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS}};
+ return {...body,contentSha256:hash(body)};
+}
+function barrierRuntime():BarrierRuntimeContext {
+ const policy=createBarrierRuntimePolicy(true);
+ return {schemaVersion:'wfc.pf.barrier-runtime.v1',binding:{scope:{projectId:pid,modelVersionId:mid,contentFingerprint:'c'.repeat(64),selectionRevision:'1',captureFrameId:frameId,captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres'},
+  registryRevision:'0',snapshot:null,policy,policySha256:hash(policy)},profile:structuredClone(BARRIER_RUNTIME_PROFILE),profileSha256:hash(BARRIER_RUNTIME_PROFILE),storage:null};
+}
+function barrierOptions(){const value=barrierRuntime();return{...defaultOptions,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope:value.binding.scope,expectedRegistryRevision:'0',expectedSnapshot:null,drillThroughWalls:true}};}
 const binding=(locationId:string)=>({id:id(locationId===id(6)?16:17),locationId,artifactId,locationRevision:'2',bindingRevision:'3',pointProjectMetres:[1,2,3],contentSha256:'a'.repeat(64),mode:'fixed-world',captureFrameId:frameId,qualifiedProjectFrameId:null,aggregateId,projectionSha256:'d'.repeat(64),sourceObject:null,sourceDecisionId:null});
-function database(from='  =a-01 ',to='=B.02',shared=false,registry='9'){
+function database(from='  =a-01 ',to='=B.02',shared=false,registry='9',mto='Instrumentation'){
  const query=vi.fn(async(sql:string,args:unknown[]=[])=>{
-  if(sql.includes('FROM cables WHERE'))return{rows:[{id:args[1],from_location:from,to_location:to,mto:'Instrumentation',cable_type_id:id(10),cable_write_revision:'4',routing:'/OLD',design_length:23,install_length:24}]};
+  if(sql.includes('FROM cables WHERE'))return{rows:[{id:args[1],from_location:from,to_location:to,mto,cable_type_id:id(10),cable_write_revision:'4',routing:'/OLD',design_length:23,install_length:24}]};
   if(sql.includes('FROM pf_project_state'))return{rows:[{registry_revision:registry}]};
   if(sql.includes('FROM pf_location_aliases'))return{rows:[{id:shared||args[1]==='=A-01'?id(6):id(7)}]};
   throw Error('Unexpected SQL in endpoint collection');
@@ -31,6 +45,55 @@ beforeEach(()=>{
  mocked.binding.mockImplementation(async(_c:unknown,input:{locationId:string})=>({status:'confirmed',binding:binding(input.locationId)}));
  mocked.comparison.mockResolvedValue({applicability:'not-required',readiness:'not-required',scope:null,reasonCodes:[],reviewStatus:'not-applicable'});
  mocked.automatic.mockResolvedValue(new Map());
+ mocked.barriers.mockResolvedValue(barrierRuntime());
+});
+describe('additive v8 barrier dependency projection',()=>{
+ it('keeps MV excluded before protected dispatch rather than enrolling a guaranteed runner refusal',async()=>{
+  const value=await collectDependenciesForVersion(database('  =a-01 ','=B.02',false,'9','MV').client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8');
+  expect(value.dependencies).toBeNull();expect(value.status).toBe('category_required');expect(value.message).toContain('MV cables are excluded');
+ });
+ const retainOptions=()=>mocked.settings.mockImplementation(async(_client:unknown,_project:string,options:unknown)=>({settings:{revision:'1',connectionGap:'1',secondaryTrayLength:'7',endConnectionLength:'5',additionalBendingPercent:'10'},options:{...(options as object),connectionToleranceMeters:1}}));
+ it('freezes exact runtime/identity/intent alongside scoped endpoint resolution, without global registry authority',async()=>{
+  retainOptions();const options=barrierOptions();
+  const value=(await collectDependenciesForVersion(database().client,pid,id(8),options,'pathfinder.dependencies.v8')).dependencies!;
+  expect(value.schemaVersion).toBe('pathfinder.dependencies.v8');expect(value).toHaveProperty('barriers',barrierRuntime());
+  expect(value).toHaveProperty('engineIdentity',barrierIdentity());expect(value).not.toHaveProperty('registryRevision');
+  expect(value.options.barrierRouting).toEqual(options.barrierRouting);expect(value).toHaveProperty('endpointResolution.to.logicalKey','=B.02');
+  expect(mocked.barriers).toHaveBeenCalledTimes(1);expect(mocked.barriers.mock.calls[0][2]).toEqual(options.barrierRouting);
+ });
+ it('refuses absent/malformed v8 intents and a protected intent on retained legacy versions',async()=>{
+  await expect(collectDependenciesForVersion(database().client,pid,id(8),defaultOptions,'pathfinder.dependencies.v8')).rejects.toMatchObject({code:'BARRIER_ADMISSION_REQUIRED'});
+  await expect(collectDependenciesForVersion(database().client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v7')).rejects.toMatchObject({code:'BARRIER_ADMISSION_REQUIRED'});
+  const malformed={...barrierOptions(),barrierRouting:{...barrierOptions().barrierRouting,drillThroughWalls:'true'}};
+  await expect(collectDependenciesForVersion(database().client,pid,id(8),malformed as never,'pathfinder.dependencies.v8')).rejects.toThrow();
+  expect(mocked.barriers).not.toHaveBeenCalled();
+ });
+ it('keeps an explicitly absent optional field outside legacy frozen hashes',async()=>{
+  retainOptions();const legacy=(await collectDependencies(database().client,pid,id(8),defaultOptions)).dependencies!;
+  const absent=(await collectDependencies(database().client,pid,id(8),{...defaultOptions,barrierRouting:undefined})).dependencies!;
+  expect(hash(absent)).toBe(hash(legacy));expect(absent.options).not.toHaveProperty('barrierRouting');
+ });
+ it('binds runtime scope changes to geometry and refuses design-only v8 reuse even for allowance-only changes',async()=>{
+  retainOptions();const previous=(await collectDependenciesForVersion(database().client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8')).dependencies!;
+  if(previous.schemaVersion!=='pathfinder.dependencies.v8')throw Error('Wrong dependency fixture');
+  const allowance={...previous,settings:{...previous.settings,revision:'2',endConnectionLength:'6'}};
+  expect(geometryHash(allowance)).toBe(geometryHash(previous));expect(verifiedDesignOnlyChange(allowance,previous)).toBe(false);
+  const changed={...previous,barriers:{...previous.barriers,profileSha256:'f'.repeat(64)}};
+  expect(geometryHash(changed)).not.toBe(geometryHash(previous));
+  const changedPolicy={...previous,barriers:{...previous.barriers,binding:{...previous.barriers.binding,policySha256:'f'.repeat(64)}}};
+  expect(geometryHash(changedPolicy)).not.toBe(geometryHash(previous));
+ });
+ it('propagates current barrier refusal rather than returning a legacy calculation',async()=>{
+  retainOptions();mocked.barriers.mockRejectedValueOnce(Object.assign(new Error('Changed scope'),{code:'BARRIER_CALCULATION_SCOPE_CHANGED'}));
+  await expect(collectDependenciesForVersion(database().client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8')).rejects.toMatchObject({code:'BARRIER_CALCULATION_SCOPE_CHANGED'});
+ });
+ it('requires runtime barriers to describe the same prepared endpoint frame',async()=>{
+  retainOptions();const runtime=barrierRuntime();runtime.binding.scope.captureFrameId=id(99);mocked.barriers.mockResolvedValue(runtime);
+  await expect(collectDependenciesForVersion(database().client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8')).rejects.toMatchObject({code:'BARRIER_CALCULATION_SCOPE_CHANGED'});
+ });
+ it('refuses a legacy identity supplied to v8 rather than blessing it with new metadata',async()=>{
+  retainOptions();await expect(collectDependenciesForVersion(database().client,pid,id(8),barrierOptions(),'pathfinder.dependencies.v8',false,syntheticEngineIdentity())).rejects.toMatchObject({code:'BARRIER_ADMISSION_REQUIRED'});
+ });
 });
 describe('shared current endpoint collection',()=>{
  it('keeps unrelated global registry changes outside new v7 mathematics while retaining strict legacy hashes',async()=>{

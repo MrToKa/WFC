@@ -11,6 +11,9 @@ async function request(projectId: string, token: string, input: CalculationGrant
   if (!policyUuidSchema.safeParse(projectId).success || !token || token.length > 16384) throw new CalculationGrantsApiError('INVALID_REQUEST', 400, 'Use the current project and administrator account.', 'refused');
   const command = input === undefined ? null : calculationGrantCommandSchema.safeParse(input);
   if (command && !command.success) throw new CalculationGrantsApiError('INVALID_REQUEST', 400, 'Review the background calculation settings before saving.', 'refused');
+  if (command?.success && command.data.action === 'enable' && command.data.preferences.barrierRouting
+    && command.data.preferences.barrierRouting.scope.projectId !== projectId)
+    throw new CalculationGrantsApiError('INVALID_REQUEST', 400, 'Use barrier settings from the current project.', 'refused');
   const encoded = command?.success ? JSON.stringify(command.data) : undefined;
   if (encoded && new TextEncoder().encode(encoded).byteLength > 65536) throw new CalculationGrantsApiError('BODY_LIMIT', 413, 'The background calculation command is too large.', 'refused');
   const response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/pathfinder/calculation-grants/${input === undefined ? 'context' : 'commands'}`, {

@@ -7,7 +7,7 @@ import type { EngineResponse,JobPrincipal } from './jobContracts.js';
 import { snapshotObject } from './contracts.js';
 import { proposalRoutingPreferences } from './jobContracts.js';
 import { createPathFinderApply } from './apply.js';
-import { syntheticEngineIdentity } from './calculationFixtures.js';
+import { syntheticEngineIdentity,syntheticBarrierEngineIdentity,syntheticDrillingRuntime } from './calculationFixtures.js';
 import { hash } from './dependencies.js';
 import { DIRECT_SECONDARY_POLICY, type DirectSecondaryDecision } from '../../shared/pathfinderDirectSecondary.js';
 function historicalEngineIdentity(){
@@ -15,7 +15,8 @@ function historicalEngineIdentity(){
   const {contentSha256:_hash,...body}={...identity,policyVersions:{numeric,routing,fitting,projection,categoryMapping}};
   return{...body,contentSha256:hash(body)};
 }
-vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:vi.fn(async()=>historicalEngineIdentity())}));
+vi.mock('./calculationEngineIdentity.js',()=>({calculationEngineIdentity:vi.fn(async()=>historicalEngineIdentity()),barrierCalculationEngineIdentity:vi.fn(async()=>syntheticBarrierEngineIdentity())}));
+vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:vi.fn(async(_client:unknown,_projectId:string,intent:NonNullable<PreviewInput['barrierRouting']>)=>syntheticDrillingRuntime(intent.scope))}));
 
 // Preview's former behaviour is retained only behind an explicitly scoped
 // producer. Actual missing/mismatched producer controls live in routingScope.test.
@@ -43,6 +44,8 @@ const who:JobPrincipal={userId:'44444444-4444-4444-8444-444444444444',loginId:'5
 const settings={connection_gap:'1',secondary_tray_length:'5',end_connection_length:'6',additional_bending_percent:'10',pf_settings_revision:'7'};
 const input=():PreviewInput=>({from:{name:'From',point:[0,0,.5]},to:{name:'To',point:[10,0,.5]},category:'Instrumentation',reverse:false,
   artifactId,expectedSelectionRevision:'3',expectedSettingsRevision:'7',expectedRegistryRevision:'4',secondaryDistanceMeters:2,preferVerticalApproach:true});
+const protectedInput=():PreviewInput=>({...input(),barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1',expectedRegistryRevision:'1',expectedSnapshot:null,drillThroughWalls:true,
+  scope:{projectId,modelVersionId:modelId,selectionRevision:'3',contentFingerprint:'a'.repeat(64),captureFrameId:who.loginId,captureFrameSha256:'f'.repeat(64),coordinateFrame:'canonical-world-metres'}}});
 function database(options:{admin?:boolean;settings?:typeof settings;registry?:string;artifact?:string;modelState?:string;health?:string;aliases?:Array<Record<string,unknown>>;objects?:Array<Record<string,unknown>>;candidateStatus?:AutomaticNamedEndpointCandidate['status'];duplicate?:string;job?:Record<string,unknown>;stored?:Record<string,unknown>;proposal?:Record<string,unknown>;review?:Record<string,unknown>}={}) {
   const query=vi.fn(async (sql:string,_parameters?:unknown[])=>{
     if (sql==='SELECT id FROM projects WHERE id=$1 FOR NO KEY UPDATE') return {rows:[{id:projectId}]};
@@ -169,18 +172,22 @@ describe('standalone Path preview contract and dependency boundary',()=>{
     expect(result.route?.points).toEqual([[0,0,.5],[10,0,.5]]);expect(result.route?.objectIds).toEqual(['dbid:12']);expect(result.route?.lengthMeters).toBe(10);
   });
   it('creates only a durable preview job, never a cable, proposal, review or apply receipt',async()=>{
-    const db=database(),result=await createPathFinderPreviews(db.pool).create(projectId,who,input());expect(result.duplicate).toBe(false);
+    const db=database(),result=await createPathFinderPreviews(db.pool).create(projectId,who,protectedInput());expect(result.duplicate).toBe(false);
     const inserts=db.query.mock.calls.filter(([sql])=>/^\s*INSERT/i.test(sql));expect(inserts).toHaveLength(2);
     expect(inserts[0][0]).toContain('INSERT INTO viewer_login_bindings');expect(inserts[1][0]).toContain("'preview'");expect(inserts[1][0]).toContain('INSERT INTO pf_jobs');
     expect(db.query.mock.calls.at(-1)?.[0]).toBe('COMMIT');
   });
+  it('refuses a fresh MV preview before queuing a runner request',async()=>{
+    const db=database();await expect(createPathFinderPreviews(db.pool).create(projectId,who,{...protectedInput(),category:'MV'})).rejects.toMatchObject({code:'PREVIEW_CATEGORY_EXCLUDED'});
+    expect(db.query).not.toHaveBeenCalled();
+  });
   it('deduplicates only the same current principal queued/running preview',async()=>{
-    const db=database({duplicate:modelId});await expect(createPathFinderPreviews(db.pool).create(projectId,who,input())).resolves.toEqual({jobId:modelId,duplicate:true});
+    const db=database({duplicate:modelId});await expect(createPathFinderPreviews(db.pool).create(projectId,who,protectedInput())).resolves.toEqual({jobId:modelId,duplicate:true});
     expect(db.query.mock.calls.some(([sql])=>sql.includes('INSERT INTO pf_jobs'))).toBe(false);
     const duplicateQuery=db.query.mock.calls.find(([sql])=>sql.startsWith('SELECT id FROM pf_jobs'));expect(duplicateQuery?.[0]).toContain("state IN ('queued','running')");expect(duplicateQuery?.[1]?.slice(0,3)).toEqual([projectId,who.userId,who.loginId]);
   });
   it('checks current administrator authority inside the transaction before enqueueing a preview',async()=>{
-    const db=database({admin:false});await expect(createPathFinderPreviews(db.pool).create(projectId,who,input())).rejects.toMatchObject({code:'ADMIN_REQUIRED'});
+    const db=database({admin:false});await expect(createPathFinderPreviews(db.pool).create(projectId,who,protectedInput())).rejects.toMatchObject({code:'ADMIN_REQUIRED'});
     expect(db.query.mock.calls.some(([sql])=>sql.includes('INSERT INTO pf_jobs'))).toBe(false);expect(db.query.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
   });
   it('does not expose ordinary cable or lookup jobs through preview result reads',async()=>{

@@ -75,7 +75,7 @@ internal static class SessionProtocol
             || value.GetProperty("maxInputBytes").GetInt32() != MaximumInput || value.GetProperty("maxOutputBytes").GetInt32() != MaximumOutput)
             throw new InvalidDataException("Session binary or protocol identity mismatch.");
     }
-    internal static JsonElement ValidateResult(ReadOnlyMemory<byte> bytes, string requestId, int ordinal)
+    internal static JsonElement ValidateResult(ReadOnlyMemory<byte> bytes, string requestId, int ordinal, Request? request = null)
     {
         using var doc = Parse(bytes); var value = doc.RootElement;
         Fields(value, "schemaVersion", "type", "response", "session");
@@ -85,11 +85,13 @@ internal static class SessionProtocol
             || session.GetProperty("preparedReuse").GetString() is not ("none" or "build" or "disk" or "memory")) throw new InvalidDataException("Session result identity mismatch.");
         _ = session.GetProperty("retireAfterResponse").GetBoolean();
         var response = value.GetProperty("response");
-        if (response.GetProperty("schemaVersion").GetString() is not ("pathfinder.model.response.v1" or "pathfinder.model.response.v2")
+        if (response.GetProperty("schemaVersion").GetString() is not ("pathfinder.model.response.v1" or "pathfinder.model.response.v2" or "pathfinder.model.response.v3")
             || response.GetProperty("requestId").GetString() != requestId || response.GetProperty("engineeringAccepted").GetBoolean()
             || response.GetProperty("status").GetString() is not ("prepared" or "calculated" or "lookup_planned" or "no_path" or "settings_required"
                 or "category_required" or "model_needs_review" or "invalid_request" or "deadline_exceeded" or "resource_limit"))
             throw new InvalidDataException("Session response identity or status mismatch.");
+        if (request is not null) Program.ValidateResponseVersion(response, request);
+        else if (response.GetProperty("schemaVersion").GetString() == "pathfinder.model.response.v3") throw new InvalidDataException("Protected responses require their actual admitted request.");
         return value.Clone();
     }
 }

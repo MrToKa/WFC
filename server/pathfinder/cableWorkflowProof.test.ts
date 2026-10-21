@@ -2,10 +2,11 @@
 import type { PoolClient } from 'pg';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CableWorkflowRow } from '../../shared/pathfinderCableWorkflow.js';
-import type { DependencySnapshot, EngineResponse } from './jobContracts.js';
+import type { BarrierDependencySnapshot, DependencySnapshot, EngineResponse } from './jobContracts.js';
 import { defaultOptions } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { createCableWorkflowProofReader, readWorkflowVerifiedProposal, WORKFLOW_PROOF_BYTES } from './cableWorkflowProof.js';
+import { BARRIER_RUNTIME_PROFILE, barrierRouteHashInput, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 
 const proof = vi.hoisted(() => ({ seal: vi.fn(), enrollment: vi.fn(), scope: vi.fn(),scoped:vi.fn(), initialFill: vi.fn() }));
 vi.mock('./revisionResultRepository.js', () => ({ verifyRevisionResultForProposal: proof.seal }));
@@ -57,6 +58,8 @@ function fixture() {
     if (sql.includes('cable-workflow:proposal-proof')) return { rows: [raw] };
     if (sql.includes('cable-workflow:accepted-proof')) return { rows: [receipt] };
     if (sql.includes('pathfinder:sealed-item-applicability')) return {rows:[{state:'complete',status:'calculated',dependencies:raw.dependencies,job_state:raw.job_state,cancel_requested:raw.cancel_requested}]};
+    if (sql.includes('pathfinder:barrier-sealed-item-applicability')) return {rows:[{state:'complete',status:'calculated',dependencies:raw.dependencies,proposal_dependencies:raw.dependencies,result:raw.result,
+      dependency_hash:raw.dependency_hash,proposal_hash:raw.proposal_hash,proposal_status:raw.status,job_state:raw.job_state,cancel_requested:raw.cancel_requested}]};
     throw Error('Unexpected SQL in proof fixture.');
   });
   const client = { query } as unknown as PoolClient;
@@ -69,7 +72,59 @@ beforeEach(() => {
   proof.initialFill.mockResolvedValue(false);
 });
 
+/** Explicit empty scope is a synthetic integrity fixture, not geometry or
+ * acceptance evidence. Scope/SQL boundaries are mocked; the physical-strategy
+ * integrity helper and strict response parser execute in the real reader. */
+function barrierFixture() {
+  const f=fixture(),scope={projectId,modelVersionId:f.dependencies.model.id,selectionRevision:f.dependencies.model.selectionRevision,contentFingerprint:f.dependencies.model.contentFingerprint,
+    captureFrameId:id(20),captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const},policy=createBarrierRuntimePolicy(false);
+  const barriers:BarrierRuntimeContext={schemaVersion:'wfc.pf.barrier-runtime.v1',binding:{scope,registryRevision:'3',snapshot:{snapshotId:id(21),scope,registryRevision:'3',contentSha256:'c'.repeat(64),mode:'explicit-empty'},policy,policySha256:hash(policy)},
+    profile:structuredClone(BARRIER_RUNTIME_PROFILE),profileSha256:hash(BARRIER_RUNTIME_PROFILE),storage:{intentId:id(22),manifest:{blobId:id(23),sha256:'d'.repeat(64),bytes:1000},capture:null}};
+  const {registryRevision:_registry,...body}=f.dependencies as DependencySnapshot&{registryRevision:string};
+  const dependencies={...body,schemaVersion:'pathfinder.dependencies.v8',barriers,cableInputs:{fromLocation:'FROM',toLocation:'TO',mto:'LV',cableTypeId:id(24)},
+    from:{point:[0,0,0]},to:{point:[5,0,0]},options:{...body.options,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope,expectedRegistryRevision:'3',expectedSnapshot:barriers.binding.snapshot,drillThroughWalls:false}}} as BarrierDependencySnapshot;
+  const routeHash=hash(barrierRouteHashInput([[0,0,0],[5,0,0]]));
+  const result:Data={...f.result,schemaVersion:'pathfinder.model.response.v3',calculationMode:'calculate',effectiveCategory:'LV',barriers:{schemaVersion:'wfc.pf.barrier-execution.v1',context:barriers,
+    proof:{schemaVersion:'wfc.pf.barrier-check-proof.v2',binding:barriers.binding,routeSha256:routeHash,status:'no-barriers-declared',routePointCount:2,totalSegments:1,checkedSegments:0,blocking:null,failedSegmentIndex:null,reasonCode:'EXPLICIT_EMPTY_SCOPE',coverage:'registered-selected-objects-only',engineeringAccepted:false},
+    directSecondary:{schemaVersion:'wfc.pf.constrained-direct-secondary.v2',policyVersion:'nearest-eligible-tray-or-registered-barriers.v2',binding:barriers.binding,directRouteSha256:routeHash,mode:'tray-network',directCheck:null,reasonCode:'DISTANCE_NOT_QUALIFIED',
+      distanceDecision:{schemaVersion:'wfc.pf.direct-secondary.v1',policyVersion:'nearest-eligible-tray-or.v1',coordinateFrame:'canonical-world-metres',mode:'tray-network',fromPoint:[0,0,0],toPoint:[5,0,0],distanceMeters:5,nearestFromMeters:1,nearestToMeters:1,eligibleTrays:1,comparison:null}},
+    diagnostics:{status:'no-barriers-declared',reasonCode:'DRILLING_BYPASS',searchComplete:true,candidatesTruncated:false,pairAttempts:0,collisionQueries:0,work:'1',plannerAttempts:0,straightPairAttempts:0,localEdgeChecks:0,localPhaseUsed:false,straightPhaseTruncated:false},connectors:{from:null,to:null},qualification:null}};
+  f.raw.dependencies=dependencies;f.raw.result=result;
+  const reseal=()=>{f.raw.dependency_hash=hash(dependencies);f.raw.proposal_hash=hash({dependencies,result,baselineHash:f.seal.baselineHash});
+    proof.seal.mockResolvedValue({...f.seal,proposalId,dependencyHash:f.raw.dependency_hash,proposalHash:f.raw.proposal_hash,engineResultSha256:hash(result)});};
+  reseal();
+  return {...f,dependencies,result,reseal};
+}
+
 describe('cable workflow positive result evidence (synthetic boundaries)', () => {
+  it.each(['queued','running','complete'])('uses current sealed v8 readiness with %s siblings after validating its retained physical strategy',async state=>{
+    const f=barrierFixture();f.raw.job_state=state;
+    expect(await f.reader.reviewable(cableId,jobId,proposalId,f.dependencies)).toMatchObject({currentness:'current',reviewable:true,
+      itemApplicability:{schemaVersion:'wfc.pf.sealed-cable-applicability.v2',dependencyVersion:'pathfinder.dependencies.v8',projectId,jobId,cableId,proposalId}});
+    expect(proof.scoped).toHaveBeenCalledWith(f.client,{projectId,jobId,cableId,lock:true});
+  });
+  it.each(['queued','running','complete'])('keeps non-scoped v8 readiness whole-job only (%s)',async state=>{
+    const f=barrierFixture();f.raw.job_state=state;proof.scoped.mockResolvedValue(null);
+    expect(await f.reader.reviewable(cableId,jobId,proposalId,f.dependencies)).toMatchObject({reviewable:state==='complete',itemApplicability:null});
+  });
+  it('refuses superseded v8 cable authority even after the whole parent completed',async()=>{
+    const f=barrierFixture();proof.scoped.mockResolvedValue({enrolled:true,valid:false,code:'LOCATION_IMPACT_TARGET_SUPERSEDED'});
+    expect(await f.reader.reviewable(cableId,jobId,proposalId,f.dependencies)).toMatchObject({reviewable:false,itemApplicability:null});
+  });
+  it.each(['legacy-response','missing-proof','wrong-route-hash','wrong-endpoint','changed-context','design-mode','extra-response-field'] as const)('never marks a coherently resealed v8 %s as verified',async kind=>{
+    const f=barrierFixture();
+    if(kind==='legacy-response')f.result.schemaVersion='pathfinder.model.response.v1';
+    if(kind==='missing-proof')f.result.barriers.proof=null;
+    if(kind==='wrong-route-hash')f.result.barriers.proof.routeSha256='0'.repeat(64);
+    if(kind==='wrong-endpoint')f.result.route.pathPoints[0].x=99;
+    if(kind==='changed-context')f.result.barriers.context={...f.result.barriers.context,binding:{...f.result.barriers.context.binding,registryRevision:'4'}};
+    if(kind==='design-mode')f.result.calculationMode='design';
+    if(kind==='extra-response-field')f.result.callerAuthority=true;
+    f.reseal();expect(await readWorkflowVerifiedProposal(f.client,projectId,cableId,proposalId)).toBeNull();
+    expect(await f.reader.reviewable(cableId,jobId,proposalId,f.dependencies)).toMatchObject({currentness:'unavailable',reviewable:false});
+    expect(proof.scoped).not.toHaveBeenCalled();
+    expect(await f.reader.accepted(f.cable,async()=>({...f.dependencies,cableWriteRevision:afterRevision}))).toBe(false);
+  });
   it('uses exact job/project/cable identity and existing seal, scope and C# ledger validators', async () => {
     const f = fixture();
     expect(await f.reader.reviewable(cableId, jobId, proposalId, f.dependencies)).toEqual({ currentness: 'current', reviewable: true, reasonCodes: [] });

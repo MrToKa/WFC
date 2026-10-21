@@ -8,5 +8,6 @@
     <InternalsVisibleTo Include="PathFinder.FittedTrace.Tests" />
     <ProjectReference Include="../../src/PathFinder.Model/PathFinder.Model.csproj" />
     <ProjectReference Include="../../src/PathFinder.Adapter/PathFinder.Adapter.csproj" />
+    <ProjectReference Include="../../src/PathFinder.BarrierVerifier/PathFinder.BarrierVerifier.csproj" />
   </ItemGroup>
 </Project>

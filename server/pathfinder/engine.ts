@@ -115,6 +115,8 @@ export async function runEngine(request: Record<string,unknown> & {requestId:str
       try {
         const result = engineResponseSchema.parse(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks))));
         if (result.requestId !== request.requestId) throw new PathFinderError('ENGINE_RESPONSE_IDENTITY',502);
+        if ((request.schemaVersion === 'pathfinder.model.runner.v2') !== (result.schemaVersion === 'pathfinder.model.response.v3'))
+          throw new PathFinderError('ENGINE_RESPONSE_VERSION',502);
         if(terminalCandidate){
           if(signal.aborted||performance.now()>=originalDeadlineAt||performance.now()>terminalExpiresAt){rejectDeferred(deferredRefusal());return;}
           terminalReconciled=true;retainObservation();

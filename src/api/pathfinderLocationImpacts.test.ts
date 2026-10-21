@@ -13,10 +13,25 @@ function impact(n = 30) { return locationImpactSummarySchema.parse({ id: id(n), 
 const page = () => ({ schemaVersion: 'wfc.pf.location-impact-page.v1', projectId: project, impacts: [impact(), impact(20)], nextBeforeId: id(20) });
 const progress = () => ({ schemaVersion: 'wfc.pf.location-impact-progress.v1', projectId: project, impact: impact() });
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+const barrierIntent=(drillThroughWalls=false)=>{const current=impact().current,scope={projectId:project,modelVersionId:current.modelVersionId,contentFingerprint:current.contentFingerprint,selectionRevision:current.selectionRevision,captureFrameId:current.captureFrameId,captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};return{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope,expectedRegistryRevision:'4',expectedSnapshot:{snapshotId:id(40),scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const},drillThroughWalls};};
 beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('bounded owned location impact reads', () => {
+  it.each([false,true])('retains exact scoped barrier input in progress and history (drill=%s)',async drillThroughWalls=>{
+    const original=impact(),barrierRouting=barrierIntent(drillThroughWalls),entry={...original,calculation:{...original.calculation!,preferences:{...original.calculation!.preferences,barrierRouting}}};
+    const value={...progress(),impact:entry},history={...page(),impacts:[entry],nextBeforeId:null};
+    vi.mocked(fetch).mockResolvedValueOnce(response(value)).mockResolvedValueOnce(response(history));
+    await expect(fetchLocationImpactProgress(project,'token',actor,impactId)).resolves.toEqual(value);
+    await expect(fetchLocationImpacts(project,'token',actor)).resolves.toEqual(history);
+  });
+  it('refuses malformed and foreign-frame barrier input instead of stripping it from observed progress',async()=>{
+    const original=impact(),intent=barrierIntent(),scope={...intent.scope,captureFrameId:id(99)};
+    for(const barrierRouting of [null,{...intent,extra:true},{...intent,scope,expectedSnapshot:{...intent.expectedSnapshot,scope}}]){
+      vi.mocked(fetch).mockResolvedValueOnce(response({...progress(),impact:{...original,calculation:{...original.calculation!,preferences:{...original.calculation!.preferences,barrierRouting}}}}));
+      await expect(fetchLocationImpactProgress(project,'token',actor,impactId)).rejects.toMatchObject({code:'INVALID_RESPONSE'});
+    }
+  });
   it('uses fixed GET-only paths for paged reload discovery and one exact summary, preserving observed timing', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(response(page())).mockResolvedValueOnce(response(progress()));
     await expect(fetchLocationImpacts(project, 'token', actor, { beforeId: id(50), limit: 25 })).resolves.toEqual(page());

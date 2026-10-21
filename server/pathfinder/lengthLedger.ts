@@ -16,10 +16,13 @@ export function requireCalculationLengthLedger(response: EngineResponse, setting
   const ledger = parsed.data, route = response.route, design = response.design;
   try {
     if (ledger.schemaVersion === 'wfc.pf.length-components.v2') {
-      const decision = response.schemaVersion === 'pathfinder.model.response.v2' ? directSecondaryDecisionSchema.safeParse(response.directSecondary) : null;
+      const decision = response.schemaVersion === 'pathfinder.model.response.v2' ? directSecondaryDecisionSchema.safeParse(response.directSecondary)
+        : response.schemaVersion === 'pathfinder.model.response.v3' && response.barriers.directSecondary?.mode === 'direct-secondary'
+          ? directSecondaryDecisionSchema.safeParse(response.barriers.directSecondary.distanceDecision) : null;
       if (!decision?.success || canonicalPurposeJson(ledger.directSecondary) !== canonicalPurposeJson(decision.data)
         || directSecondaryRouteIssue(decision.data, { ...route, points: route.pathPoints.map(point => [point.x, point.y, point.z]) })) return fail();
-    } else if (response.schemaVersion === 'pathfinder.model.response.v2' && response.directSecondary.mode === 'direct-secondary') return fail();
+    } else if (response.schemaVersion === 'pathfinder.model.response.v2' && response.directSecondary.mode === 'direct-secondary'
+      || response.schemaVersion === 'pathfinder.model.response.v3' && response.barriers.directSecondary?.mode === 'direct-secondary') return fail();
     if (ledger.settingsRevision !== settings.revision
       || ledger.raw.lengthMeters !== route.lengthMeters || ledger.raw.fromDistanceMeters !== route.fromDistanceMeters || ledger.raw.toDistanceMeters !== route.toDistanceMeters
       || ledger.from.requiresSecondary !== route.fromRequiresSecondary || ledger.to.requiresSecondary !== route.toRequiresSecondary

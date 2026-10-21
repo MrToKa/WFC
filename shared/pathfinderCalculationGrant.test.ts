@@ -7,7 +7,22 @@ const grant=()=>({schemaVersion:'wfc.pf.calculation-grant.v1' as const,projectId
   operations:[...CALCULATION_GRANT_OPERATIONS],limitsProfile:'local-bounded-v1' as const,preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeoutMilliseconds:60000});
 const context=()=>({schemaVersion:'wfc.pf.calculation-grant-context.v1' as const,projectId:id(1),controlRevision:'1',grant:grant(),status:'enabled' as const,reasonCodes:[],producer:{status:'ready' as const,reasonCode:null}});
 const command=()=>({schemaVersion:'wfc.pf.calculation-grant-command.v1' as const,action:'enable' as const,expectedControlRevision:'0',idempotencyKey:id(5),reason:'Explicit synthetic enable.',preferences:{secondaryDistanceMeters:2,preferVerticalApproach:true},timeoutMilliseconds:60000});
+const barrierIntent=(drillThroughWalls=false)=>{const scope={projectId:id(1),modelVersionId:id(6),contentFingerprint:'a'.repeat(64),selectionRevision:'3',captureFrameId:id(7),captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};return{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope,expectedRegistryRevision:'4',expectedSnapshot:{snapshotId:id(8),scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const},drillThroughWalls};};
 describe('strict calculation-only grant contracts',()=>{
+  it('retains exact no-drilling barrier input without introducing it into historical grants',()=>{
+    expect(calculationGrantSchema.parse(grant()).preferences).not.toHaveProperty('barrierRouting');
+    const preferences={...command().preferences,barrierRouting:barrierIntent()};
+    expect(calculationGrantCommandSchema.parse({...command(),preferences}).action).toBe('enable');
+    expect(JSON.parse(calculationGrantCommandCanonicalJson({...command(),preferences})).preferences).toEqual(preferences);
+    expect(calculationGrantSchema.parse({...grant(),preferences}).preferences).toEqual(preferences);
+  });
+  it('refuses explicit drilling and malformed versioned intent in both saved grants and enable commands',()=>{
+    for(const barrierRouting of [barrierIntent(true),null,{...barrierIntent(),drillThroughWalls:undefined},{...barrierIntent(),actorId:id(4)}]){
+      const preferences={...command().preferences,barrierRouting};
+      expect(calculationGrantCommandSchema.safeParse({...command(),preferences}).success).toBe(false);
+      expect(calculationGrantSchema.safeParse({...grant(),preferences}).success).toBe(false);
+    }
+  });
   it('preserves exact revisions and fixed narrow operations without login credentials',()=>{
     expect(calculationGrantSchema.parse(grant())).toEqual(grant());expect(calculationGrantContextSchema.parse(context())).toEqual(context());
     expect(CALCULATION_GRANT_LIMITS.executionLeaseMilliseconds).toBe(900000);expect(CALCULATION_GRANT_LIMITS.activeGlobalLeases).toBe(1);

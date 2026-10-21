@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { calculationEngineIdentity } from './calculationEngineIdentity.js';
+import { barrierCalculationEngineIdentity as calculationEngineIdentity } from './calculationEngineIdentity.js';
 import { markRecalculationEngineIdentity, markRecalculationEngineUnavailable } from './recalculationSchema.js';
 import { schedulerTransaction as transaction } from './schedulerTransaction.js';
 import { PathFinderError } from './errors.js';

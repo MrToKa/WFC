@@ -6,6 +6,16 @@ internal sealed class SessionExecutionContext
     private FittedModelCache? cache;
     private PreparedModel? previous;
     private string? identity;
+    private string? barrierIdentity;
+    internal PreparedBarriers? BarrierCache { get; private set; }
+    internal void SelectBarrierKey(string next)
+    {
+        // At most one qualified kernel is retained; discard a superseded scope
+        // before reading/allocating its replacement. File hashes are rechecked
+        // by the caller even when this immutable qualification can be reused.
+        if (barrierIdentity != next) { BarrierCache = null; barrierIdentity = next; }
+    }
+    internal void StoreBarriers(PreparedBarriers value) => BarrierCache = value;
     internal string Reuse { get; private set; } = "none";
     internal void BeginRequest() => Reuse = "none";
     internal PreparedModel Prepare(string root, byte[] bytes, ModelBuildRules? rules, CancellationToken token)

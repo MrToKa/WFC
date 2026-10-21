@@ -3,7 +3,7 @@ import { canonicalPurposeJson, policyHashSchema, policyRevisionSchema, policyUui
 import { canonicalDecimalString } from '../../shared/pathfinderLengthLedger.js';
 import type { CableWorkflowRow } from '../../shared/pathfinderCableWorkflow.js';
 import type { DependencySnapshot, EngineResponse } from './jobContracts.js';
-import { designLengthCompatibilityIssue, optionsSchema, proposalRoutingPreferences, routeCompatibilityIssue } from './jobContracts.js';
+import { designLengthCompatibilityIssue, engineResponseSchema, optionsSchema, proposalRoutingPreferences, routeCompatibilityIssue } from './jobContracts.js';
 import { hash } from './dependencies.js';
 import { requireVersionedCalculationScope } from './routingScope.js';
 import { requireCalculationLengthLedger } from './lengthLedger.js';
@@ -11,6 +11,7 @@ import { verifyRevisionResultForProposal } from './revisionResultRepository.js';
 import { readRecalculationJobAuthority } from './recalculationRepository.js';
 import { readProposalApplicability } from './proposalApplicability.js';
 import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
+import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 
 export const WORKFLOW_PROOF_BYTES = 256 * 1024;
 type Data = Record<string, any>;
@@ -38,6 +39,13 @@ export async function readWorkflowVerifiedProposal(client: PoolClient, projectId
     if (!dependencies || !result || dependencies.projectId !== projectId || dependencies.cableId !== cableId
       || hash(dependencies) !== raw.dependency_hash || !optionsSchema.safeParse(dependencies.options).success) return null;
     requireVersionedCalculationScope(dependencies);
+    if (dependencies.schemaVersion === 'pathfinder.dependencies.v8') {
+      const { calculationMode, ...body } = result as EngineResponse & { calculationMode?: unknown };
+      if (calculationMode !== 'calculate') return null;
+      const parsed = engineResponseSchema.safeParse(body); if (!parsed.success) return null;
+      requireBarrierEngineStrategy(parsed.data, { context: dependencies.barriers, category: dependencies.cableInputs.mto,
+        fromPoint: dependencies.from.point, toPoint: dependencies.to.point });
+    }
     if (result.status !== 'calculated' || !result.route?.success || !result.design || !proposalRoutingPreferences(dependencies.options)
       || routeCompatibilityIssue(result.route.routeText) || designLengthCompatibilityIssue(result.design.designLengthMeters)) return null;
     const ledger = requireCalculationLengthLedger(result, dependencies.settings);
@@ -63,7 +71,7 @@ export function createCableWorkflowProofReader(client: PoolClient, projectId: st
       if (!verified || verified.raw.job_id !== jobId) return { currentness: 'unavailable' as const, reviewable: false, reasonCodes: ['PROPOSAL_PROOF_UNAVAILABLE'] };
       if (!current || hash(current) !== verified.raw.dependency_hash)
         return { currentness: 'changed' as const, reviewable: false, reasonCodes: ['PROPOSAL_DEPENDENCIES_CHANGED'] };
-      if(verified.dependencies.schemaVersion==='pathfinder.dependencies.v7'){
+      if(verified.dependencies.schemaVersion==='pathfinder.dependencies.v7'||verified.dependencies.schemaVersion==='pathfinder.dependencies.v8'){
         const applicable=await readProposalApplicability(client,{projectId,jobId,cableId,proposalId,
           dependencyVersion:verified.dependencies.schemaVersion,dependencyHash:verified.raw.dependency_hash,
           jobState:verified.raw.job_state,cancelRequested:verified.raw.cancel_requested,seal:verified.seal});check();

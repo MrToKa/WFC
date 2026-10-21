@@ -44,11 +44,14 @@ CREATE TABLE IF NOT EXISTS pf_recalculation_commands (
 );
 CREATE TABLE IF NOT EXISTS pf_recalculation_events (
  project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,generation bigint NOT NULL,
- domain text NOT NULL CHECK(domain IN('model','geometry','routing','endpoints','settings','cables','engine','manual','preferences')),
+ domain text NOT NULL CHECK(domain IN('model','geometry','routing','endpoints','settings','cables','engine','manual','preferences','barriers')),
  reason text NOT NULL CHECK(reason~'^[A-Z][A-Z0-9_]{0,95}$'),source_revision text CHECK(octet_length(source_revision)<=256),
  occurred_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(project_id,generation)
 );
 CREATE INDEX IF NOT EXISTS pf_recalculation_due ON pf_recalculation_state(due_at,project_id) WHERE enabled AND NOT paused;
+-- Existing installations retain the old generated CHECK until deliberately migrated.
+ALTER TABLE pf_recalculation_events DROP CONSTRAINT IF EXISTS pf_recalculation_events_domain_check;
+ALTER TABLE pf_recalculation_events ADD CONSTRAINT pf_recalculation_events_domain_check CHECK(domain IN('model','geometry','routing','endpoints','settings','cables','engine','manual','preferences','barriers'));
 CREATE OR REPLACE FUNCTION pf_recalculation_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
  IF TG_OP='DELETE' AND NOT EXISTS(SELECT 1 FROM projects WHERE id=OLD.project_id) THEN RETURN OLD;END IF;
  RAISE EXCEPTION 'Recalculation command/enrollment is immutable';END $$;
@@ -61,7 +64,7 @@ CREATE TRIGGER pf_recalculation_event_update BEFORE UPDATE ON pf_recalculation_e
 CREATE OR REPLACE FUNCTION pf_recalculation_dirty(pid uuid,kind text,why text,source_value text DEFAULT NULL) RETURNS void LANGUAGE plpgsql AS $$
  DECLARE gen bigint;BEGIN
  IF NOT EXISTS(SELECT 1 FROM projects WHERE id=pid) THEN RETURN;END IF;
- IF kind NOT IN('model','geometry','routing','endpoints','settings','cables','engine','manual','preferences') OR why!~'^[A-Z][A-Z0-9_]{0,95}$' OR octet_length(source_value)>256 THEN RAISE EXCEPTION 'Invalid recalculation event';END IF;
+ IF kind NOT IN('model','geometry','routing','endpoints','settings','cables','engine','manual','preferences','barriers') OR why!~'^[A-Z][A-Z0-9_]{0,95}$' OR octet_length(source_value)>256 THEN RAISE EXCEPTION 'Invalid recalculation event';END IF;
  INSERT INTO pf_recalculation_state(project_id) VALUES(pid) ON CONFLICT DO NOTHING;
  UPDATE pf_recalculation_state SET desired_generation=desired_generation+1,
  first_dirty_at=COALESCE(first_dirty_at,clock_timestamp()),
@@ -93,6 +96,7 @@ CREATE OR REPLACE FUNCTION pf_recalculation_row_event() RETURNS trigger LANGUAGE
  WHEN 'pf_purpose_project_state' THEN kind='routing';why='ROUTING_SCOPE_CHANGED';changed=(b->'catalog_revision',b->'routing_policy_revision') IS DISTINCT FROM (a->'catalog_revision',a->'routing_policy_revision');
  WHEN 'pf_project_state' THEN kind='endpoints';why='LOCATION_REGISTRY_CHANGED';changed=b->'registry_revision' IS DISTINCT FROM a->'registry_revision';
  WHEN 'pf_endpoint_binding_heads' THEN kind='endpoints';why='ENDPOINT_BINDING_CHANGED';changed=(b->'binding_id',b->'binding_revision') IS DISTINCT FROM (a->'binding_id',a->'binding_revision');
+ WHEN 'pf_barrier_heads' THEN kind='barriers';why='BARRIER_SCOPE_CHANGED';changed=(b->'revision',b->'snapshot_id') IS DISTINCT FROM (a->'revision',a->'snapshot_id') AND COALESCE(a->>'snapshot_id',b->>'snapshot_id') IS NOT NULL;
  WHEN 'pf_revision_comparison_targets' THEN kind='geometry';why='COMPARISON_SCOPE_CHANGED';changed=(b->'current_comparison_id',b->'comparison_revision',b->'decision_set_sha256') IS DISTINCT FROM (a->'current_comparison_id',a->'comparison_revision',a->'decision_set_sha256');
  WHEN 'pf_revision_comparison_intents' THEN kind='geometry';why='COMPARISON_INTENT_CHANGED';changed=(b->'id',b->'state') IS DISTINCT FROM (a->'id',a->'state');
  ELSE RAISE EXCEPTION 'Unknown recalculation trigger';END CASE;
@@ -106,6 +110,7 @@ CREATE OR REPLACE FUNCTION pf_recalculation_row_event() RETURNS trigger LANGUAGE
  WHEN 'pf_purpose_project_state' THEN (COALESCE(a,b)->>'catalog_revision')||':'||(COALESCE(a,b)->>'routing_policy_revision')
  WHEN 'pf_project_state' THEN COALESCE(a,b)->>'registry_revision'
  WHEN 'pf_endpoint_binding_heads' THEN (COALESCE(a,b)->>'binding_revision')||':'||(COALESCE(a,b)->>'binding_id')
+ WHEN 'pf_barrier_heads' THEN (COALESCE(a,b)->>'revision')||':'||COALESCE(COALESCE(a,b)->>'snapshot_id','none')
  WHEN 'pf_revision_comparison_targets' THEN (COALESCE(a,b)->>'comparison_revision')||':'||COALESCE(COALESCE(a,b)->>'current_comparison_id','none')
  WHEN 'pf_revision_comparison_intents' THEN (COALESCE(a,b)->>'id')||':'||(COALESCE(a,b)->>'state') END;
  IF changed THEN PERFORM pf_recalculation_dirty(pid,kind,why,source_value);END IF;RETURN COALESCE(NEW,OLD);END $$;
@@ -128,7 +133,7 @@ DROP TRIGGER IF EXISTS pf_recalculation_cable_delete ON cables;
 CREATE TRIGGER pf_recalculation_cable_delete AFTER DELETE ON cables REFERENCING OLD TABLE AS pf_recalc_old FOR EACH STATEMENT EXECUTE FUNCTION pf_recalculation_cable_delete();
 `;
 
-const rowTables = ['projects','project_model_selections','model_versions','pf_project_preparations','pf_purpose_project_state','pf_project_state','pf_endpoint_binding_heads','pf_revision_comparison_targets','pf_revision_comparison_intents'] as const;
+const rowTables = ['projects','project_model_selections','model_versions','pf_project_preparations','pf_purpose_project_state','pf_project_state','pf_endpoint_binding_heads','pf_barrier_heads','pf_revision_comparison_targets','pf_revision_comparison_intents'] as const;
 export async function initializeRecalculationSchema(pool: Pool): Promise<void> {
   const c = await pool.connect(); let discard = false, committing = false;
   try {
@@ -144,7 +149,7 @@ export async function initializeRecalculationSchema(pool: Pool): Promise<void> {
   finally { c.release(discard ? true : undefined); }
 }
 
-export type RecalculationDirtyInput = { projectId: string; domain: 'model'|'geometry'|'routing'|'endpoints'|'settings'|'cables'|'engine'|'manual'|'preferences'; reason: string; sourceRevision?: string };
+export type RecalculationDirtyInput = { projectId: string; domain: 'model'|'geometry'|'routing'|'endpoints'|'settings'|'cables'|'engine'|'manual'|'preferences'|'barriers'; reason: string; sourceRevision?: string };
 export async function markRecalculationDirty(client: PoolClient, input: RecalculationDirtyInput): Promise<void> {
   await client.query('SELECT pf_recalculation_dirty($1,$2,$3,$4)', [input.projectId,input.domain,input.reason,input.sourceRevision ?? null]);
 }

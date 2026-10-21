@@ -7,13 +7,16 @@ import { RECALCULATION_LIMITS } from '../../shared/pathfinderRecalculation.js';
 import { collectDependencyBatchInTransaction } from './dependencyBatch.js';
 import { canonicalJson, collectDependencies, collectDependenciesForVersion, hash } from './dependencies.js';
 import { defaultOptions } from './jobContracts.js';
+import { BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS, type BarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { BARRIER_RUNTIME_PROFILE, createBarrierRuntimePolicy, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 
-const mocked = vi.hoisted(() => ({ active: vi.fn(), artifact: vi.fn(), context: vi.fn(), routing: vi.fn(), comparison: vi.fn(), identity: vi.fn(), needed: vi.fn(), automatic: vi.fn() }));
+const mocked = vi.hoisted(() => ({ active: vi.fn(), artifact: vi.fn(), context: vi.fn(), routing: vi.fn(), comparison: vi.fn(), identity: vi.fn(), barrierIdentity: vi.fn(), barriers: vi.fn(), needed: vi.fn(), automatic: vi.fn() }));
 vi.mock('./automaticEndpointCandidates.js', () => ({ readAutomaticEndpointCandidates: mocked.automatic }));
 vi.mock('./repository.js', () => ({ activeModel: mocked.active, latestArtifact: mocked.artifact }));
 vi.mock('./routingScope.js', () => ({ requirePreparedRoutingScope: mocked.routing }));
 vi.mock('./revisionComparisonRepository.js', () => ({ readComparisonDependency: mocked.comparison }));
-vi.mock('./calculationEngineIdentity.js', () => ({ calculationEngineIdentity: mocked.identity }));
+vi.mock('./calculationEngineIdentity.js', () => ({ calculationEngineIdentity: mocked.identity,barrierCalculationEngineIdentity:mocked.barrierIdentity }));
+vi.mock('./barrierCalculationScope.js',()=>({collectBarrierCalculationScope:mocked.barriers}));
 vi.mock('./endpointBindingRepository.js', async importOriginal => {
   const actual = await importOriginal<typeof import('./endpointBindingRepository.js')>();
   return { ...actual, readCurrentEndpointBindingContext: mocked.context, readNeededEndpointBindingHeads: mocked.needed };
@@ -30,6 +33,15 @@ function identity(): EngineIdentity {
   // hash(string) canonicalizes the string, so digest the validated body object directly.
   return { ...body, contentSha256: hash(JSON.parse(engineIdentityCanonicalBody(body))) };
 }
+function barrierIdentity():BarrierEngineIdentity {
+  const {contentSha256:_old,...base}=identity();const body={...base,schemaVersion:'wfc.pf.engine-identity.v2' as const,barriersModuleSha256:'8'.repeat(64),barrierVerifierModuleSha256:'9'.repeat(64),policyVersions:{...BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS}};
+  return {...body,contentSha256:hash(body)};
+}
+function barrierRuntime():BarrierRuntimeContext {
+  const policy=createBarrierRuntimePolicy(true);
+  return{schemaVersion:'wfc.pf.barrier-runtime.v1',binding:{scope:{projectId,modelVersionId:modelId,selectionRevision:'1',contentFingerprint:'c'.repeat(64),captureFrameId:frameId,captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres'},registryRevision:'0',snapshot:null,policy,policySha256:hash(policy)},profile:structuredClone(BARRIER_RUNTIME_PROFILE),profileSha256:hash(BARRIER_RUNTIME_PROFILE),storage:null};
+}
+function barrierOptions(){const runtime=barrierRuntime();return{...defaultOptions,barrierRouting:{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope:runtime.binding.scope,expectedRegistryRevision:'0',expectedSnapshot:null,drillThroughWalls:true}};}
 function binding(locationId: string, n: number): EndpointBinding {
   const body = {
     schemaVersion: 'wfc.pf.endpoint-binding.v1' as const, id: id(n), projectId, locationId, locationRevision: '1', bindingRevision: '1', locationRegistryRevision: '9',
@@ -77,10 +89,33 @@ beforeEach(async () => {
   mocked.routing.mockResolvedValue({ catalogRevision: '1', routingContentSha256: 'e'.repeat(64), routingPolicyRevision: '1', routingPolicySha256: 'f'.repeat(64) });
   mocked.comparison.mockResolvedValue({ applicability: 'not-required', readiness: 'not-required', scope: null, reasonCodes: [], reviewStatus: 'not-applicable' }); mocked.identity.mockResolvedValue(identity());
   mocked.automatic.mockResolvedValue(new Map());
+  mocked.barrierIdentity.mockResolvedValue(barrierIdentity());mocked.barriers.mockResolvedValue(barrierRuntime());
 });
 afterEach(() => vi.restoreAllMocks());
 
 describe('bulk dependency collection, mocked SQL protocol with real freeze/head/alias logic', () => {
+  it('collects v8 runtime once for a whole batch and equals the exact single-cable body',async()=>{
+    const db=fixture(20),options=barrierOptions();
+    const batch=await collectDependencyBatchInTransaction(db.client,{projectId,options,dependencyVersion:'pathfinder.dependencies.v8'});
+    expect(mocked.barriers).toHaveBeenCalledTimes(1);expect(mocked.barrierIdentity).toHaveBeenCalledTimes(1);expect(mocked.identity).not.toHaveBeenCalled();
+    const single=await collectDependenciesForVersion(db.client,projectId,db.state.cables[0].id,options,'pathfinder.dependencies.v8',true);
+    expect(batch.items[0].dependencies).toEqual(single.dependencies);expect(batch.items.every(item=>item.dependencies?.schemaVersion==='pathfinder.dependencies.v8')).toBe(true);
+    expect(batch.registryRevision).toBe('9');expect(batch.items[0].dependencies).not.toHaveProperty('registryRevision');
+  });
+  it('refuses protected options without explicit v8 and v8 without a strict intent before reading cables',async()=>{
+    const db=fixture();
+    await expect(collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions()})).rejects.toMatchObject({code:'BARRIER_ADMISSION_REQUIRED'});
+    await expect(collectDependencyBatchInTransaction(db.client,{projectId,options:defaultOptions,dependencyVersion:'pathfinder.dependencies.v8'})).rejects.toMatchObject({code:'BARRIER_ADMISSION_REQUIRED'});
+    expect(db.query).not.toHaveBeenCalled();
+  });
+  it('does not fall back to runnable legacy items if common v8 storage is corrupt',async()=>{
+    const db=fixture(20);mocked.barriers.mockRejectedValueOnce(Object.assign(new Error('Corrupt capture'),{code:'BARRIER_BLOB_INTEGRITY'}));
+    await expect(collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions(),dependencyVersion:'pathfinder.dependencies.v8'})).rejects.toMatchObject({code:'BARRIER_BLOB_INTEGRITY'});
+  });
+  it('refuses cross-version implementation injection instead of relabeling legacy identity',async()=>{
+    const db=fixture();await expect(collectDependencyBatchInTransaction(db.client,{projectId,options:barrierOptions(),dependencyVersion:'pathfinder.dependencies.v8',engineIdentity:identity()})).rejects.toMatchObject({code:'BARRIER_ENGINE_IDENTITY_REQUIRED'});
+    expect(mocked.barriers).not.toHaveBeenCalled();
+  });
   it('admits explicit scoped batches with exact single-cable v7 parity while retaining registry as separate audit', async () => {
     const db=fixture(20),input={projectId,options:defaultOptions,dependencyVersion:'pathfinder.dependencies.v7' as const};
     const first=await collectDependencyBatchInTransaction(db.client,input),single=await collectDependenciesForVersion(db.client,projectId,db.state.cables[0].id,defaultOptions,'pathfinder.dependencies.v7',true);

@@ -8,6 +8,10 @@ import { fetchPathFinderCableWorkflowPage, fetchPathFinderCableWorkflowDetail, C
 const id = (n: number) => `30000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const project = id(1), cable = id(10), hash = 'a'.repeat(64);
 const digest = (value: unknown) => createHash('sha256').update(canonicalPurposeJson(value)).digest('hex');
+const barrierIntent = (drillThroughWalls = false) => {
+  const scope = { projectId: project, modelVersionId: id(2), contentFingerprint: 'a'.repeat(64), selectionRevision: '3', captureFrameId: id(3), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
+  return { schemaVersion: 'wfc.pf.barrier-admission-intent.v1' as const, scope, expectedRegistryRevision: '4', expectedSnapshot: { snapshotId: id(4), scope, registryRevision: '4', contentSha256: 'c'.repeat(64), mode: 'explicit-empty' as const }, drillThroughWalls };
+};
 function fixture(input = {}) {
   return cableWorkflowPageSchema.parse({ schemaVersion: 'wfc.pf.cable-workflow-page.v1', projectId: project,
     querySha256: digest(cableWorkflowQueryHashInput(cableWorkflowQuerySchema.parse(input))), contextSha256: hash, scannedCount: 1, scannedThroughCableId: cable, nextCursor: null, rows: [{
@@ -22,6 +26,25 @@ beforeEach(() => { vi.stubGlobal('fetch', vi.fn()); vi.stubGlobal('crypto', webc
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('bounded read-only cable workflow transport', () => {
+  it.each([false, true])('retains exact barrier JSON and hashes for list/detail requests (drill=%s)', async drillThroughWalls => {
+    const input = { barrierRouting: barrierIntent(drillThroughWalls) }, page = fixture(input);
+    const detail = { schemaVersion: 'wfc.pf.cable-workflow-detail.v1', projectId: project, cableId: cable, contextSha256: hash,
+      querySha256: digest(cableWorkflowDetailQueryHashInput(cableWorkflowDetailQuerySchema.parse(input))), row: page.rows[0] };
+    vi.mocked(fetch).mockResolvedValueOnce(response(page)).mockResolvedValueOnce(response(detail));
+    await expect(fetchPathFinderCableWorkflowPage(project, 'token', input)).resolves.toEqual(page);
+    await expect(fetchPathFinderCableWorkflowDetail(project, 'token', cable, input)).resolves.toEqual(detail);
+    for (const [url] of vi.mocked(fetch).mock.calls) expect(new URL(String(url), 'http://local').searchParams.get('barrierRouting')).toBe(canonicalPurposeJson(input.barrierRouting));
+  });
+  it('refuses a malformed intent before a request and refuses a legacy query hash for a barrier-aware request', async () => {
+    await expect(fetchPathFinderCableWorkflowPage(project, 'token', { barrierRouting: { ...barrierIntent(), drillThroughWalls: undefined } } as never)).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    await expect(fetchPathFinderCableWorkflowDetail(project, 'token', cable, { barrierRouting: null } as never)).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    const intent = barrierIntent(), scope = { ...intent.scope, projectId: id(99) }, foreign = { ...intent, scope, expectedSnapshot: { ...intent.expectedSnapshot, scope } };
+    await expect(fetchPathFinderCableWorkflowPage(project, 'token', { barrierRouting: foreign })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    await expect(fetchPathFinderCableWorkflowDetail(project, 'token', cable, { barrierRouting: foreign })).rejects.toMatchObject({ code: 'INVALID_REQUEST' });
+    expect(fetch).not.toHaveBeenCalled();
+    vi.mocked(fetch).mockResolvedValueOnce(response(fixture()));
+    await expect(fetchPathFinderCableWorkflowPage(project, 'token', { barrierRouting: barrierIntent() })).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+  });
   it('sends only GET with current bearer/preferences and preserves literal NFC search and exact strings', async () => {
     const input = { search: '  A\u030a_100%\\  ', secondaryDistanceMeters: 0.0000001, preferVerticalApproach: false }, page = fixture(input), abort = new AbortController();
     vi.mocked(fetch).mockResolvedValueOnce(response(page));

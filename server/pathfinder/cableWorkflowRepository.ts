@@ -9,7 +9,8 @@ import { cableWorkflowQuerySchema, cableWorkflowDetailQuerySchema, cableWorkflow
 import { calculationAvailabilitySchema, notEvaluatedCalculationAvailability, type CalculationAvailability } from '../../shared/pathfinderCalculationAvailability.js';
 import { canonicalPurposeJson, policyUuidSchema } from '../../shared/pathfinderPurposePolicy.js';
 import { defaultOptions, optionsSchema, type JobPrincipal, type DependencySnapshot } from './jobContracts.js';
-import { collectCommonCalculationInputs, freezeCableDependenciesForVersion, hash, type CommonCalculationCollection } from './dependencies.js';
+import { collectCommonCalculationInputs, collectBarrierCommonCalculationInputs, freezeCableDependenciesForVersion, hash, type CommonCalculationCollection, type BarrierCommonCalculationCollection } from './dependencies.js';
+import { sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
 import { readCurrentEndpointBindingContext, readNeededEndpointBindingHeads } from './endpointBindingRepository.js';
 import type { EndpointBindingContext } from '../../shared/pathfinderEndpointBindings.js';
 import { readAutomaticEndpointCandidates } from './automaticEndpointCandidates.js';
@@ -21,6 +22,7 @@ import { createCableWorkflowCursor } from './cableWorkflowCursor.js';
 import { createCableWorkflowProofReader } from './cableWorkflowProof.js';
 
 type Data = Record<string, any>;
+type WorkflowCommon = CommonCalculationCollection | BarrierCommonCalculationCollection;
 export const CABLE_WORKFLOW_REPOSITORY_LIMITS = Object.freeze({ admissions: 10_000 });
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'Cable diagnostics could not be read within their supported scope. Refresh the current project.'); };
 const bounded = <T>(value: T): T => { if (Buffer.byteLength(canonicalPurposeJson(value)) > CABLE_WORKFLOW_READ_LIMITS.responseBytes) return fail('WORKFLOW_RESPONSE_LIMIT', 413); return value; };
@@ -49,12 +51,14 @@ async function context(client: PoolClient, projectId: string) {
       'settings',jsonb_build_object('revision',p.pf_settings_revision::text,'gap',p.connection_gap::text,'secondary',p.secondary_tray_length::text,'end',p.end_connection_length::text,'bending',p.additional_bending_percent::text),
       'registry',r.registry_revision::text,'preparation',jsonb_build_object('aggregate',g.current_aggregate_id,'artifact',g.current_artifact_id,'revision',g.geometry_revision::text),
       'purpose',jsonb_build_object('catalog',u.catalog_revision::text,'routing',u.routing_policy_revision::text),
+      'barriers',jsonb_build_object('revision',h.revision::text,'snapshot',h.snapshot_id),
       'comparison',jsonb_build_object('id',v.current_comparison_id,'revision',v.comparison_revision::text,'sha',v.decision_set_sha256),
       'generation',q.desired_generation::text,
       'latestAdmission',(SELECT jsonb_build_object('id',a.id,'created',to_char(a.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) FROM pf_revision_admissions a WHERE a.project_id=$1 ORDER BY a.created_at DESC,a.id DESC LIMIT 1)) AS context
     FROM projects p LEFT JOIN project_model_selections s ON s.project_id=p.id LEFT JOIN model_versions m ON m.project_id=p.id AND m.id=s.active_model_version_id
     LEFT JOIN pf_project_state r ON r.project_id=p.id LEFT JOIN pf_project_preparations g ON g.project_id=p.id
     LEFT JOIN pf_purpose_project_state u ON u.project_id=p.id LEFT JOIN pf_recalculation_state q ON q.project_id=p.id
+    LEFT JOIN pf_barrier_heads h ON h.project_id=p.id
     LEFT JOIN pf_revision_comparison_targets v ON v.project_id=p.id AND v.target_aggregate_id=g.current_aggregate_id AND v.target_model_version_id=s.active_model_version_id WHERE p.id=$1`, [projectId])).rows[0];
   if (!value || !Number.isInteger(value.admission_count) || value.admission_count < 0) return fail('WORKFLOW_CONTEXT_UNAVAILABLE');
   if (value.admission_count > CABLE_WORKFLOW_REPOSITORY_LIMITS.admissions) return fail('WORKFLOW_ADMISSION_LIMIT', 413);
@@ -98,16 +102,16 @@ async function metadata(client: PoolClient, projectId: string, ids: string[]): P
 }
 
 async function readRows(client: PoolClient, projectId: string, candidates: Data[], preferences: CableWorkflowDetailQuery, check: () => void,
-  readContext: Awaited<ReturnType<typeof context>>, shared: { commonCache: Map<string, Promise<CommonCalculationCollection>>; current?: EndpointBindingContext['current'] }) {
+  readContext: Awaited<ReturnType<typeof context>>, shared: { commonCache: Map<string, Promise<WorkflowCommon>>; current?: EndpointBindingContext['current'] }) {
   const requested = { ...defaultOptions, secondaryDistanceMeters: preferences.secondaryDistanceMeters,
-    preferVerticalApproach: preferences.preferVerticalApproach }, { commonCache } = shared;
+    preferVerticalApproach: preferences.preferVerticalApproach,...(preferences.barrierRouting?{barrierRouting:preferences.barrierRouting}:{}) }, { commonCache } = shared;
   const getCommon = (raw: unknown) => {
     const parsed = optionsSchema.safeParse(raw); if (!parsed.success) return Promise.resolve(null);
     const key = canonicalPurposeJson(parsed.data);
-    if (!commonCache.has(key)) commonCache.set(key, collectCommonCalculationInputs(client, projectId, parsed.data));
+    if (!commonCache.has(key)) commonCache.set(key, parsed.data.barrierRouting ? collectBarrierCommonCalculationInputs(client,projectId,parsed.data) : collectCommonCalculationInputs(client, projectId, parsed.data));
     return commonCache.get(key)!;
   };
-  let common: CommonCalculationCollection | null;
+  let common: WorkflowCommon | null;
   try { common = await getCommon(requested); }
   catch (error) {
     check(); if (!(error instanceof PathFinderError)) throw error;
@@ -157,7 +161,8 @@ async function readRows(client: PoolClient, projectId: string, candidates: Data[
     check(); const from = endpoint(cable.from_location), to = endpoint(cable.to_location), meta = latest.get(cable.id);
     const fresh = async (raw: unknown,version:DependencySnapshot['schemaVersion']): Promise<DependencySnapshot | null> => {
       const options = optionsSchema.safeParse(raw); if (!options.success) return null;
-      if (options.data.secondaryDistanceMeters !== preferences.secondaryDistanceMeters || options.data.preferVerticalApproach !== preferences.preferVerticalApproach) return null;
+      if (options.data.secondaryDistanceMeters !== preferences.secondaryDistanceMeters || options.data.preferVerticalApproach !== preferences.preferVerticalApproach
+        || !sameBarrierAdmissionIntent(options.data.barrierRouting,preferences.barrierRouting)) return null;
       const coherent = await getCommon(options.data); check();
       return coherent?.inputs ? freezeCableDependenciesForVersion(coherent.inputs, cable, from.point, to.point,version).dependencies : null;
     };
@@ -197,7 +202,7 @@ export function createCableWorkflowRepository(pool: Pool, options: { cursorKey?:
     async page(projectId: string, who: JobPrincipal, raw: unknown, signal?: AbortSignal, http = false) {
       return cableWorkflowReadTransaction(pool, projectId, who, async (client, check) => {
         const query: CableWorkflowQuery = http ? parseCableWorkflowHttpQuery(raw) : cableWorkflowQuerySchema.parse(raw), queryHash = hash(cableWorkflowQueryHashInput(query));
-        const scope = await context(client, projectId), shared = { commonCache: new Map<string, Promise<CommonCalculationCollection>>() };
+        const scope = await context(client, projectId), shared = { commonCache: new Map<string, Promise<WorkflowCommon>>() };
         const provisional = await readRows(client, projectId, [], query, check, scope, shared);
         const after = cursors.decode(query.cursor, projectId, queryHash, provisional.contextHash, who);
         const source = (await client.query<Data>(candidatesSql, [projectId, after, null, asciiSearchNeedle(query.search)])).rows; check();

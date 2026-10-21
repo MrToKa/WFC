@@ -587,6 +587,8 @@ export function createSessionEngineExecutor(
         if (signal.aborted) throw new PathFinderError('CALCULATION_CANCELLED', 409);
         if (result.response.requestId !== request.requestId)
           throw error('ENGINE_RESPONSE_IDENTITY');
+        if ((request.schemaVersion === 'pathfinder.model.runner.v2') !== (result.response.schemaVersion === 'pathfinder.model.response.v3'))
+          throw error('ENGINE_RESPONSE_VERSION');
         if (Date.now() > deadline + 1500) throw error('ENGINE_DEADLINE');
         observe({
           type: 'result',

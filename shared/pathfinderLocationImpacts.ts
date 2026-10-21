@@ -11,6 +11,12 @@ const ids = z.array(uuid).max(LOCATION_IMPACT_LIMITS.cables).refine(values => va
 const codes = z.array(recalculationReasonSchema).max(64).refine(values => new Set(values).size === values.length);
 export const locationImpactCalculationSchema = z.object({ preferences: recalculationPreferencesSchema, timeoutMilliseconds: recalculationTimeoutSchema }).strict();
 export type LocationImpactCalculation = z.infer<typeof locationImpactCalculationSchema>;
+const sameBarrierScope = (projectId: string, current: z.infer<typeof endpointCurrentScopeSchema>, calculation: LocationImpactCalculation | null): boolean => {
+  const scope = calculation?.preferences.barrierRouting?.scope;
+  return !scope || scope.projectId === projectId && scope.modelVersionId === current.modelVersionId
+    && scope.selectionRevision === current.selectionRevision && scope.contentFingerprint === current.contentFingerprint
+    && scope.captureFrameId === current.captureFrameId;
+};
 export const locationImpactReferenceSchema = z.object({ id: uuid, status: z.enum(['pending', 'blocked']), eligibleCables: count,
   excludedMvCables: count, blockedCategoryCables: count }).strict();
 export const locationImpactRecordSchema = z.object({ schemaVersion: z.literal('wfc.pf.location-impact-record.v1'), id: uuid, projectId: uuid,
@@ -20,7 +26,8 @@ export const locationImpactRecordSchema = z.object({ schemaVersion: z.literal('w
   eligibleCableIds: ids, excludedMvCableIds: ids, blockedCategoryCableIds: ids, createdAt: timestamp, contentSha256: hash }).strict().superRefine((value, context) => {
   const all = [...value.eligibleCableIds, ...value.excludedMvCableIds, ...value.blockedCategoryCableIds];
   if (all.length > LOCATION_IMPACT_LIMITS.cables || new Set(all).size !== all.length || Date.parse(value.authorityExpiresAt) > Date.parse(value.loginExpiresAt)
-    || Date.parse(value.authorityExpiresAt) - Date.parse(value.createdAt) > LOCATION_IMPACT_LIMITS.authorityMilliseconds)
+    || Date.parse(value.authorityExpiresAt) - Date.parse(value.createdAt) > LOCATION_IMPACT_LIMITS.authorityMilliseconds
+    || !sameBarrierScope(value.projectId, value.current, value.calculation))
     context.addIssue({ code: 'custom', message: 'A bounded impact retains a disjoint complete scope and finite original-login authority.' });
 });
 export type LocationImpactRecord = z.infer<typeof locationImpactRecordSchema>;
@@ -40,7 +47,8 @@ export const locationImpactSummarySchema = z.object({ id: uuid, projectId: uuid,
   elapsedMilliseconds: z.number().int().nonnegative(), admissionElapsedMilliseconds: z.number().int().nonnegative().nullable() }).strict().superRefine((value, context) => {
   if (value.completed > value.total || value.readyCables + value.blockedCables > value.total || value.currentTargetCables > value.eligibleCables
     || value.eligibleCables + value.excludedMvCables + value.blockedCategoryCables > LOCATION_IMPACT_LIMITS.cables
-    || value.current.modelVersionId !== value.modelVersionId || value.current.selectionRevision !== value.selectionRevision || value.current.contentFingerprint !== value.contentFingerprint)
+    || value.current.modelVersionId !== value.modelVersionId || value.current.selectionRevision !== value.selectionRevision || value.current.contentFingerprint !== value.contentFingerprint
+    || !sameBarrierScope(value.projectId, value.current, value.calculation))
     context.addIssue({ code: 'custom', message: 'Observed impact progress cannot exceed its exact bounded scope.' });
 });
 export type LocationImpactSummary = z.infer<typeof locationImpactSummarySchema>;

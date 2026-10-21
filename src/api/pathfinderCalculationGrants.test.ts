@@ -5,7 +5,24 @@ import { calculationGrantFixture, calculationGrantIds as ids } from '@/test/calc
 beforeEach(() => vi.stubGlobal('fetch', vi.fn()));
 afterEach(() => vi.unstubAllGlobals());
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+const barrierIntent=(drillThroughWalls=false)=>{const scope={projectId:ids.project,modelVersionId:ids.grant,contentFingerprint:'a'.repeat(64),selectionRevision:'3',captureFrameId:ids.key,captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};return{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope,expectedRegistryRevision:'4',expectedSnapshot:{snapshotId:ids.installation,scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const},drillThroughWalls};};
 describe('fixed calculation-grant transport', () => {
+  it('preserves the full no-drilling barrier choice through enable JSON and retained grant responses',async()=>{
+    const f=calculationGrantFixture();if(f.command.action!=='enable')throw Error('Enable fixture required');
+    const barrierRouting=barrierIntent(),preferences={...f.command.preferences,barrierRouting},command={...f.command,preferences};
+    const context={...f.enabled,grant:{...f.enabled.grant!,preferences}},receipt={...f.receipt,context};
+    vi.mocked(fetch).mockResolvedValueOnce(response(receipt)).mockResolvedValueOnce(response(context));
+    await expect(sendCalculationGrantCommand(ids.project,'token',command)).resolves.toEqual(receipt);
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).preferences.barrierRouting).toEqual(barrierRouting);
+    await expect(fetchCalculationGrantContext(ids.project,'token')).resolves.toEqual(context);
+  });
+  it('refuses drilling, malformed, null and foreign-project barrier command intent before transport',async()=>{
+    const f=calculationGrantFixture();if(f.command.action!=='enable')throw Error('Enable fixture required');
+    const intent=barrierIntent(),scope={...intent.scope,projectId:ids.actor};
+    for(const barrierRouting of [barrierIntent(true),null,{...intent,drillThroughWalls:undefined},{...intent,scope,expectedSnapshot:{...intent.expectedSnapshot,scope}}])
+      await expect(sendCalculationGrantCommand(ids.project,'token',{...f.command,preferences:{...f.command.preferences,barrierRouting}} as never)).rejects.toMatchObject({code:'INVALID_REQUEST',outcome:'refused'});
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it('uses fixed human management routes, exact CAS identity and no producer authority fields', async () => {
     const f = calculationGrantFixture(), signal = new AbortController().signal;
     vi.mocked(fetch).mockResolvedValueOnce(response(f.context)).mockResolvedValueOnce(response(f.receipt));

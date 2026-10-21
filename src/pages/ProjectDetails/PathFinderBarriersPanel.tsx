@@ -66,6 +66,6 @@ function AdminBarriersPanel(props: PathFinderBarriersPanelProps) {
       {state.draftParents.length ? <ul aria-label="Barrier object identities">{state.draftParents.map(parent => <li key={parent.selectionId}>{parent.name}: {parent.objectId}; current model identity.</li>)}</ul> : null}
       {state.registry.reasonCodes.length ? <ul aria-label="Barrier registry reasons">{state.registry.reasonCodes.map(reason => <li key={reason}>{reason.toLowerCase().replaceAll('_', ' ')}</li>)}</ul> : null}
     </details> : null}
-    <Caption1>Barrier protection for routing is not available yet. Previously calculated routes have not been checked against this set.</Caption1>
+    <Caption1>Check the barrier status recorded with each calculation. Registering a set does not check previously calculated routes.</Caption1>
   </section>;
 }

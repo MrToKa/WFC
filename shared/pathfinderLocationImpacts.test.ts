@@ -9,7 +9,21 @@ const record = () => ({ schemaVersion: 'wfc.pf.location-impact-record.v1', id: i
   excludedMvCableIds: [id(22)], blockedCategoryCableIds: [id(23)], createdAt: '2026-10-20T22:00:00.000Z', contentSha256: 'e'.repeat(64) });
 const item = () => ({ schemaVersion: 'wfc.pf.location-impact-item.v1', projectId: id(1), impactId: id(10), cableId: id(20), generation: '1', cableWriteRevision: '9007199254740993',
   fromLogicalKey: 'EQUIPMENT', toLogicalKey: 'OTHER', category: 'LV', eligible: true, contentSha256: 'f'.repeat(64) });
+const barrierIntent=(drillThroughWalls=false)=>{const scope={projectId:id(1),modelVersionId:current.modelVersionId,contentFingerprint:current.contentFingerprint,selectionRevision:current.selectionRevision,captureFrameId:current.captureFrameId,captureFrameSha256:'b'.repeat(64),coordinateFrame:'canonical-world-metres' as const};return{schemaVersion:'wfc.pf.barrier-admission-intent.v1' as const,scope,expectedRegistryRevision:'4',expectedSnapshot:{snapshotId:id(14),scope,registryRevision:'4',contentSha256:'c'.repeat(64),mode:'explicit-empty' as const},drillThroughWalls};};
 describe('scoped impact contracts', () => {
+  it.each([false,true])('retains exact scoped preferences and explicit drilling choice without changing historical absence (drill=%s)',drillThroughWalls=>{
+    const legacy=record(),barrierRouting=barrierIntent(drillThroughWalls),calculation={...legacy.calculation,preferences:{...legacy.calculation.preferences,barrierRouting}};
+    expect(locationImpactCalculationSchema.parse(legacy.calculation).preferences).not.toHaveProperty('barrierRouting');
+    expect(locationImpactRecordSchema.parse({...legacy,calculation}).calculation?.preferences.barrierRouting).toEqual(barrierRouting);
+  });
+  it('refuses impact intent whose project/model/selection/frame differs from its frozen endpoint scope',()=>{
+    const r=record(),intent=barrierIntent();
+    for(const patch of [{projectId:id(99)},{modelVersionId:id(99)},{selectionRevision:'99'},{contentFingerprint:'f'.repeat(64)},{captureFrameId:id(99)}]){
+      const scope={...intent.scope,...patch},barrierRouting={...intent,scope,expectedSnapshot:{...intent.expectedSnapshot,scope}};
+      expect(locationImpactRecordSchema.safeParse({...r,calculation:{...r.calculation,preferences:{...r.calculation.preferences,barrierRouting}}}).success).toBe(false);
+    }
+    expect(locationImpactCalculationSchema.safeParse({...r.calculation,preferences:{...r.calculation.preferences,barrierRouting:null}}).success).toBe(false);
+  });
   it('requires explicit finite preferences and timeout, never supplies defaults', () => { expect(locationImpactCalculationSchema.safeParse({}).success).toBe(false); expect(locationImpactCalculationSchema.safeParse(record().calculation).success).toBe(true); });
   it.each([{ preferences: { secondaryDistanceMeters: NaN, preferVerticalApproach: true }, timeoutMilliseconds: 60000 }, { preferences: { secondaryDistanceMeters: 2, preferVerticalApproach: true }, timeoutMilliseconds: 0 }])('refuses invalid config %j', value => expect(locationImpactCalculationSchema.safeParse(value).success).toBe(false));
   it('retains disjoint eligible/MV/unknown groups and missing configuration as explicit null', () => { expect(locationImpactRecordSchema.safeParse(record()).success).toBe(true); expect(locationImpactRecordSchema.safeParse({ ...record(), calculation: null }).success).toBe(true); });

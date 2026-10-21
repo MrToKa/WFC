@@ -19,6 +19,7 @@ import { appendLocationImpactInTransaction } from './locationImpactRepository.js
 import { appendInitialFillMandateInTransaction } from './initialFillMandates.js';
 import { readAutomaticNamedEndpointCandidate } from './automaticEndpointCandidates.js';
 import { readCableEndpointDisplay } from './cableEndpointDisplay.js';
+import { collectBarrierCalculationScope } from './barrierCalculationScope.js';
 import { CABLE_ENDPOINT_PAIR_LIMITS, cableEndpointPairCommandSchema, cableEndpointPairReceiptSchema,
   cableEndpointPairClosedSchema, cableEndpointPairRecoverySchema, type CableEndpointPairCommand } from '../../shared/pathfinderCableEndpointPair.js';
 
@@ -26,6 +27,18 @@ const fail = (code: string, status = 409): never => { throw new PathFinderError(
 const budget = <T>(value: T): T => { if (Buffer.byteLength(canonicalPurposeJson(value)) > CABLE_ENDPOINT_LIMITS.responseBytes) return fail('CABLE_ENDPOINT_RESPONSE_LIMIT', 413); return value; };
 type End = z.infer<typeof cableEndpointEndSchema>;
 const owner = (cableId: string, end: End, command: CableEndpointCommand) => ({ schemaVersion: 'wfc.pf.cable-endpoint-command-owner.v1', cableId, end, command });
+
+/** Historical receipt recovery remains above this guard. Fresh calculation
+ * requests must retain and verify their exact barrier scope before any head or
+ * outbox write. An explicit null calculation is an endpoint-only save. */
+async function requireFreshCalculationBarriers(client: PoolClient, projectId: string, command: CableEndpointCommand,
+  check: () => void, signal?: AbortSignal, checked = new Set<string>()): Promise<void> {
+  if (command.schemaVersion === 'wfc.pf.cable-endpoint-command.v1' || command.calculation === null) return;
+  const intent = command.calculation.preferences.barrierRouting;
+  if (!intent) return fail('BARRIER_ROUTING_INTENT_REQUIRED');
+  const key = canonicalPurposeJson(intent); if (checked.has(key)) return;
+  check(); await collectBarrierCalculationScope(client, projectId, intent, { signal }); check(); checked.add(key);
+}
 
 /** The caller separately verifies this immutable record through the retained reader. */
 async function objectDisplay(client: PoolClient, projectId: string, object: EndpointObjectRef, check: () => void) {
@@ -254,6 +267,7 @@ export function createCableEndpointCommands(pool: Pool) {
         await store(client, projectId, who, cableId, end, command, { schemaVersion: 'wfc.pf.cable-endpoint-stored.v1', status: 'closed', closure });
         return cableEndpointRecoverySchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-recovery.v1', status: 'closed', closure });
       }
+      await requireFreshCalculationBarriers(client, projectId, command, check, signal);
       const value = await context(client, projectId, cableId, end, check);
       if (value.contextSha256 !== command.expectedContextSha256 || value.cableWriteRevision !== command.expectedCableWriteRevision
         || value.logicalName !== command.expectedLogicalName || value.registryRevision !== command.expectedRegistryRevision
@@ -315,6 +329,8 @@ export function createCableEndpointCommands(pool: Pool) {
         await storePair(client, projectId, who, cableId, command, { schemaVersion: 'wfc.pf.cable-endpoint-pair-stored.v1', status: 'closed', closure });
         return cableEndpointPairRecoverySchema.parse({ schemaVersion: 'wfc.pf.cable-endpoint-pair-recovery.v1', status: 'closed', closure });
       }
+      const checkedBarriers = new Set<string>();
+      for (const entry of command.endpoints) await requireFreshCalculationBarriers(client, projectId, entry.command, check, signal, checkedBarriers);
       const originals = { from: await context(client, projectId, cableId, 'from', check), to: await context(client, projectId, cableId, 'to', check) };
       if (originals.from.contextSha256 !== command.expectedContexts.from || originals.to.contextSha256 !== command.expectedContexts.to) return fail('CABLE_ENDPOINT_CONTEXT_CHANGED');
       const groups = new Map<string, { value: CableEndpointContext; selection: CableEndpointCommand['selection']; locationId: string; affected: Awaited<ReturnType<typeof impact>>; binding?: Awaited<ReturnType<typeof confirmEndpointBindingChangeInTransaction>> }>();

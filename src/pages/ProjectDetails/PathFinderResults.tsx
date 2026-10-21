@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Body1, Button, Caption1, Spinner } from '@fluentui/react-components';
-import type { PathFinderJob, PathFinderProposal } from '@/api/pathfinder';
+import type { PathFinderJob, PathFinderPreferences, PathFinderProposal } from '@/api/pathfinder';
 import { MAX_PATH_POINTS } from '../../../viewer-runtime/protocol.mjs';
 import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
@@ -17,19 +17,24 @@ import { cableComparisonInputSchema, type CableComparisonInput } from '../../../
 import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { revisionResultEnvelopeSchema } from '../../../shared/pathfinderRevisionResults';
 import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
+import { PathFinderBarrierResult } from './PathFinderBarrierResult';
+import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 
 export type PathFinderWorkflowDisplayRequest = { cableId: string; requestId: number; action: 'show' | 'hide' };
 export type PathFinderWorkflowDisplay = { cableId: string | null; visible: boolean; routing: string | null; designLength: string | null };
-type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: { secondaryDistanceMeters: number; preferVerticalApproach: boolean } | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void;
-  workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void };
+type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: PathFinderPreferences | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void;
+  backgroundOptions?: PathFinderPreferences | null; workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
 function hasExactItemApplicability(proposal: PathFinderProposal | null, projectId: string | null | undefined) {
   const proof = sealedCableItemApplicabilitySchema.safeParse(proposal?.itemApplicability);
-  return Boolean(proposal && projectId && proof.success && proposal.provenance?.dependencyVersion === 'pathfinder.dependencies.v7'
+  return Boolean(proposal && projectId && proof.success && (proposal.provenance?.dependencyVersion === 'pathfinder.dependencies.v7'
+    && proof.data.schemaVersion === 'wfc.pf.sealed-cable-applicability.v1' && proof.data.dependencyVersion === 'pathfinder.dependencies.v7'
+    || proposal.provenance?.dependencyVersion === 'pathfinder.dependencies.v8'
+    && proof.data.schemaVersion === 'wfc.pf.sealed-cable-applicability.v2' && proof.data.dependencyVersion === 'pathfinder.dependencies.v8')
     && proposal.projectId === projectId && proof.data.projectId === projectId && proof.data.jobId === proposal.jobId
     && proof.data.cableId === proposal.cableId && proof.data.proposalId === proposal.id && proof.data.dependencyHash === proposal.provenance.dependencyHash);
 }
-export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, onBatchBusyChange, onCableValuesChanged,
+export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, onBatchBusyChange, onCableValuesChanged,
   workflowDisplayRequest, onWorkflowDisplayChange }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
@@ -128,7 +133,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       if (!access?.isAdmin || !access.projectId || access.projectId !== access.loadedProjectId || access.projectId !== detail.projectId || !access.token || !preferences)
         throw new Error('CURRENT_COMPARISON_SCOPE_REQUIRED');
       const live = await fetchPathFinderCableWorkflowDetail(access.projectId, access.token, detail.cableId,
-        { secondaryDistanceMeters: preferences.secondaryDistanceMeters, preferVerticalApproach: preferences.preferVerticalApproach }, controller.signal);
+        preferences, controller.signal);
       if (!current()) return;
       const input = cableComparisonInputSchema.safeParse({ projectId: access.projectId, cableId: detail.cableId,
         current: { source: 'live-cable-read', contextSha256: live.contextSha256, mto: live.row.mto, cable: live.row.cable },
@@ -311,7 +316,8 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     if (confirmed) { if (operation.current === current) setApplied(true); confirmedCableWrite(); }
   };
   const summary = data?.proposals.find(value => value.id === proposal?.id), stale = proposal?.stale || summary?.stale || false;
-  const preferencesMatch = options === undefined || Boolean(options && proposal?.routingPreferences && options.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && options.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach);
+  const preferencesMatch = options === undefined || Boolean(options && proposal?.routingPreferences && options.secondaryDistanceMeters === proposal.routingPreferences.secondaryDistanceMeters && options.preferVerticalApproach === proposal.routingPreferences.preferVerticalApproach
+    && sameBarrierAdmissionIntent(options.barrierRouting, proposal.routingPreferences.barrierRouting));
   const proposalJob = data?.jobs.find(value => value.id === proposal?.jobId);
   const checkedJobStatus = workflowScopeOwner ? scopeReadiness.jobStatus : proposalJob?.status ?? scopeReadiness.jobStatus;
   const calculationCancelled = Boolean(proposalJob?.cancelRequested || scopeReadiness.cancelRequested || checkedJobStatus === 'cancelled' || scopeReadiness.jobStatus === 'cancelled');
@@ -354,7 +360,7 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     {pendingApply.busy ? <Spinner size="tiny" label="Reconciling the exact Apply command…" /> : null}
     {pendingApply.error ? <Body1 role="alert">{pendingApply.error}</Body1> : null}
     {pendingApply.message ? <Body1 role="status">{pendingApply.message}</Body1> : null}
-    {pf.preparationAccess ? <PathFinderRecalculationPanel {...pf.preparationAccess} accountId={accountId ?? null} active={active} preferences={options}
+    {pf.preparationAccess ? <PathFinderRecalculationPanel {...pf.preparationAccess} accountId={accountId ?? null} active={active} preferences={backgroundOptions !== undefined ? backgroundOptions : options}
       contextKey={JSON.stringify([data?.activeModel, pf.preparationViewerGeneration, options])}
       onChanged={pf.refresh} onAuthorityLost={pf.cancelOperation} /> : null}
     <PathFinderBatchReview batch={batch} disabled={pf.busy || !active || !pendingApply.canStart || !historyReadiness.ready}
@@ -408,13 +414,14 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
       {proposal.provenance ? <details style={{ minWidth: 0, overflowWrap: 'anywhere' }}><summary>Calculation provenance</summary>
         <Caption1>Dependency version: {proposal.provenance.dependencyVersion}; digest: {proposal.provenance.dependencyHash}.</Caption1>
         <Caption1>Recorded engine digest: {proposal.provenance.engineIdentity?.contentSha256 ?? 'Unavailable for this historical result'}.</Caption1>
-        {proposal.provenance.dependencyVersion === 'pathfinder.dependencies.v7' ? <Caption1>Shared location calculation. {hasExactItemApplicability(proposal, pf.preparationAccess?.projectId) ? 'An individually sealed cable result is recorded.' : 'Individual applicability is not confirmed.'} Human review and current server checks are still required.</Caption1>
+        {['pathfinder.dependencies.v7','pathfinder.dependencies.v8'].includes(proposal.provenance.dependencyVersion) ? <Caption1>Shared location calculation. {hasExactItemApplicability(proposal, pf.preparationAccess?.projectId) ? 'An individually sealed cable result is recorded.' : 'Individual applicability is not confirmed.'} Human review and current server checks are still required.</Caption1>
           : proposal.provenance.automatic ? <Caption1>Automatic generation: {proposal.provenance.automatic.generation}; authority epoch: {proposal.provenance.automatic.authorityEpoch}; {proposal.provenance.automatic.current ? 'current' : 'no longer current'}{proposal.provenance.automatic.reasonCode ? ` — ${proposal.provenance.automatic.reasonCode.toLowerCase().replaceAll('_', ' ')}` : ''}.</Caption1> : <Caption1>No durable automatic enrollment recorded.</Caption1>}
         <Caption1>These recorded facts do not replace human review or grant Apply authority.</Caption1>
       </details> : <Caption1>Calculation provenance is unavailable for this historical result.</Caption1>}
       {proposal.route ? <><Body1>Geometric length: {proposal.route.lengthMeters} m</Body1><Caption1>From approach: {proposal.route.fromDistanceMeters} m{proposal.route.fromRequiresSecondary ? ' (SECONDARY)' : ''}; To approach: {proposal.route.toDistanceMeters} m{proposal.route.toRequiresSecondary ? ' (SECONDARY)' : ''}</Caption1><Caption1>Connection gaps: {proposal.route.connectionGapCount}; total gap length: {proposal.route.connectionGapLengthMeters} m</Caption1><details><summary>Exact route text</summary><p style={{ overflowWrap: 'anywhere' }}>{proposal.route.routeText}</p></details></> : null}
       {proposal.design ? <><Body1>Before percentage: {proposal.design.lengthBeforePercentageMeters} m</Body1><Caption1>Before rounding: {proposal.design.unroundedLengthMeters} m</Caption1><Body1>Design length: {proposal.design.designLengthMeters} m</Body1></> : null}
       <PathFinderDirectSecondary decision={proposal.directSecondary} />
+      <PathFinderBarrierResult execution={proposal.barriers} stale={stale} currentIntent={options?.barrierRouting} />
       {proposal.lengthLedger ? <details><summary>Exact length components</summary>
         <p>Raw geometry: {proposal.lengthLedger.rawLengthDecimalMeters} m. Connection gaps are already included.</p>
         <p>Removed From approach: {proposal.lengthLedger.from.removedApproachMeters} m; removed To approach: {proposal.lengthLedger.to.removedApproachMeters} m.</p>

@@ -6,8 +6,11 @@ import type { usePathFinder } from './hooks/usePathFinder';
 import { useRoutingsViewerStyles } from './RoutingsViewerTab.styles';
 import { computedPathObjectIds, previewEndpointObjectIds } from './pathFinderEndpointVisibility';
 import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
+import { PathFinderBarrierResult } from './PathFinderBarrierResult';
 
 type Endpoint = { name: string; coordinates: [string, string, string] };
+type FreshPreviewCategory = Exclude<PathFinderPreviewInput['category'], 'MV'>;
+const freshPreviewCategories = ['LV', 'Control', 'Instrumentation'] as const satisfies readonly FreshPreviewCategory[];
 type EndpointSelection = { objectId: string; modelScope: string };
 type PreviewDisplayRun = { jobId: string; modelScope: string | null; endpointObjectIds: string[] };
 type Props = { pf: ReturnType<typeof usePathFinder>; active: boolean; displayOwned: boolean; claimViewer: () => () => boolean; options: PathFinderPreferences | null; onInputChange: () => void; onEndpointNamesChange: (names: string[]) => void };
@@ -31,7 +34,7 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
   const generation = useRef(0), displayGuard = useRef<() => boolean>(() => false);
   const endpointSelections = useRef<{ from: EndpointSelection | null; to: EndpointSelection | null }>({ from: null, to: null });
   const displayRun = useRef<PreviewDisplayRun | null>(null), activeModelScope = modelScope(pf.data);
-  const [from, setFrom] = useState<Endpoint>(emptyEndpoint), [to, setTo] = useState<Endpoint>(emptyEndpoint), [category, setCategory] = useState<PathFinderPreviewInput['category']>('LV');
+  const [from, setFrom] = useState<Endpoint>(emptyEndpoint), [to, setTo] = useState<Endpoint>(emptyEndpoint), [category, setCategory] = useState<FreshPreviewCategory>('LV');
   const [jobId, setJobId] = useState<string | null>(null), [preview, setPreview] = useState<Preview | null>(null), [working, setWorking] = useState(false), [cancelRequested, setCancelRequested] = useState(false), [notice, setNotice] = useState<string | null>(null);
   const dependencyKey = JSON.stringify([pf.data?.activeModel, pf.data?.registryRevision, pf.data?.settings, pf.data?.artifacts.map(artifact => artifact.id), options]);
   useEffect(() => { onEndpointNamesChange([...new Set([from.name.trim(), to.name.trim()].filter(Boolean))]); }, [from.name, to.name, onEndpointNamesChange]);
@@ -114,9 +117,10 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
         </details>
       </fieldset>;
     })}
-    <Field label="Cable type"><select aria-label="Path cable type" value={category} disabled={working || pending || pf.busy} onChange={event => { onInputChange(); invalidate(); setCategory(event.target.value as PathFinderPreviewInput['category']); }}>
-      {(['MV', 'LV', 'Control', 'Instrumentation'] as const).map(value => <option key={value} value={value}>{value}{value === 'Instrumentation' ? ' (Control rules)' : ''}</option>)}
+    <Field label="Cable type"><select aria-label="Path cable type" value={category} disabled={working || pending || pf.busy} onChange={event => { onInputChange(); invalidate(); setCategory(event.target.value as FreshPreviewCategory); }}>
+      {freshPreviewCategories.map(value => <option key={value} value={value}>{value}{value === 'Instrumentation' ? ' (Control rules)' : ''}</option>)}
     </select></Field>
+    <Caption1>MV cables are excluded from path calculation.</Caption1>
     <div className={styles.actions}>
       <Button appearance="primary" disabled={!active || !pf.data?.artifacts.length || !options || !endpointsValid || working || pending || pf.busy} onClick={() => void run()}>Calculate path</Button>
       {preview?.result?.route?.success && !preview.result.stale ? <Button disabled={working || pending || pf.busy} onClick={() => void run({ ...preview.input, reverse: !preview.input.reverse })}>Reverse path</Button> : null}
@@ -131,6 +135,7 @@ export function PathFinderPreview({ pf, active, displayOwned, claimViewer, optio
       {preview.result ? <><Body1>{preview.result.message}</Body1>{preview.result.stale ? <Body1 role="alert">This path is outdated. Calculate again before using it.</Body1> : null}
         {preview.result.route ? <><Body1>Geometric length: {preview.result.route.lengthMeters} m</Body1><Caption1>From approach: {preview.result.route.fromDistanceMeters} m{preview.result.route.fromRequiresSecondary ? ' (SECONDARY)' : ''}; To approach: {preview.result.route.toDistanceMeters} m{preview.result.route.toRequiresSecondary ? ' (SECONDARY)' : ''}</Caption1><Caption1>Connection gaps: {preview.result.route.connectionGapCount}; total gap length: {preview.result.route.connectionGapLengthMeters} m</Caption1><details><summary>Standalone route text</summary><p style={{ overflowWrap: 'anywhere' }}>{preview.result.route.routeText}</p></details></> : null}
         <PathFinderDirectSecondary decision={preview.result.directSecondary} />
+        <PathFinderBarrierResult execution={preview.result.barriers} stale={preview.result.stale} currentIntent={options?.barrierRouting} />
         {preview.result.design ? <><Caption1>Before percentage: {preview.result.design.lengthBeforePercentageMeters} m; before rounding: {preview.result.design.unroundedLengthMeters} m</Caption1><Body1>Design length: {preview.result.design.designLengthMeters} m</Body1></> : null}
       </> : null}
       <Caption1>Standalone preview only. Cable values are changed through Calculate and review below.</Caption1>

@@ -39,6 +39,44 @@ export const engineIdentitySchema = engineIdentityBodySchema.extend({ contentSha
 export type EngineIdentityBody = z.infer<typeof engineIdentityBodySchema>;
 export type EngineIdentity = z.infer<typeof engineIdentitySchema>;
 
+/** Additive barrier runner identity. Historical v1 bodies/readers above retain
+ * their exact four-module fields, policy values and content hashes. */
+export const BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS = Object.freeze({ ...ENGINE_IDENTITY_POLICY_VERSIONS,
+  projection: 'wfc.pf.model-runner-v2-barrier-projection.v1',
+  barriers: 'wfc.pf.triangle-centreline-collision.v1',
+  qualification: 'wfc.pf.barrier-verifier.v1',
+  constrainedRouting: 'wfc.pf.constrained-tray-routing.v1',
+  localConnectors: 'wfc.pf.local-approach-routing.v1',
+  runtimeProfile: 'wfc.pf.barrier-runtime-profile.v1',
+} as const);
+export const barrierEngineIdentityBodySchema = engineIdentityBodySchema.omit({ schemaVersion: true, policyVersions: true }).extend({
+  schemaVersion: z.literal('wfc.pf.engine-identity.v2'), barriersModuleSha256: policyHashSchema,
+  barrierVerifierModuleSha256: policyHashSchema,
+  policyVersions: engineIdentityPoliciesSchema.extend({
+    projection: z.literal(BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS.projection), directSecondary: z.literal(DIRECT_SECONDARY_POLICY),
+    barriers: z.literal(BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS.barriers), qualification: z.literal(BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS.qualification),
+    constrainedRouting: z.literal(BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS.constrainedRouting), localConnectors: z.literal(BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS.localConnectors),
+    runtimeProfile: z.literal(BARRIER_ENGINE_IDENTITY_POLICY_VERSIONS.runtimeProfile),
+  }).strict(),
+}).strict();
+export const barrierEngineIdentitySchema = barrierEngineIdentityBodySchema.extend({ contentSha256: policyHashSchema }).strict();
+export type BarrierEngineIdentityBody = z.infer<typeof barrierEngineIdentityBodySchema>;
+export type BarrierEngineIdentity = z.infer<typeof barrierEngineIdentitySchema>;
+export type CalculationEngineIdentity = EngineIdentity | BarrierEngineIdentity;
+
+export function barrierEngineIdentityCanonicalBody(identity: BarrierEngineIdentity | BarrierEngineIdentityBody): string {
+  if (Object.prototype.hasOwnProperty.call(identity, 'contentSha256')) {
+    const { contentSha256: _digest, ...body } = barrierEngineIdentitySchema.parse(identity);
+    return canonicalPurposeJson(body);
+  }
+  return canonicalPurposeJson(barrierEngineIdentityBodySchema.parse(identity));
+}
+export function verifyBarrierEngineIdentity(identity: unknown, hashCanonicalString: (value: string) => string): identity is BarrierEngineIdentity {
+  const parsed = barrierEngineIdentitySchema.safeParse(identity);
+  try { return parsed.success && hashCanonicalString(barrierEngineIdentityCanonicalBody(parsed.data)) === parsed.data.contentSha256; }
+  catch { return false; }
+}
+
 /** Both creation and verification use exactly this validated, detached body. */
 export function engineIdentityContentHashInput(identity: EngineIdentity | EngineIdentityBody): EngineIdentityBody {
   if (Object.prototype.hasOwnProperty.call(identity, 'contentSha256')) {

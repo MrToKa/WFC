@@ -3,7 +3,9 @@ import { revision, uuid, snapshotSchema } from './contracts.js';
 import type { RoutingScope } from './routingScope.js';
 import type { EndpointCalculationPoint, EndpointCalculationPreparation, CurrentEndpointCalculationPoint, ScopedEndpointResolution } from './endpointCalculationProvenance.js';
 import type { ComparisonCalculationScope } from './comparisonCalculationProvenance.js';
-import type { EngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import type { EngineIdentity, BarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { barrierAdmissionIntentSchema, type BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
+import { barrierExecutionSchema, type BarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
 import { lengthLedgerSchema, legacyLengthLedgerSchema } from '../../shared/pathfinderLengthLedger.js';
 import { directSecondaryDecisionSchema, directSecondaryRouteIssue } from '../../shared/pathfinderDirectSecondary.js';
 
@@ -11,14 +13,17 @@ export const optionsSchema = z.object({
   connectionToleranceMeters:z.number().finite().positive().max(100),sampleSpacingMeters:z.number().finite().positive().max(100),
   secondaryDistanceMeters:z.number().finite().min(0).max(1_000_000),preferVerticalApproach:z.boolean(),
   maxGraphNodes:z.number().int().min(2).max(1_000_000),maxGraphConnections:z.number().int().min(1).max(4_000_000),
+  barrierRouting:barrierAdmissionIntentSchema.optional(),
 }).strict();
 export const defaultOptions = Object.freeze({connectionToleranceMeters:0.25,sampleSpacingMeters:0.125,secondaryDistanceMeters:2,preferVerticalApproach:true,maxGraphNodes:200_000,maxGraphConnections:1_000_000});
 /** Metadata comes only from retained engine inputs; unknown historical values cannot authorize Apply. */
-export function proposalRoutingPreferences(options:unknown):{secondaryDistanceMeters:number;preferVerticalApproach:boolean}|null {
+export function proposalRoutingPreferences(options:unknown):{secondaryDistanceMeters:number;preferVerticalApproach:boolean;barrierRouting?:BarrierAdmissionIntent}|null {
   if (!options || typeof options!=='object') return null;
-  const {secondaryDistanceMeters,preferVerticalApproach}=options as Record<string,unknown>;
+  const {secondaryDistanceMeters,preferVerticalApproach,barrierRouting}=options as Record<string,unknown>;
+  const barrier = barrierRouting === undefined ? undefined : barrierAdmissionIntentSchema.safeParse(barrierRouting);
+  if (barrier && !barrier.success) return null;
   return typeof secondaryDistanceMeters==='number' && Number.isFinite(secondaryDistanceMeters) && secondaryDistanceMeters>=0 && secondaryDistanceMeters<=1_000_000 && typeof preferVerticalApproach==='boolean'
-    ? {secondaryDistanceMeters,preferVerticalApproach} : null;
+    ? {secondaryDistanceMeters,preferVerticalApproach,...(barrier?.success ? {barrierRouting:barrier.data} : {})} : null;
 }
 export const createJobSchema = z.object({cableIds:z.array(uuid).min(1).max(10_000).optional(),expectedRegistryRevision:revision,
   options:optionsSchema.optional(),timeoutMilliseconds:z.number().int().min(100).max(120_000).optional(),force:z.boolean().optional()}).strict();
@@ -51,7 +56,10 @@ export type ScopedDependencySnapshot = Omit<CurrentDependencySnapshot, 'schemaVe
   schemaVersion: 'pathfinder.dependencies.v7'; from: CurrentEndpointCalculationPoint; to: CurrentEndpointCalculationPoint;
   endpointResolution: ScopedEndpointResolution;
 };
-export type CurrentCalculationDependencySnapshot = CurrentDependencySnapshot | AutomaticDependencySnapshot | ScopedDependencySnapshot;
+export type BarrierDependencySnapshot = Omit<ScopedDependencySnapshot,'schemaVersion'|'engineIdentity'> & {
+  schemaVersion:'pathfinder.dependencies.v8'; engineIdentity:BarrierEngineIdentity; barriers:BarrierRuntimeContext;
+};
+export type CurrentCalculationDependencySnapshot = CurrentDependencySnapshot | AutomaticDependencySnapshot | ScopedDependencySnapshot | BarrierDependencySnapshot;
 /** v2/v3/v4 remain historical; current dispatch/Review/Apply require actual implementation provenance. */
 export type DependencySnapshot = HistoricalDependencySnapshot | EndpointDependencySnapshot | ComparisonDependencySnapshot | CurrentCalculationDependencySnapshot;
 const enginePoint = z.object({x:z.number().finite(),y:z.number().finite(),z:z.number().finite()}).strict();
@@ -86,7 +94,22 @@ const directEngineResponseSchema = engineResponseObjectSchema.extend({ schemaVer
     }
   } else if (value.lengthLedger?.schemaVersion === 'wfc.pf.length-components.v2') context.addIssue({ code: 'custom', message: 'Tray-network fallback retains its legacy formula.' });
 });
-export const engineResponseSchema = z.union([legacyEngineResponseSchema, directEngineResponseSchema]);
+const barrierEngineResponseSchema = engineResponseObjectSchema.extend({ schemaVersion: z.literal('pathfinder.model.response.v3'),
+  status: z.enum(['calculated','no_path','settings_required','category_required','model_needs_review','invalid_request','deadline_exceeded','resource_limit']),
+  barriers: barrierExecutionSchema,
+}).strict().superRefine((value, context) => {
+  const issue = (message: string) => context.addIssue({ code: 'custom', message });
+  if (value.status === 'calculated' && (!value.route?.success || !['clear','bypassed','no-barriers-declared'].includes(value.barriers.diagnostics.status)))
+    issue('Calculated protected routes require successful geometry and exact final barrier evidence.');
+  if (value.route?.success && value.status !== 'calculated' && value.status !== 'settings_required')
+    issue('A successful route cannot acquire a different protected outcome.');
+  if (value.barriers.directSecondary?.mode === 'direct-secondary') {
+    if (value.lengthLedger && (value.lengthLedger.schemaVersion !== 'wfc.pf.length-components.v2'
+      || JSON.stringify(value.lengthLedger.directSecondary) !== JSON.stringify(value.barriers.directSecondary.distanceDecision)))
+      issue('The actual constrained direct strategy retains its exact original direct ledger.');
+  } else if (value.lengthLedger?.schemaVersion === 'wfc.pf.length-components.v2') issue('An actual tray fallback retains the tray length formula.');
+});
+export const engineResponseSchema = z.union([legacyEngineResponseSchema, directEngineResponseSchema, barrierEngineResponseSchema]);
 export type EngineResponse = z.infer<typeof engineResponseSchema>;
 export type EngineRoute = z.infer<typeof routeSchema>;
 export type EngineDesign = z.infer<typeof designSchema>;

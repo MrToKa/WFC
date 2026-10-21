@@ -66,9 +66,11 @@ function decimal(value: number): string {
 }
 export async function fetchPathFinderCableWorkflowPage(projectId: string, token: string, input: Partial<CableWorkflowQuery> = {}, signal?: AbortSignal): Promise<CableWorkflowPage> {
   const parsed = cableWorkflowQuerySchema.safeParse(input); if (!parsed.success) return invalidRequest();
+  if (parsed.data.barrierRouting && parsed.data.barrierRouting.scope.projectId !== projectId) return invalidRequest();
   const query = parsed.data, params = new URLSearchParams({ filter: query.filter, search: query.search, limit: String(query.limit),
     secondaryDistanceMeters: decimal(query.secondaryDistanceMeters), preferVerticalApproach: String(query.preferVerticalApproach) });
   if (query.cursor !== undefined) params.set('cursor', query.cursor);
+  if (query.barrierRouting !== undefined) params.set('barrierRouting', canonicalPurposeJson(query.barrierRouting));
   try { parseCableWorkflowHttpQuery(Object.fromEntries(params)); } catch { return invalidRequest(); }
   return read(projectId, token, `?${params}`, cableWorkflowQueryHashInput(query), (value, queryHash) => {
     const page = cableWorkflowPageSchema.safeParse(value);
@@ -83,7 +85,9 @@ export async function fetchPathFinderCableWorkflowPage(projectId: string, token:
 export async function fetchPathFinderCableWorkflowDetail(projectId: string, token: string, cableId: string, input: Partial<CableWorkflowDetailQuery> = {}, signal?: AbortSignal): Promise<CableWorkflowDetail> {
   if (!policyUuidSchema.safeParse(cableId).success) return invalidRequest();
   const parsed = cableWorkflowDetailQuerySchema.safeParse(input); if (!parsed.success) return invalidRequest();
+  if (parsed.data.barrierRouting && parsed.data.barrierRouting.scope.projectId !== projectId) return invalidRequest();
   const query = parsed.data, params = new URLSearchParams({ secondaryDistanceMeters: decimal(query.secondaryDistanceMeters), preferVerticalApproach: String(query.preferVerticalApproach) });
+  if (query.barrierRouting !== undefined) params.set('barrierRouting', canonicalPurposeJson(query.barrierRouting));
   try { parseCableWorkflowDetailHttpQuery(Object.fromEntries(params)); } catch { return invalidRequest(); }
   return read(projectId, token, `/${cableId}?${params}`, cableWorkflowDetailQueryHashInput(query), (value, queryHash) => {
     const detail = cableWorkflowDetailSchema.safeParse(value);

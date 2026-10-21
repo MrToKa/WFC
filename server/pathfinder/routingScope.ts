@@ -6,7 +6,9 @@ import { readRoutingPolicyScope } from './purposePolicy.js';
 import { hasCurrentEndpointCalculationProvenance } from './endpointCalculationProvenance.js';
 import { hasCurrentComparisonCalculationProvenance } from './comparisonCalculationProvenance.js';
 import { createHash } from 'node:crypto';
-import { verifyEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { verifyEngineIdentity, verifyBarrierEngineIdentity } from '../../shared/pathfinderEngineIdentity.js';
+import { verifyBarrierRuntimeContext } from '../../shared/pathfinderBarrierRuntime.js';
+import { sameBarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission.js';
 
 /** This projection deliberately cannot carry drawing or private full-source facts. */
 export const routingScopeSchema = z.object({
@@ -54,13 +56,26 @@ export async function requirePreparedRoutingScope(client: PoolClient, projectId:
 /** Historical v1 job inputs never acquire current permissions through a cast or replay. */
 export function requireVersionedCalculationScope(value: unknown): void {
   const input = value as {schemaVersion?: unknown; routing?: unknown} | null;
-  if (!input || !['pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6', 'pathfinder.dependencies.v7'].includes(String(input.schemaVersion)) || !routingScopeSchema.safeParse(input.routing).success)
+  if (!input || !['pathfinder.dependencies.v2', 'pathfinder.dependencies.v3', 'pathfinder.dependencies.v4', 'pathfinder.dependencies.v5', 'pathfinder.dependencies.v6', 'pathfinder.dependencies.v7', 'pathfinder.dependencies.v8'].includes(String(input.schemaVersion)) || !routingScopeSchema.safeParse(input.routing).success)
     throw new PathFinderError('ROUTING_PREPARATION_REQUIRED', 409, 'This calculation predates catalog routing permissions. Prepare and calculate a fresh proposal.');
   if (!hasCurrentEndpointCalculationProvenance(value))
     throw new PathFinderError('ENDPOINT_BINDING_UPGRADE_REQUIRED', 409, 'Confirm current shared endpoint bindings, then calculate and review a fresh proposal. Historical endpoint values do not authorize new calculations.');
   if (!hasCurrentComparisonCalculationProvenance(value))
     throw new PathFinderError('COMPARISON_UPGRADE_REQUIRED', 409, 'This proposal predates revision comparison provenance. Calculate and review a fresh proposal against the current prepared model and comparison decisions.');
-  if(!['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(String(input.schemaVersion))||!verifyEngineIdentity((value as {engineIdentity?:unknown}).engineIdentity,
-    text=>createHash('sha256').update(text).digest('hex')))
+  const digest=(text:string)=>createHash('sha256').update(text).digest('hex');
+  if(input.schemaVersion==='pathfinder.dependencies.v8'){
+    const data=value as {engineIdentity?:unknown;barriers?:unknown;projectId?:unknown;model?:{id?:unknown;selectionRevision?:unknown;contentFingerprint?:unknown};preparation?:{captureFrameId?:unknown};options?:{barrierRouting?:unknown}};
+    if(!verifyBarrierEngineIdentity(data.engineIdentity,digest)||!verifyBarrierRuntimeContext(data.barriers,digest))
+      throw new PathFinderError('BARRIER_IDENTITY_UPGRADE_REQUIRED',409,'Calculate a fresh route using current barrier evidence and implementation.');
+    const {binding}=data.barriers;
+    if(binding.scope.projectId!==data.projectId||binding.scope.modelVersionId!==data.model?.id
+      ||binding.scope.selectionRevision!==data.model?.selectionRevision||binding.scope.contentFingerprint!==data.model?.contentFingerprint
+      ||binding.scope.captureFrameId!==data.preparation?.captureFrameId||!sameBarrierAdmissionIntent(data.options?.barrierRouting,
+        {schemaVersion:'wfc.pf.barrier-admission-intent.v1',scope:binding.scope,expectedRegistryRevision:binding.registryRevision,
+          expectedSnapshot:binding.snapshot,drillThroughWalls:binding.policy.drillThroughWalls}))
+      throw new PathFinderError('BARRIER_CONTEXT_CHANGED',409,'The frozen barrier scope does not match this exact calculation.');
+    return;
+  }
+  if(!['pathfinder.dependencies.v5','pathfinder.dependencies.v6','pathfinder.dependencies.v7'].includes(String(input.schemaVersion))||!verifyEngineIdentity((value as {engineIdentity?:unknown}).engineIdentity,digest))
     throw new PathFinderError('ENGINE_IDENTITY_UPGRADE_REQUIRED',409,'This proposal predates actual calculation implementation provenance. Calculate and review a fresh proposal with the current engine.');
 }

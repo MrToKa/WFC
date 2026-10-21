@@ -33,7 +33,8 @@ namespace AddinRibbon.Routing
                         if (drillThroughWalls)
                             return new ConstrainedSecondaryEvaluation(distance, null, "bypassed",
                                 new ConstrainedRouteEvaluation(distance.DirectRoute, ConstrainedRouteStatus.Bypassed, "DRILLING_BYPASS", true, budget));
-                        direct = budget.Query(collision, from, to);
+                        budget.FinalChecks.Clear();
+                        direct = budget.FinalQuery(collision, from, distance.DirectRoute.PathPoints.Count == 1 ? from : to);
                         disposition = direct.Status == RouteCollisionStatus.Clear ? "clear"
                             : direct.Status == RouteCollisionStatus.Blocked ? "blocked" : "indeterminate";
                         if (direct.Status == RouteCollisionStatus.Clear)

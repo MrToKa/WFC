@@ -36,7 +36,7 @@ internal static partial class Program
             using var deadline = new CancellationTokenSource(request.TimeoutMilliseconds);
             try { response = Execute(request, deadline.Token, context); deadline.Token.ThrowIfCancellationRequested(); }
             catch (OperationCanceledException) { response = Failure(request, "deadline_exceeded", "Calculation deadline exceeded."); retire = true; }
-            catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidOperationException or OverflowException or System.ComponentModel.Win32Exception)
+            catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidDataException or InvalidOperationException or OverflowException or FormatException or KeyNotFoundException or System.ComponentModel.Win32Exception)
             { response = Failure(request, "invalid_request", error is IOException ? "An owned input or cache file could not be read." : error.Message); retire = true; }
             using var element = JsonDocument.Parse(JsonSerializer.SerializeToUtf8Bytes(response, Json));
             retire |= element.RootElement.GetProperty("status").GetString() is "resource_limit" or "deadline_exceeded"
@@ -150,7 +150,7 @@ internal static partial class Program
                     if (winner == nextInput || winner == activity.Task || nextInput.IsCompleted || activity.Task.IsCompleted)
                         throw new InvalidDataException("Pipelined request or EOF while calculation was active.");
                     var responseBytes = await responseRead ?? throw new EndOfStreamException("Worker exited without a result.");
-                    var wrapper = SessionProtocol.ValidateResult(responseBytes, request.RequestId, ordinal);
+                    var wrapper = SessionProtocol.ValidateResult(responseBytes, request.RequestId, ordinal, request);
                     if (fault.Task.IsCompleted) throw new SessionBudgetException(await fault.Task);
                     deadline.Token.ThrowIfCancellationRequested();
                     var response = wrapper.GetProperty("response"); var status = response.GetProperty("status").GetString();

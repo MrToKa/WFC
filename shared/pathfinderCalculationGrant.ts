@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {policyUuidSchema,policyRevisionSchema,canonicalPurposeJson} from './pathfinderPurposePolicy.js';
-import {recalculationPreferencesSchema,recalculationTimeoutSchema,recalculationReasonSchema} from './pathfinderRecalculation.js';
+import {backgroundRecalculationPreferencesSchema,recalculationTimeoutSchema,recalculationReasonSchema} from './pathfinderRecalculation.js';
 
 export const CALCULATION_GRANT_OPERATIONS=['prepare','trace','compare','match-suggest','calculate'] as const;
 export const CALCULATION_GRANT_LIMITS=Object.freeze({controlBytes:64*1024,responseBytes:1024*1024,executionLeaseMilliseconds:15*60_000,
@@ -20,7 +20,7 @@ const operations=z.array(calculationGrantOperationSchema).length(CALCULATION_GRA
 export const calculationGrantSchema=z.object({schemaVersion:z.literal('wfc.pf.calculation-grant.v1'),projectId:policyUuidSchema,id:policyUuidSchema,
   grantRevision:policyRevisionSchema,grantEpoch:policyRevisionSchema,installationEpoch:policyUuidSchema,enabled:z.boolean(),enabledBy:policyUuidSchema,
   enabledAt:timestamp,updatedAt:timestamp,issuerAdminRevision:policyRevisionSchema,scope:z.literal('active-model'),operations,
-  limitsProfile:z.literal('local-bounded-v1'),preferences:recalculationPreferencesSchema,timeoutMilliseconds:recalculationTimeoutSchema}).strict();
+  limitsProfile:z.literal('local-bounded-v1'),preferences:backgroundRecalculationPreferencesSchema,timeoutMilliseconds:recalculationTimeoutSchema}).strict();
 export const calculationGrantProducerStatusSchema=z.object({status:z.enum(['unqualified','ready','running','blocked','quarantined']),reasonCode:recalculationReasonSchema.nullable()}).strict();
 export const calculationGrantContextSchema=z.object({schemaVersion:z.literal('wfc.pf.calculation-grant-context.v1'),projectId:policyUuidSchema,
   controlRevision:policyRevisionSchema,grant:calculationGrantSchema.nullable(),status:z.enum(['disabled','enabled','revoked','restore-fenced','blocked']),
@@ -34,7 +34,7 @@ export const calculationGrantContextSchema=z.object({schemaVersion:z.literal('wf
 const base={schemaVersion:z.literal('wfc.pf.calculation-grant-command.v1'),expectedControlRevision:policyRevisionSchema,idempotencyKey:policyUuidSchema,
   reason:text.refine(value=>value.trim().length>0)};
 export const calculationGrantCommandSchema=z.discriminatedUnion('action',[
-  z.object({...base,action:z.literal('enable'),preferences:recalculationPreferencesSchema,timeoutMilliseconds:recalculationTimeoutSchema}).strict(),
+  z.object({...base,action:z.literal('enable'),preferences:backgroundRecalculationPreferencesSchema,timeoutMilliseconds:recalculationTimeoutSchema}).strict(),
   z.object({...base,action:z.literal('disable')}).strict(),
 ]);
 export const calculationGrantReceiptSchema=z.object({schemaVersion:z.literal('wfc.pf.calculation-grant-receipt.v1'),duplicate:z.boolean(),context:calculationGrantContextSchema}).strict();

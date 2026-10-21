@@ -296,13 +296,14 @@ namespace AddinRibbon.Routing
 
         internal static bool ConstrainedFinalClear(RouteResult route, RouteCollisionQuery collision, ConstrainedBudget budget)
         {
+            budget.FinalChecks.Clear();
             if (route.PathPoints.Count == 0) { budget.SawIndeterminate = true; return false; }
             if (route.PathPoints.Count == 1)
-                return budget.Query(collision, route.PathPoints[0], route.PathPoints[0]).Status == RouteCollisionStatus.Clear;
+                return budget.FinalQuery(collision, route.PathPoints[0], route.PathPoints[0]).Status == RouteCollisionStatus.Clear;
             for (int index = 1; index < route.PathPoints.Count; index++)
             {
                 budget.Charge(1);
-                if (budget.Query(collision, route.PathPoints[index - 1], route.PathPoints[index]).Status != RouteCollisionStatus.Clear) return false;
+                if (budget.FinalQuery(collision, route.PathPoints[index - 1], route.PathPoints[index]).Status != RouteCollisionStatus.Clear) return false;
             }
             return true;
         }

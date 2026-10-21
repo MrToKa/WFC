@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 import type { PathFinderPreferences, PathFinderProposal } from '@/api/pathfinder';
 import type { PendingApplyInput } from './usePathfinderPendingApply';
+import { sameBarrierAdmissionIntent } from '../../../../shared/pathfinderBarrierAdmission';
 
 export const MAX_BATCH_REVIEW_SELECTION = 1000;
 const uuid = z.string().uuid(), hash = z.string().regex(/^[a-f0-9]{64}$/);
@@ -42,7 +43,8 @@ function matchesProposal(candidate: BatchReviewCandidate, proposal: PathFinderPr
     && proposal.design?.designLengthMeters === candidate.designLength
     && options !== null && (options === undefined || proposal.routingPreferences
       && proposal.routingPreferences.secondaryDistanceMeters === options.secondaryDistanceMeters
-      && proposal.routingPreferences.preferVerticalApproach === options.preferVerticalApproach));
+      && proposal.routingPreferences.preferVerticalApproach === options.preferVerticalApproach
+      && sameBarrierAdmissionIntent(proposal.routingPreferences.barrierRouting,options.barrierRouting)));
 }
 
 /** Explicit human batch review and sequential Apply; the shared pending hook owns every durable command. */

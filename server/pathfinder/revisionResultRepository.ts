@@ -239,7 +239,7 @@ function projection(row: Row, current: CurrentDisplay): RevisionResultRow {
     result: envelope ? { ...envelope.summary, proposalId: envelope.proposalId, proposalHash: envelope.proposalHash, revisionResultSha256: envelope.revisionResultSha256,
       engineResultSha256: envelope.engineResultSha256, ledgerHash: envelope.ledgerHash, dependencyHash: envelope.dependencyHash } : null, currentness,...(itemApplicability?{itemApplicability}:{}) });
 }
-const cablePageSql = `SELECT b.*,i.status AS item_status,i.message AS item_message,p.status AS proposal_status,p.dependencies->>'schemaVersion' AS dependency_version,p.dependency_hash,p.id AS proposal_id,s.record,to_jsonb(s) AS sealed_row,j.state AS job_state,j.failure AS job_failure,j.cancel_requested
+const cablePageSql = `SELECT b.*,i.status AS item_status,i.message AS item_message,p.status AS proposal_status,coalesce(p.dependencies->>'schemaVersion',i.dependencies->>'schemaVersion') AS dependency_version,p.dependency_hash,p.id AS proposal_id,s.record,to_jsonb(s) AS sealed_row,j.state AS job_state,j.failure AS job_failure,j.cancel_requested
  FROM pf_revision_baselines b JOIN pf_revision_admissions a ON a.project_id=b.project_id AND a.id=b.admission_id
  LEFT JOIN pf_jobs j ON j.project_id=a.project_id AND j.id=a.job_id
  LEFT JOIN pf_job_items i ON i.project_id=b.project_id AND i.job_id=a.job_id AND i.cable_id=b.cable_id
@@ -256,12 +256,18 @@ export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage
     const result = new Map<string, CurrentDisplay>(), ids = page.map(r => String(r.cable_id)); if (!ids.length) return result;
     const currentRows = (await client.query<{ id: string; cable_write_revision: string }>('SELECT id,cable_write_revision::text FROM cables WHERE project_id=$1 AND id=ANY($2::uuid[]) ORDER BY id', [admission.project_id, ids])).rows;
     const revisions = new Map(currentRows.map(r => [r.id, r.cable_write_revision]));
-    const items=new Map<string,Awaited<ReturnType<typeof collect>>['items'][number]>();let unavailable = 'CURRENT_DEPENDENCIES_UNAVAILABLE';
-    for(const scoped of [false,true]){
-      const selected=currentRows.filter(r=>page.some(row=>row.cable_id===r.id&&(row.dependency_version==='pathfinder.dependencies.v7')===scoped));
+    const items=new Map<string,Awaited<ReturnType<typeof collect>>['items'][number]>(), unavailable=new Map<string,string>();
+    const options=optionsSchema.parse(admission.options);
+    const version=(row:Row)=>row.dependency_version==='pathfinder.dependencies.v8'?'pathfinder.dependencies.v8'
+      :row.dependency_version==='pathfinder.dependencies.v7'?'pathfinder.dependencies.v7'
+        :!row.dependency_version&&options.barrierRouting?'pathfinder.dependencies.v8':'pathfinder.dependencies.v5';
+    // Preserve the historical default v5 projection, and collect each newer
+    // mathematical body separately. v8 can never enter the legacy collector.
+    for(const dependencyVersion of ['pathfinder.dependencies.v5','pathfinder.dependencies.v7','pathfinder.dependencies.v8'] as const){
+      const selected=currentRows.filter(r=>page.some(row=>row.cable_id===r.id&&version(row)===dependencyVersion));
       if(!selected.length)continue;
-      try { const batch=await collect(client,{projectId:String(admission.project_id),options:optionsSchema.parse(admission.options),cableIds:selected.map(r=>r.id),...(scoped?{dependencyVersion:'pathfinder.dependencies.v7' as const}:{})});for(const item of batch.items)items.set(item.id,item); }
-      catch(error){if(!(error instanceof PathFinderError))throw error;unavailable=error.code;}
+      try { const batch=await collect(client,{projectId:String(admission.project_id),options,cableIds:selected.map(r=>r.id),...(dependencyVersion==='pathfinder.dependencies.v5'?{}:{dependencyVersion})});for(const item of batch.items)items.set(item.id,item); }
+      catch(error){if(!(error instanceof PathFinderError))throw error;for(const item of selected)unavailable.set(item.id,error.code);}
     }
     const authority = admission.job_id === null ? null : await readRecalculationJobAuthority(client, { projectId: String(admission.project_id), jobId: String(admission.job_id) });
     for (const row of page) {
@@ -270,14 +276,18 @@ export function createRevisionResults(pool: Pool, adapters: { collectCurrentPage
       else if (current !== baseline.currentCable.cableWriteRevision) result.set(id, { state: 'changed', reasonCodes: ['CABLE_WRITE_REVISION_CHANGED'] });
       else if (authority?.enrolled && !authority.valid) result.set(id, { state: 'changed', reasonCodes: [authority.code ?? 'AUTOMATIC_AUTHORITY_CHANGED'] });
       else if (!envelope) result.set(id, { state: 'unavailable', reasonCodes: ['CALCULATION_OUTPUT_UNAVAILABLE'] });
-      else if (!items.get(id)?.dependencies) result.set(id, { state: 'unavailable', reasonCodes: [unavailable] });
+      else if (!items.get(id)?.dependencies) result.set(id, { state: 'unavailable', reasonCodes: [unavailable.get(id)??'CURRENT_DEPENDENCIES_UNAVAILABLE'] });
       else {
         const currentHash=revisionResultHash(items.get(id)!.dependencies),equal=currentHash===envelope.dependencyHash;
-        const perCable=admission.job_id!==null&&row.dependency_version==='pathfinder.dependencies.v7'?await readRecalculationJobAuthority(client,{projectId:String(admission.project_id),jobId:String(admission.job_id),cableId:id}):authority;
+        const scoped=row.dependency_version==='pathfinder.dependencies.v7'||row.dependency_version==='pathfinder.dependencies.v8';
+        const perCable=admission.job_id!==null&&scoped?await readRecalculationJobAuthority(client,{projectId:String(admission.project_id),jobId:String(admission.job_id),cableId:id}):authority;
         if(perCable?.enrolled&&!perCable.valid){result.set(id,{state:'changed',reasonCodes:[perCable.code]});continue;}
-        const sealed=equal&&row.dependency_version==='pathfinder.dependencies.v7'?verifiedEnvelope({...row,...object(row.sealed_row)}):null;
+        const sealed=equal&&scoped?verifiedEnvelope({...row,...object(row.sealed_row)}):null;
         const applicable=sealed?await readProposalApplicability(client,{projectId:String(admission.project_id),jobId:sealed.jobId,cableId:id,proposalId:sealed.proposalId,
-          dependencyVersion:'pathfinder.dependencies.v7',dependencyHash:sealed.dependencyHash,jobState:String(row.job_state),cancelRequested:row.cancel_requested===true,seal:sealed}):null;
+          dependencyVersion:String(row.dependency_version),dependencyHash:sealed.dependencyHash,jobState:String(row.job_state),cancelRequested:row.cancel_requested===true,seal:sealed}):null;
+        if(equal&&row.dependency_version==='pathfinder.dependencies.v8'&&row.job_state==='complete'&&!applicable?.applicable){
+          result.set(id,{state:'unavailable',reasonCodes:['BARRIER_ITEM_PROOF_UNAVAILABLE']});continue;
+        }
         result.set(id,{state:equal?'current':'changed',reasonCodes:equal?[]:['CALCULATION_DEPENDENCIES_CHANGED'],itemApplicability:applicable?.evidence??null});
       }
     }
