@@ -1,5 +1,36 @@
 # PathFinder local implementation progress
 
+## Current checkpoint — selected-object bottom-centre fix delivered
+
+Branch pf-u9-selected-bounds-local-20261021, productfee2d78861c7c0ec9b1dfcb5792f3f1487814992.
+Report72 + evidence/cable-workflow/selected-object-bottom-centre-actual.json.
+Assign From/To now stages the protected selected bbox lower-plane centre even
+when that equipment ID was not part of automatic endpoint-name preparation.
+Only absent-retention reasons permit explicit fixed-world drafts; all other
+scope/authority/ambiguity/hidden failures remain refused. Save stays atomic and
+explicit, with shared location reuse and affected non-MV calculation. Fixed-world
+points require review on model revision; no object attachment/native proof claimed.
+
+PASS:120hook/pair/popup tests at unchanged finalfiles; final48ViewerNode tests;
+TypeScript/scopedlint/syntax/finalDockerbuild/independentreview. Byte check caught
+CRLF conversion; canonical runtimebf4c8f76 restored fromGit and matches currentAPI
+and oldweb. No computational projection source or engine identity was changed.
+
+Actual staticweb update PASS2026-10-21T02:35:37.757Z. Newwebimageaa5e3afd/container4d098f2e.
+API3476333e/PostgreSQL/MinIO identities/config/start unchanged; onlyweb recreated.
+Alloutside configidentities preserved; originalbackend externalprocessstatechanged
+honestly observed. No SQL/modelwrite/realSave/Review/Apply/grant issued. Priorweb
+rollbacktar55296512bytes+privateenv/state retained. ExistingU8DB/modelbackups kept;
+no fresh DB/modelarchive required/made for this web-only change. One unusedownbuild
+image removed; intermediatebff56c absent; no testcontainers/volumes/prune/deniedpath
+cleanup. Privateoperatorv2ac2ae3fd and receipts are preserved, no activehelper/test.
+
+RealAalborg reread/SDK/UI stillBLOCKEDsavedoriginrefusal; no unchangedretry/bypass.
+Next: handoffs/PF-U7-selected-bounds-browser-check.md. Existingautomation PAUSED;
+latestusersequencing PFchecks→SimplifiedPreparer5180 preserved. No original5180/
+5190runtimechange, no push/PR/merge, sources/readonly. Sourcefee2 cachedorigin/main
+3behind/128ahead; live remote/PR/CI NOT_RUN for this correction.
+
 ## Latest user sequencing — 21 October 2026
 
 After this Path Finder implementation and its required technical checks finish,
