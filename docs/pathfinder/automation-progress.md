@@ -1,8 +1,10 @@
 # PathFinder local implementation progress
 
-## In progress — popup theme and saved From/To display recovery
+## Current checkpoint — popup theme and saved From/To display delivered
 
-Branch `pf-popup-theme-and-endpoints-local-20261021`, inherits abe2c1f.
+Branch `pf-popup-theme-and-endpoints-local-20261021`, product
+`da95c71c0b542b13491c0f96ef0b000d50594275`, inherits abe2c1f. Report75 and
+evidence/cable-workflow/popup-theme-and-endpoints-actual.json.
 Native popup surfaces now use a child-document Griffel renderer and Fluent
 theme provider. Exact successful fixed-world assignment commands supply a
 separate display-only SDK object hint; new commands can also retain its name.
@@ -20,19 +22,32 @@ Computer-use on independent no-data CSS fixture5193 verified actual popup
 dark/light colors, Segoe UI, spacing/button styles and draft retention. This
 does not establish actual Aalborg/Brave/multimonitor acceptance.
 
-Root is preparing a fresh cold5191 DB/model/volume/image archive before the
-API+web update. First attempt failed model audit with a 64MiB temporary helper
-filesystem, below the actual largest233991168-byte model resource. Services
-were resumed automatically; failure receipt retained. New owned attempt uses
-512MiB temporary capacity within existing helper limits. Original5180/5190,
-sources, denied paths and production cable values remain outside this change.
-Current operator: project mirror work/pf-popup-theme-endpoints/update-runtime.mjs;
-private outputs: pathfinder-engine/.scratch/popup-theme-endpoints-update-20261021-2.
-NEXT: finish backup, commit checked source, build exact API/web images, verify
-unchanged calculation identity and data services, activate only5191, record75.
-Real Aalborg UI remains NOT_RUN due unchanged saved origin refusal; do not
-retry/bypass it. Conditional Simplified Preparer5180 remains queued after PF
-technical/browser gate; no Preparer deployment is claimed.
+Fresh complete cold5191 archive PASS:9e6698af-7659-4ed1-9996-d27c341228ca,
+3159402059B, separate private companion, engine scratch
+popup-theme-endpoints-update-20261021-2/cold-backup. First audit attempt failed
+with64MiB temporary capacity below actual largest233991168B resource; fresh512MiB
+bounded attempt passed. Initial activation refused before mutation due undefined
+vs omitted serialized snapshot fields; repaired after real configs matched.
+Actual API+web delivery PASS2026-10-21T08:44:11.712Z, API f837f52afd0c6913a45457979c286ed6727111b95fafeafa832bc8063a57ba16,
+web5c83f8165da77cd5a83b3f397cb5849cc8e322261bfde123f1bd8754669e2105.
+Health200; actual engine identity UNCHANGED
+ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d.
+Served runtimebf4c8f76/adapter21469bc0 unchanged. Data-service/outside identities
+and configs preserved. Post-update read-only hashes PASS against archive for
+cables/types/projects/trays/model versions/selection, locations/aliases, binding
+heads/revisions/commands, jobs/items/proposals. No Save/calculation/grant/Review/
+Apply or newDDL. Needed archive/rollback/private receipts retained; new SQL
+fixtures retired,5193 tab/server/generated directory removed. No active helper/test.
+Original5180/5190/sources/denied paths untouched, no prune/push/PR/merge.
+Operator project mirror work/pf-popup-theme-endpoints/update-runtime.mjs SHA
+52006ae065bdf56674ebf55a5e1f5f2d495686883083bab36fa2497282ce1df8.
+Original main clean96e63f13; live GitHub main sameSHA21October, no featurePR,
+local unpublished CI NOT_RUN. Cached3behind/134ahead at product is not liveparity.
+NEXT selfcontained handoff:PF-U7-popup-theme-and-endpoints-browser-check.md.
+First unfinished step remains actual Aalborg reread/SDK/native popup/monitor
+check, NOT_RUN due unchanged saved origin refusal. Do not retry/bypass it.
+After that gate, resume authorized Simplified Preparer on main5180 with fresh
+inventory/tests and DB/model backups. No Preparer deployment is claimed.
 
 ## Current checkpoint — separate cable windows delivered
 

@@ -1,0 +1,274 @@
+{
+  "schemaVersion": "wfc.pf.popup-theme-and-endpoints.v1",
+  "recordedAt": "2026-10-21T08:51:05.704Z",
+  "branch": "pf-popup-theme-and-endpoints-local-20261021",
+  "sourceRevision": "da95c71c0b542b13491c0f96ef0b000d50594275",
+  "changes": [
+    "Child-document Fluent/Griffel renderer and inherited application theme for both cable popup surfaces",
+    "Read-only exact successful-command recovery of fixed-world selected SDK object IDs",
+    "Optional selected object display name retained by new explicit Save commands",
+    "Show foreground union includes current verified manual From/To parent IDs without changing points or calculations"
+  ],
+  "checks": {
+    "sourceTests": {
+      "status": "PASS",
+      "passed": 659,
+      "failed": 0,
+      "files": 18,
+      "receiptSha256": "cad90765f0058177859889f6cbfe9c8cd365f84f96f6f1c927099d4f22a9cfa9"
+    },
+    "actualPostgreSql": {
+      "status": "PASS",
+      "passed": 11,
+      "failed": 0,
+      "receiptSha256": "c9d53099b29a9290f697ad9a0ed0e795a5e1b87461503d69f1f36fb609f5fe30",
+      "scope": "Synthetic owned PostgreSQL18 command/auth/transaction slice; not actual engineering mappings"
+    },
+    "capacity": {
+      "status": "PASS",
+      "syntheticLedgerRows": 5001,
+      "executionMilliseconds": [
+        20.19,
+        20.399,
+        20.373
+      ]
+    },
+    "clientTypes": "PASS",
+    "serverTypes": "PASS",
+    "changedFileLint": "PASS",
+    "diffCheck": "PASS",
+    "independentSourceReviews": "PASS",
+    "productionApiBuild": "PASS",
+    "productionWebBuild": "PASS"
+  },
+  "browser": {
+    "status": "PASS_LIMITED_SYNTHETIC_APPEARANCE_FIXTURE",
+    "origin": "http://127.0.0.1:5193",
+    "data": "Synthetic only; no WFC API, model, account or business rows",
+    "actualDetachedPopup": {
+      "dark": {
+        "background": "rgb(41, 41, 41)",
+        "color": "rgb(255, 255, 255)"
+      },
+      "light": {
+        "background": "rgb(255, 255, 255)",
+        "color": "rgb(36, 36, 36)"
+      },
+      "font": "Segoe UI",
+      "padding": "12px",
+      "buttonBorder": "1px",
+      "draftRetained": true,
+      "returnToPageRetained": true
+    },
+    "actualAalborg5191": "NOT_RUN_SAVED_ORIGIN_REFUSAL",
+    "braveMultimonitor": "NOT_VERIFIED",
+    "fixtureTabAndServerClosed": true
+  },
+  "delivery": {
+    "status": "PASS",
+    "at": "2026-10-21T08:44:11.712Z",
+    "sourceRevision": "da95c71c0b542b13491c0f96ef0b000d50594275",
+    "operatorSha256": "52006ae065bdf56674ebf55a5e1f5f2d495686883083bab36fa2497282ce1df8",
+    "images": {
+      "api": "sha256:f837f52afd0c6913a45457979c286ed6727111b95fafeafa832bc8063a57ba16",
+      "web": "sha256:5c83f8165da77cd5a83b3f397cb5849cc8e322261bfde123f1bd8754669e2105"
+    },
+    "containers": {
+      "api": "632d63ce92b611fa9589be40b2351145f79bf338736367001f00c0e5de3ad041",
+      "web": "56d21e6420fe8789281994c58d7cf15c0f32e251042356f12385a6ca3d187bfd"
+    },
+    "engineIdentity": "ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d",
+    "postgresMinioPreserved": true,
+    "outsideIdentitiesPreserved": true,
+    "externalProcessStateChangesObserved": false,
+    "servedRuntimeSha256": "bf4c8f76e63a04d6f08c0a618238bb5a417219433df1fc7700072363340e06a8",
+    "servedAdapterSha256": "21469bc088a33d3a3fb28a5a2d9e25b8b07cada9d5f7ff3894d877c7fd8eaadc",
+    "healthStatus": 200,
+    "backupDirectory": "pathfinder-engine\\.scratch\\popup-theme-endpoints-update-20261021-2\\cold-backup",
+    "realAalborgUI": "NOT_RUN_SAVED_ORIGIN_REFUSAL"
+  },
+  "backup": {
+    "status": "PASS",
+    "backupId": "9e6698af-7659-4ed1-9996-d27c341228ca",
+    "createdAt": "2026-10-21T08:40:30.693Z",
+    "profile": "cold-pg-minio-staging-pathfinder-v2",
+    "directory": "pathfinder-engine/.scratch/popup-theme-endpoints-update-20261021-2/cold-backup",
+    "manifestSha256": "cbd7c314895c63b0ba47fd49e969e1a3561d0cd271f8f4a3614e807f1f9051ba",
+    "files": [
+      {
+        "path": "database.dump",
+        "bytes": 21892724,
+        "sha256": "b3fb9a77232ad2288dfeb7ee0ca23320261354177ca24e90d744eed5321d479b"
+      },
+      {
+        "path": "minio.wfcops",
+        "bytes": 1935513891,
+        "sha256": "b610c19ee6bf9ebcd77febc941323a70669746f0e63869ccca90d9e6f1fb3485"
+      },
+      {
+        "path": "staging.wfcops",
+        "bytes": 184,
+        "sha256": "023c5f5da0aede3efd55b34e4d8f44d16abc7edf5233b19ad9b5c295e4f6fdfc"
+      },
+      {
+        "path": "pathfinder.wfcops",
+        "bytes": 736738313,
+        "sha256": "1b7ea1dadeb129a3f8ea6c32eb2771da8c30e573a50045058cd5f9d7e2f55d06"
+      },
+      {
+        "path": "api-image.tar",
+        "bytes": 185435136,
+        "sha256": "8dc2afdcd52f647d30c7c145a7c1436e3d5d2941ef23da94e60f820ed40fcceb"
+      },
+      {
+        "path": "web-image.tar",
+        "bytes": 55309312,
+        "sha256": "45553ab8d5c9096d628357cd7c08933df5bf82beb719934b339d740ee8b683ed"
+      },
+      {
+        "path": "postgres-image.tar",
+        "bytes": 162226688,
+        "sha256": "9c16e896147969ee35d3ed04af8f17b80543da9d6fb80cfbbc9abdf117191d62"
+      },
+      {
+        "path": "minio-image.tar",
+        "bytes": 62259712,
+        "sha256": "7a3e953b6647a85a4932e6d4a1d4931c4333c519abc09c2b5bab37aaeaad1e9d"
+      },
+      {
+        "path": "losslessInventory.mjs",
+        "bytes": 26099,
+        "sha256": "0f0fd212f0ed35177ff301c5d15faeb8ab6e90646cda89772289063ef5e3b49f"
+      }
+    ],
+    "privateCompanionRetained": true
+  },
+  "preservedRows": {
+    "status": "PASS",
+    "scope": "Read-only hashes against fresh cold archive; no Save/calculation/Review/Apply",
+    "tables": [
+      {
+        "table": "cables",
+        "status": "PASS",
+        "rows": "2153"
+      },
+      {
+        "table": "cable_types",
+        "status": "PASS",
+        "rows": "57"
+      },
+      {
+        "table": "projects",
+        "status": "PASS",
+        "rows": "5"
+      },
+      {
+        "table": "trays",
+        "status": "PASS",
+        "rows": "334"
+      },
+      {
+        "table": "model_versions",
+        "status": "PASS",
+        "rows": "5"
+      },
+      {
+        "table": "model_resources",
+        "status": "NOT_PRESENT",
+        "rows": null
+      },
+      {
+        "table": "project_model_selections",
+        "status": "PASS",
+        "rows": "5"
+      },
+      {
+        "table": "pf_locations",
+        "status": "PASS",
+        "rows": "1536"
+      },
+      {
+        "table": "pf_location_aliases",
+        "status": "PASS",
+        "rows": "1538"
+      },
+      {
+        "table": "pf_endpoint_binding_heads",
+        "status": "PASS",
+        "rows": "16"
+      },
+      {
+        "table": "pf_endpoint_binding_revisions",
+        "status": "PASS",
+        "rows": "29"
+      },
+      {
+        "table": "pf_endpoint_binding_commands",
+        "status": "PASS",
+        "rows": "41"
+      },
+      {
+        "table": "pf_jobs",
+        "status": "PASS",
+        "rows": "98"
+      },
+      {
+        "table": "pf_job_items",
+        "status": "PASS",
+        "rows": "25346"
+      },
+      {
+        "table": "pf_proposals",
+        "status": "PASS",
+        "rows": "1050"
+      }
+    ]
+  },
+  "recoveryNotes": [
+    {
+      "status": "FAIL_REPAIRED",
+      "scope": "Initial SQL fixture server-readiness race; owner-specific container retired"
+    },
+    {
+      "status": "FAIL_REPAIRED",
+      "scope": "Historical SQL fixture lacked the genuine preparation session/plan; fixture repaired without production relaxation"
+    },
+    {
+      "status": "FAIL_REPAIRED",
+      "scope": "Initial cold archive audit under 64MiB helper temp capacity; largest model resource233991168B; subsequent512MiB bounded attempt passed"
+    },
+    {
+      "status": "REFUSED_BEFORE_MUTATION_REPAIRED",
+      "scope": "Operator snapshot compared undefined properties with omitted serialized properties; JSON-compatible canonical comparison repaired; actual container identities/configs were unchanged"
+    }
+  ],
+  "cleanup": {
+    "status": "PASS",
+    "newSqlFixturesRetired": true,
+    "syntheticBrowserServerAndTabClosed": true,
+    "syntheticBrowserDirectoryRemoved": true,
+    "coldArchiveRollbackImagesAndEvidenceRetained": true,
+    "deniedHistoricalPathsUntouched": true,
+    "globalPrune": false
+  },
+  "boundaries": {
+    "noOriginal5180Or5190Writes": true,
+    "noSourcesEdits": true,
+    "noPushPrMerge": true,
+    "noCalculationOrSaveReviewApplyIssued": true,
+    "noNewDdl": true,
+    "calculationIdentityUnchanged": "ebb19973d052848e544e5d75e382f599498453375a6478ef84000c306836021d",
+    "engineeringAcceptance": "NOT_CLAIMED",
+    "simplifiedPreparer": "QUEUED_AFTER_REAL_PF_BROWSER_CHECK"
+  },
+  "repository": {
+    "localOriginalBranch": "main",
+    "localOriginalCommit": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "localOriginalClean": true,
+    "githubMainObserved": "96e63f13fdc2b1d30b8f8ff658dd662f25fac104",
+    "featurePullRequests": 0,
+    "cachedOriginMainBehind": 3,
+    "cachedOriginMainAhead": 134,
+    "localFeatureCI": "NOT_RUN_UNPUBLISHED"
+  }
+}
