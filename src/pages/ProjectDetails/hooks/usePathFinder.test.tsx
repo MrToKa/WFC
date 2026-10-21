@@ -4,8 +4,9 @@ import { usePathFinder } from './usePathFinder';
 import { fetchPathFinderState, fetchPathFinderLookupPlan, fetchPathFinderProposal, fetchPathFinderJob, pathFinderRequest, PathFinderApiError, type PathFinderState, type PathFinderProposal } from '@/api/pathfinder';
 import { fetchProjectModels } from '@/api/projectModels';
 import { ViewerAccessError } from '@/viewer/sessionApi';
+import type { ViewerController } from '@/viewer/ViewerController';
 
-const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
+const facts = vi.hoisted(() => ({ disposed: vi.fn(), load: vi.fn(), capture: vi.fn(), barrierCapture: vi.fn(), barrierPublish: vi.fn(), readSelection: vi.fn(), transparency: vi.fn(), clear: vi.fn(), cancelPicking: vi.fn(), instances: 0, events: [] as ((event: { type: string; payload: Record<string, unknown> }) => void)[] }));
 vi.mock('@/api/pathfinder', async importOriginal => {
   const original = await importOriginal<typeof import('@/api/pathfinder')>();
   return { ...original, fetchPathFinderState: vi.fn(), fetchPathFinderLookupPlan: vi.fn(), fetchPathFinderProposal: vi.fn(), fetchPathFinderJob: vi.fn(), pathFinderRequest: vi.fn() };
@@ -15,8 +16,15 @@ vi.mock('@/viewer/ViewerController', () => ({ ViewerController: class {
   constructor(options: { onEvent: (event: { type: string; payload: Record<string, unknown> }) => void }) { facts.instances++; facts.events.push(options.onEvent); } dispose = facts.disposed; load = facts.load;
   readSelection = facts.readSelection; setPathTransparency = facts.transparency; clear = facts.clear; cancelPicking = facts.cancelPicking;
   captureModel = facts.capture; getLoadSnapshot = () => ({ ready: true });
+  captureBarriers = facts.barrierCapture; publishBarriers = facts.barrierPublish;
 } }));
 const projectId = '11111111-1111-4111-8111-111111111111', modelId = '22222222-2222-4222-8222-222222222222', locationId = '33333333-3333-4333-8333-333333333333';
+function barrierRequest(): Parameters<ViewerController['captureBarriers']>[0] { return {
+  captureId: locationId, scope: { projectId, modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64),
+    captureFrameId: '44444444-4444-4444-8444-444444444444', captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' },
+  selectedParents: [{ selectionId: '55555555-5555-4555-8555-555555555555', kind: 'wall', objectId: 'dbid:44', dbId: 44,
+    externalId: null, name: 'Synthetic selected wall', identityBasis: 'version-local-only', inclusion: 'own-and-all-descendant-fragments' }],
+}; }
 function state(): PathFinderState { return { schemaVersion: 1, projectId, registryRevision: '3', activeModel: { modelVersionId: modelId, selectionRevision: '2', contentFingerprint: 'a'.repeat(64) },
   settings: { revision: '1', connectionGap: '1', secondaryTrayLength: '4', endConnectionLength: '2', additionalBendingPercent: '5' }, cables: [], artifacts: [], jobs: [], proposals: [],
   locations: [{ id: locationId, name: 'EQ-001', aliases: ['Equipment A'], revision: '1', binding: null }] }; }
@@ -27,6 +35,8 @@ beforeEach(() => {
   vi.mocked(fetchPathFinderProposal).mockReset(); vi.mocked(fetchPathFinderJob).mockReset();
   vi.mocked(fetchPathFinderLookupPlan).mockReset().mockResolvedValue({ routeCodes: ['/BC1', '/BC2'], selectionRevision: '2', connectionGap: '0.250' });
   facts.capture.mockReset().mockResolvedValue({ snapshot: { lookup: 'owned-protected-capture' }, summary: {} });
+  facts.barrierCapture.mockReset().mockResolvedValue({ capture: { fixture: 'opaque protected barrier observation' }, frameObservation: {} });
+  facts.barrierPublish.mockReset().mockResolvedValue({ fixture: 'opaque protected publication receipt' });
   vi.mocked(fetchProjectModels).mockResolvedValue({ selection: { projectId, activeModelVersionId: modelId, selectionRevision: 2, updatedAt: '2026-10-18T00:00:00Z' }, versions: [{ id: modelId, projectId, label: 'Model', source: { name: 'test.nwd', bytes: 1, sha256: 'a'.repeat(64), identityBasis: 'observed-local-file' }, preparedAt: '2026-10-18T00:00:00Z', importedAt: null, state: 'ready', health: 'healthy' }] });
 });
 
@@ -434,6 +444,45 @@ describe('PathFinder scope and shared-location orchestration', () => {
     await act(() => result.current.calculate([locationId], true, { secondaryDistanceMeters: 0, preferVerticalApproach: false }));
     expect(pathFinderRequest).toHaveBeenCalledExactlyOnceWith(projectId, 'token', '/jobs', 'POST', { cableIds: [locationId], expectedRegistryRevision: '3', force: true,
       options: { connectionToleranceMeters: 1, sampleSpacingMeters: 0.125, maxGraphNodes: 200000, maxGraphConnections: 1000000, secondaryDistanceMeters: 0, preferVerticalApproach: false } }, expect.any(AbortSignal));
+  });
+  it('serializes barrier capture and publication through the scoped protected facade', async () => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    const request = barrierRequest();
+    await act(async () => {
+      await result.current.runProjectPreparation(request.scope, async viewer => {
+        const observed = await viewer.captureBarriers(request);
+        expect(Object.keys(viewer).sort()).toEqual(['assertCurrent', 'capture', 'captureBarriers', 'discover', 'publishBarriers', 'readSelection']);
+        return viewer.publishBarriers(locationId, observed);
+      });
+    });
+    expect(facts.barrierCapture).toHaveBeenCalledExactlyOnceWith(request, expect.objectContaining({ signal: expect.any(AbortSignal), isCurrent: expect.any(Function) }));
+    expect(facts.barrierPublish).toHaveBeenCalledExactlyOnceWith(locationId, await facts.barrierCapture.mock.results[0].value, expect.any(AbortSignal));
+    expect(facts.capture).not.toHaveBeenCalled(); expect(facts.clear).not.toHaveBeenCalled(); expect(facts.instances).toBe(1);
+  });
+  it('fences late barrier geometry after administrator loss before publication', async () => {
+    let resolveCapture!: (value: unknown) => void;
+    facts.barrierCapture.mockImplementationOnce(() => new Promise(resolve => { resolveCapture = resolve; }));
+    const view = renderHook(({ isAdmin }) => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin, container }), { initialProps: { isAdmin: true } });
+    await waitFor(() => expect(view.result.current.data).not.toBeNull());
+    const request = barrierRequest(); let operation!: Promise<unknown>; let refused!: Promise<void>;
+    act(() => { operation = view.result.current.runProjectPreparation(request.scope, async viewer => viewer.publishBarriers(locationId, await viewer.captureBarriers(request))); refused = expect(operation).rejects.toThrow(); });
+    await waitFor(() => expect(facts.barrierCapture).toHaveBeenCalledOnce());
+    view.rerender({ isAdmin: false });
+    await act(async () => { resolveCapture({ fixture: 'late opaque observation' }); await refused; });
+    expect(facts.barrierPublish).not.toHaveBeenCalled();
+    expect(facts.barrierCapture.mock.calls[0][1].signal.aborted).toBe(true);
+  });
+  it('retains the explicit barrier admission when submitting selected cable calculation', async () => {
+    const { result } = renderHook(() => usePathFinder({ projectId, loadedProjectId: projectId, token: 'token', isAdmin: true, container }));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    const barrierRouting = { schemaVersion: 'wfc.pf.barrier-admission-intent.v1' as const, scope: barrierRequest().scope,
+      expectedRegistryRevision: '0', expectedSnapshot: null, drillThroughWalls: true };
+    vi.mocked(pathFinderRequest).mockClear();
+    await act(async () => { await result.current.calculate([locationId], true, { secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting }); });
+    expect(pathFinderRequest).toHaveBeenCalledWith(projectId, 'token', '/jobs', 'POST', expect.objectContaining({
+      options: expect.objectContaining({ barrierRouting }), cableIds: [locationId],
+    }), expect.any(AbortSignal));
   });
   it('uses the protected controller for selection/transparency and cancels pending viewer work', async () => {
     const selected = { coordinateFrame: 'world-metres-z-up', metresPerDisplayUnit: 1, globalOffsetMetres: [0, 0, 0], objects: [] };

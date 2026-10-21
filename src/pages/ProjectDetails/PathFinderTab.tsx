@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Body1, Button, Caption1, Field, Input, Spinner, Tab, TabList, Textarea, makeStyles, tokens } from '@fluentui/react-components';
+import { Body1, Button, Caption1, Checkbox, Field, Input, Spinner, Tab, TabList, Textarea, makeStyles, tokens } from '@fluentui/react-components';
 import type { PathFinderCable, PathFinderLocation, PathFinderPreferences } from '@/api/pathfinder';
 import { CAPTURE_INPUT_LIMITS } from '../../../viewer-runtime/capture-input.mjs';
 import { usePathFinder } from './hooks/usePathFinder';
@@ -15,6 +15,9 @@ import { notEvaluatedCalculationAvailability, type CalculationAvailability } fro
 import { PathFinderCableWorkspace } from '@/components/pathfinder/PathFinderCableWorkspace';
 import type { CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import type { PathFinderWorkflowDisplay, PathFinderWorkflowDisplayRequest } from './PathFinderResults';
+import { PathFinderBarriersPanel } from './PathFinderBarriersPanel';
+import { createBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
+import type { BarrierRegistry } from '../../../shared/pathfinderBarriers';
 
 const useStyles = makeStyles({
   heading: { margin: 0, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightSemibold },
@@ -59,11 +62,26 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
   const [lookupBusy, setLookupBusy] = useState(false);
   const displayGeneration = useRef(0), [displayOwner, setDisplayOwner] = useState<'none' | 'proposal' | 'lookup' | 'standalone'>('none');
   const [secondaryDistance, setSecondaryDistance] = useState('2'), [preferVertical, setPreferVertical] = useState(true), [transparency, setTransparency] = useState('75');
+  const [barrierAuthoring, setBarrierAuthoring] = useState<{ registry: BarrierRegistry | null; dirty: boolean; pending: boolean }>({ registry: null, dirty: false, pending: false });
+  const barrierStateChanged = useCallback((value: typeof barrierAuthoring) => setBarrierAuthoring(previous => JSON.stringify(previous) === JSON.stringify(value) ? previous : value), []);
+  const currentBarrierRegistry = barrierAuthoring.registry && barrierAuthoring.registry.scope.projectId === projectId
+    && barrierAuthoring.registry.scope.modelVersionId === controller.data?.activeModel.modelVersionId
+    && barrierAuthoring.registry.scope.selectionRevision === controller.data?.activeModel.selectionRevision
+    && barrierAuthoring.registry.scope.contentFingerprint === controller.data?.activeModel.contentFingerprint ? barrierAuthoring.registry : null;
+  const barrierOwner = JSON.stringify([projectId, accountId, token, controller.preparationViewerGeneration, controller.data?.activeModel, currentBarrierRegistry?.scope, currentBarrierRegistry?.registryRevision]);
+  const [drillDraft, setDrillDraft] = useState<{ owner: string; checked: boolean } | null>(null);
+  const drillThroughWalls = drillDraft?.owner === barrierOwner && drillDraft.checked;
+  useEffect(() => { setDrillDraft(previous => previous && previous.owner !== barrierOwner ? null : previous); }, [barrierOwner]);
+  const barrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, drillThroughWalls);
   const [standaloneNames, setStandaloneNames] = useState<string[]>([]);
   const updateStandaloneNames = useCallback((names: string[]) => setStandaloneNames(previous => previous.length === names.length && previous.every((name, index) => name === names[index]) ? previous : names), []);
   const [routeRulesDirty, setRouteRulesDirty] = useState(false), [externalSnapshotRevision, setExternalSnapshotRevision] = useState(0);
   const secondaryValue = secondaryDistance.trim() ? Number(secondaryDistance) : NaN;
-  const preferences: PathFinderPreferences | null = Number.isFinite(secondaryValue) && secondaryValue >= 0 && secondaryValue <= 1_000_000 ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical } : null;
+  const validSecondary = Number.isFinite(secondaryValue) && secondaryValue >= 0 && secondaryValue <= 1_000_000;
+  const preferences: PathFinderPreferences | null = validSecondary && barrierRouting && !barrierAuthoring.dirty && !barrierAuthoring.pending
+    ? { secondaryDistanceMeters: secondaryValue, preferVerticalApproach: preferVertical, barrierRouting } : null;
+  const backgroundBarrierRouting = createBarrierAdmissionIntent(currentBarrierRegistry, false);
+  const backgroundPreferences = preferences && backgroundBarrierRouting ? { ...preferences, barrierRouting: backgroundBarrierRouting } : null;
   const transparencyValue = transparency.trim() ? Number(transparency) : NaN;
   const claimViewer = (owner: typeof displayOwner, clear = true) => {
     const current = ++displayGeneration.current; setDisplayOwner(owner); pf.cancelPicking(); if (clear) pf.clear();
@@ -150,10 +168,15 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={pf.zoom}>Zoom to path</Button>
           <Button disabled={pf.viewerPhase !== 'ready'} onClick={restoreView}>Restore view</Button>
         </div>
+        <PathFinderBarriersPanel projectId={projectId} loadedProjectId={loadedProjectId} token={token} isAdmin={isAdmin} pf={pf} onStateChange={barrierStateChanged} />
+        <Checkbox label="Drill through the walls" checked={drillThroughWalls} disabled={pf.busy || barrierAuthoring.pending || !currentBarrierRegistry}
+          onChange={(_, value) => setDrillDraft({ owner: barrierOwner, checked: value.checked === true })} />
+        <Caption1>For this calculation, allow crossing registered walls, partitions, floors and ceilings. Existing results keep their original setting.</Caption1>
+        {!barrierRouting ? <Caption1>Configure the registered barriers before calculating, or explicitly enable drilling for this calculation.</Caption1> : null}
         <details><summary>Background model recalculation</summary><PathFinderCalculationGrantPanel
           projectId={projectId} loadedProjectId={loadedProjectId} token={token} accountId={accountId ?? null} isAdmin={isAdmin}
           active={active} contextKey={JSON.stringify([data?.activeModel.modelVersionId,data?.activeModel.selectionRevision,data?.activeModel.contentFingerprint])}
-          preferences={preferences} onChanged={pf.refresh} onAuthorityLost={pf.refresh}
+          preferences={backgroundPreferences} onChanged={pf.refresh} onAuthorityLost={pf.refresh}
         /></details>
         <TabList aria-label="Path Finder tools" selectedValue={mode} onTabSelect={(_, value) => changeMode(value.value as 'routes' | 'path' | 'lookup')}>
           <Tab id={`${panelId}-routes-tab`} value="routes" aria-controls={`${panelId}-routes-panel`}>Routes</Tab>
@@ -183,7 +206,7 @@ function AdminPathFinderTab({ projectId, loadedProjectId, token, isAdmin, accoun
         </div>
         <div id={`${panelId}-path-panel`} role="tabpanel" aria-labelledby={`${panelId}-path-tab`} className={extra.panel} style={{ display: mode === 'path' ? 'flex' : 'none' }}>
         <Field label="SECONDARY trigger distance (m)" hint="Approaches longer than this distance use the SECONDARY length from Project Details."><Input aria-label="SECONDARY trigger distance in metres" value={secondaryDistance} onChange={(_, value) => { restoreView(); setSecondaryDistance(value.value); }} /></Field>
-        {!preferences ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
+        {!validSecondary ? <Body1 role="alert">Enter a SECONDARY trigger distance from 0 to 1,000,000 metres.</Body1> : null}
         <label><input type="checkbox" checked={preferVertical} onChange={event => { restoreView(); setPreferVertical(event.target.checked); }} />Prefer vertical approach</label>
         <PathFinderCableWorkspace projectId={projectId} loadedProjectId={loadedProjectId} accountId={accountId ?? null} token={token} isAdmin={isAdmin}
           pf={pf} active={mode === 'path' && !routeRulesDirty} selectedCableId={selectedCableId} refreshKey={cableWriteRefresh} preferences={preferences}

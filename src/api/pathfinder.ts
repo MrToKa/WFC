@@ -9,6 +9,7 @@ import { directSecondaryDecisionSchema, directSecondaryRouteIssue, type DirectSe
 import { revisionResultEnvelopeSchema } from '../../shared/pathfinderRevisionResults';
 import { calculationAvailabilitySchema } from '../../shared/pathfinderCalculationAvailability';
 import { sealedCableItemApplicabilitySchema } from '../../shared/pathfinderItemApplicability';
+import { barrierAdmissionIntentSchema, type BarrierAdmissionIntent } from '../../shared/pathfinderBarrierAdmission';
 
 const uuid = z.string().uuid(), revision = z.string().regex(/^(0|[1-9][0-9]{0,18})$/);
 const point = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
@@ -91,7 +92,7 @@ const lookupSchema = z.object({ id: uuid, projectId: uuid, kind: z.literal('look
     diagnostics: z.object({ geometryLeavesUsed: diagnosticCount, fallbackBends: diagnosticCount, fallbackStraights: diagnosticCount, fallbackClearances: diagnosticCount }) }).nullable() });
 const endpointSchema = z.object({ name: z.string().max(500), point: point.optional() });
 const categorySchema = z.enum(['MV', 'LV', 'Control', 'Instrumentation']);
-const preferences = { secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).optional(), preferVerticalApproach: z.boolean().optional() };
+const preferences = { secondaryDistanceMeters: z.number().finite().min(0).max(1_000_000).optional(), preferVerticalApproach: z.boolean().optional(), barrierRouting: barrierAdmissionIntentSchema.optional() };
 const previewInputSchema = z.object({ from: endpointSchema, to: endpointSchema, category: categorySchema, reverse: z.boolean(), ...preferences,
   artifactId: uuid, expectedSelectionRevision: revision, expectedSettingsRevision: revision, expectedRegistryRevision: revision });
 const resolvedEndpointSchema = z.object({ name: z.string(), point, source: z.enum(['manual-world-point', 'shared-location', 'equipment-bottom-aabb']), objectId: z.string().nullable(), locationId: uuid.nullable(), bindingRevision: revision.nullable() });
@@ -115,7 +116,7 @@ export type PathFinderJob = z.infer<typeof jobSchema> & { items?: { cableId: str
 export type PathFinderLookup = z.infer<typeof lookupSchema>;
 export type PathFinderLookupPlan = z.infer<typeof lookupPlanSchema>;
 export type PathFinderPreview = z.infer<typeof previewSchema>;
-export type PathFinderPreferences = { secondaryDistanceMeters: number; preferVerticalApproach: boolean };
+export type PathFinderPreferences = { secondaryDistanceMeters: number; preferVerticalApproach: boolean; barrierRouting?: BarrierAdmissionIntent };
 export type PathFinderPreviewInput = Omit<z.infer<typeof previewInputSchema>, 'artifactId' | 'expectedSelectionRevision' | 'expectedSettingsRevision' | 'expectedRegistryRevision'>;
 export class PathFinderApiError extends Error {
   constructor(public readonly code: string, public readonly status: number) {

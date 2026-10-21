@@ -80,6 +80,8 @@ function viewer(
     discover,
     assertCurrent: vi.fn(),
     capture: vi.fn(),
+    captureBarriers: vi.fn(),
+    publishBarriers: vi.fn(),
     readSelection: vi.fn(),
   } as ProjectPreparationViewer & {
     discover: typeof discover;
@@ -192,6 +194,8 @@ describe('complete exact preparation discovery', () => {
         discover,
         assertCurrent: () => {},
         capture: vi.fn(),
+        captureBarriers: vi.fn(),
+        publishBarriers: vi.fn(),
         readSelection: vi.fn(),
       });
       expect(discover).toHaveBeenCalledWith(

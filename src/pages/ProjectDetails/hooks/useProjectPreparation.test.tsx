@@ -212,7 +212,7 @@ describe('project preparation lifecycle', () => {
   });
   it('retains completed evidence after a committed part and retries only its exact unknown evidence upload',async()=>{
     const {pf,session,committed}=setup(),evidence=await completedEvidenceFixture();
-    vi.mocked(pf.runProjectPreparation).mockImplementation(async(_scope,operation)=>operation({assertCurrent:()=>{},readSelection:vi.fn(),discover:vi.fn(),capture:vi.fn().mockResolvedValue({snapshot:{synthetic:true},summary:{completedEvidence:evidence}})}));
+    vi.mocked(pf.runProjectPreparation).mockImplementation(async(_scope,operation)=>operation({assertCurrent:()=>{},readSelection:vi.fn(),discover:vi.fn(),captureBarriers:vi.fn(),publishBarriers:vi.fn(),capture:vi.fn().mockResolvedValue({snapshot:{synthetic:true},summary:{completedEvidence:evidence}})}));
     vi.mocked(api.uploadPreparationPart).mockImplementation(async()=>{vi.mocked(api.fetchPreparationSession).mockResolvedValue({...session,state:'collecting',parts:[committed],coverage:{expectedParts:1,committedParts:1,requestedScopeComplete:true,missingPartIds:[]}});return {schemaVersion:'wfc.pf.preparation-part-receipt.v1',part:committed,sessionRevision:'2',duplicate:false};});
     vi.mocked(saveCaptureEvidence).mockRejectedValueOnce(new TypeError('Lost evidence receipt')).mockResolvedValueOnce({} as never);
     const {result}=renderHook(()=>useProjectPreparation(pf,true));await waitFor(()=>expect(result.current.session).not.toBeNull());await act(()=>result.current.collect());expect(result.current.unknown).toBe(true);

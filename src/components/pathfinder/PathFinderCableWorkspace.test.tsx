@@ -11,6 +11,7 @@ import { cableWorkflowRowSchema, type CableWorkflowRow } from '../../../shared/p
 import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
 import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
 import { emptyInitialFillCounters, type InitialFillProgress } from '../../../shared/pathfinderInitialFillProgress';
+import type { BarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('@/api/pathfinderLocationImpacts', () => ({ fetchLocationImpacts: vi.fn() }));
 vi.mock('@/hooks/usePathfinderLocationImpactProgress', () => ({ usePathfinderLocationImpactProgress: vi.fn() }));
@@ -106,6 +107,24 @@ describe('owned cable routing workspace composition (mocked reads and child UI)'
     const original = { preferences: { secondaryDistanceMeters: 9, preferVerticalApproach: false }, timeoutMilliseconds: 7000 };
     await act(async () => { await panelProps.access.onSaved?.({ cableId: id(3), locationImpact: { id: id(8) } } as CableEndpointReceipt, endpointBindingFixture().context.current!, original); });
     expect(vi.mocked(usePathfinderLocationImpactProgress).mock.calls.at(-1)?.[0].calculation).toEqual(original);
+  });
+  it.each(['same', 'drilling changed', 'snapshot changed', 'legacy'] as const)('resumes only matching barrier-owned history: %s', async kind => {
+    const p = props(), current = endpointBindingFixture().context.current!;
+    const barrierRouting: BarrierAdmissionIntent = { schemaVersion: 'wfc.pf.barrier-admission-intent.v1',
+      scope: { projectId: id(1), modelVersionId: current.modelVersionId, selectionRevision: current.selectionRevision,
+        contentFingerprint: current.contentFingerprint, captureFrameId: id(51), captureFrameSha256: 'b'.repeat(64), coordinateFrame: 'canonical-world-metres' },
+      expectedRegistryRevision: '1', expectedSnapshot: null, drillThroughWalls: true };
+    p.preferences = { ...p.preferences!, barrierRouting };
+    const historical = structuredClone(p.preferences);
+    if (kind === 'drilling changed') historical.barrierRouting = { ...barrierRouting, drillThroughWalls: false };
+    if (kind === 'snapshot changed') historical.barrierRouting = { ...barrierRouting, expectedRegistryRevision: '2' };
+    if (kind === 'legacy') delete historical.barrierRouting;
+    vi.mocked(fetchLocationImpacts).mockResolvedValueOnce({ impacts: [{ id: id(8), ...current, current,
+      calculation: { preferences: historical, timeoutMilliseconds: 120000 } }] } as never);
+    render(<PathFinderCableWorkspace {...p} />);
+    await waitFor(() => expect(fetchLocationImpacts).toHaveBeenCalledOnce());
+    await act(async () => { await Promise.resolve(); });
+    expect(vi.mocked(usePathfinderLocationImpactProgress).mock.calls.at(-1)?.[0].impactId).toBe(kind === 'same' ? id(8) : null);
   });
   it('refreshes the bounded list and live selected cable after an explicit confirmed Apply notification', async () => {
     const p = props(), view = render(<PathFinderCableWorkspace {...p} refreshKey={0} />); fireEvent.click(screen.getByText('Needs routing cable'));

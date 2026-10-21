@@ -10,6 +10,7 @@ import { endpointBindingFixture } from '@/test/endpointBindingFixtures';
 import { PENDING_APPLY_STORAGE_KEY } from './hooks/usePathfinderPendingApply';
 import { calculationAvailabilitySchema, type CalculationAvailability } from '../../../shared/pathfinderCalculationAvailability';
 import type { PathFinderRevisionResultsProps } from './PathFinderRevisionResults';
+import type { PathFinderBarriersPanelProps } from './PathFinderBarriersPanel';
 vi.mock('@/api/pathfinderEndpointBindings', async original => ({ ...await original<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn(), fetchEndpointBindingHistory: vi.fn(), saveEndpointBinding: vi.fn() }));
 
 vi.mock('./hooks/usePathFinder', () => ({ usePathFinder: vi.fn() }));
@@ -20,6 +21,22 @@ vi.mock('@/components/pathfinder/PathFinderCableWorkspace', () => ({ PathFinderC
 // These network panels have dedicated contract/authority tests. This suite owns
 // Tab tool composition and the real pending-Apply hook, not incidental reads.
 vi.mock('./PathFinderCalculationGrantPanel', () => ({ PathFinderCalculationGrantPanel: () => null }));
+// Barrier authoring has independent lifecycle tests; composition uses an explicit
+// synthetic empty declaration, never inferred real model coverage.
+vi.mock('./PathFinderBarriersPanel', async () => {
+  const { useEffect } = await import('react');
+  return { PathFinderBarriersPanel: (props: PathFinderBarriersPanelProps) => {
+    const model = props.pf.data?.activeModel;
+    useEffect(() => {
+      if (!props.projectId || !model?.modelVersionId || !model.contentFingerprint) return;
+      const scope = { projectId: props.projectId, modelVersionId: model.modelVersionId, selectionRevision: model.selectionRevision,
+        contentFingerprint: model.contentFingerprint, captureFrameId: '88888888-8888-4888-8888-888888888888', captureFrameSha256: 'c'.repeat(64), coordinateFrame: 'canonical-world-metres' as const };
+      props.onStateChange?.({ registry: { schemaVersion: 'wfc.pf.barrier-registry.v1', scope, registryRevision: '1', state: 'ready', selectedParents: [],
+        snapshot: { snapshotId: '99999999-9999-4999-8999-999999999999', scope, registryRevision: '1', contentSha256: 'd'.repeat(64), mode: 'explicit-empty' }, reasonCodes: [] }, dirty: false, pending: false });
+    }, [props.projectId, props.onStateChange, model]);
+    return null;
+  } };
+});
 vi.mock('./PathFinderRecalculationPanel', () => ({ PathFinderRecalculationPanel: () => null }));
 vi.mock('./PathFinderRevisionResults', async () => {
   const { useEffect } = await import('react');
@@ -318,8 +335,8 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     const user = userEvent.setup(), matched = pf.data.cables[0].fromMatch;
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()], cables: [{ ...pf.data.cables[0], toMatch: matched }] } }); mount();
     expect(pf.calculate).not.toHaveBeenCalled(); expect(screen.queryByRole('checkbox', { name: 'Automatically calculate ready cables' })).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Calculate non-MV cables' })); expect(pf.calculate).toHaveBeenLastCalledWith([pf.data.cables[0].id], true, { secondaryDistanceMeters: 2, preferVerticalApproach: true });
-    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Calculate selected cable' })); expect(pf.calculate).toHaveBeenLastCalledWith([pf.data.cables[0].id], true, { secondaryDistanceMeters: 2, preferVerticalApproach: true });
+    await user.click(screen.getByRole('button', { name: 'Calculate non-MV cables' })); expect(pf.calculate).toHaveBeenLastCalledWith([pf.data.cables[0].id], true, expect.objectContaining({ secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting: expect.objectContaining({ drillThroughWalls: false }) }));
+    await user.click(screen.getByRole('button', { name: /=CABLE-1/ })); await user.click(screen.getByRole('button', { name: 'Calculate selected cable' })); expect(pf.calculate).toHaveBeenLastCalledWith([pf.data.cables[0].id], true, expect.objectContaining({ secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting: expect.objectContaining({ drillThroughWalls: false }) }));
   });
   it('previews exact ordered lookup and reverse with unchanged cable labels and the read-only project gap', async () => {
     const user = userEvent.setup(), forwardId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', reverseId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -396,7 +413,7 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     const startPreview = vi.fn().mockResolvedValueOnce(forwardId).mockResolvedValueOnce(reverseId), readPreview = vi.fn(async (id: string) => preview(id, id === reverseId)), showPath = vi.fn(async () => 'displayed');
     vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] }, startPreview, readPreview, showPath }); mount();
     await user.type(screen.getByRole('textbox', { name: 'Path From location' }), 'EQ-001'); await user.type(screen.getByRole('textbox', { name: 'Path To location' }), 'EQ-002'); await user.click(screen.getByRole('button', { name: 'Calculate path' }));
-    expect(startPreview).toHaveBeenNthCalledWith(1, { from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: false, secondaryDistanceMeters: 2, preferVerticalApproach: true });
+    expect(startPreview).toHaveBeenNthCalledWith(1, expect.objectContaining({ from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: false, secondaryDistanceMeters: 2, preferVerticalApproach: true, barrierRouting: expect.objectContaining({ drillThroughWalls: false }) }));
     await screen.findByText('Path calculation complete'); await waitFor(() => expect(showPath).toHaveBeenCalledWith({ pathId: forwardId, points: [[1, 2, 3], [4, 5, 6]], objectIds: [23] }));
     await user.click(screen.getByRole('button', { name: 'Reverse path' })); await screen.findByText(/Original endpoints: From EQ-001; To EQ-002. Reverse preview/);
     expect(startPreview).toHaveBeenLastCalledWith(expect.objectContaining({ from: { name: 'EQ-001' }, to: { name: 'EQ-002' }, category: 'LV', reverse: true }));
@@ -595,6 +612,37 @@ describe('admin PathFinder interface', { timeout: 60_000 }, () => {
     await user.click(screen.getByRole('tab', { name: 'Path lookup' })); await user.type(screen.getByRole('textbox', { name: 'Path Finder ordered route' }), '/DRAFT'); await user.click(screen.getByRole('button', { name: 'Show route' }));
     await user.click(screen.getByRole('tab', { name: 'Path' })); await act(async () => finish(id)); expect(pf.action).toHaveBeenCalledWith(`/jobs/${id}`, undefined, 'DELETE'); expect(pf.readLookup).not.toHaveBeenCalled();
     await user.click(screen.getByRole('tab', { name: 'Path lookup' })); expect(screen.getByRole('textbox', { name: 'Path Finder ordered route' })).toHaveValue('/DRAFT'); expect(screen.queryByRole('region', { name: 'Ordered lookup result' })).toBeNull();
+  });
+  it('defaults drilling off and freezes its explicit value into each submitted cable calculation', async () => {
+    const user = userEvent.setup(); vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, artifacts: [artifact()] } }); mount();
+    const checkbox = screen.getByRole('checkbox', { name: 'Drill through the walls' });
+    expect(checkbox).not.toBeChecked();
+    await user.click(checkbox); expect(checkbox).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Calculate non-MV cables' }));
+    const submitted = (pf.calculate.mock.calls as unknown[][]).at(-1)?.[2];
+    expect(submitted).toMatchObject({ barrierRouting: { drillThroughWalls: true, expectedRegistryRevision: '1', expectedSnapshot: { mode: 'explicit-empty' } } });
+    await user.click(checkbox); expect(checkbox).not.toBeChecked();
+    expect(submitted).toMatchObject({ barrierRouting: { drillThroughWalls: true } });
+    await user.click(screen.getByRole('button', { name: 'Calculate non-MV cables' }));
+    expect((pf.calculate.mock.calls as unknown[][]).at(-1)?.[2]).toMatchObject({ barrierRouting: { drillThroughWalls: false } });
+  });
+  it('starts a changed model selection with drilling off instead of inheriting the previous choice', async () => {
+    const user = userEvent.setup(), view = mount();
+    await user.click(screen.getByRole('checkbox', { name: 'Drill through the walls' }));
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).toBeChecked();
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, data: { ...pf.data, activeModel: { ...pf.data.activeModel, selectionRevision: '3' } } });
+    view.rerender(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
+    vi.mocked(usePathFinder).mockReturnValue(pf);
+    view.rerender(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
+  });
+  it('resets drilling after a same-model Viewer reload without reviving a previous enabled choice', async () => {
+    const user = userEvent.setup(), view = mount();
+    await user.click(screen.getByRole('checkbox', { name: 'Drill through the walls' }));
+    vi.mocked(usePathFinder).mockReturnValue({ ...pf, preparationViewerGeneration: 2 });
+    view.rerender(<PathFinderTab projectId={projectId} loadedProjectId={projectId} token="isolated-test-token" accountId={accountId} isAdmin />);
+    expect(screen.getByRole('checkbox', { name: 'Drill through the walls' })).not.toBeChecked();
   });
   it('clears completed lookup display on a project revision change even when the gap value returns unchanged', async () => {
     const user = userEvent.setup(), id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

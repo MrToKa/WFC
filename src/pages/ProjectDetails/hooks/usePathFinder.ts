@@ -12,6 +12,8 @@ export type ProjectPreparationViewer = {
   readSelection: ViewerController['readSelection'];
   discover: (request: PreparationDiscoveryRequest) => Promise<PreparationDiscoveryPage>;
   capture: (request: ModelCaptureRequest) => ReturnType<ViewerController['captureModel']>;
+  captureBarriers: (request: Parameters<ViewerController['captureBarriers']>[0]) => ReturnType<ViewerController['captureBarriers']>;
+  publishBarriers: (intentId: string, observation: Parameters<ViewerController['publishBarriers']>[1]) => ReturnType<ViewerController['publishBarriers']>;
   assertCurrent: () => void;
 };
 
@@ -271,6 +273,8 @@ export function usePathFinder({ projectId, loadedProjectId, token, isAdmin, cont
         readSelection:async()=>{current();const result=await run.viewer!.readSelection();current();return result;},
         discover: async request => { current(); const page = await run.viewer!.discoverPreparationObjects(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return page; },
         capture: async request => { current(); const capture = await run.viewer!.captureModel(request, progress => captureProgress(run, () => `Collecting project geometry: ${progress.index + 1} data batches…`), { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
+        captureBarriers: async request => { current(); update(run, { viewerMessage: 'Reading selected barrier geometry…' }); const capture = await run.viewer!.captureBarriers(request, { signal: combined, isCurrent: () => { try { current(); return true; } catch { return false; } } }); current(); return capture; },
+        publishBarriers: async (intentId, observation) => { current(); const receipt = await run.viewer!.publishBarriers(intentId, observation, combined); current(); return receipt; },
       });
       current(); return value;
     } finally {

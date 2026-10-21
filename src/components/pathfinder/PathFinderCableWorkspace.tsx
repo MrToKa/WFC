@@ -3,6 +3,7 @@ import { Button, Portal } from '@fluentui/react-components';
 import { requestFloatingCableWindow, type FloatingCableWindowRequest } from '@/hooks/useFloatingCablePanel';
 import { useCableInformationPanelStyles } from '@/pages/ProjectDetails/CableInformationPanel.styles';
 import type { PathFinderPreferences } from '@/api/pathfinder';
+import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
 import { fetchPathFinderCableWorkflowDetail, type CableWorkflowRow } from '@/api/pathfinderCableWorkflow';
 import { fetchLocationImpacts } from '@/api/pathfinderLocationImpacts';
 import type { CableEndpointReceipt } from '@/api/pathfinderCableEndpoints';
@@ -59,6 +60,7 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   const lastCalculation = useRef(''), lastWrite = useRef('');
   const lastExternalRefresh = useRef(props.refreshKey);
   const model = props.pf.data?.activeModel, preferences = props.preferences;
+  const barrierPreferenceKey = JSON.stringify(preferences?.barrierRouting);
   const enabled = props.active && props.pf.viewerPhase === 'ready' && Boolean(preferences && model?.modelVersionId);
   const calculation = preferences ? { preferences, timeoutMilliseconds: 120000 } : null;
   const authorityLost = useCallback(() => callbacks.current.pf.refresh(), []);
@@ -93,16 +95,18 @@ function OwnedWorkspace(props: PathFinderCableWorkspaceProps & { owner: string }
   // Its original authority is never renewed by this GET or a browser reload.
   useEffect(() => {
     if (!enabled || impact || !props.projectId || !props.token || !props.accountId || !preferences) return;
+    const expectedBarrierIntent: unknown = barrierPreferenceKey === undefined ? undefined : JSON.parse(barrierPreferenceKey);
     const ticket = new AbortController(); historyRead.current = ticket;
     void fetchLocationImpacts(props.projectId, props.token, props.accountId, { limit: 25 }, ticket.signal).then(page => {
       if (!alive.current || ticket.signal.aborted || historyRead.current !== ticket) return;
       const found = page.impacts.find(item => item.modelVersionId === model?.modelVersionId && item.selectionRevision === model?.selectionRevision
         && item.contentFingerprint === model?.contentFingerprint && item.calculation?.preferences.secondaryDistanceMeters === preferences.secondaryDistanceMeters
-        && item.calculation.preferences.preferVerticalApproach === preferences.preferVerticalApproach);
+        && item.calculation.preferences.preferVerticalApproach === preferences.preferVerticalApproach
+        && sameBarrierAdmissionIntent((item.calculation.preferences as PathFinderPreferences).barrierRouting, expectedBarrierIntent));
       if (found) setImpact({ id: found.id, current: found.current, calculation: found.calculation, originCableId: null });
     }).catch(() => { /* Explicit progress refresh remains available; no automatic retry storm. */ });
     return () => { ticket.abort(); if (historyRead.current === ticket) historyRead.current = null; };
-  }, [enabled, impact, props.projectId, props.token, props.accountId, model?.modelVersionId, model?.selectionRevision, model?.contentFingerprint, preferences?.secondaryDistanceMeters, preferences?.preferVerticalApproach]);
+  }, [enabled, impact, props.projectId, props.token, props.accountId, model?.modelVersionId, model?.selectionRevision, model?.contentFingerprint, preferences?.secondaryDistanceMeters, preferences?.preferVerticalApproach, barrierPreferenceKey]);
   const calculationChanged = useCallback((value: NonNullable<ReturnType<typeof usePathfinderLocationImpactProgress>['impact']>) => {
       const key = JSON.stringify([value.id, value.status, value.completed, value.readyCables, value.blockedCables]);
       if (key === lastCalculation.current) return; lastCalculation.current = key;
