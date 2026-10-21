@@ -12,6 +12,7 @@ import { validateRestoreFencing, validateRestoredInventory, validateInventoryEnv
 import {createProducerProfile,assertProducerContainer} from '../pathfinder-background/container-profile.mjs';
 import { assertProducerEnvironment } from './producer-environment.mjs';
 import {localCapacityProfile,assertCapacityEnvironment,capacityProfileTransition,LEGACY_CAPACITY_PROFILE} from './capacity-environment.mjs';
+import {prepareRuntimeImageInstall,imageInstallDigest} from './runtime-image-install.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const DEFAULT_RUNTIME = path.join(ROOT, 'pathfinder-engine/.scratch/pathfinder-local');
@@ -104,6 +105,38 @@ export async function load(runtime = DEFAULT_RUNTIME) {
   const file = path.join(location, 'runtime-state.json'); await assertCanonicalPath(file);
   const raw = await fs.readFile(file); if (raw.length > 1024 ** 2) fail('PF_STATE_LIMIT');
   const state = validateState(JSON.parse(raw), location); await readSettings(state); return state;
+}
+/** Late qualified delivery only. Caller journals BEGIN before entering: the two
+ * individually atomic file replacements are NOT an atomic pair. Any exception
+ * requires inspecting both pins; the operator must never automatically retry. */
+export async function installRuntimeImages(state, options) {
+  validateState(state,state.runtime);
+  if (typeof options?.candidate?.runtime !== 'string' || !path.isAbsolute(options.candidate.runtime)) fail('PF_IMAGE_INSTALL_CANDIDATE_REQUIRED');
+  const candidate = await load(options?.candidate?.runtime);
+  await configuration(state); await configuration(candidate);
+  const previousSettings = await readSettings(state);
+  const resources = await ownership(state); await ownership(candidate);
+  const files = [stateFile(state),path.join(state.runtime,'runtime.env'),stateFile(candidate),path.join(candidate.runtime,'runtime.env')];
+  const bytes = await Promise.all(files.map(async filename => { await assertCanonicalPath(filename); return fs.readFile(filename); }));
+  const inspectedImages = (await Promise.all(['api','web'].map(role => jsonCommand(['image','inspect',options?.images?.[role] ?? 'invalid'])))).flat();
+  const prepared = prepareRuntimeImageInstall({root:ROOT,source:state,candidate,options,sourceStateBytes:bytes[0],sourceEnvBytes:bytes[1],
+    candidateStateBytes:bytes[2],candidateEnvBytes:bytes[3],resources,inspectedImages});
+  const envTemp = path.join(state.runtime,`image-install-${options.operationId}-${randomUUID()}.env`),
+    stateTemp = path.join(state.runtime,`image-install-${options.operationId}-${randomUUID()}.json`);
+  // Retain temporary files on refusal/partial outcome as private evidence.
+  await privateFile(envTemp,prepared.envBytes); await privateFile(stateTemp,prepared.stateBytes);
+  const currentResources = await ownership(state); await ownership(candidate);
+  prepareRuntimeImageInstall({root:ROOT,source:state,candidate,options,sourceStateBytes:bytes[0],sourceEnvBytes:bytes[1],
+    candidateStateBytes:bytes[2],candidateEnvBytes:bytes[3],resources:currentResources,inspectedImages});
+  const expected = [options.expectedStateSha256,options.expectedEnvSha256,options.expectedCandidateStateSha256,options.expectedCandidateEnvSha256];
+  for (let at=0;at<files.length;at++) { await assertCanonicalPath(files[at]); if ((await hashFile(files[at])).sha256 !== expected[at]) fail('PF_IMAGE_INSTALL_CAS_CHANGED'); }
+  await fs.rename(envTemp,files[1]); await fs.rename(stateTemp,files[0]);
+  const expectedFinal=[imageInstallDigest(prepared.stateBytes),imageInstallDigest(prepared.envBytes)];
+  for (let at=0;at<2;at++) { await assertCanonicalPath(files[at]); if ((await hashFile(files[at])).sha256 !== expectedFinal[at]) fail('PF_IMAGE_INSTALL_FINAL_PAIR_CHANGED'); }
+  const finalState=await load(state.runtime),finalSettings=await readSettings(finalState);
+  if (canonical(finalState)!==canonical(prepared.state) || canonical(finalSettings)!==canonical({...previousSettings,apiImage:options.images.api,webImage:options.images.web})) fail('PF_IMAGE_INSTALL_FINAL_SETTINGS_CHANGED');
+  Object.assign(state,prepared.state);
+  return {status:'PASS',operationId:options.operationId,images:{...options.images},stateSha256:imageInstallDigest(prepared.stateBytes),envSha256:state.envSha256};
 }
 export async function init({ runtime = DEFAULT_RUNTIME, project = 'wfc-pathfinder-local', port = 5190 } = {}) {
   const location = path.resolve(runtime); if (!contained(path.join(ROOT, 'pathfinder-engine/.scratch'), location)) fail('PF_RUNTIME_OUTSIDE_SCRATCH');

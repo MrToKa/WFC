@@ -1,6 +1,30 @@
 # PathFinder local implementation progress
 
-## Current: PF-B8b technically verified; execute PF-B9 immediately
+## Current: PF-B9 ACTIVE — source controls and migration qualifier
+
+Branch pf-b9-barrier-delivery-local-20261021; base b4c1f56b49a09e3a2be79ba14d3d50c851bc98af.
+Root owns shared foundations, docs/Git and ALL actual builds/tests/Docker/SQL/HTTP.
+A owns new v3 operator/runtime helper; B migration qualifier; C read-only review.
+B9 controls: foundations168PASS; revised operator/foundations52PASS (overlap).
+Initial operator48PASS/4FAIL retained: explicit mounted-module seed + Windows temp
+canonical fixture fixed; production guards unchanged. PG18 readonly catalog5
+PASS:442relations/59routines/2sequences/1view/0unsupported. Earlier42725 SQL and
+unsupported-view diagnostic failures retained. No B9 backup/build/runtime mutation.
+Readonly quiescence FAIL:8historical preparations +1enabled grant; all job/import/
+impact/initial-fill/recalculation/current-lease counts0. Source-only audit now
+distinguishes passive records from runnable authority; no rows cancelled/changed.
+Draft scratch: .scratch/barrier-delivery-20261021-9f5058f3-8408-4a36-8592-dd46d90e6742.
+Actual one-shot execution will use a fresh absent operation directory.
+Report92 ACTIVE. Final combinedcontrols3:99PASS; source-onlyindependentreviewclear.
+Actualbackup-mode diagnosticPASS retains8expiredpassivehumanrows+1persistentgrant,
+sourceUpgradeAuthorized=false. Validissuergrant stillBLOCKSsourceupgrade; never
+treatasexpired orwaiveprotectedruntimegate. No grant/schedule changes.
+Freshoperation next: .scratch/barrier-delivery-55c9f2e7-c53d-4ef1-ad92-26f14ed2aa3e.
+Executeinit/backup/restore/candidate/targetgates ONLY; sourceupdateheld.
+Included buildcontext/docs nowfreeze throughcandidatebuild; write runtimeprogress
+onlyunderexcludedownscratch untilcandidatebuildcompleted.
+
+## PF-B8b technically verified baseline
 
 B8b product `985afcd9ab3d0423d9352f999757a9f46fcce023` on
 `pf-b8b-snapshot-memory-local-20261021`, inheriting38e4f20. Report91 and public
