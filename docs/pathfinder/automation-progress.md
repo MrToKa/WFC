@@ -1,6 +1,6 @@
 # PathFinder local implementation progress
 
-## Current: PF-B11 saved obstacle persistence ACTIVE; PF-B10 delivered
+## Current: PF-B11 cable actions/obstacle display technically delivered
 
 Branch pf-b11-saved-obstacles-local-20261022 inherits e171c6a. Executing committed
 handoff PF-B11-saved-obstacle-persistence.md immediately. C owns barrier API/hook/
@@ -13,13 +13,18 @@ remains queued; its supervisor independent source review proceeds in parallel.
 Latest user steering: popup cannot Save/Recalculate. A owns Results/Tab4 files,
 B Workspace/RoutingPanel4, C barrier API/hook/panel6. Repair comparison reads and
 popup reasons/configuration navigation without bypassing exact barrier/write
-proof. New tests/build/delivery pending; user cable actions take priority.
+proof. Technical delivery now PASS; user cable actions retained priority.
 Frozen source root checks nowPASS:110barrier/API/list +68Workspace/popup +13targeted
 Results/Tab (166unselected; earlier6overlap),16webplanner; fulltypecheck+targeted
 productionlint0warnings+diffcheckPASS. Independent source reviewCLEAR. Root
 read-only actualAalborg headabsent/parents0; both illustratedcable jobscomplete,
 existingRouting/Design present, historicalv7/no barrierproof. No valuewipe or
-automaticDrill/empty. Next productcommit/web-only build/install; keepAPIsame.
+automaticDrill/empty. Product77bbcf80d8a0e14bb20e687a8ddb5f2b9c0b1bfa built/installedPASS. Newweb75187b0a,
+health/index/asset200 and nonweb conservationPASS; SAME running API ac0d16ab.
+New archive/private rollback/evidence retained. Actualbrowser/civilcapture/manual
+acceptance remainBLOCKED/NOT_RUN. Usermustpublishcurrentbarriers and recalculate
+historicalv7 beforeReviewApply. Next prepare/execute SP-0 diagnostic handoff; main
+5180 remains untouched and stoppedoriginalPG must not be started forbackup.
 
 ## Previous: PF-B10 cable workspace repair technically delivered
 

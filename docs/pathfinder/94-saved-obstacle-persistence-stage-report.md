@@ -1,4 +1,4 @@
-# PF-B11 — saved obstacle display and refresh (ACTIVE)
+# PF-B11 — saved obstacle display and refresh (TECHNICALLY DELIVERED)
 
 User steering during implementation adds an immediate cable-action repair:
 saved path30m/66m is visible but Calculate/Save and comparison are disabled. Source
@@ -61,3 +61,18 @@ old aeca pair. API remains running, no migration/data change. Actual browser,
 civil/opening capture and manual engineering acceptance remain BLOCKED/NOT_RUN.
 Next: local product commit, web-only build and qualified replacement, record exact receipts, then resume
 the already-authorized Simplified Preparer work from its unfinished SP-0 gate.
+
+## Technical delivery
+
+Product 77bbcf80d8a0e14bb20e687a8ddb5f2b9c0b1bfa built and installed PASS at2026-10-21T23:47:49.001Z.
+Web sha256:75187b0aee5f0c1ed361ddcf1a1765af50467c2fb7098a5210a356eefa3aee5e; public health/index/asset200, exact nonweb
+resource conservation and SAME running API container PASS. New image archive
+55347200bytes/SHAe20672bfd2e20a9c1d3e1c0fc40a105239b46d0d7e9343ef7a7451d221a1c62b retained with private
+old state/env and exact immutable install receipt. No root DB/model/cable writes
+or API restart. Public receipt evidence/cable-workspace/b11-delivery.json.
+Saved obstacle reload and display-only comparison verified through stated tests;
+actual5191 browser and civil capture/manual engineering acceptance remain BLOCKED/NOT_RUN.
+User must publish an actual current obstacle set (or explicitly choose drilling)
+and recalculate historicalv7 results before Review/Apply; no acceptance fabricated.
+Next useful independent task: resume Preparer SP-0 baseline diagnostics from the
+actual incomplete296f8fde receipt in the separate Preparer worktree.

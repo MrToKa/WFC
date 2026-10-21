@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "wfc.pf.b11-delivery-evidence.v1",
+  "status": "PASS",
+  "operationId": "b77e34b6-f136-4c31-9da4-b0cc532ca043",
+  "at": "2026-10-21T23:47:49.001Z",
+  "productRevision": "77bbcf80d8a0e14bb20e687a8ddb5f2b9c0b1bfa",
+  "webImage": "sha256:75187b0aee5f0c1ed361ddcf1a1765af50467c2fb7098a5210a356eefa3aee5e",
+  "apiImage": "sha256:ac0d16ab1b0f4c92922c20d1a13a5ea142d4c6e92558de1870daf4db7fd60fcf",
+  "apiSameRunningContainer": true,
+  "sourcePort": 5191,
+  "http": {
+    "health": 200,
+    "index": {
+      "bytes": 955,
+      "sha256": "362dee077e7c0f029d8a2f633d41f06e41233bac9d52740d1ba7eb67776fce2a"
+    },
+    "asset": {
+      "path": "/assets/index-BY9ne-2G.js",
+      "bytes": 716405,
+      "sha256": "f0da91fe781223b1fce5a329c183d44a9381eea516dc4fb36e7a3c7436c291e7"
+    }
+  },
+  "imageArchive": {
+    "bytes": 55347200,
+    "sha256": "e20672bfd2e20a9c1d3e1c0fc40a105239b46d0d7e9343ef7a7451d221a1c62b"
+  },
+  "privateReceiptSha256": "2c4c37f9522370fd2412df1620a5ac4cfbeb969005b4c4afed865829db1bcab2",
+  "validation": {
+    "barrierAndList": 110,
+    "workspacePanel": 68,
+    "tabResults": 13,
+    "intentionallyUnselected": 166,
+    "webPlanner": 16,
+    "typecheck": "PASS",
+    "productionLint": "PASS",
+    "lintWarnings": 0,
+    "independentSourceReview": "CLEAR"
+  },
+  "actualMetadata": {
+    "barrierHeadPresent": false,
+    "savedParentCount": 0,
+    "currentAggregatePresent": true,
+    "illustratedSamples": 2,
+    "bothJobsComplete": true,
+    "bothHaveStoredRoutingAndDesign": true,
+    "dependencyVersion": "pathfinder.dependencies.v7",
+    "bothHaveBarrierIntent": false
+  },
+  "browser": "BLOCKED",
+  "civilEngineeringAcceptance": "NOT_RUN",
+  "rootDatabaseWrites": false
+}
