@@ -6,20 +6,36 @@ using System.Text.Json.Nodes;
 
 namespace PathFinder.RunnerSession.Tests;
 
-internal static class TestProgram
+internal static partial class TestProgram
 {
     private static readonly List<object> Checks = [];
     private static int failures;
     private static void Check(string label, bool pass, object? detail = null) { Checks.Add(new { label, status = pass ? "PASS" : "FAIL", detail }); if (!pass) failures++; }
     private static async Task<int> Main(string[] args)
     {
+        if (args is ["--worker-memory-probe"])
+        {
+            Console.WriteLine(JsonSerializer.Serialize(new { schemaVersion = "wfc.pf.worker-memory-probe.v1",
+                gcTotalAvailableMemoryBytes = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes }));
+            return 0;
+        }
+        if (args is ["--memory-phase-probe", var phaseRoot])
+        {
+            if (!Path.IsPathFullyQualified(phaseRoot) || !Directory.Exists(phaseRoot)) return 2;
+            Environment.SetEnvironmentVariable("PF_ROOT", phaseRoot);
+            for (var index = 0; index < 40; index++) PreparationMemoryTrace.Observe(PathFinder.Model.PreparationMemoryPhase.BeforeQuery);
+            return 0;
+        }
         if (args is ["--emit-corpus", var corpus]) { Console.WriteLine(Corpus.Emit(Path.GetFullPath(corpus))); return 0; }
         if (args is not ["--runner", var runner, "--work-root", var work] || !Path.IsPathFullyQualified(runner) || !Path.IsPathFullyQualified(work) || Directory.Exists(work)) return 2;
         Directory.CreateDirectory(work); var manifest = Corpus.Emit(Path.Combine(work, "corpus"));
         try
         {
             await Protocol();
+            await WorkerMemoryPolicyChecks();
             using var doc = JsonDocument.Parse(File.ReadAllBytes(manifest));
+            await CheckedPreparation(runner, Path.GetDirectoryName(manifest)!, Path.Combine(work, "checked-preparation"),
+                doc.RootElement.GetProperty("cases")[0].GetProperty("request"));
             Process? session = null; var ordinal = 0; var observedPids = new HashSet<int>();
             try
             {

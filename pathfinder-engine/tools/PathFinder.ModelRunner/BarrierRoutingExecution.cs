@@ -7,11 +7,11 @@ using PathFinder.Model;
 
 internal static partial class Program
 {
-    private static object ExecuteBarrierRoute(Request request, string root, ModelSnapshot snapshot, PreparedModel prepared,
+    private static object ExecuteBarrierRoute(Request request, string root, ModelIdentity model, PreparedModel prepared,
         object summary, RoutingOptions options, CancellationToken token, SessionExecutionContext? session)
     {
         var context = BarrierContext(request);
-        if (snapshot.Model.ContentSha256 != BarrierString(context.Scope, "contentFingerprint")) throw new ArgumentException("Barrier scope and planning model content fingerprints differ.");
+        if (model.ContentSha256 != BarrierString(context.Scope, "contentFingerprint")) throw new ArgumentException("Barrier scope and planning model content fingerprints differ.");
         PreparedBarriers barriers;
         try { barriers = LoadBarriers(root, context, session, token); }
         catch (BarrierQualificationException error) { return BarrierFailure(request, context, "no_path", "BARRIER_QUALIFICATION_REFUSED", error.Message); }
@@ -111,7 +111,7 @@ internal static partial class Program
         };
         var result = new Dictionary<string, object?> { ["schemaVersion"] = "pathfinder.model.response.v3", ["requestId"] = request.RequestId,
             ["status"] = status, ["message"] = status == "settings_required" ? "Project Details SECONDARY length is required." : route.Message,
-            ["model"] = snapshot.Model, ["prepared"] = summary, ["effectiveCategory"] = category.ToString(), ["route"] = route,
+            ["model"] = model, ["prepared"] = summary, ["effectiveCategory"] = category.ToString(), ["route"] = route,
             ["design"] = design, ["projectSettings"] = settings, ["engineeringAccepted"] = false, ["lookupScope"] = null,
             ["usedConnectionGapMeters"] = null, ["barriers"] = execution };
         if (ledger is not null) result.Add("lengthLedger", ledger);

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -8,6 +9,7 @@ namespace PathFinder.Model;
 
 public static class SnapshotReader
 {
+    private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     public static JsonSerializerOptions JsonOptions { get; } = Options();
     private static JsonSerializerOptions Options()
     {
@@ -20,21 +22,31 @@ public static class SnapshotReader
         value.MakeReadOnly(); return value;
     }
     public static ModelSnapshot Read(ReadOnlyMemory<byte> bytes, ModelLimits? limits = null, CancellationToken cancellation = default)
+        => ReadWithPhases(bytes, limits, cancellation, null);
+
+    internal static ModelSnapshot ReadWithPhases(ReadOnlyMemory<byte> bytes, ModelLimits? limits,
+        CancellationToken cancellation, Action<PreparationMemoryPhase>? observe)
     {
         limits ??= new();
         cancellation.ThrowIfCancellationRequested();
         if (bytes.Length == 0 || bytes.Length > limits.MaximumBytes) throw new ArgumentException("Snapshot byte budget exceeded.");
-        using (var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64 }))
-        {
-            RejectDuplicates(document.RootElement, cancellation);
-            if (document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty("objects", out var objects) && objects.ValueKind == JsonValueKind.Array)
-                foreach (var item in objects.EnumerateArray())
-                    if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("equipmentEligibility", out var eligibility) && eligibility.ValueKind == JsonValueKind.Null)
-                        throw new ArgumentException("Optional equipment display eligibility must be absent or a complete record, never null.");
-        }
+        Observe(observe, PreparationMemoryPhase.BeforeTokenValidation);
+        ValidateJsonTokens(bytes, cancellation);
+        Observe(observe, PreparationMemoryPhase.AfterTokenValidation);
+        Observe(observe, PreparationMemoryPhase.BeforeTypedDeserialize);
         var snapshot = JsonSerializer.Deserialize<ModelSnapshot>(bytes.Span, JsonOptions) ?? throw new ArgumentException("Snapshot cannot be null.");
+        Observe(observe, PreparationMemoryPhase.AfterTypedDeserialize);
+        Observe(observe, PreparationMemoryPhase.BeforeSemanticValidation);
         Validate(snapshot, limits, cancellation);
+        Observe(observe, PreparationMemoryPhase.AfterSemanticValidation);
         return snapshot;
+    }
+
+    private static void Observe(Action<PreparationMemoryPhase>? observe, PreparationMemoryPhase phase)
+    {
+        // Diagnostics cannot change snapshot admission or expose snapshot data.
+        try { observe?.Invoke(phase); }
+        catch (Exception) { }
     }
     public static string Sha256(ReadOnlySpan<byte> bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
@@ -270,18 +282,90 @@ public static class SnapshotReader
     {
         if (value is null || value.Length != 64 || value.Any(c => !char.IsAsciiHexDigit(c)) || value != value.ToLowerInvariant()) throw new ArgumentException("Invalid lowercase SHA256.");
     }
-    private static void RejectDuplicates(JsonElement element, CancellationToken cancellation)
+    private enum JsonScope : byte { Object, Array, RootObject, ObjectsArray, SnapshotObject }
+    private struct JsonFrame
     {
-        cancellation.ThrowIfCancellationRequested();
-        if (element.ValueKind == JsonValueKind.Object)
+        internal JsonScope Scope;
+        internal HashSet<string>? Names;
+        internal string? Property;
+    }
+    /** Utf8JsonReader can defer decoding string values. Validate the complete
+     * original UTF-8 without constructing a string, including unknown/scalar
+     * fields that strict DTO deserialization will subsequently reject. */
+    private static void ValidateUtf8(ReadOnlyMemory<byte> bytes, CancellationToken cancellation)
+    {
+        const int chunkBytes = 65536;
+        for (int offset = 0; offset < bytes.Length;)
         {
-            var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var property in element.EnumerateObject())
+            cancellation.ThrowIfCancellationRequested();
+            int length = Math.Min(chunkBytes, bytes.Length - offset);
+            // One look-ahead byte locates a possibly split code point. A valid
+            // UTF-8 scalar has at most three continuation bytes; each resulting
+            // chunk is checked by the standard strict decoder, never repaired.
+            var window = bytes.Slice(offset, Math.Min(chunkBytes + 1, bytes.Length - offset)).Span;
+            cancellation.ThrowIfCancellationRequested();
+            if (offset + length < bytes.Length)
             {
-                if (!names.Add(property.Name)) throw new ArgumentException("Duplicate JSON property.");
-                RejectDuplicates(property.Value, cancellation);
+                int back = 0;
+                while (back < 3 && (window[length] & 0xc0) == 0x80) { length--; back++; }
+            }
+            try { _ = StrictUtf8.GetCharCount(window[..length]); }
+            catch (DecoderFallbackException error) { throw new JsonException("Snapshot contains invalid UTF-8.", error); }
+            offset += length;
+            cancellation.ThrowIfCancellationRequested();
+        }
+    }
+    /** Keep only open-container state. Numeric vertices/indices and scalar values
+     * never become a second DOM; decoded property names exist only for currently
+     * open objects and are released when their end token is consumed. */
+    private static void ValidateJsonTokens(ReadOnlyMemory<byte> bytes, CancellationToken cancellation)
+    {
+        ValidateUtf8(bytes, cancellation);
+        var reader = new Utf8JsonReader(bytes.Span, new JsonReaderOptions {
+            MaxDepth = 64, AllowTrailingCommas = false, CommentHandling = JsonCommentHandling.Disallow,
+        });
+        var frames = new JsonFrame[64]; int depth = 0;
+        while (reader.Read())
+        {
+            cancellation.ThrowIfCancellationRequested();
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.StartObject:
+                case JsonTokenType.StartArray:
+                {
+                    if (depth == frames.Length) throw new JsonException("Snapshot JSON depth exceeds its budget.");
+                    var parent = depth == 0 ? default : frames[depth - 1];
+                    var scope = reader.TokenType == JsonTokenType.StartObject
+                        ? depth == 0 ? JsonScope.RootObject : parent.Scope == JsonScope.ObjectsArray ? JsonScope.SnapshotObject : JsonScope.Object
+                        : parent.Scope == JsonScope.RootObject && parent.Property == "objects" ? JsonScope.ObjectsArray : JsonScope.Array;
+                    if (depth > 0) frames[depth - 1].Property = null;
+                    frames[depth++] = new JsonFrame { Scope = scope,
+                        Names = reader.TokenType == JsonTokenType.StartObject ? new HashSet<string>(StringComparer.Ordinal) : null };
+                    break;
+                }
+                case JsonTokenType.EndObject:
+                case JsonTokenType.EndArray:
+                    frames[--depth] = default;
+                    break;
+                case JsonTokenType.PropertyName:
+                {
+                    ref var current = ref frames[depth - 1];
+                    string name = reader.GetString()!;
+                    if (!current.Names!.Add(name)) throw new ArgumentException("Duplicate JSON property.");
+                    current.Property = name;
+                    break;
+                }
+                default:
+                    if (depth > 0)
+                    {
+                        ref var current = ref frames[depth - 1];
+                        if (reader.TokenType == JsonTokenType.Null && current.Scope == JsonScope.SnapshotObject && current.Property == "equipmentEligibility")
+                            throw new ArgumentException("Optional equipment display eligibility must be absent or a complete record, never null.");
+                        current.Property = null;
+                    }
+                    break;
             }
         }
-        else if (element.ValueKind == JsonValueKind.Array) foreach (var value in element.EnumerateArray()) RejectDuplicates(value, cancellation);
+        cancellation.ThrowIfCancellationRequested();
     }
 }

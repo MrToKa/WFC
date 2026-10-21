@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 using AddinRibbon.Routing;
 
 namespace PathFinder.Model;
@@ -14,48 +15,200 @@ public sealed class FittedModelCache
     public const string EngineVersion = "45c24bf5f433f13e102600b36f20327c77961d0a";
     private readonly string root;
     private readonly ModelLimits limits;
+    private readonly Action<PreparationMemoryPhase>? observer;
     private readonly object gate = new();
     private readonly Dictionary<string, PreparedModel> memory = new(StringComparer.Ordinal);
     private readonly Queue<string> order = new();
 
-    public FittedModelCache(string ownedCacheDirectory, ModelLimits? limits = null)
+    public FittedModelCache(string ownedCacheDirectory, ModelLimits? limits = null, Action<PreparationMemoryPhase>? observer = null)
     {
         this.limits = limits ?? new();
+        this.observer = observer;
         if (this.limits.MaximumCachedModels < 1 || this.limits.MaximumBytes < 1024) throw new ArgumentException("Invalid cache resource limits.");
         root = Path.GetFullPath(ownedCacheDirectory);
         Directory.CreateDirectory(root);
         if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) throw new ArgumentException("Cache root cannot be a reparse point.");
     }
 
+    private void Observe(PreparationMemoryPhase phase)
+    {
+        try { observer?.Invoke(phase); } catch { /* Optional diagnostics never alter calculation or validation. */ }
+    }
+
     public PreparedModel GetOrBuild(ReadOnlyMemory<byte> snapshotJson, ModelBuildRules? rules = null, CancellationToken cancellation = default)
     {
         cancellation.ThrowIfCancellationRequested();
         if (snapshotJson.Length == 0 || snapshotJson.Length > limits.MaximumBytes) throw new ArgumentException("Snapshot byte budget exceeded.");
+        // This legacy public API accepts caller-owned memory. Detach before hash
+        // and validation so it cannot populate a fitted entry under other bytes.
+        var owned = new byte[snapshotJson.Length];
+        for (var offset = 0; offset < owned.Length; offset += 65536)
+        { cancellation.ThrowIfCancellationRequested(); snapshotJson.Span.Slice(offset, Math.Min(65536, owned.Length - offset)).CopyTo(owned.AsSpan(offset)); }
+        var sha256 = SnapshotReader.Sha256(owned);
+        Observe(PreparationMemoryPhase.BeforeStrictParse);
+        var snapshot = SnapshotReader.ReadWithPhases(owned, limits, cancellation, observer);
+        Observe(PreparationMemoryPhase.StrictParse);
+        var checkedInput = new CheckedModelSnapshot(snapshot, sha256, sha256, limits, false);
+        return GetOrBuildChecked(checkedInput, rules, cancellation);
+    }
+
+    /// <summary>Read one exact regular source file into one private buffer. File
+    /// bytes are never returned to a caller and no claimed SHA authorizes them.</summary>
+    public VerifiedSnapshotSource ReadSourceFile(string filename, string expectedSha256, CancellationToken cancellation = default)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (!Path.IsPathFullyQualified(filename)) throw new ArgumentException("An absolute snapshot path is required.");
+        var before = new FileInfo(filename); before.Refresh();
+        if (!before.Exists || (before.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0
+            || before.Length < 1 || before.Length > limits.MaximumBytes) throw new ArgumentException("Snapshot is missing or exceeds the byte budget.");
+        long length = before.Length; var written = before.LastWriteTimeUtc; var created = before.CreationTimeUtc;
+        using var input = new FileStream(filename, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
+        if (input.Length != length) throw new IOException("Snapshot changed before reading.");
+        var bytes = new byte[checked((int)length)];
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        for (var offset = 0; offset < bytes.Length;)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            int count = input.Read(bytes.AsSpan(offset, Math.Min(65536, bytes.Length - offset)));
+            if (count == 0) throw new IOException("Snapshot was truncated while reading.");
+            hash.AppendData(bytes, offset, count); offset += count;
+        }
+        cancellation.ThrowIfCancellationRequested();
+        if (input.ReadByte() != -1 || input.Length != length) throw new IOException("Snapshot grew while reading.");
+        var after = new FileInfo(filename); after.Refresh();
+        if (!after.Exists || (after.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0
+            || after.Length != length || after.LastWriteTimeUtc != written || after.CreationTimeUtc != created) throw new IOException("Snapshot file changed while reading.");
+        var sha256 = Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+        if (sha256 != expectedSha256) throw new ArgumentException("Snapshot hash does not match the immutable artifact.");
+        cancellation.ThrowIfCancellationRequested(); Observe(PreparationMemoryPhase.SourceRead); return new(bytes, sha256, limits);
+    }
+
+    public CheckedModelSnapshot ReadCheckedSnapshot(VerifiedSnapshotSource source, string projectId, string modelVersionId,
+        CancellationToken cancellation = default)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (source.Limits != limits) throw new ArgumentException("Snapshot validation limits differ from the fitted cache.");
+        Observe(PreparationMemoryPhase.BeforeStrictParse);
+        var snapshot = SnapshotReader.ReadWithPhases(source.Bytes, limits, cancellation, observer);
+        if (snapshot.Model.ProjectId != projectId || snapshot.Model.ModelVersionId != modelVersionId)
+            throw new ArgumentException("Snapshot project/model identity mismatch.");
+        Observe(PreparationMemoryPhase.StrictParse);
+        return new(snapshot, source.Sha256, source.Sha256, limits, snapshot.Capture.LookupRouteCodes is not null);
+    }
+
+    public PreparedExecution GetOrBuildExecution(CheckedModelSnapshot source, ModelBuildRules? rules = null, CancellationToken cancellation = default)
+    {
+        // Reusable compatibility path. Only the explicitly named transfer below
+        // consumes a token; callers retaining this token retain its checked DTO.
+        var normalized = NormalizeRules(source, rules, cancellation, out var rulesContextSha256);
+        var snapshot = source.Snapshot;
+        ValidateExecutionScope(snapshot, normalized, cancellation);
+        var identity = CacheIdentity(source.Sha256, normalized);
+        while (!Monitor.TryEnter(gate, 50)) cancellation.ThrowIfCancellationRequested();
+        try
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (memory.TryGetValue(identity.Key, out var retained))
+            {
+                var included = retained.Objects.Where(item => item.GeometryRole == "routing-leaf" && item.Visibility is not ("hidden" or "excluded"))
+                    .Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
+                bool required = snapshot.Objects.Any(item => included.Contains(item.Id)
+                    && (item.CategoryAssignmentSource == "unassigned" || item.AllowedCategories.Length == 0));
+                return new(retained, snapshot.Model, source.SourceSha256, source.IndependentLookup, required, source.Scope);
+            }
+        }
+        finally { Monitor.Exit(gate); }
+        return GetOrBuildExecution(ExecutionInput(source, snapshot, normalized, rulesContextSha256, cancellation), cancellation);
+    }
+
+    /// <summary>Explicitly consume one checked token and detach its exact Core
+    /// mesh plus compact metadata before fitting. Limits/rules/lookup/exclusion
+    /// validation and cancellation before the atomic take leave the token valid.
+    /// Once taken, any later failure/cancellation leaves it consumed; a racing
+    /// second transfer cannot acquire the DTO. No fitting happens in this frame.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    public PreparedExecutionInput TransferForExecution(CheckedModelSnapshot source, ModelBuildRules? rules = null,
+        CancellationToken cancellation = default)
+    {
+        var normalized = NormalizeRules(source, rules, cancellation, out var rulesContextSha256);
+        ValidateExecutionScope(source.Snapshot, normalized, cancellation);
+        cancellation.ThrowIfCancellationRequested();
+        var snapshot = source.TakeForExecution();
+        return ExecutionInput(source, snapshot, normalized, rulesContextSha256, cancellation);
+    }
+
+    private ModelBuildRules NormalizeRules(CheckedModelSnapshot source, ModelBuildRules? rules, CancellationToken cancellation, out string rulesContextSha256)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (source.Limits != limits) throw new ArgumentException("Snapshot validation limits differ from the fitted cache.");
         rules ??= new();
-        if (rules.Version != "pf2.rules.v1" || rules.CategoryMappingVersion != "wfc-mto-v1" || rules.ExcludedObjectIds is null
-            || rules.ExcludedObjectIds.Any(string.IsNullOrWhiteSpace) || rules.ExcludedObjectIds.Length > limits.MaximumObjects
-            || rules.ExcludedObjectIds.Distinct(StringComparer.Ordinal).Count() != rules.ExcludedObjectIds.Length)
+        if (rules.ExcludedObjectIds is null || rules.ExcludedObjectIds.Length > limits.MaximumObjects)
             throw new ArgumentException("Unknown rules or invalid exclusion identities.");
-        rules = rules with { ExcludedObjectIds = rules.ExcludedObjectIds.Order(StringComparer.Ordinal).ToArray() };
-        var snapshotHash = SnapshotReader.Sha256(snapshotJson.Span);
+        var captured = rules with { ExcludedObjectIds = rules.ExcludedObjectIds.ToArray() };
+        if (captured.Version != "pf2.rules.v1" || captured.CategoryMappingVersion != "wfc-mto-v1"
+            || captured.ExcludedObjectIds.Any(string.IsNullOrWhiteSpace) || captured.ExcludedObjectIds.Length > limits.MaximumObjects
+            || captured.ExcludedObjectIds.Distinct(StringComparer.Ordinal).Count() != captured.ExcludedObjectIds.Length)
+            throw new ArgumentException("Unknown rules or invalid exclusion identities.");
+        rulesContextSha256 = SnapshotReader.Sha256(JsonSerializer.SerializeToUtf8Bytes(captured, SnapshotReader.JsonOptions));
+        return captured with { ExcludedObjectIds = captured.ExcludedObjectIds.Order(StringComparer.Ordinal).ToArray() };
+    }
+
+    private static void ValidateExecutionScope(ModelSnapshot snapshot, ModelBuildRules rules, CancellationToken cancellation)
+    {
+        if (snapshot.Capture.LookupRouteCodes is not null && snapshot.Objects.Any(item => item.GeometryRole == "routing-leaf" && item.RouteBoundaryId is null))
+            throw new ArgumentException("Independent lookup must resolve its bounded logical-owner scope before fitting geometry.");
+        var objectIdentities = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in snapshot.Objects) { cancellation.ThrowIfCancellationRequested(); objectIdentities.Add(item.Id); }
+        foreach (var excludedId in rules.ExcludedObjectIds)
+        {
+            cancellation.ThrowIfCancellationRequested();
+            if (!objectIdentities.Contains(excludedId)) throw new ArgumentException("Exclusion references unknown object identity.");
+        }
+    }
+
+    // This method must finish before Core fitting on the transfer path. Every
+    // mesh constructor eagerly detaches vertices/indices; no deferred source
+    // enumeration or SnapshotObject is retained in the returned opaque input.
+    private PreparedExecutionInput ExecutionInput(CheckedModelSnapshot source, ModelSnapshot snapshot,
+        ModelBuildRules rules, string rulesContextSha256, CancellationToken cancellation)
+    {
+        var snapshotHash = source.Sha256;
+        var identity = CacheIdentity(snapshotHash, rules);
+        Observe(PreparationMemoryPhase.BeforePrepareInputs);
+        var state = PrepareInputs(snapshot, rules, cancellation);
+        Observe(PreparationMemoryPhase.AfterPrepareInputs);
+        cancellation.ThrowIfCancellationRequested();
+        return new(snapshot.Model, snapshotHash, source.SourceSha256, limits, source.IndependentLookup, source.Scope,
+            identity.Key, identity.RulesHash, rulesContextSha256, state.Inputs, state.Objects, state.Diagnostics, state.NeedsReview, state.RequiresCategoryAssignment);
+    }
+
+    private (string Key, string RulesHash) CacheIdentity(string snapshotHash, ModelBuildRules rules)
+    {
         var rulesHash = SnapshotReader.Sha256(JsonSerializer.SerializeToUtf8Bytes(new { rules, limits }, SnapshotReader.JsonOptions));
         var key = SnapshotReader.Sha256(Encoding.UTF8.GetBytes("pf2.fitted-cache.v1\n" + EngineVersion + "\n" + snapshotHash + "\n" + rulesHash));
+        return (key, rulesHash);
+    }
+
+    private PreparedModel GetOrBuildChecked(CheckedModelSnapshot source, ModelBuildRules? rules, CancellationToken cancellation) =>
+        GetOrBuildExecution(source, rules, cancellation).Prepared;
+
+    public PreparedExecution GetOrBuildExecution(PreparedExecutionInput source, CancellationToken cancellation = default)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (source.Limits != limits) throw new ArgumentException("Snapshot validation limits differ from the fitted cache.");
+        var prepared = GetOrBuildPrepared(source, cancellation);
+        cancellation.ThrowIfCancellationRequested();
+        return new(prepared, source.Model, source.SourceSha256, source.IndependentLookup, source.RequiresCategoryAssignment, source.Scope);
+    }
+
+    private PreparedModel GetOrBuildPrepared(PreparedExecutionInput source, CancellationToken cancellation)
+    {
+        var key = source.Key; var snapshotHash = source.Sha256; var rulesHash = source.RulesHash;
         while (!Monitor.TryEnter(gate, 50)) cancellation.ThrowIfCancellationRequested();
         try
         {
             cancellation.ThrowIfCancellationRequested();
             if (memory.TryGetValue(key, out var hit)) return hit;
-            var snapshot = SnapshotReader.Read(snapshotJson, limits, cancellation);
-            if (snapshot.Capture.LookupRouteCodes is not null && snapshot.Objects.Any(item => item.GeometryRole == "routing-leaf" && item.RouteBoundaryId is null))
-                throw new ArgumentException("Independent lookup must resolve its bounded logical-owner scope before fitting geometry.");
-            var objectIdentities = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var item in snapshot.Objects) { cancellation.ThrowIfCancellationRequested(); objectIdentities.Add(item.Id); }
-            foreach (var excludedId in rules.ExcludedObjectIds)
-            {
-                cancellation.ThrowIfCancellationRequested();
-                if (!objectIdentities.Contains(excludedId)) throw new ArgumentException("Exclusion references unknown object identity.");
-            }
-            var state = PrepareInputs(snapshot, rules, cancellation);
             var payloadPath = CachePath(key, ".fit.json");
             var manifestPath = CachePath(key, ".manifest.json");
             PreparedModel result;
@@ -69,13 +222,17 @@ public sealed class FittedModelCache
                 var bytes = ReadBounded(payloadPath, limits.MaximumBytes, cancellation);
                 if (SnapshotReader.Sha256(bytes) != manifest.PayloadSha256) throw new InvalidDataException("Fitted-cache payload corruption detected.");
                 var payload = JsonSerializer.Deserialize<FitPayload>(bytes, SnapshotReader.JsonOptions) ?? throw new InvalidDataException("Missing fit payload.");
-                var restored = Restore(payload, state.Inputs, cancellation);
-                result = Result(snapshot, key, snapshotHash, rulesHash, restored, payload.Counts, state.Objects,
-                    state.Diagnostics.Concat(payload.Diagnostics).ToArray(), state.NeedsReview || HasFallback(payload.Counts), true);
+                Observe(PreparationMemoryPhase.BeforeDiskRestore);
+                var restored = Restore(payload, source.Inputs, cancellation);
+                Observe(PreparationMemoryPhase.AfterDiskRestore);
+                result = Result(source.Model, key, snapshotHash, rulesHash, restored, payload.Counts, source.Objects,
+                    source.Diagnostics.Concat(payload.Diagnostics).ToArray(), source.NeedsReview || HasFallback(payload.Counts), true);
             }
             else
             {
-                var built = TrayGeometryBuilder.Build(state.Inputs, cancellation);
+                Observe(PreparationMemoryPhase.BeforeCoreFit);
+                var built = TrayGeometryBuilder.Build(source.Inputs, cancellation);
+                Observe(PreparationMemoryPhase.AfterCoreFit);
                 var counts = new GeometryCounts(built.ValidatedBends, built.FallbackBends, built.ValidatedStraights, built.FallbackStraights, built.FallbackClearances);
                 var payload = new FitPayload(built.Segments.Select(Save).ToArray(), counts, built.Diagnostics.ToArray());
                 var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, SnapshotReader.JsonOptions);
@@ -83,8 +240,8 @@ public sealed class FittedModelCache
                 var manifest = new CacheManifest("pf2.fitted-cache.v1", key, snapshotHash, rulesHash, EngineVersion, SnapshotReader.Sha256(bytes));
                 WriteAtomic(payloadPath, bytes, cancellation);
                 WriteAtomic(manifestPath, JsonSerializer.SerializeToUtf8Bytes(manifest, SnapshotReader.JsonOptions), cancellation);
-                result = Result(snapshot, key, snapshotHash, rulesHash, built.Segments, counts, state.Objects,
-                    state.Diagnostics.Concat(built.Diagnostics).ToArray(), state.NeedsReview || HasFallback(counts), false);
+                result = Result(source.Model, key, snapshotHash, rulesHash, built.Segments, counts, source.Objects,
+                    source.Diagnostics.Concat(built.Diagnostics).ToArray(), source.NeedsReview || HasFallback(counts), false);
             }
             cancellation.ThrowIfCancellationRequested();
             while (memory.Count >= limits.MaximumCachedModels && order.Count > 0) memory.Remove(order.Dequeue());
@@ -97,6 +254,7 @@ public sealed class FittedModelCache
     private InputState PrepareInputs(ModelSnapshot snapshot, ModelBuildRules rules, CancellationToken cancellation)
     {
         var diagnostics = new List<string>(); var inputs = new List<TrayGeometryInput>(); var objects = new List<PreparedObject>();
+        bool requiresCategoryAssignment = false;
         var capture = snapshot.Capture;
         bool review = !capture.InventoryComplete || !capture.GeometryComplete || !capture.UnitsVerified || !capture.TransformsVerified
             || !capture.PlanningVisibilityKnown || !capture.SourceLinkVerified;
@@ -133,6 +291,10 @@ public sealed class FittedModelCache
                 (item.Bounds.Minimum[1] + item.Bounds.Maximum[1]) / 2, item.Bounds.Minimum[2]);
             var state = item.PlanningExcluded || excluded.Contains(item.Id) ? "excluded" : visibility[item.Id];
             objects.Add(new PreparedObject(item.Id, item.ExternalId, item.DbId, item.Name, item.GeometryRole, routeName, shapeName, state, bottom));
+            // All included PreparedObjects count, even when a missing route
+            // label prevents fitting. This is the original write/category guard.
+            if (item.GeometryRole == "routing-leaf" && state is not ("hidden" or "excluded")
+                && (item.CategoryAssignmentSource == "unassigned" || item.AllowedCategories.Length == 0)) requiresCategoryAssignment = true;
             if (item.GeometryRole != "routing-leaf") continue;
             if (string.IsNullOrWhiteSpace(routeName))
             { review = true; diagnostics.Add(item.Id + ": missing_route_label for explicitly selected routing-leaf."); continue; }
@@ -148,15 +310,15 @@ public sealed class FittedModelCache
                 AffineTransform.Point(item.Bounds.Minimum), AffineTransform.Point(item.Bounds.Maximum), faces, mesh));
         }
         if (inputs.Count == 0) { review = true; diagnostics.Add("No eligible route geometry was captured; this is not a prepared routing model."); }
-        return new InputState(inputs.ToArray(), objects.ToArray(), diagnostics.ToArray(), review);
+        return new InputState(inputs.ToArray(), objects.ToArray(), diagnostics.ToArray(), review, requiresCategoryAssignment);
     }
 
     private static TrayMeshData? Mesh(SnapshotObject item) => item.Fragments.Length == 0 ? null : new TrayMeshData(item.Fragments.Select(fragment =>
         new TrayMeshFragment(fragment.Vertices.Select(AffineTransform.Point), fragment.TriangleIndices)));
     private static bool HasFallback(GeometryCounts counts) => counts.FallbackBends != 0 || counts.FallbackStraights != 0 || counts.FallbackClearances != 0;
-    private static PreparedModel Result(ModelSnapshot snapshot, string key, string snapshotHash, string rulesHash, IReadOnlyList<TraySegment> segments,
+    private static PreparedModel Result(ModelIdentity model, string key, string snapshotHash, string rulesHash, IReadOnlyList<TraySegment> segments,
         GeometryCounts counts, PreparedObject[] objects, string[] diagnostics, bool review, bool disk) =>
-        new(key, snapshotHash, rulesHash, snapshot.Model.ProjectId, snapshot.Model.ModelVersionId, snapshot.Model.ContentSha256,
+        new(key, snapshotHash, rulesHash, model.ProjectId, model.ModelVersionId, model.ContentSha256,
             review ? "needs_review" : "fitted_geometry_ready_native_parity_not_asserted", segments,
             new ReadOnlyCollection<PreparedObject>(objects), counts, new ReadOnlyCollection<string>(diagnostics), disk);
 
@@ -228,7 +390,7 @@ public sealed class FittedModelCache
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
-    private sealed record InputState(TrayGeometryInput[] Inputs, PreparedObject[] Objects, string[] Diagnostics, bool NeedsReview);
+    private sealed record InputState(TrayGeometryInput[] Inputs, PreparedObject[] Objects, string[] Diagnostics, bool NeedsReview, bool RequiresCategoryAssignment);
     private sealed record CacheManifest(string SchemaVersion, string Key, string SnapshotSha256, string RulesSha256, string EngineVersion, string PayloadSha256);
     private sealed record FitPayload(FitSegment[] Segments, GeometryCounts Counts, string[] Diagnostics);
     private sealed record FitSegment(string Id, string Name, int Categories, double[][] Points, bool EndsOnly, FitPort[] Ports, int SurfaceCount);

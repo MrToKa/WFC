@@ -47,12 +47,37 @@ internal static partial class Program
             if (args.Length == 0) return await Supervise(bytes, request);
             if (args is not ["--worker"]) throw new ArgumentException("Unsupported command arguments.");
             using var deadline = new CancellationTokenSource(request.TimeoutMilliseconds);
-            return await Emit(Execute(request, deadline.Token));
+            return await Emit(WorkerCalculation(request, () => Execute(request, deadline.Token)));
         }
         catch (OperationCanceledException) { return await Emit(Failure(request, "deadline_exceeded", "Calculation deadline exceeded.")); }
+        catch (OutOfMemoryException) { return await Emit(Failure(request, "resource_limit", WorkerMemoryPolicy.RefusalMessage)); }
         catch (SessionBudgetException error) { return await Emit(Failure(request, "resource_limit", error.Message)); }
         catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidDataException or InvalidOperationException or OverflowException or FormatException or KeyNotFoundException or System.ComponentModel.Win32Exception)
         { return await Emit(Failure(request, "invalid_request", error is IOException ? "An owned input or cache file could not be read." : error.Message)); }
+    }
+
+    // The same managed-allocation refusal boundary is used by both launch modes.
+    // If refusal serialization itself cannot allocate, process/protocol failure
+    // remains fail-closed; no partial response is promoted to a calculation.
+    internal static object WorkerCalculation(Request request, Func<object> calculation, SessionExecutionContext? session = null)
+    {
+        try { return calculation(); }
+        catch (OutOfMemoryException)
+        {
+            session?.Discard();
+            return Failure(request, "resource_limit", WorkerMemoryPolicy.RefusalMessage);
+        }
+    }
+
+    internal static ProcessStartInfo WorkerStartInfo(string mode)
+    {
+        if (mode is not ("--worker" or "--session-worker")) throw new ArgumentException("Unknown worker launch mode.");
+        var info = new ProcessStartInfo(Environment.ProcessPath ?? throw new InvalidOperationException("Process path unavailable."))
+        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        if (Path.GetFileNameWithoutExtension(info.FileName).Equals("dotnet", StringComparison.OrdinalIgnoreCase)) info.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+        info.ArgumentList.Add(mode);
+        WorkerMemoryPolicy.Configure(info);
+        return info;
     }
 
     private static object Execute(Request request, CancellationToken token, SessionExecutionContext? session = null)
@@ -118,24 +143,9 @@ internal static partial class Program
         if (request.SchemaVersion == "pathfinder.model.runner.v2") session?.SelectBarrierKey(BarrierHash(BarrierContext(request).Value));
         var snapshots = SafeChild(root, "snapshots", create: false);
         var input = SafeChild(snapshots, request.SnapshotId + ".json", create: false);
-        var info = new FileInfo(input);
-        if (!info.Exists || info.Length is < 1 or > 268435456) throw new ArgumentException("Snapshot is missing or exceeds the byte budget.");
-        var snapshotBytes = ReadBounded(File.OpenRead(input), 268435456, token).GetAwaiter().GetResult();
-        if (SnapshotReader.Sha256(snapshotBytes) != request.SnapshotSha256) throw new ArgumentException("Snapshot hash does not match the immutable artifact.");
-        var snapshot = SnapshotReader.Read(snapshotBytes, cancellation: token);
-        if (snapshot.Model.ProjectId != request.ProjectId || snapshot.Model.ModelVersionId != request.ModelVersionId)
-            throw new ArgumentException("Snapshot project/model identity mismatch.");
-        LookupScopeSummary? lookupScope = null;
-        if (snapshot.Capture.LookupRouteCodes is not null)
-        {
-            if (request.Operation != "lookup") throw new ArgumentException("Independent lookup geometry cannot be used for planning preparation or cable calculation.");
-            var resolved = LookupScopeResolver.Resolve(snapshot, LookupScopeResolver.Plan(request.RouteText!, token), cancellation: token);
-            snapshot = resolved.Snapshot; lookupScope = resolved.Scope;
-            snapshotBytes = JsonSerializer.SerializeToUtf8Bytes(snapshot, SnapshotReader.JsonOptions);
-        }
         var cacheRoot = SafeChild(root, "cache", create: true);
-        var prepared = session is null ? new FittedModelCache(cacheRoot).GetOrBuild(snapshotBytes, request.Rules, token)
-            : session.Prepare(cacheRoot, snapshotBytes, request.Rules, token);
+        var execution = PrepareSnapshot(input, cacheRoot, request, token, session);
+        var prepared = execution.Prepared; var model = execution.Model; var lookupScope = execution.LookupScope;
         var summary = new
         {
             prepared.Key, prepared.Readiness, prepared.Counts, prepared.CacheScope, prepared.LoadedFromDisk,
@@ -153,7 +163,7 @@ internal static partial class Program
                 {
                     schemaVersion = "pathfinder.model.response.v1", request.RequestId, status = "prepared",
                     message = "Fitted computational artifact prepared; engineering acceptance is a separate gate.",
-                    snapshot.Model,
+                    Model = model,
                     prepared = new { prepared.Key, prepared.Readiness, prepared.Counts, prepared.CacheScope, prepared.LoadedFromDisk,
                         objectCount = prepared.Objects.Count, segmentCount = prepared.Segments.Count,
                         diagnosticCount = prepared.Diagnostics.Count, diagnostics = prepared.Diagnostics.Take(2048).ToArray(),
@@ -165,7 +175,7 @@ internal static partial class Program
             {
                 schemaVersion = "pathfinder.model.response.v1", request.RequestId, status = "prepared",
                 message = "Fitted computational artifact prepared; engineering acceptance is a separate gate.",
-                snapshot.Model, prepared = summary, engineeringAccepted = false
+                Model = model, prepared = summary, engineeringAccepted = false
             };
         }
         var category = request.Category switch
@@ -174,9 +184,7 @@ internal static partial class Program
             "Control" or "Instrumentation" => CableCategory.Control, _ => CableCategory.None
         };
         if (request.Operation == "calculate" && category == CableCategory.None) return Failure(request, "category_required", "Resolve the cable category before calculation.");
-        var includedRoutingObjects = prepared.Objects.Where(o => o.GeometryRole == "routing-leaf" && o.Visibility is not ("hidden" or "excluded"))
-            .Select(o => o.Id).ToHashSet(StringComparer.Ordinal);
-        if (request.Operation == "calculate" && snapshot.Objects.Any(o => includedRoutingObjects.Contains(o.Id) && (o.CategoryAssignmentSource == "unassigned" || o.AllowedCategories.Length == 0)))
+        if (request.Operation == "calculate" && execution.RequiresCategoryAssignment)
             return Failure(request, "model_needs_review", "Assign explicit planning categories to the selected routing geometry.");
         var options = request.Options ?? throw new ArgumentException("Explicit routing options are required.");
         var routeOptions = new RoutingOptions
@@ -185,8 +193,9 @@ internal static partial class Program
             SecondaryDistanceMeters = options.SecondaryDistanceMeters, PreferVerticalApproach = options.PreferVerticalApproach,
             MaxGraphNodes = options.MaxGraphNodes, MaxGraphConnections = options.MaxGraphConnections
         };
+        PreparationMemoryTrace.Observe(PreparationMemoryPhase.BeforeQuery);
         if (request.SchemaVersion == "pathfinder.model.runner.v2")
-            return ExecuteBarrierRoute(request, root, snapshot, prepared, summary, routeOptions, token, session);
+            return ExecuteBarrierRoute(request, root, model, prepared, summary, routeOptions, token, session);
         DirectSecondaryDecision? directSecondary = null;
         RouteResult routeResult;
         if (request.Operation == "calculate" && request.DirectSecondaryPolicy is not null)
@@ -240,14 +249,14 @@ internal static partial class Program
             if (lengthLedger is not null) return new
             {
                 schemaVersion = "pathfinder.model.response.v2", request.RequestId, status, message = routeResult.Message,
-                snapshot.Model, prepared = summary, effectiveCategory = category.ToString(), route = routeResult, design = resultDesign,
+                Model = model, prepared = summary, effectiveCategory = category.ToString(), route = routeResult, design = resultDesign,
                 projectSettings = settings, engineeringAccepted = false, lookupScope, usedConnectionGapMeters = (double?)null, lengthLedger, directSecondary
             };
             return new
             {
                 schemaVersion = "pathfinder.model.response.v2", request.RequestId, status,
                 message = status == "settings_required" ? "Project Details SECONDARY length is required." : routeResult.Message,
-                snapshot.Model, prepared = summary, effectiveCategory = category.ToString(), route = routeResult, design = resultDesign,
+                Model = model, prepared = summary, effectiveCategory = category.ToString(), route = routeResult, design = resultDesign,
                 projectSettings = settings, engineeringAccepted = false, lookupScope, usedConnectionGapMeters = (double?)null, directSecondary
             };
         }
@@ -255,7 +264,7 @@ internal static partial class Program
         {
             schemaVersion = "pathfinder.model.response.v1", request.RequestId, status,
             message = routeResult.Message,
-            snapshot.Model, prepared = summary, effectiveCategory = category.ToString(),
+            Model = model, prepared = summary, effectiveCategory = category.ToString(),
             route = routeResult, design = resultDesign, projectSettings = settings,
             engineeringAccepted = false, lookupScope,
             usedConnectionGapMeters = (double?)null, lengthLedger
@@ -265,11 +274,43 @@ internal static partial class Program
             schemaVersion = "pathfinder.model.response.v1", request.RequestId, status,
             message = status == "settings_required" ? "Project Details SECONDARY length is required."
                 : request.Operation == "lookup" && routeResult.Success ? "Ordered lookup calculated without equipment approaches or full cable design allowances." : routeResult.Message,
-            snapshot.Model, prepared = summary, effectiveCategory = request.Operation == "lookup" ? null : category.ToString(),
+            Model = model, prepared = summary, effectiveCategory = request.Operation == "lookup" ? null : category.ToString(),
             route = routeResult, design = resultDesign, projectSettings = settings,
             engineeringAccepted = false, lookupScope,
             usedConnectionGapMeters = request.Operation == "lookup" ? options.ConnectionToleranceMeters : (double?)null
         };
+    }
+
+    // Scope both the private source buffer and checked DTO to preparation. The
+    // returned execution contains exact fitted geometry and small source guards,
+    // never the large deserialized snapshot or a previously calculated route.
+    private static PreparedExecution PrepareSnapshot(string input, string cacheRoot, Request request,
+        CancellationToken token, SessionExecutionContext? session)
+    {
+        // Expected identity may evict old geometry before allocating new bytes;
+        // it can never authorize reuse without the following exact file hash.
+        session?.SelectPlanningSource(cacheRoot, request.SnapshotSha256!, request.Rules, token);
+        var reader = new FittedModelCache(cacheRoot, observer: PreparationMemoryTrace.Observer);
+        using var source = reader.ReadSourceFile(input, request.SnapshotSha256!, token);
+        if (session is not null && session.TryReusePlanning(cacheRoot, source.Sha256, request.ProjectId, request.ModelVersionId,
+            request.Rules, token, out var retained))
+        { source.Dispose(); PreparationMemoryTrace.Observe(PreparationMemoryPhase.RawDisposed); return retained!; }
+        var checkedSnapshot = reader.ReadCheckedSnapshot(source, request.ProjectId, request.ModelVersionId, token);
+        // Strict checked DTO/hash metadata is detached from the original bytes.
+        // Do not overlap the large source buffer with physical mesh fitting.
+        source.Dispose();
+        PreparationMemoryTrace.Observe(PreparationMemoryPhase.RawDisposed);
+        if (checkedSnapshot.IndependentLookup)
+        {
+            if (request.Operation != "lookup") throw new ArgumentException("Independent lookup geometry cannot be used for planning preparation or cable calculation.");
+            checkedSnapshot = checkedSnapshot.ResolveLookup(request.RouteText!, token);
+        }
+        // Explicit transfer empties the checked token and returns from all
+        // DTO-to-mesh conversion frames before fitting allocates its working set.
+        var detachedInput = reader.TransferForExecution(checkedSnapshot, request.Rules, token);
+        PreparationMemoryTrace.Observe(PreparationMemoryPhase.SnapshotTransferred);
+        return session is null ? reader.GetOrBuildExecution(detachedInput, token)
+            : session.Prepare(cacheRoot, detachedInput, token);
     }
 
     private static void Validate(Request r)
@@ -368,10 +409,7 @@ internal static partial class Program
     }
     private static async Task<int> Supervise(byte[] input, Request request)
     {
-        var info = new ProcessStartInfo(Environment.ProcessPath ?? throw new InvalidOperationException("Process path unavailable."))
-        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        if (Path.GetFileNameWithoutExtension(info.FileName).Equals("dotnet", StringComparison.OrdinalIgnoreCase)) info.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
-        info.ArgumentList.Add("--worker");
+        var info = WorkerStartInfo("--worker");
         using var process = Process.Start(info) ?? throw new InvalidOperationException("Worker could not start.");
         using var deadline = new CancellationTokenSource(request.TimeoutMilliseconds);
         using var guardStop = new CancellationTokenSource();

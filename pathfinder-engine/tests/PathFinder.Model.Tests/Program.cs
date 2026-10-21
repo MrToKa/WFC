@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -18,6 +19,12 @@ internal static class Program
             {
                 EquipmentEligibilityTests.Run(Fixture(), Check, (name, action) => Reject(name, action));
                 Console.WriteLine(JsonSerializer.Serialize(new { scope = "sdk-display-equipment-eligibility-synthetic-only", status = Failures.Count == 0 ? "PASS" : "FAIL", checks = Checks, failures = Failures }));
+                return Failures.Count == 0 ? 0 : 1;
+            }
+            if (args.Contains("--reader-prepass", StringComparer.Ordinal))
+            {
+                ReaderPrepass(Fixture());
+                Console.WriteLine(JsonSerializer.Serialize(new { scope = "strict-snapshot-token-reader-synthetic-only", status = Failures.Count == 0 ? "PASS" : "FAIL", checks = Checks, failures = Failures }));
                 return Failures.Count == 0 ? 0 : 1;
             }
             var scratch = Path.Combine(root, "pathfinder-engine/.scratch/model-tests-" + Guid.NewGuid().ToString("N"));
@@ -53,6 +60,7 @@ internal static class Program
                 "Full route generated from cold/restored fitted segments.");
             Invalidation(fixture, cache, cold);
             Visibility(fixture, scratch);
+            ReaderPrepass(fixture);
             InvalidInputs(fixture);
             HierarchyDepth(fixture);
             RouteBoundaryTests.Run(fixture, scratch, Check, (name, action) => Reject(name, action));
@@ -213,6 +221,99 @@ internal static class Program
         Reject("vertex-limit", () => SnapshotReader.Read(Bytes(fixture), new ModelLimits { MaximumVertices = 2 }));
         Reject("triangle-limit", () => SnapshotReader.Read(Bytes(fixture), new ModelLimits { MaximumTriangles = 0 }));
         Reject("byte-limit", () => SnapshotReader.Read(Bytes(fixture), new ModelLimits { MaximumBytes = 10 }));
+    }
+    private static void ReaderPrepass(JsonObject fixture)
+    {
+        string json = fixture.ToJsonString(); var source = Encoding.UTF8.GetBytes(json);
+        void JsonRefusal(string name, byte[] input)
+        {
+            try { SnapshotReader.Read(input); Check(name, false, "Malformed original JSON was accepted."); }
+            catch (JsonException) { Check(name, true, "Strict JSON/UTF-8 boundary rejected the original bytes."); }
+        }
+        // These duplicate values are otherwise valid and equal. A serializer
+        // that silently chooses the final property would incorrectly admit them.
+        foreach (var (name, original, replacement) in new[] {
+            ("decoded-root-duplicate", "\"schemaVersion\":", "\"schemaVersion\":\"pathfinder.model.snapshot.v1\",\"schema\\u0056ersion\":"),
+            ("decoded-model-duplicate", "\"projectId\":\"project-1\"", "\"projectId\":\"project-1\",\"project\\u0049d\":\"project-1\""),
+            ("decoded-fragment-duplicate", "\"id\":\"fragment-1\"", "\"id\":\"fragment-1\",\"\\u0069d\":\"fragment-1\""),
+        }) Reject(name, () => SnapshotReader.Read(Encoding.UTF8.GetBytes(json.Replace(original, replacement))), typeof(ArgumentException));
+        Reject("decoded-unknown-duplicate-before-dto", () => SnapshotReader.Read(Encoding.UTF8.GetBytes(
+            json.Insert(1, "\"\u00e9\":0,\"\\u00e9\":0,"))), typeof(ArgumentException));
+        foreach (string field in new[] { "equipmentEligibility", "equipment\\u0045ligibility" })
+            Reject("explicit-null-immediate-eligibility:" + field, () => SnapshotReader.Read(Encoding.UTF8.GetBytes(json.Replace(
+                "\"geometryRole\":\"routing-leaf\"", "\"geometryRole\":\"routing-leaf\",\"" + field + "\":null"))), typeof(ArgumentException));
+        // The null special case belongs only to objects[] entries. A nested
+        // unknown member must reach strict DTO rejection rather than acquire
+        // the semantic meaning of a snapshot object's optional eligibility.
+        JsonRefusal("nested-eligibility-name-remains-unknown-member", Encoding.UTF8.GetBytes(json.Replace(
+            "\"id\":\"fragment-1\"", "\"id\":\"fragment-1\",\"equipmentEligibility\":null")));
+        var siblings = (JsonObject)fixture.DeepClone(); siblings["objects"]![0]!["properties"] = new JsonArray(
+            new JsonObject { ["category"] = "", ["name"] = "equipmentEligibility", ["value"] = "first" },
+            new JsonObject { ["category"] = "", ["name"] = "equipmentEligibility", ["value"] = "second" });
+        Check("property-name-sets-are-per-object", SnapshotReader.Read(Bytes(siblings)).Objects[0].Properties.Length == 2,
+            "Repeated member names in distinct sibling objects remain valid.");
+        Check("exact-byte-limit-is-admitted", SnapshotReader.Read(source, new ModelLimits { MaximumBytes = source.Length }).Objects.Length == 1,
+            "The existing byte ceiling is inclusive and unchanged.");
+        Reject("one-byte-over-exact-limit", () => SnapshotReader.Read(source, new ModelLimits { MaximumBytes = source.Length - 1 }));
+        Check("surrounding-json-whitespace-is-admitted", SnapshotReader.Read(Encoding.UTF8.GetBytes(" \r\n\t" + json + " \r\n\t")).Objects.Length == 1,
+            "Only JSON whitespace surrounds the single original root.");
+        foreach (var (name, value) in new[] {
+            ("comments", "/*not JSON*/" + json), ("trailing-value", json + " null"),
+            ("trailing-comma", json[..^1] + ",}"), ("truncated", json[..^1]), ("whitespace-only", " \r\n\t"),
+            ("over-depth-65", new string('[', 65) + "0" + new string(']', 65)),
+            ("over-depth-4096", new string('[', 4096) + "0" + new string(']', 4096)),
+        }) JsonRefusal("reader-json-refuses:" + name, Encoding.UTF8.GetBytes(value));
+        Reject("reader-empty-source", () => SnapshotReader.Read(ReadOnlyMemory<byte>.Empty));
+        var invalidKnown = source.ToArray(); invalidKnown[json.IndexOf("STRAIGHT", StringComparison.Ordinal)] = 0xff;
+        JsonRefusal("invalid-utf8-known-string", invalidKnown);
+        JsonRefusal("invalid-utf8-root-scalar", [0x22, 0xff, 0x22]);
+        JsonRefusal("invalid-utf8-overlong-scalar", [0x22, 0xc0, 0xaf, 0x22]);
+        JsonRefusal("invalid-utf8-encoded-surrogate", [0x22, 0xed, 0xa0, 0x80, 0x22]);
+        JsonRefusal("invalid-utf8-truncated-scalar", [0x22, 0xe2, 0x82]);
+        // Exercise every possible split of valid 2/3/4-byte scalars at the
+        // fixed validation work boundary. No decoder may repair/drop bytes.
+        foreach (string scalar in new[] { "\u00e9", "\u20ac", "\U0001f642" })
+        {
+            string named = json.Replace("\"name\":\"STRAIGHT\"", "\"name\":\"A" + scalar + "B\"");
+            int at = Encoding.UTF8.GetByteCount(named[..named.IndexOf(scalar, StringComparison.Ordinal)]);
+            for (int split = 1; split < Encoding.UTF8.GetByteCount(scalar); split++)
+            {
+                string padded = new string(' ', 65536 - split - at) + named;
+                Check("valid-utf8-boundary:" + Encoding.UTF8.GetByteCount(scalar) + ":" + split,
+                    SnapshotReader.Read(Encoding.UTF8.GetBytes(padded)).Objects[0].Name == "A" + scalar + "B",
+                    "Original non-ASCII scalar crosses the bounded UTF-8 validation chunk intact.");
+            }
+        }
+        string crossing = json.Replace("\"name\":\"STRAIGHT\"", "\"name\":\"\U0001f642\"");
+        int scalarAt = Encoding.UTF8.GetByteCount(crossing[..crossing.IndexOf("\U0001f642", StringComparison.Ordinal)]);
+        var invalidCrossing = Encoding.UTF8.GetBytes(new string(' ', 65535 - scalarAt) + crossing);
+        invalidCrossing[65536] = 0x20;
+        JsonRefusal("invalid-utf8-across-validation-boundary", invalidCrossing);
+        var signedZero = SnapshotReader.Read(Encoding.UTF8.GetBytes(json.Replace("\"vertices\":[[0,-0.5,0]", "\"vertices\":[[-0,-0.5,0]")));
+        Check("reader-preserves-negative-zero-bits", BitConverter.DoubleToInt64Bits(signedZero.Objects[0].Fragments[0].Vertices[0][0]) == long.MinValue,
+            "The transport reader does not normalize binary64 zero's sign.");
+        var tiny = SnapshotReader.Read(Encoding.UTF8.GetBytes(json.Replace("\"vertices\":[[0,-0.5,0]", "\"vertices\":[[1e-200,-0.5,0]")));
+        Check("reader-preserves-small-binary64-value", BitConverter.DoubleToInt64Bits(tiny.Objects[0].Fragments[0].Vertices[0][0]) == BitConverter.DoubleToInt64Bits(1e-200),
+            "No decimal rounding, epsilon or coordinate normalization enters the token prepass.");
+        var reordered = SnapshotReader.Read(Encoding.UTF8.GetBytes(json.Replace("\"triangleIndices\":[0,1,2]", "\"triangleIndices\":[2,0,1]")));
+        Check("reader-preserves-original-index-order", reordered.Objects[0].Fragments[0].TriangleIndices.SequenceEqual([2, 0, 1]),
+            "The strict prepass neither sorts nor reconstructs arrays.");
+        using var cancellation = new CancellationTokenSource();
+        using var observed = new CancellingSnapshotMemory(Encoding.UTF8.GetBytes(new string(' ', 3 * 65536) + json), cancellation);
+        Check("reader-cancellation-is-not-pre-triggered", !cancellation.IsCancellationRequested && observed.Accesses == 0,
+            "Cancellation will be requested only after actual buffered input access begins.");
+        Reject("reader-observes-cancellation-after-input-access", () => SnapshotReader.Read(observed.Source, cancellation: cancellation.Token), typeof(OperationCanceledException));
+        Check("reader-cancelled-after-progress", observed.Accesses == 2,
+            "A token cancelled by the second bounded input access is observed before further processing.");
+    }
+    private sealed class CancellingSnapshotMemory(byte[] bytes, CancellationTokenSource cancellation) : MemoryManager<byte>
+    {
+        internal int Accesses { get; private set; }
+        internal ReadOnlyMemory<byte> Source => CreateMemory(bytes.Length);
+        public override Span<byte> GetSpan() { if (++Accesses == 2) cancellation.Cancel(); return bytes; }
+        public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException();
+        public override void Unpin() { }
+        protected override void Dispose(bool disposing) { }
     }
     private static void HierarchyDepth(JsonObject fixture)
     {

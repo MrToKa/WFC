@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 
@@ -34,7 +33,7 @@ internal static partial class Program
             if (bytes is null) return 0;
             var request = SessionRequest(bytes); context.BeginRequest(); object response; var retire = ordinal == SessionProtocol.MaximumRequests;
             using var deadline = new CancellationTokenSource(request.TimeoutMilliseconds);
-            try { response = Execute(request, deadline.Token, context); deadline.Token.ThrowIfCancellationRequested(); }
+            try { response = WorkerCalculation(request, () => Execute(request, deadline.Token, context), context); deadline.Token.ThrowIfCancellationRequested(); }
             catch (OperationCanceledException) { response = Failure(request, "deadline_exceeded", "Calculation deadline exceeded."); retire = true; }
             catch (Exception error) when (error is ArgumentException or JsonException or IOException or InvalidDataException or InvalidOperationException or OverflowException or FormatException or KeyNotFoundException or System.ComponentModel.Win32Exception)
             { response = Failure(request, "invalid_request", error is IOException ? "An owned input or cache file could not be read." : error.Message); retire = true; }
@@ -51,10 +50,7 @@ internal static partial class Program
     }
     private static Process SessionChild()
     {
-        var info = new ProcessStartInfo(Environment.ProcessPath ?? throw new InvalidOperationException("Process path unavailable."))
-        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        if (Path.GetFileNameWithoutExtension(info.FileName).Equals("dotnet", StringComparison.OrdinalIgnoreCase)) info.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
-        info.ArgumentList.Add("--session-worker");
+        var info = WorkerStartInfo("--session-worker");
         return Process.Start(info) ?? throw new InvalidOperationException("Worker could not start.");
     }
     private static async Task RetireSessionChild(Process child)
