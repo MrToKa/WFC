@@ -17,12 +17,15 @@ interface Request extends ExpressRequest {
   file?: Express.Multer.File;
 }
 import { pool } from '../db.js';
+import { readAutoLengths } from '../pathfinder/autoLengthStore.js';
+import { autoLengthViewSchema, emptyAutoLengthView, type AutoLengthView } from '../../shared/pathfinderAutoLength.js';
 import {
   CABLE_MTO_VALUES,
   mapCableRow,
   type CableMtoValue,
   type CableRow,
   type CableWithTypeRow,
+  type PublicCableWithAutoLength,
 } from '../models/cable.js';
 import { mapCableMaterialRow, type CableMaterialRow } from '../models/cableMaterial.js';
 import {
@@ -88,6 +91,7 @@ const LIST_OUTPUT_HEADERS = {
   toLocation: 'To Location',
   delivery: 'Delivery',
   routing: 'Routing',
+  autoCalculatedLength: 'Auto calculated length [m]',
   designLength: 'Design Length [m]',
 } as const;
 
@@ -166,6 +170,11 @@ const CABLE_LIST_EXPORT_COLUMNS = [
     name: LIST_OUTPUT_HEADERS.routing,
     key: 'routing',
     width: 30,
+  },
+  {
+    name: LIST_OUTPUT_HEADERS.autoCalculatedLength,
+    key: 'autoCalculatedLength',
+    width: 24,
   },
   {
     name: LIST_OUTPUT_HEADERS.designLength,
@@ -538,7 +547,7 @@ type ExcelExportCellValue = string | number | Date;
 
 const EXCEL_BUILT_IN_NUMBER_FORMAT = '0';
 
-const buildCableListExportRow = (row: CableWithTypeRow): ExcelExportCellValue[] => [
+const buildCableListExportRow = (row: CableWithTypeRow, autoLength: AutoLengthView = emptyAutoLengthView()): ExcelExportCellValue[] => [
   row.cable_id ?? '',
   row.revision ?? '',
   row.mto ?? '',
@@ -553,6 +562,7 @@ const buildCableListExportRow = (row: CableWithTypeRow): ExcelExportCellValue[] 
   row.to_location ?? '',
   row.delivery ?? '',
   row.routing ?? '',
+  autoLength.autoCalculatedLength ?? '',
   row.design_length !== null && row.design_length !== '' ? Number(row.design_length) : '',
 ];
 
@@ -2177,6 +2187,23 @@ const buildCableMaterialReportRows = (
     ];
   });
 
+/** Read-only scalar projection under the existing ordinary cable authorization.
+ * A projection outage must not hide the cable list or invent a calculated value.
+ */
+const readCableAutoLengthViews = async (projectId: string, rows: CableWithTypeRow[]): Promise<Map<string, AutoLengthView>> => {
+  if (!rows.length) return new Map();
+  try {
+    return await readAutoLengths(pool, projectId, [...new Set(rows.map(row => row.id))]);
+  } catch {
+    console.error('Read Path Finder auto lengths failed.');
+    return new Map(rows.map(row => [row.id, { ...emptyAutoLengthView(), autoLengthStatus: 'unavailable' as const }]));
+  }
+};
+const mapCableRowsWithAutoLength = async (projectId: string, rows: CableWithTypeRow[]): Promise<PublicCableWithAutoLength[]> => {
+  const views = await readCableAutoLengthViews(projectId, rows);
+  return rows.map(row => ({ ...mapCableRow(row), ...autoLengthViewSchema.parse(views.get(row.id) ?? emptyAutoLengthView()) }));
+};
+
 const cablesRouter = Router({ mergeParams: true });
 
 cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
@@ -2205,7 +2232,7 @@ cablesRouter.get('/', async (req: Request, res: Response): Promise<void> => {
       [projectId],
     );
 
-    res.json({ cables: result.rows.map(mapCableRow) });
+    res.json({ cables: await mapCableRowsWithAutoLength(projectId, result.rows) });
   } catch (error) {
     console.error('List cables error', error);
     res.status(500).json({ error: 'Failed to fetch cables' });
@@ -2393,7 +2420,7 @@ cablesRouter.post('/', authenticate, async (req: Request, res: Response): Promis
       [inserted.id],
     );
 
-    res.status(201).json({ cable: mapCableRow(result.rows[0]) });
+    res.status(201).json({ cable: (await mapCableRowsWithAutoLength(projectId, result.rows))[0] });
   } catch (error) {
     if (client) {
       await client.query('ROLLBACK').catch(() => undefined);
@@ -2571,7 +2598,7 @@ cablesRouter.patch(
           [cableId],
         );
 
-        res.json({ cable: mapCableRow(unchangedResult.rows[0]) });
+        res.json({ cable: (await mapCableRowsWithAutoLength(projectId, unchangedResult.rows))[0] });
         return;
       }
 
@@ -2655,7 +2682,7 @@ cablesRouter.patch(
         [updated.id],
       );
 
-      res.json({ cable: mapCableRow(result.rows[0]) });
+      res.json({ cable: (await mapCableRowsWithAutoLength(projectId, result.rows))[0] });
     } catch (error) {
       if (client) {
         await client.query('ROLLBACK').catch(() => undefined);
@@ -2837,7 +2864,7 @@ cablesRouter.get('/:cableId/details', async (req: Request, res: Response): Promi
     await client.query('COMMIT');
 
     res.json({
-      cable: mapCableRow(cable),
+      cable: (await mapCableRowsWithAutoLength(projectId, [cable]))[0],
       changeLog: cable.change_log ?? [],
       materialCableType: materialCableType ? mapMaterialCableTypeRow(materialCableType) : null,
       cableTypeDefaultMaterials: cableTypeDefaultMaterials.map(mapCableTypeDefaultMaterialRow),
@@ -3623,7 +3650,7 @@ cablesRouter.post(
 
         res.json({
           summary,
-          cables: existing.rows.map(mapCableRow),
+          cables: await mapCableRowsWithAutoLength(projectId, existing.rows),
         });
       } catch (error) {
         console.error('Fetch cables after empty import error', error);
@@ -3937,7 +3964,7 @@ cablesRouter.post(
 
       res.json({
         summary,
-        cables: refreshed.rows.map(mapCableRow),
+        cables: await mapCableRowsWithAutoLength(projectId, refreshed.rows),
       });
     } catch (error) {
       console.error('Fetch cables after import error', error);
@@ -4419,9 +4446,10 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         views: [{ state: 'frozen', ySplit: 1 }],
       });
       const columns = [...CABLE_LIST_EXPORT_COLUMNS, ...CHANGE_TRACKER_REVISION_COLUMNS] as const;
+      const autoLengths = await readCableAutoLengthViews(projectId, result.rows);
       const rows: ExcelExportCellValue[][] = result.rows.flatMap(
         (row: CableWithTypeRow): ExcelExportCellValue[][] => {
-          const cableRow = buildCableListExportRow(row);
+          const cableRow = buildCableListExportRow(row, autoLengths.get(row.id));
           const versions = versionsByCableRecordId.get(row.id) ?? [];
 
           if (versions.length === 0) {
@@ -4474,7 +4502,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         if (column.key === 'weight') {
           worksheetColumn.numFmt = '#,##0.000';
         }
-        if (column.key === 'designLength') {
+        if (column.key === 'designLength' || column.key === 'autoCalculatedLength') {
           worksheetColumn.numFmt = '#,##0';
         }
         if (column.key === 'trackerChangedAt') {
@@ -4514,8 +4542,9 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
       );
       const columns = columnIndexes.map((index) => CABLE_LIST_EXPORT_COLUMNS[index]);
       const hasIdColumn = columns.some((column) => column.key === 'cableId');
+      const autoLengths = await readCableAutoLengthViews(projectId, result.rows);
       const rows = [...result.rows].sort((a, b) => a.cable_id - b.cable_id).map((row) => {
-        const values = buildCableListExportRow(row);
+        const values = buildCableListExportRow(row, autoLengths.get(row.id));
         return columnIndexes.map((index) => values[index]);
       });
 
@@ -4549,7 +4578,7 @@ cablesRouter.get('/export', authenticate, async (req: Request, res: Response): P
         if (column.key === 'weight') {
           worksheetColumn.numFmt = '#,##0.000';
         }
-        if (column.key === 'designLength') {
+        if (column.key === 'designLength' || column.key === 'autoCalculatedLength') {
           worksheetColumn.numFmt = '#,##0';
         }
       });

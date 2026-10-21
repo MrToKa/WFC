@@ -214,6 +214,28 @@ function workflowFixture(status: 'complete' | 'running' = 'complete') {
   return { pf, proposal, live, parent, selection: live.row };
 }
 describe('selected current cable workflow result', () => {
+  it('requests one ordinary Cable projection read for a current sealed v8 item while unrelated siblings run without Review, Apply or Viewer changes', async () => {
+    const f = workflowFixture('running'), changed = vi.fn(), claimViewer = vi.fn(() => () => true);
+    const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}
+      accountId={id(2)} options={options} displayOwned={false} claimViewer={claimViewer} onCalculationCommitted={changed} />);
+    await waitFor(() => expect(changed).toHaveBeenCalledExactlyOnceWith({ projectId: id(1), cableId: id(4), jobId: id(7),
+      proposalId: id(3), proposalHash: f.proposal.proposalHash, revisionResultHash: f.proposal.revisionResultHash, dependencyHash: 'c'.repeat(64) }));
+    view.rerender(<PathFinderResults pf={asPf({ ...f.pf, data: { ...f.pf.data, jobs: [{ ...f.parent, completed: 20 }] } })}
+      selectedCableId={id(4)} workflowSelection={{ ...f.selection }} accountId={id(2)} options={options} displayOwned={false}
+      claimViewer={claimViewer} onCalculationCommitted={changed} />);
+    await act(async () => {});
+    expect(changed).toHaveBeenCalledOnce(); expect(f.pf.refresh).not.toHaveBeenCalled();
+    expect(f.pf.reviewProposal).not.toHaveBeenCalled(); expect(f.pf.action).not.toHaveBeenCalled(); expect(claimViewer).not.toHaveBeenCalled();
+  });
+  it('does not request an Auto projection refresh for a selected item whose authoritative currentness changed', async () => {
+    const f = workflowFixture('running'), changed = vi.fn();
+    const selection = { ...f.selection, calculation: { ...f.selection.calculation, currentness: 'changed' as const, reviewable: false } };
+    vi.mocked(fetchPathFinderCableWorkflowDetail).mockResolvedValue({ ...f.live, row: selection });
+    render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={selection}
+      accountId={id(2)} options={options} displayOwned={false} onCalculationCommitted={changed} />);
+    await screen.findByText(/The current cable proof is unavailable or changed/);
+    expect(changed).not.toHaveBeenCalled(); expect(f.pf.refresh).not.toHaveBeenCalled();
+  });
   it('reads selected cable metadata and refreshed progress without claiming the viewer or making the model Ghost', async () => {
     const f = workflowFixture(), claimViewer = vi.fn(() => () => true), changed = vi.fn();
     const view = render(<PathFinderResults pf={asPf(f.pf)} selectedCableId={id(4)} workflowSelection={f.selection}

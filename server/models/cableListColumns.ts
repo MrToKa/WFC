@@ -7,6 +7,7 @@ export const CABLE_LIST_COLUMN_IDS = [
   'fromLocation',
   'toLocation',
   'routing',
+  'autoCalculatedLength',
   'designLength',
   'actions',
 ] as const;

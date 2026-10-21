@@ -17,6 +17,7 @@ import { readProposalApplicability } from './proposalApplicability.js';
 import type { SealedCableItemApplicability } from '../../shared/pathfinderItemApplicability.js';
 import { createInitialFillReceiptProofReader } from './initialFillReceiptProof.js';
 import { readBarrierWriteEvidence } from './barrierWrites.js';
+import { registerAutoLengthAdmission } from './autoLengthStore.js';
 
 type Row = Record<string, unknown>;
 const fail = (code: string, status = 409): never => { throw new PathFinderError(code, status, 'The immutable cable revision result is unavailable or inconsistent. Refresh the admission and calculate a new proposal when required.'); };
@@ -184,6 +185,10 @@ export async function persistRevisionAdmission(client: PoolClient, input: Revisi
   for (let at = 0; at < items.length; at += REVISION_RESULTS_LIMITS.chunk) await client.query(`INSERT INTO pf_revision_baselines(project_id,admission_id,cable_id,baseline_sha256,baseline,status,message)
     SELECT $1,$2,x.cable_id,x.baseline_sha256,x.baseline,x.status,x.message FROM jsonb_to_recordset($3::jsonb)
     AS x(cable_id uuid,baseline_sha256 text,baseline jsonb,status text,message text)`, [projectId, id, JSON.stringify(items.slice(at, at + REVISION_RESULTS_LIMITS.chunk))]);
+  // This is a new admission in the caller's existing project/authority
+  // transaction. Historical admissions and exact replays above are untouched.
+  await registerAutoLengthAdmission(client, { projectId, admissionId: id, jobId,
+    cableIds: snapshots.map(cable => cable.id) });
   return id;
 }
 function verifiedBaseline(row: Row): RevisionBaseline {

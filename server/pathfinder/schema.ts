@@ -20,6 +20,7 @@ import { initializeCalculationGrantSchema } from './calculationGrantSchema.js';
 import { initializeGrantOperationSchema } from './grantOperationSchema.js';
 import { initializeProducerResourceSchema } from './producerResourceSchema.js';
 import { initializeRevisionResultSchema } from './revisionResultSchema.js';
+import { initializeAutoLengthSchema } from './autoLengthSchema.js';
 import { initializeApplyRecoverySchema } from './applyRecoverySchema.js';
 import { initializeBarrierRegistrySchema } from './barrierRegistrySchema.js';
 
@@ -144,6 +145,7 @@ export async function initializePathFinder(pool: Pool): Promise<void> {
   await initializeGrantOperationSchema(pool);
   await initializeProducerResourceSchema(pool);
   await initializeRevisionResultSchema(pool);
+  await initializeAutoLengthSchema(pool);
   await initializeLocationImpactSchema(pool);
   await initializeInitialFillMandateSchema(pool);
   await initializeInitialFillAttemptSchema(pool);

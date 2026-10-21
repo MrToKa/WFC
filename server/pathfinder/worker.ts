@@ -27,6 +27,8 @@ import { DIRECT_SECONDARY_POLICY, directSecondaryDecisionSchema } from '../../sh
 import { directSecondaryPolicyForScope, requireDirectSecondaryStrategy } from './directSecondaryStrategy.js';
 import { requireBarrierEngineStrategy } from './barrierStrategy.js';
 import { isExpectedBarrierCurrentnessError } from './barrierCurrentness.js';
+import { publishAutoLength } from './autoLengthStore.js';
+import { requireCurrentBarrierWriteScope } from './barrierWrites.js';
 export const nextAutomaticCursor = (rows:Array<{project_id:string}>):string|null => rows.length===5 ? rows.at(-1)!.project_id : null;
 
 type Row = Record<string,any>;
@@ -260,18 +262,32 @@ async function executeJob(pool:Pool,job:Row,stopping:AbortSignal,engine:EngineEx
         const proposalHash = hash({dependencies,result,baselineHash:baseline.baselineHash});
         const inserted=await client.query<{id:string}>(`INSERT INTO pf_proposals(id,project_id,job_id,cable_id,status,dependencies,dependency_hash,geometry_hash,result,proposal_hash)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(project_id,job_id,cable_id) DO NOTHING RETURNING id`,[randomUUID(),job.project_id,job.id,item.cable_id,status,dependencies,hash(dependencies),geometryHash(dependencies),result,proposalHash]);
-        if(inserted.rows[0])await sealRevisionResult(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,proposalId:inserted.rows[0].id,dependencyHash:hash(dependencies),result,dependencies});
+        let exact={id:inserted.rows[0]?.id,dependencies,result,status,
+          message:barrierUnavailable ? 'The registered barrier scope changed or became unavailable. This item is stale; refresh barriers and calculate again.'
+            : stale ? 'Dependencies changed during calculation. Calculate a fresh proposal.' : response.message};
+        let sealed;
+        if(exact.id)sealed=await sealRevisionResult(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,proposalId:exact.id,dependencyHash:hash(dependencies),result,dependencies});
         else{
           // A lost ACK may have committed the original immutable output. Verify
           // that exact output and seal; never attach fresh metadata to a replay.
-          const existing=(await client.query<Row>('SELECT id,result,dependencies,proposal_hash FROM pf_proposals WHERE project_id=$1 AND job_id=$2 AND cable_id=$3',[job.project_id,job.id,item.cable_id])).rows[0];
-          const sealed=existing&&await verifyRevisionResultForProposal(client,{projectId:job.project_id,proposalId:existing.id,result:existing.result,dependencies:existing.dependencies,proposalHash:existing.proposal_hash});
-          if(!sealed||sealed.baselineHash!==baseline.baselineHash)throw new PathFinderError('REVISION_RESULT_CONFLICT',409,'The existing immutable calculation cannot be reconciled with its admission.');
+          const existing=(await client.query<Row>('SELECT id,status,result,dependencies,proposal_hash FROM pf_proposals WHERE project_id=$1 AND job_id=$2 AND cable_id=$3',[job.project_id,job.id,item.cable_id])).rows[0];
+          sealed=existing&&await verifyRevisionResultForProposal(client,{projectId:job.project_id,proposalId:existing.id,result:existing.result,dependencies:existing.dependencies,proposalHash:existing.proposal_hash});
+          if(!sealed||sealed.baselineHash!==baseline.baselineHash||hash(existing.dependencies)!==hash(dependencies))throw new PathFinderError('REVISION_RESULT_CONFLICT',409,'The existing immutable calculation cannot be reconciled with its admission.');
+          exact={id:existing.id,dependencies:existing.dependencies,result:existing.result,
+            status:stale?'stale':existing.status,message:stale?exact.message:existing.result.message};
         }
         const completed = await client.query(`UPDATE pf_job_items SET state='complete',status=$4,message=$5 WHERE project_id=$1 AND job_id=$2 AND cable_id=$3 AND state='running' RETURNING cable_id`,
-        [job.project_id,job.id,item.cable_id,status,barrierUnavailable ? 'The registered barrier scope changed or became unavailable. This item is stale; refresh barriers and calculate again.'
-          : stale ? 'Dependencies changed during calculation. Calculate a fresh proposal.' : response.message]);
+        [job.project_id,job.id,item.cable_id,exact.status,exact.message]);
         if (completed.rows.length) await client.query('UPDATE pf_jobs SET completed=completed+1,updated_at=NOW() WHERE id=$1 AND owner_token=$2',[job.id,job.owner_token]);
+        if(!stale&&exact.status==='calculated'&&exact.dependencies.schemaVersion==='pathfinder.dependencies.v8'){
+          if(!exact.id||!sealed)throw new PathFinderError('AUTO_LENGTH_STORED_SOURCE_REQUIRED',409);
+          await publishAutoLength(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id,proposalId:exact.id,
+            dependencies:exact.dependencies,result:exact.result,seal:sealed});
+          // Derived output gains no business-write authority, but its successful
+          // source still retains the final physical scope and cancel fences.
+          await requireCurrentBarrierWriteScope(client,exact.dependencies,{signal});
+          await fencedJob(client,job);
+        }
         await requireEnrollmentAuthority(client,{projectId:job.project_id,jobId:job.id,cableId:item.cable_id});
       });
     }

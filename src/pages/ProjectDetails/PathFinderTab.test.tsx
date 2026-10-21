@@ -17,6 +17,10 @@ import { cableWorkflowDetailSchema } from '../../../shared/pathfinderCableWorkfl
 vi.mock('@/api/pathfinderEndpointBindings', async original => ({ ...await original<typeof import('@/api/pathfinderEndpointBindings')>(), fetchEndpointBinding: vi.fn(), fetchEndpointBindingHistory: vi.fn(), saveEndpointBinding: vi.fn() }));
 
 vi.mock('./hooks/usePathFinder', () => ({ usePathFinder: vi.fn() }));
+const autoReadCapture = vi.hoisted(() => ({ read: vi.fn(), refresh: vi.fn() }));
+vi.mock('./hooks/usePathfinderAutoLengthRead', () => ({ usePathfinderAutoLengthRead: (input: unknown) => {
+  autoReadCapture.read(input); return { view: null, loading: false, error: null, refresh: autoReadCapture.refresh };
+} }));
 vi.mock('@/api/pathfinderCableWorkflow', () => ({ fetchPathFinderCableWorkflowDetail: vi.fn() }));
 vi.mock('./hooks/useRoutingsViewerHeight', () => ({ useRoutingsViewerHeight: () => 720 }));
 // Persistent workspace has its own component/API suites; these historical cases
@@ -148,6 +152,17 @@ function preview(id: string, reverse = false): PathFinderPreview { return { id, 
 
 // Fluent's expanded sidebar makes jsdom role/style queries expensive; assertions still use their normal wait budgets.
 describe('admin PathFinder interface', { timeout: 60_000 }, () => {
+  it('forwards the exact successful selected item to the separate ordinary Auto read without approving or refreshing the model', async () => {
+    const detail = proposal(true), current = { ...proposalModel(), data: { ...pf.data, proposals: [detail] },
+      readProposal: vi.fn(async () => detail), showPath: vi.fn(async () => 'displayed') };
+    vi.mocked(usePathFinder).mockReturnValue(current); mount();
+    fireEvent.click(screen.getByRole('button', { name: /=CABLE-1From:/ }));
+    fireEvent.click(screen.getByRole('button', { name: /=CABLE-1 — Ready for review/ }));
+    await waitFor(() => expect(autoReadCapture.read).toHaveBeenLastCalledWith(expect.objectContaining({ projectId, loadedProjectId: projectId,
+      accountId, selectedCableId: detail.cableId, item: { projectId, cableId: detail.cableId, jobId: detail.jobId, proposalId: detail.id,
+        proposalHash: detail.proposalHash, revisionResultHash: detail.revisionResultHash, dependencyHash: detail.provenance!.dependencyHash } })));
+    expect(current.refresh).not.toHaveBeenCalled(); expect(current.reviewProposal).not.toHaveBeenCalled(); expect(current.action).not.toHaveBeenCalled();
+  });
   it('shows automatic point availability independently of saved bindings and filters only missing calculation points', async () => {
     const user = userEvent.setup(), automaticId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     const confirmed = calculationAvailabilitySchema.parse({ status: 'confirmed-ready', pointAvailable: true, source: 'confirmed-shared-location', approximate: false, candidateObjectIds: [], reasonCode: null, engineeringAccepted: false });

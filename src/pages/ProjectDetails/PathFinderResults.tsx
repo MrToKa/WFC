@@ -19,6 +19,8 @@ import { revisionResultEnvelopeSchema } from '../../../shared/pathfinderRevision
 import { PathFinderDirectSecondary } from './PathFinderDirectSecondary';
 import { PathFinderBarrierResult } from './PathFinderBarrierResult';
 import { sameBarrierAdmissionIntent } from '../../../shared/pathfinderBarrierAdmission';
+import type { AutoLengthView } from '../../../shared/pathfinderAutoLength';
+import type { PathFinderCalculatedItemIdentity } from './hooks/usePathfinderAutoLengthRead';
 
 export type PathFinderWorkflowDisplayRequest = { cableId: string; requestId: number; action: 'show' | 'hide' };
 export type PathFinderWorkflowDisplay = { cableId: string | null; visible: boolean; routing: string | null; designLength: string | null };
@@ -29,11 +31,13 @@ export type PathFinderWorkflowReview = {
   comparisonLoading: boolean; comparisonError: string | null; message: string | null;
   reviewed: boolean; applied: boolean; canReview: boolean; canApply: boolean; busy: boolean;
   pending: boolean; canRecover: boolean; recoveryMessage: string | null; recoveryError: string | null;
+  autoLength?: AutoLengthView | null; autoLengthLoading?: boolean; autoLengthError?: string | null; refreshAutoLength?: () => void;
   review: () => void; apply: () => void; retry: () => void; closePending: () => void;
 };
 type Props = { pf: ReturnType<typeof usePathFinder>; selectedCableId: string | null; workflowSelection?: CableWorkflowRow | null; accountId?: string | null; active?: boolean; displayOwned?: boolean; claimViewer?: () => () => boolean; options?: PathFinderPreferences | null; onBatchBusyChange?: (busy: boolean) => void; onCableValuesChanged?: () => void;
   backgroundOptions?: PathFinderPreferences | null; workflowDisplayRequest?: PathFinderWorkflowDisplayRequest | null; onWorkflowDisplayChange?: (value: PathFinderWorkflowDisplay) => void;
-  onWorkflowReviewChange?: (value: PathFinderWorkflowReview | null) => void };
+  onWorkflowReviewChange?: (value: PathFinderWorkflowReview | null) => void;
+  onCalculationCommitted?: (value: PathFinderCalculatedItemIdentity) => void };
 const resultLabel = (status: string) => ({ calculated: 'Ready for review', model_needs_review: 'Model review required', no_path: 'No connected path', settings_required: 'Project values required', category_required: 'Cable category required', locations_required: 'Resolve locations', stale: 'Outdated', deadline_exceeded: 'Calculation timed out', resource_limit: 'Calculation limit reached', invalid_request: 'Review the input' }[status] ?? 'Review required');
 function hasExactItemApplicability(proposal: PathFinderProposal | null, projectId: string | null | undefined) {
   const proof = sealedCableItemApplicabilitySchema.safeParse(proposal?.itemApplicability);
@@ -45,7 +49,7 @@ function hasExactItemApplicability(proposal: PathFinderProposal | null, projectI
     && proof.data.cableId === proposal.cableId && proof.data.proposalId === proposal.id && proof.data.dependencyHash === proposal.provenance.dependencyHash);
 }
 export function PathFinderResults({ pf, selectedCableId, workflowSelection = null, accountId, active = true, displayOwned = true, claimViewer, options, backgroundOptions, onBatchBusyChange, onCableValuesChanged,
-  workflowDisplayRequest, onWorkflowDisplayChange, onWorkflowReviewChange }: Props) {
+  workflowDisplayRequest, onWorkflowDisplayChange, onWorkflowReviewChange, onCalculationCommitted }: Props) {
   const styles = useRoutingsViewerStyles();
   const [proposal, setProposal] = useState<PathFinderProposal | null>(null), [job, setJob] = useState<PathFinderJob | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null), [pathDisplayed, setPathDisplayed] = useState(false), [applied, setApplied] = useState(false);
@@ -358,6 +362,23 @@ export function PathFinderResults({ pf, selectedCableId, workflowSelection = nul
     && (!workflowScopeOwner || scopeReadiness.ready)
     && !calculationFailed && !knownLiveRevisionMismatch && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady) && preferencesMatch && !stale && !proposal.compatibilityIssue
     && proposal.canApply && !(summary && summary.proposalHash === proposal.proposalHash && !summary.canApply));
+  const projectionCallback = useRef(onCalculationCommitted); projectionCallback.current = onCalculationCommitted;
+  const lastProjection = useRef('');
+  const completedSelectedItem = Boolean(active && accountId && selectedCableId && proposal?.cableId === selectedCableId && protectedResult
+    && proposal?.provenance?.engineIdentity?.schemaVersion === 'wfc.pf.engine-identity.v2'
+    && proposal.status === 'calculated' && proposal.route?.success && proposal.design && proposal.revisionResultHash
+    && scopeReadiness.admissionId && proposal.jobId === scopeReadiness.jobId && (!workflowScopeOwner || scopeReadiness.ready) && !calculationCancelled && !calculationFailed
+    && !stale && !proposal.compatibilityIssue && preferencesMatch && (wholeJobReady && (!checkedJobStatus || checkedJobStatus === 'complete') || sealedItemReady));
+  const projectionIdentity = completedSelectedItem && proposal?.provenance ? JSON.stringify([ownershipKey, proposal.projectId, proposal.cableId, proposal.jobId,
+    proposal.id, proposal.proposalHash, proposal.revisionResultHash, proposal.provenance.dependencyHash]) : null;
+  useEffect(() => {
+    if (!projectionIdentity || !proposal?.provenance || lastProjection.current === projectionIdentity) return;
+    lastProjection.current = projectionIdentity;
+    projectionCallback.current?.({ projectId: proposal.projectId, cableId: proposal.cableId, jobId: proposal.jobId, proposalId: proposal.id,
+      proposalHash: proposal.proposalHash, revisionResultHash: proposal.revisionResultHash!, dependencyHash: proposal.provenance.dependencyHash });
+    // An exact item identity, not job progress or presentation state, requests
+    // one ordinary read. The separate write gates remain untouched.
+  }, [projectionIdentity, proposal]);
   const proposalJobIssue = !proposal || effectiveCanApply ? null : calculationCancelled
     ? 'This calculation was cancelled. Its saved path can be inspected, but cannot be reviewed or applied. Choose a completed calculation in Cable revision results, or calculate non-MV cables again if needed.'
     : calculationFailed ? 'This calculation failed. Its saved path can be inspected, but cannot be reviewed or applied. Calculate again before reviewing the result.'

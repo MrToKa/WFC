@@ -16,8 +16,13 @@ vi.mock('./recalculationRepository.js', () => ({ readRecalculationJobAuthority: 
 vi.mock('./proposalApplicability.js', () => ({ readProposalApplicability: applicabilitySeams.applicable }));
 const initialFillProof = vi.hoisted(() => vi.fn());
 vi.mock('./initialFillReceiptProof.js', () => ({ createInitialFillReceiptProofReader: () => initialFillProof }));
+// Admission/seal integrity is the boundary of this suite. The actual ordered
+// registration SQL is covered by autoLengthStore and owned PostgreSQL tests.
+const autoAdmission = vi.hoisted(() => vi.fn());
+vi.mock('./autoLengthStore.js', () => ({ registerAutoLengthAdmission: autoAdmission }));
 beforeEach(() => { initialFillProof.mockReset(); initialFillProof.mockResolvedValue(false); applicabilitySeams.authority.mockReset();applicabilitySeams.authority.mockResolvedValue({enrolled:false});
-  applicabilitySeams.applicable.mockReset();applicabilitySeams.applicable.mockResolvedValue({applicable:false,evidence:null}); });
+  applicabilitySeams.applicable.mockReset();applicabilitySeams.applicable.mockResolvedValue({applicable:false,evidence:null});
+  autoAdmission.mockReset(); autoAdmission.mockResolvedValue({admissionOrdinal:'1',duplicate:false}); });
 type Row = Record<string, unknown>;
 const id = (n: number) => 'd9000000-0000-4000-8000-' + n.toString(16).padStart(12, '0');
 const pid = id(1), jid = id(2), model = { id: id(3), selectionRevision: '1', contentFingerprint: 'a'.repeat(64) },
@@ -156,6 +161,14 @@ async function protectedAcceptedBaselineFixture() {
 }
 
 describe('immutable admission snapshots and revision envelopes', () => {
+  it('registers each new complete admission once and does not retarget an exact replay', async () => {
+    const f=fixture(), input=f.input(), admissionId=await persistRevisionAdmission(f.client,input);
+    expect(autoAdmission).toHaveBeenCalledExactlyOnceWith(f.client, {projectId:pid,admissionId,jobId:jid,
+      cableIds:input.items.map(item=>String(item.cable.id)).sort()});
+    expect(f.baselines).toHaveLength(input.items.length);
+    expect(await persistRevisionAdmission(f.client,input)).toBe(admissionId);
+    expect(autoAdmission).toHaveBeenCalledTimes(1);
+  });
   it('recognizes an exact protected apply.v3 baseline through the real pure proof, seal, human review and receipt links', async () => {
     const value = await protectedAcceptedBaselineFixture(), baseline = await value.run();
     expect(baseline.acceptedMatchesCurrent).toBe(true);

@@ -8,6 +8,7 @@ import type { CableWorkflowRow } from '../../../shared/pathfinderCableWorkflow';
 import { CablePopupSurface, type CablePopupSurfaceStyles } from '@/components/CablePopupSurface';
 import type { PathFinderWorkflowReview } from '@/pages/ProjectDetails/PathFinderResults';
 import { PathFinderCableComparison } from './PathFinderCableComparison';
+import { CableAutoCalculatedLength } from './CableAutoCalculatedLength';
 
 export type PathFinderCableRoutingPanelProps = {
   access: Omit<CableEndpointSelectionAccess, 'end' | 'cableId'>;
@@ -118,6 +119,13 @@ function OwnedCableRoutingPanel({ access, cable, open, onClose, anchor, onCalcul
       </section>
       <section className={styles.field} aria-label="Review and Apply cable routing">
         <h4 className={styles.heading}>Review and Apply</h4>
+        {currentReview?.autoLength || currentReview?.autoLengthLoading || currentReview?.autoLengthError ? <section aria-label="Automatic length from Cable list">
+          <h4 className={styles.heading}>Auto calculated length [m]</h4>
+          {currentReview.autoLengthLoading ? <Spinner size="tiny" label="Reading automatic cable length…" /> : null}
+          {currentReview.autoLength ? <CableAutoCalculatedLength value={currentReview.autoLength} /> : null}
+          {currentReview.autoLengthError ? <p role="alert" className={styles.note}>{currentReview.autoLengthError}</p> : null}
+          {currentReview.refreshAutoLength ? <Button disabled={currentReview.autoLengthLoading} onClick={currentReview.refreshAutoLength}>Refresh automatic length</Button> : null}
+        </section> : null}
         <p className={styles.note}>Keep the existing Cable list values. Compare them with the calculated proposal, inspect its path with Show, then explicitly review and Apply it.</p>
         {calculationPending ? <p role="status" className={styles.note}>Waiting for this cable’s new calculation. Earlier proposals cannot be approved here.</p>
           : currentReview?.comparisonLoading ? <Spinner size="tiny" label="Reading current and proposed cable values…" />

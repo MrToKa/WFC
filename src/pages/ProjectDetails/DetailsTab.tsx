@@ -231,27 +231,11 @@ export const DetailsTab = ({
       </div>
       <div className={styles.panel}>
         <Caption1>Automatic cable length calculation</Caption1>
-        <Body1><strong>Tray-list estimate</strong></Body1>
+        <Body1><strong>Path Finder calculated length</strong></Body1>
         <Body1>
-          Auto calculated length [m] = ceil(Total routing length [m] × (1 + Additional % for
-          bending / 100) + For end connection [m])
+          Auto calculated length [m] shows the latest successful checked Path Finder result.
+          It is read-only and uses the model geometry and the project allowances below.
         </Body1>
-        <Body1>
-          Current formula: ceil(Total routing length [m] × (1 +{' '}
-          {formatNumeric(project.additionalBendingPercent)} / 100) +{' '}
-          {formatNumeric(project.endConnectionLength)})
-        </Body1>
-        <Body1>
-          Total routing length is the sum of the tray lengths along the cable route, converted
-          from millimetres to metres. Each Secondary segment adds the project&apos;s Secondary tray
-          length.
-        </Body1>
-        <Caption1>
-          The formula applies the bending allowance and end connection length, then rounds up
-          to the next whole metre. No length is
-          calculated if the route is empty or a required segment length is missing or invalid.
-        </Caption1>
-          <Body1><strong>Path Finder design length</strong></Body1>
         <Body1>
           ceil((max(0, Geometric length − flagged From/To approach lengths) + Secondary tray
           length × number of flagged approaches + For end connection) × (1 + Additional % for
@@ -267,6 +251,17 @@ export const DetailsTab = ({
           once before the percentage, then the result is rounded up. Measured connection gaps
           are already included in geometric length and are not added again. Connection gap
           controls which gaps can be connected.
+        </Caption1>
+        <Caption1>
+          A direct SECONDARY connection uses the actual 3D From/To distance, then adds For end
+          connection once before Additional % for bending and rounds up. Secondary tray length
+          does not replace this direct distance.
+        </Caption1>
+        <Caption1>
+          Existing Design length remains manually editable and changes from Path Finder only
+          after Review → Apply. When both Routing and Design length are empty, the confirmed
+          shared-location Save may fill them automatically after successful checks. Pending,
+          blocked or outdated calculations are shown beside the retained Auto length.
         </Caption1>
       </div>
       {supportDistanceOverrides.length > 0 ? (

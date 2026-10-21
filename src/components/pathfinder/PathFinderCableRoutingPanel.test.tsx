@@ -60,6 +60,17 @@ function reviewController(p: PathFinderCableRoutingPanelProps): PathFinderWorkfl
 beforeEach(() => { assignment = pair(); vi.mocked(useCableEndpointPairSelection).mockReset().mockImplementation(() => assignment); vi.mocked(useCableEndpointSelection).mockReset(); });
 
 describe('persistent nonmodal cable routing panel with atomic drafts', () => {
+  it('shows the separately read Auto projection without replacing Design or creating an approval', () => {
+    const p = props(), refreshAutoLength = vi.fn(), review = { ...reviewController(p), autoLength: { autoCalculatedLength: 54,
+      autoLengthStatus: 'calculated' as const, autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
+      autoLengthBarrierStatus: 'bypassed' as const, autoLengthMatchesLatestRequest: true }, refreshAutoLength };
+    render(<PathFinderCableRoutingPanel {...p} review={review} />);
+    const auto = within(screen.getByRole('region', { name: 'Automatic length from Cable list' }));
+    expect(auto.getByText('54')).toBeVisible(); expect(auto.getByText(/Drill through the walls enabled/)).toBeVisible();
+    expect(auto.queryByRole('spinbutton')).toBeNull(); expect(review.review).not.toHaveBeenCalled(); expect(review.apply).not.toHaveBeenCalled();
+    fireEvent.click(auto.getByRole('button', { name: 'Refresh automatic length' })); expect(refreshAutoLength).toHaveBeenCalledOnce();
+    expect(p.cable!.cable.designLength).not.toBe('54'); expect(assignment.save).not.toHaveBeenCalled();
+  });
   it('compares retained and proposed routing and length in the same popup and requires separate review and Apply clicks', () => {
     const p = props(); p.cable!.cable.routing = '/OLD/SECONDARY'; p.cable!.cable.designLength = '150';
     const review = reviewController(p), view = render(<PathFinderCableRoutingPanel {...p} review={review} />);

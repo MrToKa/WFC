@@ -13,6 +13,7 @@ import {
   fetchMaterialCableInstallationMaterials,
   fetchTrays,
   updateCableMaterial,
+  updateCable,
   type Cable,
   type CableMaterial,
   type CableVersion,
@@ -32,6 +33,7 @@ vi.mock('@/api/client', async (importOriginal) => ({
   fetchMaterialCableInstallationMaterials: vi.fn(),
   fetchTrays: vi.fn(),
   updateCableMaterial: vi.fn(),
+  updateCable: vi.fn(),
 }));
 vi.mock('@/context/AuthContext', () => ({
   useAuth: () => ({ user: { isAdmin: true }, token: 'token' }),
@@ -138,6 +140,44 @@ beforeEach(() => {
     cableMaterial: material,
     changeLogEntry: logEntry,
   });
+});
+
+it('displays the checked PF length independently of Design and never falls back to a tray estimate', async () => {
+  const checked = { ...cable, tag: 'PF cable', routing: '/TRAY-01', designLength: 25, autoCalculatedLength: 54,
+    autoLengthStatus: 'calculated' as const, autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
+    autoLengthBarrierStatus: 'clear' as const, autoLengthMatchesLatestRequest: true };
+  vi.mocked(fetchCableDetails).mockResolvedValue({ cable: checked, materialCableType: null, cableTypeDefaultMaterials: [], cableMaterials: [] });
+  renderDetails();
+  const auto = await screen.findByRole('region', { name: 'Path Finder automatic length' });
+  expect(within(auto).getByText('54')).toBeVisible(); expect(screen.getByText('25')).toBeVisible();
+  expect(within(auto).queryByRole('spinbutton')).toBeNull(); expect(fetchTrays).not.toHaveBeenCalled();
+  vi.mocked(fetchCableDetails).mockResolvedValue({ cable: { ...cable, routing: '/TRAY-01', designLength: 25 }, materialCableType: null, cableTypeDefaultMaterials: [], cableMaterials: [] });
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  // Refresh briefly replaces this page with its loading state. Read the newly
+  // mounted projection instead of retaining the now-detached previous section.
+  await screen.findByText('No checked Path Finder length yet.');
+  const refreshedAuto = screen.getByRole('region', { name: 'Path Finder automatic length' });
+  expect(within(refreshedAuto).queryByText('25')).toBeNull(); expect(fetchTrays).not.toHaveBeenCalled();
+});
+
+it('preserves the PF Auto value as read-only when a user edits Design length without submitting projection fields', async () => {
+  const user = userEvent.setup(), checked = { ...cable, tag: 'PF cable', designLength: 25, autoCalculatedLength: 54,
+    autoLengthStatus: 'calculated' as const, autoLengthCalculatedAt: '2026-10-21T12:00:00Z',
+    autoLengthBarrierStatus: 'clear' as const, autoLengthMatchesLatestRequest: true };
+  const response = { cable: checked, materialCableType: null, cableTypeDefaultMaterials: [], cableMaterials: [] };
+  vi.mocked(fetchCableDetails).mockResolvedValueOnce(response).mockResolvedValue({ ...response, cable: { ...checked, designLength: 30 } });
+  vi.mocked(updateCable).mockResolvedValue({ cable: { ...checked, designLength: 30 } });
+  renderDetails(); await user.click(await screen.findByRole('button', { name: 'Edit' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit cable' }), design = within(dialog).getByRole('spinbutton', { name: 'Design length [m]' });
+  expect(within(dialog).queryByLabelText('Auto calculated length [m]')).toBeNull();
+  fireEvent.change(design, { target: { value: '30' } }); await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+  await waitFor(() => expect(updateCable).toHaveBeenCalledOnce());
+  const input = vi.mocked(updateCable).mock.calls[0][3];
+  expect(input.designLength).toBe(30); expect(Object.keys(input).some(key => key.startsWith('auto'))).toBe(false);
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit cable' })).toBeNull());
+  expect(screen.getByText('30')).toBeVisible();
+  const auto = await screen.findByRole('region', { name: 'Path Finder automatic length' });
+  expect(within(auto).getByText('54')).toBeVisible();
 });
 
 it('selects a catalog material in a wide dialog, opens its editor and saves its quantity', async () => {
