@@ -1,0 +1,12 @@
+# Applied explicitly only with a pinned operator proof. It changes proof
+# capability configuration, not the default application safety boundary.
+services:
+  preparer:
+    environment:
+      PREPARER_PRICE_PROOF_PATH: /proof/${PREPARER_PRICE_PROOF_BASENAME}
+      PREPARER_PRICE_PROOF_SHA256: ${PREPARER_PRICE_PROOF_SHA256}
+    volumes:
+      - type: bind
+        source: ${PREPARER_PRICE_PROOF_DIRECTORY}
+        target: /proof
+        read_only: true

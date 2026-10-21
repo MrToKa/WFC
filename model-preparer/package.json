@@ -1,0 +1,14 @@
+{
+  "name": "routings-model-preparer",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "start": "node app/server.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs app-test/*.test.mjs",
+    "test:core": "node --test --test-concurrency=1 --test-reporter=tap test/*.test.mjs",
+    "test:app": "node --test --test-concurrency=1 --test-reporter=tap app-test/*.test.mjs"
+  },
+  "dependencies": {}
+}

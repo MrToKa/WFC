@@ -11,3 +11,5 @@ server/.env
 backups/
 
 public/viewer-runtime/
+
+.preparer-work/

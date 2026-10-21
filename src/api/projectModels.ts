@@ -25,6 +25,8 @@ const messages: Record<string, string> = {
   ACCESS_DENIED: 'You do not have permission to change this project model.',
   PROJECT_NOT_FOUND: 'The project is no longer available.',
   MODEL_NOT_FOUND: 'The model version is no longer available in this project.',
+  PACKAGE_NOT_FOUND: 'This older model has no saved ZIP. Generate it again to save a downloadable package.',
+  PACKAGE_UNAVAILABLE: 'The saved model ZIP is unavailable. Try again later.',
   SELECTION_CONFLICT: 'The model selection changed elsewhere. Review the latest selection before saving.',
   MODEL_UNAVAILABLE: 'The model resources are unavailable. The active selection has not been replaced.',
   MODEL_NOT_SELECTABLE: 'This model version is not currently available for selection.',
@@ -98,6 +100,50 @@ export async function fetchProjectModels(projectId: string, token: string, optio
   const versions = value.versions.map(item => version(item, projectId));
   if (new Set(versions.map(item => item.id)).size !== versions.length) return invalid();
   return { versions, selection: selection(value.selection, projectId) };
+}
+
+/** Download uses the current login; no credential is placed in a URL or public object link. */
+export async function downloadProjectModelPackage(projectId: string, versionId: string, token: string, options: { signal?: AbortSignal } = {}): Promise<{ blob: Blob; filename: string }> {
+  if (!uuid(projectId) || !uuid(versionId) || !token) throw new ProjectModelApiError('INVALID_REQUEST');
+  options.signal?.throwIfAborted();
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBaseUrl()}/api/projects/${projectId}/model-versions/${versionId}/package`, {
+      method: 'GET', signal: options.signal, cache: 'no-store', credentials: 'same-origin', redirect: 'error',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (error) { if (options.signal?.aborted) throw error; throw new ProjectModelApiError('NETWORK_ERROR'); }
+  if (!response.ok) {
+    let code = response.status === 401 ? 'AUTH_REQUIRED' : response.status === 403 ? 'ACCESS_DENIED' : response.status === 404 ? 'PACKAGE_NOT_FOUND' : 'PACKAGE_UNAVAILABLE';
+    try { const value = await readJson(response); if (record(value) && typeof value.code === 'string' && Object.hasOwn(messages, value.code)) code = value.code; } catch { /* Keep the safe status fallback. */ }
+    throw new ProjectModelApiError(code, response.status);
+  }
+  const declared = response.headers.get('content-length');
+  const expected = declared && /^[0-9]+$/.test(declared) ? Number(declared) : NaN;
+  const reader = response.body?.getReader();
+  if (!reader || response.headers.get('content-type')?.split(';')[0].trim() !== 'application/zip' ||
+      !Number.isSafeInteger(expected) || expected < 0 || expected > 2 * 1024 ** 3) {
+    await reader?.cancel().catch(() => {});
+    return invalid();
+  }
+  const chunks: BlobPart[] = []; let bytes = 0;
+  try {
+    for (;;) {
+      options.signal?.throwIfAborted();
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > expected) return invalid();
+      chunks.push(new Uint8Array(chunk.value).buffer);
+    }
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    if (error instanceof ProjectModelApiError) throw error;
+    throw new ProjectModelApiError('NETWORK_ERROR');
+  } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  options.signal?.throwIfAborted();
+  if (bytes !== expected) return invalid();
+  return { blob: new Blob(chunks, { type: 'application/zip' }), filename: `model-${versionId}.zip` };
 }
 export async function setProjectActiveModel(projectId: string, token: string, input: { modelVersionId: string | null; expectedSelectionRevision: number }, options: { signal?: AbortSignal } = {}): Promise<{ selection: ProjectModelSelection }> {
   if (!(input.modelVersionId === null || uuid(input.modelVersionId)) || !integer(input.expectedSelectionRevision) || input.expectedSelectionRevision === Number.MAX_SAFE_INTEGER) throw new ProjectModelApiError('INVALID_REQUEST');

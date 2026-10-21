@@ -1,0 +1,71 @@
+name: routings-preparer
+services:
+  preparer:
+    image: ${PREPARER_IMAGE:-routings-model-preparer:stage3}
+    pull_policy: never
+    hostname: routings-preparer
+    labels:
+      routings.preparer.mode: ${PREPARER_DEPLOY_MODE:-closed}
+      routings.preparer.instance: ${PREPARER_INSTANCE_ID:?Supply the private runtime instance identity}
+      routings.preparer.port: ${PREPARER_HOST_PORT:-8083}
+      routings.preparer.listen-address: ${PREPARER_LISTEN_ADDRESS:-127.0.0.1}
+      routings.preparer.configuration-sha256: ${PREPARER_CONFIGURATION_SHA256}
+      routings.preparer.runtime-configuration-sha256: ${PREPARER_RUNTIME_CONFIGURATION_SHA256}
+      routings.preparer.live-reuse-only: ${PREPARER_LIVE_REUSE_ONLY:-true}
+      routings.preparer.proof-sha256: ${PREPARER_PRICE_PROOF_SHA256:-none}
+      routings.preparer.import-root-hash: ${PREPARER_IMPORT_ROOT_HASH}
+      routings.preparer.source-root-hash: ${PREPARER_SOURCE_ROOT_HASH}
+    init: true
+    env_file:
+      - path: ${PREPARER_ENV_FILE_PATH:?Supply the authorized configuration path through start-preparer.ps1}
+        required: true
+        format: raw
+    environment:
+      NODE_ENV: production
+      PREPARER_MODE: ${PREPARER_DEPLOY_MODE:-closed}
+      PREPARER_INSTANCE_ID: ${PREPARER_INSTANCE_ID:?Supply the private runtime instance identity}
+      PREPARER_HOST: 0.0.0.0
+      PREPARER_PORT: "8080"
+      PREPARER_PUBLIC_ORIGIN: http://${PREPARER_LISTEN_ADDRESS:-127.0.0.1}:${PREPARER_HOST_PORT:-8083}
+      PORT: "8080"
+      PREPARER_DATA_DIR: /var/lib/preparer/data
+      PREPARER_WORK_DIR: /var/lib/preparer/work
+      PREPARER_OUTPUT_DIR: /var/lib/preparer/outputs
+      PREPARER_PACKAGE_MODULE: /opt/package/index.mjs
+      PREPARER_SDK_DIR: /opt/preview/sdk
+      PREPARER_IMPORT_ROOT: /imports
+      PREPARER_SOURCE_ROOT: /sources
+      PREPARER_LIVE_REUSE_ONLY: ${PREPARER_LIVE_REUSE_ONLY:-true}
+      PREPARER_PRICE_SIGNING_KEY_PATH: /var/lib/preparer/data/live/security/cost-hmac.key
+    ports:
+      - ${PREPARER_LISTEN_ADDRESS:-127.0.0.1}:${PREPARER_HOST_PORT:-8083}:8080
+    volumes:
+      - preparer-data:/var/lib/preparer/data
+      - preparer-work:/var/lib/preparer/work
+      - preparer-outputs:/var/lib/preparer/outputs
+      - type: bind
+        source: ${PREPARER_IMPORT_ROOT:?Supply an allowed read-only import directory}
+        target: /imports
+        read_only: true
+      - type: bind
+        source: ${PREPARER_SOURCE_DIRECTORY:?Supply an allowed read-only NWD source directory}
+        target: /sources
+        read_only: true
+    networks: [local]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 45s
+    restart: "no"
+volumes:
+  preparer-data:
+  preparer-work:
+  preparer-outputs:
+networks:
+  local:
+    # Docker Desktop 28 suppresses published-port forwarding for an internal
+    # network. Publish only on the explicit loopback/private host address.
+    # Host firewall rules enforce the permitted client subnet in LAN mode.
+    internal: false

@@ -9,8 +9,10 @@ import { Readable } from 'node:stream';
 import { DEFAULT_LIMITS } from '../vendor/routings-model-package/index.mjs';
 import { createModelImportService } from './importService.js';
 import type { ModelRegistryRepository } from './repository.js';
-import type { ModelStorage } from './storage.js';
-import type { ImportRecord, PortableManifest, StorageOwnership, VerificationReport, VersionRecord } from './types.js';
+import { ModelStorageError, type ModelStorage } from './storage.js';
+import type { ImportRecord, PortableManifest, StorageOwnership, VerificationReport, VersionRecord, PackageArchiveRecord } from './types.js';
+
+vi.mock('../config.js', () => ({ config: { objectStorage: {} } }));
 
 const payload = Buffer.from('lifecycle-only test upload');
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -29,7 +31,7 @@ function barrier() {
 function request(): IncomingMessage {
   return Object.assign(Readable.from([payload]), { complete: true }) as unknown as IncomingMessage;
 }
-async function fixture(options: { fault?: Parameters<typeof createModelImportService>[0]['fault']; maxConcurrent?: number } = {}) {
+async function fixture(options: { fault?: Parameters<typeof createModelImportService>[0]['fault']; maxConcurrent?: number; duplicate?: boolean } = {}) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'wfc-import-lifecycle-')));
   const projectId = randomUUID(), requestedBy = randomUUID(), id = randomUUID(), ownerToken = randomUUID();
   const versionId = randomUUID();
@@ -47,6 +49,7 @@ async function fixture(options: { fault?: Parameters<typeof createModelImportSer
   };
   let version: VersionRecord | null = null;
   let ownership: StorageOwnership | null = null;
+  let archiveOwnership: PackageArchiveRecord | null = null;
   let recoverJobs = false;
   let locked = false;
   const release = vi.fn(async () => { locked = false; });
@@ -73,6 +76,14 @@ async function fixture(options: { fault?: Parameters<typeof createModelImportSer
       };
       ownership = { importId: id, projectId, modelVersionId: versionId, storagePrefix: version.storagePrefix, ownerToken, published: false, cleanedAt: null, createdAt: timestamp };
       job = { ...job, modelVersionId: versionId, verificationReport: report };
+      archiveOwnership = { importId: id, projectId, modelVersionId: versionId, storagePrefix: `archives/${projectId}/${id}/`, ownerToken,
+        bytes: payload.length, sha256: digest(payload), published: false, cleanedAt: null };
+      if (options.duplicate) {
+        version = { ...version, state: 'ready', health: 'healthy', packageId: randomUUID(), ownerImportId: randomUUID() };
+        ownership = null;
+        job = { ...job, duplicate: true };
+        return { kind: 'duplicate' as const, version: structuredClone(version) };
+      }
       return { kind: 'reserved' as const, version: structuredClone(version), ownership: structuredClone(ownership) };
     }),
     markPublishing: vi.fn(async () => { job = { ...job, state: 'publishing' }; return structuredClone(job); }),
@@ -80,14 +91,24 @@ async function fixture(options: { fault?: Parameters<typeof createModelImportSer
       if (!version || !ownership) throw new Error('fixture missing reservation');
       version = { ...version, state: 'ready', health: 'healthy', importedAt: timestamp, validationReportId: randomUUID() };
       ownership = { ...ownership, published: true };
+      if (archiveOwnership) archiveOwnership.published = true;
       job = { ...job, state: 'complete' };
       return structuredClone(version);
     }),
+    publishDuplicate: vi.fn(async () => {
+      if (!archiveOwnership) throw new Error('fixture missing archive ownership');
+      archiveOwnership.published = true;
+      job = { ...job, state: 'complete' };
+    }),
+    getArchiveOwnership: vi.fn(async () => structuredClone(archiveOwnership)),
+    getPublishedArchive: vi.fn(async () => archiveOwnership?.published ? structuredClone(archiveOwnership) : null),
+    listUnpublishedArchives: vi.fn(async () => []),
+    markArchiveCleaned: vi.fn(async () => { if (archiveOwnership) archiveOwnership.cleanedAt = timestamp; }),
     reconcile: vi.fn(async () => ({ published: ownership?.published ?? false, ownership: structuredClone(ownership), job: structuredClone(job) })),
     failImport: vi.fn(async (_previous, failure) => {
       if (job.state !== 'complete') {
         job = { ...job, state: 'failed', failure };
-        if (version) version = { ...version, state: 'failed', failure };
+        if (version && !options.duplicate) version = { ...version, state: 'failed', failure };
       }
       return structuredClone(job);
     }),
@@ -103,12 +124,25 @@ async function fixture(options: { fault?: Parameters<typeof createModelImportSer
   const storage: ModelStorage = {
     initialize: vi.fn(async () => undefined),
     prefix: (project, modelVersion) => `projects/${project}/versions/${modelVersion}/`,
+    archivePrefix: (project, importId) => `archives/${project}/${importId}/`,
     putResource: vi.fn(async (_prefix, resource, filename) => {
       expect(await fs.readFile(filename)).toEqual(Buffer.from('r'));
       expect(resource.sha256).toBe(digest(Buffer.from('r')));
     }),
     verifyResources: vi.fn(async () => ({ resourceCount: 1, totalBytes: 1 })),
+    putArchive: vi.fn(async (_prefix, identity, filename) => {
+      const bytes = await fs.readFile(filename);
+      expect(identity).toEqual({ bytes: payload.length, sha256: digest(payload) });
+      expect(bytes).toEqual(payload);
+      await fs.writeFile(path.join(root, 'retained.zip'), bytes);
+    }),
+    verifyArchive: vi.fn(async () => undefined),
+    readVerifiedArchive: vi.fn(async () => {
+      const handle = await fs.open(path.join(root, 'retained.zip'), 'r');
+      return { handle, bytes: payload.length, close: async () => handle.close() };
+    }),
     removeUnpublished: vi.fn(async () => undefined),
+    removeUnpublishedArchive: vi.fn(async () => undefined),
   };
   const verify = vi.fn(async (archive: string, options?: { extractTo?: string }): Promise<VerificationReport> => {
     expect(await fs.readFile(archive)).toEqual(payload);
@@ -148,6 +182,125 @@ async function fixture(options: { fault?: Parameters<typeof createModelImportSer
 }
 
 describe('model import lifecycle and reconciliation', () => {
+  it('retains and verifies the original ZIP before publication and downloads it after staging cleanup', async () => {
+    const test = await fixture();
+    await test.service.initialize();
+    await test.service.receive(request(), test.input);
+    await vi.waitFor(() => expect(test.release).toHaveBeenCalledOnce());
+    expect(test.job().state).toBe('complete');
+    expect(test.storage.putArchive).toHaveBeenCalledOnce();
+    expect(test.storage.verifyArchive).toHaveBeenCalledOnce();
+    expect(vi.mocked(test.storage.verifyArchive).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(test.repository.publish).mock.invocationCallOrder[0]);
+    await expect(fs.stat(test.directory)).rejects.toMatchObject({ code: 'ENOENT' });
+    const archive = await test.service.getPackage(test.input.projectId, test.version()!.id);
+    try {
+      expect(await archive.handle.readFile()).toEqual(payload);
+      expect(archive.sha256).toBe(digest(payload));
+      expect(archive.filename).toBe(`model-${test.version()!.id}.zip`);
+    } finally { await archive.close(); }
+    expect(test.repository.selectModel).not.toHaveBeenCalled();
+  });
+
+  it('retains a fresh exact ZIP for a legacy content duplicate without rewriting or activating its existing model', async () => {
+    const test = await fixture({ duplicate: true });
+    await test.service.initialize();
+    await test.service.receive(request(), test.input);
+    await vi.waitFor(() => expect(test.release).toHaveBeenCalledOnce());
+    expect(test.job().state).toBe('complete');
+    expect(test.job().duplicate).toBe(true);
+    expect(test.storage.putResource).not.toHaveBeenCalled();
+    expect(test.repository.publish).not.toHaveBeenCalled();
+    expect(test.repository.publishDuplicate).toHaveBeenCalledOnce();
+    expect(test.storage.putArchive).toHaveBeenCalledWith(`archives/${test.input.projectId}/${test.job().id}/`,
+      { bytes: payload.length, sha256: digest(payload) }, path.join(test.directory, 'archive.zip'), expect.any(AbortSignal));
+    expect(vi.mocked(test.storage.verifyArchive).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(test.repository.publishDuplicate).mock.invocationCallOrder[0]);
+    expect(test.version()?.ownerImportId).not.toBe(test.job().id);
+    const archive = await test.service.getPackage(test.input.projectId, test.version()!.id);
+    try { expect(await archive.handle.readFile()).toEqual(payload); } finally { await archive.close(); }
+    expect(test.repository.selectModel).not.toHaveBeenCalled();
+  });
+
+  it('keeps the old model ready and fails the duplicate job if its new ZIP readback fails', async () => {
+    const test = await fixture({ duplicate: true });
+    await test.service.initialize();
+    vi.mocked(test.storage.verifyArchive).mockRejectedValue(new ModelStorageError('STORAGE_INTEGRITY_FAILED', 'controlled readback failure'));
+    await test.service.receive(request(), test.input);
+    await vi.waitFor(() => expect(test.release).toHaveBeenCalledOnce());
+    expect(test.job().state).toBe('failed');
+    expect(test.version()?.state).toBe('ready');
+    expect(test.repository.publishDuplicate).not.toHaveBeenCalled();
+    expect(test.storage.removeUnpublished).not.toHaveBeenCalled();
+    expect(test.storage.removeUnpublishedArchive).toHaveBeenCalledWith(`archives/${test.input.projectId}/${test.job().id}/`);
+    await expect(test.service.getPackage(test.input.projectId, test.version()!.id)).rejects.toMatchObject({ code: 'PACKAGE_NOT_FOUND', status: 404 });
+  });
+
+  it('preserves a successfully retained duplicate ZIP when the publication reply is lost', async () => {
+    const test = await fixture({ duplicate: true });
+    await test.service.initialize();
+    const publish = vi.mocked(test.repository.publishDuplicate).getMockImplementation()!;
+    vi.mocked(test.repository.publishDuplicate).mockImplementation(async (...args) => { await publish(...args); throw new Error('lost commit reply'); });
+    await test.service.receive(request(), test.input);
+    await vi.waitFor(() => expect(test.release).toHaveBeenCalledOnce());
+    expect(test.job().state).toBe('complete');
+    expect(test.storage.removeUnpublishedArchive).not.toHaveBeenCalled();
+    expect(test.repository.failImport).not.toHaveBeenCalled();
+    const archive = await test.service.getPackage(test.input.projectId, test.version()!.id);
+    await archive.close();
+  });
+
+  it('cleans an independently owned unpublished archive after its project/job was deleted', async () => {
+    const test = await fixture();
+    const archive: PackageArchiveRecord = { importId: test.job().id, projectId: test.input.projectId, modelVersionId: randomUUID(),
+      storagePrefix: `archives/${test.input.projectId}/${test.job().id}/`, ownerToken: test.job().ownerToken,
+      bytes: payload.length, sha256: digest(payload), published: false, cleanedAt: null };
+    vi.mocked(test.repository.listUnpublishedArchives).mockResolvedValue([archive]);
+    vi.mocked(test.repository.getArchiveOwnership).mockResolvedValue(archive);
+    vi.mocked(test.repository.reconcile).mockResolvedValue({ published: false, ownership: null, job: null });
+    await test.service.initialize();
+    expect(test.storage.removeUnpublishedArchive).toHaveBeenCalledWith(archive.storagePrefix);
+    expect(test.repository.markArchiveCleaned).toHaveBeenCalledWith(archive.importId, archive.ownerToken);
+    expect(test.storage.removeUnpublished).not.toHaveBeenCalled();
+  });
+
+  it.each(['putArchive', 'verifyArchive'] as const)('does not publish when %s fails and cleans its unpublished ZIP/resources', async stage => {
+    const test = await fixture();
+    await test.service.initialize();
+    vi.mocked(test.storage[stage]).mockRejectedValue(new ModelStorageError('STORAGE_INTEGRITY_FAILED', 'private detail'));
+    await test.service.receive(request(), test.input);
+    await vi.waitFor(() => expect(test.release).toHaveBeenCalledOnce());
+    expect(test.job().state).toBe('failed');
+    expect(test.job().failure?.code).toBe('STORAGE_READBACK_FAILED');
+    expect(test.repository.publish).not.toHaveBeenCalled();
+    expect(test.storage.removeUnpublished).toHaveBeenCalledWith(test.ownership()?.storagePrefix);
+  });
+
+  it.each([
+    ['STORAGE_ARCHIVE_MISSING', 'PACKAGE_NOT_FOUND', 404],
+    ['STORAGE_INTEGRITY_FAILED', 'PACKAGE_UNAVAILABLE', 503],
+  ] as const)('reports %s on ZIP download without changing resource health or active selection', async (storageCode, code, status) => {
+    const test = await fixture();
+    await test.service.initialize();
+    await test.service.receive(request(), test.input);
+    await vi.waitFor(() => expect(test.release).toHaveBeenCalledOnce());
+    vi.mocked(test.storage.readVerifiedArchive).mockRejectedValue(new ModelStorageError(storageCode, 'private key'));
+    await expect(test.service.getPackage(test.input.projectId, test.version()!.id)).rejects.toMatchObject({ code, status });
+    expect(test.repository.setHealth).not.toHaveBeenCalled();
+    expect(test.repository.selectModel).not.toHaveBeenCalled();
+    expect(test.version()?.health).toBe('healthy');
+  });
+
+  it('does not read storage for a version outside this project or an unready version', async () => {
+    const test = await fixture();
+    await expect(test.service.getPackage(test.input.projectId, randomUUID())).rejects.toMatchObject({ code: 'MODEL_NOT_FOUND', status: 404 });
+    expect(test.storage.readVerifiedArchive).not.toHaveBeenCalled();
+    await test.service.initialize();
+    vi.mocked(test.storage.verifyArchive).mockRejectedValue(new Error('controlled fixture failure'));
+    await test.service.receive(request(), test.input);
+    await vi.waitFor(() => expect(test.release).toHaveBeenCalledOnce());
+    await expect(test.service.getPackage(test.input.projectId, test.version()!.id)).rejects.toMatchObject({ code: 'VERSION_NOT_READY', status: 409 });
+    expect(test.storage.readVerifiedArchive).not.toHaveBeenCalled();
+  });
+
   it('waits for a delayed durable begin on close, rejects acceptance and releases the retained lock', async () => {
     const test = await fixture();
     await test.service.initialize();

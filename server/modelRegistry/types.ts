@@ -122,6 +122,18 @@ export interface StorageOwnership {
   createdAt: string;
 }
 
+export interface PackageArchiveRecord {
+  importId: string;
+  projectId: string;
+  modelVersionId: string;
+  storagePrefix: string;
+  ownerToken: string;
+  sha256: string;
+  bytes: number;
+  published: boolean;
+  cleanedAt: string | null;
+}
+
 export interface SelectionRecord {
   projectId: string;
   activeModelVersionId: string | null;

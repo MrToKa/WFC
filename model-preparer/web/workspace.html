@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>WFC · Подготовка на 3D модели</title>
+  <link rel="stylesheet" href="/web/workspace.css">
+  <script type="module" src="/web/workspace.mjs"></script>
+</head>
+<body>
+  <header class="header">
+    <a class="brand" href="/" aria-label="WFC — начало"><span class="brand-icon" aria-hidden="true">W</span><span>WFC <span class="brand-divider">/</span> <strong>Model Preparer</strong></span></a>
+    <div id="account" class="account" hidden><span class="live-pill"><span></span> Live</span><span id="account-name"></span><button id="logout" class="text-button" type="button">Изход</button></div>
+  </header>
+
+  <main class="shell">
+    <div id="feedback" class="feedback" role="alert" hidden></div>
+    <section id="login-screen" class="login-layout" hidden>
+      <div class="login-intro"><p class="eyebrow">ОТ 3D ФАЙЛ ДО WFC</p><h1>Подготви модела.<br><span>Продължи работа.</span></h1><p>Генерирай SVF модел и го запиши директно в проекта си. ZIP пакетът остава на разположение за сваляне.</p><ol class="intro-steps"><li><span>1</span> Влез с WFC акаунта си</li><li><span>2</span> Провери Autodesk и избери модел</li><li><span>3</span> Генерирай и получи готовия резултат</li></ol></div>
+      <section class="card login-card" aria-labelledby="login-title"><span class="small-icon" aria-hidden="true">↗</span><h2 id="login-title">Вход с WFC</h2><p class="muted">Използвай акаунт с права на инженер или администратор.</p><form id="login-form"><div class="field"><label for="email">Имейл</label><input id="email" type="email" autocomplete="username" required placeholder="name@company.com" maxlength="254"></div><div class="field"><label for="password">Парола</label><input id="password" type="password" autocomplete="current-password" required maxlength="1024"></div><button id="login-button" class="button primary wide" type="submit">Вход</button></form><p class="small muted">Паролата се използва само за вход в WFC.</p></section>
+    </section>
+
+    <div id="workspace-screen" hidden>
+      <div class="page-heading"><div><p class="eyebrow">ПОДГОТОВКА НА МОДЕЛ</p><h1>От NWD до готов SVF.</h1><p class="muted">Едно генериране. Моделът и ZIP пакетът се запазват в WFC.</p></div><span class="format-chip">NWD <span aria-hidden="true">→</span> SVF + ZIP</span></div>
+      <section class="card connection-card" aria-labelledby="connection-title"><div class="connection-copy"><span id="connection-indicator" class="state-indicator" aria-hidden="true"></span><div><h2 id="connection-title">1. Провери Autodesk</h2><p id="connection-summary" class="muted">Провери достъпа преди да избереш модел.</p><p id="quota-note" class="small muted" hidden></p></div></div><button id="check-autodesk" class="button secondary" type="button">Проверка на Autodesk <span aria-hidden="true">↗</span></button></section>
+      <details id="settings-panel" class="settings-panel" hidden><summary>Настройки на Autodesk <span class="small muted">само за администратор</span></summary><form id="settings-form" class="settings-form"><p class="settings-description">Запази данните на Autodesk приложението веднъж. Тайният ключ се пази на сървъра и не се показва отново.</p><div class="settings-grid"><div class="field"><label for="client-id">Client ID</label><input id="client-id" type="text" autocomplete="off" spellcheck="false" maxlength="256" required></div><div class="field"><label for="client-secret">Client Secret <span id="secret-saved" class="saved-hint" hidden>запазен</span></label><input id="client-secret" type="password" autocomplete="new-password" maxlength="512" placeholder="Въведи при първото запазване или за смяна"><small>Празното поле запазва текущия ключ.</small></div><div class="field"><label for="region">Регион</label><select id="region"><option value="EMEA">Европа — EMEA</option><option value="US">САЩ — US</option></select></div><div class="field"><label for="bucket">Име на хранилището (Bucket)</label><input id="bucket" type="text" autocomplete="off" spellcheck="false" maxlength="128" required></div></div><label class="checkbox"><input id="free-confirmed" type="checkbox"><span>Потвърждавам, че акаунтът е с план APS Free и няма включено автоматично платено използване.</span></label><p class="small muted">Това е потвърждение от администратора. Проверка на връзката не удостоверява оставащия брой заявки.</p><button id="save-settings" class="button secondary" type="submit">Запази настройките</button></form></details>
+
+      <div class="content-grid">
+        <section class="card generate-card" aria-labelledby="generate-title"><div class="section-heading"><div><p class="eyebrow">НОВ МОДЕЛ</p><h2 id="generate-title">2. Избери и генерирай</h2></div><span class="step-mark" aria-hidden="true">02</span></div><form id="generate-form"><div class="field"><label for="project">Проект в WFC</label><select id="project" required><option value="">Избери проект</option></select><small id="project-help">Показват се проектите, в които имаш право да записваш.</small></div><div class="field"><label for="model-file">3D модел (.nwd)</label><label class="file-drop" for="model-file"><span class="file-icon" aria-hidden="true">↑</span><span id="file-label">Избери NWD файл</span><span class="small muted">До 2 GB</span><input id="model-file" type="file" accept=".nwd"></label></div><div id="source-field" class="field" hidden><label for="known-source">Или избери наличен модел на сървъра</label><select id="known-source"><option value="">Избери наличен файл</option></select></div><div class="field"><label for="model-label">Име на модела / версия</label><input id="model-label" type="text" maxlength="160" placeholder="Например: Aalborg · ревизия 03" required></div><button id="generate-button" class="button primary wide" type="submit" disabled>Generate <span aria-hidden="true">→</span></button><p id="generate-help" class="small muted">Първо провери връзката с Autodesk.</p></form><div class="automatic-note"><span aria-hidden="true">✓</span><p>Конвертиране, ZIP пакет и запис в WFC — автоматично след Generate.</p></div></section>
+
+        <section class="results-section" aria-labelledby="results-title"><div class="results-heading"><div><p class="eyebrow">РЕЗУЛТАТИ</p><h2 id="results-title">Моите модели <span id="generation-count" class="count">0</span></h2></div><button id="refresh-generations" class="text-button" type="button">Обнови <span aria-hidden="true">↻</span></button></div><div id="generations-list" class="generations-list" aria-live="polite"></div><div id="empty-results" class="empty-state"><span aria-hidden="true">◇</span><h3>Готовият модел ще се появи тук.</h3><p>Можеш да следиш изпълнението и да свалиш ZIP пакета след подготовката.</p></div></section>
+      </div>
+      <p id="connection-status" class="connection-status" role="status"></p>
+    </div>
+    <p id="initial-loading" class="initial-loading" role="status">Свързване с приложението…</p>
+  </main>
+</body>
+</html>

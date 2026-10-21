@@ -87,7 +87,13 @@ export function createModelImportService(options: {
       await cleanupLocal(job);
       return;
     }
+    const archive = await repository.getArchiveOwnership(job.id);
+    if (archive?.published) { await cleanupLocal(job); return; }
     await repository.failImport(job, failure(error));
+    if (archive && archive.ownerToken === job.ownerToken) {
+      await storage.removeUnpublishedArchive(archive.storagePrefix);
+      await repository.markArchiveCleaned(job.id, job.ownerToken);
+    }
     if (state.ownership && !state.ownership.published && state.ownership.ownerToken === job.ownerToken) {
       await storage.removeUnpublished(state.ownership.storagePrefix);
     }
@@ -112,7 +118,15 @@ export function createModelImportService(options: {
         await delay(250, undefined, { signal: controller.signal });
         reservation = await repository.reserve(job, report);
       }
+      const archivePrefix = storage.archivePrefix(job.projectId, job.id);
+      const archiveIdentity = { bytes: report.package.bytes, sha256: report.package.sha256 };
       if (reservation.kind === 'duplicate') {
+        // A legacy ready model can have identical geometry but no retained original ZIP.
+        // Keep this exact newly verified package independently of canonical resource deduplication.
+        await storage.putArchive(archivePrefix, archiveIdentity, archive, controller.signal);
+        await storage.verifyArchive(archivePrefix, archiveIdentity, controller.signal);
+        job = await repository.markPublishing(job);
+        await repository.publishDuplicate(job, reservation.version, report);
         await cleanupLocal(job);
         return;
       }
@@ -128,6 +142,10 @@ export function createModelImportService(options: {
       }
       await options.fault?.('beforeReadback', { job, version });
       const readback = await storage.verifyResources(ownership.storagePrefix, report.manifest.resources, controller.signal);
+      // Keep the original portable archive, including its manifest, independent of staging cleanup.
+      // Publication follows a full separate readback of both resources and ZIP bytes.
+      await storage.putArchive(archivePrefix, archiveIdentity, archive, controller.signal);
+      await storage.verifyArchive(archivePrefix, archiveIdentity, controller.signal);
       job = await repository.markPublishing(job);
       await options.fault?.('beforePublish', { job, version });
       await repository.publish(job, version, report, readback);
@@ -161,6 +179,19 @@ export function createModelImportService(options: {
             await repository.markCleaned(ownership.importId, ownership.ownerToken);
           }
         } catch { console.error('Orphan model import recovery deferred', { importId: ownership.importId }); }
+        finally { await lock.release(); }
+      }
+      for (const archive of await repository.listUnpublishedArchives()) {
+        const lock = await repository.tryLockImport(archive.importId);
+        if (!lock) continue;
+        try {
+          const current = await repository.getArchiveOwnership(archive.importId);
+          if (!current || current.published || current.cleanedAt || current.ownerToken !== archive.ownerToken) continue;
+          const state = await repository.reconcile(archive.importId);
+          if (state.job) continue; // Existing jobs are reconciled through their own failure boundary above.
+          await storage.removeUnpublishedArchive(current.storagePrefix);
+          await repository.markArchiveCleaned(current.importId, current.ownerToken);
+        } catch { console.error('Orphan model package recovery deferred', { importId: archive.importId }); }
         finally { await lock.release(); }
       }
     })();
@@ -301,6 +332,26 @@ export function createModelImportService(options: {
       const job = await repository.getImport(projectId, importId);
       if (!job) throw new ModelRegistryError('IMPORT_NOT_FOUND', 404);
       return toImportDto(job);
+    },
+    async getPackage(projectId: string, versionId: string, signal?: AbortSignal) {
+      const version = await repository.getVersion(projectId, versionId);
+      if (!version) throw new ModelRegistryError('MODEL_NOT_FOUND', 404);
+      if (version.state !== 'ready') throw new ModelRegistryError('VERSION_NOT_READY', 409);
+      const archive = await repository.getPublishedArchive(projectId, versionId);
+      if (!archive || !archive.published || archive.modelVersionId !== version.id || archive.projectId !== projectId ||
+          archive.storagePrefix !== storage.archivePrefix(projectId, archive.importId)) {
+        throw new ModelRegistryError('PACKAGE_NOT_FOUND', 404);
+      }
+      try {
+        const verified = await storage.readVerifiedArchive(archive.storagePrefix, archive, signal);
+        return { ...verified, sha256: archive.sha256, filename: `model-${version.id}.zip` };
+      } catch (error) {
+        signal?.throwIfAborted();
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'STORAGE_ARCHIVE_MISSING') {
+          throw new ModelRegistryError('PACKAGE_NOT_FOUND', 404);
+        }
+        throw new ModelRegistryError('PACKAGE_UNAVAILABLE', 503);
+      }
     },
     async selectModel(projectId: string, id: string | null, revision: number, requestedBy: string) {
       if (id !== null) {

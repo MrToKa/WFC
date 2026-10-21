@@ -4,7 +4,7 @@ import type { Pool, PoolClient } from 'pg';
 import { ModelRegistryError } from './errors.js';
 import type {
   ImportRecord, ImportState, ModelFailure, ModelHealth, ModelSource, PortableManifest,
-  SelectionRecord, StorageOwnership, VerificationReport, VersionRecord,
+  SelectionRecord, StorageOwnership, VerificationReport, VersionRecord, PackageArchiveRecord,
 } from './types.js';
 export { toImportDto, toVersionDto } from './types.js';
 
@@ -56,6 +56,26 @@ function ownershipRecord(row: Row): StorageOwnership {
     storagePrefix: String(row.storage_prefix), ownerToken: String(row.owner_token), published: row.published === true,
     cleanedAt: nullableDate(row.cleaned_at), createdAt: date(row.created_at),
   };
+}
+function archiveRecord(row: Row): PackageArchiveRecord {
+  return { importId: String(row.import_id), projectId: String(row.project_id), modelVersionId: String(row.model_version_id),
+    storagePrefix: String(row.storage_prefix), ownerToken: String(row.owner_token), sha256: String(row.archive_sha256),
+    bytes: number(row.archive_bytes), published: row.published === true, cleanedAt: nullableDate(row.cleaned_at) };
+}
+
+async function reserveArchive(client: PoolClient, job: ImportRecord, versionId: string, report: VerificationReport): Promise<void> {
+  await client.query(`INSERT INTO model_package_archives(import_id,project_id,model_version_id,storage_prefix,owner_token,archive_sha256,archive_bytes)
+    VALUES($1,$2,$3,$4,$5,$6,$7)`, [job.id, job.projectId, versionId, `archives/${job.projectId}/${job.id}/`,
+    job.ownerToken, report.package.sha256, report.package.bytes]);
+}
+
+async function publishArchive(client: PoolClient, job: ImportRecord, versionId: string): Promise<void> {
+  const row = (await client.query<Row>('SELECT * FROM model_package_archives WHERE import_id=$1 FOR UPDATE', [job.id])).rows[0];
+  if (!row || row.owner_token !== job.ownerToken || row.project_id !== job.projectId || row.model_version_id !== versionId ||
+      row.archive_sha256 !== job.archiveSha256 || number(row.archive_bytes) !== job.receivedBytes || row.published || row.cleaned_at) {
+    throw new ModelRegistryError('IMPORT_FENCED', 409);
+  }
+  await client.query('UPDATE model_package_archives SET published=TRUE WHERE import_id=$1', [job.id]);
 }
 function selectionRecord(row: Row): SelectionRecord {
   return {
@@ -246,9 +266,8 @@ export function createModelRegistryRepository(pool: Pool) {
         if (existing) {
           const version = versionRecord(existing);
           if (!sameProvenance(version.source, manifest.source)) throw new ModelRegistryError('PROVENANCE_CONFLICT', 409);
-          await client.query(`INSERT INTO model_package_aliases(project_id,package_id,model_version_id) VALUES($1,$2,$3)
-            ON CONFLICT(project_id,package_id) DO NOTHING`, [current.projectId, manifest.packageId, version.id]);
-          await client.query(`UPDATE model_import_jobs SET state='complete',model_version_id=$1,verification_report=$2,duplicate=TRUE,updated_at=NOW() WHERE id=$3`,
+          await reserveArchive(client, current, version.id, report);
+          await client.query(`UPDATE model_import_jobs SET model_version_id=$1,verification_report=$2,duplicate=TRUE,updated_at=NOW() WHERE id=$3`,
             [version.id, report, current.id]);
           return { kind: 'duplicate', version };
         }
@@ -271,6 +290,7 @@ export function createModelRegistryRepository(pool: Pool) {
         const ownership = (await client.query<Row>(`INSERT INTO model_storage_ownership(import_id,project_id,model_version_id,storage_prefix,owner_token)
           VALUES($1,$2,$3,$4,$5) RETURNING *`, [current.id,current.projectId,id,prefix,current.ownerToken])).rows[0];
         await client.query("UPDATE model_import_jobs SET model_version_id=$1,verification_report=$2,updated_at=NOW() WHERE id=$3", [id,report,current.id]);
+        await reserveArchive(client, current, id, report);
         return { kind: 'reserved', version: versionRecord(versionRow), ownership: ownershipRecord(ownership) };
       });
     },
@@ -303,6 +323,7 @@ export function createModelRegistryRepository(pool: Pool) {
           throw new ModelRegistryError('IMPORT_FENCED', 409);
         }
         if (readback.resourceCount !== report.resourceCount || readback.totalBytes !== report.totalRawBytes) throw new ModelRegistryError('STORAGE_READBACK_FAILED', 422);
+        await publishArchive(client, current, version.id);
         const reportId = randomUUID();
         const receipt = { resourceCount: readback.resourceCount, totalBytes: readback.totalBytes, algorithm: 'SHA-256', status: 'PASS', verifiedAt: new Date().toISOString() };
         await client.query('INSERT INTO model_validation_reports(id,report,storage_readback) VALUES($1,$2,$3)', [reportId,report,receipt]);
@@ -314,6 +335,44 @@ export function createModelRegistryRepository(pool: Pool) {
         await client.query('DELETE FROM model_content_reservations WHERE project_id=$1 AND import_id=$2', [current.projectId,current.id]);
         return versionRecord(result.rows[0]);
       });
+    },
+
+    async publishDuplicate(job: ImportRecord, version: VersionRecord, report: VerificationReport): Promise<void> {
+      await transaction(pool, async client => {
+        await lockProject(client, job.projectId);
+        const current = await ownedJob(client, job);
+        if (current.state !== 'publishing' || !current.duplicate || current.modelVersionId !== version.id) throw new ModelRegistryError('IMPORT_STATE_CONFLICT', 409);
+        await requireCurrentEditor(client, current);
+        verifiedReport(current, report);
+        const row = (await client.query<Row>("SELECT * FROM model_versions WHERE project_id=$1 AND id=$2 AND state='ready' FOR UPDATE", [current.projectId, version.id])).rows[0];
+        if (!row || row.content_fingerprint !== report.contentFingerprint || !sameProvenance(row.source as ModelSource, report.manifest.source)) {
+          throw new ModelRegistryError('PROVENANCE_CONFLICT', 409);
+        }
+        await publishArchive(client, current, version.id);
+        await client.query(`INSERT INTO model_package_aliases(project_id,package_id,model_version_id) VALUES($1,$2,$3)
+          ON CONFLICT(project_id,package_id) DO NOTHING`, [current.projectId, report.manifest.packageId, version.id]);
+        await client.query("UPDATE model_import_jobs SET state='complete',verification_report=$1,updated_at=NOW() WHERE id=$2", [report, current.id]);
+      });
+    },
+
+    async getArchiveOwnership(importId: string): Promise<PackageArchiveRecord | null> {
+      const result = await pool.query<Row>('SELECT * FROM model_package_archives WHERE import_id=$1', [uuid(importId)]);
+      return result.rows[0] ? archiveRecord(result.rows[0]) : null;
+    },
+
+    async getPublishedArchive(projectId: string, versionId: string): Promise<PackageArchiveRecord | null> {
+      const result = await pool.query<Row>(`SELECT * FROM model_package_archives WHERE project_id=$1 AND model_version_id=$2 AND published=TRUE
+        ORDER BY created_at DESC,import_id DESC LIMIT 1`, [uuid(projectId), uuid(versionId)]);
+      return result.rows[0] ? archiveRecord(result.rows[0]) : null;
+    },
+
+    async listUnpublishedArchives(): Promise<PackageArchiveRecord[]> {
+      const result = await pool.query<Row>('SELECT * FROM model_package_archives WHERE published=FALSE AND cleaned_at IS NULL ORDER BY created_at,import_id');
+      return result.rows.map(archiveRecord);
+    },
+
+    async markArchiveCleaned(importId: string, ownerToken: string): Promise<void> {
+      await pool.query('UPDATE model_package_archives SET cleaned_at=NOW() WHERE import_id=$1 AND owner_token=$2 AND published=FALSE AND cleaned_at IS NULL', [uuid(importId), uuid(ownerToken)]);
     },
 
     async reconcile(importId: string): Promise<{ published: boolean; ownership: StorageOwnership | null; job: ImportRecord | null }> {

@@ -38,6 +38,16 @@ function fixture(options: { commitError?: Error; duplicate?: boolean; differentH
 }
 
 describe('model registry connection and failure boundaries', () => {
+  it('adds independent retained archive ownership without replacing existing version/resource tables', async () => {
+    const test = fixture();
+    await initializeModelRegistry(test.pool);
+    const sql = test.statements.join('\n');
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS model_package_archives');
+    expect(sql).toContain("storage_prefix = 'archives/' || project_id::text || '/' || import_id::text || '/'");
+    expect(sql).toContain('CREATE TRIGGER protect_package_archive_ownership');
+    expect(sql).not.toMatch(/DROP TABLE|TRUNCATE TABLE/);
+    expect(test.statements.at(-1)).toBe('COMMIT');
+  });
   it('does no I/O when the repository is constructed', () => {
     const test = fixture();
     createModelRegistryRepository(test.pool);

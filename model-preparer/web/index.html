@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Model Preparer — models and versions</title>
+  <link rel="stylesheet" href="/web/styles.css">
+  <script type="module" src="/web/app.mjs"></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to the current job</a>
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="Model Preparer — home"><span class="brand-mark" aria-hidden="true"></span><span>Model <strong>Preparer</strong></span></a>
+    <div class="header-state"><span class="local-note">Local application</span><span id="mode-badge" class="badge">Connecting…</span></div>
+  </header>
+  <div class="app-shell">
+    <aside class="job-sidebar" aria-labelledby="jobs-title">
+      <div class="sidebar-heading"><h2 id="jobs-title">Models and versions <span id="jobs-count" class="count">0</span></h2><button id="refresh" class="icon-button" type="button" aria-label="Refresh the job list" title="Refresh">↻</button></div>
+      <p class="sidebar-intro">Jobs and verified results are preserved across restarts.</p>
+      <div id="jobs-list" class="jobs-list" role="list"></div>
+      <p id="jobs-empty" class="empty-sidebar">No jobs yet. Choose a source or register an existing package.</p>
+      <div class="sidebar-foot">Stopping ends local work. Processing in Autodesk may continue.</div>
+    </aside>
+    <main id="workspace" class="workspace" tabindex="-1">
+      <div class="page-heading"><div><p class="eyebrow">From source to verified package</p><h1>3D model preparation</h1></div><span class="format-note">NWD → SVF</span></div>
+      <section id="mode-notice" class="notice" aria-label="Operating mode" hidden></section>
+      <div id="feedback" class="feedback" role="alert" hidden></div>
+      <section class="configuration-strip" aria-labelledby="configuration-title">
+        <div><h2 id="configuration-title">Preparation readiness</h2><p id="cost-summary">Checking the local configuration…</p></div>
+        <details class="configuration-details"><summary>Settings and limits</summary><div id="configuration-list"></div><p id="runtime-summary"></p><p id="limits-summary"></p></details>
+      </section>
+      <section class="input-section" aria-labelledby="input-title">
+        <div class="section-heading"><div><h2 id="input-title">New source</h2><p>Choose a file and a label to identify this version.</p></div></div>
+        <form id="capture-form" class="capture-form">
+          <div class="field file-field"><label for="nwd-file">NWD file</label><input id="nwd-file" name="nwd" type="file" accept=".nwd"><small id="nwd-description">The file is streamed to the local application.</small></div>
+          <div id="source-choice" class="field" hidden><label for="known-source">Or an NWD in the permitted directory</label><select id="known-source"><option value="">Select an available NWD</option></select><small>The application reads the original and saves its own verified copy.</small></div>
+          <div class="field"><label for="version-label">Version label</label><input id="version-label" name="label" type="text" maxlength="160" placeholder="For example: Aalborg · revision 03" required autocomplete="off"></div>
+          <button id="capture-button" class="button primary" type="submit">Create job</button>
+        </form>
+        <div id="simulation-input" class="simulation-input" hidden><p>The test source is synthetic and created by the server. Do not select a real NWD for simulation.</p><button id="simulation-capture" class="button primary" type="button">Create synthetic job</button></div>
+        <div id="resume-upload" class="resume-upload" hidden><p id="resume-upload-label"></p><button id="resume-upload-button" class="button" type="button">Continue registration</button><button id="discard-upload-button" class="text-button" type="button">Keep the source for later</button></div>
+        <details id="register-details" class="register-details"><summary>Already have a prepared package?</summary>
+          <p>Registration verifies the package locally and preserves its provenance. It does not start a new conversion.</p>
+          <div class="registration-options">
+            <form id="known-form" class="known-form"><div class="field"><label for="known-input">Available package</label><select id="known-input"><option value="">No packages are available in the permitted directory</option></select></div><button id="known-register-button" class="button" type="submit" disabled>Register available package</button></form>
+            <form id="register-form" class="register-form"><div class="field"><label for="package-file">Or choose a ZIP package</label><input id="package-file" name="package" type="file" accept=".zip" required></div><button id="register-button" class="button" type="submit">Upload and verify package</button></form>
+          </div>
+        </details>
+      </section>
+      <section id="job-detail" class="job-detail" aria-labelledby="job-title" hidden>
+        <div class="detail-heading"><div><p id="job-kind" class="eyebrow"></p><h2 id="job-title" tabindex="-1"></h2><p id="job-source" class="muted"></p></div><span id="job-status" class="badge"></span></div>
+        <ol id="phase-list" class="phase-list" aria-label="Preparation stages"></ol>
+        <div id="job-error" class="notice error-notice" role="status" hidden></div>
+        <div id="job-context" class="context-note" hidden></div>
+        <div id="operation-panel" class="operation-panel" aria-live="polite" hidden><div><strong id="operation-title"></strong><p id="operation-counts"></p><small id="operation-id"></small></div><button id="stop-button" class="button danger" type="button">Stop local work</button></div>
+        <div id="facts" class="facts"></div>
+        <div id="root-field" class="field root-field" hidden><label for="root-select">3D view to download</label><select id="root-select"></select><small>Select a view when more than one is available.</small></div>
+        <div id="actions" class="actions" aria-label="Available actions"></div>
+        <details class="recovery-details"><summary>Recovery after an interrupted process</summary><label class="checkbox-label"><input id="recover-dead" type="checkbox"> Request a recovery check on the next action</label><p>The server allows recovery only when the previous owner is confirmed stopped. Lock age alone does not allow its removal.</p></details>
+        <section id="result-panel" class="result-panel" aria-labelledby="result-title" hidden><div><p class="eyebrow">Verified result</p><h3 id="result-title">The package is ready</h3><p id="result-summary"></p></div><div class="result-actions"><a id="preview-link" class="button primary" target="_blank" rel="noopener" hidden>Open 3D preview</a><a id="package-link" class="button" download>Download ZIP</a><a id="report-link" class="text-button" download>Download report</a></div></section>
+        <details class="identity-details"><summary>Identity and history</summary><dl id="identity-list"></dl></details>
+      </section>
+      <section id="welcome" class="welcome"><span class="welcome-symbol" aria-hidden="true">◇</span><h2>Select a version to review</h2><p>The current phase, verified facts and available next actions will appear here.</p></section>
+      <div id="global-operation" class="global-operation" aria-live="polite" hidden><span id="global-operation-label"></span><button id="global-stop" class="text-button" type="button">Stop locally</button></div>
+      <p id="connection-status" class="connection-status" role="status" aria-live="polite"></p>
+    </main>
+  </div>
+</body>
+</html>
