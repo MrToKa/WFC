@@ -8,7 +8,7 @@ namespace AddinRibbon.Routing
     /// D&lt;T decision. Only a clear direct centreline, or an explicit drilling
     /// bypass, selects that strategy. Otherwise search accessible tray candidates.
     /// No design ledger/formula or endpoint coordinates are replaced here.</summary>
-    public static class ConstrainedSecondaryRoute
+    public static partial class ConstrainedSecondaryRoute
     {
         public static ConstrainedSecondaryEvaluation Calculate(IEnumerable<TraySegment> trays, RoutePoint from, RoutePoint to,
             CableCategory category, RouteCollisionQuery collision, RoutingOptions options = null,

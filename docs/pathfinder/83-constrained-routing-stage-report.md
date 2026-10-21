@@ -95,4 +95,3 @@ Automatic approval review previously refused cleanup of B2 scratch sql-root and
 linux-sql with “blocked by policy”. Both paths/parents and seven historical refused
 targets stay untouched. B3 created no containers. Keep needed evidence/artifacts.
 Next: execute PF-B4 from its detailed handoff on a new inherited local branch.
-

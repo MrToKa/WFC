@@ -123,7 +123,7 @@ namespace AddinRibbon.Routing
         }
 
         private static List<Projection> ConstrainedCandidates(List<TraySegment> trays, RoutePoint target, RouteCollisionQuery collision,
-            RoutingOptions options, ConstrainedBudget budget, Dictionary<Tuple<int, double>, RouteCollisionObservation> checkedPoints)
+            RoutingOptions options, ConstrainedBudget budget, Dictionary<Tuple<int, double>, RouteCollisionObservation> checkedPoints, bool requireClear = true)
         {
             var seen = new HashSet<Tuple<int, double>>(); var clear = new List<Projection>();
             for (int segment = 0; segment < trays.Count; segment++)
@@ -136,14 +136,14 @@ namespace AddinRibbon.Routing
                     double length = Math.Sqrt(squared);
                     if (!RoutePoint.IsFinite(length)) throw new ConstrainedLimitException("NONFINITE_TRAY_LENGTH");
                     double fraction = squared == 0 ? 0 : Clamp(((target.X - a.X) * x + (target.Y - a.Y) * y + (target.Z - a.Z) * z) / squared);
-                    ConstrainedAddCandidate(clear, seen, checkedPoints, target, segment, part, along, length, a, b, fraction, collision, budget);
+                    ConstrainedAddCandidate(clear, seen, checkedPoints, target, segment, part, along, length, a, b, fraction, collision, budget, requireClear);
                     // Once the exact legacy pair fails, both straight candidate
                     // families remain discoverable. The preference flag changes
                     // only accessible-window ranking, never their availability.
                     double horizontal = x * x + y * y;
                     fraction = horizontal == 0 ? (z == 0 ? 0 : Clamp((target.Z - a.Z) / z))
                         : Clamp(((target.X - a.X) * x + (target.Y - a.Y) * y) / horizontal);
-                    ConstrainedAddCandidate(clear, seen, checkedPoints, target, segment, part, along, length, a, b, fraction, collision, budget);
+                    ConstrainedAddCandidate(clear, seen, checkedPoints, target, segment, part, along, length, a, b, fraction, collision, budget, requireClear);
                     along += length;
                     if (!RoutePoint.IsFinite(along)) throw new ConstrainedLimitException("NONFINITE_TRAY_LENGTH");
                 }
@@ -172,13 +172,13 @@ namespace AddinRibbon.Routing
         private static void ConstrainedAddCandidate(List<Projection> clear, HashSet<Tuple<int, double>> seen,
             Dictionary<Tuple<int, double>, RouteCollisionObservation> checkedPoints, RoutePoint target,
             int segment, int part, double along, double length, RoutePoint a, RoutePoint b, double fraction,
-            RouteCollisionQuery collision, ConstrainedBudget budget)
+            RouteCollisionQuery collision, ConstrainedBudget budget, bool requireClear)
         {
             var point = RoutePoint.Interpolate(a, b, fraction); double distance = point.DistanceTo(target), station = along + length * fraction;
             if (!RoutePoint.IsFinite(distance) || !RoutePoint.IsFinite(station)) throw new ConstrainedLimitException("NONFINITE_CANDIDATE");
             if (!seen.Add(Tuple.Create(segment, station))) return;
             var projection = new Projection { Segment = segment, Part = part, Along = station, Point = point, Distance = distance };
-            if (ConstrainedApproach(target, projection, collision, budget, checkedPoints).Status == RouteCollisionStatus.Clear) clear.Add(projection);
+            if (!requireClear || ConstrainedApproach(target, projection, collision, budget, checkedPoints).Status == RouteCollisionStatus.Clear) clear.Add(projection);
         }
 
         private static RouteResult ConstrainedPair(List<TraySegment> eligible, RoutePoint from, RoutePoint to, Projection first, Projection last,
@@ -190,6 +190,16 @@ namespace AddinRibbon.Routing
             var firstCheck = ConstrainedApproach(from, first, collision, budget, fromChecks);
             var lastCheck = ConstrainedApproach(to, last, collision, budget, toChecks);
             if (firstCheck.Status != RouteCollisionStatus.Clear || lastCheck.Status != RouteCollisionStatus.Clear) return null;
+            RouteConnectorPlan unusedFrom, unusedTo;
+            return ConstrainedPairGraph(eligible, from, to, first, last, collision, options, budget, null, null, out unusedFrom, out unusedTo);
+        }
+
+        private static RouteResult ConstrainedPairGraph(List<TraySegment> eligible, RoutePoint from, RoutePoint to, Projection first, Projection last,
+            RouteCollisionQuery collision, RoutingOptions options, ConstrainedBudget budget,
+            Func<RoutePoint, RouteConnectorPlan> fromPlanner, Func<RoutePoint, RouteConnectorPlan> toPlanner,
+            out RouteConnectorPlan fromPlan, out RouteConnectorPlan toPlan)
+        {
+            fromPlan = null; toPlan = null;
             int maxNodes = Math.Min(options.MaxGraphNodes, budget.Limits.MaxGraphNodes);
             int maxConnections = Math.Min(options.MaxGraphConnections, budget.Limits.MaxGraphConnections);
             var nodes = new List<Node>(); var pieces = new List<Piece>(); var segmentNodes = new List<List<int>>();
@@ -234,6 +244,14 @@ namespace AddinRibbon.Routing
             if (!AddNeighbourConnections(nodes, pieces, segmentNodes, options.ConnectionToleranceMeters, maxNodes, maxConnections, budget.Token, out limit))
                 throw new ConstrainedLimitException(limit == GraphLimit.Connections ? "GRAPH_CONNECTION_LIMIT" : limit == GraphLimit.Candidates ? "GRAPH_CANDIDATE_LIMIT" : "GRAPH_NODE_LIMIT");
             budget.Check();
+            if (fromPlanner != null && toPlanner != null)
+            {
+                // Plan against the actual stored graph stations. Equal-Along
+                // legacy vertices can select a different floating representation
+                // from an interpolated projection; do not add an unmeasured join.
+                fromPlan = fromPlanner(nodes[firstNode].Point); toPlan = toPlanner(nodes[lastNode].Point);
+                if (fromPlan.Status != LocalConnectorStatus.Clear || toPlan.Status != LocalConnectorStatus.Clear) return null;
+            }
             var checkedEdges = new Dictionary<long, bool>(); long directedEdges = 0;
             for (int index = 0; index < nodes.Count; index++)
             {
@@ -256,17 +274,22 @@ namespace AddinRibbon.Routing
             budget.Charge(nodes.Count + directedEdges); PathCost graphCost;
             var path = ShortestPath(nodes, firstNode, lastNode, budget.Token, out graphCost); budget.Check(); if (path == null) return null;
             var codes = new List<string>(); var segmentIds = new List<string>(); var points = new List<RoutePoint> { from };
-            bool fromSecondary = first.Distance > options.SecondaryDistanceMeters, toSecondary = last.Distance > options.SecondaryDistanceMeters;
+            double fromDistance = fromPlan == null ? first.Distance : fromPlan.LengthMeters;
+            double toDistance = toPlan == null ? last.Distance : toPlan.LengthMeters;
+            bool fromSecondary = fromDistance > options.SecondaryDistanceMeters, toSecondary = toDistance > options.SecondaryDistanceMeters;
+            if (fromPlan != null) foreach (var point in fromPlan.Points) AppendPoint(points, point);
             if (fromSecondary) codes.Add("/SECONDARY");
             foreach (int index in path)
             {
                 budget.Charge(1); var node = nodes[index]; var segment = eligible[node.Segment];
                 AppendTransition(codes, segment.RouteCode); AppendTransition(segmentIds, segment.Id); AppendPoint(points, node.Point);
             }
-            AppendPoint(points, to); if (toSecondary) codes.Add("/SECONDARY");
-            double total = graphCost.PhysicalLength + first.Distance + last.Distance;
+            if (toPlan == null) AppendPoint(points, to);
+            else for (int index = toPlan.Points.Count - 1; index >= 0; index--) AppendPoint(points, toPlan.Points[index]);
+            if (toSecondary) codes.Add("/SECONDARY");
+            double total = graphCost.PhysicalLength + fromDistance + toDistance;
             if (!RoutePoint.IsFinite(total)) throw new ConstrainedLimitException("NONFINITE_ROUTE_LENGTH");
-            var route = new RouteResult(true, "Path calculated.", codes, segmentIds, points, total, first.Distance, last.Distance,
+            var route = new RouteResult(true, "Path calculated.", codes, segmentIds, points, total, fromDistance, toDistance,
                 fromSecondary, toSecondary, graphCost.GapCount, graphCost.GapLength);
             return ConstrainedFinalClear(route, collision, budget) ? route : null;
         }

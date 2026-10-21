@@ -1,5 +1,29 @@
 # PathFinder local implementation progress
 
+## PF-B4 technically checked — bounded local approaches; PF-B5 next
+
+Current branch pf-b4-local-approaches-local-20261021 inherits9801488fa988120399b275d9e6c069caccd531fc,
+B3 productfbf7ddd7e0c0f709655bff9224299866e7a28564/report83/receipt complete.
+prepare-stage-handoff produced PF-B4-local-approaches.md; executing immediately.
+barrier_engine_map owns new Core local connector files and only required NEW B3
+Support refactors; barrier_geometry_map owns new LocalConnectors.Tests project;
+barrier_registry read-only independent review. Root owns docs/progress and sole
+build/test/runtime/HTTP/SQL. No active test processes, no container changes.
+B4 implementation complete, B3 entry/11pinned/math retained. ROOT final40 local
+connector checks PASS:offset wall/floor openings, both-end exact lengths/SECONDARY,
+domain/resolution/cancel/budgets, translated1e6 geometry and near1e9 tiny-grid refusal.
+Synthetic suite449.7756ms/processpeak59256832B; numeric preflight2400thread-allocated
+bytes. This is not representative/max/combined512MiB qualification. Actual B3 suite54,
+legacy105, frozen43cases/215checks, ledger35/direct63 realrunner checks PASS.
+Initial B4 result36PASS/1FAIL retained:direct drilling disposition incorrectly
+unavailable; corrected bypassed. Coarser explicit-domain/profile mismatch now refuses.
+Independent source review/hash audit PASS; noTSchanges needing repeated type/lint.
+Explicit domain/grid is search guidance; all exact waypoints/segments need actual
+kernel checks, actual approach lengths in existing ledger, same absolute budget.
+Drill bypass/direct straight strategy unchanged. Next productcommit/report84/evidence,
+prepare B5 handoff and execute. Evidence new own scratch/local-connectors-20261021-6d29c5f6-b3ed-495c-a3f6-f076be1e2039. All policy-refused
+paths/parents preserved; actual capture/UI unchanged NOT_RUN, no refusal bypass.
+
 ## PF-B3 technically checked — constrained routing; PF-B4 next
 
 Branch pf-b3-constrained-routing-local-20261021 inherits b98a9d844d9fd641d1bd21257c0d4000ca0787ff,
